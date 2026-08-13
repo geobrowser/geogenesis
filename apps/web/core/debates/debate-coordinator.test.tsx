@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt } from './api';
 import { DebateCoordinator } from './debate-coordinator';
+import { clearEnteringDebate, markEnteringDebate } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -145,6 +146,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   sessionStorage.clear();
+  clearEnteringDebate();
   vi.restoreAllMocks();
 });
 
@@ -211,6 +213,52 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1'));
     expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  // The reported flicker. `useAcceptDebateRequest` pushes into the room and invalidates activity in
+  // the same tick, but the room is a server segment with no loading boundary: the accepting tab
+  // keeps this pathname for seconds while the debate arrives in activity. Reading that as "not
+  // there yet" reopened the dialog they had just accepted from, with the buttons swapped, and then
+  // took it away again when the room landed.
+  it('does not prompt the accepting tab to join the debate it is walking into', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-1');
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+    // Nor the fallback in its place — that would be the same flicker wearing a smaller hat.
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  it('still tells the other tab about the same debate', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-2');
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
+  });
+
+  // Held only until the room lands: leaving it set would suppress the prompt for a debate the
+  // viewer has since walked back out of.
+  it('releases the entry intent once the room is on screen', async () => {
+    mocks.pathname = '/space/space-1/debates/debate-1';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-1');
+
+    const view = render(<DebateCoordinator />);
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+
+    mocks.pathname = '/space/space-1/claims';
+    view.rerender(<DebateCoordinator />);
+
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
   });
 
   it('does not offer a debate the viewer is already in', async () => {

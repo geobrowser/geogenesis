@@ -17,8 +17,9 @@ import { SpaceChip } from './matchmaking/matchmaking-claim-card';
  * any more — so the person who *sent* the request finds out through their activity, wherever they
  * happen to be. This is how they get told, and it moves nobody's page until they say so.
  *
- * The tab that clicked Accept never sees this: `useAcceptDebateRequest` walks it straight into the
- * room, and the prompt hides for whichever debate is already on screen.
+ * The tab that clicked Accept never sees this. It is walking into the room already, and the
+ * coordinator counts that walk as being there — see `debate-entry-intent.ts`, which exists because
+ * the walk outlasts the activity refetch and this dialog used to reappear in the middle of it.
  */
 export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; currentUserId: string }) {
   const router = useRouter();

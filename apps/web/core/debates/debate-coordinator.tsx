@@ -16,6 +16,7 @@ import { type DebateSharePrompt } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
+import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
 import {
@@ -70,7 +71,12 @@ export function DebateCoordinator() {
   const acceptChallenge = useAcceptDebateChallenge();
   const rejectChallenge = useRejectDebateChallenge();
   const challengeError = acceptChallenge.error ?? rejectChallenge.error;
-  const viewingDebate = Boolean(debate && pathname.includes(`/debates/${debate.id}`));
+  // "Already in it" has to cover the walk there as well as the arrival. The room is a server
+  // segment with no `loading` boundary, so the tab that accepted keeps this page — and this
+  // pathname — for the seconds the route takes, while the activity it invalidated on the way out
+  // comes straight back reporting the debate.
+  const enteringDebateId = useEnteringDebateId();
+  const atDebate = Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
@@ -113,8 +119,8 @@ export function DebateCoordinator() {
   }, [challenge, snoozedChallengeId]);
 
   // How the person who *sent* the request learns it was accepted (GEO-2514): the debate exists
-  // already, and this is the only thing that tells them. The accepting tab is on the debate page by
-  // the time its activity catches up, so `viewingDebate` keeps the prompt off its screen.
+  // already, and this is the only thing that tells them. `atDebate` keeps it off the accepting
+  // tab's screen, which is walking into the room and does not need telling.
   //
   // There is no snooze here, unlike the request and challenge popups. Those leave something behind
   // that the other side is not waiting on; this one is a debate with an opponent already in the
@@ -125,7 +131,13 @@ export function DebateCoordinator() {
   // dialog render nothing keeps the rejoin bar as the fallback — otherwise a debate reported
   // without its participants would offer no way in at all.
   const describable = (debate?.participants?.length ?? 0) >= 2;
-  const promptedDebate = debate && describable && !viewingDebate ? debate : null;
+  const promptedDebate = debate && describable && !atDebate ? debate : null;
+
+  // Held until the room lands, then released — the timeout in the store is only the backstop for a
+  // push that never arrives at all.
+  React.useEffect(() => {
+    if (enteringDebateId && pathname.includes(`/debates/${enteringDebateId}`)) clearEnteringDebate(enteringDebateId);
+  }, [enteringDebateId, pathname]);
 
   React.useEffect(() => {
     if (!queriedSharePrompt || retainedSharePrompt || queriedSharePrompt.id === closedSharePromptId) return;
@@ -177,7 +189,7 @@ export function DebateCoordinator() {
       {promptedDebate && currentUserId && !activity?.rematch && (
         <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
-      {debate && !viewingDebate && !promptedDebate && !activity?.rematch && <DebateRejoinBar debate={debate} />}
+      {debate && !atDebate && !promptedDebate && !activity?.rematch && <DebateRejoinBar debate={debate} />}
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the
           hub's Requests tab, and the rematch routing effect above walks them into the claim picker
           the moment it is accepted. */}
