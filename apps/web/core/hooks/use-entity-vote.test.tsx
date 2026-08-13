@@ -3,7 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { userEntityVotesQueryKey } from '~/core/hooks/use-user-voted-entity-ids';
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
@@ -16,6 +16,11 @@ import {
 
 const PERSONAL_SPACE_ID = 'd4bee0928fb5405baba3b1513f085835';
 const TARGET_SPACE_ID = '1234567890abcdef1234567890abcdef';
+
+function expectVotedListRefreshOnly(invalidateQueries: MockInstance) {
+  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(PERSONAL_SPACE_ID, 'up') });
+  expect(invalidateQueries).toHaveBeenCalledTimes(1);
+}
 
 const mocks = vi.hoisted(() => ({
   fetchResponse:
@@ -154,7 +159,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(mocks.fetchResponse).toHaveBeenCalledTimes(30);
     expect(result.current.isProcessingResponse).toBe(true);
     expect(result.current.isResponseIndexingDelayed).toBe(true);
-    expect(invalidateQueries).not.toHaveBeenCalled();
+    expectVotedListRefreshOnly(invalidateQueries);
     expect(
       queryClient.getQueryData<{ runId: string }>(
         entityResponseIndexingQueryKey(PERSONAL_SPACE_ID, 'claim-1', TARGET_SPACE_ID, 'stance')
@@ -178,7 +183,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(cancelQueries).toHaveBeenCalledWith({
       queryKey: ['claim-response-summaries', PERSONAL_SPACE_ID, TARGET_SPACE_ID],
     });
-    expect(invalidateQueries).not.toHaveBeenCalled();
+    expectVotedListRefreshOnly(invalidateQueries);
   });
 
   it('isolates optimistic response state by personal space', async () => {
@@ -216,7 +221,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(mocks.fetchResponse).toHaveBeenCalledOnce();
     expect(result.current.isProcessingResponse).toBe(true);
     expect(result.current.isResponseIndexingDelayed).toBe(false);
-    expect(invalidateQueries).not.toHaveBeenCalled();
+    expectVotedListRefreshOnly(invalidateQueries);
 
     await act(async () => vi.advanceTimersByTimeAsync(2_000));
 
@@ -225,7 +230,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(result.current.isResponseIndexingDelayed).toBe(false);
     expect(result.current.optimisticResponse).toBeUndefined();
     expect(mocks.loadResponseSummaryCaches).toHaveBeenCalledOnce();
-    expect(invalidateQueries).not.toHaveBeenCalled();
+    expectVotedListRefreshOnly(invalidateQueries);
   });
 
   it('keeps reconciliation recoverable when the single-claim summary refresh fails', async () => {
@@ -274,6 +279,23 @@ describe('useEntityResponse indexing reconciliation', () => {
     // response triggers so the voted lists don't go stale.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(PERSONAL_SPACE_ID, 'up') });
     expect(invalidateQueries).toHaveBeenCalledTimes(4);
+  });
+
+  it('refreshes the voted lists for claim responses too, not just curation', async () => {
+    mocks.fetchResponse.mockReturnValue('negative');
+    const { queryClient, wrapper } = createHarness();
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const setQueryData = vi.spyOn(queryClient, 'setQueryData');
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'veracity' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('negative'));
+    await act(async () => Promise.resolve());
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(PERSONAL_SPACE_ID, 'down') });
+    expect(setQueryData).toHaveBeenCalledWith(userEntityVotesQueryKey(PERSONAL_SPACE_ID, 'up'), expect.any(Function));
   });
 
   it('does not let an older control supersede shared indexing state', async () => {

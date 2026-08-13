@@ -15,6 +15,7 @@ function cache(...pages: string[][]): UserVotedEntityIdsCache {
   return {
     pages: pages.map((objectIds, index) => ({
       objectIds,
+      voteKindByObjectId: {},
       endCursor: `cursor-${index}`,
       hasNextPage: index < pages.length - 1,
     })),
@@ -59,7 +60,11 @@ describe('removeEntityFromVotedIds', () => {
   });
 });
 
-const page = (param: string | null, ...objectIds: string[]): VotedIdPage => ({ param, objectIds });
+const page = (param: string | null, ...objectIds: string[]): VotedIdPage => ({
+  param,
+  objectIds,
+  voteKindByObjectId: {},
+});
 
 describe('mergeVotedIdPages', () => {
   it('appends pages the accumulation has not seen', () => {

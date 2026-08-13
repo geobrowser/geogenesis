@@ -352,15 +352,11 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
   /**
    * Keeps the Upvoted/Downvoted tabs in step with the response that just landed:
    * drop the entity from whichever list it no longer belongs to, restore it to the
-   * one it just joined. Only curation responses feed those lists — stance and
-   * veracity write different vote kinds — so other kinds leave them untouched.
-   *
+   * one it just joined.
    * The response counts and the viewer's own response are invalidated by the
    * indexing reconciliation above rather than here.
    */
   const syncVotedLists = (direction: ResponseDirection) => {
-    if (responseKind !== 'curation') return;
-
     if (direction !== 'positive') dropFromVotedList('up');
     if (direction !== 'negative') dropFromVotedList('down');
 

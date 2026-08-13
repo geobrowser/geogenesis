@@ -49,7 +49,7 @@ export function clearRemovedVotedId(removed: string[], entityId: string): string
 
 const MAX_CACHED_VOTE_PAGES = 4;
 
-export type VotedIdPage = { param: string | null; objectIds: string[] };
+export type VotedIdPage = { param: string | null; objectIds: string[]; voteKindByObjectId: Record<string, number> };
 
 /**
  * Folds the pages currently in the cache into everything fetched so far.
@@ -108,7 +108,12 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
     queryKey: userEntityVotesQueryKey(personalSpaceId, direction),
     queryFn: async ({ pageParam, signal }) => {
       if (!personalSpaceId) {
-        return { objectIds: [], endCursor: null, hasNextPage: false } satisfies UserEntityVoteObjectIdsPage;
+        return {
+          objectIds: [],
+          voteKindByObjectId: {},
+          endCursor: null,
+          hasNextPage: false,
+        } satisfies UserEntityVoteObjectIdsPage;
       }
       return Effect.runPromise(getUserEntityVoteObjectIdsPage(personalSpaceId, voteType, 0, pageParam, signal));
     },
@@ -137,6 +142,7 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
         data.pages.map((page, index) => ({
           param: (data.pageParams[index] ?? null) as string | null,
           objectIds: page.objectIds,
+          voteKindByObjectId: page.voteKindByObjectId,
         }))
       )
     );
@@ -175,9 +181,20 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
 
   const ids = React.useMemo(() => idPages.flat(), [idPages]);
 
+  const voteKindById = React.useMemo(() => {
+    const map = new Map<string, number>();
+    for (const page of fetchedPages) {
+      for (const [id, voteKind] of Object.entries(page.voteKindByObjectId)) {
+        map.set(id, voteKind);
+      }
+    }
+    return map;
+  }, [fetchedPages]);
+
   return {
     ids,
     idPages,
+    voteKindById,
     isLoading: canFetch && query.isLoading,
     hasNextPage: Boolean(query.hasNextPage),
     isFetchingNextPage: query.isFetchingNextPage,

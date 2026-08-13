@@ -19,6 +19,7 @@ import {
   type UserVoteFilter,
   type UuidFilter,
 } from '~/core/gql/graphql';
+import { uuidToHex } from '~/core/id/normalize';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import {
   type ActiveResponseDirection,
@@ -1320,12 +1321,13 @@ export function getEntityResponders(
 export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
 
 type UserEntityVotesPage = {
-  nodes: Array<{ objectId: string }>;
+  nodes: Array<{ objectId: string; voteKind: number }>;
   pageInfo: { hasNextPage: boolean; endCursor?: string | null };
 };
 
 export type UserEntityVoteObjectIdsPage = {
   objectIds: string[];
+  voteKindByObjectId: Record<string, number>;
   endCursor: string | null;
   hasNextPage: boolean;
 };
@@ -1352,11 +1354,14 @@ export function getUserEntityVoteObjectIdsPage(
       signal,
     });
 
-    const objectIds = page.nodes.map(node => node.objectId).filter(Boolean);
+    const nodes = page.nodes.filter(node => Boolean(node.objectId));
+    const objectIds = nodes.map(node => node.objectId);
+    const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
     const endCursor = page.pageInfo.endCursor ?? null;
 
     return {
       objectIds,
+      voteKindByObjectId,
       endCursor,
       // A cursor is required to advance, so treat a missing one as the end.
       hasNextPage: Boolean(page.pageInfo.hasNextPage && endCursor),

@@ -12,6 +12,7 @@ const USER_ENTITY_VOTES_BY_TYPE_SOURCE = /* GraphQL */ `
     ) {
       nodes {
         objectId
+        voteKind
       }
       pageInfo {
         hasNextPage
@@ -23,7 +24,7 @@ const USER_ENTITY_VOTES_BY_TYPE_SOURCE = /* GraphQL */ `
 
 export type UserEntityVotesByTypeQuery = {
   userVotesConnection?: {
-    nodes: Array<{ objectId: string }>;
+    nodes: Array<{ objectId: string; voteKind: number }>;
     pageInfo: { hasNextPage: boolean; endCursor?: string | null };
   } | null;
 };
@@ -36,6 +37,7 @@ export type UserEntityVotesByTypeQueryVariables = {
   after?: string | null;
 };
 
-export const UserEntityVotesByTypeDocument = parse(
-  USER_ENTITY_VOTES_BY_TYPE_SOURCE
-) as unknown as TypedDocumentNode<UserEntityVotesByTypeQuery, UserEntityVotesByTypeQueryVariables>;
+export const UserEntityVotesByTypeDocument = parse(USER_ENTITY_VOTES_BY_TYPE_SOURCE) as unknown as TypedDocumentNode<
+  UserEntityVotesByTypeQuery,
+  UserEntityVotesByTypeQueryVariables
+>;

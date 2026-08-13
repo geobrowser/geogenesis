@@ -8,6 +8,7 @@ import { type IdPage, flattenIdPages, upsertIdPage } from '~/core/blocks/data/ac
 import { filterStateToWhere, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { type EntityVoteDirectionFilter, useUserVotedEntityIds } from '~/core/hooks/use-user-voted-entity-ids';
 import { ID } from '~/core/id';
+import { resolveEntityResponseKind, responseKindToVoteKind } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 /**
@@ -15,14 +16,12 @@ import { useQueryEntities } from '~/core/sync/use-store';
  * Hydrating the flattened id list
  */
 export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) {
-  const { filterState, filterMode } = useDataBlock();
+  const { filterState, filterMode, spaceId } = useDataBlock();
   const blockWhere = React.useMemo(() => filterStateToWhere(filterState, filterMode), [filterState, filterMode]);
 
   const enabled = direction !== null;
-  const { ids, idPages, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useUserVotedEntityIds(
-    direction ?? 'up',
-    enabled
-  );
+  const { ids, idPages, voteKindById, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } =
+    useUserVotedEntityIds(direction ?? 'up', enabled);
 
   const pageIndex = Math.max(0, idPages.length - 1);
   const pageIds = React.useMemo(() => idPages[pageIndex] ?? [], [idPages, pageIndex]);
@@ -50,7 +49,17 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
     setEntityIdPages([]);
   }, [resetKey]);
 
-  const pageEntityIds = React.useMemo(() => (entities ?? []).map(entity => entity.id), [entities]);
+  const pageEntityIds = React.useMemo(
+    () =>
+      (entities ?? [])
+        .filter(entity => {
+          const votedKind = voteKindById.get(ID.uuidToHex(entity.id));
+          if (votedKind === undefined) return false;
+          return responseKindToVoteKind(resolveEntityResponseKind(entity, spaceId)) === votedKind;
+        })
+        .map(entity => entity.id),
+    [entities, voteKindById, spaceId]
+  );
   const pageEntityIdsSignature = pageEntityIds.join('|');
 
   React.useEffect(() => {
