@@ -681,6 +681,10 @@ function RematchClaimCard({
   useReadinessOnFirstPosition({
     claim: claim.claim,
     localPosition,
+    // The optimistic copy exists only while this client's own submission is in flight, so it is
+    // what separates "the viewer just picked this side" from "we just learned the side they already
+    // held" — which is what a position looks like when their identity or geo-chat's copy lands late.
+    pickedHere: optimisticResponse !== undefined,
     responseSettled,
     alreadyReady: claimReadiness?.viewer_debate_ready ?? false,
   });
@@ -749,11 +753,14 @@ function RematchClaimCard({
 function useReadinessOnFirstPosition({
   claim,
   localPosition,
+  pickedHere,
   responseSettled,
   alreadyReady,
 }: {
   claim: DebateClaimSummary;
   localPosition: boolean | null;
+  /** Whether {@link localPosition} is this client's own in-flight submission. */
+  pickedHere: boolean;
   /** Whether geo-chat's copy of the response has caught up with {@link localPosition}. */
   responseSettled: boolean;
   alreadyReady: boolean;
@@ -770,10 +777,14 @@ function useReadinessOnFirstPosition({
     previousPosition.current = localPosition;
 
     const justEstablished = previous === null && localPosition !== null;
-    if (!justEstablished || alreadyReady || optedIn.current) return;
+    // A position can appear without anyone picking anything: the viewer's id resolves a beat after
+    // mount, or geo-chat's copy of a claim they had already answered lands late. Both look exactly
+    // like a fresh pick from here, and standing them ready for either silently undoes a stand-down
+    // they made elsewhere — the thing this hook is careful not to do.
+    if (!justEstablished || !pickedHere || alreadyReady || optedIn.current) return;
 
     setWantsReadiness(true);
-  }, [alreadyReady, localPosition]);
+  }, [alreadyReady, localPosition, pickedHere]);
 
   // ...but it is only sent once geo-chat can see the response readiness depends on. Firing on the
   // optimistic position instead had the server reject it for a claim it had no response for, and

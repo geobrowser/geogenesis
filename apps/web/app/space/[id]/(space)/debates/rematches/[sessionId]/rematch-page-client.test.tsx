@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => ({
   curatedIds: [] as string[],
   savedClaims: null as DebateRematchClaim[] | null,
   browsedLookupLoading: false,
+  currentUserId: 'user-local' as string | null,
   claimReadinessLoading: false,
   claimReadinessError: false,
   claimReadiness: [] as Array<{
@@ -65,8 +66,8 @@ vi.mock('~/core/debates/api', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/debates/api')>();
   return {
     ...actual,
-    getCurrentGeoChatUserId: () => 'user-local',
-    resolveCurrentGeoChatUserId: () => Promise.resolve('user-local'),
+    getCurrentGeoChatUserId: () => mocks.currentUserId,
+    resolveCurrentGeoChatUserId: () => Promise.resolve(mocks.currentUserId),
   };
 });
 
@@ -190,6 +191,7 @@ beforeEach(() => {
   mocks.curatedIds = [];
   mocks.savedClaims = null;
   mocks.browsedLookupLoading = false;
+  mocks.currentUserId = 'user-local';
   // The hub's filter menus measure their dropdown.
   window.ResizeObserver ??= class {
     observe() {}
@@ -741,6 +743,35 @@ describe('DebateRematchPageClient', () => {
   });
 
   // Taking a side here means you want to debate it, so readiness shouldn't be a second step.
+  // A position can appear without anyone picking one — here because geo-chat's copy of a claim the
+  // viewer had already answered lands after the card is on screen. That looks identical to a fresh
+  // pick, and standing them ready for it reverses a stand-down they made elsewhere.
+  it('does not stand the viewer ready when geo-chat reports a position they already held', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+  });
+
   // Standing down elsewhere is deliberate; arriving here mustn't quietly reverse it.
   it('leaves readiness alone for positions already held on arrival', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
