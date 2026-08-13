@@ -36,6 +36,9 @@ const mocks = vi.hoisted(() => ({
   entityQueryHasNextPage: false,
   entities: [] as Array<Record<string, unknown>>,
   recommendedSections: [] as Array<{ id: string; name: string; claimIds: string[] }>,
+  recommendedEntities: [] as Array<Record<string, unknown>>,
+  recommendedLoading: false,
+  rematchClaimIds: [] as string[][],
   claimReadinessLoading: false,
   claimReadinessError: false,
   claimReadiness: [] as Array<{
@@ -61,11 +64,14 @@ vi.mock('~/core/debates/hooks', () => ({
     isLoading: false,
     error: null,
   }),
-  useDebateRematchClaimsForIds: () => ({
-    data: { claims: mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
-    isLoading: false,
-    error: null,
-  }),
+  useDebateRematchClaimsForIds: (_sessionId: string, claimIds: string[]) => {
+    mocks.rematchClaimIds.push(claimIds);
+    return {
+      data: { claims: mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+      isLoading: false,
+      error: null,
+    };
+  },
   useDebate: () => ({ data: { claim: { claim_entity_id: CLAIM_SOURCE } } }),
   useDebateClaimsBySpaces: () => ({
     claims: mocks.claimReadiness,
@@ -109,7 +115,11 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
 
 // The curated lookup has its own tests; these cover the picker around it.
 vi.mock('~/core/debates/recommended-claims', () => ({
-  useRecommendedClaimSections: () => ({ sections: mocks.recommendedSections, claimEntities: [] }),
+  useRecommendedClaimSections: () => ({
+    sections: mocks.recommendedSections,
+    claimEntities: mocks.recommendedEntities,
+    isLoading: mocks.recommendedLoading,
+  }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
@@ -150,6 +160,9 @@ beforeEach(() => {
   mocks.entityQueryHasNextPage = false;
   mocks.entities = [publishedEntity()];
   mocks.recommendedSections = [];
+  mocks.recommendedEntities = [];
+  mocks.recommendedLoading = false;
+  mocks.rematchClaimIds.length = 0;
   // The hub's filter menus measure their dropdown.
   window.ResizeObserver ??= class {
     observe() {}
@@ -503,6 +516,31 @@ describe('DebateRematchPageClient', () => {
 
     showAllClaims();
     expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
+  });
+
+  // Curated claims are picked by hand, so they can be ones the browsed pages never reach. They
+  // have to land in the same pool, or a recommendation would head a section with nothing under it.
+  it('renders a curated claim the browsed pages never returned', () => {
+    const CURATED = '019fedb59a8f7d728e556ab19c3e8841';
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CURATED] }];
+    mocks.recommendedEntities = [publishedEntity(CURATED, 'A curated claim from elsewhere')];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByText('A curated claim from elsewhere')).toBeInTheDocument();
+    // And it goes into the id lookup, so the session can report positions on it.
+    expect(mocks.rematchClaimIds.at(-1)).toContain(CURATED);
+  });
+
+  // An empty result mid-flight is not "nothing recommended"; landing on the opponent tab and then
+  // moving the viewer once the lookup settles is worse than waiting.
+  it('waits on the Recommended tab while the curated lookup is still running', () => {
+    mocks.recommendedLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Recommended' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveAttribute('aria-selected', 'false');
+    // And the claims stay behind the loading state rather than the opponent tab's list appearing.
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
   });
 
   it('shortens the opponent tab to their first name', () => {

@@ -22,13 +22,16 @@ const mocks = vi.hoisted(() => ({
   pages: [] as unknown[],
   blocks: [] as unknown[],
   items: [] as unknown[],
+  loading: false,
+  wheres: [] as Array<Record<string, unknown>>,
 }));
 
 // Three stages: pages by type, the blocks they point at, then the blocks' collection items. The
 // two id lookups are told apart by which ids they ask for.
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({ where }: { where: Record<string, unknown> }) => {
-    if ('types' in where) return { entities: mocks.pages };
+    mocks.wheres.push(where);
+    if ('types' in where) return { entities: mocks.pages, isLoading: mocks.loading };
     const ids = (where.id as { in?: string[] } | undefined)?.in ?? [];
     const blocks = (mocks.blocks as Array<{ id: string }>).filter(block => ids.includes(block.id));
     return {
@@ -88,6 +91,8 @@ beforeEach(() => {
   mocks.pages = [page()];
   mocks.blocks = [block('block-1', 'Geopolitics & chips', ['claim-a', 'claim-b'])];
   mocks.items = [claimEntity('claim-a'), claimEntity('claim-b')];
+  mocks.loading = false;
+  mocks.wheres.length = 0;
 });
 
 describe('useRecommendedClaimSections', () => {
@@ -159,6 +164,39 @@ describe('useRecommendedClaimSections', () => {
     const { result } = renderHook(() => useRecommendedClaimSections([ME, OPPONENT]));
 
     expect(result.current.sections).toEqual([]);
+  });
+
+  // An absent index has to fall to the end, not to the front where an empty-string default puts it.
+  it('sorts items without a position after the ones that have one', () => {
+    mocks.blocks = [block('block-1', 'Geopolitics & chips', ['claim-unplaced', 'claim-placed'])];
+    (mocks.blocks[0] as { relations: Array<{ position?: string }> }).relations[0]!.position = undefined;
+    mocks.items = [claimEntity('claim-unplaced'), claimEntity('claim-placed')];
+
+    const { result } = renderHook(() => useRecommendedClaimSections([ME, OPPONENT]));
+
+    expect(result.current.sections[0]!.claimIds).toEqual(['claim-placed', 'claim-unplaced']);
+  });
+
+  // Anyone can publish this type, so a hundred unrelated entities could crowd a real page out of a
+  // result capped before the source is checked.
+  it('asks only for pages in the curated spaces', () => {
+    renderHook(() => useRecommendedClaimSections([ME, OPPONENT]));
+
+    const pagesWhere = mocks.wheres.find(where => 'types' in where) as {
+      OR?: Array<{ spaces?: Array<{ equals?: string }> }>;
+    };
+    expect(pagesWhere.OR?.map(branch => branch.spaces?.[0]?.equals)).toEqual([
+      '8a4955bcd9d0fc0d8613f17f01de3b9f',
+      CURATOR_SPACE,
+    ]);
+  });
+
+  it('reports that it is still looking rather than that nothing is recommended', () => {
+    mocks.loading = true;
+
+    const { result } = renderHook(() => useRecommendedClaimSections([ME, OPPONENT]));
+
+    expect(result.current.isLoading).toBe(true);
   });
 
   it('returns nothing before the session has participants', () => {

@@ -144,8 +144,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // hook hands back their entities along with the sections, and they join the same pool the browsed
   // claims feed — so the session lookup, response kinds and the cards treat them like any other
   // published claim.
-  const { sections: recommendedSections, claimEntities: recommendedEntities } =
-    useRecommendedClaimSections(participantSpaceIds);
+  const {
+    sections: recommendedSections,
+    claimEntities: recommendedEntities,
+    isLoading: recommendedLoading,
+  } = useRecommendedClaimSections(participantSpaceIds);
 
   const claimEntities = React.useMemo(() => {
     const byId = new Map(publishedClaims.entities.map(claim => [claim.id, claim]));
@@ -266,7 +269,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 
   const hasRecommended = recommendedSections.length > 0;
-  const tab: PickerTab = chosenTab ?? (hasRecommended ? 'recommended' : 'opponent');
+  // Held on the curated tab while the lookup runs, so an empty result mid-flight can't land the
+  // viewer on the opponent tab and then move them once it settles.
+  const tab: PickerTab = chosenTab ?? (hasRecommended || recommendedLoading ? 'recommended' : 'opponent');
   const setTab = setChosenTab;
 
   const facetSpaceIds = React.useMemo(() => [...new Set(claims.map(claim => claim.claim.space_id))], [claims]);
@@ -393,7 +398,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         <header className="mb-4 flex items-center justify-between gap-4">
           <h1 className="sr-only">Rematch {remoteName}</h1>
           <div className="flex min-w-0 items-center gap-5">
-            {hasRecommended ? (
+            {hasRecommended || recommendedLoading ? (
               <TabButton active={tab === 'recommended'} onClick={() => setTab('recommended')}>
                 Recommended
               </TabButton>
@@ -464,7 +469,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             sessionQuery.isLoading ||
             savedClaimsQuery.isLoading ||
             publishedClaimsQuery.isLoading ||
-            publishedClaimsLoading
+            publishedClaimsLoading ||
+            (tab === 'recommended' && recommendedLoading)
           }
           error={sessionQuery.error ?? savedClaimsQuery.error ?? publishedClaimsQuery.error}
           isEmpty={tab === 'recommended' ? visibleSections.length === 0 : visibleClaims.length === 0}

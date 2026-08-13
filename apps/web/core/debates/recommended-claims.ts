@@ -47,11 +47,24 @@ export function useRecommendedClaimSections(participantSpaceIds: string[]): {
   sections: RecommendedClaimSection[];
   /** The claims themselves, so callers don't fetch what this already resolved. */
   claimEntities: Entity[];
+  /**
+   * True until every stage has settled. Empty sections mean "nothing recommended" only once this
+   * is false — before then they only mean "still looking", and a caller that can't tell the two
+   * apart will show the wrong tab and then move it under the viewer.
+   */
+  isLoading: boolean;
 } {
   const enabled = participantSpaceIds.length > 0;
 
-  const { entities: pages } = useQueryEntities({
-    where: { types: [{ id: { equals: RECOMMENDED_CLAIMS_TYPE_ID } }] },
+  const { entities: pages, isLoading: pagesLoading } = useQueryEntities({
+    // Scoped to the curated spaces in the query, not after it: anyone can publish this type, and a
+    // hundred unrelated entities would otherwise fill the page and crowd a real one out.
+    // One branch per space rather than one `spaces` array — a multi-id space filter matches
+    // nothing, where a single-id one matches as expected.
+    where: {
+      types: [{ id: { equals: RECOMMENDED_CLAIMS_TYPE_ID } }],
+      OR: RECOMMENDED_CLAIMS_SPACE_IDS.map(spaceId => ({ spaces: [{ equals: spaceId }] })),
+    },
     first: 100,
     enabled,
   });
@@ -80,7 +93,7 @@ export function useRecommendedClaimSections(participantSpaceIds: string[]): {
       );
   }, [enabled, pages, participantSpaceIds]);
 
-  const { entities: blocks } = useQueryEntities({
+  const { entities: blocks, isLoading: blocksLoading } = useQueryEntities({
     where: { id: { in: blockIds } },
     first: 100,
     enabled: blockIds.length > 0,
@@ -107,7 +120,7 @@ export function useRecommendedClaimSections(participantSpaceIds: string[]): {
 
   const itemIds = React.useMemo(() => [...new Set(itemIdsByBlock.flatMap(block => block.itemIds))], [itemIdsByBlock]);
 
-  const { entities: items } = useQueryEntities({
+  const { entities: items, isLoading: itemsLoading } = useQueryEntities({
     where: { id: { in: itemIds } },
     first: 100,
     enabled: itemIds.length > 0,
@@ -131,10 +144,19 @@ export function useRecommendedClaimSections(participantSpaceIds: string[]): {
     );
   }, [claimEntities, itemIdsByBlock]);
 
-  return React.useMemo(() => ({ sections, claimEntities }), [claimEntities, sections]);
+  // Each stage feeds the next, so any of them still running means the answer isn't in yet.
+  const isLoading =
+    enabled && (pagesLoading || (blockIds.length > 0 && blocksLoading) || (itemIds.length > 0 && itemsLoading));
+
+  return React.useMemo(() => ({ sections, claimEntities, isLoading }), [claimEntities, isLoading, sections]);
 }
 
 /** Blocks and collection items both carry a fractional index; absent, they fall to the end. */
 function byPosition(a: { position?: string }, z: { position?: string }) {
-  return (a.position ?? '').localeCompare(z.position ?? '');
+  // An empty string sorts before every real position, so absent has to be handled on its own
+  // rather than defaulted — otherwise "falls to the end" would put it first.
+  if (a.position === undefined || z.position === undefined) {
+    return Number(a.position === undefined) - Number(z.position === undefined);
+  }
+  return a.position.localeCompare(z.position);
 }
