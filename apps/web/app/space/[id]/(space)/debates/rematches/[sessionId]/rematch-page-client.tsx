@@ -150,27 +150,42 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     isLoading: recommendedLoading,
   } = useRecommendedClaimSections(participantSpaceIds);
 
+  const recommendedClaimIds = React.useMemo(
+    () => [...new Set(recommendedSections.flatMap(section => section.claimIds))],
+    [recommendedSections]
+  );
+
   const claimEntities = React.useMemo(() => {
     const byId = new Map(publishedClaims.entities.map(claim => [claim.id, claim]));
     for (const claim of recommendedEntities) if (!byId.has(claim.id)) byId.set(claim.id, claim);
     return [...byId.values()];
   }, [publishedClaims.entities, recommendedEntities]);
 
-  const publishedClaimIds = React.useMemo(() => claimEntities.map(claim => claim.id), [claimEntities]);
-  // Batched: geo-chat caps the ids per request, and the browsed list plus the curated claims runs
-  // past that cap after a page or two of Load more.
-  const publishedClaimsQuery = useDebateRematchClaimsForIds(sessionId, publishedClaimIds);
+  // Looked up separately from the browsed ids rather than as one list. Sharing a list would make
+  // the curated tab wait on the graph-wide claim scan below, which it draws nothing from — and
+  // that scan is the slowest thing on the page.
+  //
+  // Both batched: geo-chat caps the ids per request, and the browsed list alone runs past that cap
+  // after a page or two of Load more.
+  const curatedClaimsQuery = useDebateRematchClaimsForIds(sessionId, recommendedClaimIds);
+  const browsedClaimIds = React.useMemo(
+    () => publishedClaims.entities.map(claim => claim.id),
+    [publishedClaims.entities]
+  );
+  const browsedClaimsQuery = useDebateRematchClaimsForIds(sessionId, browsedClaimIds);
 
   const claims = React.useMemo(() => {
     const synchronizedClaims = new Map(
-      [...(savedClaimsQuery.data?.claims ?? []), ...(publishedClaimsQuery.data?.claims ?? [])].map(claim => [
-        claim.claim.claim_entity_id,
-        claim,
-      ])
+      [
+        ...(savedClaimsQuery.data?.claims ?? []),
+        ...(curatedClaimsQuery.data?.claims ?? []),
+        ...(browsedClaimsQuery.data?.claims ?? []),
+      ].map(claim => [claim.claim.claim_entity_id, claim])
     );
     const excludedClaimIds = new Set([
       ...(savedClaimsQuery.data?.excluded_claim_ids ?? []),
-      ...(publishedClaimsQuery.data?.excluded_claim_ids ?? []),
+      ...(curatedClaimsQuery.data?.excluded_claim_ids ?? []),
+      ...(browsedClaimsQuery.data?.excluded_claim_ids ?? []),
     ]);
     for (const claim of claimEntities) {
       if (
@@ -203,7 +218,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return [...synchronizedClaims.values()]
       .filter(claim => !excludedClaimIds.has(claim.claim.claim_entity_id))
       .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
-  }, [claimEntities, publishedClaimsQuery.data, savedClaimsQuery.data, session?.participants, sourceDebateQuery.data]);
+  }, [
+    browsedClaimsQuery.data,
+    claimEntities,
+    curatedClaimsQuery.data,
+    savedClaimsQuery.data,
+    session?.participants,
+    sourceDebateQuery.data,
+  ]);
   const remoteParticipant =
     currentUserId === null
       ? null
@@ -306,6 +328,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId);
+
+  // Each tab draws from a different set of queries, so each waits on its own. The browsed scan is
+  // the slow one and only the All tab reads it.
+  const tabIsLoading =
+    sessionQuery.isLoading ||
+    (tab === 'recommended'
+      ? recommendedLoading || curatedClaimsQuery.isLoading
+      : tab === 'opponent'
+        ? savedClaimsQuery.isLoading
+        : savedClaimsQuery.isLoading || publishedClaimsLoading || browsedClaimsQuery.isLoading);
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
   const visibleSections = React.useMemo(() => {
@@ -465,14 +497,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         )}
 
         <HubQueryState
+          // Only what the visible tab actually draws from, and only while it has nothing to show.
+          // Holding every tab on the slowest query meant the session's own claims — which arrive in
+          // one round trip — sat behind a graph-wide scan they don't come from.
           isLoading={
-            sessionQuery.isLoading ||
-            savedClaimsQuery.isLoading ||
-            publishedClaimsQuery.isLoading ||
-            publishedClaimsLoading ||
-            (tab === 'recommended' && recommendedLoading)
+            tabIsLoading && (tab === 'recommended' ? visibleSections.length === 0 : visibleClaims.length === 0)
           }
-          error={sessionQuery.error ?? savedClaimsQuery.error ?? publishedClaimsQuery.error}
+          error={sessionQuery.error ?? savedClaimsQuery.error ?? browsedClaimsQuery.error}
           isEmpty={tab === 'recommended' ? visibleSections.length === 0 : visibleClaims.length === 0}
           emptyMessage={
             hasFilters

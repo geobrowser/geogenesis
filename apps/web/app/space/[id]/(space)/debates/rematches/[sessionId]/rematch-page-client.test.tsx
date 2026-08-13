@@ -34,11 +34,15 @@ const mocks = vi.hoisted(() => ({
   entityQueries: [] as unknown[],
   entityQueryPlaceholder: false,
   entityQueryHasNextPage: false,
+  entityQueryLoading: false,
   entities: [] as Array<Record<string, unknown>>,
   recommendedSections: [] as Array<{ id: string; name: string; claimIds: string[] }>,
   recommendedEntities: [] as Array<Record<string, unknown>>,
   recommendedLoading: false,
   rematchClaimIds: [] as string[][],
+  curatedIds: [] as string[],
+  savedClaims: null as DebateRematchClaim[] | null,
+  browsedLookupLoading: false,
   claimReadinessLoading: false,
   claimReadinessError: false,
   claimReadiness: [] as Array<{
@@ -59,13 +63,22 @@ vi.mock('~/core/debates/api', async importOriginal => {
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebateRematch: () => ({ data: mocks.session, isLoading: false, error: null }),
+  // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
+  // arrive through the id lookup.
   useDebateRematchClaims: () => ({
-    data: { claims: mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+    data: { claims: mocks.savedClaims ?? mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
     isLoading: false,
     error: null,
   }),
+  // Two lookups run: one for the curated ids, one for the browsed ones. `curatedIds` lets a test
+  // stall the browsed lookup on its own, which is the whole point of their being separate.
   useDebateRematchClaimsForIds: (_sessionId: string, claimIds: string[]) => {
     mocks.rematchClaimIds.push(claimIds);
+    const isCuratedLookup =
+      mocks.curatedIds.length > 0 && claimIds.every(claimId => mocks.curatedIds.includes(claimId));
+    if (mocks.browsedLookupLoading && !isCuratedLookup) {
+      return { data: { claims: [], excluded_claim_ids: [] }, isLoading: true, error: null };
+    }
     return {
       data: { claims: mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
       isLoading: false,
@@ -89,7 +102,7 @@ vi.mock('~/core/sync/use-store', () => ({
     mocks.entityQueries.push(options.where);
     return {
       entities: mocks.entities,
-      isLoading: false,
+      isLoading: mocks.entityQueryLoading,
       isPlaceholderData: mocks.entityQueryPlaceholder,
       endCursor: mocks.entityQueryHasNextPage ? 'cursor-1' : null,
       hasNextPage: mocks.entityQueryHasNextPage,
@@ -158,11 +171,15 @@ beforeEach(() => {
   mocks.entityQueries.length = 0;
   mocks.entityQueryPlaceholder = false;
   mocks.entityQueryHasNextPage = false;
+  mocks.entityQueryLoading = false;
   mocks.entities = [publishedEntity()];
   mocks.recommendedSections = [];
   mocks.recommendedEntities = [];
   mocks.recommendedLoading = false;
   mocks.rematchClaimIds.length = 0;
+  mocks.curatedIds = [];
+  mocks.savedClaims = null;
+  mocks.browsedLookupLoading = false;
   // The hub's filter menus measure their dropdown.
   window.ResizeObserver ??= class {
     observe() {}
@@ -528,7 +545,36 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByText('A curated claim from elsewhere')).toBeInTheDocument();
     // And it goes into the id lookup, so the session can report positions on it.
-    expect(mocks.rematchClaimIds.at(-1)).toContain(CURATED);
+    expect(mocks.rematchClaimIds.flat()).toContain(CURATED);
+  });
+
+  // The browsed scan reads every Claim in the graph and is the slowest thing here. The curated tab
+  // draws nothing from it, so waiting on it was pure delay.
+  it('shows curated sections without waiting on the browsed claim scan', () => {
+    mocks.entityQueryLoading = true;
+    // The browsed half of the session lookup is still in flight too — the curated half is not,
+    // and only stays independent while the two are asked for separately.
+    mocks.browsedLookupLoading = true;
+    mocks.curatedIds = [CLAIM_SHARED];
+    // Not among the session's saved claims, so the curated lookup is its only source of positions.
+    mocks.savedClaims = [];
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] }];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
+    // Not just the card: its sides come from the session lookup, so a curated claim sharing the
+    // browsed lookup would render with no positions and no debate to request until the scan lands.
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+  });
+
+  // The session's own claims arrive in one round trip; they shouldn't sit behind the scan either.
+  it('shows the opponent’s claims without waiting on the browsed claim scan', () => {
+    mocks.entityQueryLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Salina’s positions/ }));
+
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 
   // An empty result mid-flight is not "nothing recommended"; landing on the opponent tab and then
