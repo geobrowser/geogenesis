@@ -779,6 +779,53 @@ describe('useClearDebateActivity', () => {
     });
     expect(invalidateQueries).not.toHaveBeenCalled();
   });
+
+  // DebateCoordinator routes into `source_debate_id` for as long as a session is deciding. Leaving
+  // the room while the session sat in activity sent the viewer straight back into the room they
+  // had just left, which is what made the screen flicker after a cancelled recording.
+  it('clears a rematch anchored to the debate being left', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const activity: DebateActivity = {
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: { ...rematchSession(), status: 'deciding' },
+      challenge: null,
+    };
+    queryClient.setQueryData(debateQueryKeys.activity('user-a'), activity);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useClearDebateActivity(), { wrapper });
+
+    act(() => result.current('debate-1'));
+
+    expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual({ ...activity, rematch: null });
+  });
+
+  it('leaves a rematch anchored to a different debate alone', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const activity: DebateActivity = {
+      online: true,
+      available_to_debate: true,
+      cooldown_until: null,
+      match: null,
+      debate: null,
+      rematch: { ...rematchSession(), source_debate_id: 'debate-2' },
+      challenge: null,
+    };
+    queryClient.setQueryData(debateQueryKeys.activity('user-a'), activity);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useClearDebateActivity(), { wrapper });
+
+    act(() => result.current('debate-1'));
+
+    expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(activity);
+  });
 });
 
 describe('debate query refresh behavior', () => {

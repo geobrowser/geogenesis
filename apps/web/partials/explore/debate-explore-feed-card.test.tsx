@@ -180,7 +180,7 @@ describe('DebateExploreFeedCard', () => {
   });
 
   it('renders the fallback when the debate is not watchable', () => {
-    mocks.debateQuery = { data: { ...watchableDebate(), status: 'aborted' } as Debate, isError: false };
+    mocks.debateQuery = { data: { ...watchableDebate(), status: 'cancelled' } as Debate, isError: false };
     renderCard();
     expect(screen.getByTestId('fallback')).toBeDefined();
   });

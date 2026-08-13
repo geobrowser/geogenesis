@@ -6,9 +6,10 @@ import { Avatar } from '~/design-system/avatar';
 import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
-import { type DebateChallenge, getCurrentGeoChatUserId } from '../api';
+import type { DebateChallenge } from '../api';
 import { useAcceptDebateChallenge, useDebateActivity, useRejectDebateChallenge } from '../hooks';
 import { speakerLabel } from '../playback-utils';
+import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { SpaceTopicFilters } from './claims-tab';
 import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
@@ -67,10 +68,16 @@ export function RequestsTab() {
     React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
   );
   const challenge = liveChallenges[0] ?? null;
-  const currentUserId = getCurrentGeoChatUserId();
-  // A claimless challenge belongs to no space, so a space filter can only hide it.
+  const currentUserId = useCurrentGeoChatUserId();
+  // A claimless challenge belongs to no space, so a space filter can only hide it. Role is left
+  // undecided until the viewer's id is known — guessing files an incoming challenge under Sent,
+  // where it reads as something the viewer sent and offers them "Cancel request" for it.
   const challengeRole =
-    !challenge || spaceId ? null : challenge.recipient.user_id === currentUserId ? 'recipient' : 'requester';
+    !challenge || spaceId || !currentUserId
+      ? null
+      : challenge.recipient.user_id === currentUserId
+        ? 'recipient'
+        : 'requester';
   const incomingChallenge = challengeRole === 'recipient' && status !== 'sent' ? challenge : null;
   const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
 

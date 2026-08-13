@@ -255,8 +255,19 @@ function useClearDebateActivityCache({ clearCooldown, reconcile }: { clearCooldo
   return React.useCallback(
     (debateId: string) => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => {
-        if (!current || current.debate?.id !== debateId) return current;
-        return clearCooldown ? { ...current, debate: null, cooldown_until: null } : { ...current, debate: null };
+        if (!current) return current;
+        const clearsDebate = current.debate?.id === debateId;
+        // The rematch anchored to this debate goes with it. DebateCoordinator navigates into
+        // `source_debate_id` for as long as a session is deciding, so leaving the room while the
+        // session sat in activity sent the viewer straight back into the room they just left.
+        const clearsRematch = current.rematch?.source_debate_id === debateId;
+        if (!clearsDebate && !clearsRematch) return current;
+        return {
+          ...current,
+          ...(clearsDebate ? { debate: null } : null),
+          ...(clearsDebate && clearCooldown ? { cooldown_until: null } : null),
+          ...(clearsRematch ? { rematch: null } : null),
+        };
       });
       if (reconcile) {
         void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
