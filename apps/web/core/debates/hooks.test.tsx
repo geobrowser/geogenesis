@@ -19,6 +19,7 @@ import {
   useDebateActivity,
   useDebateClaims,
   useDebateRematchClaims,
+  useDebateRematchClaimsForIds,
   useEndDebateTurn,
   useGeoChatAuth,
   useLeaveDebateRematch,
@@ -76,6 +77,55 @@ vi.mock('./api', async importOriginal => {
     markDebateReady: mocks.markDebateReady,
     updateDebateAvailability: mocks.updateDebateAvailability,
   };
+});
+
+describe('useDebateRematchClaimsForIds', () => {
+  beforeEach(() => {
+    mocks.authenticated = true;
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    mocks.listDebateRematchClaims.mockReset();
+    setCachedIdentityToken(null);
+  });
+
+  // geo-chat rejects a request naming more than 100 claims outright, and losing that response
+  // takes every claim's positions with it — not only the ones past the limit.
+  it('splits an over-long id list across requests and merges the responses', async () => {
+    const ids = Array.from({ length: 150 }, (_, index) => `claim-${index}`);
+    mocks.listDebateRematchClaims.mockImplementation((_sessionId: string, claimIds: string[]) =>
+      Promise.resolve({
+        claims: claimIds.map(claimId => ({ claim: { claim_entity_id: claimId } })),
+        excluded_claim_ids: [`excluded-${claimIds.length}`],
+      })
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(() => useDebateRematchClaimsForIds('session-1', ids), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await waitFor(() => expect(result.current.data.claims).toHaveLength(150));
+    const batchSizes = mocks.listDebateRematchClaims.mock.calls.map(([, claimIds]) => claimIds.length);
+    expect(batchSizes).toEqual([100, 50]);
+    // Exclusions from every batch count, deduped.
+    expect(result.current.data.excluded_claim_ids.sort()).toEqual(['excluded-100', 'excluded-50']);
+  });
+
+  it('asks once for a list that fits', async () => {
+    mocks.listDebateRematchClaims.mockResolvedValue({ claims: [], excluded_claim_ids: [] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    renderHook(() => useDebateRematchClaimsForIds('session-1', ['claim-a', 'claim-b']), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1));
+    expect(mocks.listDebateRematchClaims.mock.calls[0]![1]).toEqual(['claim-a', 'claim-b']);
+  });
 });
 
 function jwtExpiringIn(seconds: number) {
