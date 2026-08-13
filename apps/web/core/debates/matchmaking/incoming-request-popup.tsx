@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 
 import type { DebateRequest, DebateRequestParty } from '../api';
@@ -81,11 +80,24 @@ export function IncomingRequestPopup({
         label: 'Dismiss forever',
         onClick: () => answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true })),
       }}
-      footerNote={
+      headerNote={
         <ClaimDebateToggle
           disabled={busy}
-          failed={dismissRequest.isError}
-          onStandDown={() => answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true }))}
+          failed={dismissRequest.isError || setReadiness.isError}
+          onStandDown={() =>
+            answerOnce(() => {
+              // Two calls because they undo two different things. The dismiss answers *this*
+              // request, for both parties. Leaving the queue is what takes the viewer out of
+              // matchmaking on the claim — `remove_intent` alone left them standing as a match in
+              // everyone else's list, still offered for debates they had just declined.
+              setReadiness.mutate({
+                spaceId: request.claim.space_id,
+                claimId: request.claim.claim_entity_id,
+                ready: false,
+              });
+              dismissRequest.mutate({ requestId: request.id, removeIntent: true });
+            })
+          }
         />
       }
       overflowMenu={
@@ -142,12 +154,10 @@ function ClaimDebateToggle({
         aria-label="Debate this claim"
         disabled={disabled}
         onClick={toggle}
-        className="flex items-center gap-1.5 px-4 py-1 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+        className="flex items-center gap-2 text-[15px] leading-[14px] font-medium tracking-[-0.25px] text-grey-04 transition-colors hover:text-text disabled:opacity-50"
       >
         <Toggle checked={ready} className="shrink-0" />
-        <Text as="span" variant="metadata" color="current">
-          Debate this claim
-        </Text>
+        <span>Debate this claim</span>
       </button>
     </div>
   );
