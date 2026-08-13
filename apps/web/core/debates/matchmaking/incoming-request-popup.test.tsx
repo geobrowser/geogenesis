@@ -15,15 +15,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./hooks', () => ({
-  useAcceptDebateRequest: () => ({ mutate: mocks.accept, isPending: false, error: null }),
+  useAcceptDebateRequest: () => ({ mutate: mocks.accept, isPending: false, isError: false, error: null }),
   useDismissDebateRequest: () => ({
     mutate: mocks.dismiss,
     isPending: false,
     isError: mocks.dismissIsError,
     error: mocks.dismissIsError ? new Error('nope') : null,
   }),
-  useBlockDebateUser: () => ({ mutate: mocks.block, isPending: false, error: null }),
-  useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
+  useBlockDebateUser: () => ({ mutate: mocks.block, isPending: false, isError: false, error: null }),
+  useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, isError: false, error: null }),
 }));
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
@@ -194,12 +194,17 @@ describe('IncomingRequestPopup answers', () => {
   // The controls come back after a failure, so the press that follows has to land — otherwise the
   // request can never be answered from this popup again.
   it('lets the viewer answer again after a failed answer', () => {
-    mocks.dismiss.mockImplementation((_variables, options) => options?.onError?.(new Error('nope')));
-    render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
+    // Fail the way react-query does: run onError *and* leave the mutation in its error state.
+    mocks.dismiss.mockImplementation((_variables, options) => {
+      mocks.dismissIsError = true;
+      options?.onError?.(new Error('nope'));
+    });
+    const view = render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
     expect(mocks.dismiss).toHaveBeenCalledTimes(1);
 
+    view.rerender(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
     fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
 
     expect(mocks.dismiss).toHaveBeenCalledTimes(2);

@@ -89,7 +89,7 @@ export function IncomingRequestPopup({
       headerNote={
         <ClaimDebateToggle
           disabled={busy}
-          failed={dismissRequest.isError || setReadiness.isError}
+          failed={Boolean(dismissRequest.isError || setReadiness.isError)}
           onStandDown={() =>
             answerOnce(() => {
               // Two calls because they undo two different things. The dismiss answers *this*
