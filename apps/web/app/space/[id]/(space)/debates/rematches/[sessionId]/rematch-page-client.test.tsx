@@ -180,6 +180,15 @@ beforeEach(() => {
   mocks.curatedIds = [];
   mocks.savedClaims = null;
   mocks.browsedLookupLoading = false;
+  // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds.
+  window.IntersectionObserver ??= class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  } as unknown as typeof IntersectionObserver;
   // The hub's filter menus measure their dropdown.
   window.ResizeObserver ??= class {
     observe() {}
@@ -524,15 +533,31 @@ describe('DebateRematchPageClient', () => {
 
   // Recommended comes from the curator's page whole, so paging the browsed corpus means nothing
   // there — offering it implies there are more recommendations waiting.
-  it('keeps Load more off the Recommended tab while offering it on the others', () => {
+  it('keeps the paging sentinel off the Recommended tab while placing it on the others', () => {
     mocks.entityQueryHasNextPage = true;
     mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] }];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
 
     showAllClaims();
-    expect(screen.getByRole('button', { name: 'Load more' })).toBeInTheDocument();
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+  });
+
+  // No button to press any more; reaching the end of the list is what asks for the next page.
+  it('does not offer a Load more button', () => {
+    mocks.entityQueryHasNextPage = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+  });
+
+  it('leaves the sentinel out once there is no page left to fetch', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
   });
 
   // Curated claims are picked by hand, so they can be ones the browsed pages never reach. They
