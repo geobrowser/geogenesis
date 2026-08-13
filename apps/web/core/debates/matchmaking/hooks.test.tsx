@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '../api';
+import { clearEnteringDebate, useEnteringDebateId } from '../debate-entry-intent';
 import { useAcceptDebateRequest, useClaimReadiness } from './hooks';
 
 const mocks = vi.hoisted(() => ({
@@ -49,6 +50,7 @@ beforeEach(() => {
   mocks.push.mockReset();
   mocks.acceptDebateRequest.mockReset();
   mocks.joinDebateQueue.mockReset();
+  clearEnteringDebate();
 });
 
 describe('useAcceptDebateRequest', () => {
@@ -61,6 +63,18 @@ describe('useAcceptDebateRequest', () => {
     result.current.mutate({ requestId: 'request-1' });
 
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+  });
+
+  // The room route outlasts the activity refetch this mutation also kicks off, so the coordinator
+  // needs to know this tab is on its way in — otherwise it prompts it to join what it is entering.
+  it('claims the debate it is entering before it starts routing', async () => {
+    mocks.acceptDebateRequest.mockResolvedValue({ request: { id: 'request-1' }, debate });
+    const { result: intent } = renderHook(() => useEnteringDebateId());
+
+    const { result } = renderHook(() => useAcceptDebateRequest(), { wrapper });
+    result.current.mutate({ requestId: 'request-1' });
+
+    await waitFor(() => expect(intent.current).toBe('debate-1'));
   });
 
   it('stays put when acceptance produced no debate', async () => {

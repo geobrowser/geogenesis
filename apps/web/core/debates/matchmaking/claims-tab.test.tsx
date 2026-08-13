@@ -43,14 +43,14 @@ vi.mock('~/core/sync/use-store', () => ({
 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
 
-function claim(entityId: string, text: string, viewerResponded: boolean): MatchmakingClaim {
+function claim(entityId: string, text: string, viewerResponded: boolean, debateReady = false): MatchmakingClaim {
   return {
     claim: { id: `row-${entityId}`, space_id: SPACE_ID, claim_entity_id: entityId, claim: text, description: null },
     topics: [],
     response_kind: 'stance',
     viewer_position: viewerResponded ? true : null,
     viewer_response: viewerResponded ? { position: true, position_label: 'Agree' } : null,
-    viewer_debate_ready: false,
+    viewer_debate_ready: debateReady,
     readiness_disabled_reason: null,
     positions: [],
     score: 0,
@@ -98,6 +98,26 @@ describe('ClaimsTab', () => {
     expect(screen.queryByRole('heading', { name: 'My positions' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'All claims' })).not.toBeInTheDocument();
     expect(screen.getByText('Bitcoin will never top $250K')).toBeInTheDocument();
+  });
+
+  // "My positions" means every claim the viewer holds a response for, whether or not they are
+  // currently open to debating it — the toggle is a separate answer to a separate question. The
+  // reported bug drops the toggled-off ones, and it is geo-chat's join to fix; this pins the client
+  // half, so nobody closes the gap here by filtering the list a second time on the way in.
+  it('keeps positions the viewer is not currently open to debating', () => {
+    const OFF = '019fedb3-2e63-7b50-9c33-4e9f7a0d6631';
+    mocks.claims = [
+      claim(MINE, 'Chips are better than fries', true, true),
+      claim(OFF, 'Rust belongs in the kernel', true, false),
+    ];
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /All claims/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
+
+    expect(mocks.lastQuery).toMatchObject({ filter: 'mine' });
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+    expect(screen.getByText('Rust belongs in the kernel')).toBeInTheDocument();
   });
 
   it('drops the split once a filter already narrows to one group', () => {

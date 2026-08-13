@@ -421,6 +421,9 @@ export function DebateRecordingUploadCoordinator() {
         });
         void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(cancelTargetDebateId) });
         void queryClient.invalidateQueries({ queryKey: debateQueryKeys.media(cancelTargetDebateId) });
+        // Cancelling ends the debate and the rematch it anchored. Until activity says so the
+        // viewer still reads as mid-flow, which greys out every Debate control on every surface.
+        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
       }
       try {
         await Promise.all(
