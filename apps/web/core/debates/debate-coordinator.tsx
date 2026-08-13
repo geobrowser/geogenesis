@@ -130,13 +130,37 @@ export function DebateCoordinator() {
   // The dialog names both sides, so it needs both. Deciding that here rather than letting the
   // dialog render nothing keeps the rejoin bar as the fallback — otherwise a debate reported
   // without its participants would offer no way in at all.
+  //
+  // Only while it is still `ready`, for the same reason declining cancels: past that point there is
+  // nothing to decline. Aborting an `in_progress` debate ends a room the pair is recording in, and
+  // aborting a `thanking` one throws away a recording that is finished but not yet published. This
+  // coordinator is mounted app-wide, so a second tab opened on any other Geo page would put that
+  // button in front of someone mid-debate, in a dialog that covers the page and has no other way
+  // out. Everything past `ready` falls through to the rejoin bar, which offers the way in without
+  // offering a way to destroy it.
   const describable = (debate?.participants?.length ?? 0) >= 2;
-  const promptedDebate = debate && describable && !atDebate ? debate : null;
+  const promptedDebate = debate && debate.status === 'ready' && describable && !atDebate ? debate : null;
 
-  // Held until the room lands, then released — the timeout in the store is only the backstop for a
-  // push that never arrives at all.
+  // Held until a navigation commits, then released. Arriving at the room is the expected end, and
+  // `atDebate` carries on from the pathname there. Going anywhere else abandons the walk — holding
+  // the intent past that would suppress the prompt and the rejoin bar both, which are the only two
+  // ways into an unfinished debate, for the rest of the window. The timeout in the store is the
+  // backstop for a push that commits nothing at all.
+  const entryPathnameRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (enteringDebateId && pathname.includes(`/debates/${enteringDebateId}`)) clearEnteringDebate(enteringDebateId);
+    if (!enteringDebateId) {
+      entryPathnameRef.current = null;
+      return;
+    }
+    if (pathname.includes(`/debates/${enteringDebateId}`)) {
+      clearEnteringDebate(enteringDebateId);
+      return;
+    }
+    if (entryPathnameRef.current === null) {
+      entryPathnameRef.current = pathname;
+      return;
+    }
+    if (pathname !== entryPathnameRef.current) clearEnteringDebate(enteringDebateId);
   }, [enteringDebateId, pathname]);
 
   React.useEffect(() => {

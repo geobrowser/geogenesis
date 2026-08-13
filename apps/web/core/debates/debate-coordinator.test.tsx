@@ -261,6 +261,47 @@ describe('DebateCoordinator', () => {
     expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
   });
 
+  // Decline cancels the debate on the server, which is the honest answer to one that has not
+  // started and a destructive one to anything past that: `in_progress` is a room the pair is
+  // recording in, `thanking` is a recording that is finished but not yet published. The prompt is
+  // app-wide and covers the page with no other way out, so a second tab would hand that button to
+  // someone mid-debate.
+  it('does not offer to cancel a debate that is already under way', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'in_progress', participants: bothParticipants() };
+
+    const view = render(<DebateCoordinator />);
+
+    // The rejoin bar instead: still a way in, with nothing on it that ends the debate.
+    expect(await screen.findByRole('button', { name: /Your debate is under way/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'thanking', participants: bothParticipants() };
+    view.rerender(<DebateCoordinator />);
+
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+  });
+
+  // Impatient viewers leave. The intent has to end with whichever navigation commits first, or the
+  // debate they walked away from goes unmentioned — no prompt, no rejoin bar — for the rest of the
+  // 30s window.
+  it('releases the entry intent when the viewer navigates somewhere else instead', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-1');
+
+    const view = render(<DebateCoordinator />);
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+
+    mocks.pathname = '/space/space-1/people';
+    view.rerender(<DebateCoordinator />);
+
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
+  });
+
   it('does not offer a debate the viewer is already in', async () => {
     mocks.pathname = '/space/space-1/debates/debate-1';
     mocks.activity = activityWithDebate();
