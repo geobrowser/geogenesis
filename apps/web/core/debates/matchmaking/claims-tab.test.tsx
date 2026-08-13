@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +9,10 @@ import { ClaimsTab } from './claims-tab';
 const mocks = vi.hoisted(() => ({
   claims: [] as MatchmakingClaim[],
   lastQuery: null as unknown,
+  hasNextPage: false,
+  fetchNextPage: vi.fn(),
+  observed: [] as Element[],
+  trigger: null as null | (() => void),
 }));
 
 vi.mock('./hooks', () => ({
@@ -18,9 +22,9 @@ vi.mock('./hooks', () => ({
       data: { pages: [{ claims: mocks.claims, next_cursor: null, facets: { space_ids: [] } }] },
       isLoading: false,
       error: null,
-      hasNextPage: false,
+      hasNextPage: mocks.hasNextPage,
       isFetchingNextPage: false,
-      fetchNextPage: vi.fn(),
+      fetchNextPage: mocks.fetchNextPage,
       refetch: vi.fn(),
     };
   },
@@ -62,6 +66,27 @@ const MINE = '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419';
 const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
 beforeEach(() => {
+  mocks.hasNextPage = false;
+  mocks.fetchNextPage.mockReset();
+  mocks.observed = [];
+  // Records the sentinel and hands back a way to say it scrolled into view.
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(private readonly callback: IntersectionObserverCallback) {}
+      observe(element: Element) {
+        mocks.observed.push(element);
+        mocks.trigger = () =>
+          this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never);
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    }
+  );
+
   mocks.claims = [
     claim(MINE, 'Chips are better than fries', true),
     claim(THEIRS, 'Bitcoin will never top $250K', false),
@@ -77,6 +102,25 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ClaimsTab', () => {
+  // Pages arrive by reaching the end of the list, not by pressing anything.
+  it('fetches the next page when the end of the list scrolls into view', () => {
+    mocks.hasNextPage = true;
+    render(<ClaimsTab />);
+
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+    expect(mocks.fetchNextPage).not.toHaveBeenCalled();
+
+    act(() => mocks.trigger?.());
+
+    expect(mocks.fetchNextPage).toHaveBeenCalled();
+  });
+
+  it('places no sentinel once the last page has arrived', () => {
+    render(<ClaimsTab />);
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+  });
+
   // The claims you've taken a side on are the ones that can turn into debates, so they lead.
   it('leads with the claims the viewer has a position on', () => {
     render(<ClaimsTab />);
