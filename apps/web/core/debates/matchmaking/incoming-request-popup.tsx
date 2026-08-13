@@ -51,10 +51,13 @@ export function IncomingRequestPopup({
   // `isPending` only disables the buttons on the *next* render, so a double tap gets two answers in
   // before it takes effect — and the second one 409s over a request the first already took.
   const answered = React.useRef(false);
+  // Reports whether the answer was taken, so a control that also moves on press (the switch) can
+  // stay put when the guard turned it down instead of showing an answer that never happened.
   const answerOnce = (answer: () => void) => {
-    if (answered.current) return;
+    if (answered.current) return false;
     answered.current = true;
     answer();
+    return true;
   };
   // A failed answer has to give the guard back, or the request is unanswerable from this popup for
   // the rest of its life: the controls re-enable and the switch returns, but every press after that
@@ -96,19 +99,30 @@ export function IncomingRequestPopup({
               // request, for both parties. Leaving the queue is what takes the viewer out of
               // matchmaking on the claim — `remove_intent` alone left them standing as a match in
               // everyone else's list, still offered for debates they had just declined.
+              //
+              // Chained, not fired side by side, because the two can fail independently and there
+              // is no single endpoint that does both. Dismissing first and failing to leave the
+              // queue is the unrecoverable order: the dismissal closes this popup, so the viewer
+              // never learns they are still matchable and has nothing left to retry from. Leaving
+              // the queue first fails safe instead — the request stays pending, the switch comes
+              // back on, and pressing it again re-runs both.
               setReadiness.mutate(
                 {
                   spaceId: request.claim.space_id,
                   claimId: request.claim.claim_entity_id,
                   ready: false,
                 },
-                releaseAnswer
+                {
+                  ...releaseAnswer,
+                  // remove_intent is the variant behind "I don't want to debate this claim", which
+                  // is what this switch says. (Sending a plain dismiss instead was tried while
+                  // chasing a requester-side "nobody holding the opposite position is available"
+                  // error and made no difference, so the exclusion comes from the dismissal itself,
+                  // not this flag.)
+                  onSuccess: () =>
+                    dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer),
+                }
               );
-              // remove_intent is the variant behind "I don't want to debate this claim", which is
-              // what this switch says. (Sending a plain dismiss instead was tried while chasing a
-              // requester-side "nobody holding the opposite position is available" error and made
-              // no difference, so the exclusion comes from the dismissal itself, not this flag.)
-              dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer);
             })
           }
         />
@@ -141,7 +155,8 @@ function ClaimDebateToggle({
 }: {
   disabled: boolean;
   failed: boolean;
-  onStandDown: () => void;
+  /** Returns false when the request was already answered, e.g. Accept is mid-flight. */
+  onStandDown: () => boolean;
 }) {
   const [standDownRequested, setStandDownRequested] = React.useState(false);
 
@@ -152,10 +167,12 @@ function ClaimDebateToggle({
   // transition, so it misses a mutation that was already in an error state.
   const ready = !standDownRequested || failed;
 
+  // Only move the switch if the press actually answered the request. Accepting and then hitting
+  // this before the popup closes used to turn it off over an accept that was still going through,
+  // and a failed accept then left it off with no stand-down behind it.
   const toggle = () => {
     if (!ready) return;
-    setStandDownRequested(true);
-    onStandDown();
+    if (onStandDown()) setStandDownRequested(true);
   };
 
   return (

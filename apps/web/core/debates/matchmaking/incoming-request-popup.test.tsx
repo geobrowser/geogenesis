@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   dismissIsError: false,
   block: vi.fn(),
   setReadiness: vi.fn(),
+  readinessIsError: false,
 }));
 
 vi.mock('./hooks', () => ({
@@ -23,7 +24,12 @@ vi.mock('./hooks', () => ({
     error: mocks.dismissIsError ? new Error('nope') : null,
   }),
   useBlockDebateUser: () => ({ mutate: mocks.block, isPending: false, isError: false, error: null }),
-  useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, isError: false, error: null }),
+  useClaimReadiness: () => ({
+    mutate: mocks.setReadiness,
+    isPending: false,
+    isError: mocks.readinessIsError,
+    error: mocks.readinessIsError ? new Error('queue down') : null,
+  }),
 }));
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
@@ -75,6 +81,10 @@ beforeEach(() => {
   mocks.dismissIsError = false;
   mocks.block.mockReset();
   mocks.setReadiness.mockReset();
+  mocks.readinessIsError = false;
+  // The dismissal is chained off leaving the queue, so the default mock has to succeed the way
+  // react-query does or nothing downstream of it ever runs.
+  mocks.setReadiness.mockImplementation((_variables, options) => options?.onSuccess?.());
 
   // Radix popovers measure their content; jsdom ships neither observer.
   window.ResizeObserver ??= class {
@@ -206,5 +216,41 @@ describe('IncomingRequestPopup answers', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
 
     expect(mocks.dismiss).toHaveBeenCalledTimes(2);
+  });
+
+  // The two calls can fail independently and no endpoint does both. Dismissing first would close
+  // the popup on a viewer who is still in the queue — matchable on a claim they just declined, with
+  // nothing left to retry from. Leaving the queue first keeps the failure recoverable.
+  it('does not dismiss the request when leaving the claim queue fails', () => {
+    mocks.setReadiness.mockImplementation((_variables, options) => {
+      mocks.readinessIsError = true;
+      options?.onError?.(new Error('queue down'));
+    });
+    const view = render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
+
+    expect(mocks.dismiss).not.toHaveBeenCalled();
+
+    // The request is still live, so the switch has to come back and the next press has to land.
+    view.rerender(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
+    expect(screen.getByRole('switch', { name: 'Debate this claim' })).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
+    expect(mocks.setReadiness).toHaveBeenCalledTimes(2);
+  });
+
+  // The switch moves on press rather than on the response, so it has to check that the press was
+  // actually taken: accepting first consumes the answer, and a failed accept would otherwise leave
+  // the switch off with no stand-down behind it.
+  it('leaves the claim toggle alone when the request was already answered', () => {
+    render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
+
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+    expect(mocks.dismiss).not.toHaveBeenCalled();
+    expect(screen.getByRole('switch', { name: 'Debate this claim' })).toHaveAttribute('aria-checked', 'true');
   });
 });
