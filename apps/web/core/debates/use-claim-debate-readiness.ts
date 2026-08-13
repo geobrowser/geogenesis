@@ -8,7 +8,7 @@ import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote'
 
 import { type DebateClaimsResponse, GeoChatRequestError, type MatchmakingReadiness } from './api';
 import { useDebateReadinessIntent } from './debate-readiness-intent';
-import { useGeoChatAuth, useJoinDebateQueue, useLeaveDebateQueue } from './hooks';
+import { debateQueryKeys, useGeoChatAuth, useJoinDebateQueue, useLeaveDebateQueue } from './hooks';
 
 export type ClaimDebateReadinessControl = {
   /** Where the switch sits, including a desired state that hasn't been sent to geo-chat yet. */
@@ -20,6 +20,12 @@ export type ClaimDebateReadinessControl = {
   /** The viewer's side, read through their own response before geo-chat can see it. */
   viewerPosition: boolean | null;
   toggle: () => void;
+  /**
+   * Record a specific readiness rather than flipping. For callers that stand the viewer up as a
+   * consequence of something else — the rematch picker, where taking a side *is* asking to debate.
+   * Going through the same intent means the switch and the opt-in can't both send.
+   */
+  setReady: (ready: boolean) => void;
 };
 
 /**
@@ -70,6 +76,16 @@ export function useClaimDebateReadiness({
     spaceId,
     entityId,
     readiness.response_kind
+  );
+
+  /** Every cached family that can report this claim's response, across the surfaces that show it. */
+  const readinessFamilies = React.useMemo(
+    () => [
+      ['debates', 'claims', spaceId] as const,
+      debateQueryKeys.matchmakingClaimsRoot(intentAccountKey),
+      debateQueryKeys.matches(intentAccountKey),
+    ],
+    [intentAccountKey, spaceId]
   );
 
   const pendingResponse = responseIndexing.status === 'idle' ? null : responseIndexing.pending;
@@ -211,11 +227,17 @@ export function useClaimDebateReadiness({
 
           if (retryAfterRefetch) {
             joinQueue.reset();
-            void queryClient.refetchQueries({ queryKey: ['debates', 'claims', spaceId] }).finally(() => {
-              updateIntent(current =>
-                current?.desiredReady && current.refreshing ? { ...current, refreshing: false } : current
-              );
-            });
+            // Every family that can carry this claim's response, not just the entity page's. The
+            // hub reads readiness from the matchmaking families, where a refetch of the per-space
+            // family alone matches no active query — it resolves instantly and burns the one retry
+            // on exactly the state that just 409'd.
+            void Promise.all(readinessFamilies.map(queryKey => queryClient.refetchQueries({ queryKey }))).finally(
+              () => {
+                updateIntent(current =>
+                  current?.desiredReady && current.refreshing ? { ...current, refreshing: false } : current
+                );
+              }
+            );
             return;
           }
         }
@@ -231,6 +253,7 @@ export function useClaimDebateReadiness({
       joinQueue,
       queryClient,
       readiness.viewer_response?.position,
+      readinessFamilies,
       responseIndexing,
       responseWithdrawalPending,
       setIntent,
@@ -239,32 +262,31 @@ export function useClaimDebateReadiness({
     ]
   );
 
-  const toggle = React.useCallback(() => {
-    const desiredReady = !checked;
-    if (desiredReady && (viewerPosition === null || !canEnableToggle)) return;
+  const setReady = React.useCallback(
+    (desiredReady: boolean) => {
+      if (desiredReady && (viewerPosition === null || !canEnableToggle)) return;
 
-    setIntent({
-      desiredReady,
-      confirmedReady: intent?.confirmedReady ?? backendReady,
-      inFlightReady: intent?.inFlightReady ?? null,
-      expectedPosition: desiredReady ? viewerPosition : (intent?.expectedPosition ?? viewerPosition),
-      responseRunId: desiredReady ? (pendingResponse ? responseIndexing.runId : null) : (intent?.responseRunId ?? null),
-      hasRetried: desiredReady ? false : (intent?.hasRetried ?? false),
-      refreshing: false,
-      error: null,
-    });
-  }, [
-    backendReady,
-    canEnableToggle,
-    checked,
-    intent,
-    pendingResponse,
-    responseIndexing.runId,
-    setIntent,
-    viewerPosition,
-  ]);
+      setIntent({
+        desiredReady,
+        confirmedReady: intent?.confirmedReady ?? backendReady,
+        inFlightReady: intent?.inFlightReady ?? null,
+        expectedPosition: desiredReady ? viewerPosition : (intent?.expectedPosition ?? viewerPosition),
+        responseRunId: desiredReady
+          ? pendingResponse
+            ? responseIndexing.runId
+            : null
+          : (intent?.responseRunId ?? null),
+        hasRetried: desiredReady ? false : (intent?.hasRetried ?? false),
+        refreshing: false,
+        error: null,
+      });
+    },
+    [backendReady, canEnableToggle, intent, pendingResponse, responseIndexing.runId, setIntent, viewerPosition]
+  );
 
-  return { checked, disabled, isSaving, error: intent?.error ?? null, viewerPosition, toggle };
+  const toggle = React.useCallback(() => setReady(!checked), [checked, setReady]);
+
+  return { checked, disabled, isSaving, error: intent?.error ?? null, viewerPosition, toggle, setReady };
 }
 
 /** Turns geo-chat's machine-readable readiness reason into something worth showing, or nothing. */

@@ -22,6 +22,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./hooks', () => ({
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  },
   useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useJoinDebateQueue: () => ({
     mutateAsync: mocks.joinMutateAsync,

@@ -32,12 +32,12 @@ import {
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
-import { useClaimReadiness } from '~/core/debates/matchmaking/hooks';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { useClaimDebateReadiness } from '~/core/debates/use-claim-debate-readiness';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
@@ -678,16 +678,6 @@ function RematchClaimCard({
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
 
-  useReadinessOnFirstPosition({
-    claim: claim.claim,
-    localPosition,
-    // The optimistic copy exists only while this client's own submission is in flight, so it is
-    // what separates "the viewer just picked this side" from "we just learned the side they already
-    // held" — which is what a position looks like when their identity or geo-chat's copy lands late.
-    pickedHere: optimisticResponse !== undefined,
-    responseSettled,
-    alreadyReady: claimReadiness?.viewer_debate_ready ?? false,
-  });
   const requesting =
     session?.status === 'request_pending' && request?.claim.claim_entity_id === claim.claim.claim_entity_id;
 
@@ -696,15 +686,32 @@ function RematchClaimCard({
     [claim, responseKind, session]
   );
 
+  // geo-chat's copy, deliberately — not `localPosition`. The card reads the viewer's own in-flight
+  // response off the indexing snapshot for display, and uses this field for the two questions only
+  // the server can answer: whether it is safe to send readiness yet, and whether the position
+  // summaries already count the viewer. Handing it the optimistic answer claimed the server agreed
+  // the instant the viewer clicked, which sent readiness before there was an indexed response to
+  // hang it on and suppressed the optimistic avatar the card would otherwise add.
   const readiness: MatchmakingReadiness = {
     response_kind: responseKind,
     viewer_response:
-      localPosition === null
+      serverLocalPosition === null
         ? null
-        : { position: localPosition, position_label: responsePositionLabel(responseKind, localPosition) },
+        : { position: serverLocalPosition, position_label: responsePositionLabel(responseKind, serverLocalPosition) },
     viewer_debate_ready: claimReadiness?.viewer_debate_ready ?? false,
     readiness_disabled_reason: claimReadiness?.readiness_disabled_reason ?? null,
   };
+
+  useReadinessOnFirstPosition({
+    claim: claim.claim,
+    readiness,
+    localPosition,
+    // The optimistic copy exists only while this client's own submission is in flight, so it is
+    // what separates "the viewer just picked this side" from "we just learned the side they already
+    // held" — which is what a position looks like when their identity or geo-chat's copy lands late.
+    pickedHere: optimisticResponse !== undefined,
+    alreadyReady: claimReadiness?.viewer_debate_ready ?? false,
+  });
 
   return (
     <MatchmakingClaimCard
@@ -749,29 +756,36 @@ function RematchClaimCard({
  * Only a side picked while the picker is open counts. Opting in for positions already held on
  * arrival would fire a write per claim on load, and would silently undo a stand-down the viewer
  * made somewhere else. Switching sides doesn't re-fire either, for the same reason.
+ *
+ * Recorded through the card's own readiness intent rather than sent from here. The two would
+ * otherwise both stand the viewer up on the same claim — the switch holds an intent through
+ * publishing now, so a viewer who took a side and pressed it would have queued twice — and the
+ * intent already owns the wait for geo-chat to catch up, which this used to duplicate.
  */
 function useReadinessOnFirstPosition({
   claim,
+  readiness,
   localPosition,
   pickedHere,
-  responseSettled,
   alreadyReady,
 }: {
   claim: DebateClaimSummary;
+  readiness: MatchmakingReadiness;
   localPosition: boolean | null;
   /** Whether {@link localPosition} is this client's own in-flight submission. */
   pickedHere: boolean;
-  /** Whether geo-chat's copy of the response has caught up with {@link localPosition}. */
-  responseSettled: boolean;
   alreadyReady: boolean;
 }) {
-  const setReadiness = useClaimReadiness();
+  const { setReady } = useClaimDebateReadiness({
+    readiness,
+    entityId: claim.claim_entity_id,
+    spaceId: claim.space_id,
+    canEnable: true,
+  });
   // Seeded with the position held on mount, so arriving with one is not a transition.
   const previousPosition = React.useRef(localPosition);
   const optedIn = React.useRef(false);
-  const [wantsReadiness, setWantsReadiness] = React.useState(false);
 
-  // The intent is recorded off the optimistic position, so it survives the wait below.
   React.useEffect(() => {
     const previous = previousPosition.current;
     previousPosition.current = localPosition;
@@ -783,19 +797,9 @@ function useReadinessOnFirstPosition({
     // they made elsewhere — the thing this hook is careful not to do.
     if (!justEstablished || !pickedHere || alreadyReady || optedIn.current) return;
 
-    setWantsReadiness(true);
-  }, [alreadyReady, localPosition, pickedHere]);
-
-  // ...but it is only sent once geo-chat can see the response readiness depends on. Firing on the
-  // optimistic position instead had the server reject it for a claim it had no response for, and
-  // the rollback in `useClaimReadiness` flipped the switch straight back off.
-  React.useEffect(() => {
-    if (!wantsReadiness || !responseSettled || optedIn.current) return;
-
     optedIn.current = true;
-    setWantsReadiness(false);
-    setReadiness.mutate({ spaceId: claim.space_id, claimId: claim.claim_entity_id, ready: true });
-  }, [claim.claim_entity_id, claim.space_id, responseSettled, setReadiness, wantsReadiness]);
+    setReady(true);
+  }, [alreadyReady, localPosition, pickedHere, setReady]);
 }
 
 /** One curated block, collapsible so a long page of recommendations stays scannable. */

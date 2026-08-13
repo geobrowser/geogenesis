@@ -36,9 +36,9 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
   setReadiness: vi.fn(),
-  joinQueue: vi.fn((_variables: { spaceId: string; claimId: string }) =>
-    Promise.resolve({ claim: null, match: null })
-  ),
+  joinQueue: vi.fn((_variables: { spaceId: string; claimId: string }) => Promise.resolve({ claim: null, match: null })),
+  /** Which space each card wired its readiness machine to, in mount order. */
+  joinQueueSpaceIds: [] as string[],
   leaveQueue: vi.fn((_variables: { spaceId: string; claimId: string }) =>
     Promise.resolve({ claim: null, match: null })
   ),
@@ -113,14 +113,24 @@ vi.mock('~/core/debates/hooks', () => ({
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
   // The card's Debate switch shares the entity page's queue-backed readiness machine.
-  useJoinDebateQueue: (spaceId: string) => ({
-    mutateAsync: (variables: { claimId: string }) => mocks.joinQueue({ spaceId, ...variables }),
-    reset: vi.fn(),
-    isPending: false,
-    error: null,
-  }),
+  useJoinDebateQueue: (spaceId: string) => {
+    mocks.joinQueueSpaceIds.push(spaceId);
+    return {
+      mutateAsync: (variables: { claimId: string }) => mocks.joinQueue({ spaceId, ...variables }),
+      reset: vi.fn(),
+      isPending: false,
+      error: null,
+    };
+  },
   useLeaveDebateQueue: (spaceId: string) => ({
     mutateAsync: (variables: { claimId: string }) => mocks.leaveQueue({ spaceId, ...variables }),
     isPending: false,
@@ -158,7 +168,13 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     isConnected: true,
     personalSpaceId: 'personal-space',
   }),
-  useEntityResponseIndexingSnapshot: () => ({ status: 'idle', pending: null, runId: null }),
+  // In production `optimisticResponse` is derived from this snapshot, so the two can't disagree.
+  // Mocking them independently let a test assert an optimistic side the snapshot denied.
+  useEntityResponseIndexingSnapshot: ({ entityId }: { entityId: string }) => {
+    const expectedResponse = mocks.optimisticResponses.get(entityId);
+    if (expectedResponse === undefined) return { status: 'idle', pending: null, runId: null };
+    return { status: 'reconciling', pending: { entityId, expectedResponse }, runId: `run-${entityId}` };
+  },
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
 
@@ -208,6 +224,9 @@ beforeEach(() => {
   mocks.claimReadinessLoading = false;
   mocks.claimReadinessError = false;
   mocks.setReadiness.mockReset();
+  mocks.joinQueue.mockClear();
+  mocks.leaveQueue.mockClear();
+  mocks.joinQueueSpaceIds.length = 0;
   mocks.openSidePanel.mockReset();
   mocks.entityQueries.length = 0;
   mocks.entityQueryPlaceholder = false;
@@ -977,7 +996,7 @@ describe('DebateRematchPageClient', () => {
   // Readiness is rejected for a claim geo-chat has no response for, and `useClaimReadiness` rolls
   // the switch back when that happens — so opting in off the optimistic position made the toggle
   // visibly flip on and straight back off.
-  it('waits for the response to settle before standing the viewer ready', () => {
+  it('waits for the response to settle before standing the viewer ready', async () => {
     const unresponded = {
       ...sharedClaim(),
       participants: [
@@ -987,12 +1006,12 @@ describe('DebateRematchPageClient', () => {
     };
     mocks.claims = [unresponded];
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
-    expect(mocks.setReadiness).not.toHaveBeenCalled();
+    expect(mocks.joinQueue).not.toHaveBeenCalled();
 
     // The side is picked: optimistic only, geo-chat still has nothing.
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-    expect(mocks.setReadiness).not.toHaveBeenCalled();
+    expect(mocks.joinQueue).not.toHaveBeenCalled();
 
     // geo-chat catches up, and only now is readiness sent.
     mocks.claims = [
@@ -1006,18 +1025,14 @@ describe('DebateRematchPageClient', () => {
     ];
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(mocks.setReadiness).toHaveBeenCalledWith({
-      spaceId: SPACE_1,
-      claimId: CLAIM_SHARED,
-      ready: true,
-    });
+    await waitFor(() => expect(mocks.joinQueue).toHaveBeenCalledWith({ spaceId: SPACE_1, claimId: CLAIM_SHARED }));
   });
 
   // `entity.spaces` is rank-ordered and counts any space that merely references the claim, so
   // `spaces[0]` is a citing space whenever it outranks the claim's own. Responding in one space and
   // asking to debate in another is what the server answers with "respond to this claim in this
   // space before enabling debate readiness".
-  it('scopes a browsed claim to the space it is named in, not the highest-ranked one citing it', async () => {
+  it('scopes a browsed claim to the space it is named in, not the highest-ranked one citing it', () => {
     mocks.entities = [
       {
         ...publishedEntity(CLAIM_MORE, 'A claim that lives in Podcasts'),
@@ -1038,13 +1053,15 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();
 
-    const card = screen.getByText('A claim that lives in Podcasts').closest('article');
-    fireEvent.click(within(card!).getByRole('switch', { name: 'Ready to debate this claim' }));
-
-    await waitFor(() => expect(mocks.joinQueue).toHaveBeenCalledWith({ spaceId: PODCASTS_SPACE, claimId: CLAIM_MORE }));
+    // The space is fixed when the card wires its readiness machine, not when the request goes out —
+    // a browsed claim has no indexed response yet, so the machine holds the request until geo-chat
+    // has one. What matters here is which space it is bound to.
+    expect(screen.getByText('A claim that lives in Podcasts')).toBeInTheDocument();
+    expect(mocks.joinQueueSpaceIds).toContain(PODCASTS_SPACE);
+    expect(mocks.joinQueueSpaceIds).not.toContain(CRYPTO_SPACE);
   });
 
-  it('stands the viewer ready only once, even as the claim keeps refetching', () => {
+  it('stands the viewer ready only once, even as the claim keeps refetching', async () => {
     mocks.claims = [
       {
         ...sharedClaim(),
@@ -1071,7 +1088,7 @@ describe('DebateRematchPageClient', () => {
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(mocks.setReadiness).toHaveBeenCalledOnce();
+    await waitFor(() => expect(mocks.joinQueue).toHaveBeenCalledOnce());
   });
 });
 

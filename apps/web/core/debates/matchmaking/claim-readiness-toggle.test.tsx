@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 
-import type { DebateClaimSummary, MatchmakingReadiness } from '../api';
+import { type DebateClaimSummary, GeoChatRequestError, type MatchmakingReadiness } from '../api';
 import { ClaimReadinessToggle } from './claim-readiness-toggle';
 
 const mocks = vi.hoisted(() => ({
@@ -21,6 +21,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../hooks', () => ({
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  },
   useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useJoinDebateQueue: () => ({
     mutateAsync: mocks.joinMutateAsync,
@@ -215,6 +222,25 @@ describe('ClaimReadinessToggle', () => {
 
     expect(toggle()).toHaveAttribute('aria-checked', 'false');
     expect(mocks.joinMutateAsync).not.toHaveBeenCalled();
+  });
+
+  // The one retry after a `claim_response_required` is only worth spending on fresher state. The
+  // hub reads readiness from the matchmaking families, so refetching the entity page's per-space
+  // family alone matched no active query — it resolved instantly and retried the same 409.
+  it('refetches every readiness family before retrying claim_response_required', async () => {
+    mocks.joinMutateAsync.mockRejectedValueOnce(
+      new GeoChatRequestError('Respond before debating', 'claim_response_required', 409)
+    );
+    const view = renderToggle();
+    const refetchQueries = vi.spyOn(view.queryClient, 'refetchQueries');
+
+    fireEvent.click(toggle());
+
+    await waitFor(() => expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(2));
+    const refetched = refetchQueries.mock.calls.map(([options]) => options?.queryKey);
+    expect(refetched).toContainEqual(['debates', 'claims', SPACE_ID]);
+    expect(refetched).toContainEqual(['debates', 'account', 'account-1', 'matchmaking-claims']);
+    expect(refetched).toContainEqual(['debates', 'account', 'account-1', 'matches']);
   });
 
   it('cancels held readiness when the switch is turned back off before it is sent', () => {
