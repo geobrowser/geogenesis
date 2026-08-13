@@ -8,7 +8,7 @@ import { Toggle } from '~/design-system/toggle';
 import type { DebateRequest, DebateRequestParty } from '../api';
 import { DebateRequestDialog, type DebateRequestDialogParticipant } from '../debate-request-dialog';
 import { speakerLabel } from '../playback-utils';
-import { useAcceptDebateRequest, useBlockDebateUser, useDismissDebateRequest } from './hooks';
+import { useAcceptDebateRequest, useBlockDebateUser, useClaimReadiness, useDismissDebateRequest } from './hooks';
 import { SpaceChip } from './matchmaking-claim-card';
 import { RequestOverflowMenu } from './request-overflow-menu';
 
@@ -37,6 +37,7 @@ export function IncomingRequestPopup({
 }) {
   const acceptRequest = useAcceptDebateRequest();
   const dismissRequest = useDismissDebateRequest();
+  const setReadiness = useClaimReadiness();
   const blockUser = useBlockDebateUser();
 
   const participants = React.useMemo<DebateRequestDialogParticipant[]>(
@@ -44,8 +45,8 @@ export function IncomingRequestPopup({
     [request.recipient, request.requester]
   );
 
-  const busy = acceptRequest.isPending || dismissRequest.isPending || blockUser.isPending;
-  const error = [acceptRequest.error, dismissRequest.error, blockUser.error].find(
+  const busy = acceptRequest.isPending || dismissRequest.isPending || setReadiness.isPending || blockUser.isPending;
+  const error = [acceptRequest.error, dismissRequest.error, setReadiness.error, blockUser.error].find(
     (candidate): candidate is Error => candidate instanceof Error
   );
   // `isPending` only disables the buttons on the *next* render, so a double tap gets two answers in

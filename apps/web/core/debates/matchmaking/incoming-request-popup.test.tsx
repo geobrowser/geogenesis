@@ -131,6 +131,13 @@ describe('IncomingRequestPopup', () => {
     fireEvent.click(toggle);
 
     expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true });
+    // And leave the claim's queue: dismissing answers this request, but only leaving the queue
+    // takes the viewer out of everyone else's matches for the claim.
+    expect(mocks.setReadiness).toHaveBeenCalledWith({
+      spaceId: 'space-1',
+      claimId: 'claim-1',
+      ready: false,
+    });
     expect(mocks.accept).not.toHaveBeenCalled();
   });
 
@@ -142,6 +149,7 @@ describe('IncomingRequestPopup', () => {
     fireEvent.click(toggle);
 
     expect(mocks.dismiss).toHaveBeenCalledTimes(1);
+    expect(mocks.setReadiness).toHaveBeenCalledTimes(1);
   });
 
   it('offers blocking behind the overflow menu', () => {
