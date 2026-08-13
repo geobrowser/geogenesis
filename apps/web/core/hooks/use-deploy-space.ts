@@ -2,11 +2,6 @@
 
 import { getCreateDaoSpaceCalldata } from '@geoprotocol/geo-sdk';
 import { DaoSpaceFactoryAbi } from '@geoprotocol/geo-sdk/abis';
-
-/** The SDK doesn't re-export `VotingSettingsInput` from the public entry, so we
- *  derive it from the function signature we already depend on. Source of truth
- *  stays in the SDK. */
-export type VotingSettingsInput = Parameters<typeof getCreateDaoSpaceCalldata>[0]['votingSettings'];
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Effect, Either } from 'effect';
@@ -26,6 +21,8 @@ import { SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
 import { getImagePath } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
+export type VotingSettingsInput = Parameters<typeof getCreateDaoSpaceCalldata>[0]['votingSettings'];
+
 type DeployArgs = {
   type: SpaceType;
   spaceName: string;
@@ -34,6 +31,7 @@ type DeployArgs = {
   topicId?: string;
   /** Optional override for DAO voting settings; ignored for personal-style spaces. */
   votingSettings?: VotingSettingsInput;
+  seedOverviewTemplate?: boolean;
 };
 
 /**
@@ -90,7 +88,15 @@ export function useDeploySpace() {
         return null;
       }
 
-      const { spaceName, type, governanceType, spaceImage, topicId, votingSettings } = args;
+      const {
+        spaceName,
+        type,
+        governanceType,
+        spaceImage,
+        topicId,
+        votingSettings,
+        seedOverviewTemplate = true,
+      } = args;
 
       const isPublicGovernance = determineIsPublicGovernance(type, governanceType);
 
@@ -103,6 +109,7 @@ export function useDeploySpace() {
           spaceCoverUri: spaceImage,
           topicId,
           votingSettings,
+          seedOverviewTemplate,
         });
       } else {
         // Non-DAO governance types (personal, company, nonprofit, …) share onboarding's
@@ -152,6 +159,7 @@ type CreateDaoSpaceParams = {
   spaceCoverUri?: string;
   topicId?: string;
   votingSettings?: VotingSettingsInput;
+  seedOverviewTemplate?: boolean;
 };
 
 async function createDaoSpace({
@@ -162,6 +170,7 @@ async function createDaoSpace({
   spaceCoverUri,
   topicId,
   votingSettings,
+  seedOverviewTemplate = true,
 }: CreateDaoSpaceParams): Promise<string> {
   const personalSpaceId = await getPersonalSpaceId(walletAddress);
   if (!personalSpaceId) {
@@ -285,17 +294,18 @@ async function createDaoSpace({
     throw new Error('Timed out waiting for DAO space to index.');
   }
 
-  // Seed the overview tab. Deliberately after indexing and deliberately non-fatal
-  try {
-    await seedNewSpaceOverview({
-      smartAccount,
-      spaceId: newSpaceId,
-      spaceAddress: newDaoSpaceAddress,
-      spaceHomeEntityId: resolvedTopicId,
-      authorSpaceId: personalSpaceId,
-    });
-  } catch (error) {
-    console.error('[CREATE_SPACE] Failed to seed the overview template; the space itself was created.', error);
+  if (seedOverviewTemplate) {
+    try {
+      await seedNewSpaceOverview({
+        smartAccount,
+        spaceId: newSpaceId,
+        spaceAddress: newDaoSpaceAddress,
+        spaceHomeEntityId: resolvedTopicId,
+        authorSpaceId: personalSpaceId,
+      });
+    } catch (error) {
+      console.error('[CREATE_SPACE] Failed to seed the overview template; the space itself was created.', error);
+    }
   }
 
   return newSpaceId;
