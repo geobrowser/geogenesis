@@ -44,17 +44,25 @@ export function GeoImage({ value, alt = '', unoptimized = false, ...props }: Geo
 
 type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onError'> & {
   value: string;
+  /**
+   * Called once the image cannot be loaded from anywhere — a non-IPFS source that failed, or the
+   * last gateway in the chain. Lets a caller draw something of its own rather than leave the
+   * browser's broken-image glyph on screen.
+   */
+  onExhausted?: () => void;
 };
 
 /** Native img element resolving IPFS values through the gateway fallback chain (Filebase → Pinata → Lighthouse). */
-export function NativeGeoImage({ value, alt = '', ...props }: NativeGeoImageProps) {
+export function NativeGeoImage({ value, alt = '', onExhausted, ...props }: NativeGeoImageProps) {
   const [level, setLevel] = useState(0);
 
   const handleError = useCallback(() => {
-    if (value.startsWith('ipfs://')) {
-      setLevel(prev => Math.min(prev + 1, IPFS_GATEWAY_COUNT - 1));
+    if (value.startsWith('ipfs://') && level < IPFS_GATEWAY_COUNT - 1) {
+      setLevel(level + 1);
+      return;
     }
-  }, [value]);
+    onExhausted?.();
+  }, [level, onExhausted, value]);
 
   const src = getImagePathAtLevel(value, level);
   if (!isRenderableSrc(src)) return null;

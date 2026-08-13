@@ -13,6 +13,7 @@ import {
 } from '~/core/community-calls/api';
 import { OCCURRENCE_MATCH_TOLERANCE_MS, detailsHref, parseRoomName } from '~/core/community-calls/constants';
 import { formatDateTime, formatDuration, formatFullDate, formatTimeRange } from '~/core/community-calls/format';
+import { participantAvatarUrl } from '~/core/community-calls/participant-avatar';
 import {
   CallAttendee,
   CallChatLogMessage,
@@ -326,11 +327,7 @@ function AttendeesTab({ attendees }: { attendees: CallAttendee[] }) {
         <li key={a.identity} className="flex items-center justify-between rounded-lg border border-grey-02 p-3">
           <div className="flex items-center gap-2">
             <span className="size-6 shrink-0 overflow-hidden rounded-full">
-              <Avatar
-                value={a.name || a.identity}
-                avatarUrl={a.avatarCid ? `ipfs://${a.avatarCid}` : undefined}
-                size={24}
-              />
+              <Avatar value={a.name || a.identity} avatarUrl={participantAvatarUrl(a.avatarCid)} size={24} />
             </span>
             <div className="flex flex-col">
               <span className="text-metadata text-text">
