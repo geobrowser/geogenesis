@@ -4,8 +4,8 @@ import * as React from 'react';
 
 import { notFound } from 'next/navigation';
 
+import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
 import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
@@ -32,7 +32,8 @@ import { SpaceTabs } from '~/partials/space-page/space-tabs';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
-import { SpaceChromeGate, SpaceHeaderContentContainer } from './space-chrome-gate';
+import { SpaceChromeGate, SpaceHeaderContentGate } from './space-chrome-gate';
+import { resolveSpaceSidebar } from './space-sidebar';
 
 type LayoutProps = {
   params: Promise<{ id: string }>;
@@ -50,13 +51,10 @@ export default async function Layout(props0: LayoutProps) {
     notFound();
   }
 
-  const [props, communityCalls] = await Promise.all([
-    getSpaceFrontPage(spaceId),
-    fetchCommunityCalls(spaceId).catch(() => []),
-  ]);
+  const [props, { communityCalls }] = await Promise.all([getSpaceFrontPage(spaceId), resolveSpaceSidebar(spaceId)]);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
-  const hasCommunityCallsSidebar = !Spaces.hasExternalTopic(props.space) && communityCalls.length > 0;
+  const isExternalTopic = Spaces.hasExternalTopic(props.space);
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
@@ -70,7 +68,11 @@ export default async function Layout(props0: LayoutProps) {
       >
         <SpaceChromeGate>
           <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-          <SpaceHeaderContentContainer hasSidebar={hasCommunityCallsSidebar}>
+          <SpaceHeaderContentGate
+            spaceId={spaceId}
+            hasCommunityCalls={communityCalls.length > 0}
+            isExternalTopic={isExternalTopic}
+          >
             <div className="space-y-2">
               <EditableSpaceHeading
                 spaceId={spaceId}
@@ -116,7 +118,7 @@ export default async function Layout(props0: LayoutProps) {
                 />
               </React.Suspense>
             </div>
-          </SpaceHeaderContentContainer>
+          </SpaceHeaderContentGate>
           <Spacer height={20} />
         </SpaceChromeGate>
         {children}
@@ -244,12 +246,10 @@ const getSpaceFrontPage = async (spaceId: string) => {
     ...blockRelations,
     ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
   ];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(
-    allBlocks,
-    cachedFetchEntitiesBatch,
-    spaceId,
-    allBlockRelations
-  );
+  const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
+    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
+  ]);
 
   return {
     id: entity.id,
@@ -257,7 +257,9 @@ const getSpaceFrontPage = async (spaceId: string) => {
     tabRelations,
     tabs,
     blockRelations: entity.relations,
-    blocks,
+    // Shown-column properties ride along with the blocks so the editor hydrates them in the same
+    // pass — a gallery needs the dimensions on them to size its cards on the first paint.
+    blocks: [...blocks, ...shownPropertyEntities],
     initialCollectionItems,
     space,
     avatarUrl: Entities.avatar(entity.relations) ?? null,

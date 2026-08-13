@@ -25,7 +25,7 @@ import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata'
 import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import {
   LIST_GALLERY_BROWSE_BODY_CLASS,
@@ -83,7 +83,7 @@ export function TableBlockListItem({
   });
   const description = descriptionValue?.value ?? nameCell.description ?? null;
 
-  const image = useBlockMainMediaUrl({
+  const { url: image, isResolving: isImageResolving } = useBlockMainMediaUrl({
     entityId: rowEntityId,
     spaceId: currentSpaceId,
     mediaPropertyId: mainMedia?.propertyId ?? null,
@@ -277,7 +277,7 @@ export function TableBlockListItem({
               alt=""
               fill
             />
-          ) : (
+          ) : isImageResolving ? null : ( // Still looking it up — an empty frame beats flashing the fallback and swapping.
             <NextImage
               src={PLACEHOLDER_SPACE_IMAGE}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
@@ -343,8 +343,8 @@ export function TableBlockListItem({
               </div>
             );
           })}
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <EntityRowActions entityId={rowEntityId} spaceId={currentSpaceId} />
             {!isPlaceholder && (
               <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
                 {source.type === 'COLLECTION' ? (

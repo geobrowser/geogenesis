@@ -2,25 +2,30 @@ import { renderHook } from '@testing-library/react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from './api';
 import {
   useCreateDebateChallenge,
   useDebate,
   useDebateActivity,
   useDebateClaims,
   useDebateMedia,
+  useDebateProfile,
   useDebateRematch,
   useDebateRematchClaims,
-  useDebateProfile,
   useDebateSharePrompts,
   useDebateTranscript,
   useSpaceDebates,
 } from './hooks';
-import { GeoChatRequestError } from './api';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
   attention: true,
-  queryClient: { invalidateQueries: vi.fn(), setQueryData: vi.fn() },
+  queryCache: { subscribe: vi.fn(() => vi.fn()) },
+  queryClient: {
+    getQueryCache: vi.fn(() => mocks.queryCache),
+    invalidateQueries: vi.fn(),
+    setQueryData: vi.fn(),
+  },
   queryRefetch: vi.fn(),
   useMutation: vi.fn((options: unknown) => options),
   useQuery: vi.fn((options: unknown) => ({ options, refetch: mocks.queryRefetch })),
@@ -55,6 +60,8 @@ beforeEach(() => {
   mocks.authenticated = true;
   mocks.attention = true;
   mocks.queryClient.invalidateQueries.mockClear();
+  mocks.queryClient.getQueryCache.mockClear();
+  mocks.queryCache.subscribe.mockClear();
   mocks.queryClient.setQueryData.mockClear();
   mocks.queryRefetch.mockClear();
   mocks.useMutation.mockClear();
@@ -103,10 +110,9 @@ describe('debate query network ownership', () => {
       onError(error: Error, request: { recipient_profile_space_id: string }): void;
     };
 
-    mutation.onError(
-      new GeoChatRequestError('Unavailable', 'challenge_unavailable', 400),
-      { recipient_profile_space_id: 'profile-b' }
-    );
+    mutation.onError(new GeoChatRequestError('Unavailable', 'challenge_unavailable', 400), {
+      recipient_profile_space_id: 'profile-b',
+    });
 
     expect(mocks.queryClient.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ['debates', 'account', 'user-a', 'profile', 'profile-b'],

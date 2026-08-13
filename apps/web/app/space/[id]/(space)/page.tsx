@@ -6,8 +6,8 @@ import type { Metadata } from 'next';
 
 import { notFound } from 'next/navigation';
 
+import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
@@ -21,16 +21,17 @@ import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
-import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
+import { resolveSpaceSidebar } from './space-sidebar';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -77,17 +78,10 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const [props, communityCalls] = await Promise.all([
-    getSpaceFrontPage(space),
-    fetchCommunityCalls(spaceId).catch(() => []),
-  ]);
+  const [props, { communityCalls }] = await Promise.all([getSpaceFrontPage(space), resolveSpaceSidebar(spaceId)]);
 
   return (
-    <EntityPageSidebarLayout
-      sidebar={
-        communityCalls.length > 0 ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null
-      }
-    >
+    <EntityPageSidebarLayout sidebar={<SpaceOverviewSidePanel spaceId={spaceId} communityCalls={communityCalls} />}>
       <React.Suspense fallback={<SubtopicGallerySkeleton />}>
         <SubtopicGalleryContainer spaceId={params.id} />
       </React.Suspense>
@@ -190,14 +184,14 @@ async function getTopicEntityData(spaceId: string, topicEntityId: string) {
     ...blockRelations,
     ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
   ];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(
-    allBlocks,
-    cachedFetchEntitiesBatch,
-    spaceId,
-    allBlockRelations
-  );
+  const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
+    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
+  ]);
 
-  return { blocks, blockRelations, tabs, initialCollectionItems };
+  // Shown-column properties ride along with the blocks so the editor hydrates them in the same
+  // pass — a gallery needs the dimensions on them to size its cards on the first paint.
+  return { blocks: [...blocks, ...shownPropertyEntities], blockRelations, tabs, initialCollectionItems };
 }
 
 const SubtopicGallerySkeleton = () => {

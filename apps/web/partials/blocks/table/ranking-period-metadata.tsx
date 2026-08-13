@@ -11,6 +11,7 @@ import type { RankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import type { RankingSubmissionRecord } from '~/core/blocks/ranking/ranking-submission-types';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { profilesBySpaceIdsQueryKey } from '~/core/io/query-keys';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 
 import { Avatar } from '~/design-system/avatar';
@@ -94,23 +95,25 @@ export function RankingAggregatedSubmitterAvatars({
   totalCount,
   maxVisible = VISIBLE_RANKED_BY_AVATARS,
   size = RANKED_BY_AVATAR_SIZE,
+  queriesEnabled = true,
 }: {
   submitterSpaceIds: string[];
   totalCount?: number;
   maxVisible?: number;
   size?: 12 | 20;
+  queriesEnabled?: boolean;
 }) {
   const uniqueSpaceIds = React.useMemo(() => dedupePreserveOrder(submitterSpaceIds), [submitterSpaceIds]);
   const { data: profilesBySpaceId = new Map() } = useQuery({
-    queryKey: ['ranking-submitter-profiles', uniqueSpaceIds],
-    enabled: uniqueSpaceIds.length > 0,
+    queryKey: profilesBySpaceIdsQueryKey(uniqueSpaceIds),
+    enabled: queriesEnabled && uniqueSpaceIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
       const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueSpaceIds));
       return new Map(uniqueSpaceIds.map((spaceId, index) => [spaceId, profiles[index]!]));
     },
   });
-  const { spacesById } = useSpacesByIds(uniqueSpaceIds);
+  const { spacesById } = useSpacesByIds(uniqueSpaceIds, queriesEnabled);
 
   const resolveAvatarUrl = React.useCallback(
     (spaceId: string) => {

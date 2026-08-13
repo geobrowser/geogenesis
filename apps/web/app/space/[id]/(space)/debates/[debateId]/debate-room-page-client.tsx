@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
+import { capture } from '~/core/analytics';
 import {
   type Debate,
   type DebateRematchSession,
@@ -25,6 +26,7 @@ import {
   SpeakerIcon,
 } from '~/core/debates/debate-room-controls';
 import {
+  type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
   createDebateRoomOwnershipCoordinator,
 } from '~/core/debates/debate-room-ownership';
@@ -72,6 +74,8 @@ type DebateRoomPageClientProps = {
 };
 
 type DebateNoiseFilterStatus = 'initializing' | 'enabled' | 'disabled' | 'unsupported' | 'failed';
+
+type DebateRoomConnectionConflictSource = 'web_lock_blocked' | 'ownership_released' | 'livekit_duplicate_identity';
 
 const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
   initializing: 'Loading…',
@@ -203,7 +207,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     'idle'
   );
   const [roomError, setRoomError] = React.useState<string | null>(null);
-  const [connectionConflict, setConnectionConflict] = React.useState(false);
+  const [connectionConflictSource, setConnectionConflictSource] =
+    React.useState<DebateRoomConnectionConflictSource | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
   const [rematchConsentRequested, setRematchConsentRequested] = React.useState(false);
   const [audioMuted, setAudioMuted] = React.useState(false);
@@ -235,6 +240,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingStopTimerRef = React.useRef<number | null>(null);
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
   const connectionFailureHandledRef = React.useRef(false);
+  const reportedConflictGenerationRef = React.useRef<number | null>(null);
+  const reportedRecoveryGenerationRef = React.useRef<number | null>(null);
   const connectionFailureRedirectTimerRef = React.useRef<number | null>(null);
   const remoteParticipantRefetchTimerRef = React.useRef<number | null>(null);
   const serverNowRef = React.useRef(serverClock.now);
@@ -268,6 +275,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     Boolean(debate?.rematch_session_id) && debate?.status !== 'cancelled'
   );
   const leaveRematch = useLeaveDebateRematch(debate?.rematch_session_id ?? '');
+  // Read from the recording-cancellation effect, which must not re-run on every mutation render.
+  const leaveRematchRef = React.useRef(leaveRematch.mutateAsync);
+  leaveRematchRef.current = leaveRematch.mutateAsync;
   const countdown = useDebateCountdown(countdownDebate, serverClock.now);
   debateStatusRef.current = countdown.effectiveStatus;
   const currentUserId = getCurrentGeoChatUserId();
@@ -324,6 +334,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localSlot,
     audioMuted || pendingTurnYield !== null
   );
+  const connectionConflict = connectionConflictSource !== null;
   const canTakeOverConnection =
     connectionConflict && (countdown.effectiveStatus === 'connecting' || countdown.effectiveStatus === 'preflight');
   const connectionConflictWithoutTakeover = connectionConflict && !canTakeOverConnection;
@@ -354,16 +365,26 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     (recordingCancelledBy !== null && !opponentCancelledRecording) ||
     idleRematchDestination !== null;
 
-  const returnFromDebate = React.useCallback(() => {
-    if (debateExitStartedRef.current) return;
-    debateExitStartedRef.current = true;
-    clearDebateActivity(debateId);
-    if (window.history.length > 1) {
-      router.back();
-      return;
-    }
-    router.replace(`/space/${spaceId}/debates`);
-  }, [clearDebateActivity, debateId, router, spaceId]);
+  const returnFromDebate = React.useCallback(
+    ({ forwardOnly = false }: { forwardOnly?: boolean } = {}) => {
+      if (debateExitStartedRef.current) return;
+      debateExitStartedRef.current = true;
+      clearDebateActivity(debateId);
+      // Going back restores whatever opened the room, which is where an ordinary exit belongs.
+      // A debate that ended under us is different: the entry behind us is often this same room
+      // (hub → room → rematch → room), and stepping back into it re-runs the exit from a fresh
+      // mount. That is the flicker, and it is why the removal dialog needed a second Okay.
+      if (!forwardOnly && window.history.length > 1) {
+        router.back();
+        return;
+      }
+      router.replace(`/space/${spaceId}/debates`);
+    },
+    [clearDebateActivity, debateId, router, spaceId]
+  );
+
+  /** The exit for a debate whose recording was cancelled — it can never be re-entered. */
+  const leaveCancelledDebate = React.useCallback(() => returnFromDebate({ forwardOnly: true }), [returnFromDebate]);
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
@@ -392,6 +413,40 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setRemoteMediaAudioEnabled(remoteMediaRef, remoteAudioEnabled);
   }, [remoteAudioEnabled]);
 
+  const reportConnectionConflict = React.useCallback(
+    (
+      generation: number,
+      source: DebateRoomConnectionConflictSource,
+      coordinationMode: DebateRoomOwnershipCoordinationMode
+    ) => {
+      if (reportedConflictGenerationRef.current === generation) return;
+      reportedConflictGenerationRef.current = generation;
+      captureDebateRoomConnectionEvent('debate_room_connection_conflict', {
+        debateId,
+        source,
+        coordinationMode,
+        debateStatus: debateStatusRef.current,
+        roomState: roomStateRef.current,
+      });
+    },
+    [debateId]
+  );
+
+  const reportLocalReleaseRecovery = React.useCallback(
+    (generation: number, coordinationMode: DebateRoomOwnershipCoordinationMode) => {
+      if (reportedRecoveryGenerationRef.current === generation) return;
+      reportedRecoveryGenerationRef.current = generation;
+      captureDebateRoomConnectionEvent('debate_room_ownership_recovered', {
+        debateId,
+        coordinationMode,
+        debateStatus: debateStatusRef.current,
+        roomState: roomStateRef.current,
+        waitedForLocalRelease: true,
+      });
+    },
+    [debateId]
+  );
+
   React.useEffect(() => {
     if (!currentUserId) return;
     const coordinator = createDebateRoomOwnershipCoordinator({
@@ -406,12 +461,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         const canReleaseOwnership = status === 'connecting' || preflightStillPending;
         if (!canReleaseOwnership) return false;
 
-        connectionGenerationRef.current += 1;
+        const generation = connectionGenerationRef.current + 1;
+        connectionGenerationRef.current = generation;
         disconnectConnectingRoom(connectingRoomRef);
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         setRemoteVideoReady(false);
-        setConnectionConflict(true);
+        setConnectionConflictSource('ownership_released');
         setRoomError('This debate moved to another tab.');
         setRoomState('idle');
         logDebateConnectionDiagnostic('ownership-released', {
@@ -419,6 +475,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           instanceId: connectionInstanceIdRef.current,
           roomState: roomStateRef.current,
         });
+        reportConnectionConflict(
+          generation,
+          'ownership_released',
+          ownershipRef.current?.coordinationMode ?? 'livekit-fallback'
+        );
         return true;
       },
     });
@@ -429,7 +490,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (ownershipRef.current === coordinator) ownershipRef.current = null;
       coordinator.close();
     };
-  }, [currentUserId, debateId]);
+  }, [currentUserId, debateId, reportConnectionConflict]);
 
   const clearRecordingTimers = React.useCallback(() => {
     if (recordingStartTimerRef.current !== null) {
@@ -700,10 +761,21 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       let connectingRoom: RoomLike | null = null;
       let newlyCreatedTracks: LocalTrackLike[] = [];
       const ownership = ownershipRef.current;
-      const ownsConnection = options.takeover ? await ownership?.requestTakeover() : await ownership?.acquire();
+      let ownsConnection: boolean | undefined;
+      let waitedForLocalRelease = false;
+      if (options.takeover) {
+        ownsConnection = await ownership?.requestTakeover();
+      } else {
+        const acquisition = await ownership?.acquire();
+        ownsConnection = acquisition?.acquired;
+        waitedForLocalRelease = acquisition?.waitedForLocalRelease ?? false;
+      }
       if (!isCurrent()) return;
+      if (ownsConnection && waitedForLocalRelease) {
+        reportLocalReleaseRecovery(generation, ownership?.coordinationMode ?? 'livekit-fallback');
+      }
       if (ownsConnection === false) {
-        setConnectionConflict(true);
+        setConnectionConflictSource('web_lock_blocked');
         setRoomError('This debate is already open in another tab.');
         setRoomState('idle');
         logDebateConnectionDiagnostic('ownership-blocked', {
@@ -711,10 +783,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           instanceId: connectionInstanceIdRef.current,
           roomState: roomStateRef.current,
         });
+        reportConnectionConflict(generation, 'web_lock_blocked', ownership?.coordinationMode ?? 'livekit-fallback');
         return;
       }
 
-      setConnectionConflict(false);
+      setConnectionConflictSource(null);
       setRoomError(null);
       setRoomState('connecting');
       setServerClockSettled(false);
@@ -806,7 +879,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         room.on(livekit.RoomEvent.Disconnected, payload => {
           if (!isCurrent() || roomRef.current !== room) return;
           if (payload === livekit.DisconnectReason.CLIENT_INITIATED) return;
-          connectionGenerationRef.current += 1;
+          const conflictGeneration = connectionGenerationRef.current + 1;
+          connectionGenerationRef.current = conflictGeneration;
           // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
           // call room.disconnect() a second time and could re-enter this handler.
           roomRef.current = null;
@@ -816,7 +890,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           localMediaStreamRef.current = null;
           setRemoteVideoReady(false);
           const duplicateIdentity = payload === livekit.DisconnectReason.DUPLICATE_IDENTITY;
-          setConnectionConflict(duplicateIdentity);
+          setConnectionConflictSource(duplicateIdentity ? 'livekit_duplicate_identity' : null);
           setRoomError(
             duplicateIdentity
               ? 'This debate is active in another tab or device.'
@@ -829,6 +903,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             roomState: roomStateRef.current,
             disconnectReason: payload,
           });
+          if (duplicateIdentity) {
+            reportConnectionConflict(
+              conflictGeneration,
+              'livekit_duplicate_identity',
+              ownershipRef.current?.coordinationMode ?? 'livekit-fallback'
+            );
+          }
         });
 
         await room.connect(token.url, token.token);
@@ -918,7 +999,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (roomRef.current === room) roomRef.current = null;
           return;
         }
-        setConnectionConflict(false);
+        setConnectionConflictSource(null);
         setRoomState('connected');
       } catch (error) {
         if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
@@ -930,7 +1011,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         localMediaStreamRef.current = null;
         if (isCurrent()) {
           ownershipRef.current?.release();
-          setConnectionConflict(false);
+          setConnectionConflictSource(null);
           setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
           setRoomState(debate?.status === 'connecting' ? 'connecting' : 'idle');
         }
@@ -945,6 +1026,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       initializeNoiseFilter,
       liveKitJoin,
       markJoined,
+      reportConnectionConflict,
+      reportLocalReleaseRecovery,
       refetchDebate,
       setPreviewStream,
       videoEnabled,
@@ -1362,19 +1445,32 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localMediaStreamRef.current = null;
     setRemoteVideoReady(false);
     setRoomState('idle');
-    // The canceller already saw the confirmation in the upload banner; only the opponent needs
-    // the "your debate was removed" popup, so return the canceller to their previous page.
-    if (!opponentCancelledRecording) {
-      returnFromDebate();
+    // The rematch this debate anchored ends with it. Both sides leave: the session is what keeps
+    // the pair "in a flow" — every Debate control stays disabled and DebateCoordinator keeps
+    // routing back into this room — and neither of them can act on it any more.
+    if (debate.rematch_session_id) {
+      void leaveRematchRef.current().catch(() => undefined);
     }
-  }, [currentUserId, debate, discardLocalRecorder, opponentCancelledRecording, recordingCancelledBy, returnFromDebate]);
+    // The canceller already saw the confirmation in the upload banner; only the opponent needs
+    // the "your debate was removed" popup, so return the canceller to the debates page.
+    if (!opponentCancelledRecording) {
+      leaveCancelledDebate();
+    }
+  }, [
+    currentUserId,
+    debate,
+    discardLocalRecorder,
+    leaveCancelledDebate,
+    opponentCancelledRecording,
+    recordingCancelledBy,
+  ]);
 
   if (debate && opponentCancelledRecording) {
     return (
       <DebateRecordingRemovedDialog
         cancellerName={recordingCanceller ? speakerName(recordingCanceller) : 'Your opponent'}
         claim={debate.claim.claim}
-        onAcknowledge={returnFromDebate}
+        onAcknowledge={leaveCancelledDebate}
       />
     );
   }
@@ -2404,6 +2500,40 @@ function logDebateConnectionDiagnostic(
   }
 ) {
   console.info('[DebateRoomConnection]', { event, ...details });
+}
+
+function captureDebateRoomConnectionEvent(
+  eventName: 'debate_room_connection_conflict' | 'debate_room_ownership_recovered',
+  details: {
+    debateId: string;
+    coordinationMode: DebateRoomOwnershipCoordinationMode;
+    debateStatus: Debate['status'] | null;
+    roomState: string;
+    source?: DebateRoomConnectionConflictSource;
+    waitedForLocalRelease?: boolean;
+  }
+) {
+  try {
+    capture(eventName, {
+      debate_id: details.debateId,
+      coordination_mode: details.coordinationMode,
+      debate_status: details.debateStatus ?? 'unknown',
+      room_state: details.roomState,
+      visibility_state: typeof document === 'undefined' ? 'unknown' : document.visibilityState,
+      has_focus: typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus(),
+      navigation_type: currentNavigationType(),
+      ...(details.source ? { source: details.source } : {}),
+      ...(details.waitedForLocalRelease ? { waited_for_local_release: true } : {}),
+    });
+  } catch {
+    // Analytics is best-effort and must never affect room ownership or connection recovery.
+  }
+}
+
+function currentNavigationType() {
+  if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') return 'unknown';
+  const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+  return navigation?.type ?? 'unknown';
 }
 
 // Mobile browsers behind cellular/symmetric NAT can take several seconds to establish the publisher
