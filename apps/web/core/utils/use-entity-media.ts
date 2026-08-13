@@ -191,6 +191,12 @@ export function useEntityMedia(
     const id = entityId;
     const key = `${id}:${spaceId}`;
 
+    // Requests for an entity we've since moved off must not land. Whoever finishes last would
+    // otherwise win, and a late reply for the *previous* entity overwrites the current one's
+    // result with a key that no longer matches — leaving it stranded, since `settled` reads as
+    // null and the effect has no reason to run again.
+    let cancelled = false;
+
     const fetchMedia = async () => {
       try {
         const [avatarRelations, coverRelations] = await Promise.all([
@@ -212,6 +218,8 @@ export function useEntityMedia(
               }),
         ]);
 
+        if (cancelled) return;
+
         const avatarUrl = avatarRelations[0]?.toEntity.value;
         const coverUrl = coverRelations[0]?.toEntity.value;
 
@@ -223,11 +231,16 @@ export function useEntityMedia(
       } catch {
         // Ignored — the entity may not exist. Still record the attempt: a caller waiting on
         // `isResolving` would otherwise hold its loading state forever.
+        if (cancelled) return;
         setFetched({ key, avatarUrl: undefined, coverUrl: undefined });
       }
     };
 
     fetchMedia();
+
+    return () => {
+      cancelled = true;
+    };
   }, [entityId, spaceId, fetchKey, storeAvatarUrl, storeCoverUrl, cache]);
 
   const avatarUrl = storeAvatarUrl ?? settled?.avatarUrl;
