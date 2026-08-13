@@ -15,12 +15,11 @@ import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { NavUtils } from '~/core/utils/utils';
 
 import { SmallButton } from '~/design-system/button';
+import { ClampedText } from '~/design-system/clamped-text';
 import { Dots } from '~/design-system/dots';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { Create } from '~/design-system/icons/create';
 import { Spacer } from '~/design-system/spacer';
-import { Text } from '~/design-system/text';
-import { Truncate } from '~/design-system/truncate';
 
 import { HistoryDiffSlideUp } from '../history/history-diff-slide-up';
 import { HistoryEmpty } from '../history/history-empty';
@@ -85,11 +84,12 @@ export function EditableHeading({
         ) : (
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center justify-between">
-              <Truncate maxLines={3} shouldTruncate>
-                <Text as="h1" variant="mainPage">
-                  {name ?? fallbackName ?? ZERO_WIDTH_SPACE}
-                </Text>
-              </Truncate>
+              <ClampedText
+                as="h1"
+                text={name ?? fallbackName ?? ZERO_WIDTH_SPACE}
+                maxLines={3}
+                textClassName="w-full text-mainPage wrap-break-word text-text"
+              />
             </div>
             <Spacer height={12} />
           </div>
