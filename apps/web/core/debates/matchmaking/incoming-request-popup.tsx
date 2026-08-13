@@ -56,6 +56,11 @@ export function IncomingRequestPopup({
     answered.current = true;
     answer();
   };
+  // A failed answer has to give the guard back, or the request is unanswerable from this popup for
+  // the rest of its life: the controls re-enable and the switch returns, but every press after that
+  // is swallowed. Pass it to each mutation rather than watching an error flag, so it fires on the
+  // attempt that actually failed however many follow it.
+  const releaseAnswer = { onError: () => void (answered.current = false) };
 
   return (
     <DebateRequestDialog
@@ -74,11 +79,12 @@ export function IncomingRequestPopup({
           <span className="shrink-0">Debate request</span>
         </span>
       }
-      onAccept={() => answerOnce(() => acceptRequest.mutate({ requestId: request.id }))}
+      onAccept={() => answerOnce(() => acceptRequest.mutate({ requestId: request.id }, releaseAnswer))}
       onReject={onNotNow}
       formatAction={{
         label: 'Dismiss forever',
-        onClick: () => answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true })),
+        onClick: () =>
+          answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer)),
       }}
       headerNote={
         <ClaimDebateToggle
@@ -90,12 +96,15 @@ export function IncomingRequestPopup({
               // request, for both parties. Leaving the queue is what takes the viewer out of
               // matchmaking on the claim — `remove_intent` alone left them standing as a match in
               // everyone else's list, still offered for debates they had just declined.
-              setReadiness.mutate({
-                spaceId: request.claim.space_id,
-                claimId: request.claim.claim_entity_id,
-                ready: false,
-              });
-              dismissRequest.mutate({ requestId: request.id, removeIntent: true });
+              setReadiness.mutate(
+                {
+                  spaceId: request.claim.space_id,
+                  claimId: request.claim.claim_entity_id,
+                  ready: false,
+                },
+                releaseAnswer
+              );
+              dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer);
             })
           }
         />

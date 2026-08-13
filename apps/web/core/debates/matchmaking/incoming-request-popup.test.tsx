@@ -175,13 +175,32 @@ describe('IncomingRequestPopup answers', () => {
   });
 
   // Otherwise the switch reads as "you are out of matchmaking for this claim" while the server
-  // still has the viewer standing ready and the request live.
+  // still has the viewer standing ready and the request live. Starting in the error state would
+  // never move the switch off, so this walks the real sequence: off on the press, back on when the
+  // rejection comes back failed.
   it('puts the claim toggle back when the rejection fails', () => {
+    const view = render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
+    expect(screen.getByRole('switch', { name: 'Debate this claim' })).toHaveAttribute('aria-checked', 'false');
+
     mocks.dismissIsError = true;
+    view.rerender(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
+
+    expect(screen.getByRole('switch', { name: 'Debate this claim' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  // The controls come back after a failure, so the press that follows has to land — otherwise the
+  // request can never be answered from this popup again.
+  it('lets the viewer answer again after a failed answer', () => {
+    mocks.dismiss.mockImplementation((_variables, options) => options?.onError?.(new Error('nope')));
     render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
+    expect(mocks.dismiss).toHaveBeenCalledTimes(1);
 
-    expect(screen.getByRole('switch', { name: 'Debate this claim' })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
+
+    expect(mocks.dismiss).toHaveBeenCalledTimes(2);
   });
 });
