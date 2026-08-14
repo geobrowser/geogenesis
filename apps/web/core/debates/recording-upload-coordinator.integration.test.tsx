@@ -65,6 +65,7 @@ vi.mock('./hooks', () => ({
   debateQueryKeys: {
     debate: (id: string) => ['debate', id],
     media: (id: string) => ['media', id],
+    activity: (accountKey: string | null) => ['activity', accountKey],
   },
   useGeoChatAuth: () => ({
     ready: true,
@@ -551,6 +552,9 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
     expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debate', 'debate-1'] });
+    // Cancelling ends the debate and the rematch it anchored; until activity says so, every Debate
+    // control on every surface stays greyed out for the viewer who just cancelled.
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['activity', 'user-a'] });
   });
 
   it('removes a stale local upload restored for an already cancelled debate', async () => {

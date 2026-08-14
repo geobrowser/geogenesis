@@ -1,22 +1,27 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import { StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateRematchClaim, DebateRematchSession } from '~/core/debates/api';
 
 import { DebateRematchPageClient } from './rematch-page-client';
 
-const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE } = vi.hoisted(() => ({
-  SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
-  SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
-  CLAIM_SHARED: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419',
-  CLAIM_MORE: '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520',
-  CLAIM_SOURCE: '019fedb3-2e63-7b50-9c33-4e9f7a0d6621',
-}));
+const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CRYPTO_SPACE, PODCASTS_SPACE, NAME_PROPERTY } =
+  vi.hoisted(() => ({
+    SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
+    SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
+    // Real ids from the hard-coded ranking table, so the ordering under test is the real one.
+    CRYPTO_SPACE: 'c9f267dcb0d270718c2a3c45a64afd32',
+    PODCASTS_SPACE: 'b5a31f8182b042437ede0f84ee02f104',
+    NAME_PROPERTY: 'a126ca530c8e48d5b88882c734c38935',
+    CLAIM_SHARED: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419',
+    CLAIM_MORE: '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520',
+    CLAIM_SOURCE: '019fedb3-2e63-7b50-9c33-4e9f7a0d6621',
+  }));
 
 const mocks = vi.hoisted(() => ({
   session: null as DebateRematchSession | null,
@@ -31,9 +36,20 @@ const mocks = vi.hoisted(() => ({
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
   setReadiness: vi.fn(),
   openSidePanel: vi.fn(),
-  entityQueries: [] as unknown[],
+  entityQueries: [] as Array<{ where?: unknown; after?: string }>,
   entityQueryPlaceholder: false,
+  entityQueryHasNextPage: false,
+  entityQueryLoading: false,
   entities: [] as Array<Record<string, unknown>>,
+  recommendedSections: [] as Array<{ id: string; name: string; claimIds: string[] }>,
+  recommendedEntities: [] as Array<Record<string, unknown>>,
+  recommendedLoading: false,
+  rematchClaimIds: [] as string[][],
+  curatedIds: [] as string[],
+  savedClaims: null as DebateRematchClaim[] | null,
+  browsedLookupLoading: false,
+  currentUserId: 'user-local' as string | null,
+  scrollSentinelIntoView: null as null | (() => void),
   claimReadinessLoading: false,
   claimReadinessError: false,
   claimReadiness: [] as Array<{
@@ -49,16 +65,37 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/debates/api', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/debates/api')>();
-  return { ...actual, getCurrentGeoChatUserId: () => 'user-local' };
+  return {
+    ...actual,
+    getCurrentGeoChatUserId: () => mocks.currentUserId,
+    resolveCurrentGeoChatUserId: () => Promise.resolve(mocks.currentUserId),
+  };
 });
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebateRematch: () => ({ data: mocks.session, isLoading: false, error: null }),
+  // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
+  // arrive through the id lookup.
   useDebateRematchClaims: () => ({
-    data: { claims: mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+    data: { claims: mocks.savedClaims ?? mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
     isLoading: false,
     error: null,
   }),
+  // Two lookups run: one for the curated ids, one for the browsed ones. `curatedIds` lets a test
+  // stall the browsed lookup on its own, which is the whole point of their being separate.
+  useDebateRematchClaimsForIds: (_sessionId: string, claimIds: string[]) => {
+    mocks.rematchClaimIds.push(claimIds);
+    const isCuratedLookup =
+      mocks.curatedIds.length > 0 && claimIds.every(claimId => mocks.curatedIds.includes(claimId));
+    if (mocks.browsedLookupLoading && !isCuratedLookup) {
+      return { data: { claims: [], excluded_claim_ids: [] }, isLoading: true, error: null };
+    }
+    return {
+      data: { claims: mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+      isLoading: false,
+      error: null,
+    };
+  },
   useDebate: () => ({ data: { claim: { claim_entity_id: CLAIM_SOURCE } } }),
   useDebateClaimsBySpaces: () => ({
     claims: mocks.claimReadiness,
@@ -69,17 +106,18 @@ vi.mock('~/core/debates/hooks', () => ({
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: (options: { where?: unknown }) => {
-    mocks.entityQueries.push(options.where);
+  useQueryEntities: (options: { where?: unknown; after?: string }) => {
+    mocks.entityQueries.push(options);
     return {
       entities: mocks.entities,
-      isLoading: false,
+      isLoading: mocks.entityQueryLoading,
       isPlaceholderData: mocks.entityQueryPlaceholder,
-      endCursor: null,
-      hasNextPage: false,
+      endCursor: mocks.entityQueryHasNextPage ? 'cursor-1' : null,
+      hasNextPage: mocks.entityQueryHasNextPage,
     };
   },
 }));
@@ -98,6 +136,15 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 // The card's Debate toggle publishes readiness through this.
 vi.mock('~/core/debates/matchmaking/hooks', () => ({
   useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
+}));
+
+// The curated lookup has its own tests; these cover the picker around it.
+vi.mock('~/core/debates/recommended-claims', () => ({
+  useRecommendedClaimSections: () => ({
+    sections: mocks.recommendedSections,
+    claimEntities: mocks.recommendedEntities,
+    isLoading: mocks.recommendedLoading,
+  }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
@@ -135,7 +182,35 @@ beforeEach(() => {
   mocks.openSidePanel.mockReset();
   mocks.entityQueries.length = 0;
   mocks.entityQueryPlaceholder = false;
+  mocks.entityQueryHasNextPage = false;
+  mocks.entityQueryLoading = false;
   mocks.entities = [publishedEntity()];
+  mocks.recommendedSections = [];
+  mocks.recommendedEntities = [];
+  mocks.recommendedLoading = false;
+  mocks.rematchClaimIds.length = 0;
+  mocks.curatedIds = [];
+  mocks.savedClaims = null;
+  mocks.browsedLookupLoading = false;
+  mocks.currentUserId = 'user-local';
+  // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
+  // the callback so a test can say the sentinel scrolled into view.
+  mocks.scrollSentinelIntoView = null;
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(private readonly callback: IntersectionObserverCallback) {}
+      observe(element: Element) {
+        mocks.scrollSentinelIntoView = () =>
+          this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never);
+      }
+      unobserve() {}
+      disconnect() {}
+      takeRecords() {
+        return [];
+      }
+    }
+  );
   // The hub's filter menus measure their dropdown.
   window.ResizeObserver ??= class {
     observe() {}
@@ -424,6 +499,158 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByText('A newly published claim')).toBeNull();
   });
 
+  // A curator's page for this pairing is the best thing to land on; without one the tab has no
+  // reason to exist.
+  it('hides the Recommended tab when nothing is curated for this pairing', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Recommended' })).toBeNull();
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toBeInTheDocument();
+  });
+
+  it('opens on Recommended when a curator has, grouping each block into its own section', () => {
+    mocks.recommendedSections = [
+      { id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] },
+      { id: 'block-2', name: 'Open weight AI', claimIds: [CLAIM_MORE] },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Recommended' })).toBeInTheDocument();
+    const geopolitics = screen.getByRole('heading', { name: 'Geopolitics & chips' });
+    const openWeight = screen.getByRole('heading', { name: 'Open weight AI' });
+    expect(geopolitics.compareDocumentPosition(openWeight) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    // Each block lists its own claims.
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  it('collapses a section without touching the others', () => {
+    mocks.recommendedSections = [
+      { id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] },
+      { id: 'block-2', name: 'Open weight AI', claimIds: [CLAIM_MORE] },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Geopolitics & chips/ }));
+
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  // A curated claim the session hasn't heard of still has to render, so it joins the same pool the
+  // browsed pages feed rather than being listed separately.
+  it('drops a section whose claims all fall out of the filters', async () => {
+    mocks.recommendedSections = [
+      { id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] },
+      { id: 'block-2', name: 'Open weight AI', claimIds: [CLAIM_MORE] },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'newly' } });
+
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull());
+    expect(screen.getByRole('heading', { name: 'Open weight AI' })).toBeInTheDocument();
+  });
+
+  // Recommended comes from the curator's page whole, so paging the browsed corpus means nothing
+  // there — offering it implies there are more recommendations waiting.
+  it('keeps the paging sentinel off the Recommended tab while placing it on the others', () => {
+    mocks.entityQueryHasNextPage = true;
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] }];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+
+    showAllClaims();
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+  });
+
+  // No button to press any more; reaching the end of the list is what asks for the next page.
+  it('does not offer a Load more button', () => {
+    mocks.entityQueryHasNextPage = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+  });
+
+  // The picker pages by cursor rather than through an infinite query, so the sentinel firing has
+  // to be shown to advance that cursor — a sentinel that renders but is wired to nothing would
+  // satisfy every other test here.
+  it('advances the cursor when the end of the list scrolls into view', () => {
+    mocks.entityQueryHasNextPage = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(browsedClaimsQueryOptions()?.after).toBeUndefined();
+
+    act(() => mocks.scrollSentinelIntoView?.());
+
+    expect(browsedClaimsQueryOptions()?.after).toBe('cursor-1');
+  });
+
+  it('leaves the sentinel out once there is no page left to fetch', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+  });
+
+  // Curated claims are picked by hand, so they can be ones the browsed pages never reach. They
+  // have to land in the same pool, or a recommendation would head a section with nothing under it.
+  it('renders a curated claim the browsed pages never returned', () => {
+    const CURATED = '019fedb59a8f7d728e556ab19c3e8841';
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CURATED] }];
+    mocks.recommendedEntities = [publishedEntity(CURATED, 'A curated claim from elsewhere')];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByText('A curated claim from elsewhere')).toBeInTheDocument();
+    // And it goes into the id lookup, so the session can report positions on it.
+    expect(mocks.rematchClaimIds.flat()).toContain(CURATED);
+  });
+
+  // The browsed scan reads every Claim in the graph and is the slowest thing here. The curated tab
+  // draws nothing from it, so waiting on it was pure delay.
+  it('shows curated sections without waiting on the browsed claim scan', () => {
+    mocks.entityQueryLoading = true;
+    // The browsed half of the session lookup is still in flight too — the curated half is not,
+    // and only stays independent while the two are asked for separately.
+    mocks.browsedLookupLoading = true;
+    mocks.curatedIds = [CLAIM_SHARED];
+    // Not among the session's saved claims, so the curated lookup is its only source of positions.
+    mocks.savedClaims = [];
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] }];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
+    // Not just the card: its sides come from the session lookup, so a curated claim sharing the
+    // browsed lookup would render with no positions and no debate to request until the scan lands.
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+  });
+
+  // The session's own claims arrive in one round trip; they shouldn't sit behind the scan either.
+  it('shows the opponent’s claims without waiting on the browsed claim scan', () => {
+    mocks.entityQueryLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Salina’s positions/ }));
+
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  // An empty result mid-flight is not "nothing recommended"; landing on the opponent tab and then
+  // moving the viewer once the lookup settles is worse than waiting.
+  it('waits on the Recommended tab while the curated lookup is still running', () => {
+    mocks.recommendedLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Recommended' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveAttribute('aria-selected', 'false');
+    // And the claims stay behind the loading state rather than the opponent tab's list appearing.
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+  });
+
   it('shortens the opponent tab to their first name', () => {
     const base = session();
     mocks.session = session({
@@ -554,7 +781,7 @@ describe('DebateRematchPageClient', () => {
     mocks.entities = [publishedEntity(STALE, 'A stale claim from the previous search')];
     mocks.entityQueryPlaceholder = true;
     fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'claim' } });
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ name: { contains: 'claim' } }));
+    await waitFor(() => expect(browsedClaimsWhere()).toMatchObject({ name: { contains: 'claim' } }));
 
     // The real page for this term lands.
     mocks.entities = [publishedEntity()];
@@ -566,7 +793,10 @@ describe('DebateRematchPageClient', () => {
   });
 
   // Taking a side here means you want to debate it, so readiness shouldn't be a second step.
-  it('turns the Debate toggle on when a position is first established here', () => {
+  // A position can appear without anyone picking one — here because geo-chat's copy of a claim the
+  // viewer had already answered lands after the card is on screen. That looks identical to a fresh
+  // pick, and standing them ready for it reverses a stand-down they made elsewhere.
+  it('does not stand the viewer ready when geo-chat reports a position they already held', () => {
     mocks.claims = [
       {
         ...sharedClaim(),
@@ -576,13 +806,20 @@ describe('DebateRematchPageClient', () => {
         ],
       },
     ];
-    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
     expect(mocks.setReadiness).not.toHaveBeenCalled();
-
-    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
-    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    expect(mocks.setReadiness).toHaveBeenCalledWith({ spaceId: SPACE_1, claimId: CLAIM_SHARED, ready: true });
   });
 
   // Standing down elsewhere is deliberate; arriving here mustn't quietly reverse it.
@@ -621,7 +858,7 @@ describe('DebateRematchPageClient', () => {
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'Fast fashion' } });
 
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ name: { contains: 'Fast fashion' } }));
+    await waitFor(() => expect(browsedClaimsWhere()).toMatchObject({ name: { contains: 'Fast fashion' } }));
   });
 
   it('renders the card’s Debate toggle against real readiness', () => {
@@ -650,9 +887,177 @@ describe('DebateRematchPageClient', () => {
 
     const card = screen.getByText('A claim both participants chose').closest('article');
     expect(within(card!).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+  });
+
+  // geo-chat rejects a request for a claim it has no position for — "respond to this claim before
+  // requesting a rematch" — so the button waits for geo-chat's copy, not the optimistic one. It
+  // stays hidden rather than disabled: an unpressable button reads as broken.
+  it('withholds the request until geo-chat has the position it will be validated against', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+  });
+
+  it('sends the request once geo-chat agrees with the side on screen', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    expect(request).toBeEnabled();
+    fireEvent.click(request);
+    expect(mocks.mutate).toHaveBeenCalled();
+  });
+
+  // Switching sides leaves geo-chat holding the side you just moved off, which is no more valid to
+  // request against than holding none.
+  it('withholds the request while a side switch is still publishing', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: false, position_label: 'Disagree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+  });
+
+  // Readiness is rejected for a claim geo-chat has no response for, and `useClaimReadiness` rolls
+  // the switch back when that happens — so opting in off the optimistic position made the toggle
+  // visibly flip on and straight back off.
+  it('waits for the response to settle before standing the viewer ready', () => {
+    const unresponded = {
+      ...sharedClaim(),
+      participants: [
+        { user_id: 'user-local', position: null, position_label: null },
+        { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+      ],
+    };
+    mocks.claims = [unresponded];
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+
+    // The side is picked: optimistic only, geo-chat still has nothing.
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    expect(mocks.setReadiness).not.toHaveBeenCalled();
+
+    // geo-chat catches up, and only now is readiness sent.
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.setReadiness).toHaveBeenCalledWith({
+      spaceId: SPACE_1,
+      claimId: CLAIM_SHARED,
+      ready: true,
+    });
+  });
+
+  // `entity.spaces` is rank-ordered and counts any space that merely references the claim, so
+  // `spaces[0]` is a citing space whenever it outranks the claim's own. Responding in one space and
+  // asking to debate in another is what the server answers with "respond to this claim in this
+  // space before enabling debate readiness".
+  it('scopes a browsed claim to the space it is named in, not the highest-ranked one citing it', () => {
+    mocks.entities = [
+      {
+        ...publishedEntity(CLAIM_MORE, 'A claim that lives in Podcasts'),
+        // Crypto (rank 2) outranks Podcasts (rank 8), but only Podcasts names the claim.
+        spaces: [CRYPTO_SPACE, PODCASTS_SPACE],
+        values: [
+          { isDeleted: false, property: { id: NAME_PROPERTY }, spaceId: PODCASTS_SPACE, value: 'A claim that lives in Podcasts' },
+        ],
+      },
+    ];
+    // The toggle only offers itself once the viewer holds a position.
+    mocks.optimisticResponses.set(CLAIM_MORE, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    const card = screen.getByText('A claim that lives in Podcasts').closest('article');
+    fireEvent.click(within(card!).getByRole('switch', { name: 'Ready to debate this claim' }));
+
+    expect(mocks.setReadiness).toHaveBeenCalledWith({
+      spaceId: PODCASTS_SPACE,
+      claimId: CLAIM_MORE,
+      ready: true,
+    });
+  });
+
+  it('stands the viewer ready only once, even as the claim keeps refetching', () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.setReadiness).toHaveBeenCalledOnce();
   });
 });
+
+/** The where clause of the query that browses published claims, not the curated lookups beside it. */
+function browsedClaimsQueryOptions() {
+  return mocks.entityQueries
+    .filter(options => {
+      const where = options.where as { types?: Array<{ id?: { equals?: string } }> } | undefined;
+      return where?.types?.[0]?.id?.equals === CLAIM_TYPE_ID;
+    })
+    .at(-1);
+}
+
+function browsedClaimsWhere() {
+  return browsedClaimsQueryOptions()?.where;
+}
 
 /** The picker opens on the opponent's positions; most assertions want the unfiltered list. */
 function showAllClaims() {

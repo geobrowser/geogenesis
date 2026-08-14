@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { activeDebate, hasActiveDebateFlow } from './activity-state';
+import { activeDebate, hasActiveDebateFlow, recordingCancelledDebateId } from './activity-state';
 import type { Debate, DebateActivity, DebateMatch } from './api';
 
 const debate = (status: Debate['status']) => ({ id: 'debate-1', status }) as Debate;
+const cancelledRecording = (status: Debate['status']) =>
+  ({ id: 'debate-1', status, recording_cancelled_at: '2026-08-11T12:00:00.000Z' }) as Debate;
 const activity = (overrides: Partial<DebateActivity>) => overrides as DebateActivity;
 
 describe('activity state', () => {
@@ -19,6 +21,22 @@ describe('activity state', () => {
   it.each(['complete', 'cancelled'] as const)('does not count a %s debate', status => {
     expect(activeDebate(activity({ debate: debate(status) }))).toBeNull();
     expect(hasActiveDebateFlow(activity({ debate: debate(status) }))).toBe(false);
+  });
+
+  // Cancelling the upload ends the debate for both sides before its status catches up. Counting it
+  // left the pair mid-flow with every Debate control dead and no way to start anything new.
+  it('does not count a debate whose recording was cancelled', () => {
+    const activityWithCancelledRecording = activity({ debate: cancelledRecording('thanking') });
+
+    expect(activeDebate(activityWithCancelledRecording)).toBeNull();
+    expect(hasActiveDebateFlow(activityWithCancelledRecording)).toBe(false);
+  });
+
+  it('names the debate whose recording was cancelled so callers refuse to route into it', () => {
+    expect(recordingCancelledDebateId(activity({ debate: cancelledRecording('thanking') }))).toBe('debate-1');
+    expect(recordingCancelledDebateId(activity({ debate: debate('thanking') }))).toBeNull();
+    expect(recordingCancelledDebateId(activity({ debate: null }))).toBeNull();
+    expect(recordingCancelledDebateId(null)).toBeNull();
   });
 
   it('treats a rematch session as an active flow', () => {

@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import { useDebatesEnabled } from '~/core/state/feature-flags';
-
 import { Text } from '~/design-system/text';
 
 import { useCreateDebateChallenge, useDebateProfile } from './hooks';
@@ -14,11 +12,10 @@ import { useCreateDebateChallenge, useDebateProfile } from './hooks';
  * available and neither side is mid-flow. `DebateCoordinator` owns the request dialog.
  */
 export function ProfileDebateButton({ spaceId }: { spaceId: string }) {
-  const isDebatesEnabled = useDebatesEnabled();
-  const profileQuery = useDebateProfile(spaceId, isDebatesEnabled);
+  const profileQuery = useDebateProfile(spaceId);
   const createChallenge = useCreateDebateChallenge();
 
-  if (!isDebatesEnabled || !profileQuery.data?.can_challenge) return null;
+  if (!profileQuery.data?.can_challenge) return null;
 
   const error = createChallenge.error instanceof Error ? createChallenge.error.message : null;
 

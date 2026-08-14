@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { QueuedSendTimeoutError, enqueueFor } from './smart-account-send-queue';
+import { QueuedSendTimeoutError, enqueueFor, withNonceRetry } from './smart-account-send-queue';
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -114,5 +114,54 @@ describe('smart-account send queue', () => {
 
     await expect(holding).resolves.toBe('done');
     await expect(queued).resolves.toBe('ran');
+  });
+
+  describe('withNonceRetry', () => {
+    // Mirrors the real shape: viem throws UserOperationExecutionError with an
+    // InvalidAccountNonceError cause, exposed via BaseError's .walk(predicate).
+    const nonceError = () => {
+      const err = new Error('Invalid Smart Account nonce used for User Operation.');
+      (err as unknown as { walk: (fn: (e: unknown) => boolean) => unknown }).walk = fn => {
+        const cause = new Error('Invalid Smart Account nonce used for User Operation.');
+        cause.name = 'InvalidAccountNonceError';
+        return fn(cause) ? cause : undefined;
+      };
+      return err;
+    };
+
+    it('retries a nonce-rejected send and succeeds once the nonce is fresh', async () => {
+      let attempts = 0;
+      const task = vi.fn(async () => {
+        attempts++;
+        if (attempts < 2) throw nonceError();
+        return 'ok';
+      });
+
+      const result = withNonceRetry(task);
+      await vi.advanceTimersByTimeAsync(500);
+      await expect(result).resolves.toBe('ok');
+      expect(task).toHaveBeenCalledTimes(2);
+    });
+
+    it('gives up after the retry budget and surfaces the nonce error', async () => {
+      const task = vi.fn(async () => {
+        throw nonceError();
+      });
+
+      const result = withNonceRetry(task);
+      const assertion = expect(result).rejects.toThrow('Invalid Smart Account nonce');
+      await vi.advanceTimersByTimeAsync(2_000);
+      await assertion;
+      expect(task).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not retry errors unrelated to the nonce', async () => {
+      const task = vi.fn(async () => {
+        throw new Error('boom');
+      });
+
+      await expect(withNonceRetry(task)).rejects.toThrow('boom');
+      expect(task).toHaveBeenCalledTimes(1);
+    });
   });
 });
