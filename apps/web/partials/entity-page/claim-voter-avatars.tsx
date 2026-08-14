@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getEntityResponders } from '~/core/io/queries';
 import {
   type ActiveResponseDirection,
@@ -50,6 +52,28 @@ export function ClaimResponderAvatars({
     return optimisticViewerResponse === null ? otherResponderIds : [viewerSpaceId, ...otherResponderIds];
   }, [optimisticViewerResponse, responders, viewerSpaceId]);
 
+  // Keep the viewer's profile query warm (same key as the nav)
+  const { smartAccount } = useSmartAccount();
+  const walletAddress = smartAccount?.account.address;
+  const { profile: viewerProfile } = useGeoProfile(walletAddress);
+
+  const viewerAdded =
+    !!viewerSpaceId && (optimisticViewerResponse === 'positive' || optimisticViewerResponse === 'negative');
+
+  const knownProfiles = React.useMemo(() => {
+    if (!viewerAdded || !viewerSpaceId) return undefined;
+    if (responders?.some(responder => responder.userId === viewerSpaceId)) return undefined;
+    return new Map([
+      [
+        viewerSpaceId,
+        {
+          avatarUrl: viewerProfile?.avatarUrl ?? null,
+          address: viewerProfile?.address ?? walletAddress ?? null,
+        },
+      ],
+    ]);
+  }, [responders, viewerAdded, viewerProfile, viewerSpaceId, walletAddress]);
+
   if (responderSpaceIds.length === 0) return null;
 
   return (
@@ -58,6 +82,7 @@ export function ClaimResponderAvatars({
       totalCount={Math.max(totalResponders, responderSpaceIds.length)}
       size={12}
       queriesEnabled={!responseBatch.managed}
+      knownProfiles={knownProfiles}
     />
   );
 }

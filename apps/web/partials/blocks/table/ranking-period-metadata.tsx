@@ -21,6 +21,9 @@ import { Time } from '~/design-system/icons/time';
 
 const VISIBLE_RANKED_BY_AVATARS = 3;
 const RANKED_BY_AVATAR_SIZE = 20;
+
+type KnownAvatarProfile = { avatarUrl: string | null; address?: string | null };
+const EMPTY_KNOWN_PROFILES: ReadonlyMap<string, KnownAvatarProfile> = new Map();
 const RANKED_BY_ROW_CLASS = 'inline-flex min-w-0 shrink-0 flex-nowrap items-center gap-[8px]';
 
 function dedupePreserveOrder(ids: string[]): string[] {
@@ -96,35 +99,45 @@ export function RankingAggregatedSubmitterAvatars({
   maxVisible = VISIBLE_RANKED_BY_AVATARS,
   size = RANKED_BY_AVATAR_SIZE,
   queriesEnabled = true,
+  knownProfiles = EMPTY_KNOWN_PROFILES,
 }: {
   submitterSpaceIds: string[];
   totalCount?: number;
   maxVisible?: number;
   size?: 12 | 20;
   queriesEnabled?: boolean;
+  knownProfiles?: ReadonlyMap<string, KnownAvatarProfile>;
 }) {
   const uniqueSpaceIds = React.useMemo(() => dedupePreserveOrder(submitterSpaceIds), [submitterSpaceIds]);
+  // Keep profile/space query keys stable when an optimistic viewer is overlaid via
+  // knownProfiles.
+  const querySpaceIds = React.useMemo(
+    () => (knownProfiles.size === 0 ? uniqueSpaceIds : uniqueSpaceIds.filter(id => !knownProfiles.has(id))),
+    [uniqueSpaceIds, knownProfiles]
+  );
   const { data: profilesBySpaceId = new Map() } = useQuery({
-    queryKey: profilesBySpaceIdsQueryKey(uniqueSpaceIds),
-    enabled: queriesEnabled && uniqueSpaceIds.length > 0,
+    queryKey: profilesBySpaceIdsQueryKey(querySpaceIds),
+    enabled: queriesEnabled && querySpaceIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
-      const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueSpaceIds));
-      return new Map(uniqueSpaceIds.map((spaceId, index) => [spaceId, profiles[index]!]));
+      const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(querySpaceIds));
+      return new Map(querySpaceIds.map((spaceId, index) => [spaceId, profiles[index]!]));
     },
   });
-  const { spacesById } = useSpacesByIds(uniqueSpaceIds, queriesEnabled);
+  const { spacesById } = useSpacesByIds(querySpaceIds, queriesEnabled);
 
   const resolveAvatarUrl = React.useCallback(
     (spaceId: string) => {
+      const known = knownProfiles.get(spaceId);
+      const knownAvatarUrl = known?.avatarUrl && known.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? known.avatarUrl : null;
       const profile = profilesBySpaceId.get(spaceId);
       const profileAvatarUrl =
         profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
       const spaceImage = spacesById.get(spaceId)?.entity.image;
       const spaceAvatarUrl = spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
-      return profileAvatarUrl ?? spaceAvatarUrl;
+      return knownAvatarUrl ?? profileAvatarUrl ?? spaceAvatarUrl;
     },
-    [profilesBySpaceId, spacesById]
+    [knownProfiles, profilesBySpaceId, spacesById]
   );
 
   const visibleSpaceIds = React.useMemo(() => {
@@ -144,7 +157,7 @@ export function RankingAggregatedSubmitterAvatars({
     return {
       key: spaceId,
       avatarUrl: resolveAvatarUrl(spaceId),
-      fallbackSeed: profile?.address ?? spaceId,
+      fallbackSeed: knownProfiles.get(spaceId)?.address ?? profile?.address ?? spaceId,
     };
   });
 
