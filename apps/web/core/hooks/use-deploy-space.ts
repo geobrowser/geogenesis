@@ -295,17 +295,15 @@ async function createDaoSpace({
   }
 
   if (seedOverviewTemplate) {
-    try {
-      await seedNewSpaceOverview({
-        smartAccount,
-        spaceId: newSpaceId,
-        spaceAddress: newDaoSpaceAddress,
-        spaceHomeEntityId: resolvedTopicId,
-        authorSpaceId: personalSpaceId,
-      });
-    } catch (error) {
+    void seedNewSpaceOverview({
+      smartAccount,
+      spaceId: newSpaceId,
+      spaceAddress: newDaoSpaceAddress,
+      spaceHomeEntityId: resolvedTopicId,
+      authorSpaceId: personalSpaceId,
+    }).catch(error => {
       console.error('[CREATE_SPACE] Failed to seed the overview template; the space itself was created.', error);
-    }
+    });
   }
 
   return newSpaceId;

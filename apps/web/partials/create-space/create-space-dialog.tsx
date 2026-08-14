@@ -187,7 +187,8 @@ export function CreateSpaceDialog() {
     // always-mounted PendingCreatedSpaceRunner, then close the modal immediately
     // instead of blocking on it. The runner routes the user into the space once
     // it's indexed (the space page notFound()s before then), and surfaces a
-    // retryable error via the status bar on failure.
+    // retryable error via the status bar on failure. Seeding the overview
+    // template outlives that navigation — deploy() fires it without awaiting.
     // Refuse to start a second deploy while one is in flight. DAO deploy is NOT
     // idempotent — a second job mints a SECOND space on-chain — and the runner's
     // dedupe cannot catch this on its own: it keys on jobId, so a re-create looks
