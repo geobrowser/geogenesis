@@ -11,6 +11,7 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { FEATURED_TAG_ID, SCORE_SYSTEM_PROPERTY, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { DEBATES_PAGE_TYPE_ID, DEBATE_TYPE_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
+import { EPISODE_TYPE_ID, NEWS_STORY_TYPE_ID, PAPER_TYPE_ID, TWEET_TYPE_ID } from '~/core/explore/explore-constants';
 import { ID } from '~/core/id';
 import {
   RANKING_AGGREGATION_RESTRICTION_MEMBERS_AND_EDITORS_ID,
@@ -38,12 +39,12 @@ const RECENT_DEBATES_PAGE_SIZE = 3;
 const TRENDING_CLAIMS_PAGE_SIZE = 5;
 
 const RECENT_NEWS_TYPE_IDS = [
-  'e550fe517e904b2c8fffdf13408f5634',
+  NEWS_STORY_TYPE_ID,
   CLAIM_TYPE_ID,
   DEBATE_TYPE_ID,
-  'd6f0506def324d8e9de4976b986e78ec',
-  '972d201ad78045689e01543f67b26bee',
-  '5e24fb52856c4189a9716af4387b1b89',
+  TWEET_TYPE_ID,
+  EPISODE_TYPE_ID,
+  PAPER_TYPE_ID,
 ];
 
 function filterByType(spaceId: string, typeId: string): string {
