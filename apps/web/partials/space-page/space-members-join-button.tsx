@@ -20,7 +20,7 @@ type SpaceMembersJoinButtonProps = {
 };
 
 export function SpaceMembersJoinButton({ spaceId, memberRequest }: SpaceMembersJoinButtonProps) {
-  const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
+  const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({ spaceId });
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { open: openSignInPrompt } = useSignInPrompt();
@@ -44,10 +44,7 @@ export function SpaceMembersJoinButton({ spaceId, memberRequest }: SpaceMembersJ
       id: `join:${spaceId}`,
       label: 'your membership request',
       requires: 'personalSpace',
-      run: () =>
-        new Promise<void>((resolve, reject) => {
-          requestToBeMember(undefined, { onSuccess: () => resolve(), onError: err => reject(err) });
-        }),
+      run: () => requestToBeMemberAsync(),
     });
     if (!smartAccount) openSignInPrompt('join');
   };

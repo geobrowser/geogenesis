@@ -59,7 +59,7 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
   // invalidates the durable pending sources, so the pill drops out of this list
   // — the side panel re-filters off the same state — and the space surfaces as
   // "Membership pending" in the browse sidebar.
-  const { requestToBeMember, status } = useRequestToBeMember({
+  const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({
     spaceId: space.spaceId,
     space: { name: space.name, image: space.image },
   });
@@ -81,10 +81,7 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
       id: `join:${space.spaceId}`,
       label: 'your membership request',
       requires: 'personalSpace',
-      run: () =>
-        new Promise<void>((resolve, reject) => {
-          requestToBeMember(undefined, { onSuccess: () => resolve(), onError: err => reject(err) });
-        }),
+      run: () => requestToBeMemberAsync(),
     });
     if (!smartAccount) openSignInPrompt('join');
   };

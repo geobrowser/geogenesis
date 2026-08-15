@@ -101,7 +101,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
     });
   }, [dispatch, smartAccount, personalSpaceId, isRegistered, isAccountSetupPending, spaceId, tx]);
 
-  const { mutate, status } = useMutation({
+  const { mutate, mutateAsync, status } = useMutation({
     mutationFn: handleRequestToBeMember,
     onSuccess: () => {
       // personalSpaceId is guaranteed here (the request would have thrown without
@@ -127,6 +127,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
 
   return {
     requestToBeMember: mutate,
+    requestToBeMemberAsync: mutateAsync,
     status,
   };
 }

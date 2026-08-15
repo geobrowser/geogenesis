@@ -82,12 +82,12 @@ export function useEntityVote({ entityId, spaceId }: UseEntityVoteArgs) {
     queryClient.invalidateQueries({ queryKey: ['user-entity-vote', personalSpaceId, entityId, spaceId, 0] });
   };
 
-  const { mutate: upvote } = useMutation({
+  const { mutate: upvote, mutateAsync: upvoteAsync } = useMutation({
     mutationFn: () => castVote('UP'),
     onSuccess,
   });
 
-  const { mutate: downvote } = useMutation({
+  const { mutate: downvote, mutateAsync: downvoteAsync } = useMutation({
     mutationFn: () => castVote('DOWN'),
     onSuccess,
   });
@@ -101,6 +101,8 @@ export function useEntityVote({ entityId, spaceId }: UseEntityVoteArgs) {
     upvote,
     downvote,
     unvote,
+    upvoteAsync,
+    downvoteAsync,
     isConnected: !!personalSpaceId && isRegistered,
     personalSpaceId,
   };

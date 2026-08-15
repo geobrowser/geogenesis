@@ -65,7 +65,7 @@ export function EntityVoteButtons({
   spaceId,
   claimVoterAvatarsPosition = 'leading',
 }: EntityVoteButtonsProps) {
-  const { upvote, downvote, unvote, isConnected, personalSpaceId } = useEntityVote({
+  const { upvote, downvote, unvote, upvoteAsync, downvoteAsync, isConnected, personalSpaceId } = useEntityVote({
     entityId,
     spaceId,
   });
@@ -169,11 +169,7 @@ export function EntityVoteButtons({
       id: `entity-vote:${entityId}:${spaceId}`,
       label: 'your vote',
       requires: 'personalSpace',
-      run: () =>
-        new Promise<void>((resolve, reject) => {
-          const mutate = direction === 0 ? upvote : downvote;
-          mutate(undefined, { onSuccess: () => resolve(), onError: err => reject(err) });
-        }),
+      run: () => (direction === 0 ? upvoteAsync : downvoteAsync)(),
     });
 
     if (!smartAccount) openPrivySignIn();
