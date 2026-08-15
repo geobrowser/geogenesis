@@ -35,6 +35,8 @@ import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 import { useToast } from './use-toast';
 
+type PersonalSpaceIdCache = { isRegistered: boolean; personalSpaceId: string | null };
+
 /** Generate a short name from the first ~20 chars of markdown text, stripping formatting. */
 function getCommentName(markdown: string): string {
   const plain = markdown
@@ -148,6 +150,12 @@ export function useCreateComment(targetEntityId: string) {
         setToast(<span>Please connect your wallet to comment</span>);
         return null;
       }
+
+      // Read the personal space from the query cache at call time, not a value captured when this
+      // callback was created.
+      const personalSpaceId =
+        queryClient.getQueryData<PersonalSpaceIdCache>(['personal-space-id', smartAccount.account.address])
+          ?.personalSpaceId ?? null;
 
       if (!personalSpaceId) {
         setToast(
@@ -475,7 +483,7 @@ export function useCreateComment(targetEntityId: string) {
         setInFlightCount(c => c - 1);
       }
     },
-    [smartAccount, personalSpaceId, isAccountSetupPending, targetEntityId, queryClient, setToast, reportError]
+    [smartAccount, isAccountSetupPending, targetEntityId, queryClient, setToast, reportError]
   );
 
   const editComment = React.useCallback(
@@ -492,6 +500,10 @@ export function useCreateComment(targetEntityId: string) {
         setToast(<span>Please connect your wallet to edit</span>);
         return false;
       }
+
+      const personalSpaceId =
+        queryClient.getQueryData<PersonalSpaceIdCache>(['personal-space-id', smartAccount.account.address])
+          ?.personalSpaceId ?? null;
 
       if (!personalSpaceId) {
         setToast(<span>Personal space required. Please complete onboarding.</span>);
@@ -619,7 +631,7 @@ export function useCreateComment(targetEntityId: string) {
         setInFlightCount(c => c - 1);
       }
     },
-    [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast, reportError]
+    [smartAccount, targetEntityId, queryClient, setToast, reportError]
   );
 
   return {
