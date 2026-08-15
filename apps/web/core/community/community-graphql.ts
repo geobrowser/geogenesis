@@ -43,14 +43,24 @@ export function afterArg(after: string | null): string {
   return after ? `, after: "${after}"` : '';
 }
 
-export async function runQuery<T>(label: string, query: string, signal?: AbortController['signal']): Promise<T | null> {
+export class CommunityQueryError extends Error {
+  readonly label: string;
+
+  constructor(label: string, cause: unknown) {
+    super(`community: "${label}" query failed`, { cause });
+    this.name = 'CommunityQueryError';
+    this.label = label;
+  }
+}
+
+export async function runQuery<T>(label: string, query: string, signal?: AbortController['signal']): Promise<T> {
   const result = await Effect.runPromise(
     Effect.either(graphql<T>({ endpoint: Environment.getConfig().api, query, signal }))
   );
 
   if (Either.isLeft(result)) {
     console.error(`community: "${label}" query failed`, result.left);
-    return null;
+    throw new CommunityQueryError(label, result.left);
   }
 
   return result.right;
@@ -66,10 +76,10 @@ export async function collectConnection<TNode>(
   let after: string | null = null;
 
   for (let page = 0; page < MAX_PAGES; page++) {
-    const data: Record<string, Connection<TNode> | undefined> | null = await runQuery<
+    const data: Record<string, Connection<TNode> | undefined> = await runQuery<
       Record<string, Connection<TNode> | undefined>
     >(label, buildQuery(after), signal);
-    const connection: Connection<TNode> | undefined = data ? selectConnection(data) : undefined;
+    const connection: Connection<TNode> | undefined = selectConnection(data);
     if (!connection) break;
 
     nodes.push(...connection.nodes);

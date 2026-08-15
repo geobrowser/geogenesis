@@ -23,7 +23,7 @@ import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { SingleSelectPill } from './community-filter-pill';
+import { FILTER_PILL_CLASS, SingleSelectPill } from './community-filter-pill';
 
 type Props = {
   spaceId: string;
@@ -185,11 +185,24 @@ function LeaderboardTable({
   );
 }
 
+function LeaderboardError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="rounded-lg border border-grey-02 bg-white px-4 py-8 text-center text-[16px] leading-[20px] text-grey-04">
+      Could not load the curator leaderboard.
+      <div className="mt-3 flex justify-center">
+        <button type="button" onClick={onRetry} className={FILTER_PILL_CLASS}>
+          Try again
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
   const [period, setPeriod] = React.useState<CuratorLeaderboardPeriod>(initialData?.period ?? DEFAULT_PERIOD);
   const { personalSpaceId } = usePersonalSpaceId();
 
-  const { data } = useQuery({
+  const { data, isPending, isError, refetch } = useQuery({
     queryKey: ['curator-leaderboard', spaceId, period, personalSpaceId],
     queryFn: async () => {
       const params = new URLSearchParams({ period });
@@ -200,12 +213,14 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
     },
     initialData: initialData && period === initialData.period ? initialData : undefined,
     staleTime: 60_000,
+    retry: 2,
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
   });
 
   const metrics = data?.metrics ?? EMPTY_METRICS;
   const rows = data?.rows ?? [];
   const currentUserRow = data?.currentUserRow ?? null;
-  const isLoading = !data;
+  const isLoading = isPending;
 
   return (
     <section className="flex flex-col gap-4">
@@ -219,9 +234,15 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
         />
       </div>
 
-      <LeaderboardMetrics metrics={metrics} isLoading={isLoading} />
+      {isError ? (
+        <LeaderboardError onRetry={() => void refetch()} />
+      ) : (
+        <>
+          <LeaderboardMetrics metrics={metrics} isLoading={isLoading} />
 
-      <LeaderboardTable rows={rows} currentUserRow={currentUserRow} isLoading={isLoading} />
+          <LeaderboardTable rows={rows} currentUserRow={currentUserRow} isLoading={isLoading} />
+        </>
+      )}
     </section>
   );
 }

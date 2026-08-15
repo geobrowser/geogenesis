@@ -23,7 +23,12 @@ export async function GET(request: Request, context: RouteContext) {
   const taskStatusId =
     requestedStatus && IdUtils.isValid(requestedStatus) ? requestedStatus : BOUNTY_TASK_STATUS_DONE_ENTITY_ID;
 
-  const data = await fetchSpaceBounties({ spaceId, taskStatusId });
+  try {
+    const data = await fetchSpaceBounties({ spaceId, taskStatusId });
 
-  return NextResponse.json(data);
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('[SPACE_BOUNTIES] Failed to load bounties', error);
+    return NextResponse.json({ error: 'Failed to load bounties' }, { status: 502 });
+  }
 }

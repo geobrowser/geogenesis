@@ -27,11 +27,16 @@ export async function GET(request: Request, context: RouteContext) {
     : 'week';
   const currentUserSpaceId = searchParams.get('currentUserSpaceId');
 
-  const data = await fetchCuratorLeaderboard({
-    spaceId,
-    period,
-    currentUserSpaceId: currentUserSpaceId && IdUtils.isValid(currentUserSpaceId) ? currentUserSpaceId : null,
-  });
+  try {
+    const data = await fetchCuratorLeaderboard({
+      spaceId,
+      period,
+      currentUserSpaceId: currentUserSpaceId && IdUtils.isValid(currentUserSpaceId) ? currentUserSpaceId : null,
+    });
 
-  return NextResponse.json(data);
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('[CURATOR_LEADERBOARD] Failed to build the leaderboard', error);
+    return NextResponse.json({ error: 'Failed to load the curator leaderboard' }, { status: 502 });
+  }
 }
