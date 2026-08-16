@@ -202,7 +202,7 @@ export function EntityVoteButtons({
       id: voteActionId,
       label: 'your vote',
       requires: 'personalSpace',
-      run: () => submitResponseAsync(direction),
+      run: () => submitResponseAsync(direction).then(() => {}),
     });
     if (!smartAccount) openPrivySignIn();
   }
