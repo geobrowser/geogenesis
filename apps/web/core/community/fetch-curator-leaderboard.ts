@@ -8,7 +8,7 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { RANKING_BLOCK_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
 
 import { ID_CHUNK_SIZE, afterArg, chunk, collectConnection, gqlId, gqlIdList, runQuery } from './community-graphql';
-import { type CuratorLeaderboardWindow, curatorLeaderboardWindow, isWithinWindow } from './curator-leaderboard-period';
+import { type CuratorLeaderboardWindow, curatorLeaderboardWindow } from './curator-leaderboard-period';
 import type {
   CuratorLeaderboardPeriod,
   CuratorLeaderboardResult,
@@ -108,31 +108,9 @@ async function fetchRankingCounts(
     return { perCurator, total: relationsTotalCount ?? 0, truncated: relationsTruncated };
   }
 
-  const rankEntityIds = [...new Set(relations.map(relation => relation.fromEntityId).filter(Boolean))];
-  const rankCreatedAt = new Map<string, string | null>();
-
-  for (const ids of chunk(rankEntityIds, ID_CHUNK_SIZE)) {
-    const data = await runQuery<{
-      entitiesConnection?: { nodes: { id: string; createdAt: string | null }[] };
-    }>(
-      'rank entities',
-      `query {
-        entitiesConnection(first: ${ids.length}, filter: { id: { in: [${gqlIdList(ids)}] } }) {
-          nodes { id createdAt }
-        }
-      }`,
-      signal
-    );
-
-    for (const node of data?.entitiesConnection?.nodes ?? []) {
-      rankCreatedAt.set(node.id, node.createdAt);
-    }
-  }
-
   let total = 0;
 
   for (const relation of relations) {
-    if (!isWithinWindow(rankCreatedAt.get(relation.fromEntityId), window)) continue;
     if (!relation.spaceId) continue;
 
     perCurator.set(relation.spaceId, (perCurator.get(relation.spaceId) ?? 0) + 1);
