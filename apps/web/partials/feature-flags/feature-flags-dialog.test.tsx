@@ -60,7 +60,7 @@ describe('FeatureFlagsDialog', () => {
           debugDebatesPage: true,
           debateDebugging: true,
           debateFormatSelector: true,
-          bountiesTab: false,
+          bountiesTab: true,
         })
       );
     });

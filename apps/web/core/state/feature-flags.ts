@@ -24,7 +24,7 @@ export const featureFlagDefinitions = [
   {
     id: 'bountiesTab',
     label: 'Bounties',
-    description: 'Show the bounty board, space bounty tabs, and bounty detail surfaces (testnet only).',
+    description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
   },
 ] as const;
 
@@ -39,7 +39,7 @@ export const defaultFeatureFlags: FeatureFlags = {
   debugDebatesPage: false,
   debateDebugging: false,
   debateFormatSelector: false,
-  bountiesTab: false,
+  bountiesTab: true,
 };
 
 export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefined): FeatureFlags {
