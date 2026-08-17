@@ -267,18 +267,24 @@ export function SpaceTopicFilters({
   leading,
   className,
 }: SpaceTopicFiltersProps) {
-  const { labelsById } = useSpaceLabels(facetSpaceIds);
+  const { labelsById, isLoading: labelsLoading } = useSpaceLabels(facetSpaceIds);
 
   const spaceOptions = React.useMemo<HubFilterOption<string>[]>(
     () => [
       { value: '', label: 'Any space', showImage: false },
-      ...facetSpaceIds.map(id => ({
-        value: id,
-        label: spaceLabel(labelsById, id)?.name ?? 'Space',
-        image: spaceLabel(labelsById, id)?.image ?? null,
-      })),
+      ...facetSpaceIds.map(id => {
+        const label = spaceLabel(labelsById, id);
+        return {
+          value: id,
+          // A settled lookup that still can't name the space really does leave "Space" as the best
+          // label there is; only a name still on its way draws as a skeleton.
+          label: label?.name ?? 'Space',
+          image: label?.image ?? null,
+          pending: !label && labelsLoading,
+        };
+      }),
     ],
-    [facetSpaceIds, labelsById]
+    [facetSpaceIds, labelsById, labelsLoading]
   );
 
   const topicOptions = React.useMemo<HubFilterOption<string>[]>(
@@ -289,7 +295,8 @@ export function SpaceTopicFilters({
     [facetTopics]
   );
 
-  const selectedSpaceLabel = spaceId ? (spaceLabel(labelsById, spaceId)?.name ?? 'Space') : 'Any space';
+  const selectedSpace = spaceId ? spaceLabel(labelsById, spaceId) : undefined;
+  const selectedSpaceLabel = spaceId ? (selectedSpace?.name ?? 'Space') : 'Any space';
   const topicLabel = topicId ? (facetTopics?.find(topic => topic.id === topicId)?.name ?? 'Topic') : 'Any topic';
 
   return (
@@ -297,6 +304,7 @@ export function SpaceTopicFilters({
       {leading}
       <HubFilterMenu
         label={selectedSpaceLabel}
+        labelPending={Boolean(spaceId) && !selectedSpace && labelsLoading}
         options={spaceOptions}
         value={spaceId ?? ''}
         onChange={value => onSpaceChange(value || null)}

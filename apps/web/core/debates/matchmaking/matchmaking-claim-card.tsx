@@ -20,6 +20,7 @@ import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
@@ -358,10 +359,22 @@ function PositionRow({
 export function SpaceChip({ spaceId }: { spaceId: string }) {
   // Same resolution as the space filter above the list, so a card and the menu option naming its
   // space are never one loaded and the other still reading "Space".
-  const { labelsById } = useSpaceLabels(React.useMemo(() => (validateSpaceId(spaceId) ? [spaceId] : []), [spaceId]));
+  const { labelsById, isLoading } = useSpaceLabels(
+    React.useMemo(() => (validateSpaceId(spaceId) ? [spaceId] : []), [spaceId])
+  );
   const label = spaceLabel(labelsById, spaceId);
   const name = label?.name ?? 'Space';
   const image = label?.image ?? null;
+
+  // A whole list of cards eyebrowed "Space" reads as though every claim lives somewhere called
+  // Space. A skeleton says the name is coming, and holds the line's height while it does.
+  if (!label && isLoading) {
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <Skeleton className="h-3 w-20" aria-label="Loading space name" />
+      </span>
+    );
+  }
 
   return (
     <span className="flex min-w-0 items-center gap-1.5">

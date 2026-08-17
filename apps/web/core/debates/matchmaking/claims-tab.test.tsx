@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   spaceAllowlist: null as Set<string> | null,
   sidebarData: null as unknown,
   fetchedSpaceIds: [] as string[][],
+  spacesLoading: false,
   lastQuery: null as unknown,
   hasNextPage: false,
   fetchNextPage: vi.fn(),
@@ -62,7 +63,7 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: (spaceIds: string[]) => {
     mocks.fetchedSpaceIds.push(spaceIds);
-    return { spaces: [], spacesById: new Map(), isLoading: false };
+    return { spaces: [], spacesById: new Map(), isLoading: mocks.spacesLoading };
   },
 }));
 
@@ -115,6 +116,7 @@ beforeEach(() => {
   mocks.spaceAllowlist = null;
   mocks.sidebarData = null;
   mocks.fetchedSpaceIds = [];
+  mocks.spacesLoading = false;
   mocks.fetchNextPage.mockReset();
   mocks.observed = [];
   // Records the sentinel and hands back a way to say it scrolled into view.
@@ -296,6 +298,61 @@ describe('ClaimsTab', () => {
     render(<ClaimsTab />);
 
     expect(screen.getByText('Crypto')).toBeInTheDocument();
+  });
+
+  // On a cold load the sidebar hasn't cached anything yet either. A column of identical "Space"
+  // rows reads as a list of real, indistinguishable choices; skeletons read as names on their way.
+  it('draws unresolved space options as skeletons rather than a column of "Space"', () => {
+    mocks.claims = [];
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.spacesLoading = true;
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+
+    expect(screen.getAllByLabelText('Loading space name')).toHaveLength(2);
+    expect(screen.queryByText('Space')).toBeNull();
+  });
+
+  // Picking a space nobody can name yet filters the list to something the viewer can't read back.
+  it('does not let an unresolved space be picked', () => {
+    mocks.claims = [];
+    mocks.facetSpaceIds = [SPACE_ID];
+    mocks.spacesLoading = true;
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    const option = screen.getByLabelText('Loading space name').closest('button');
+    expect(option).toBeDisabled();
+
+    fireEvent.click(option!);
+
+    expect(mocks.lastQuery).toMatchObject({ spaceId: null });
+  });
+
+  // A settled lookup that still can't name the space really does leave "Space" as the best label
+  // there is — the skeleton must not become the permanent state.
+  it('falls back to the plain label once the lookup settles with no name', () => {
+    mocks.claims = [];
+    mocks.facetSpaceIds = [SPACE_ID];
+    mocks.spacesLoading = false;
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+
+    expect(screen.queryByLabelText('Loading space name')).toBeNull();
+    // The option's accessible name picks up its avatar initial, so it reads "SSpace".
+    expect(screen.getByRole('button', { name: /Space$/ })).toBeEnabled();
+  });
+
+  // The same placeholder ran down every card in the list.
+  it('draws an unresolved card space as a skeleton', () => {
+    mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
+    mocks.spacesLoading = true;
+    render(<ClaimsTab />);
+
+    expect(screen.getAllByLabelText('Loading space name').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Space')).toBeNull();
   });
 
   // A space the sidebar has no row for still has to resolve the old way.
