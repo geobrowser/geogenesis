@@ -27,6 +27,7 @@ import {
   statusKeyForId,
 } from '~/core/bounties/labels';
 import { formatPoints } from '~/core/bounties/payout';
+import { reconcileDeletedRelations } from '~/core/bounties/reconcile-store';
 import type { BoardBounty } from '~/core/bounties/types';
 import { bountyQueryKeys } from '~/core/bounties/use-bounties';
 import { useAccessControl } from '~/core/hooks/use-access-control';
@@ -203,6 +204,7 @@ export function BountyForm(props: Props) {
         spaceId,
         name: `Update bounty: ${fields.name}`,
         onSuccess: async () => {
+          reconcileDeletedRelations(relations);
           await invalidate();
           router.push(NavUtils.toBounty(spaceId, initial.bounty.id));
         },

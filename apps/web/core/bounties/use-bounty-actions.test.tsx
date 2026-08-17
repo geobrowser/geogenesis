@@ -11,6 +11,7 @@ import { useBountyAllocationActions, useBountyInterestActions } from './use-boun
 import type { BountyRoles } from './use-bounty-roles';
 
 const mocks = vi.hoisted(() => ({
+  reconcile: vi.fn(),
   makeProposal: vi.fn(),
   invalidateQueries: vi.fn(() => Promise.resolve()),
   setToast: vi.fn(),
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: mocks.makeProposal }) }));
+vi.mock('./reconcile-store', () => ({ reconcileDeletedRelations: mocks.reconcile }));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.setToast] }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }) }));
 vi.mock('./api', async importOriginal => {
@@ -125,6 +127,8 @@ describe('useBountyInterestActions', () => {
     expect(call.relations.map((r: Relation) => r.id)).toEqual(['row-1', 'row-2']);
     expect(call.relations.every((r: Relation) => r.isDeleted)).toBe(true);
     expect(mocks.invalidateQueries).not.toHaveBeenCalled();
+    // A failed publish must not touch the store.
+    expect(mocks.reconcile).not.toHaveBeenCalled();
     expect(result.current.error).toBe('Could not withdraw your interest.');
   });
 
@@ -185,6 +189,8 @@ describe('useBountyAllocationActions', () => {
     });
     const call = mocks.makeProposal.mock.calls[0][0];
     expect(call.relations).toEqual([expect.objectContaining({ id: 'alloc-1', isDeleted: true })]);
+    // Successful tombstoning publishes reconcile the local store so the stale row stops rendering.
+    expect(mocks.reconcile).toHaveBeenCalledWith(call.relations);
     // Nothing to remove → no publish.
     await act(async () => {
       expect(await result.current.remove({ id: 'nobody', name: null })).toBe(false);

@@ -20,6 +20,7 @@ import {
 } from '~/core/bounties/labels';
 
 import { SmallButton } from '~/design-system/button';
+import { Check } from '~/design-system/icons/check';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Menu } from '~/design-system/menu';
@@ -100,6 +101,7 @@ export function BountyFilterBar({ filters, onChange, spaces, skills }: Props) {
       <FilterMenu
         label={statusLabel}
         closeOnSelect={false}
+        multiple
         items={WORKFLOW_STATUSES.map(status => ({
           key: status.key,
           label: status.label,
@@ -184,12 +186,15 @@ function FilterMenu({
   items,
   onSelect,
   closeOnSelect = true,
+  multiple = false,
   maxHeightClass,
 }: {
   label: string;
   items: { key: string; label: string; active: boolean }[];
   onSelect: (key: string) => void;
   closeOnSelect?: boolean;
+  /** Renders checkboxes (several items can be active) instead of a single check mark. */
+  multiple?: boolean;
   maxHeightClass?: string;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -215,12 +220,37 @@ function FilterMenu({
               onSelect(item.key);
               if (closeOnSelect) setOpen(false);
             }}
-            className={cx(
-              'flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left hover:bg-bg',
-              item.active && 'bg-grey-01'
-            )}
+            className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 text-left hover:bg-bg"
           >
-            <Text variant="button" className="hover:text-text!">
+            {multiple ? (
+              <span
+                aria-hidden
+                className={cx(
+                  'flex size-4 shrink-0 items-center justify-center rounded border',
+                  item.active ? 'border-text bg-text text-white' : 'border-grey-03 bg-white'
+                )}
+              >
+                {item.active ? (
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M2 5L4 7L8 3"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                ) : null}
+              </span>
+            ) : (
+              <span
+                aria-hidden
+                className={cx('flex size-4 shrink-0 items-center justify-center', !item.active && 'invisible')}
+              >
+                <Check />
+              </span>
+            )}
+            <Text variant="button" className={cx('hover:text-text!', item.active && 'text-text')}>
               {item.label}
             </Text>
           </button>

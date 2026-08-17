@@ -16,6 +16,7 @@ import {
   buildExpressInterestOps,
   buildRemoveAllocationOps,
 } from './interest-ops';
+import { reconcileDeletedRelations } from './reconcile-store';
 import { bountyQueryKeys } from './use-bounties';
 import type { BountyRoles } from './use-bounty-roles';
 
@@ -88,7 +89,10 @@ export function useBountyInterestActions(detail: BountyDetail | null | undefined
       spaceId: roles.personalSpaceId,
       name: `Withdraw interest in bounty: ${detail.bounty.name}`,
     });
-    if (ok) await invalidate();
+    if (ok) {
+      reconcileDeletedRelations(relations);
+      await invalidate();
+    }
     setState({ pending: false, error: ok ? null : 'Could not withdraw your interest.' });
     return ok;
   }, [detail, invalidate, makeProposal, person, roles.ownInterestRows, roles.personalSpaceId]);
@@ -200,7 +204,10 @@ export function useBountyAllocationActions(detail: BountyDetail | null | undefin
           spaceId: bounty.spaceId,
           name: `Remove allocation: ${bounty.name}`,
         });
-        if (ok) await invalidate();
+        if (ok) {
+          reconcileDeletedRelations(relations);
+          await invalidate();
+        }
         return ok;
       } finally {
         setPendingPersonId(null);

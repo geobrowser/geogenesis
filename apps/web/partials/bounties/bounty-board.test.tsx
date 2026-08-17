@@ -200,3 +200,23 @@ describe('BountyBoard', () => {
     expect(screen.getByText('No bounties match these filters.')).toBeInTheDocument();
   });
 });
+
+describe('BountyBoard status filter', () => {
+  it('shows which statuses are selected and toggles them without closing the menu', () => {
+    mocks.query.data = { bounties: [bounty({ id: 'x' })], spaces };
+    render(<BountyBoard />);
+    fireEvent.click(screen.getByRole('button', { name: /^Open/ }));
+    const checked = screen.getAllByRole('menuitemcheckbox', { checked: true }).map(el => el.textContent);
+    expect(checked).toEqual(['Backlog', 'To do', 'In progress', 'In review']);
+    expect(screen.getAllByRole('menuitemcheckbox', { checked: false }).map(el => el.textContent)).toEqual([
+      'Done',
+      'Cancelled',
+    ]);
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Done' }));
+    // Menu stays open (multi-select) and the URL now carries the explicit set.
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Done' })).toBeInTheDocument();
+    expect(mocks.replace).toHaveBeenCalledWith('/bounties?status=backlog%2Ctodo%2Cin-progress%2Cin-review%2Cdone', {
+      scroll: false,
+    });
+  });
+});

@@ -11,6 +11,7 @@ import type { BoardBounty } from '~/core/bounties/types';
 import { BountyForm, deadlineFromDateInput, validateBountyForm } from './bounty-form';
 
 const mocks = vi.hoisted(() => ({
+  reconcile: vi.fn(),
   push: vi.fn(),
   makeProposal: vi.fn(),
   setToast: vi.fn(),
@@ -32,6 +33,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQuery: () => mocks.metrics,
   useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
 }));
+vi.mock('~/core/bounties/reconcile-store', () => ({ reconcileDeletedRelations: mocks.reconcile }));
 vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: mocks.makeProposal }) }));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.setToast] }));
 vi.mock('~/core/hooks/use-access-control', () => ({ useAccessControl: () => mocks.access }));
