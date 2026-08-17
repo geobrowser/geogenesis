@@ -1,5 +1,8 @@
 import '@testing-library/jest-dom/vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+import type { ComponentProps } from 'react';
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -16,7 +19,7 @@ vi.mock('~/design-system/fallback-image', () => ({
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href, ...props }: React.ComponentProps<'a'>) => (
+  PrefetchLink: ({ children, href, ...props }: ComponentProps<'a'>) => (
     <a href={href} {...props}>
       {children}
     </a>
@@ -51,7 +54,9 @@ const ranking: FeaturedRanking = {
 };
 
 describe('FeaturedRankingsSection', () => {
-  it('shows five leaderboard entries per page', () => {
+  it('shows five leaderboard entries per page', async () => {
+    const user = userEvent.setup();
+
     render(
       <FeaturedRankingsSection
         rankings={[ranking]}
@@ -64,7 +69,7 @@ describe('FeaturedRankingsSection', () => {
     expect(screen.getByRole('button', { name: 'City 5' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'City 6' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Next entries' }));
+    await user.click(screen.getByRole('button', { name: 'Next entries' }));
 
     expect(screen.queryByRole('button', { name: 'City 1' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'City 6' })).toBeInTheDocument();
