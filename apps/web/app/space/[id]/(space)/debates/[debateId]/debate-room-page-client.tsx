@@ -61,7 +61,7 @@ import {
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
-import { useDebatesEnabled, useFeatureFlag } from '~/core/state/feature-flags';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
@@ -142,17 +142,6 @@ const connectionFailureRedirectDelayMs = 750;
 const maximumBrowserTimeoutMs = 2_147_483_647;
 
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
-  const isDebatesEnabled = useDebatesEnabled();
-  const router = useRouter();
-
-  React.useEffect(() => {
-    if (!isDebatesEnabled) {
-      router.replace(`/space/${spaceId}`);
-    }
-  }, [isDebatesEnabled, router, spaceId]);
-
-  if (!isDebatesEnabled) return null;
-
   return (
     <DebateMediaSessionBoundary>
       <DebateRoomSurface spaceId={spaceId} debateId={debateId} />

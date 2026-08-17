@@ -13,14 +13,12 @@ import type { DebateClaim } from './api';
 import { ClaimDebateButton } from './claim-debate-button';
 
 const mocks = vi.hoisted(() => ({
-  debatesEnabled: vi.fn(),
   debateClaims: vi.fn(),
   joinMutate: vi.fn(),
   leaveMutate: vi.fn(),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useDebatesEnabled: () => mocks.debatesEnabled(),
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -46,7 +44,6 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 }));
 
 beforeEach(() => {
-  mocks.debatesEnabled.mockReturnValue(true);
   mocks.debateClaims.mockReturnValue({ data: { claims: [] } });
   mocks.joinMutate.mockReset();
   mocks.joinMutate.mockReturnValue(new Promise(() => undefined));

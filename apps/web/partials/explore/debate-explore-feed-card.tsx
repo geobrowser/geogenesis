@@ -13,7 +13,6 @@ import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { ID } from '~/core/id';
-import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -52,7 +51,6 @@ export function DebateExploreFeedCard({
   hideJoinButton = false,
   fallback,
 }: DebateExploreFeedCardProps) {
-  const debatesEnabled = useDebatesEnabled();
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
   const debateId = ID.hexToUuid(item.entityId);
 
@@ -91,14 +89,13 @@ export function DebateExploreFeedCard({
     return () => observer.disconnect();
   }, [container]);
 
-  const enabled = debatesEnabled && nearViewport;
-  const debateQuery = useDebate(debateId, enabled);
+  const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
   const watchable = debate != null && isWatchableDebate(debate);
 
   // Same two-stage gate as the full-screen feed (GEO-2412): both recordings existing doesn't
   // prove the media job produced a playable final video.
-  const mediaQuery = useDebateMedia(debateId, enabled && watchable);
+  const mediaQuery = useDebateMedia(debateId, nearViewport && watchable);
   const processed = hasProcessedVideo(mediaQuery.data);
 
   const notWatchable =
@@ -107,7 +104,7 @@ export function DebateExploreFeedCard({
     mediaQuery.isError ||
     (mediaQuery.data != null && !processed);
 
-  if (!debatesEnabled || notWatchable) {
+  if (notWatchable) {
     return <>{fallback}</>;
   }
 

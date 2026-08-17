@@ -50,7 +50,6 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useDebatesEnabled: () => true,
 }));
 
 vi.mock('@geogenesis/auth', () => ({

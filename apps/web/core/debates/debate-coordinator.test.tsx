@@ -92,7 +92,6 @@ vi.mock('./claim-response-indexed-notifier', () => ({
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useDebatesEnabled: () => true,
 }));
 
 beforeEach(() => {
