@@ -18,10 +18,12 @@ describe('feature flags', () => {
     expect(defaultFeatureFlags.debugDebatesPage).toBe(false);
     expect(defaultFeatureFlags.debateDebugging).toBe(false);
     expect(defaultFeatureFlags.debateFormatSelector).toBe(false);
+    expect(defaultFeatureFlags.bountiesTab).toBe(false);
     expect(normalizeFeatureFlags(null)).toEqual({
       debugDebatesPage: false,
       debateDebugging: false,
       debateFormatSelector: false,
+      bountiesTab: false,
     });
   });
 
@@ -33,6 +35,7 @@ describe('feature flags', () => {
       debugDebatesPage: false,
       debateDebugging: true,
       debateFormatSelector: false,
+      bountiesTab: false,
     });
   });
 
@@ -53,6 +56,7 @@ describe('feature flags', () => {
         debugDebatesPage: true,
         debateDebugging: true,
         debateFormatSelector: true,
+        bountiesTab: false,
       })
     );
   });
