@@ -28,8 +28,8 @@ type Props = {
 // lower than the old compact rows and reveal the rest behind "Show more".
 const INITIAL_VISIBLE_COUNT = 3;
 
-// Leaderboard page size — matches the design's three visible entries.
-const ENTRIES_PER_PAGE = 3;
+// Leaderboard page size — show the top five entries before paging.
+const ENTRIES_PER_PAGE = 5;
 
 export function FeaturedRankingsSection({ rankings, memberOrEditorSpaceIds, pendingMembershipSpaceIds }: Props) {
   const [showAll, setShowAll] = React.useState(false);

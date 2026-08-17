@@ -49,7 +49,7 @@ export interface FeaturedRanking {
   /** Name/image of the space the block lives in — feeds the card's space badge. */
   spaceName: string | null;
   spaceImage: string | null;
-  /** Current aggregated leaderboard, best first — the card pages through it in threes. */
+  /** Current aggregated leaderboard, best first — the card pages through it in fives. */
   topEntries: FeaturedRankingEntry[];
 }
 
@@ -60,9 +60,9 @@ const MAX_CANDIDATES = 25;
 const MAX_FEATURED_RANKINGS = 10;
 const RESOLVE_CONCURRENCY = 6;
 
-// The card shows three leaderboard entries per page; nine covers three pages
+// The card shows five leaderboard entries per page; fifteen covers three pages
 // without fetching the whole standings.
-const MAX_TOP_ENTRIES = 9;
+const MAX_TOP_ENTRIES = 15;
 
 // Entities that are Ranking Blocks AND tagged Featured.
 const FEATURED_RANKINGS_FILTER: EntityFilter = {
