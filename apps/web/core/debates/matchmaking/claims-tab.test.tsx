@@ -8,6 +8,8 @@ import { ClaimsTab } from './claims-tab';
 
 const mocks = vi.hoisted(() => ({
   claims: [] as MatchmakingClaim[],
+  facetSpaceIds: [] as string[],
+  spaceAllowlist: null as Set<string> | null,
   lastQuery: null as unknown,
   hasNextPage: false,
   fetchNextPage: vi.fn(),
@@ -15,11 +17,15 @@ const mocks = vi.hoisted(() => ({
   trigger: null as null | (() => void),
 }));
 
+vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
+  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: false }),
+}));
+
 vi.mock('./hooks', () => ({
   useMatchmakingClaims: (query: unknown) => {
     mocks.lastQuery = query;
     return {
-      data: { pages: [{ claims: mocks.claims, next_cursor: null, facets: { space_ids: [] } }] },
+      data: { pages: [{ claims: mocks.claims, next_cursor: null, facets: { space_ids: mocks.facetSpaceIds } }] },
       isLoading: false,
       error: null,
       hasNextPage: mocks.hasNextPage,
@@ -46,10 +52,17 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
+const OTHER_SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c599';
 
-function claim(entityId: string, text: string, viewerResponded: boolean, debateReady = false): MatchmakingClaim {
+function claim(
+  entityId: string,
+  text: string,
+  viewerResponded: boolean,
+  debateReady = false,
+  spaceId = SPACE_ID
+): MatchmakingClaim {
   return {
-    claim: { id: `row-${entityId}`, space_id: SPACE_ID, claim_entity_id: entityId, claim: text, description: null },
+    claim: { id: `row-${entityId}`, space_id: spaceId, claim_entity_id: entityId, claim: text, description: null },
     topics: [],
     response_kind: 'stance',
     viewer_position: viewerResponded ? true : null,
@@ -67,6 +80,9 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
 beforeEach(() => {
   mocks.hasNextPage = false;
+  mocks.facetSpaceIds = [];
+  // Null is "the allowlist hasn't resolved", which every pre-existing case here runs under.
+  mocks.spaceAllowlist = null;
   mocks.fetchNextPage.mockReset();
   mocks.observed = [];
   // Records the sentinel and hands back a way to say it scrolled into view.
@@ -162,6 +178,68 @@ describe('ClaimsTab', () => {
     expect(mocks.lastQuery).toMatchObject({ filter: 'mine' });
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
     expect(screen.getByText('Rust belongs in the kernel')).toBeInTheDocument();
+  });
+
+  // Featured spaces plus the viewer's own; `/matchmaking/claims` takes a single space_id, so the
+  // list has to be narrowed here.
+  it('shows only claims from spaces the viewer is allowed to see', () => {
+    mocks.claims = [
+      claim(MINE, 'Chips are better than fries', true),
+      claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID),
+    ];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+    expect(screen.queryByText('Bitcoin will never top $250K')).not.toBeInTheDocument();
+  });
+
+  // The allowlist is keyed on normalized ids; a claim row carries the hyphen-less form.
+  it('matches allowed spaces across id formats', () => {
+    mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '').toLowerCase()]);
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+  });
+
+  // Until the sources settle there is no allowlist to filter against, and hiding claims the viewer
+  // is entitled to and then flashing them back in reads worse than a beat of everything.
+  it('filters nothing while the allowlist is still resolving', () => {
+    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
+    mocks.spaceAllowlist = null;
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Bitcoin will never top $250K')).toBeInTheDocument();
+  });
+
+  // The space menu comes from the server's facets, which span every space the query touched.
+  it('offers only allowed spaces in the space filter', () => {
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+
+    // Names resolve through useSpacesByIds, mocked empty here, so every allowed space reads "Space".
+    expect(screen.getAllByRole('button', { name: /Space$/ })).toHaveLength(1);
+  });
+
+  // The allowlist runs over the loaded page, so a page can arrive with nothing left in it. With
+  // the sentinel rendered only alongside results the list would stop there and report "no claims"
+  // while the corpus still held matches.
+  it('keeps asking for pages when the allowlist empties the one it has', () => {
+    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.hasNextPage = true;
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('No debatable claims yet.')).toBeInTheDocument();
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+
+    act(() => mocks.trigger?.());
+
+    expect(mocks.fetchNextPage).toHaveBeenCalled();
   });
 
   it('drops the split once a filter already narrows to one group', () => {
