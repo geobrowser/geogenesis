@@ -19,6 +19,9 @@ vi.mock('~/core/bounties/use-bounty-detail', () => ({
 vi.mock('~/core/bounties/use-bounty-roles', () => ({
   useBountyRoles: () => mocks.roles,
 }));
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+}));
 vi.mock('./bounty-info-card', () => ({
   BountyInfoCard: (props: Record<string, unknown>) => {
     mocks.lastInfoCardProps = props;
@@ -60,5 +63,12 @@ describe('BountyDetailHeader', () => {
     mocks.roles = { isEditor: true };
     render(<BountyDetailHeader spaceId="s" bountyId="b" />);
     expect(mocks.lastInfoCardProps?.showStatus).toBe(true);
+    expect(screen.getByRole('link', { name: 'Edit bounty' })).toHaveAttribute('href', '/space/s/bounties/b/edit');
+  });
+
+  it('hides the edit affordance from non-editors', () => {
+    mocks.detail = { data: { bounty: { id: 'b' }, interest: [], submissions: [] }, isLoading: false, isError: false };
+    render(<BountyDetailHeader spaceId="s" bountyId="b" />);
+    expect(screen.queryByRole('link', { name: 'Edit bounty' })).not.toBeInTheDocument();
   });
 });

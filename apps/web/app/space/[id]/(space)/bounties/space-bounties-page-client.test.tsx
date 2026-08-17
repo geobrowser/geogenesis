@@ -9,6 +9,7 @@ import { SpaceBountiesPageClient } from './space-bounties-page-client';
 const mocks = vi.hoisted(() => ({
   enabled: true,
   replace: vi.fn(),
+  isEditor: false,
   lastSpaceId: undefined as string | undefined,
 }));
 
@@ -18,10 +19,17 @@ vi.mock('next/navigation', () => ({
 vi.mock('~/core/bounties/config', () => ({
   useBountiesEnabled: () => mocks.enabled,
 }));
+vi.mock('~/core/hooks/use-access-control', () => ({
+  useAccessControl: () => ({ isEditor: mocks.isEditor, isMember: false, canEdit: false, isLoading: false }),
+}));
 vi.mock('~/partials/bounties', () => ({
-  BountyBoard: ({ spaceId }: { spaceId?: string }) => {
+  BountyBoard: ({ spaceId, header }: { spaceId?: string; header?: React.ReactNode }) => {
     mocks.lastSpaceId = spaceId;
-    return <div data-testid="board" />;
+    return (
+      <div data-testid="board">
+        {header}
+      </div>
+    );
   },
 }));
 
@@ -34,6 +42,17 @@ describe('SpaceBountiesPageClient', () => {
     expect(screen.getByTestId('board')).toBeInTheDocument();
     expect(mocks.lastSpaceId).toBe('space-1');
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('offers New bounty to editors only', () => {
+    mocks.enabled = true;
+    mocks.isEditor = false;
+    const { unmount } = render(<SpaceBountiesPageClient spaceId="space-1" />);
+    expect(screen.queryByRole('button', { name: 'New bounty' })).not.toBeInTheDocument();
+    unmount();
+    mocks.isEditor = true;
+    render(<SpaceBountiesPageClient spaceId="space-1" />);
+    expect(screen.getByRole('button', { name: 'New bounty' })).toBeInTheDocument();
   });
 
   it('routes back to the space and renders nothing when the flag is off', () => {

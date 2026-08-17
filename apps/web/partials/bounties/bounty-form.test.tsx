@@ -1,0 +1,196 @@
+import '@testing-library/jest-dom/vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+
+import * as React from 'react';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { BOUNTY_STATUS_TODO_ID, HARD_DIFFICULTY_ID } from '~/core/bounties/ontology';
+import type { BoardBounty } from '~/core/bounties/types';
+
+import { BountyForm, deadlineFromDateInput, validateBountyForm } from './bounty-form';
+
+const mocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  makeProposal: vi.fn(),
+  setToast: vi.fn(),
+  invalidateQueries: vi.fn(() => Promise.resolve()),
+  metrics: {
+    data: { balance: 1000, totalPaidOut: 0 } as { balance: number; totalPaidOut: number } | undefined,
+    isError: false,
+  },
+  access: { isEditor: true, isLoading: false },
+  profile: { id: 'person-1', spaceId: 'personal-1', name: 'Bob' } as {
+    id: string;
+    spaceId: string;
+    name: string | null;
+  } | null,
+}));
+
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }));
+vi.mock('@tanstack/react-query', () => ({
+  useQuery: () => mocks.metrics,
+  useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }),
+}));
+vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: mocks.makeProposal }) }));
+vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.setToast] }));
+vi.mock('~/core/hooks/use-access-control', () => ({ useAccessControl: () => mocks.access }));
+vi.mock('~/core/hooks/use-smart-account', () => ({
+  useSmartAccount: () => ({ smartAccount: { account: { address: '0xabc' } }, isLoading: false }),
+}));
+vi.mock('~/core/hooks/use-geo-profile', () => ({ useGeoProfile: () => ({ profile: mocks.profile }) }));
+vi.mock('~/core/bounties/config', () => ({ CURATOR_API_BASE_URL: 'https://curator.example.com' }));
+vi.mock('~/design-system/select-entity', () => ({
+  SelectEntity: () => <input aria-label="entity search" />,
+}));
+vi.mock('~/design-system/select', () => ({
+  Select: ({
+    value,
+    onChange,
+    options,
+  }: {
+    value: string;
+    onChange: (v: string) => void;
+    options: { value: string; label: string }[];
+  }) => (
+    <select value={value} onChange={e => onChange(e.target.value)} aria-label="select">
+      {options.map(o => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+
+beforeEach(() => {
+  mocks.push.mockReset();
+  mocks.makeProposal.mockReset();
+  mocks.setToast.mockReset();
+  mocks.metrics = { data: { balance: 1000, totalPaidOut: 0 }, isError: false };
+  mocks.access = { isEditor: true, isLoading: false };
+});
+afterEach(cleanup);
+
+describe('deadlineFromDateInput', () => {
+  it('turns a date into end-of-day UTC and rejects garbage', () => {
+    expect(deadlineFromDateInput('2026-12-31')).toBe('2026-12-31T23:59:59.000Z');
+    expect(deadlineFromDateInput('')).toBeNull();
+    expect(deadlineFromDateInput('nope')).toBeNull();
+  });
+});
+
+describe('validateBountyForm', () => {
+  const base = {
+    name: 'X',
+    budget: '',
+    maxContributors: '',
+    maxSubmissionsPerPerson: '',
+    deadline: '',
+    availableBalance: null,
+    reservedBudget: 0,
+  };
+
+  it('requires a name and numeric fields', () => {
+    expect(validateBountyForm({ ...base, name: '  ' })).toMatchObject({ ok: false, message: 'Add a bounty name.' });
+    expect(validateBountyForm({ ...base, budget: 'abc' })).toMatchObject({ ok: false });
+    expect(validateBountyForm({ ...base, maxContributors: '1.5' })).toMatchObject({ ok: false });
+    expect(validateBountyForm({ ...base, deadline: 'nope' })).toMatchObject({ ok: false });
+  });
+
+  it('caps the budget at the available balance, crediting back the current budget on edit', () => {
+    expect(validateBountyForm({ ...base, budget: '1500', availableBalance: 1000 })).toMatchObject({ ok: false });
+    expect(validateBountyForm({ ...base, budget: '1000', availableBalance: 1000 })).toMatchObject({
+      ok: true,
+      budget: 1000,
+    });
+    // Editing a 500-point bounty when 1000 remain: up to 1500 is fine.
+    expect(validateBountyForm({ ...base, budget: '1500', availableBalance: 1000, reservedBudget: 500 })).toMatchObject({
+      ok: true,
+    });
+    // No balance known: no cap.
+    expect(validateBountyForm({ ...base, budget: '999999' })).toMatchObject({ ok: true });
+  });
+
+  it('parses blanks as null', () => {
+    expect(validateBountyForm(base)).toEqual({
+      ok: true,
+      budget: null,
+      maxContributors: null,
+      maxSubmissionsPerPerson: null,
+    });
+  });
+});
+
+describe('BountyForm', () => {
+  it('refuses non-editors', () => {
+    mocks.access = { isEditor: false, isLoading: false };
+    render(<BountyForm mode="create" spaceId="space-1" />);
+    expect(screen.getByTestId('bounty-form-denied')).toBeInTheDocument();
+  });
+
+  it('toasts validation errors instead of publishing', () => {
+    render(<BountyForm mode="create" spaceId="space-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Publish bounty' }));
+    expect(mocks.setToast).toHaveBeenCalled();
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+
+  it('hides contributor limits for easy bounties', () => {
+    render(<BountyForm mode="create" spaceId="space-1" />);
+    expect(screen.getByText('Max contributors')).toBeInTheDocument();
+    fireEvent.change(screen.getAllByLabelText('select')[0], { target: { value: 'easy' } });
+    expect(screen.queryByText('Max contributors')).not.toBeInTheDocument();
+  });
+
+  it('publishes a create proposal into the space and navigates to the new bounty', async () => {
+    mocks.makeProposal.mockImplementation(async ({ onSuccess }: { onSuccess: () => Promise<void> }) => onSuccess());
+    render(<BountyForm mode="create" spaceId="space-1" />);
+    fireEvent.change(screen.getByPlaceholderText('What needs curating?'), { target: { value: 'Add drugs' } });
+    fireEvent.change(screen.getByPlaceholderText('Total for all contributors'), { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Publish bounty' }));
+
+    await waitFor(() => expect(mocks.makeProposal).toHaveBeenCalledTimes(1));
+    const call = mocks.makeProposal.mock.calls[0][0];
+    expect(call.spaceId).toBe('space-1');
+    expect(call.name).toBe('Create bounty: Add drugs');
+    expect(call.values.some((v: { value: string }) => v.value === 'Add drugs')).toBe(true);
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith(expect.stringMatching(/^\/space\/space-1\/[0-9a-f]{32}$/))
+    );
+    expect(mocks.invalidateQueries).toHaveBeenCalled();
+  });
+
+  it('prefills from an existing bounty and publishes an update proposal', async () => {
+    mocks.makeProposal.mockImplementation(async ({ onSuccess }: { onSuccess: () => Promise<void> }) => onSuccess());
+    const bounty: BoardBounty = {
+      id: 'bounty-1',
+      spaceId: 'space-1',
+      name: 'Existing',
+      description: 'Desc',
+      budget: 300,
+      difficulty: 'Hard',
+      difficultyId: HARD_DIFFICULTY_ID,
+      status: 'To do',
+      statusId: BOUNTY_STATUS_TODO_ID,
+      deadline: '2026-12-31T23:59:59.000Z',
+      maxContributors: 2,
+      submissionsPerPerson: 1,
+      skills: [{ id: 'skill-1', name: 'Pharmacology' }],
+      maintainers: [],
+      allocatedIds: [],
+      interestedCount: 0,
+      updatedAt: null,
+    };
+    render(<BountyForm mode="edit" spaceId="space-1" initial={{ bounty, relations: [] }} />);
+    expect(screen.getByDisplayValue('Existing')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('300')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('2026-12-31')).toBeInTheDocument();
+    expect(screen.getByText('Pharmacology')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(mocks.makeProposal).toHaveBeenCalledTimes(1));
+    expect(mocks.makeProposal.mock.calls[0][0].name).toBe('Update bounty: Existing');
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/bounty-1'));
+  });
+});

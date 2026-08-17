@@ -4,7 +4,10 @@ import * as React from 'react';
 
 import { useBountyDetail } from '~/core/bounties/use-bounty-detail';
 import { useBountyRoles } from '~/core/bounties/use-bounty-roles';
+import { NavUtils } from '~/core/utils/utils';
 
+import { SmallButton } from '~/design-system/button';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { BountyInfoCard } from './bounty-info-card';
@@ -28,6 +31,13 @@ export function BountyDetailHeader({ spaceId, bountyId }: Props) {
 
   return (
     <div className="flex flex-col gap-4" data-testid="bounty-detail-header">
+      {roles.isEditor ? (
+        <div className="flex justify-end">
+          <Link href={NavUtils.toEditBounty(spaceId, bountyId)}>
+            <SmallButton>Edit bounty</SmallButton>
+          </Link>
+        </div>
+      ) : null}
       <BountyInfoCard bounty={data.bounty} showStatus={roles.isEditor} />
     </div>
   );
