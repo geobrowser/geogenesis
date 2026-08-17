@@ -49,6 +49,7 @@ const mocks = vi.hoisted(() => ({
   savedClaims: null as DebateRematchClaim[] | null,
   browsedLookupLoading: false,
   currentUserId: 'user-local' as string | null,
+  spaceAllowlist: null as Set<string> | null,
   scrollSentinelIntoView: null as null | (() => void),
   claimReadinessLoading: false,
   claimReadinessError: false,
@@ -147,6 +148,11 @@ vi.mock('~/core/debates/recommended-claims', () => ({
   }),
 }));
 
+// Null is "the allowlist hasn't resolved", which every case that isn't about it runs under.
+vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
+  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: false }),
+}));
+
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, sidePanelTarget: null, closeSidePanel: vi.fn() }),
 }));
@@ -193,6 +199,7 @@ beforeEach(() => {
   mocks.savedClaims = null;
   mocks.browsedLookupLoading = false;
   mocks.currentUserId = 'user-local';
+  mocks.spaceAllowlist = null;
   // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
   // the callback so a test can say the sentinel scrolled into view.
   mocks.scrollSentinelIntoView = null;
@@ -714,6 +721,48 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
   });
 
+  // Featured spaces plus the ones the viewer belongs to. The picker browses the whole published
+  // corpus, so without this it offers claims from spaces the viewer has nothing to do with.
+  it('drops claims from spaces outside the viewer’s allowed set', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_1.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    // The shared claim sits in Crypto (allowed); the published one is in Governance space.
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+  });
+
+  // Applied to the pool, not to the All tab alone, so the tab a viewer lands on describes the same
+  // set of claims as every other one.
+  it('drops disallowed claims from the opponent tab too', async () => {
+    mocks.claims = [sharedClaim()];
+    mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    // The count follows the same pool, so it can't advertise a position the tab no longer lists.
+    const tab = screen.getByRole('button', { name: /Salina’s positions/ });
+    expect(within(tab).getByText('0')).toBeInTheDocument();
+  });
+
+  // The browsed scan is graph-wide; asking geo-chat about claims the picker will drop spends a
+  // batch of round trips on rows nobody sees.
+  it('keeps disallowed claims out of the geo-chat lookup entirely', () => {
+    mocks.spaceAllowlist = new Set([SPACE_1.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.rematchClaimIds.flat()).not.toContain(CLAIM_MORE);
+  });
+
+  it('filters nothing while the allowlist is still resolving', async () => {
+    mocks.spaceAllowlist = null;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+  });
+
   it('searches claim text, and keeps searching across a tab switch', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();
@@ -995,7 +1044,12 @@ describe('DebateRematchPageClient', () => {
         // Crypto (rank 2) outranks Podcasts (rank 8), but only Podcasts names the claim.
         spaces: [CRYPTO_SPACE, PODCASTS_SPACE],
         values: [
-          { isDeleted: false, property: { id: NAME_PROPERTY }, spaceId: PODCASTS_SPACE, value: 'A claim that lives in Podcasts' },
+          {
+            isDeleted: false,
+            property: { id: NAME_PROPERTY },
+            spaceId: PODCASTS_SPACE,
+            value: 'A claim that lives in Podcasts',
+          },
         ],
       },
     ];
