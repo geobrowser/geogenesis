@@ -6,6 +6,7 @@ import { BOUNTIES_RELATION_TYPE, NEWS_STORY_TYPE_ID } from '~/core/constants';
 import { ID } from '~/core/id';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { RANKING_BLOCK_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 import { ID_CHUNK_SIZE, afterArg, chunk, collectConnection, gqlId, gqlIdList, runQuery } from './community-graphql';
 import { type CuratorLeaderboardWindow, curatorLeaderboardWindow } from './curator-leaderboard-period';
@@ -20,6 +21,11 @@ const RANKING_BLOCK_LIMIT = 100;
 const RELATION_PAGE_SIZE = 500;
 const ENTITY_PAGE_SIZE = 200;
 const VOTE_PAGE_SIZE = 1000;
+
+// Chunked id lookups run concurrently rather than in series, capped so a large
+// space can't burst into hundreds of simultaneous requests. Matches the limit
+// app/explore/page.tsx uses for its own fan-out.
+const CHUNK_CONCURRENCY = 8;
 
 type CuratorAccumulator = {
   rankings: number;
@@ -196,8 +202,8 @@ async function fetchSubmissionCounts(
       ? 'executedAt: { isNull: false }'
       : `executedAt: { greaterThanOrEqualTo: "${window.seconds}" }`;
 
-  for (const ids of chunk(proposalIds, ID_CHUNK_SIZE)) {
-    const data = await runQuery<{ proposalsConnection?: { nodes: { id: string; proposedBy: string }[] } }>(
+  const proposalPages = await mapWithConcurrency(chunk(proposalIds, ID_CHUNK_SIZE), CHUNK_CONCURRENCY, ids =>
+    runQuery<{ proposalsConnection?: { nodes: { id: string; proposedBy: string }[] } }>(
       'bounty-linked proposals',
       `query {
         proposalsConnection(
@@ -212,8 +218,10 @@ async function fetchSubmissionCounts(
         }
       }`,
       signal
-    );
+    )
+  );
 
+  for (const data of proposalPages) {
     for (const proposal of data?.proposalsConnection?.nodes ?? []) {
       if (!proposal.proposedBy) continue;
       perCurator.set(proposal.proposedBy, (perCurator.get(proposal.proposedBy) ?? 0) + 1);
@@ -270,8 +278,10 @@ async function fetchNewsStoryCounts(
 
   const firstVersionKeyByStory = new Map<string, bigint>();
 
-  for (const ids of chunk(storyIds, ID_CHUNK_SIZE)) {
-    const { nodes: versions } = await collectConnection<{ fromEntityId: string; validFromKey: string }>(
+  // The only chunk loop with a paginated call inside it, so this is the one whose
+  // worst case multiplies: chunks × up to MAX_PAGES, previously all in series.
+  const versionPages = await mapWithConcurrency(chunk(storyIds, ID_CHUNK_SIZE), CHUNK_CONCURRENCY, ids =>
+    collectConnection<{ fromEntityId: string; validFromKey: string }>(
       'news story type relation versions',
       after => `query {
         relationVersionsConnection(
@@ -289,8 +299,10 @@ async function fetchNewsStoryCounts(
       }`,
       data => data.relationVersionsConnection,
       signal
-    );
+    )
+  );
 
+  for (const { nodes: versions } of versionPages) {
     for (const version of versions) {
       if (!version.fromEntityId || !version.validFromKey) continue;
       const key = BigInt(version.validFromKey);
@@ -304,8 +316,8 @@ async function fetchNewsStoryCounts(
   const versionKeys = [...new Set([...firstVersionKeyByStory.values()].map(String))];
   const authorByVersionKey = new Map<string, string>();
 
-  for (const keys of chunk(versionKeys, ID_CHUNK_SIZE)) {
-    const data = await runQuery<{
+  const editVersionPages = await mapWithConcurrency(chunk(versionKeys, ID_CHUNK_SIZE), CHUNK_CONCURRENCY, keys =>
+    runQuery<{
       editVersionsConnection?: { nodes: { versionKey: string; createdById: string | null }[] };
     }>(
       'news story edit versions',
@@ -318,8 +330,10 @@ async function fetchNewsStoryCounts(
         }
       }`,
       signal
-    );
+    )
+  );
 
+  for (const data of editVersionPages) {
     for (const node of data?.editVersionsConnection?.nodes ?? []) {
       const curatorSpaceId = gqlId(node.createdById);
       if (curatorSpaceId) authorByVersionKey.set(node.versionKey, curatorSpaceId);

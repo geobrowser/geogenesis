@@ -16,11 +16,14 @@ import {
 } from '~/core/constants';
 import { ID } from '~/core/id';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 import type { BountyContributor, SpaceBountiesResult, SpaceBounty } from './bounty-types';
 import { ID_CHUNK_SIZE, afterArg, chunk, collectConnection, gqlId, gqlIdList, runQuery } from './community-graphql';
 
 const BOUNTY_PAGE_SIZE = 100;
+
+const CHUNK_CONCURRENCY = 8;
 
 type RelationTarget = { id: string; name: string | null; types: { id: string }[] | null };
 
@@ -64,8 +67,8 @@ async function fetchContributorAvatars(
   const imageUrlProperty = gqlId(SystemIds.IMAGE_URL_PROPERTY);
   if (!avatarProperty || !imageUrlProperty || entityIds.length === 0) return avatarByEntityId;
 
-  for (const ids of chunk(entityIds, ID_CHUNK_SIZE)) {
-    const data = await runQuery<{
+  const avatarPages = await mapWithConcurrency(chunk(entityIds, ID_CHUNK_SIZE), CHUNK_CONCURRENCY, ids =>
+    runQuery<{
       entitiesConnection?: {
         nodes: {
           id: string;
@@ -87,8 +90,10 @@ async function fetchContributorAvatars(
         }
       }`,
       signal
-    );
+    )
+  );
 
+  for (const data of avatarPages) {
     for (const node of data?.entitiesConnection?.nodes ?? []) {
       const url = node.relationsList.flatMap(relation => relation.toEntity.valuesList).find(value => value.text)?.text;
       if (url) avatarByEntityId.set(node.id, url);
