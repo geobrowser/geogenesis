@@ -29,3 +29,11 @@ export const BOUNTY_SPACE_IDS: Record<'TESTNET' | 'MAINNET', readonly string[]> 
 export const CURRENT_BOUNTY_SPACE_IDS: readonly string[] = IS_TESTNET
   ? BOUNTY_SPACE_IDS.TESTNET
   : BOUNTY_SPACE_IDS.MAINNET;
+
+const currentBountySpaceIdSet = new Set(CURRENT_BOUNTY_SPACE_IDS.map(id => id.toLowerCase().replace(/-/g, '')));
+
+/** True when the space participates in the bounty program on the current network. */
+export function isBountySpace(spaceId: string | null | undefined): boolean {
+  if (!spaceId) return false;
+  return currentBountySpaceIdSet.has(spaceId.toLowerCase().replace(/-/g, ''));
+}

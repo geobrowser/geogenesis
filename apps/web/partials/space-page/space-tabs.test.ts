@@ -60,14 +60,7 @@ describe('buildSpaceTabs', () => {
       isDebugDebatesPageEnabled: false,
     });
 
-    expect(tabs.map(tab => tab.label)).toEqual([
-      'Overview',
-      'Facts',
-      'Sources',
-      'Debates',
-      'Governance',
-      'Activity',
-    ]);
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Debates', 'Governance', 'Activity']);
     expect(tabs.find(tab => tab.label === 'Debates')?.href).toBe(`${overviewHref}?tabId=dynamic-debates`);
   });
 
@@ -114,6 +107,46 @@ describe('buildSpaceTabs', () => {
 
     expect(tabs.filter(tab => tab.label === 'Debug debates')).toEqual([
       { label: 'Debug debates', href: `/space/${spaceId}/debug-debates`, priority: 3 },
+    ]);
+  });
+
+  it('inserts Bounties after authored tabs, before Governance, when its gate is on', () => {
+    const tabs = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs,
+      typeIds: [SystemIds.SPACE_TYPE],
+      isDebugDebatesPageEnabled: false,
+      isBountiesTabEnabled: true,
+    });
+
+    expect(tabs.map(tab => tab.label)).toEqual(['Overview', 'Facts', 'Sources', 'Bounties', 'Governance', 'Activity']);
+    expect(tabs.find(tab => tab.label === 'Bounties')?.href).toBe(`/space/${spaceId}/bounties`);
+  });
+
+  it('omits Bounties by default and keeps the system route over an authored tab of the same label', () => {
+    const off = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [...dynamicTabs, { label: 'Bounties', href: `${overviewHref}?tabId=bounties` }],
+      typeIds: [SystemIds.SPACE_TYPE],
+      isDebugDebatesPageEnabled: false,
+    });
+    // Gate off: the authored tab is just an ordinary content tab.
+    expect(off.filter(tab => tab.label === 'Bounties')).toEqual([
+      { label: 'Bounties', href: `${overviewHref}?tabId=bounties`, priority: 1 },
+    ]);
+
+    const on = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [...dynamicTabs, { label: 'Bounties', href: `${overviewHref}?tabId=bounties` }],
+      typeIds: [SystemIds.SPACE_TYPE],
+      isDebugDebatesPageEnabled: false,
+      isBountiesTabEnabled: true,
+    });
+    expect(on.filter(tab => tab.label === 'Bounties')).toEqual([
+      { label: 'Bounties', href: `/space/${spaceId}/bounties`, priority: 3 },
     ]);
   });
 });

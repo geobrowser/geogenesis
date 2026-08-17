@@ -44,6 +44,8 @@ export type RouteEntityPageBodyProps = SharedProps & {
   serverRelations: Relation[];
   notice?: React.ReactNode;
   coverSlot?: React.ReactNode;
+  /** Rendered after the block content and property sheet, before backlinks (e.g. bounty submissions/payouts). */
+  belowBodySlot?: React.ReactNode;
 };
 
 export type SidePanelEntityPageBodyProps = SharedProps & {
@@ -96,10 +98,12 @@ function EditorFooter({
   entityId,
   spaceId,
   variant,
+  belowBodySlot,
 }: {
   entityId: string;
   spaceId: string;
   variant: EntityPageBodyProps['variant'];
+  belowBodySlot?: React.ReactNode;
 }) {
   return (
     <>
@@ -113,6 +117,12 @@ function EditorFooter({
       ) : (
         <ToggleEntityPage id={entityId} spaceId={spaceId} />
       )}
+      {belowBodySlot ? (
+        <>
+          <Spacer height={40} />
+          {belowBodySlot}
+        </>
+      ) : null}
       <Spacer height={40} />
       {variant === 'route' ? <RouteBacklinks entityId={entityId} /> : <SidePanelBacklinks entityId={entityId} />}
       <CommentSection entityId={entityId} spaceId={spaceId} />
@@ -178,7 +188,15 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     );
   }
 
-  const { showCover = true, showHeading = true, showHeader = true, serverRelations, notice = null, coverSlot } = props;
+  const {
+    showCover = true,
+    showHeading = true,
+    showHeader = true,
+    serverRelations,
+    notice = null,
+    coverSlot,
+    belowBodySlot,
+  } = props;
   const showSpacer = showCover || showHeading || showHeader;
 
   return (
@@ -198,7 +216,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         {tabsSection}
         {notice}
         {(showSpacer || !!notice) && <Spacer height={40} />}
-        <EditorFooter entityId={entityId} spaceId={spaceId} variant="route" />
+        <EditorFooter entityId={entityId} spaceId={spaceId} variant="route" belowBodySlot={belowBodySlot} />
       </EntityPageContentContainer>
     </>
   );

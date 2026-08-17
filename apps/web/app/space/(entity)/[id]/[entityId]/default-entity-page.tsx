@@ -17,6 +17,8 @@ interface Props {
   notice?: React.ReactNode;
   /** Replaces the cover/avatar slot above the Name (e.g. a community-call recording player). */
   coverSlot?: React.ReactNode;
+  /** Rendered after the block content and property sheet, before backlinks. */
+  belowBodySlot?: React.ReactNode;
 }
 
 export default async function DefaultEntityPage({
@@ -27,6 +29,7 @@ export default async function DefaultEntityPage({
   showHeader = true,
   notice = null,
   coverSlot,
+  belowBodySlot,
 }: Props) {
   const isEditing = searchParams?.edit === 'true';
   const props = await fetchEntityPageData(params.id, params.entityId);
@@ -62,6 +65,7 @@ export default async function DefaultEntityPage({
             serverRelations={props.relationEntityRelations}
             coverSlot={coverSlot}
             notice={notice}
+            belowBodySlot={belowBodySlot}
           />
         </RouteEditorProvider>
       </EntityStoreProvider>
