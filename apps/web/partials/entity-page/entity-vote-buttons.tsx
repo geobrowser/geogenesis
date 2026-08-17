@@ -9,7 +9,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { Effect } from 'effect';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
@@ -36,7 +36,7 @@ import {
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
-import { pendingActionsAtom, useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
 
@@ -130,14 +130,12 @@ export function EntityVoteButtons({
 
   // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
   // once the space exists (see pending-actions). Keep the optimistic mark on screen until the
-  // queued write clears from the queue, then hand off to the mutation's own optimistic state.
+  // queued write is replayed, then hand off to the mutation's own optimistic state.
   const voteActionId = `entity-vote:${entityId}:${spaceId}`;
-  const pendingActions = useAtomValue(pendingActionsAtom);
-  const hasQueuedVote = pendingActions.some(a => a.id === voteActionId);
   const [queuedResponse, setQueuedResponse] = React.useState<ActiveResponseDirection | undefined>(undefined);
   React.useEffect(() => {
-    if (!hasQueuedVote) setQueuedResponse(undefined);
-  }, [hasQueuedVote]);
+    if (queuedResponse !== undefined && optimisticResponse !== undefined) setQueuedResponse(undefined);
+  }, [queuedResponse, optimisticResponse]);
 
   const { login } = useGeoLogin({
     onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
