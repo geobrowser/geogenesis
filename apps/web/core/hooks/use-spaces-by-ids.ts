@@ -33,6 +33,11 @@ export function useSpacesByIds(spaceIds: string[] = [], enabled = true): UseSpac
       };
     },
     enabled: enabled && normalizedIds.length > 0,
+    // A space's name and image are about as static as this app's data gets, and the panels that
+    // read them mount and unmount constantly (side panels, dropdowns, per-row chips). Without a
+    // stale window every one of those remounts refetched an answer it already had, and the label
+    // fell back to a placeholder for the length of the round trip.
+    staleTime: 5 * 60 * 1000,
   });
 
   return {

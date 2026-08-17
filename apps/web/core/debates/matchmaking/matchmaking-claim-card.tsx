@@ -11,7 +11,7 @@ import {
   useEntityResponseIndexingSnapshot,
   useResetEntityResponseIndexingSnapshot,
 } from '~/core/hooks/use-entity-vote';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
@@ -356,10 +356,12 @@ function PositionRow({
 }
 
 export function SpaceChip({ spaceId }: { spaceId: string }) {
-  const { spacesById } = useSpacesByIds(React.useMemo(() => (validateSpaceId(spaceId) ? [spaceId] : []), [spaceId]));
-  const space = spacesById.get(spaceId);
-  const name = space?.entity?.name ?? 'Space';
-  const image = space?.entity?.image ?? null;
+  // Same resolution as the space filter above the list, so a card and the menu option naming its
+  // space are never one loaded and the other still reading "Space".
+  const { labelsById } = useSpaceLabels(React.useMemo(() => (validateSpaceId(spaceId) ? [spaceId] : []), [spaceId]));
+  const label = spaceLabel(labelsById, spaceId);
+  const name = label?.name ?? 'Space';
+  const image = label?.image ?? null;
 
   return (
     <span className="flex min-w-0 items-center gap-1.5">

@@ -8,7 +8,7 @@ import cx from 'classnames';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -253,7 +253,9 @@ type SpaceTopicFiltersProps = {
 
 /**
  * Space and topic options come from the backend's facets so they stay in sync with the sorted
- * result set; names and thumbnails are resolved locally from the knowledge graph.
+ * result set; names and thumbnails come from {@link useSpaceLabels}, which answers off the browse
+ * sidebar's already-loaded rows before falling back to the knowledge graph — the facets are
+ * narrowed to the viewer's own spaces, which is exactly what the sidebar is holding.
  */
 export function SpaceTopicFilters({
   spaceId,
@@ -265,18 +267,18 @@ export function SpaceTopicFilters({
   leading,
   className,
 }: SpaceTopicFiltersProps) {
-  const { spacesById } = useSpacesByIds(facetSpaceIds);
+  const { labelsById } = useSpaceLabels(facetSpaceIds);
 
   const spaceOptions = React.useMemo<HubFilterOption<string>[]>(
     () => [
       { value: '', label: 'Any space', showImage: false },
       ...facetSpaceIds.map(id => ({
         value: id,
-        label: spacesById.get(id)?.entity?.name ?? 'Space',
-        image: spacesById.get(id)?.entity?.image ?? null,
+        label: spaceLabel(labelsById, id)?.name ?? 'Space',
+        image: spaceLabel(labelsById, id)?.image ?? null,
       })),
     ],
-    [facetSpaceIds, spacesById]
+    [facetSpaceIds, labelsById]
   );
 
   const topicOptions = React.useMemo<HubFilterOption<string>[]>(
@@ -287,14 +289,14 @@ export function SpaceTopicFilters({
     [facetTopics]
   );
 
-  const spaceLabel = spaceId ? (spacesById.get(spaceId)?.entity?.name ?? 'Space') : 'Any space';
+  const selectedSpaceLabel = spaceId ? (spaceLabel(labelsById, spaceId)?.name ?? 'Space') : 'Any space';
   const topicLabel = topicId ? (facetTopics?.find(topic => topic.id === topicId)?.name ?? 'Topic') : 'Any topic';
 
   return (
     <div className={cx('flex flex-wrap items-center gap-2', className)}>
       {leading}
       <HubFilterMenu
-        label={spaceLabel}
+        label={selectedSpaceLabel}
         options={spaceOptions}
         value={spaceId ?? ''}
         onChange={value => onSpaceChange(value || null)}

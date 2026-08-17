@@ -6,8 +6,7 @@ import * as React from 'react';
 
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useBrowseSidebarQuerySource } from '~/core/browse/use-browse-sidebar-cache';
 
 import { loadBrowseSidebarData } from '~/partials/browse-sidebar/load-browse-sidebar-data';
 
@@ -31,9 +30,7 @@ import { browseSidebarClaimSpaceAllowlist } from './claim-space-allowlist';
  * rather than "nothing is allowed".
  */
 export function useClaimSpaceAllowlist(): { allowlist: Set<string> | null; isLoading: boolean } {
-  const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
-  const { smartAccount } = useSmartAccount();
-  const walletAddress = smartAccount?.account.address;
+  const { personalSpaceId, walletAddress, keyInput, isLoading: personalSpaceLoading } = useBrowseSidebarQuerySource();
 
   // Held until the account and the personal space both resolve (`usePersonalSpaceId` waits on the
   // smart account itself). Fetching before then would key and cache a featured-only sidebar — the
@@ -42,7 +39,7 @@ export function useClaimSpaceAllowlist(): { allowlist: Set<string> | null; isLoa
   const enabled = !personalSpaceLoading;
 
   const { data, isLoading } = useQuery({
-    queryKey: browseSidebarDataQueryKey(personalSpaceId ?? walletAddress ?? null),
+    queryKey: browseSidebarDataQueryKey(keyInput),
     queryFn: () => (personalSpaceId ? fetchBrowseSidebarData(personalSpaceId) : loadBrowseSidebarData(walletAddress)),
     enabled,
     staleTime: 60_000,
