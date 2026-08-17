@@ -160,6 +160,22 @@ describe('ensureSpaceMembership', () => {
     expect(mocks.proposeRequestMembership).toHaveBeenCalledOnce();
   });
 
+  it('resolves false rather than rejecting when a check throws outright', async () => {
+    // A synchronous throw escapes the per-call `.catch()` guards — `.catch` is
+    // attached to the returned promise, and there is no promise to attach to.
+    // Callers fire this as `void ensureSpaceMembership(...)`, so a rejection here
+    // would land as an unhandled rejection on top of a successful vote.
+    mocks.activeMemberRequest.mockImplementation(() => {
+      throw new Error('gateway down');
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await expect(run()).resolves.toBe(false);
+
+    expect(consoleError).toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it('shares one run between concurrent callers for the same space', async () => {
     const [first, second] = await Promise.all([run(), run()]);
 

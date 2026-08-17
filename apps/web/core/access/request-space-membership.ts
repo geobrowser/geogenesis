@@ -144,7 +144,17 @@ export function ensureSpaceMembership(args: EnsureSpaceMembershipArgs): Promise<
   if (inFlight) return inFlight;
   if (autoRequestedMemberships.has(requestKey)) return Promise.resolve(false);
 
-  const check = runMembershipCheck(args, requestKey).finally(() => inFlightMembershipChecks.delete(requestKey));
+  const check = runMembershipCheck(args, requestKey)
+    // Structural backstop for the "never throws" contract above. Every await inside
+    // is already guarded, but callers fire this as `void ensureSpaceMembership(...)`
+    // alongside an action the user actually asked for — so an unguarded rejection
+    // added later would surface as an unhandled rejection on top of a successful
+    // vote rather than a caught failure.
+    .catch(error => {
+      console.error('Automatic membership request failed', { spaceId, personalSpaceId }, error);
+      return false;
+    })
+    .finally(() => inFlightMembershipChecks.delete(requestKey));
   inFlightMembershipChecks.set(requestKey, check);
   return check;
 }
