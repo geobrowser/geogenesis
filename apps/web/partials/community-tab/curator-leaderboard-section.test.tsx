@@ -59,6 +59,7 @@ function result(
     metrics: { activeCurators: rows.length, rankings: 0, newsStories: 0 },
     rows,
     currentUserRow,
+    truncated: false,
   } satisfies CuratorLeaderboardResult;
 }
 
@@ -73,5 +74,11 @@ describe('CuratorLeaderboardSection', () => {
     renderSection(result([], row({ curatorSpaceId: VIEWER_SPACE_ID, name: 'Grace', isCurrentUser: true, rank: 7 })));
 
     expect(screen.getByRole('link', { name: 'You' }).getAttribute('href')).toBe(`/space/${VIEWER_SPACE_ID}`);
+  });
+
+  it('says when the counts are a truncated prefix, not a complete total', () => {
+    renderSection({ ...result([row()]), truncated: true });
+
+    expect(screen.getByText('Some activity was not included in these counts.')).toBeTruthy();
   });
 });

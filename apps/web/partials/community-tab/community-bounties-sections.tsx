@@ -40,7 +40,7 @@ import type { BountyStatusSlug } from './bounty-status';
 import { FILTER_PILL_CLASS } from './community-filter-pill';
 import { communityFullscreenActiveAtom } from '~/atoms';
 
-const EMPTY_RESULT: SpaceBountiesResult = { bounties: [], skills: [] };
+const EMPTY_RESULT: SpaceBountiesResult = { bounties: [], skills: [], truncated: false };
 
 const INLINE_CARD_LIMIT = 4;
 
@@ -154,6 +154,15 @@ function BountiesErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+function BountiesTruncatedNotice({ shown, totalCount }: { shown: number; totalCount?: number }) {
+  const message =
+    totalCount != null && totalCount > shown
+      ? `Showing ${shown} of ${totalCount} bounties.`
+      : 'This list may be incomplete.';
+
+  return <p className="text-[16px] leading-[20px] text-grey-04">{message}</p>;
+}
+
 function BountiesEmptyState({
   totalCount,
   emptyMessage,
@@ -191,8 +200,8 @@ function useSpaceBounties(spaceId: string, taskStatusId: string) {
     retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
   });
 
-  const { bounties, skills } = data ?? EMPTY_RESULT;
-  return { bounties, skills, isLoading: isPending, isError, refetch };
+  const { bounties, skills, truncated, totalCount } = data ?? EMPTY_RESULT;
+  return { bounties, skills, truncated, totalCount, isLoading: isPending, isError, refetch };
 }
 
 type BountyFilterValues = {
@@ -350,7 +359,10 @@ function BountiesSection({
   /** "View all" navigates to this full-screen route. */
   viewAllHref: string;
 }) {
-  const { bounties, skills, isLoading, isError, refetch } = useSpaceBounties(spaceId, taskStatusId);
+  const { bounties, skills, isLoading, isError, refetch, truncated, totalCount } = useSpaceBounties(
+    spaceId,
+    taskStatusId
+  );
   const { filtered, filterKey, controls: filterControls, clearFilters } = useBountyFilterState(bounties, skills);
 
   const [visibleCount, setVisibleCount] = React.useState(INFINITE_PAGE_SIZE);
@@ -403,6 +415,7 @@ function BountiesSection({
       ) : (
         <>
           <Grid bounties={inlineBounties} allBounties={bounties} />
+          {truncated ? <BountiesTruncatedNotice shown={bounties.length} totalCount={totalCount} /> : null}
           {hasMore ? <div ref={sentinelRef} aria-hidden className="h-px w-full" /> : null}
         </>
       )}
@@ -452,7 +465,10 @@ function BountiesFullView({
   cardWidthPx?: number;
   emptyMessage: string;
 }) {
-  const { bounties, skills, isLoading, isError, refetch } = useSpaceBounties(spaceId, taskStatusId);
+  const { bounties, skills, isLoading, isError, refetch, truncated, totalCount } = useSpaceBounties(
+    spaceId,
+    taskStatusId
+  );
   const { filtered, controls: filterControls, clearFilters } = useUrlBountyFilterState(bounties, skills);
 
   return (
@@ -483,7 +499,10 @@ function BountiesFullView({
         ) : filtered.length === 0 ? (
           <BountiesEmptyState totalCount={bounties.length} emptyMessage={emptyMessage} onShowAll={clearFilters} />
         ) : (
-          <Grid bounties={filtered} allBounties={bounties} />
+          <>
+            <Grid bounties={filtered} allBounties={bounties} />
+            {truncated ? <BountiesTruncatedNotice shown={bounties.length} totalCount={totalCount} /> : null}
+          </>
         )}
       </div>
     </CommunityFullscreen>

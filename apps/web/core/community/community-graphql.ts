@@ -14,6 +14,13 @@ export const ID_CHUNK_SIZE = 200;
 export type Connection<TNode> = {
   pageInfo: { endCursor: string | null; hasNextPage: boolean };
   nodes: TNode[];
+  totalCount?: number;
+};
+
+export type CollectedConnection<TNode> = {
+  nodes: TNode[];
+  truncated: boolean;
+  totalCount?: number;
 };
 
 export function gqlId(id: string | null | undefined): string | null {
@@ -71,9 +78,11 @@ export async function collectConnection<TNode>(
   buildQuery: (after: string | null) => string,
   selectConnection: (data: Record<string, Connection<TNode> | undefined>) => Connection<TNode> | undefined,
   signal?: AbortController['signal']
-): Promise<TNode[]> {
+): Promise<CollectedConnection<TNode>> {
   const nodes: TNode[] = [];
   let after: string | null = null;
+  let truncated = false;
+  let totalCount: number | undefined;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const data: Record<string, Connection<TNode> | undefined> = await runQuery<
@@ -83,10 +92,19 @@ export async function collectConnection<TNode>(
     if (!connection) break;
 
     nodes.push(...connection.nodes);
+    if (connection.totalCount !== undefined) totalCount = connection.totalCount;
 
     if (!connection.pageInfo?.hasNextPage || !connection.pageInfo.endCursor) break;
     after = connection.pageInfo.endCursor;
+
+    // Ran out of pages with the server still offering more.
+    if (page === MAX_PAGES - 1) {
+      truncated = true;
+      console.warn(
+        `community: "${label}" hit the ${MAX_PAGES}-page cap with more results available; counts derived from it are a floor`
+      );
+    }
   }
 
-  return nodes;
+  return { nodes, truncated, totalCount };
 }

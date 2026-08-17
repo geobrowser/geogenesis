@@ -124,7 +124,7 @@ export async function fetchSpaceBounties({
   taskStatusId: string;
   signal?: AbortController['signal'];
 }): Promise<SpaceBountiesResult> {
-  const empty: SpaceBountiesResult = { bounties: [], skills: [] };
+  const empty: SpaceBountiesResult = { bounties: [], skills: [], truncated: false };
 
   const spaceHex = gqlId(spaceId);
   const bountyType = gqlId(BOUNTY_TYPE_ID);
@@ -132,7 +132,11 @@ export async function fetchSpaceBounties({
   const statusHex = gqlId(taskStatusId);
   if (!spaceHex || !bountyType || !taskStatusProperty || !statusHex) return empty;
 
-  const nodes = await collectConnection<BountyNode>(
+  const {
+    nodes,
+    truncated: bountiesTruncated,
+    totalCount,
+  } = await collectConnection<BountyNode>(
     'space bounties',
     after => `query {
       entitiesConnection(
@@ -145,6 +149,7 @@ export async function fetchSpaceBounties({
           }
         }
       ) {
+        totalCount
         pageInfo { endCursor hasNextPage }
         nodes {
           id
@@ -158,7 +163,7 @@ export async function fetchSpaceBounties({
     signal
   );
 
-  if (nodes.length === 0) return empty;
+  if (nodes.length === 0) return { ...empty, truncated: bountiesTruncated, totalCount };
 
   const contributorIds = new Set<string>();
   for (const node of nodes) {
@@ -222,5 +227,5 @@ export async function fetchSpaceBounties({
 
   const skills = [...new Set(bounties.flatMap(bounty => bounty.skills))].sort((a, b) => a.localeCompare(b));
 
-  return { bounties, skills };
+  return { bounties, skills, truncated: bountiesTruncated, totalCount };
 }

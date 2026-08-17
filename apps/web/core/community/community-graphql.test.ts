@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CommunityQueryError, collectConnection, runQuery } from './community-graphql';
+import { CommunityQueryError, MAX_PAGES, collectConnection, runQuery } from './community-graphql';
 
 const mocks = vi.hoisted(() => ({
   graphql: vi.fn(),
@@ -53,13 +53,14 @@ describe('collectConnection', () => {
       .mockReturnValueOnce(Effect.succeed(connectionPage([{ id: 'a' }], true, 'cursor-1')))
       .mockReturnValueOnce(Effect.succeed(connectionPage([{ id: 'b' }])));
 
-    const nodes = await collectConnection<{ id: string }>(
+    const { nodes, truncated } = await collectConnection<{ id: string }>(
       'things',
       after => `query { ${after ?? ''} }`,
       data => data.things
     );
 
     expect(nodes.map(node => node.id)).toEqual(['a', 'b']);
+    expect(truncated).toBe(false);
   });
 
   it('propagates a failure rather than returning the pages it already had', async () => {
@@ -78,10 +79,38 @@ describe('collectConnection', () => {
     ).rejects.toBeInstanceOf(CommunityQueryError);
   });
 
+  it('reports truncation when the page cap is reached with more available', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Every page claims another one follows, so the loop can only end on the cap.
+    mocks.graphql.mockReturnValue(Effect.succeed(connectionPage([{ id: 'a' }], true, 'cursor')));
+
+    const { nodes, truncated } = await collectConnection<{ id: string }>(
+      'things',
+      () => 'query {}',
+      data => data.things
+    );
+
+    expect(truncated).toBe(true);
+    expect(nodes).toHaveLength(MAX_PAGES);
+    expect(mocks.graphql).toHaveBeenCalledTimes(MAX_PAGES);
+  });
+
+  it('surfaces the server totalCount when the query selects it', async () => {
+    mocks.graphql.mockReturnValue(Effect.succeed({ things: { nodes: [{ id: 'a' }], pageInfo: {}, totalCount: 4211 } }));
+
+    const { totalCount } = await collectConnection<{ id: string }>(
+      'things',
+      () => 'query {}',
+      data => data.things
+    );
+
+    expect(totalCount).toBe(4211);
+  });
+
   it('ends pagination when the response carries no connection', async () => {
     mocks.graphql.mockReturnValue(Effect.succeed({}));
 
-    const nodes = await collectConnection<{ id: string }>(
+    const { nodes } = await collectConnection<{ id: string }>(
       'things',
       () => 'query {}',
       data => data.things

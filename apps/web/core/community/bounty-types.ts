@@ -19,4 +19,6 @@ export type SpaceBounty = {
 export type SpaceBountiesResult = {
   bounties: SpaceBounty[];
   skills: string[];
+  truncated: boolean;
+  totalCount?: number;
 };

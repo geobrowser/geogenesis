@@ -34,4 +34,5 @@ export type CuratorLeaderboardResult = {
   metrics: CuratorLeaderboardMetrics;
   rows: CuratorLeaderboardRow[];
   currentUserRow: CuratorLeaderboardRow | null;
+  truncated: boolean;
 };

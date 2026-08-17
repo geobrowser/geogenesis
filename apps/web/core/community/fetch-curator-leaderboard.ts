@@ -66,14 +66,24 @@ async function fetchRankingCounts(
   spaceHex: string,
   window: CuratorLeaderboardWindow,
   signal?: AbortController['signal']
-): Promise<{ perCurator: Map<string, number>; total: number }> {
+): Promise<{ perCurator: Map<string, number>; total: number; truncated: boolean }> {
   const perCurator = new Map<string, number>();
   const submittedTo = gqlId(SUBMITTED_TO_PROPERTY_ID);
   const blockIds = await fetchSpaceRankingBlockIds(spaceHex, signal);
 
-  if (!submittedTo || blockIds.length === 0) return { perCurator, total: 0 };
+  if (!submittedTo || blockIds.length === 0) return { perCurator, total: 0, truncated: false };
 
-  const relations = await collectConnection<{ fromEntityId: string; spaceId: string | null }>(
+  const createdAtFilter =
+    window.seconds === null ? '' : `fromEntity: { createdAt: { greaterThanOrEqualTo: "${window.seconds}" } }`;
+
+  const {
+    nodes: relations,
+    truncated: relationsTruncated,
+    totalCount: relationsTotalCount,
+  } = await collectConnection<{
+    fromEntityId: string;
+    spaceId: string | null;
+  }>(
     'submitted to ranking block relations',
     after => `query {
       relationsConnection(
@@ -81,8 +91,11 @@ async function fetchRankingCounts(
         filter: {
           typeId: { is: "${submittedTo}" }
           toEntityId: { in: [${gqlIdList(blockIds)}] }
+          spaceId: { isNull: false }
+          ${createdAtFilter}
         }
       ) {
+        totalCount
         pageInfo { endCursor hasNextPage }
         nodes { fromEntityId spaceId }
       }
@@ -91,7 +104,9 @@ async function fetchRankingCounts(
     signal
   );
 
-  if (relations.length === 0) return { perCurator, total: 0 };
+  if (relations.length === 0) {
+    return { perCurator, total: relationsTotalCount ?? 0, truncated: relationsTruncated };
+  }
 
   const rankEntityIds = [...new Set(relations.map(relation => relation.fromEntityId).filter(Boolean))];
   const rankCreatedAt = new Map<string, string | null>();
@@ -124,7 +139,7 @@ async function fetchRankingCounts(
     total += 1;
   }
 
-  return { perCurator, total };
+  return { perCurator, total: relationsTotalCount ?? total, truncated: relationsTruncated };
 }
 
 /**
@@ -134,11 +149,11 @@ async function fetchVoteCounts(
   spaceHex: string,
   window: CuratorLeaderboardWindow,
   signal?: AbortController['signal']
-): Promise<Map<string, number>> {
+): Promise<{ perCurator: Map<string, number>; truncated: boolean }> {
   const perCurator = new Map<string, number>();
   const votedAtFilter = window.iso ? `votedAt: { greaterThanOrEqualTo: "${window.iso}" }` : '';
 
-  const votes = await collectConnection<{ userId: string }>(
+  const { nodes: votes, truncated: votesTruncated } = await collectConnection<{ userId: string }>(
     'user votes',
     after => `query {
       userVotesConnection(
@@ -162,7 +177,7 @@ async function fetchVoteCounts(
     perCurator.set(vote.userId, (perCurator.get(vote.userId) ?? 0) + 1);
   }
 
-  return perCurator;
+  return { perCurator, truncated: votesTruncated };
 }
 
 /**
@@ -172,12 +187,12 @@ async function fetchSubmissionCounts(
   spaceHex: string,
   window: CuratorLeaderboardWindow,
   signal?: AbortController['signal']
-): Promise<Map<string, number>> {
+): Promise<{ perCurator: Map<string, number>; truncated: boolean }> {
   const perCurator = new Map<string, number>();
   const bountiesRelation = gqlId(BOUNTIES_RELATION_TYPE);
-  if (!bountiesRelation) return perCurator;
+  if (!bountiesRelation) return { perCurator, truncated: false };
 
-  const links = await collectConnection<{ fromEntityId: string }>(
+  const { nodes: links, truncated: linksTruncated } = await collectConnection<{ fromEntityId: string }>(
     'bounty links',
     after => `query {
       relationsConnection(
@@ -196,7 +211,7 @@ async function fetchSubmissionCounts(
   );
 
   const proposalIds = [...new Set(links.map(link => link.fromEntityId).filter(Boolean))];
-  if (proposalIds.length === 0) return perCurator;
+  if (proposalIds.length === 0) return { perCurator, truncated: linksTruncated };
 
   const executedAtFilter =
     window.seconds === null
@@ -227,7 +242,7 @@ async function fetchSubmissionCounts(
     }
   }
 
-  return perCurator;
+  return { perCurator, truncated: linksTruncated };
 }
 
 /**
@@ -239,16 +254,20 @@ async function fetchNewsStoryCounts(
   spaceHex: string,
   window: CuratorLeaderboardWindow,
   signal?: AbortController['signal']
-): Promise<{ perCurator: Map<string, number>; total: number }> {
+): Promise<{ perCurator: Map<string, number>; total: number; truncated: boolean }> {
   const perCurator = new Map<string, number>();
   const newsStoryType = gqlId(NEWS_STORY_TYPE_ID);
   const typesProperty = gqlId(SystemIds.TYPES_PROPERTY);
-  if (!newsStoryType || !typesProperty) return { perCurator, total: 0 };
+  if (!newsStoryType || !typesProperty) return { perCurator, total: 0, truncated: false };
 
   const createdAtFilter =
     window.seconds === null ? '' : `filter: { createdAt: { greaterThanOrEqualTo: "${window.seconds}" } }`;
 
-  const stories = await collectConnection<{ id: string }>(
+  const {
+    nodes: stories,
+    truncated: storiesTruncated,
+    totalCount: storiesTotalCount,
+  } = await collectConnection<{ id: string }>(
     'news story entities',
     after => `query {
       entitiesConnection(
@@ -257,6 +276,7 @@ async function fetchNewsStoryCounts(
         typeId: "${newsStoryType}"
         ${createdAtFilter}
       ) {
+        totalCount
         pageInfo { endCursor hasNextPage }
         nodes { id }
       }
@@ -266,12 +286,14 @@ async function fetchNewsStoryCounts(
   );
 
   const storyIds = [...new Set(stories.map(story => story.id).filter(Boolean))];
-  if (storyIds.length === 0) return { perCurator, total: 0 };
+  if (storyIds.length === 0) {
+    return { perCurator, total: storiesTotalCount ?? 0, truncated: storiesTruncated };
+  }
 
   const firstVersionKeyByStory = new Map<string, bigint>();
 
   for (const ids of chunk(storyIds, ID_CHUNK_SIZE)) {
-    const versions = await collectConnection<{ fromEntityId: string; validFromKey: string }>(
+    const { nodes: versions } = await collectConnection<{ fromEntityId: string; validFromKey: string }>(
       'news story type relation versions',
       after => `query {
         relationVersionsConnection(
@@ -332,7 +354,11 @@ async function fetchNewsStoryCounts(
     perCurator.set(curatorSpaceId, (perCurator.get(curatorSpaceId) ?? 0) + 1);
   }
 
-  return { perCurator, total: storyIds.length };
+  return {
+    perCurator,
+    total: storiesTotalCount ?? storyIds.length,
+    truncated: storiesTruncated,
+  };
 }
 
 function buildRows(
@@ -408,6 +434,7 @@ export async function fetchCuratorLeaderboard({
     metrics: { activeCurators: 0, rankings: 0, newsStories: 0 },
     rows: [],
     currentUserRow: null,
+    truncated: false,
   };
 
   const spaceHex = gqlId(spaceId);
@@ -434,10 +461,10 @@ export async function fetchCuratorLeaderboard({
   for (const [curatorSpaceId, count] of rankings.perCurator) {
     accumulate(curatorSpaceId, counts => (counts.rankings += count));
   }
-  for (const [curatorSpaceId, count] of votes) {
+  for (const [curatorSpaceId, count] of votes.perCurator) {
     accumulate(curatorSpaceId, counts => (counts.votes += count));
   }
-  for (const [curatorSpaceId, count] of submissions) {
+  for (const [curatorSpaceId, count] of submissions.perCurator) {
     accumulate(curatorSpaceId, counts => (counts.submissions += count));
   }
   for (const [curatorSpaceId, count] of newsStories.perCurator) {
@@ -467,5 +494,6 @@ export async function fetchCuratorLeaderboard({
     },
     rows,
     currentUserRow,
+    truncated: rankings.truncated || votes.truncated || submissions.truncated || newsStories.truncated,
   };
 }

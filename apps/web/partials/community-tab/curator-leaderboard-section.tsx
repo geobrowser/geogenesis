@@ -198,6 +198,10 @@ function LeaderboardError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
+function IncompleteCountsNotice() {
+  return <p className="text-[16px] leading-[20px] text-grey-04">Some activity was not included in these counts.</p>;
+}
+
 export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
   const [period, setPeriod] = React.useState<CuratorLeaderboardPeriod>(initialData?.period ?? DEFAULT_PERIOD);
   const { personalSpaceId } = usePersonalSpaceId();
@@ -220,6 +224,7 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
   const metrics = data?.metrics ?? EMPTY_METRICS;
   const rows = data?.rows ?? [];
   const currentUserRow = data?.currentUserRow ?? null;
+  const truncated = data?.truncated ?? false;
   const isLoading = isPending;
 
   return (
@@ -241,6 +246,8 @@ export function CuratorLeaderboardSection({ spaceId, initialData }: Props) {
           <LeaderboardMetrics metrics={metrics} isLoading={isLoading} />
 
           <LeaderboardTable rows={rows} currentUserRow={currentUserRow} isLoading={isLoading} />
+
+          {truncated && !isLoading ? <IncompleteCountsNotice /> : null}
         </>
       )}
     </section>
