@@ -11,6 +11,7 @@ import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 
 import { BountyDetailHeader } from '~/partials/bounties/bounty-detail-header';
+import { BountyDetailSections } from '~/partials/bounties/bounty-detail-sections';
 import { CommunityCallRecording } from '~/partials/community-calls/community-call-recording';
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
@@ -80,6 +81,7 @@ export default async function EntityTemplateStrategy(props: Props) {
         params={params}
         searchParams={searchParams}
         notice={<BountyDetailHeader spaceId={params.id} bountyId={params.entityId} />}
+        belowBodySlot={<BountyDetailSections spaceId={params.id} bountyId={params.entityId} />}
       />
     );
   }

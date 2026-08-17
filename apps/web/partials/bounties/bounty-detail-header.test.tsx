@@ -22,6 +22,9 @@ vi.mock('~/core/bounties/use-bounty-roles', () => ({
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
+vi.mock('./bounty-interest-card', () => ({
+  BountyInterestCard: () => <div data-testid="interest-card" />,
+}));
 vi.mock('./bounty-info-card', () => ({
   BountyInfoCard: (props: Record<string, unknown>) => {
     mocks.lastInfoCardProps = props;

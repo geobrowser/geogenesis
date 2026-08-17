@@ -11,6 +11,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { BountyInfoCard } from './bounty-info-card';
+import { BountyInterestCard } from './bounty-interest-card';
 
 type Props = {
   spaceId: string;
@@ -39,6 +40,7 @@ export function BountyDetailHeader({ spaceId, bountyId }: Props) {
         </div>
       ) : null}
       <BountyInfoCard bounty={data.bounty} showStatus={roles.isEditor} />
+      <BountyInterestCard detail={data} roles={roles} />
     </div>
   );
 }

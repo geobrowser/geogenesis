@@ -3,9 +3,14 @@ import { Effect } from 'effect';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { uuidToHex } from '~/core/id/normalize';
 import { getEntity, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import type { Relation } from '~/core/types';
 
 import { bountySpaceFallbackLabel, spaceRowsById, toBoardBounty } from './fetch-bounties';
-import { BOUNTY_SUBMISSION_PROPERTY_ID, INTERESTED_IN_BOUNTY_PROPERTY_ID } from './ontology';
+import {
+  BOUNTY_ALLOCATED_PROPERTY_ID,
+  BOUNTY_SUBMISSION_PROPERTY_ID,
+  INTERESTED_IN_BOUNTY_PROPERTY_ID,
+} from './ontology';
 import type { BoardBounty } from './types';
 
 /**
@@ -24,6 +29,8 @@ export type BountyDetail = {
   bounty: BoardBounty;
   interest: BountyBacklink[];
   submissions: BountyBacklink[];
+  /** The bounty's own Allocated relation rows (needed to tombstone on removal). */
+  allocationRelations: Relation[];
 };
 
 function toBacklink(relation: { id: string; fromEntityId: string; spaceId: string }): BountyBacklink {
@@ -60,6 +67,8 @@ export function fetchBountyDetail(spaceId: string, bountyId: string) {
     bounty.interestedCount = distinctInterestedIds(interest).length;
     bounty.submissionsCount = submissions.length;
 
-    return { bounty, interest, submissions } satisfies BountyDetail;
+    const allocationRelations = (entity.relations ?? []).filter(r => r.type.id === BOUNTY_ALLOCATED_PROPERTY_ID);
+
+    return { bounty, interest, submissions, allocationRelations } satisfies BountyDetail;
   });
 }
