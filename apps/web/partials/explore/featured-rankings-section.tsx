@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { rankingComposeHref } from '~/core/blocks/ranking/ranking-compose-url';
+import { FEATURED_RANKING_ENTRIES_PER_PAGE } from '~/core/explore/featured-rankings-config';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
 import { normId } from '~/core/utils/norm-id';
@@ -27,9 +28,6 @@ type Props = {
 // The redesigned cards are tall (leaderboard + footer), so cap the initial list
 // lower than the old compact rows and reveal the rest behind "Show more".
 const INITIAL_VISIBLE_COUNT = 3;
-
-// Leaderboard page size — matches the design's three visible entries.
-const ENTRIES_PER_PAGE = 3;
 
 export function FeaturedRankingsSection({ rankings, memberOrEditorSpaceIds, pendingMembershipSpaceIds }: Props) {
   const [showAll, setShowAll] = React.useState(false);
@@ -96,11 +94,11 @@ function FeaturedRankingCard({
   const { openSidePanel } = useEntitySidePanel();
 
   const [page, setPage] = React.useState(0);
-  const pageCount = Math.max(1, Math.ceil(ranking.topEntries.length / ENTRIES_PER_PAGE));
+  const pageCount = Math.max(1, Math.ceil(ranking.topEntries.length / FEATURED_RANKING_ENTRIES_PER_PAGE));
   const currentPage = Math.min(page, pageCount - 1);
-  const pageStart = currentPage * ENTRIES_PER_PAGE;
-  const pageEntries = ranking.topEntries.slice(pageStart, pageStart + ENTRIES_PER_PAGE);
-  const showPager = ranking.topEntries.length > ENTRIES_PER_PAGE;
+  const pageStart = currentPage * FEATURED_RANKING_ENTRIES_PER_PAGE;
+  const pageEntries = ranking.topEntries.slice(pageStart, pageStart + FEATURED_RANKING_ENTRIES_PER_PAGE);
+  const showPager = ranking.topEntries.length > FEATURED_RANKING_ENTRIES_PER_PAGE;
 
   // Gate on resolved submitter spaces, not the raw count: when submitters exist
   // but none resolve to a space, the avatar group renders nothing.
