@@ -13,6 +13,7 @@ import {
 } from '~/core/hooks/use-entity-vote';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { ID } from '~/core/id';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
@@ -23,7 +24,12 @@ import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 import { Text } from '~/design-system/text';
 
-import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
+import type {
+  DebateClaimPositionSummary,
+  DebateClaimSummary,
+  DebateParticipantSummary,
+  MatchmakingReadiness,
+} from '../api';
 import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { hubCardMotion } from './hub-motion';
 
@@ -46,6 +52,13 @@ type Props = {
    * report "not ready" on a claim they are in fact ready on.
    */
   hideReadinessToggle?: boolean;
+  /**
+   * Set when `positions` cannot be trusted to say which side the viewer is on — the rematch picker
+   * identifies the viewer inside the summaries by geo-chat user id, which is null until its token
+   * exchange lands. Suppresses the optimistic adjustment rather than making it from a "no position"
+   * that only means "don't know yet", which would draw the viewer onto two sides at once.
+   */
+  viewerIdentityPending?: boolean;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -73,6 +86,7 @@ export function MatchmakingClaimCard({
   footer,
   onOpenClaim,
   hideReadinessToggle,
+  viewerIdentityPending,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -91,6 +105,7 @@ export function MatchmakingClaimCard({
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
           hideReadinessToggle={hideReadinessToggle}
+          viewerIdentityPending={viewerIdentityPending}
         />
       ) : (
         <UnresolvableControls
@@ -163,6 +178,7 @@ function RespondableControls({
   activeDebate,
   onOpenClaim,
   hideReadinessToggle,
+  viewerIdentityPending,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -170,6 +186,7 @@ function RespondableControls({
   activeDebate?: boolean;
   onOpenClaim?: () => void;
   hideReadinessToggle?: boolean;
+  viewerIdentityPending?: boolean;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -204,20 +221,23 @@ function RespondableControls({
 
   const optimisticPositions = React.useMemo(
     () =>
-      withViewerPosition({
-        positions,
-        responseKind: readiness.response_kind,
-        serverPosition: readiness.viewer_response?.position ?? null,
-        viewerPosition,
-        viewerSpaceId: personalSpaceId,
-        viewerName: viewerProfile?.name ?? null,
-        viewerAvatarUrl: viewerProfile?.avatarUrl ?? null,
-      }),
+      viewerIdentityPending
+        ? positions
+        : withViewerPosition({
+            positions,
+            responseKind: readiness.response_kind,
+            serverPosition: readiness.viewer_response?.position ?? null,
+            viewerPosition,
+            viewerSpaceId: personalSpaceId,
+            viewerName: viewerProfile?.name ?? null,
+            viewerAvatarUrl: viewerProfile?.avatarUrl ?? null,
+          }),
     [
       personalSpaceId,
       positions,
       readiness.response_kind,
       readiness.viewer_response?.position,
+      viewerIdentityPending,
       viewerPosition,
       viewerProfile?.avatarUrl,
       viewerProfile?.name,
@@ -327,22 +347,28 @@ export function withViewerPosition({
     avatar_cid: viewerAvatarUrl,
   };
 
+  // `ID.equals` rather than `===`: `viewerSpaceId` is a graph id, which is always bare hex, while
+  // geo-chat ids are treated as possibly dashed throughout this directory. A raw comparison against
+  // a dashed `profile_space_id` silently fails to match, which would leave the viewer drawn on both
+  // sides at once — the count decrements either way.
+  const heldByViewer = (participant: DebateParticipantSummary) =>
+    ID.equals(participant.profile_space_id, viewerSpaceId);
+
+  // Counts follow `serverPosition`, but the participant lists are rebuilt from scratch on every
+  // side. Removing the viewer only from the side the server reports assumed those two agree about
+  // who the viewer is; where they don't, the viewer ends up on two sides at once.
   const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
     ...side,
-    total_count: side.total_count + 1,
-    participants: [viewer, ...side.participants],
+    total_count: side.total_count + (serverPosition === side.position ? 0 : 1),
+    participants: [viewer, ...side.participants.filter(participant => !heldByViewer(participant))],
   });
   const withoutViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
     ...side,
-    total_count: Math.max(0, side.total_count - 1),
-    participants: side.participants.filter(participant => participant.profile_space_id !== viewerSpaceId),
+    total_count: Math.max(0, side.total_count - (serverPosition === side.position ? 1 : 0)),
+    participants: side.participants.filter(participant => !heldByViewer(participant)),
   });
 
-  const adjusted = positions.map(side => {
-    if (side.position === viewerPosition) return withViewer(side);
-    if (side.position === serverPosition) return withoutViewer(side);
-    return side;
-  });
+  const adjusted = positions.map(side => (side.position === viewerPosition ? withViewer(side) : withoutViewer(side)));
 
   // A side nobody has taken yet has no summary to adjust, so the viewer would have nowhere to
   // appear. The label matches what PositionRow falls back to for a missing side.

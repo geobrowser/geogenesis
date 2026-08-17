@@ -702,9 +702,15 @@ function RematchClaimCard({
     readiness_disabled_reason: claimReadiness?.readiness_disabled_reason ?? null,
   };
 
+  // The picker has no active-debate signal of its own, so this is the one place both readiness
+  // paths read it from — the switch and the opt-in below must gate on the same thing, or the
+  // opt-in could stand the viewer up on a claim the switch is refusing.
+  const activeDebate = false;
+
   useReadinessOnFirstPosition({
     claim: claim.claim,
     readiness,
+    canEnable: !activeDebate,
     localPosition,
     // The optimistic copy exists only while this client's own submission is in flight, so it is
     // what separates "the viewer just picked this side" from "we just learned the side they already
@@ -718,6 +724,11 @@ function RematchClaimCard({
       claim={claim.claim}
       positions={positions}
       readiness={readiness}
+      activeDebate={activeDebate}
+      // `positions` locates the viewer by geo-chat user id, which is null until the token exchange
+      // lands. Until then `serverLocalPosition` reads as "no position" for someone the summaries
+      // may already count, and the card would draw them onto a second side.
+      viewerIdentityPending={currentUserId === null}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
@@ -765,12 +776,15 @@ function RematchClaimCard({
 function useReadinessOnFirstPosition({
   claim,
   readiness,
+  canEnable,
   localPosition,
   pickedHere,
   alreadyReady,
 }: {
   claim: DebateClaimSummary;
   readiness: MatchmakingReadiness;
+  /** Must match what the card's switch gates on, so the two can't disagree about the same claim. */
+  canEnable: boolean;
   localPosition: boolean | null;
   /** Whether {@link localPosition} is this client's own in-flight submission. */
   pickedHere: boolean;
@@ -780,7 +794,7 @@ function useReadinessOnFirstPosition({
     readiness,
     entityId: claim.claim_entity_id,
     spaceId: claim.space_id,
-    canEnable: true,
+    canEnable,
   });
   // Seeded with the position held on mount, so arriving with one is not a transition.
   const previousPosition = React.useRef(localPosition);

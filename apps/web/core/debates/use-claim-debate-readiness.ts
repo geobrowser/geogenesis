@@ -56,23 +56,14 @@ export function useClaimDebateReadiness({
   const queryClient = useQueryClient();
   const joinQueue = useJoinDebateQueue(spaceId);
   const leaveQueue = useLeaveDebateQueue(spaceId);
-  const { accountKey, authenticated, ready: authReady } = useGeoChatAuth();
+  const { accountKey, authenticated } = useGeoChatAuth();
   const responseIndexing = useEntityResponseIndexingSnapshot({
     entityId,
     spaceId,
     responseKind: readiness.response_kind,
   });
-  // Privy blanks the account while it rehydrates, and the intent is keyed on it — re-keying
-  // switches to an empty entry *and* wipes the one being held. A card remounting through that
-  // window (which is what the hub's list does when a claim changes section) would silently drop
-  // readiness the viewer is waiting on, flicking the switch off. Hold the last settled account
-  // until Privy actually has an answer; a real sign-out still re-keys, which is the point.
-  const settledAccountKey = React.useRef(accountKey);
-  if (authReady) settledAccountKey.current = accountKey;
-  const intentAccountKey = authReady ? accountKey : settledAccountKey.current;
-
   const { intent, setIntent, updateIntent } = useDebateReadinessIntent(
-    intentAccountKey,
+    accountKey,
     spaceId,
     entityId,
     readiness.response_kind
@@ -82,10 +73,10 @@ export function useClaimDebateReadiness({
   const readinessFamilies = React.useMemo(
     () => [
       ['debates', 'claims', spaceId] as const,
-      debateQueryKeys.matchmakingClaimsRoot(intentAccountKey),
-      debateQueryKeys.matches(intentAccountKey),
+      debateQueryKeys.matchmakingClaimsRoot(accountKey),
+      debateQueryKeys.matches(accountKey),
     ],
-    [intentAccountKey, spaceId]
+    [accountKey, spaceId]
   );
 
   const pendingResponse = responseIndexing.status === 'idle' ? null : responseIndexing.pending;
@@ -103,10 +94,6 @@ export function useClaimDebateReadiness({
   React.useEffect(
     function reconcileReadinessIntent() {
       if (!intent) return;
-      // Privy reports signed-out before it has rehydrated, and a card that remounts mid-rehydration
-      // (which is exactly what the hub's list does when a claim moves sections) would read that as
-      // a sign-out and throw the held readiness away.
-      if (!authReady) return;
       if (!authenticated || !accountKey) {
         setIntent(null);
         return;
@@ -245,7 +232,6 @@ export function useClaimDebateReadiness({
     },
     [
       accountKey,
-      authReady,
       authenticated,
       backendReady,
       entityId,

@@ -186,32 +186,7 @@ describe('ClaimReadinessToggle', () => {
     await waitFor(() => expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(1));
   });
 
-  // Privy reports signed-out until it rehydrates. A card remounting through that window — which is
-  // what the hub list does when a claim changes section — must not read it as a sign-out.
-  it('holds the intent through an unsettled auth read rather than discarding it', async () => {
-    const view = renderToggle(readiness({ viewer_response: null }), indexing('positive'));
-
-    fireEvent.click(toggle());
-
-    mocks.authReady = false;
-    mocks.authenticated = false;
-    mocks.accountKey = null;
-    view.rerender(element(readiness({ viewer_response: null }), view.queryClient));
-
-    expect(toggle()).toHaveAttribute('aria-checked', 'true');
-    expect(mocks.joinMutateAsync).not.toHaveBeenCalled();
-
-    mocks.authReady = true;
-    mocks.authenticated = true;
-    mocks.accountKey = 'account-1';
-    view.rerender(
-      element(readiness({ viewer_response: { position: true, position_label: 'Agree' } }), view.queryClient)
-    );
-
-    await waitFor(() => expect(mocks.joinMutateAsync).toHaveBeenCalledTimes(1));
-  });
-
-  it('still discards the intent once a settled sign-out is confirmed', () => {
+  it('discards a held intent when the viewer signs out', () => {
     const view = renderToggle(readiness({ viewer_response: null }), indexing('positive'));
 
     fireEvent.click(toggle());

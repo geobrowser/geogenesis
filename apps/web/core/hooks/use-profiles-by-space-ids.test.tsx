@@ -76,6 +76,25 @@ describe('useProfilesBySpaceIds', () => {
     expect(fetchProfilesBySpaceIds).toHaveBeenCalledWith(['space-viewer']);
   });
 
+  // Downstream memos key on this map. query-core skips `combine` only while the function itself is
+  // unchanged, so an inline one re-ran every render — and structural sharing doesn't reach into a
+  // Map, so every render handed callers a new identity.
+  it('keeps one map identity across renders while the inputs are unchanged', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ids = ['space-a', 'space-b'];
+
+    const { result, rerender } = renderHook(() => useProfilesBySpaceIds(ids), {
+      wrapper: makeWrapper(queryClient),
+    });
+    await waitFor(() => expect(result.current.profilesBySpaceId.size).toBe(2));
+
+    const settled = result.current.profilesBySpaceId;
+    rerender();
+    rerender();
+
+    expect(result.current.profilesBySpaceId).toBe(settled);
+  });
+
   it('serves a seeded profile with no request, even with queries disabled', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     queryClient.setQueryData(profileBySpaceIdQueryKey('space-viewer'), profile('space-viewer'));

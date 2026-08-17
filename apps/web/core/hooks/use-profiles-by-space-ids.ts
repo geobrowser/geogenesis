@@ -1,6 +1,6 @@
 'use client';
 
-import { useQueries } from '@tanstack/react-query';
+import { type UseQueryResult, useQueries } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -27,14 +27,12 @@ type UseProfilesBySpaceIdsResult = {
 export function useProfilesBySpaceIds(spaceIds: string[] = [], enabled = true): UseProfilesBySpaceIdsResult {
   const uniqueSpaceIds = React.useMemo(() => [...new Set(spaceIds.filter(Boolean))], [spaceIds]);
 
-  return useQueries({
-    queries: uniqueSpaceIds.map(spaceId => ({
-      queryKey: profileBySpaceIdQueryKey(spaceId),
-      queryFn: () => loadProfileBySpaceId(spaceId),
-      enabled,
-      staleTime: 60_000,
-    })),
-    combine: results => {
+  // Memoized because query-core skips `combine` only while the function itself is unchanged
+  // (`combine !== lastCombine`). Rebuilt each render it re-runs every render, and the structural
+  // sharing that would otherwise hide that doesn't reach into a Map — so callers got a new
+  // `profilesBySpaceId` identity every time, defeating the memos downstream of it.
+  const combine = React.useCallback(
+    (results: UseQueryResult<Profile>[]) => {
       const profilesBySpaceId = new Map<string, Profile>();
 
       results.forEach((result, index) => {
@@ -44,5 +42,16 @@ export function useProfilesBySpaceIds(spaceIds: string[] = [], enabled = true): 
 
       return { profilesBySpaceId, isLoading: results.some(result => result.isLoading) };
     },
+    [uniqueSpaceIds]
+  );
+
+  return useQueries({
+    queries: uniqueSpaceIds.map(spaceId => ({
+      queryKey: profileBySpaceIdQueryKey(spaceId),
+      queryFn: () => loadProfileBySpaceId(spaceId),
+      enabled,
+      staleTime: 60_000,
+    })),
+    combine,
   });
 }

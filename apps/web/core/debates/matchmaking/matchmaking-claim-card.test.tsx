@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   },
   spaceName: 'Crypto',
   spaceId: '019fedae-72b6-7ab2-927a-df044d57c566',
+  viewerSpaceId: 'personal-space',
 }));
 
 // The readiness switch shares the entity page's queue-backed machine, so it needs geo-chat auth
@@ -47,7 +48,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     isProcessingResponse: false,
     isResponseIndexingDelayed: false,
     isConnected: true,
-    personalSpaceId: 'personal-space',
+    personalSpaceId: mocks.viewerSpaceId,
   }),
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
@@ -122,6 +123,7 @@ beforeEach(() => {
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
+  mocks.viewerSpaceId = 'personal-space';
 });
 
 afterEach(cleanup);
@@ -185,6 +187,74 @@ describe('MatchmakingClaimCard', () => {
     const agree = screen.getByRole('button', { name: /^Agree/ });
     expect(within(agree).queryByTestId('avatar')).not.toBeInTheDocument();
     expect(within(agree).getByText('+2')).toBeInTheDocument();
+  });
+
+  // The switch of sides, which the test above doesn't reach: it starts from no server position, so
+  // nothing is ever removed. geo-chat ids are treated as possibly hyphenated in this directory
+  // while `personalSpaceId` is bare hex, so a raw `!==` left the viewer drawn on the side they had
+  // just left as well as the new one.
+  it.each([
+    ['bare hex', '019fedb10c417f3e9a112c7d5e8b4419'],
+    ['hyphenated', '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419'],
+  ])('moves the viewer off the side they left when geo-chat reports a %s id', (_form, storedId) => {
+    const held: DebateClaimPositionSummary[] = [
+      {
+        position: true,
+        position_label: 'Agree',
+        total_count: 2,
+        available_now_count: 1,
+        participants: [{ user_id: 'geo-chat-user', profile_space_id: storedId, display_name: 'You', avatar_cid: null }],
+      },
+      { position: false, position_label: 'Disagree', total_count: 3, available_now_count: 2, participants: [] },
+    ];
+    mocks.viewerSpaceId = '019fedb10c417f3e9a112c7d5e8b4419';
+    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
+    renderCard(<MatchmakingClaimCard claim={claim} positions={held} readiness={readiness()} />);
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    // One avatar, on the new side only — not one on each.
+    expect(within(disagree).getAllByTestId('avatar')).toHaveLength(1);
+    expect(within(agree).queryAllByTestId('avatar')).toHaveLength(0);
+    expect(within(agree).getByText('+1')).toBeInTheDocument();
+  });
+
+  // The rematch picker locates the viewer in `positions` by geo-chat user id, which is null until
+  // its token exchange lands. Adjusting from a "no position" that only means "don't know yet" drew
+  // the viewer onto a second side while the summaries still counted them on the first.
+  it('leaves the summaries alone while the viewer cannot be identified in them', () => {
+    const held: DebateClaimPositionSummary[] = [
+      {
+        position: true,
+        position_label: 'Agree',
+        total_count: 2,
+        available_now_count: 1,
+        participants: [
+          {
+            user_id: 'geo-chat-user',
+            profile_space_id: '019fedb10c417f3e9a112c7d5e8b4419',
+            display_name: 'You',
+            avatar_cid: null,
+          },
+        ],
+      },
+      { position: false, position_label: 'Disagree', total_count: 3, available_now_count: 2, participants: [] },
+    ];
+    mocks.viewerSpaceId = '019fedb10c417f3e9a112c7d5e8b4419';
+    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={held}
+        readiness={readiness({ viewer_response: null })}
+        viewerIdentityPending
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(within(agree).getAllByTestId('avatar')).toHaveLength(1);
+    expect(within(disagree).queryAllByTestId('avatar')).toHaveLength(0);
   });
 
   it('keeps the response pills live while the response is publishing', () => {
