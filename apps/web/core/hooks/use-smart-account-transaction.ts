@@ -1,3 +1,5 @@
+import { useCallback } from 'react';
+
 import { Duration, Effect } from 'effect';
 
 import { TransactionWriteFailedError } from '../errors';
@@ -24,51 +26,56 @@ type SendTxArgs = {
  * bounds combined — if it raced them, it would report failure for a still-queued
  * send that later executes, and a user retry double-submits.
  */
+function sanitizeErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message.replace(/0x[a-fA-F0-9]{16,}/g, '[redacted-hex]').slice(0, 300);
+  }
+
+  return 'Transaction write failed';
+}
+
 export function useSmartAccountTransaction() {
   const { smartAccount } = useSmartAccount();
 
-  const sanitizeErrorMessage = (error: unknown) => {
-    if (error instanceof Error) {
-      return error.message.replace(/0x[a-fA-F0-9]{16,}/g, '[redacted-hex]').slice(0, 300);
-    }
+  // Memoized so callers can put it in a `useCallback`/`useEffect` dependency list
+  // without re-running on every render — `useRankingComposeAccess` fires its
+  // membership check from an effect keyed on the callback it builds from this.
+  const sendTransaction = useCallback(
+    ({ to, data, value = 0n }: SendTxArgs) =>
+      Effect.gen(function* () {
+        if (!smartAccount) {
+          return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));
+        }
 
-    return 'Transaction write failed';
-  };
+        if (!to) {
+          return yield* Effect.fail(new TransactionWriteFailedError('Missing transaction target'));
+        }
 
-  const sendTransaction = ({ to, data, value = 0n }: SendTxArgs) => {
-    return Effect.gen(function* () {
-      if (!smartAccount) {
-        return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));
-      }
+        const hash = yield* Effect.tryPromise({
+          try: async () => {
+            return await smartAccount.sendTransaction({
+              to,
+              value,
+              data,
+            });
+          },
+          catch: error => new TransactionWriteFailedError(sanitizeErrorMessage(error), { cause: error }),
+        }).pipe(
+          Effect.timeoutFail({
+            // > MAX_QUEUE_WAIT_MS (120s) + the 90s receipt bound.
+            duration: Duration.seconds(240),
+            onTimeout: () =>
+              new TransactionWriteFailedError(
+                'Transaction timed out. It may have been submitted and could still land on-chain — check before retrying.'
+              ),
+          })
+        );
 
-      if (!to) {
-        return yield* Effect.fail(new TransactionWriteFailedError('Missing transaction target'));
-      }
-
-      const hash = yield* Effect.tryPromise({
-        try: async () => {
-          return await smartAccount.sendTransaction({
-            to,
-            value,
-            data,
-          });
-        },
-        catch: error => new TransactionWriteFailedError(sanitizeErrorMessage(error), { cause: error }),
-      }).pipe(
-        Effect.timeoutFail({
-          // > MAX_QUEUE_WAIT_MS (120s) + the 90s receipt bound.
-          duration: Duration.seconds(240),
-          onTimeout: () =>
-            new TransactionWriteFailedError(
-              'Transaction timed out. It may have been submitted and could still land on-chain — check before retrying.'
-            ),
-        })
-      );
-
-      console.log('Transaction successful', hash);
-      return hash;
-    }).pipe(Effect.withSpan('web.write.sendTransaction'));
-  };
+        console.log('Transaction successful', hash);
+        return hash;
+      }).pipe(Effect.withSpan('web.write.sendTransaction')),
+    [smartAccount]
+  );
 
   return sendTransaction;
 }

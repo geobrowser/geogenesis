@@ -5,7 +5,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { useSetAtom } from 'jotai';
 
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
@@ -14,7 +13,6 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
-import { requestedMembershipSpacesAtom } from '~/core/state/requested-membership';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
@@ -33,7 +31,6 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const queryClient = useQueryClient();
-  const setRequestedSpaces = useSetAtom(requestedMembershipSpacesAtom);
 
   const tx = useSmartAccountTransaction();
 
@@ -70,34 +67,13 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
     }
 
     try {
-      await requestSpaceMembership({
-        spaceId,
-        personalSpaceId,
-        tx,
-        queryClient,
-        space,
-        // Write through the setter bound to the store this tree renders under
-        // rather than the module store, so the optimistic row lands where the
-        // subscribed components are reading from.
-        setRequestedSpaces,
-      });
+      await requestSpaceMembership({ spaceId, personalSpaceId, tx, queryClient, space });
     } catch (error) {
       dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeMember });
       // Necessary to propagate error status to useMutation
       throw error;
     }
-  }, [
-    dispatch,
-    smartAccount,
-    personalSpaceId,
-    isRegistered,
-    isAccountSetupPending,
-    spaceId,
-    space,
-    tx,
-    queryClient,
-    setRequestedSpaces,
-  ]);
+  }, [dispatch, smartAccount, personalSpaceId, isRegistered, isAccountSetupPending, spaceId, space, tx, queryClient]);
 
   const { mutate, status } = useMutation({ mutationFn: handleRequestToBeMember });
 

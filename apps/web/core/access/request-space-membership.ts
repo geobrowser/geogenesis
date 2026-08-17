@@ -7,11 +7,7 @@ import { getSpace } from '~/core/io/queries';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { geo } from '~/core/sdk/geo-client';
 import { store } from '~/core/state/jotai-store';
-import {
-  type RequestedMembershipSpace,
-  requestedMembershipSpacesAtom,
-  upsertRequestedMembershipSpace,
-} from '~/core/state/requested-membership';
+import { requestedMembershipSpacesAtom, upsertRequestedMembershipSpace } from '~/core/state/requested-membership';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
 
@@ -33,8 +29,6 @@ type RequestSpaceMembershipArgs = {
   queryClient: QueryClient;
   /** Optional display data so the optimistic "pending" row can render a name/image immediately. */
   space?: MembershipSpaceDisplay;
-  /** Overrides how the optimistic bridge is written — React callers pass their `useSetAtom` setter. */
-  setRequestedSpaces?: (update: (prev: RequestedMembershipSpace[]) => RequestedMembershipSpace[]) => void;
 };
 
 /**
@@ -55,7 +49,6 @@ export async function requestSpaceMembership({
   tx,
   queryClient,
   space,
-  setRequestedSpaces,
 }: RequestSpaceMembershipArgs): Promise<void> {
   if (!validateSpaceId(spaceId)) {
     throw new Error('Invalid target space ID');
@@ -85,9 +78,10 @@ export async function requestSpaceMembership({
 
   // Optimistic, persisted bridge so the "Membership pending" state shows instantly
   // (and survives a refresh) regardless of where the request was made, while the
-  // indexer catches up.
-  const write = setRequestedSpaces ?? (update => store.set(requestedMembershipSpacesAtom, update));
-  write(prev =>
+  // indexer catches up. Written straight to the app's jotai store — the one the
+  // Provider in `core/providers.tsx` renders with — so background callers get the
+  // same optimistic update as the components that set it through `useSetAtom`.
+  store.set(requestedMembershipSpacesAtom, prev =>
     upsertRequestedMembershipSpace(prev, {
       id: spaceId,
       ownerId: personalSpaceId,
@@ -103,15 +97,25 @@ export async function requestSpaceMembership({
 }
 
 /**
- * Dedupes automatic membership requests across every surface that can trigger one
- * (ranking compose, claim responses) so a user who ranks and then responds in the
- * same space only proposes themselves once per session.
+ * Space+account pairs this session has already proposed. Recorded only once a
+ * request actually lands, so a request that was skipped (one is already under
+ * vote) or that failed can still be made later — the caller's next attempt
+ * re-runs the checks against current state instead of being suppressed for the
+ * rest of the session.
  */
 const autoRequestedMemberships = new Set<string>();
+
+/**
+ * Checks in progress, keyed the same way. Concurrent callers — several vote
+ * controls for the same space, or a compose screen and its embedded block —
+ * share one run rather than racing to propose the same membership twice.
+ */
+const inFlightMembershipChecks = new Map<string, Promise<boolean>>();
 
 /** Test seam — the module-level dedupe would otherwise leak between cases. */
 export function resetAutoRequestedMemberships() {
   autoRequestedMemberships.clear();
+  inFlightMembershipChecks.clear();
 }
 
 type EnsureSpaceMembershipArgs = {
@@ -130,12 +134,26 @@ type EnsureSpaceMembershipArgs = {
  * made or membership isn't possible. Never throws: this runs alongside an action
  * the user actually asked for, so a failed background request must not break it.
  */
-export async function ensureSpaceMembership({
-  spaceId,
-  personalSpaceId,
-  tx,
-  queryClient,
-}: EnsureSpaceMembershipArgs): Promise<boolean> {
+export function ensureSpaceMembership(args: EnsureSpaceMembershipArgs): Promise<boolean> {
+  const { spaceId, personalSpaceId } = args;
+  if (!spaceId || !personalSpaceId) return Promise.resolve(false);
+
+  const requestKey = `${normalizeSpaceId(spaceId)}:${normalizeSpaceId(personalSpaceId)}`;
+
+  const inFlight = inFlightMembershipChecks.get(requestKey);
+  if (inFlight) return inFlight;
+  if (autoRequestedMemberships.has(requestKey)) return Promise.resolve(false);
+
+  const check = runMembershipCheck(args, requestKey).finally(() => inFlightMembershipChecks.delete(requestKey));
+  inFlightMembershipChecks.set(requestKey, check);
+  return check;
+}
+
+async function runMembershipCheck(
+  { spaceId, personalSpaceId, tx, queryClient }: EnsureSpaceMembershipArgs,
+  requestKey: string
+): Promise<boolean> {
+  // Narrowed by the caller; repeated here so this function reads on its own.
   if (!spaceId || !personalSpaceId) return false;
 
   const access = await runEffectEither(getSpaceAccessById(spaceId, personalSpaceId));
@@ -156,10 +174,6 @@ export async function ensureSpaceMembership({
   // own can't be joined at all.
   if (space?.type !== 'DAO') return false;
 
-  const requestKey = `${normalizeSpaceId(spaceId)}:${normalizeSpaceId(personalSpaceId)}`;
-  if (autoRequestedMemberships.has(requestKey)) return false;
-  autoRequestedMemberships.add(requestKey);
-
   // Re-request when there's no live vote — a stuck (vote-ended) request must not
   // block a fresh one, otherwise the user is wedged out of the space for good.
   const activeRequest = await fetchActiveMemberRequest(spaceId, personalSpaceId).catch(() => null);
@@ -167,9 +181,11 @@ export async function ensureSpaceMembership({
 
   try {
     await requestSpaceMembership({ spaceId, personalSpaceId, tx, queryClient });
+    autoRequestedMemberships.add(requestKey);
   } catch {
     // Already logged by requestSpaceMembership. The user didn't ask for this
-    // request, so don't interrupt them with an error they can't act on.
+    // request, so don't interrupt them with an error they can't act on — and
+    // leave the key unrecorded so a later attempt can retry.
   }
 
   return false;

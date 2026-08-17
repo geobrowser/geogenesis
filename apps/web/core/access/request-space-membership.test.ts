@@ -4,7 +4,11 @@ import { Effect } from 'effect';
 import { atom } from 'jotai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ensureSpaceMembership, resetAutoRequestedMemberships } from './request-space-membership';
+import {
+  type SendSpaceTransaction,
+  ensureSpaceMembership,
+  resetAutoRequestedMemberships,
+} from './request-space-membership';
 
 const PERSONAL_SPACE_ID = 'd4bee0928fb5405baba3b1513f085835';
 const DAO_SPACE_ID = '1234567890abcdef1234567890abcdef';
@@ -49,7 +53,7 @@ vi.mock('~/core/telemetry/effect-runtime', () => ({
   runEffectEither: (effect: Effect.Effect<unknown, unknown>) => Effect.runPromise(Effect.either(effect)),
 }));
 
-const tx = vi.fn<() => Effect.Effect<string, Error>>(() => Effect.succeed('0xtransaction'));
+const tx = vi.fn<SendSpaceTransaction>(() => Effect.succeed('0xtransaction'));
 
 function run(spaceId: string | null = DAO_SPACE_ID, personalSpaceId: string | null = PERSONAL_SPACE_ID) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -133,5 +137,33 @@ describe('ensureSpaceMembership', () => {
 
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+
+  it('retries after a failed request instead of suppressing it for the session', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    tx.mockReturnValueOnce(Effect.fail(new Error('user rejected')));
+
+    await run();
+    await run();
+
+    expect(mocks.proposeRequestMembership).toHaveBeenCalledTimes(2);
+    consoleError.mockRestore();
+  });
+
+  it('retries once a previously live request has finished voting', async () => {
+    mocks.activeMemberRequest.mockResolvedValueOnce({ proposalId: 'proposal-1', isVotingEnded: false });
+
+    await run();
+    expect(mocks.proposeRequestMembership).not.toHaveBeenCalled();
+
+    await run();
+    expect(mocks.proposeRequestMembership).toHaveBeenCalledOnce();
+  });
+
+  it('shares one run between concurrent callers for the same space', async () => {
+    const [first, second] = await Promise.all([run(), run()]);
+
+    expect(first).toBe(second);
+    expect(mocks.proposeRequestMembership).toHaveBeenCalledOnce();
   });
 });
