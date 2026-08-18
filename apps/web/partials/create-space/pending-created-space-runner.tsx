@@ -21,6 +21,9 @@ import { NavUtils } from '~/core/utils/utils';
  * (IPFS publish + on-chain factory tx + receipt + ~120s index wait) off the
  * critical path, then routes the user into the space once it's indexed.
  *
+ * Seeding the overview template is fired off inside `deploy()` without being
+ * awaited, so it runs on past this navigation rather than delaying it.
+ *
  * Mirrors `PendingPersonalSpaceRunner`, with two differences: the pending state
  * is in-memory only (DAO deploy is not idempotent — see pending-created-space.ts),
  * and on resolve there are no local `pending:` edits to remap, so it just
@@ -78,7 +81,9 @@ export function PendingCreatedSpaceRunner() {
 
         // `useDeploySpace.onSuccess` already invalidates ['spaces'] etc.; the
         // space is indexed by the time deploy() resolves, so navigation lands
-        // on a populated page rather than notFound().
+        // on a real page rather than notFound(). The overview template may still
+        // be in flight — it was never waited on for indexing anyway — so the
+        // overview can be empty for a moment after arrival.
         setPending(null);
         devLog('[create-space] space created: %s — navigating', spaceId);
         router.push(NavUtils.toSpace(spaceId));
