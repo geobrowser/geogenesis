@@ -1,6 +1,5 @@
 'use client';
 
-import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { Ops } from '@geoprotocol/geo-sdk';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -10,8 +9,9 @@ import { Duration, Effect, Either, Schedule } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
+import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
-import { personalSpaceIdQueryKey, usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
@@ -67,8 +67,6 @@ function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
     Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration)))
   );
 }
-
-type PersonalSpaceIdCache = { isRegistered: boolean; personalSpaceId: string | null };
 
 export function useRankingSubmissions(blockId: string, spaceId: string, blockName: string) {
   const { personalSpaceId } = usePersonalSpaceId();
@@ -156,20 +154,12 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
   const saveMySubmission = React.useCallback(
     async (slots: RankingSubmissionSlot[]): Promise<RankingSubmissionPublishResult | null> => {
-      const account =
-        smartAccount ??
-        queryClient
-          .getQueriesData<GeoWalletClient>({ queryKey: ['smart-account'] })
-          .map(([, cached]) => cached)
-          .find((cached): cached is GeoWalletClient => Boolean(cached)) ??
-        null;
+      const account = readCachedSmartAccount(queryClient, smartAccount);
       if (!account) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
         return null;
       }
-      const personalSpaceId =
-        queryClient.getQueryData<PersonalSpaceIdCache>(personalSpaceIdQueryKey(account.account.address))
-          ?.personalSpaceId ?? null;
+      const { personalSpaceId } = readCachedPersonalSpace(queryClient, account.account.address);
       if (!personalSpaceId) return null;
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
