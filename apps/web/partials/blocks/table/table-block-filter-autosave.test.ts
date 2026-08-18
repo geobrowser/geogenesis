@@ -10,6 +10,7 @@ import {
   collectFiltersToApply,
   draftHasPending,
   getInitialState,
+  mergeFilterRows,
   reducer,
   seedColumnDraftFromCommittedFilters,
 } from './table-block-filter-prompt-state';
@@ -26,6 +27,16 @@ const options: (Filter & { columnName: string })[] = [
 
 const PDF = { id: 'pdf-type-id', name: 'PDF' };
 const VIDEO = { id: 'video-type-id', name: 'Video' };
+
+function nameFilter(value: string): Filter {
+  return {
+    columnId: SystemIds.NAME_PROPERTY,
+    columnName: 'Name',
+    valueType: 'TEXT',
+    value,
+    valueName: null,
+  };
+}
 
 function committedTypeFilter(pick: { id: string; name: string }): Filter {
   return {
@@ -148,5 +159,57 @@ describe('data block filter autosave', () => {
 
     expect(state.open).toBe(false);
     expect(collectFiltersToApply(state, options).touchedColumnIds).toEqual([]);
+  });
+});
+
+/**
+ * The filter chips outside the popover render from this: the same commit payload, folded
+ * into the committed filters, so a selection shows up before it is applied.
+ */
+function preview(state: PromptState, committedFilters: Filter[]): Filter[] {
+  const { filters, touchedColumnIds } = collectFiltersToApply(state, options);
+  return mergeFilterRows(committedFilters, filters, touchedColumnIds);
+}
+
+describe('pending filter preview', () => {
+  it('shows a selection that has not been applied yet', () => {
+    const state = toggle(openOn([]), [PDF]);
+
+    expect(preview(state, [])).toEqual([
+      expect.objectContaining({ columnId: TYPES_COLUMN, value: PDF.id, valueName: PDF.name }),
+    ]);
+  });
+
+  it('replaces a column in place rather than appending it', () => {
+    const committed = [committedTypeFilter(PDF), nameFilter('report')];
+    const state = toggle(openOn(committed), [PDF, VIDEO]);
+
+    expect(preview(state, committed).map(f => f.columnId)).toEqual([
+      TYPES_COLUMN,
+      TYPES_COLUMN,
+      SystemIds.NAME_PROPERTY,
+    ]);
+  });
+
+  it('drops a chip as soon as its selection is unchecked', () => {
+    const committed = [committedTypeFilter(PDF)];
+    const state = toggle(openOn(committed), []);
+
+    expect(preview(state, committed)).toEqual([]);
+  });
+
+  it('leaves untouched columns alone', () => {
+    const committed = [nameFilter('report')];
+    const state = toggle(openOn(committed), [PDF]);
+
+    expect(preview(state, committed).map(f => f.value)).toEqual(['report', PDF.id]);
+  });
+
+  it('matches what dismissing the popover actually applies', () => {
+    const committed = [committedTypeFilter(PDF), nameFilter('report')];
+    const state = toggle(openOn(committed), [VIDEO]);
+
+    const { filters, touchedColumnIds } = collectFiltersToApply(state, options);
+    expect(preview(state, committed)).toEqual(mergeFilterRows(committed, filters, touchedColumnIds));
   });
 });
