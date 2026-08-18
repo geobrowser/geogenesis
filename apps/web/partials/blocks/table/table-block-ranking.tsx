@@ -8,6 +8,7 @@ import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { produce } from 'immer';
 
+import type { Filter } from '~/core/blocks/data/filters';
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -93,9 +94,14 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
 
   const filterPromptRef = React.useRef<TableBlockFilterPromptHandle>(null);
 
+  // See the matching note in `table-block.tsx`: chips mirror the popover's drafts as they
+  // are made, while the ranking's own query keeps reading committed filters.
+  const [previewFilterState, setPreviewFilterState] = React.useState<Filter[] | null>(null);
+  const filtersForChips = previewFilterState ?? resolvedFilterState;
+
   const filterGroupsForToolbarPills = React.useMemo(
-    () => groupFilters(resolvedFilterState).filter(g => !ID.equals(g.columnId, SystemIds.SPACE_FILTER)),
-    [resolvedFilterState]
+    () => groupFilters(filtersForChips).filter(g => !ID.equals(g.columnId, SystemIds.SPACE_FILTER)),
+    [filtersForChips]
   );
 
   return (
@@ -184,6 +190,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                         setFilterState={setFilterState}
                         filterSuggestionSpaceId={spaceId}
                         isEditing={isEditing}
+                        onPreviewFilterState={setPreviewFilterState}
                       />
                     </>
                   )}
@@ -199,13 +206,13 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                         }}
                         onDeleteValue={originalIndex => {
                           setFilterState(
-                            produce(resolvedFilterState, draft => {
+                            produce(filtersForChips, draft => {
                               draft.splice(originalIndex, 1);
                             })
                           );
                         }}
                         onClearGroup={() => {
-                          setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
+                          setFilterState(filtersForChips.filter(f => f.columnId !== group.columnId));
                         }}
                         isEditing={isEditing}
                       />
@@ -224,13 +231,13 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                         }}
                         onDeleteValue={originalIndex => {
                           setFilterState(
-                            produce(resolvedFilterState, draft => {
+                            produce(filtersForChips, draft => {
                               draft.splice(originalIndex, 1);
                             })
                           );
                         }}
                         onClearGroup={() => {
-                          setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
+                          setFilterState(filtersForChips.filter(f => f.columnId !== group.columnId));
                         }}
                         onAddSimilar={anchorEl => {
                           requestAnimationFrame(() => {

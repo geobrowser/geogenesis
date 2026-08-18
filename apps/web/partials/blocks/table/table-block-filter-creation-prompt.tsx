@@ -77,6 +77,12 @@ export interface TableBlockFilterPromptHandle {
 interface TableBlockFilterPromptProps {
   trigger: React.ReactNode;
   options: (Filter & { columnName: string })[];
+  /**
+   * Fires as the draft changes so the filter chips outside the popover can show the
+   * pending edits right away. `null` means "nothing pending" — the popover is closed, or
+   * its drafts match what the table already has.
+   */
+  onPendingFiltersChange?: (pending: { filters: TableBlockNewFilterRow[]; touchedColumnIds: string[] } | null) => void;
   filterSuggestionSpaceId?: string;
   /** When set, `openWithColumn` seeds from this list (e.g. table active filters); defaults to `useFilters().filterState`. */
   filterStateForSeed?: Filter[];
@@ -245,7 +251,16 @@ function useRelationColumnTargetTypeIds(
  */
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
   function TableBlockFilterPrompt(
-    { trigger, onCreate, options, filterSuggestionSpaceId, filterStateForSeed, modesByColumnForSeed, isEditing = true },
+    {
+      trigger,
+      onCreate,
+      onPendingFiltersChange,
+      options,
+      filterSuggestionSpaceId,
+      filterStateForSeed,
+      modesByColumnForSeed,
+      isEditing = true,
+    },
     ref
   ) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
@@ -408,6 +423,23 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
         return next;
       });
     }, [relationTypeKey]);
+
+    const pendingFiltersRef = React.useRef(onPendingFiltersChange);
+    pendingFiltersRef.current = onPendingFiltersChange;
+
+    // Mirror the draft outwards on every change. The chips outside the popover render from
+    // this, so a selection shows up the moment it is made, while the table's own query
+    // keeps reading committed filters and only moves when the popover is dismissed.
+    React.useEffect(() => {
+      const publish = pendingFiltersRef.current;
+      if (!publish) return;
+      if (!state.open || isRelationsMode) {
+        publish(null);
+        return;
+      }
+      const { filters, touchedColumnIds } = collectFiltersToApply(state, options);
+      publish(touchedColumnIds.length > 0 ? { filters, touchedColumnIds } : null);
+    }, [state, options, isRelationsMode]);
 
     /**
      * Push whatever the popover currently holds onto the table and reset the session.

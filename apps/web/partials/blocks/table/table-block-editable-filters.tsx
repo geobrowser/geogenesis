@@ -20,6 +20,7 @@ import {
   type TableBlockFilterPromptHandle,
   type TableBlockNewFilterRow,
 } from './table-block-filter-creation-prompt';
+import { mergeFilterRows } from './table-block-filter-prompt-state';
 
 type RenderableFilter = Filter & { columnName: string };
 
@@ -31,11 +32,24 @@ interface TableBlockEditableFiltersProps {
   filterSuggestionSpaceId?: string;
   orderedColumnIds?: string[];
   isEditing?: boolean;
+  /**
+   * Receives the filter list the popover's drafts would produce, so filter chips can show
+   * pending edits before they are applied. `null` clears the preview.
+   */
+  onPreviewFilterState?: (filters: Filter[] | null) => void;
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
   function TableBlockEditableFilters(
-    { filterState, setFilterState, modesByColumn, filterSuggestionSpaceId, orderedColumnIds = [], isEditing = true },
+    {
+      filterState,
+      setFilterState,
+      modesByColumn,
+      filterSuggestionSpaceId,
+      orderedColumnIds = [],
+      isEditing = true,
+      onPreviewFilterState,
+    },
     ref
   ) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
@@ -100,23 +114,27 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
     ) => {
       const hasModeOverrides = modeOverrides !== undefined && Object.keys(modeOverrides).length > 0;
       if (touchedColumnIds.length === 0 && !hasModeOverrides) return;
-      const touched = new Set(touchedColumnIds);
-      const base = effectiveFilterState.filter(f => !touched.has(f.columnId));
-      const newFilters = filters.map(f => ({
-        valueType: f.valueType,
-        columnId: f.columnId,
-        columnName: f.columnName,
-        value: f.value,
-        valueName: f.valueName,
-      }));
-      const firstTouchedIndex = effectiveFilterState.findIndex(f => touched.has(f.columnId));
-      const insertIndex = firstTouchedIndex === -1 ? base.length : firstTouchedIndex;
-      const next = [...base.slice(0, insertIndex), ...newFilters, ...base.slice(insertIndex)];
+      const next = mergeFilterRows(effectiveFilterState, filters, touchedColumnIds);
       if (!hasModeOverrides && equal(comparableFilterList(next), comparableFilterList(effectiveFilterState))) {
         return;
       }
       effectiveSetFilterState(next, modeOverrides);
     };
+
+    const filterStateForPreview = React.useRef(effectiveFilterState);
+    filterStateForPreview.current = effectiveFilterState;
+
+    const onPendingFiltersChange = React.useCallback(
+      (pending: { filters: TableBlockNewFilterRow[]; touchedColumnIds: string[] } | null) => {
+        if (!onPreviewFilterState) return;
+        onPreviewFilterState(
+          pending === null
+            ? null
+            : mergeFilterRows(filterStateForPreview.current, pending.filters, pending.touchedColumnIds)
+        );
+      },
+      [onPreviewFilterState]
+    );
 
     if (!isEditing) {
       return (
@@ -138,6 +156,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
           filterStateForSeed={effectiveFilterState}
           modesByColumnForSeed={modesByColumn}
           onCreate={onCreateFilter}
+          onPendingFiltersChange={onPreviewFilterState ? onPendingFiltersChange : undefined}
           isEditing={isEditing}
           trigger={
             <SmallButton icon={<CreateSmall />} variant="secondary">
