@@ -199,10 +199,10 @@ export function PowerToolsScreen() {
     temporaryFilters,
     setFilterState,
     setTemporaryFilters,
-    filterMode,
-    setFilterMode,
-    temporaryFilterMode,
-    setTemporaryFilterMode,
+    modesByColumn,
+    setGroupMode,
+    temporaryModesByColumn,
+    setTemporaryGroupMode,
   } = useFilters(canEdit);
   const { source } = useSource({ filterState, setFilterState });
 
@@ -210,13 +210,13 @@ export function PowerToolsScreen() {
   // This matches TableBlock's behavior and is independent of the edit mode toggle.
   const effectiveFilterState = canEdit ? resolvedFilterState : temporaryFilters;
   const effectiveSetFilterState = canEdit ? setFilterState : setTemporaryFilters;
-  const activeFilterMode = canEdit ? filterMode : temporaryFilterMode;
-  const setActiveFilterMode = React.useCallback(
-    (mode: FilterMode) => {
-      if (canEdit) setFilterMode(mode);
-      else setTemporaryFilterMode(mode);
+  const activeModesByColumn = canEdit ? modesByColumn : temporaryModesByColumn;
+  const setActiveGroupMode = React.useCallback(
+    (columnId: string, mode: FilterMode) => {
+      if (canEdit) setGroupMode(columnId, mode);
+      else setTemporaryGroupMode(columnId, mode);
     },
-    [canEdit, setFilterMode, setTemporaryFilterMode]
+    [canEdit, setGroupMode, setTemporaryGroupMode]
   );
 
   const [extraColumnIds, setExtraColumnIds] = React.useState<string[]>([]);
@@ -230,7 +230,7 @@ export function PowerToolsScreen() {
 
   const data = usePowerToolsData({
     filterStateOverride: canEdit ? undefined : temporaryFilters,
-    filterModeOverride: canEdit ? undefined : temporaryFilterMode,
+    modesByColumnOverride: canEdit ? undefined : temporaryModesByColumn,
     extraColumnIds,
     excludedColumnIds,
     sort: serverSort,
@@ -1035,8 +1035,11 @@ export function PowerToolsScreen() {
               <React.Fragment key={group.columnId}>
                 <TableBlockFilterGroupPill
                   group={group}
-                  mode={activeFilterMode}
-                  onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                  mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                  onToggleMode={() => {
+                    const mode = activeModesByColumn[group.columnId] ?? 'AND';
+                    setActiveGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
+                  }}
                   onDeleteValue={originalIndex => handleDeleteFilter(originalIndex)}
                   onClearGroup={() => {
                     effectiveSetFilterState(effectiveFilterState.filter(f => f.columnId !== group.columnId));

@@ -685,17 +685,14 @@ export function useEditorStore() {
             }
 
             if (isQuery) {
-              const initialFilterString = toGeoFilterState(
-                [
-                  {
-                    columnId: SystemIds.SPACE_FILTER,
-                    columnName: 'Space',
-                    valueType: 'RELATION',
-                    value: spaceId,
-                  },
-                ],
-                'AND'
-              );
+              const initialFilterString = toGeoFilterState([
+                {
+                  columnId: SystemIds.SPACE_FILTER,
+                  columnName: 'Space',
+                  valueType: 'RELATION',
+                  value: spaceId,
+                },
+              ]);
 
               storage.values.set({
                 id: ID.createValueId({

@@ -217,7 +217,7 @@ async function appendQueryPostsDataBlock(
     },
   ];
 
-  const filterString = toGeoFilterState(filters, 'AND');
+  const filterString = toGeoFilterState(filters);
 
   storage.values.set({
     id: ID.createValueId({

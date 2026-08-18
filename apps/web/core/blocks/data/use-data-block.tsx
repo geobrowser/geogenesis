@@ -1,12 +1,9 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { Effect } from 'effect';
 
-import { ID } from '~/core/id';
-import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
@@ -16,7 +13,8 @@ import { sortRows } from '~/core/utils/utils';
 import { useProperties } from '../../hooks/use-properties';
 import { DEFAULT_DATA_BLOCK_PAGE_SIZE } from './block-ontology-ids';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
-import { Filter, FilterMode } from './filters';
+import { filterStateToWhere } from './filter-state-to-where';
+import { Filter, ModesByColumn } from './filters';
 import { Source } from './source';
 import { useBlockPageSize } from './use-block-page-size';
 import { useCollection } from './use-collection';
@@ -27,6 +25,8 @@ import { useRelationsBlock } from './use-relations-block';
 import { useSort } from './use-sort';
 import { useSource } from './use-source';
 import { useView } from './use-view';
+
+export { filterStateToWhere } from './filter-state-to-where';
 
 /** Default when no Page size is set on the block relation. Prefer `useDataBlock().pageSize`. */
 export const PAGE_SIZE = DEFAULT_DATA_BLOCK_PAGE_SIZE;
@@ -46,7 +46,7 @@ const queryKeys = {
 
 interface UseDataBlockOptions {
   filterState?: Filter[];
-  filterMode?: FilterMode;
+  modesByColumn?: ModesByColumn;
   canEdit?: boolean;
 }
 
@@ -81,14 +81,14 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     filterState: dbFilterState,
     resolvedFilterState: dbResolvedFilterState,
     isFilterResolving,
-    filterMode: dbFilterMode,
+    modesByColumn: dbModesByColumn,
     filterableProperties,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     temporaryFilters,
-    temporaryFilterMode,
+    temporaryModesByColumn,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
   } = useFilters(options?.canEdit);
 
   // Feed the resolved (names-included) state in so `setSource`'s produce()
@@ -98,9 +98,9 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const { relationBlockSourceRelations } = useRelationsBlock({ source, filterState: dbFilterState });
 
   const activeFilterState = options?.canEdit ? dbResolvedFilterState : temporaryFilters;
-  const activeFilterMode = options?.canEdit ? dbFilterMode : temporaryFilterMode;
+  const activeModesByColumn = options?.canEdit ? dbModesByColumn : temporaryModesByColumn;
   const effectiveFilterState = options?.filterState ?? activeFilterState;
-  const effectiveFilterMode = options?.filterMode ?? activeFilterMode;
+  const effectiveModesByColumn = options?.modesByColumn ?? activeModesByColumn;
   const {
     shownColumnIds,
     mapping,
@@ -121,9 +121,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const pageSize = useBlockPageSize();
 
   const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
+  const filterModesKey = React.useMemo(() => stableStringify(effectiveModesByColumn), [effectiveModesByColumn]);
   const where = React.useMemo(
-    () => filterStateToWhere(effectiveFilterState, effectiveFilterMode),
-    [filterStateKey, effectiveFilterMode]
+    () => filterStateToWhere(effectiveFilterState, effectiveModesByColumn),
+    [filterStateKey, filterModesKey, effectiveFilterState, effectiveModesByColumn]
   );
 
   // Use the mapping to get the potential renderable properties.
@@ -485,17 +486,17 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     // From useFilters
     filterState: effectiveFilterState,
     resolvedFilterState: dbResolvedFilterState,
-    filterMode: effectiveFilterMode,
+    modesByColumn: effectiveModesByColumn,
     dbFilterState,
-    dbFilterMode,
+    dbModesByColumn,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     filterableProperties,
 
     temporaryFilters,
-    temporaryFilterMode,
+    temporaryModesByColumn,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
 
     // From useSort
     sortState,
@@ -574,150 +575,6 @@ export function useDataBlockInstance() {
   }
 
   return context;
-}
-
-export function filterStateToWhere(filterState: Filter[], mode: FilterMode = 'AND'): WhereCondition {
-  if (filterState.length === 0) return {};
-  if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
-
-  // Group filters by columnId so we can AND between groups and apply
-  // the user-chosen mode (AND/OR) only within each group.
-  const groups = new Map<string, Filter[]>();
-  for (const f of filterState) {
-    const key = f.columnId;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(f);
-  }
-
-  const groupConditions: WhereCondition[] = [];
-  for (const [, filters] of groups) {
-    if (filters.length === 1) {
-      groupConditions.push(buildSingleFilterWhere(filters[0]));
-    } else if (ID.equals(filters[0].columnId, SystemIds.SPACE_FILTER)) {
-      groupConditions.push(buildSpaceFiltersWhere(filters));
-    } else if (mode === 'OR') {
-      groupConditions.push(buildOrWhere(filters));
-    } else {
-      groupConditions.push(buildAndWhere(filters));
-    }
-  }
-
-  if (groupConditions.length === 1) return groupConditions[0];
-
-  // Flat merge keeps `spaces`/`types` at the top level so they get promoted
-  // to fast top-level GraphQL query params instead of buried in a nested AND filter.
-  return mergeWhereConditions(groupConditions);
-}
-
-function mergeWhereConditions(conditions: WhereCondition[]): WhereCondition {
-  const arrayKeys = new Set(['spaces', 'types', 'values', 'relations', 'backlinks', 'AND', 'OR']);
-  const merged: WhereCondition = {};
-  const unmerged: WhereCondition[] = [];
-
-  for (const cond of conditions) {
-    const keys = Object.keys(cond) as (keyof WhereCondition)[];
-    let canMerge = true;
-
-    for (const key of keys) {
-      if (arrayKeys.has(key)) continue; // arrays are always mergeable
-      if (key in merged) {
-        canMerge = false;
-        break;
-      }
-    }
-
-    if (canMerge) {
-      for (const key of keys) {
-        if (arrayKeys.has(key)) {
-          const existing = (merged as any)[key] as unknown[] | undefined;
-          const incoming = (cond as any)[key] as unknown[];
-          (merged as any)[key] = existing ? [...existing, ...incoming] : [...incoming];
-        } else {
-          (merged as any)[key] = (cond as any)[key];
-        }
-      }
-    } else {
-      unmerged.push(cond);
-    }
-  }
-
-  if (unmerged.length === 0) return merged;
-  return { AND: [merged, ...unmerged] };
-}
-
-function buildSingleFilterWhere(f: Filter): WhereCondition {
-  if (f.valueType === 'TEXT') {
-    if (ID.equals(f.columnId, SystemIds.NAME_PROPERTY)) {
-      return { name: { contains: f.value } };
-    }
-    return {
-      values: [{ propertyId: { equals: f.columnId }, value: { contains: f.value } }],
-    };
-  }
-
-  if (f.valueType === 'RELATION') {
-    if (ID.equals(f.columnId, SystemIds.SPACE_FILTER)) {
-      return { spaces: [{ equals: f.value }] };
-    }
-    if (ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)) {
-      if (f.typesRelationSpaceId) {
-        return {
-          relations: [
-            {
-              typeOf: { id: { equals: SystemIds.TYPES_PROPERTY } },
-              toEntity: { id: { equals: f.value } },
-              space: { equals: f.typesRelationSpaceId },
-            },
-          ],
-        };
-      }
-      return { types: [{ id: { equals: f.value } }] };
-    }
-    if (f.isBacklink || f.columnName === 'Backlink') {
-      return {
-        backlinks: [{ typeOf: { id: { equals: f.columnId } }, fromEntity: { id: { equals: f.value } } }],
-      };
-    }
-    return {
-      relations: [{ typeOf: { id: { equals: f.columnId } }, toEntity: { id: { equals: f.value } } }],
-    };
-  }
-
-  return {};
-}
-
-/** Multiple SPACE_FILTER */
-function buildSpaceFiltersWhere(filters: Filter[]): WhereCondition {
-  const ids = [...new Set(filters.map(f => f.value).filter((id): id is string => Boolean(id)))];
-  if (ids.length === 0) return {};
-  if (ids.length === 1) {
-    return buildSingleFilterWhere({ ...filters[0], value: ids[0] });
-  }
-  return {
-    spaces: ids.map(id => ({ equals: id })),
-  };
-}
-
-function buildOrWhere(filterState: Filter[]): WhereCondition {
-  if (filterState.length === 0) return {};
-  if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
-
-  return {
-    OR: filterState.map(f => buildSingleFilterWhere(f)),
-  };
-}
-
-function buildAndWhere(filterState: Filter[]): WhereCondition {
-  if (filterState.length === 0) return {};
-  if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
-
-  // Wrap each filter in AND so ALL conditions must match.
-  // We use individual sub-conditions (via buildSingleFilterWhere) rather than
-  // merging into one flat object, because the local query engine's matchesCondition
-  // returns early when it sees AND/OR — mixing AND with other fields on the same
-  // object would skip those fields. Using AND: [...] also correctly handles types
-  // and spaces which need per-condition evaluation for true AND semantics.
-  return { AND: filterState.map(f => buildSingleFilterWhere(f)) };
 }
 
 function stableStringify(value: unknown): string {

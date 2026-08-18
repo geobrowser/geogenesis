@@ -25,13 +25,13 @@ function rowEntityIdsSignature(rows: { entityId: string }[]): string {
 }
 
 export function useRankingAccumulatedRows() {
-  const { entityId, source, filterState, filterMode, pageSize } = useDataBlock();
+  const { entityId, source, filterState, modesByColumn, pageSize } = useDataBlock();
   const { shownColumnIds } = useView();
   const feedPageSize = rankingFeedPageSize(pageSize);
 
   const enabled = source.type === 'SPACES' || source.type === 'GEO';
 
-  const where = React.useMemo(() => filterStateToWhere(filterState, filterMode), [filterState, filterMode]);
+  const where = React.useMemo(() => filterStateToWhere(filterState, modesByColumn), [filterState, modesByColumn]);
 
   const [afterChain, setAfterChain] = React.useState<string[]>([]);
   const pageIndex = afterChain.length;
@@ -63,11 +63,11 @@ export function useRankingAccumulatedRows() {
         sourceType: source.type,
         sourceValue: 'value' in source ? source.value : null,
         filterState: filterState.map(f => ({ columnId: f.columnId, value: f.value })),
-        filterMode,
+        filterModes: modesByColumn,
         feedPageSize,
         shownColumnIds,
       }),
-    [entityId, feedPageSize, filterMode, filterState, shownColumnIds, source]
+    [entityId, feedPageSize, filterState, modesByColumn, shownColumnIds, source]
   );
 
   React.useEffect(() => {
