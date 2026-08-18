@@ -164,6 +164,9 @@ export function notifyBountyAllocation(
       bountyId: hex(input.bountyId),
       allocatedPersonId: hex(input.allocatedPersonId),
       allocatedRelationId: hex(input.allocatedRelationId),
+      // Lets the email deep-link back into geogenesis (the backend maps this
+      // allow-listed source to its configured GEOGENESIS_FRONTEND_URL).
+      source: 'geogenesis',
     },
     ...options,
   });

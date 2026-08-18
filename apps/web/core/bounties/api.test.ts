@@ -6,6 +6,7 @@ import {
   createPayoutCredit,
   getSpaceMetrics,
   markSubmissionPaid,
+  notifyBountyAllocation,
   validateBountyAllocation,
 } from './api';
 
@@ -52,6 +53,21 @@ describe('curator api client', () => {
       spaceId: 'aaaa0000000000000000000000000001',
       bountyId: 'b',
       allocatedPersonId: 'p',
+    });
+  });
+
+  it('tags allocation notifications with the geogenesis source so the email links back here', async () => {
+    fetchMock.mockResolvedValue(ok({ sent: true, reason: null }));
+    await notifyBountyAllocation(
+      { spaceId: 's', bountyId: 'b', allocatedPersonId: 'p', allocatedRelationId: 'r' },
+      { baseUrl: BASE, getToken: async () => 't' }
+    );
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).toEqual({
+      spaceId: 's',
+      bountyId: 'b',
+      allocatedPersonId: 'p',
+      allocatedRelationId: 'r',
+      source: 'geogenesis',
     });
   });
 
