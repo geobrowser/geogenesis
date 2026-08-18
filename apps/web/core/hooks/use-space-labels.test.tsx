@@ -130,6 +130,22 @@ describe('useSpaceLabels', () => {
     expect(lastRequestedIds()).toEqual([UNKNOWN]);
   });
 
+  // Two spellings of one space are one space. Sending both would key a wider query and fetch the
+  // same row twice.
+  it('asks once for a space passed in two id formats', () => {
+    renderHook(() => useSpaceLabels([UNKNOWN, UNKNOWN.replace(/-/g, '').toUpperCase()]));
+
+    expect(lastRequestedIds()).toHaveLength(1);
+  });
+
+  // The graph is queried with these ids everywhere else in the app; normalizing what we send would
+  // be a different query, on a guess about which formats its filter accepts.
+  it('sends the id in the format the caller gave it', () => {
+    renderHook(() => useSpaceLabels([UNKNOWN]));
+
+    expect(lastRequestedIds()).toEqual([UNKNOWN]);
+  });
+
   // Callers pass facet lists that arrive in server order; a reorder is the same set of spaces and
   // must not re-key the query behind it.
   it('asks for the same ids in a stable order', () => {

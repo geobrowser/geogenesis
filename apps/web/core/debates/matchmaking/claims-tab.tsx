@@ -222,8 +222,14 @@ export function ClaimsTab() {
           loaded pages, so a page can arrive with nothing to show — and with the sentinel rendered
           only alongside results, the list would stop at the first such page and report "no claims"
           while the corpus still had matches in it. The sentinel only exists while there is a page
-          left, so it can't sit in view asking for one that isn't there. */}
-      {claimsQuery.hasNextPage ? <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" /> : null}
+          left, so it can't sit in view asking for one that isn't there.
+
+          Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
+          so the sentinel sits in view under it and pages the corpus on the strength of a loading
+          state being visible — reading "the viewer reached the end" off a list that isn't there. */}
+      {claimsQuery.hasNextPage && !allowlistPending ? (
+        <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
+      ) : null}
     </div>
   );
 }

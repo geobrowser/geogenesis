@@ -45,9 +45,14 @@ export function useClaimSpaceAllowlist(): { allowlist: Set<string> | null; isLoa
     staleTime: 60_000,
   });
 
+  // `enabled: false` only stops the fetch — a cache entry already sitting under this key is still
+  // handed back, synchronously. While the account is resolving that key is whatever partial
+  // identity we have so far, so a signed-out, featured-only entry left over from earlier in the
+  // session would answer here and pass for a settled allowlist: the viewer's own spaces filtered
+  // out of their own panel, with nothing marking it as still loading. Same gate as the fetch.
   const allowlist = React.useMemo(
-    () => (data ? browseSidebarClaimSpaceAllowlist(data, personalSpaceId) : null),
-    [data, personalSpaceId]
+    () => (personalSpaceLoading || !data ? null : browseSidebarClaimSpaceAllowlist(data, personalSpaceId)),
+    [data, personalSpaceId, personalSpaceLoading]
   );
 
   return { allowlist, isLoading: personalSpaceLoading || (enabled && isLoading) };

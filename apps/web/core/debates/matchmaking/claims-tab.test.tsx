@@ -122,6 +122,9 @@ beforeEach(() => {
   mocks.spacesLoading = false;
   mocks.fetchNextPage.mockReset();
   mocks.observed = [];
+  // Cleared with it: a trigger left over from the previous test still closes over that test's
+  // observer, so a case where nothing is observed could "scroll" a sentinel that isn't there.
+  mocks.trigger = null;
   // Records the sentinel and hands back a way to say it scrolled into view.
   vi.stubGlobal(
     'IntersectionObserver',
@@ -255,6 +258,21 @@ describe('ClaimsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     expect(screen.queryByLabelText('Loading space name')).toBeNull();
     expect(screen.queryByText('Space')).toBeNull();
+  });
+
+  // The tab shows a four-row skeleton while the allowlist resolves, so a sentinel below it sits in
+  // view and reads "the viewer reached the end" off a list that isn't rendered.
+  it('does not page the corpus while the allowlist is still resolving', () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    mocks.hasNextPage = true;
+    render(<ClaimsTab />);
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+
+    act(() => mocks.trigger?.());
+
+    expect(mocks.fetchNextPage).not.toHaveBeenCalled();
   });
 
   // A lookup that settles without an answer must not leave the panel permanently empty — too wide

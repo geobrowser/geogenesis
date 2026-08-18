@@ -54,10 +54,23 @@ export function useSpaceLabels(spaceIds: string[]): UseSpaceLabelsResult {
 
   // Only real space ids can be looked up; the ones the sidebar already answered for need no lookup
   // at all. Sorted so an unchanged set keeps its query key when the caller reorders it.
-  const missingIds = React.useMemo(
-    () => [...new Set(spaceIds.filter(id => id && validateSpaceId(id) && !sidebarLabels.has(normId(id))))].sort(),
-    [sidebarLabels, spaceIds]
-  );
+  //
+  // Deduped on the normalized id but sent in the format the caller gave us: two spellings of one
+  // space are one lookup, while the id on the wire stays the one the graph was queried with
+  // everywhere else. Normalizing what we send would be a different query, on a guess about which
+  // formats the filter accepts.
+  const missingIds = React.useMemo(() => {
+    const byNormalized = new Map<string, string>();
+
+    for (const id of spaceIds) {
+      if (!id || !validateSpaceId(id)) continue;
+      const normalized = normId(id);
+      if (sidebarLabels.has(normalized) || byNormalized.has(normalized)) continue;
+      byNormalized.set(normalized, id);
+    }
+
+    return [...byNormalized.values()].sort();
+  }, [sidebarLabels, spaceIds]);
 
   const { spacesById, isLoading } = useSpacesByIds(missingIds);
 

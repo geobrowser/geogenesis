@@ -37,7 +37,7 @@ export function useSpacesByIds(spaceIds: string[] = [], enabled = true): UseSpac
     // read them mount and unmount constantly (side panels, dropdowns, per-row chips). Without a
     // stale window every one of those remounts refetched an answer it already had, and the label
     // fell back to a placeholder for the length of the round trip.
-    staleTime: 5 * 60 * 1000,
+    staleTime: 5 * 60_000,
   });
 
   return {

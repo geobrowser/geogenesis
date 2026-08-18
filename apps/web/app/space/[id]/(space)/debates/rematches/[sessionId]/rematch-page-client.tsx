@@ -586,8 +586,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         {/* Outside the empty state deliberately: when a filter empties the list, the next page is
             the way out, so the sentinel has to stay reachable — with nothing rendered it sits in
             view and keeps paging until a match turns up or the corpus runs out. Not on the curated
-            tab, whose sections come from the page whole and have no next page to fetch. */}
-        {tab !== 'recommended' && publishedClaimsHasNextPage && (
+            tab, whose sections come from the page whole and have no next page to fetch, and not
+            while the allowlist is pending — the picker is showing a loading state then, and paging
+            the graph-wide scan against it would burn round trips on a pool held back on purpose. */}
+        {tab !== 'recommended' && publishedClaimsHasNextPage && !allowlistPending && (
           <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         )}
       </main>
