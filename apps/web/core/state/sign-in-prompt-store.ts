@@ -1,6 +1,6 @@
 import { atom, useAtom } from 'jotai';
 
-export type SignInPromptAction = 'vote' | 'join' | 'comment';
+export type SignInPromptAction = 'vote' | 'join' | 'comment' | 'bounty';
 
 export const signInPromptActionAtom = atom<SignInPromptAction | null>(null);
 
