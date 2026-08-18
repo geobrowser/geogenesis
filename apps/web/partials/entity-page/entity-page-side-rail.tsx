@@ -7,8 +7,12 @@ import * as React from 'react';
  * lays the rail out as a flex sibling of the main column, so without `w-[300px] shrink-0`
  * the rail sizes to its own content and squeezes the content column. The `<aside>` tag is
  * what `EntityPageContentContainer`'s `auto-sidebar` variant matches on (`has-[aside]`) to
- * widen the page to the with-sidebar max width. Panels that render conditionally should
- * return `null` above this shell so the page falls back to the readable content width.
+ * widen the page from ENTITY_PAGE_CONTENT_MAX_WIDTH to ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH.
+ * Panels that render conditionally should return `null` above this shell so the page falls
+ * back to the readable content width.
+ *
+ * Note this repo's breakpoints are desktop-first — `lg` is `max-width: 1023px` (see
+ * styles.css), so `lg:hidden` drops the rail on narrow viewports and keeps it on desktop.
  */
 export function EntityPageSideRail({ children }: { children: React.ReactNode }) {
   return (

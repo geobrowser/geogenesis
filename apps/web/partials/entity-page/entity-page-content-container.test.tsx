@@ -70,8 +70,13 @@ describe('EntityPageSideRail', () => {
 
     // A rail that isn't `w-[...] shrink-0` sizes to its own content and squeezes the
     // content column — the community-tab regression this guards against.
-    expect(rail.className).toContain('w-[300px]');
-    expect(rail.className).toContain('shrink-0');
+    //
+    // Asserted against the token list rather than the className string: a substring
+    // match on `w-[300px]` also passes for `max-w-[300px]`, which would not constrain
+    // the rail at all. jest-dom's `toHaveClass` would say this more directly, but
+    // vite.config.js registers no setupFiles so setupTests.ts never loads its matchers.
+    expect([...rail.classList]).toContain('w-[300px]');
+    expect([...rail.classList]).toContain('shrink-0');
     expect(rail.textContent).toBe('Panel');
   });
 
