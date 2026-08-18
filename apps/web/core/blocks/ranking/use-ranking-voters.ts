@@ -29,6 +29,10 @@ const SPACE_ID_REQUEST_LIMIT = 100;
 const EMPTY_PROFILE_MAP = new Map<string, Profile>();
 const EMPTY_SPACE_MAP = new Map<string, Space>();
 
+function usableAvatarUrl(url: string | null | undefined): string | null {
+  return url && url !== PLACEHOLDER_SPACE_IMAGE ? url : null;
+}
+
 function chunkSpaceIds(spaceIds: string[]): string[][] {
   const batches: string[][] = [];
   for (let start = 0; start < spaceIds.length; start += SPACE_ID_REQUEST_LIMIT) {
@@ -87,12 +91,19 @@ export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
     },
   });
 
+  // A space is only fetched to borrow its image, and that image is only reached
+  // for when the profile didn't supply an avatar.
+  const spaceIdsNeedingImage = React.useMemo(
+    () => spaceIds.filter(spaceId => !usableAvatarUrl(profilesBySpaceId.get(spaceId)?.avatarUrl)),
+    [spaceIds, profilesBySpaceId]
+  );
+
   const { data: spacesById = EMPTY_SPACE_MAP } = useQuery({
-    queryKey: ['ranking-voter-spaces', spaceIds],
-    enabled: spaceIds.length > 0,
+    queryKey: ['ranking-voter-spaces', spaceIdsNeedingImage],
+    enabled: !isLoadingProfiles && spaceIdsNeedingImage.length > 0,
     staleTime: 60_000,
     queryFn: async ({ signal }) => {
-      const batches = chunkSpaceIds(spaceIds);
+      const batches = chunkSpaceIds(spaceIdsNeedingImage);
       const results = await Promise.all(
         batches.map(batch => Effect.runPromise(getSpaces({ spaceIds: batch }, signal)))
       );
@@ -108,10 +119,8 @@ export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
     () =>
       resolvedRefs.map(ref => {
         const profile = profilesBySpaceId.get(ref.spaceId);
-        const profileAvatarUrl =
-          profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
-        const spaceImage = spacesById.get(ref.spaceId)?.entity.image;
-        const spaceAvatarUrl = spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
+        const profileAvatarUrl = usableAvatarUrl(profile?.avatarUrl);
+        const spaceAvatarUrl = usableAvatarUrl(spacesById.get(ref.spaceId)?.entity.image);
         return {
           rankEntityId: ref.rankEntityId,
           spaceId: ref.spaceId,
