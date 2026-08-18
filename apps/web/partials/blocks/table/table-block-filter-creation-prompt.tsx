@@ -425,6 +425,11 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       publish(touchedColumnIds.length > 0 ? { filters, touchedColumnIds } : null);
     }, [state, options, isRelationsMode]);
 
+    // Leave nothing behind. If the prompt unmounts while open — leaving edit mode with the
+    // popover up, a route change — the consumer would otherwise keep rendering pending
+    // chips for filters that were never applied and can no longer be reached.
+    React.useEffect(() => () => pendingFiltersRef.current?.(null), []);
+
     /**
      * Push whatever the popover currently holds onto the table and reset the session.
      *

@@ -9,6 +9,7 @@ import {
   buildSessionBaselineFromCommittedFilters,
   collectFiltersToApply,
   draftHasPending,
+  enumeratePendingFilterChips,
   getInitialState,
   mergeFilterRows,
   reducer,
@@ -211,5 +212,22 @@ describe('pending filter preview', () => {
 
     const { filters, touchedColumnIds } = collectFiltersToApply(state, options);
     expect(preview(state, committed)).toEqual(mergeFilterRows(committed, filters, touchedColumnIds));
+  });
+});
+
+describe('pending chip labels', () => {
+  it('labels a column whose id is written as a dashed uuid', () => {
+    // `options` carry hex ids while a stored filter can carry the dashed form; without a
+    // normalising compare the chip falls back to rendering the raw id as its label.
+    const dashed = '8f151ba4-de20-4e3c-9cb4-99ddf96f48f1';
+    const state = reducer(openOn([], TYPES_COLUMN), {
+      type: 'toggleEntitySelectionForColumn',
+      payload: { columnId: dashed, id: PDF.id, name: PDF.name },
+    });
+
+    const chips = enumeratePendingFilterChips(state, options).filter(chip => chip.columnId === dashed);
+
+    expect(chips).toHaveLength(1);
+    expect(chips[0].columnName).toBe('Types');
   });
 });

@@ -98,6 +98,8 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   // are made, while the ranking's own query keeps reading committed filters.
   const [previewFilterState, setPreviewFilterState] = React.useState<Filter[] | null>(null);
   const filtersForChips = previewFilterState ?? resolvedFilterState;
+  // See `table-block.tsx`: chips showing a preview are a readout, not an editing surface.
+  const canEditChips = isEditing && previewFilterState === null;
 
   const filterGroupsForToolbarPills = React.useMemo(
     () => groupFilters(filtersForChips).filter(g => !ID.equals(g.columnId, SystemIds.SPACE_FILTER)),
@@ -240,7 +242,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                             });
                           });
                         }}
-                        isEditing={isEditing}
+                        isEditing={canEditChips}
                       />
                     ))}
                   </div>
