@@ -58,8 +58,10 @@ describe('validateReviewForm', () => {
     expect(
       validateReviewForm({ stars: { ...full, skill: 0 }, pass: true, comment: '', payoutAmount: '10' }, null)
     ).toMatch(/Rate every/);
-    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '' }, null)).toMatch(
-      /payout amount/
+    // Blank payout is allowed on a pass (review saved without paying) — curator-app's rule.
+    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '' }, null)).toBeNull();
+    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '0' }, null)).toMatch(
+      /whole number/
     );
     expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '10.5' }, null)).toMatch(
       /whole number/
@@ -101,9 +103,18 @@ describe('BountyReviewDialog', () => {
   it('shows the suggested payout range and blocks submit until the form is valid', async () => {
     const { onSubmit } = setup();
     expect(screen.getByText(/Suggested range 200 – 1,000/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save review & pay' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/Rate every/);
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('saves a passing review without a payout when the amount is left blank', async () => {
+    const { onSubmit } = setup();
+    rateAll();
+    // No amount entered → the button reads "Save review" and payoutAmount is null.
+    fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ pass: true, payoutAmount: null });
   });
 
   it('submits normalized ratings, pass, comment and payout, then closes', async () => {

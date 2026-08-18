@@ -30,18 +30,32 @@ export type ReviewFormState = {
   payoutAmount: string;
 };
 
-/** First problem with the form, or null. Ratings must all be set; a passing review needs a whole-point payout. */
+/**
+ * First problem with the form, or null. Ratings must all be set. The payout is
+ * optional (curator-app's rule): blank ⇒ the review is saved with no payout and
+ * the submission is not marked paid; if entered it must be a positive whole
+ * number within the space's available points.
+ */
 export function validateReviewForm(state: ReviewFormState, availablePoints: number | null): string | null {
   if (RATING_LABELS.some(({ key }) => state.stars[key] < 1)) return 'Rate every category before submitting.';
   if (!state.pass) return null;
   const trimmed = state.payoutAmount.trim();
-  if (!trimmed) return 'Enter the payout amount for a passing review.';
+  if (!trimmed) return null;
   const amount = Number(trimmed);
-  if (!Number.isInteger(amount) || amount <= 0) return 'Payout must be a positive whole number of points.';
+  if (!Number.isInteger(amount) || amount <= 0) {
+    return 'Payout must be a positive whole number of points — or leave it blank to save the review without a payout.';
+  }
   if (availablePoints != null && amount > availablePoints) {
     return `Payout exceeds the space's available points (${formatPoints(availablePoints)}).`;
   }
   return null;
+}
+
+/** The payout the form will submit: null when blank (save review only). */
+export function payoutFromForm(state: ReviewFormState): number | null {
+  if (!state.pass) return null;
+  const trimmed = state.payoutAmount.trim();
+  return trimmed ? Number(trimmed) : null;
 }
 
 type Props = {
@@ -75,6 +89,8 @@ export function BountyReviewDialog({ bounty, submission, open, onOpenChange, onS
   }, [open, submission?.submissionKey]);
 
   const range = payoutRange(bounty.budget, bounty.difficultyId);
+  const hasBudget = range != null && range.max > 0;
+  const willPay = payoutFromForm(state) != null;
 
   const submit = async () => {
     if (!submission) return;
@@ -91,7 +107,7 @@ export function BountyReviewDialog({ bounty, submission, open, onOpenChange, onS
       },
       pass: state.pass,
       comment: state.comment,
-      payoutAmount: state.pass ? Number(state.payoutAmount) : null,
+      payoutAmount: payoutFromForm(state),
     });
     if (outcome.status === 'failed') {
       setError(outcome.reason);
@@ -167,12 +183,13 @@ export function BountyReviewDialog({ bounty, submission, open, onOpenChange, onS
                   step={1}
                   value={state.payoutAmount}
                   onChange={e => setState(s => ({ ...s, payoutAmount: e.target.value }))}
-                  placeholder={range ? (formatPayoutRange(range) ?? '') : 'Points'}
+                  placeholder={hasBudget ? (formatPayoutRange(range) ?? '') : 'Optional'}
                   className="w-full rounded-md border border-grey-02 px-3 py-2 text-metadata"
                 />
                 <Text variant="footnote" color="grey-04">
-                  {range ? `Suggested range ${formatPayoutRange(range)}. ` : ''}
-                  {availablePoints != null ? `${formatPoints(availablePoints)} points available.` : ''}
+                  {hasBudget ? `Suggested range ${formatPayoutRange(range)}. ` : ''}
+                  {availablePoints != null ? `${formatPoints(availablePoints)} points available. ` : ''}
+                  Leave blank to save the review without a payout.
                 </Text>
               </label>
             ) : null}
@@ -199,7 +216,7 @@ export function BountyReviewDialog({ bounty, submission, open, onOpenChange, onS
                 <Button variant="secondary">Cancel</Button>
               </Dialog.Close>
               <Button variant="primary" disabled={busy || !submission} onClick={() => void submit()}>
-                {busy ? 'Saving…' : state.pass ? 'Save review & pay' : 'Save review'}
+                {busy ? 'Saving…' : willPay ? 'Save review & pay' : 'Save review'}
               </Button>
             </div>
           </div>
