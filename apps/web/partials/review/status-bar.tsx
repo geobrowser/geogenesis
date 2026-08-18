@@ -10,7 +10,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { ReviewState } from '~/core/types';
+import { ReviewState, SpaceGovernanceType } from '~/core/types';
 import { collectClientDiagnostics, formatErrorReport } from '~/core/utils/error-diagnostics';
 import { Z_LAYERS, Z_LAYER_CLASS } from '~/core/z-layers';
 
@@ -195,13 +195,13 @@ export const StatusBar = () => {
               )}
               {state.reviewState !== 'publish-complete' && publishingStates.includes(state.reviewState) && <Spinner />}
               <motion.span
-                key={message[state.reviewState]}
+                key={statusBarMessage(state)}
                 initial={{ opacity: 0, filter: 'blur(2px)' }}
                 animate={{ opacity: 1, filter: 'blur(0px)' }}
                 exit={{ opacity: 0, filter: 'blur(2px)' }}
                 transition={{ type: 'spring', duration: 0.5, delay: 0.15 }}
               >
-                {message[state.reviewState]}
+                {statusBarMessage(state)}
               </motion.span>
             </div>
           </AnimatePresence>
@@ -220,6 +220,21 @@ const message: Record<ReviewState, string> = {
   'publish-complete': 'Changes published!',
   'publish-error': 'An error has occurred',
 };
+
+/**
+ * Writing to your own space publishes the changes outright. Writing to a DAO space files a
+ * proposal for the space to decide on, so saying "published" there claims something that hasn't
+ * happened yet — the edit is submitted, not live.
+ */
+function completionMessage(spaceGovernanceType: SpaceGovernanceType | null): string {
+  return spaceGovernanceType === 'DAO' ? 'Proposal submitted' : message['publish-complete'];
+}
+
+export function statusBarMessage(state: { reviewState: ReviewState; spaceGovernanceType: SpaceGovernanceType | null }) {
+  return state.reviewState === 'publish-complete'
+    ? completionMessage(state.spaceGovernanceType)
+    : message[state.reviewState];
+}
 
 const publishingStates: Array<ReviewState> = [
   'publishing-ipfs',
