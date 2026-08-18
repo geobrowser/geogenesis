@@ -8,7 +8,7 @@ import cx from 'classnames';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -64,17 +64,31 @@ export function ClaimsTab() {
   const pages = React.useMemo(() => claimsQuery.data?.pages ?? [], [claimsQuery.data]);
   const facets = pages[0]?.facets;
 
-  const { allowlist: spaceAllowlist } = useClaimSpaceAllowlist();
+  const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+
+  // Until the allowlist settles there is no telling an allowed space from one the viewer has
+  // nothing to do with, so the tab waits instead of showing the unfiltered set and trimming it
+  // under the viewer a moment later — which put spaces in the menu that then vanished, and offered
+  // picks that were never the viewer's to make.
+  //
+  // Only while it is genuinely still resolving. A lookup that settled without an answer leaves
+  // this false and falls through to the unfiltered list: a list that is too wide beats a panel
+  // that never fills.
+  const allowlistPending = spaceAllowlist === null && allowlistLoading;
+
   const serverClaims = React.useMemo(
-    () => pages.flatMap(page => page.claims).filter(entry => isClaimSpaceAllowed(entry.claim.space_id, spaceAllowlist)),
-    [pages, spaceAllowlist]
+    () =>
+      allowlistPending
+        ? []
+        : pages.flatMap(page => page.claims).filter(entry => isClaimSpaceAllowed(entry.claim.space_id, spaceAllowlist)),
+    [allowlistPending, pages, spaceAllowlist]
   );
 
   // The space menu offers only what the list can actually show, so picking an option never lands
   // the viewer on an empty list they can't explain.
   const facetSpaceIds = React.useMemo(
-    () => (facets?.space_ids ?? []).filter(id => isClaimSpaceAllowed(id, spaceAllowlist)),
-    [facets?.space_ids, spaceAllowlist]
+    () => (allowlistPending ? [] : (facets?.space_ids ?? []).filter(id => isClaimSpaceAllowed(id, spaceAllowlist))),
+    [allowlistPending, facets?.space_ids, spaceAllowlist]
   );
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
@@ -162,7 +176,7 @@ export function ClaimsTab() {
       />
 
       <HubQueryState
-        isLoading={claimsQuery.isLoading}
+        isLoading={claimsQuery.isLoading || allowlistPending}
         error={claimsQuery.error}
         onRetry={() => void claimsQuery.refetch()}
         isEmpty={visibleClaims.length === 0}
@@ -202,8 +216,14 @@ export function ClaimsTab() {
           loaded pages, so a page can arrive with nothing to show — and with the sentinel rendered
           only alongside results, the list would stop at the first such page and report "no claims"
           while the corpus still had matches in it. The sentinel only exists while there is a page
-          left, so it can't sit in view asking for one that isn't there. */}
-      {claimsQuery.hasNextPage ? <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" /> : null}
+          left, so it can't sit in view asking for one that isn't there.
+
+          Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
+          so the sentinel sits in view under it and pages the corpus on the strength of a loading
+          state being visible — reading "the viewer reached the end" off a list that isn't there. */}
+      {claimsQuery.hasNextPage && !allowlistPending ? (
+        <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
+      ) : null}
     </div>
   );
 }
@@ -224,7 +244,9 @@ type SpaceTopicFiltersProps = {
 
 /**
  * Space and topic options come from the backend's facets so they stay in sync with the sorted
- * result set; names and thumbnails are resolved locally from the knowledge graph.
+ * result set; names and thumbnails come from {@link useSpaceLabels}, which answers off the browse
+ * sidebar's already-loaded rows before falling back to the knowledge graph — the facets are
+ * narrowed to the viewer's own spaces, which is exactly what the sidebar is holding.
  */
 export function SpaceTopicFilters({
   spaceId,
@@ -236,18 +258,24 @@ export function SpaceTopicFilters({
   leading,
   className,
 }: SpaceTopicFiltersProps) {
-  const { spacesById } = useSpacesByIds(facetSpaceIds);
+  const { labelsById, isLoading: labelsLoading } = useSpaceLabels(facetSpaceIds);
 
   const spaceOptions = React.useMemo<HubFilterOption<string>[]>(
     () => [
       { value: '', label: 'Any space', showImage: false },
-      ...facetSpaceIds.map(id => ({
-        value: id,
-        label: spacesById.get(id)?.entity?.name ?? 'Space',
-        image: spacesById.get(id)?.entity?.image ?? null,
-      })),
+      ...facetSpaceIds.map(id => {
+        const label = spaceLabel(labelsById, id);
+        return {
+          value: id,
+          // A settled lookup that still can't name the space really does leave "Space" as the best
+          // label there is; only a name still on its way draws as a skeleton.
+          label: label?.name ?? 'Space',
+          image: label?.image ?? null,
+          pending: !label && labelsLoading,
+        };
+      }),
     ],
-    [facetSpaceIds, spacesById]
+    [facetSpaceIds, labelsById, labelsLoading]
   );
 
   const topicOptions = React.useMemo<HubFilterOption<string>[]>(
@@ -258,14 +286,16 @@ export function SpaceTopicFilters({
     [facetTopics]
   );
 
-  const spaceLabel = spaceId ? (spacesById.get(spaceId)?.entity?.name ?? 'Space') : 'Any space';
+  const selectedSpace = spaceId ? spaceLabel(labelsById, spaceId) : undefined;
+  const selectedSpaceLabel = spaceId ? (selectedSpace?.name ?? 'Space') : 'Any space';
   const topicLabel = topicId ? (facetTopics?.find(topic => topic.id === topicId)?.name ?? 'Topic') : 'Any topic';
 
   return (
     <div className={cx('flex flex-wrap items-center gap-2', className)}>
       {leading}
       <HubFilterMenu
-        label={spaceLabel}
+        label={selectedSpaceLabel}
+        labelPending={Boolean(spaceId) && !selectedSpace && labelsLoading}
         options={spaceOptions}
         value={spaceId ?? ''}
         onChange={value => onSpaceChange(value || null)}

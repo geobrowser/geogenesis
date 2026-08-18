@@ -6,8 +6,7 @@ import * as React from 'react';
 
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useBrowseSidebarQuerySource } from '~/core/browse/use-browse-sidebar-cache';
 
 import { loadBrowseSidebarData } from '~/partials/browse-sidebar/load-browse-sidebar-data';
 
@@ -31,9 +30,7 @@ import { browseSidebarClaimSpaceAllowlist } from './claim-space-allowlist';
  * rather than "nothing is allowed".
  */
 export function useClaimSpaceAllowlist(): { allowlist: Set<string> | null; isLoading: boolean } {
-  const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
-  const { smartAccount } = useSmartAccount();
-  const walletAddress = smartAccount?.account.address;
+  const { personalSpaceId, walletAddress, keyInput, isLoading: personalSpaceLoading } = useBrowseSidebarQuerySource();
 
   // Held until the account and the personal space both resolve (`usePersonalSpaceId` waits on the
   // smart account itself). Fetching before then would key and cache a featured-only sidebar — the
@@ -42,15 +39,20 @@ export function useClaimSpaceAllowlist(): { allowlist: Set<string> | null; isLoa
   const enabled = !personalSpaceLoading;
 
   const { data, isLoading } = useQuery({
-    queryKey: browseSidebarDataQueryKey(personalSpaceId ?? walletAddress ?? null),
+    queryKey: browseSidebarDataQueryKey(keyInput),
     queryFn: () => (personalSpaceId ? fetchBrowseSidebarData(personalSpaceId) : loadBrowseSidebarData(walletAddress)),
     enabled,
     staleTime: 60_000,
   });
 
+  // `enabled: false` only stops the fetch — a cache entry already sitting under this key is still
+  // handed back, synchronously. While the account is resolving that key is whatever partial
+  // identity we have so far, so a signed-out, featured-only entry left over from earlier in the
+  // session would answer here and pass for a settled allowlist: the viewer's own spaces filtered
+  // out of their own panel, with nothing marking it as still loading. Same gate as the fetch.
   const allowlist = React.useMemo(
-    () => (data ? browseSidebarClaimSpaceAllowlist(data, personalSpaceId) : null),
-    [data, personalSpaceId]
+    () => (personalSpaceLoading || !data ? null : browseSidebarClaimSpaceAllowlist(data, personalSpaceId)),
+    [data, personalSpaceId, personalSpaceLoading]
   );
 
   return { allowlist, isLoading: personalSpaceLoading || (enabled && isLoading) };
