@@ -647,6 +647,10 @@ const ConfiguredTableBlock = ({
   // page reset and the persisted block all still wait for the popover to be dismissed.
   const [previewFilterState, setPreviewFilterState] = React.useState<Filter[] | null>(null);
   const filtersForChips = previewFilterState ?? activeFilters;
+  // While the chips are mirroring the popover's drafts they are a readout, not a second
+  // editing surface. Editing them here could only guess at what the popover means to do
+  // with the same column, and the popover would overwrite the guess on dismiss.
+  const canEditChips = isEditing && previewFilterState === null;
 
   const filterSpaceIds = React.useMemo(
     () => [...new Set(filtersForChips.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value))],
@@ -1237,7 +1241,7 @@ const ConfiguredTableBlock = ({
                               });
                             });
                           }}
-                          isEditing={isEditing}
+                          isEditing={canEditChips}
                         />
                       </React.Fragment>
                     ))}

@@ -2,10 +2,10 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import equal from 'fast-deep-equal';
 
-import { Filter } from '~/core/blocks/data/filters';
-import { Source } from '~/core/blocks/data/source';
+import type { Filter } from '~/core/blocks/data/filters';
+import type { Source } from '~/core/blocks/data/source';
 import { ID } from '~/core/id';
-import { FilterableValueType } from '~/core/value-types';
+import type { FilterableValueType } from '~/core/value-types';
 
 /**
  * Draft state for the data block filter popover.
@@ -768,8 +768,10 @@ export function enumeratePendingFilterChips(
     return d != null && draftHasPending(d, columnId, options);
   });
   columnIds.sort((a, b) => {
-    const nameA = options.find(o => o.columnId === a)?.columnName ?? (a === SystemIds.SPACE_FILTER ? 'Space' : a);
-    const nameB = options.find(o => o.columnId === b)?.columnName ?? (b === SystemIds.SPACE_FILTER ? 'Space' : b);
+    const nameA =
+      options.find(o => ID.equals(o.columnId, a))?.columnName ?? (ID.equals(a, SystemIds.SPACE_FILTER) ? 'Space' : a);
+    const nameB =
+      options.find(o => ID.equals(o.columnId, b))?.columnName ?? (ID.equals(b, SystemIds.SPACE_FILTER) ? 'Space' : b);
     return nameA.localeCompare(nameB);
   });
 
@@ -779,8 +781,8 @@ export function enumeratePendingFilterChips(
     const draft = merged[columnId];
     if (!draft) continue;
 
-    const opt = options.find(o => o.columnId === columnId);
-    const columnName = opt?.columnName ?? (columnId === SystemIds.SPACE_FILTER ? 'Space' : columnId);
+    const opt = options.find(o => ID.equals(o.columnId, columnId));
+    const columnName = opt?.columnName ?? (ID.equals(columnId, SystemIds.SPACE_FILTER) ? 'Space' : columnId);
 
     if (opt?.valueType === 'RELATION') {
       for (const e of draft.multiEntitySelections) {
