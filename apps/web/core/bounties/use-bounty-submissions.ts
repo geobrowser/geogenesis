@@ -86,7 +86,8 @@ export function useBountySubmissions(detail: BountyDetail | null | undefined, ro
       payoutItems: graph.data.payouts,
       proposalStatuses: graph.data.proposalStatuses,
       lifecycleRecords: lifecycle.data ?? [],
-      currentUserEntityId: roles.personId ?? roles.personalSpaceId,
+      // Rows are keyed by personal space id (what curator-backend authorizes on).
+      currentUserEntityId: roles.personalSpaceId,
       isSpaceEditor: roles.isEditor,
     });
   }, [detail, graph.data, lifecycle.data, roles.isEditor, roles.personId, roles.personalSpaceId]);

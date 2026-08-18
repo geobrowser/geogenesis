@@ -27,7 +27,7 @@ export type SubmissionItem = {
   /** Proposal entity id. */
   entityId: string;
   name: string;
-  /** Canonical creator identity: the person entity behind the personal space, or the space id as fallback. */
+  /** Creator identity = the creator's personal space id (what curator-backend authorizes lifecycle actions on). */
   creatorEntityId: string | null;
   creatorName: string | null;
   /** The DAO space the proposal was made in (for links). */
@@ -88,7 +88,7 @@ type GroupSubmissionsArgs = {
   payoutItems: readonly PayoutItem[];
   proposalStatuses: ReadonlyMap<string, ProposalGovernanceStatus>;
   lifecycleRecords: readonly SubmissionLifecycleRecord[];
-  /** The viewer's canonical identity (person entity id) — enables "Request review" on own rows. */
+  /** The viewer's personal space id — enables "Request review" on own rows. */
   currentUserEntityId?: string | null;
   isSpaceEditor: boolean;
 };

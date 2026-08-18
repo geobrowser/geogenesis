@@ -38,12 +38,38 @@ function valueOf(entity: Entity, propertyId: string): string | null {
 
 // -- Submissions ------------------------------------------------------------------
 
+type EntityCreatedAtResult = { entities: Array<{ id: string; createdAt: string | null }> };
+
+/** Creation times for a set of entities. The batch entity document does not carry createdAt, so ask for just that. */
+export function fetchEntityCreatedAt(entityIds: readonly string[]) {
+  return Effect.gen(function* () {
+    const createdAt = new Map<string, Date>();
+    if (entityIds.length === 0) return createdAt;
+    const query = `query {
+      entities(filter: { id: { in: [${entityIds.map(id => `"${uuidToHex(id)}"`).join(', ')}] } }) {
+        id
+        createdAt
+      }
+    }`;
+    const result = yield* graphql<EntityCreatedAtResult>({ endpoint: Environment.getConfig().api, query });
+    for (const entity of result.entities) {
+      if (entity.createdAt) createdAt.set(uuidToHex(entity.id), toDate(entity.createdAt));
+    }
+    return createdAt;
+  });
+}
+
 /**
  * Submission rows are proposals linked to the bounty. Each link relation lives
  * in the creator's PERSONAL space (that is how the review flow publishes it),
- * so the relation's spaceId identifies the creator: the personal space's
- * topicId is their person entity — the canonical identity curator-app uses in
- * lifecycle keys — with the space id itself as the fallback.
+ * so the relation's spaceId identifies the creator.
+ *
+ * The creator identity is the PERSONAL SPACE ID, not the person entity:
+ * curator-backend authorizes "request review" by comparing the caller's
+ * personal space id with the row's creatorEntityId, and keys Person nodes by
+ * it. curator-app derives the same value whenever the space's profile entity
+ * coincides with the space (its own Request review button only appears in
+ * that case), so lifecycle keys stay identical wherever curator-app works.
  */
 export function fetchSubmissionItems(submissionLinks: readonly BountyBacklink[], bountySpaceId: string) {
   return Effect.gen(function* () {
@@ -52,25 +78,26 @@ export function fetchSubmissionItems(submissionLinks: readonly BountyBacklink[],
     const proposalIds = [...new Set(submissionLinks.map(link => uuidToHex(link.fromEntityId)))];
     const creatorSpaceIds = [...new Set(submissionLinks.map(link => uuidToHex(link.spaceId)))];
 
-    const [proposalEntities, creatorSpaces] = yield* Effect.all(
-      [getBatchEntities(proposalIds), getSpaces({ spaceIds: creatorSpaceIds })],
-      { concurrency: 2 }
+    const [proposalEntities, creatorSpaces, createdAtById] = yield* Effect.all(
+      [getBatchEntities(proposalIds), getSpaces({ spaceIds: creatorSpaceIds }), fetchEntityCreatedAt(proposalIds)],
+      { concurrency: 3 }
     );
 
     const proposalsById = new Map(proposalEntities.map(entity => [uuidToHex(entity.id), entity]));
     const spacesById = new Map(creatorSpaces.map(space => [uuidToHex(space.id), space]));
 
     return submissionLinks.map((link): SubmissionItem => {
-      const proposal = proposalsById.get(uuidToHex(link.fromEntityId));
+      const proposalId = uuidToHex(link.fromEntityId);
+      const proposal = proposalsById.get(proposalId);
       const space = spacesById.get(uuidToHex(link.spaceId));
       return {
         id: link.id,
-        entityId: uuidToHex(link.fromEntityId),
+        entityId: proposalId,
         name: proposal?.name?.trim() || 'Untitled proposal',
-        creatorEntityId: space ? uuidToHex(space.topicId ?? space.id) : uuidToHex(link.spaceId),
+        creatorEntityId: uuidToHex(link.spaceId),
         creatorName: space?.entity?.name?.trim() || null,
         spaceId: bountySpaceId,
-        createdAt: toDate(proposal?.createdAt),
+        createdAt: createdAtById.get(proposalId) ?? toDate(proposal?.createdAt),
       };
     });
   });
