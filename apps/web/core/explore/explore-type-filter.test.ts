@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { EXPLORE_ENTITY_TYPE_IDS } from './explore-constants';
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+
+import { EXPLORE_ENTITY_TYPES, EXPLORE_ENTITY_TYPE_IDS } from './explore-constants';
 import {
   exploreTypeFilterLabel,
   parseExploreTypeIdsParam,
@@ -8,6 +10,19 @@ import {
   sanitizeExploreTypeIds,
   toggleExploreTypeId,
 } from './explore-type-filter';
+
+describe('Explore default types', () => {
+  // The rest of this suite is written against EXPLORE_ENTITY_TYPE_IDS, so it follows the
+  // list wherever it goes and would stay green if a type were dropped. Claim is pinned
+  // explicitly: Explore is where claims get discovered, so it defaulting off is a
+  // regression rather than a preference.
+  it('includes Claim, selected by default', () => {
+    expect(EXPLORE_ENTITY_TYPES.map(type => type.label)).toContain('Claim');
+    expect(EXPLORE_ENTITY_TYPE_IDS).toContain(CLAIM_TYPE_ID);
+    expect(parseStoredExploreTypeIds(null)).toContain(CLAIM_TYPE_ID);
+    expect(parseExploreTypeIdsParam(null)).toContain(CLAIM_TYPE_ID);
+  });
+});
 
 describe('parseStoredExploreTypeIds', () => {
   it('defaults to every Explore type when cache is missing or corrupt', () => {
