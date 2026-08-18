@@ -624,6 +624,14 @@ const ConfiguredTableBlock = ({
     [canEdit, setGroupMode, setTemporaryGroupMode]
   );
 
+  const toggleActiveGroupMode = React.useCallback(
+    (columnId: string) => {
+      const mode = activeModesByColumn[columnId] ?? 'AND';
+      setActiveGroupMode(columnId, mode === 'AND' ? 'OR' : 'AND');
+    },
+    [activeModesByColumn, setActiveGroupMode]
+  );
+
   const filterSpaceIds = React.useMemo(
     () => [...new Set(activeFilters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value))],
     [activeFilters]
@@ -740,7 +748,7 @@ const ConfiguredTableBlock = ({
         pageSize,
         sourceKey: source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO',
         filters: activeFilters.map(f => ({ c: f.columnId, v: f.value })),
-        filterModes: activeModesByColumn,
+        filterModes: Object.entries(activeModesByColumn).sort(([a], [b]) => a.localeCompare(b)),
         sort: sortState ?? null,
       }),
     [isInfiniteExplore, pageSize, source, activeFilters, activeModesByColumn, sortState]
@@ -1107,10 +1115,7 @@ const ConfiguredTableBlock = ({
                         <TableBlockFilterGroupPill
                           group={group}
                           mode={activeModesByColumn[group.columnId] ?? 'AND'}
-                          onToggleMode={() => {
-                            const mode = activeModesByColumn[group.columnId] ?? 'AND';
-                            setActiveGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
-                          }}
+                          onToggleMode={() => toggleActiveGroupMode(group.columnId)}
                           onDeleteValue={originalIndex => {
                             const newFilterState = produce(activeFilters, draft => {
                               draft.splice(originalIndex, 1);
@@ -1133,10 +1138,7 @@ const ConfiguredTableBlock = ({
                         <TableBlockFilterGroupPill
                           group={group}
                           mode={activeModesByColumn[group.columnId] ?? 'AND'}
-                          onToggleMode={() => {
-                            const mode = activeModesByColumn[group.columnId] ?? 'AND';
-                            setActiveGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
-                          }}
+                          onToggleMode={() => toggleActiveGroupMode(group.columnId)}
                           onDeleteValue={originalIndex => {
                             const newFilterState = produce(activeFilters, draft => {
                               draft.splice(originalIndex, 1);

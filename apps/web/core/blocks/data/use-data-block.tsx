@@ -122,10 +122,13 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
   const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
   const filterModesKey = React.useMemo(() => stableStringify(effectiveModesByColumn), [effectiveModesByColumn]);
-  const where = React.useMemo(
-    () => filterStateToWhere(effectiveFilterState, effectiveModesByColumn),
-    [filterStateKey, filterModesKey, effectiveFilterState, effectiveModesByColumn]
-  );
+  const where = React.useMemo(() => {
+    // Rehydrate from the content keys so equivalent arrays/maps retain the
+    // same WhereCondition reference even when their input identities change.
+    const stableFilterState = JSON.parse(filterStateKey) as Filter[];
+    const stableModesByColumn = JSON.parse(filterModesKey) as ModesByColumn;
+    return filterStateToWhere(stableFilterState, stableModesByColumn);
+  }, [filterStateKey, filterModesKey]);
 
   // Use the mapping to get the potential renderable properties.
   const propertiesSchema = useProperties(shownColumnIds, spaceId);

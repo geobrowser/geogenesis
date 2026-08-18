@@ -765,7 +765,10 @@ describe('planWriteTool: setDataBlockView / setDataBlockFilters', () => {
         parentEntityId: PARENT,
         spaceId: SPACE,
         filters: [{ columnId: SystemIds.TYPES_PROPERTY, valueType: 'RELATION', value: TARGET }],
-        modesByColumn: { '33333333-3333-3333-3333-333333333333': 'OR' },
+        modesByColumn: {
+          [SystemIds.TYPES_PROPERTY]: 'AND',
+          '33333333-3333-3333-3333-333333333333': 'OR',
+        },
       },
       ctx
     )) as {

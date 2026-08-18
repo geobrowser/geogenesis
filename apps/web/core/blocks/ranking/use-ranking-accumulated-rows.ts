@@ -63,7 +63,7 @@ export function useRankingAccumulatedRows() {
         sourceType: source.type,
         sourceValue: 'value' in source ? source.value : null,
         filterState: filterState.map(f => ({ columnId: f.columnId, value: f.value })),
-        filterModes: modesByColumn,
+        filterModes: Object.entries(modesByColumn).sort(([a], [b]) => a.localeCompare(b)),
         feedPageSize,
         shownColumnIds,
       }),

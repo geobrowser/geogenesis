@@ -1089,7 +1089,9 @@ async function planSetDataBlockFilters(input: SetDataBlockFiltersInput, ctx: Wri
     for (const [columnId, mode] of Object.entries(input.modesByColumn)) {
       if (!isEntityId(columnId)) return invalid(`modesByColumn key ${columnId} is not a valid id`);
       if (mode !== 'AND' && mode !== 'OR') return invalid(`modesByColumn value ${mode} is not valid`);
-      modesByColumn[normalizeEntityId(columnId)] = mode;
+      // AND is the implicit default throughout the filter spec. Keep intents
+      // canonical by carrying only non-default OR overrides downstream.
+      if (mode === 'OR') modesByColumn[normalizeEntityId(columnId)] = mode;
     }
   } else if (input.mode === 'OR') {
     // Backward compatibility for older tool callers that still send one
