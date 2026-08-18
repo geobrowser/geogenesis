@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
 
 let claims: Entity[] = [];
 let claimsLoading = false;
-let featureEnabled = true;
 let joinPending = false;
 let lastQueryEntitiesOptions: unknown = null;
 let debateClaimsResponse: { claims: unknown[] } = { claims: [] };
@@ -39,7 +38,6 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useDebatesEnabled: () => featureEnabled,
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -124,7 +122,6 @@ vi.mock('~/design-system/select-entity-compact', () => ({
 beforeEach(() => {
   claims = [];
   claimsLoading = false;
-  featureEnabled = true;
   joinPending = false;
   lastQueryEntitiesOptions = null;
   debateClaimsResponse = { claims: [] };

@@ -18,6 +18,7 @@ import {
   type MatchmakingReadiness,
   type MatchmakingTopic,
 } from '~/core/debates/api';
+import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
@@ -38,6 +39,7 @@ import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { useClaimDebateReadiness } from '~/core/debates/use-claim-debate-readiness';
+import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
@@ -157,6 +159,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [recommendedSections]
   );
 
+  // Featured spaces plus the ones the viewer belongs to. Applied to the whole pool rather than to
+  // the All tab alone, so every tab, the space menu and the opponent-position count all describe
+  // the same set of claims.
+  const { allowlist: spaceAllowlist } = useClaimSpaceAllowlist();
+
   const claimEntities = React.useMemo(() => {
     const byId = new Map(publishedClaims.entities.map(claim => [claim.id, claim]));
     for (const claim of recommendedEntities) if (!byId.has(claim.id)) byId.set(claim.id, claim);
@@ -170,9 +177,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Both batched: geo-chat caps the ids per request, and the browsed list alone runs past that cap
   // after a page or two of Load more.
   const curatedClaimsQuery = useDebateRematchClaimsForIds(sessionId, recommendedClaimIds);
+  // Narrowed to the allowed spaces before the lookup, not after: the browsed scan is graph-wide,
+  // and asking geo-chat about claims the picker is going to drop is a batch of round trips spent
+  // on rows nobody sees.
   const browsedClaimIds = React.useMemo(
-    () => publishedClaims.entities.map(claim => claim.id),
-    [publishedClaims.entities]
+    () =>
+      publishedClaims.entities
+        .filter(claim => isClaimSpaceAllowed(claimHomeSpaceId(claim), spaceAllowlist))
+        .map(claim => claim.id),
+    [publishedClaims.entities, spaceAllowlist]
   );
   const browsedClaimsQuery = useDebateRematchClaimsForIds(sessionId, browsedClaimIds);
 
@@ -220,6 +233,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     }
     return [...synchronizedClaims.values()]
       .filter(claim => !excludedClaimIds.has(claim.claim.claim_entity_id))
+      .filter(claim => isClaimSpaceAllowed(claim.claim.space_id, spaceAllowlist))
       .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
   }, [
     browsedClaimsQuery.data,
@@ -228,6 +242,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     savedClaimsQuery.data,
     session?.participants,
     sourceDebateQuery.data,
+    spaceAllowlist,
   ]);
   const remoteParticipant =
     currentUserId === null

@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
 
-vi.mock('~/core/state/feature-flags', () => ({ useDebatesEnabled: () => true }));
 
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobile }));
 

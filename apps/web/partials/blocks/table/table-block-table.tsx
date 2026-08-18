@@ -356,7 +356,15 @@ export const TableBlockTable = ({
                             />
                           </div>
                         )}
-                        <EntityRowActions entityId={row.original.entityId} spaceId={space} />
+                        {/* The entity's own space, not the block's — a data block lists rows
+                            from many spaces, and the Debate button forwards this to geo-chat,
+                            which rejects the claim if it does not belong to the space given
+                            (GEO-2581). Same resolution the side-panel button above and the name
+                            cell already use. */}
+                        <EntityRowActions
+                          entityId={row.original.entityId}
+                          spaceId={row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space}
+                        />
                       </div>
                     </TableCell>
                   )}
