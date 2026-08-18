@@ -10,7 +10,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { ReviewState, SpaceGovernanceType } from '~/core/types';
+import { ReviewState } from '~/core/types';
 import { collectClientDiagnostics, formatErrorReport } from '~/core/utils/error-diagnostics';
 import { Z_LAYERS, Z_LAYER_CLASS } from '~/core/z-layers';
 
@@ -21,6 +21,8 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { Warning } from '~/design-system/icons/warning';
 import { Spinner } from '~/design-system/spinner';
+
+import { statusBarMessage } from './status-bar-message';
 
 /**
  * Surfaces publish progress and errors.
@@ -210,31 +212,6 @@ export const StatusBar = () => {
     </div>
   );
 };
-
-const message: Record<ReviewState, string> = {
-  idle: '',
-  reviewing: '',
-  'publishing-ipfs': 'Uploading changes to IPFS',
-  'signing-wallet': 'Sign your transaction',
-  'publishing-contract': 'Adding your changes to The Graph',
-  'publish-complete': 'Changes published!',
-  'publish-error': 'An error has occurred',
-};
-
-/**
- * Writing to your own space publishes the changes outright. Writing to a DAO space files a
- * proposal for the space to decide on, so saying "published" there claims something that hasn't
- * happened yet — the edit is submitted, not live.
- */
-function completionMessage(spaceGovernanceType: SpaceGovernanceType | null): string {
-  return spaceGovernanceType === 'DAO' ? 'Proposal submitted' : message['publish-complete'];
-}
-
-export function statusBarMessage(state: { reviewState: ReviewState; spaceGovernanceType: SpaceGovernanceType | null }) {
-  return state.reviewState === 'publish-complete'
-    ? completionMessage(state.spaceGovernanceType)
-    : message[state.reviewState];
-}
 
 const publishingStates: Array<ReviewState> = [
   'publishing-ipfs',

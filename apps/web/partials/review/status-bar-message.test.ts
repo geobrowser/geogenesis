@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { statusBarMessage } from './status-bar';
+import { statusBarMessage } from './status-bar-message';
 
 describe('statusBarMessage', () => {
   // Writing to your own space publishes outright, so the original wording still holds.

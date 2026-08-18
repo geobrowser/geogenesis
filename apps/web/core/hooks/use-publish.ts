@@ -146,7 +146,7 @@ export function usePublish() {
           relations.map(r => r.id)
         );
 
-        return space.type;
+        return { spaceGovernanceType: space.type };
       });
 
       const result = await runEffectEither(publish);
@@ -164,7 +164,11 @@ export function usePublish() {
         return;
       }
 
-      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete', spaceGovernanceType: result.right });
+      dispatch({
+        type: 'SET_REVIEW_STATE',
+        payload: 'publish-complete',
+        spaceGovernanceType: result.right.spaceGovernanceType,
+      });
 
       // want to show the "complete" state for 3s if it succeeds
       await sleepWithCallback(() => {
@@ -251,7 +255,7 @@ export function useBulkPublish() {
           },
         });
 
-        return space.type;
+        return { spaceGovernanceType: space.type };
       });
 
       const result = await runEffectEither(publish);
@@ -273,7 +277,11 @@ export function useBulkPublish() {
         triples.map(v => v.id),
         relations.map(r => r.id)
       );
-      dispatch({ type: 'SET_REVIEW_STATE', payload: 'publish-complete', spaceGovernanceType: result.right });
+      dispatch({
+        type: 'SET_REVIEW_STATE',
+        payload: 'publish-complete',
+        spaceGovernanceType: result.right.spaceGovernanceType,
+      });
       onSuccess?.();
 
       // want to show the "complete" state for 3s if it succeeds
