@@ -120,9 +120,9 @@ describe('BountyInterestCard', () => {
     expect(screen.getByText('All allocated spots are filled')).toBeInTheDocument();
   });
 
-  it('is hidden for editors who could otherwise apply, and shows action errors', () => {
-    const { container, unmount } = render(<BountyInterestCard detail={detail()} roles={roles({ isEditor: true })} />);
-    expect(container).toBeEmptyDOMElement();
+  it('lets editors apply too (curator-app shows the card to everyone), and shows action errors', () => {
+    const { unmount } = render(<BountyInterestCard detail={detail()} roles={roles({ isEditor: true })} />);
+    expect(screen.getByRole('button', { name: "I'm interested" })).toBeInTheDocument();
     unmount();
     mocks.actions.error = 'Could not record your interest.';
     render(<BountyInterestCard detail={detail()} roles={roles()} />);

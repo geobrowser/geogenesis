@@ -38,8 +38,6 @@ type Props = {
 export function BountyInterestCard({ detail, roles }: Props) {
   const state = resolveInterestCardState(detail, roles);
   const actions = useBountyInterestActions(detail, roles);
-  // Editors of the space manage the bounty rather than apply to it.
-  if (roles.isEditor && state === 'can-apply') return null;
 
   const copy: Record<InterestCardState, { title: string; body: string }> = {
     'signed-out': { title: 'Want to take on this bounty?', body: 'Sign in to express interest.' },
