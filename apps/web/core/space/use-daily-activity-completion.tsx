@@ -10,9 +10,14 @@ import {
   useRankingDailyActivityComplete,
 } from '~/core/space/use-space-daily-activities';
 
-type CompletionById = Record<string, boolean>;
+/**
+ * Deliberately partial: an absent key is a task nobody has answered yet, and that is the whole
+ * basis of `isLoading` below. `Record<string, boolean>` would claim every task already has an
+ * answer, which is exactly the distinction this needs to keep.
+ */
+export type DailyActivityCompletionById = Partial<Record<string, boolean>>;
 
-const EMPTY_COMPLETION: CompletionById = {};
+const EMPTY_COMPLETION: DailyActivityCompletionById = {};
 
 /**
  * Shared because two parts of the page have to agree on it: the overview side panel decides
@@ -37,7 +42,7 @@ export function useDailyActivityCompletion(
   spaceId: string,
   tasks: DailyActivityTask[]
 ): {
-  completionById: CompletionById;
+  completionById: DailyActivityCompletionById;
   onCompleteChange: (id: string, complete: boolean) => void;
   /** Every task reported done. False while any is still unknown, so loading never reads as done. */
   allComplete: boolean;
@@ -48,7 +53,7 @@ export function useDailyActivityCompletion(
   const queryHash = React.useMemo(() => hashKey(queryKey), [queryKey]);
 
   const getSnapshot = React.useCallback(
-    () => queryClient.getQueryData<CompletionById>(queryKey) ?? EMPTY_COMPLETION,
+    () => queryClient.getQueryData<DailyActivityCompletionById>(queryKey) ?? EMPTY_COMPLETION,
     [queryClient, queryKey]
   );
   const subscribe = React.useCallback(
@@ -62,7 +67,7 @@ export function useDailyActivityCompletion(
 
   const onCompleteChange = React.useCallback(
     (id: string, complete: boolean) => {
-      queryClient.setQueryData<CompletionById>(queryKey, (prev = EMPTY_COMPLETION) =>
+      queryClient.setQueryData<DailyActivityCompletionById>(queryKey, (prev = EMPTY_COMPLETION) =>
         prev[id] === complete ? prev : { ...prev, [id]: complete }
       );
     },
@@ -73,8 +78,8 @@ export function useDailyActivityCompletion(
   // exists can't hold the checklist open — or, worse, keep reporting it complete.
   React.useEffect(() => {
     const ids = new Set(tasks.map(task => task.id));
-    queryClient.setQueryData<CompletionById>(queryKey, (prev = EMPTY_COMPLETION) => {
-      const next: CompletionById = {};
+    queryClient.setQueryData<DailyActivityCompletionById>(queryKey, (prev = EMPTY_COMPLETION) => {
+      const next: DailyActivityCompletionById = {};
       let changed = false;
       for (const [id, value] of Object.entries(prev)) {
         if (ids.has(id)) next[id] = value;

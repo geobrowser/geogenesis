@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type DailyActivityTask } from '~/core/space/daily-activities';
+import type { DailyActivityCompletionById } from '~/core/space/use-daily-activity-completion';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
@@ -52,7 +53,7 @@ export function SpaceDailyActivitiesSection({
   isLoading,
 }: {
   tasks: DailyActivityTask[];
-  completionById: Record<string, boolean>;
+  completionById: DailyActivityCompletionById;
   isLoading: boolean;
 }) {
   const [expanded, setExpanded] = React.useState(true);
