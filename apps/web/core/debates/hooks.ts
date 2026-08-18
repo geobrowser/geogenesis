@@ -57,6 +57,7 @@ import {
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention } from './debate-attention';
+import { markEnteringDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
 
@@ -155,8 +156,24 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
     []
   );
 
+  const batches = React.useMemo(
+    () =>
+      groups.flatMap(group => {
+        const uniqueClaimIds = [...new Set(group.claimIds)];
+        const chunks: Array<{ spaceId: string; claimIds: string[] }> = [];
+        for (let index = 0; index < uniqueClaimIds.length; index += DEBATE_CLAIM_ID_BATCH_SIZE) {
+          chunks.push({
+            spaceId: group.spaceId,
+            claimIds: uniqueClaimIds.slice(index, index + DEBATE_CLAIM_ID_BATCH_SIZE),
+          });
+        }
+        return chunks;
+      }),
+    [groups]
+  );
+
   return useQueries({
-    queries: groups.map(group => ({
+    queries: batches.map(group => ({
       ...debateQueryNetworkOptions,
       queryKey: debateQueryKeys.claims(group.spaceId, group.claimIds),
       queryFn: ({ signal }: { signal?: AbortSignal }) =>
@@ -172,6 +189,9 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
     combine,
   });
 }
+
+/** Maximum number of ids accepted by geo-chat's per-space debate-claims endpoint. */
+export const DEBATE_CLAIM_ID_BATCH_SIZE = 50;
 
 export function useJoinDebateQueue(spaceId: string) {
   const queryClient = useQueryClient();
@@ -564,6 +584,10 @@ export function useAcceptDebateRematchRequest() {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, result.session.id) });
       if (result.debate) {
+        // The converted session routes from the rematch picker on its next render. Activity can
+        // refetch first and would otherwise make the app-wide coordinator prompt this accepting tab
+        // to join the same debate it is already walking into.
+        markEnteringDebate(result.debate.id);
         queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
         void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(result.debate.id) });
       }

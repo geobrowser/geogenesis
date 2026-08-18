@@ -2,6 +2,7 @@ import { QueryClient, QueryObserver } from '@tanstack/react-query';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
 
 type MessageHandler = (event: { data: unknown }) => void;
@@ -654,6 +655,25 @@ describe('DebateGatewayClient', () => {
     expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sockets).toHaveLength(2);
+  });
+
+  it('keeps a healthy socket open when an invalidated query fails with a deterministic 4xx', async () => {
+    invalidateQueries.mockRejectedValueOnce(
+      new GeoChatRequestError('at most 50 claim IDs may be requested', 'too_many_claim_ids', 400)
+    );
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets).toHaveLength(1);
   });
 
   it('cancels an in-flight snapshot before invalidating it', async () => {

@@ -1018,6 +1018,49 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.publishTrack.mock.invocationCallOrder.every(callOrder => callOrder > joinedCallOrder)).toBe(true);
   });
 
+  it('marks the participant joined before a cold local-track request finishes', async () => {
+    const pendingTracks = deferred<Awaited<ReturnType<typeof mocks.createLocalTracks>>>();
+    mocks.createLocalTracks.mockReturnValue(pendingTracks.promise);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.createLocalTracks).toHaveBeenCalledOnce();
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
+  });
+
+  it('reports the exact connection stage when LiveKit signaling fails', async () => {
+    mocks.roomConnect.mockRejectedValue(new Error('signaling failed'));
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() =>
+      expect(mocks.capture).toHaveBeenCalledWith(
+        'debate_room_connection_failed',
+        expect.objectContaining({
+          debate_id: 'debate-1',
+          stage: 'livekit_connect',
+          error_name: 'Error',
+          error_message: 'signaling failed',
+        })
+      )
+    );
+    expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
+  });
+
   it('does not mint a token when another tab owns the participant connection', async () => {
     mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {

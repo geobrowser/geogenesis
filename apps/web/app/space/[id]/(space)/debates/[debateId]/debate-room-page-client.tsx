@@ -76,6 +76,16 @@ type DebateRoomPageClientProps = {
 type DebateNoiseFilterStatus = 'initializing' | 'enabled' | 'disabled' | 'unsupported' | 'failed';
 
 type DebateRoomConnectionConflictSource = 'web_lock_blocked' | 'ownership_released' | 'livekit_duplicate_identity';
+type DebateRoomConnectionStage =
+  | 'livekit_token'
+  | 'sdk_import'
+  | 'audio_output'
+  | 'livekit_connect'
+  | 'mark_joined'
+  | 'local_tracks'
+  | 'publish_tracks'
+  | 'noise_filter'
+  | 'local_preview';
 
 const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
   initializing: 'Loading…',
@@ -746,6 +756,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     async (options: { takeover?: boolean } = {}) => {
       const generation = connectionGenerationRef.current + 1;
       connectionGenerationRef.current = generation;
+      const connectionStartedAt = performance.now();
+      let connectionStage: DebateRoomConnectionStage = 'livekit_token';
       const isCurrent = () => mountedRef.current && connectionGenerationRef.current === generation;
       let connectingRoom: RoomLike | null = null;
       let newlyCreatedTracks: LocalTrackLike[] = [];
@@ -800,8 +812,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         if (!isCurrent()) return;
         setJoinResponse(token);
 
+        connectionStage = 'sdk_import';
         const livekit = await import('livekit-client');
         if (!isCurrent()) return;
+        connectionStage = 'audio_output';
         await audioOutputSelectionPromiseRef.current;
         if (!isCurrent()) return;
         // A debate is a live, recorded 1:1 call, so both cameras must stream the whole time.
@@ -901,6 +915,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           }
         });
 
+        connectionStage = 'livekit_connect';
         await room.connect(token.url, token.token);
         if (!isCurrent()) {
           room.disconnect();
@@ -909,7 +924,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
         connectingRoomRef.current = null;
         roomRef.current = room;
+
+        // The server's connecting deadline measures whether both participants reached LiveKit, not
+        // whether camera setup and publication have finished. Report the successful room connection
+        // immediately: a cold getUserMedia call can otherwise consume the entire deadline after the
+        // participant is already present in the room.
+        connectionStage = 'mark_joined';
+        await markJoined.mutateAsync();
+        if (!isCurrent()) {
+          room.disconnect();
+          stopLocalTracks(localTracksRef);
+          localMediaStreamRef.current = null;
+          if (roomRef.current === room) roomRef.current = null;
+          return;
+        }
+
         const hasPreviewTracks = localTracksRef.current.length > 0;
+        connectionStage = 'local_tracks';
         const tracks = hasPreviewTracks
           ? localTracksRef.current
           : ((await livekit.createLocalTracks({
@@ -938,19 +969,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           sourceMediaStreamTracksRef.current
         );
 
-        // Mark joined now that we're in the room and hold local media, before publishing. publishTrack
-        // awaits WebRTC media negotiation (ICE/TURN), which between two peers behind NAT can take
-        // several seconds; that's long enough to miss the server's connecting deadline and get the
-        // debate cancelled with connection_timeout even though both participants are present.
-        await markJoined.mutateAsync();
-        if (!isCurrent()) {
-          room.disconnect();
-          stopLocalTracks(localTracksRef);
-          localMediaStreamRef.current = null;
-          if (roomRef.current === room) roomRef.current = null;
-          return;
-        }
-
+        connectionStage = 'publish_tracks';
         for (const track of tracks) {
           await publishTrackWithRetry(room, track, isCurrent);
           if (!isCurrent()) {
@@ -965,6 +984,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // LiveKit supplies the audio context required by audio processors while publishing the
         // microphone. Attach Krisp afterwards, then read mediaStreamTrack so this stream contains
         // the same processed track used by the outbound publication.
+        connectionStage = 'noise_filter';
         await initializeNoiseFilter(tracks, isCurrent);
         if (!isCurrent()) {
           room.disconnect();
@@ -973,6 +993,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (roomRef.current === room) roomRef.current = null;
           return;
         }
+        connectionStage = 'local_preview';
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
         setPreviewStream(stream);
         if (localVideoRef.current) {
@@ -999,6 +1020,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         if (isCurrent()) {
+          captureDebateRoomConnectionFailure({
+            debateId,
+            stage: connectionStage,
+            elapsedMs: performance.now() - connectionStartedAt,
+            error,
+          });
           ownershipRef.current?.release();
           setConnectionConflictSource(null);
           setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
@@ -1342,6 +1369,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!debate || debate.status !== 'ready' || roomState !== 'idle') return;
+    // Warm the route's largest client-only dependency before the ten/finite-second connecting
+    // window starts. The import is cached by the module loader; media preview remains independent.
+    void import('livekit-client').catch(() => undefined);
     void ensureLocalPreview().catch(() => undefined);
   }, [debate, ensureLocalPreview, roomState]);
 
@@ -2516,6 +2546,34 @@ function captureDebateRoomConnectionEvent(
     });
   } catch {
     // Analytics is best-effort and must never affect room ownership or connection recovery.
+  }
+}
+
+function captureDebateRoomConnectionFailure({
+  debateId,
+  stage,
+  elapsedMs,
+  error,
+}: {
+  debateId: string;
+  stage: DebateRoomConnectionStage;
+  elapsedMs: number;
+  error: unknown;
+}) {
+  try {
+    capture('debate_room_connection_failed', {
+      debate_id: debateId,
+      stage,
+      elapsed_ms: Math.max(0, Math.round(elapsedMs)),
+      error_name: error instanceof Error ? error.name : 'UnknownError',
+      error_message: error instanceof Error ? error.message : String(error),
+      online: typeof navigator === 'undefined' ? null : navigator.onLine,
+      visibility_state: typeof document === 'undefined' ? 'unknown' : document.visibilityState,
+      has_focus: typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus(),
+      navigation_type: currentNavigationType(),
+    });
+  } catch {
+    // Diagnostics are best-effort and must never interfere with room cleanup or retry.
   }
 }
 

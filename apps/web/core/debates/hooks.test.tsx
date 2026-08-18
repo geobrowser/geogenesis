@@ -12,12 +12,14 @@ import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatReq
 import { DebateCoordinator } from './debate-coordinator';
 import {
   debateQueryKeys,
+  useAcceptDebateRematchRequest,
   useClearDebateActivity,
   useClearTimedOutDebateActivity,
   useConsentToDebateRematch,
   useDebate,
   useDebateActivity,
   useDebateClaims,
+  useDebateClaimsBySpaces,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
   useEndDebateTurn,
@@ -26,9 +28,11 @@ import {
   useMarkDebateReady,
   useUpdateDebateAvailability,
 } from './hooks';
+import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
+  acceptDebateRematchRequest: vi.fn(),
   getIdentityToken: vi.fn(),
   identityToken: vi.fn(),
   consentToDebateRematch: vi.fn(),
@@ -61,12 +65,14 @@ vi.mock('@geogenesis/auth', () => ({
 vi.mock('./debate-gateway', () => ({
   useDebateGateway: () => ({ status: 'ready', paused: false }),
   useDebateGatewayScope: vi.fn(),
+  useDebateGatewaySpaceScopes: vi.fn(),
 }));
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
   return {
     ...actual,
+    acceptDebateRematchRequest: mocks.acceptDebateRematchRequest,
     consentToDebateRematch: mocks.consentToDebateRematch,
     endDebateTurn: mocks.endDebateTurn,
     leaveDebateRematch: mocks.leaveDebateRematch,
@@ -81,6 +87,7 @@ vi.mock('./api', async importOriginal => {
 describe('useDebateRematchClaimsForIds', () => {
   beforeEach(() => {
     mocks.authenticated = true;
+    mocks.acceptDebateRematchRequest.mockReset();
     mocks.identityToken.mockReturnValue(null);
     mocks.getIdentityToken.mockResolvedValue(null);
     mocks.listDebateRematchClaims.mockReset();
@@ -124,6 +131,37 @@ describe('useDebateRematchClaimsForIds', () => {
 
     await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1));
     expect(mocks.listDebateRematchClaims.mock.calls[0]![1]).toEqual(['claim-a', 'claim-b']);
+  });
+});
+
+describe('useDebateClaimsBySpaces', () => {
+  beforeEach(() => {
+    mocks.authenticated = true;
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    mocks.listDebateClaims.mockReset();
+    setCachedIdentityToken(null);
+  });
+
+  it('deduplicates and splits each space into requests of at most fifty ids', async () => {
+    const ids = Array.from({ length: 101 }, (_, index) => `claim-${index}`);
+    mocks.listDebateClaims.mockImplementation((_spaceId: string, claimIds: string[]) =>
+      Promise.resolve({ claims: claimIds.map(claim_entity_id => ({ claim_entity_id })) })
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(
+      () => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: [...ids, ids[0]!] }]),
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      }
+    );
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(101));
+    expect(mocks.listDebateClaims.mock.calls.map(([, claimIds]) => claimIds.length)).toEqual([50, 50, 1]);
+    expect(new Set(result.current.claims.map(claim => claim.claim_entity_id))).toEqual(new Set(ids));
   });
 });
 
@@ -447,6 +485,29 @@ describe('useConsentToDebateRematch', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.rematch('user-a', session.id) });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
     expect(queryClient.getQueryData<Debate>(debateQueryKeys.debate('debate-1'))?.rematch_session_id).toBe(session.id);
+  });
+});
+
+describe('useAcceptDebateRematchRequest', () => {
+  it('holds an entry intent while the converted debate route is loading', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
+    const session = { ...rematchSession(), status: 'converted' as const, converted_debate_id: 'debate-2' };
+    const debate = { id: 'debate-2' } as Debate;
+    mocks.acceptDebateRematchRequest.mockResolvedValue({ session, debate });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(
+      () => ({ accept: useAcceptDebateRematchRequest(), enteringDebateId: useEnteringDebateId() }),
+      { wrapper }
+    );
+
+    await act(() => result.current.accept.mutateAsync('request-1'));
+
+    await waitFor(() => expect(result.current.enteringDebateId).toBe('debate-2'));
+    expect(queryClient.getQueryData(debateQueryKeys.debate('debate-2'))).toEqual(debate);
+    clearEnteringDebate('debate-2');
   });
 });
 

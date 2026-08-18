@@ -10,7 +10,13 @@ import {
   isClaimResponseSummaryQueryKey,
 } from '~/core/responses/claim-response-summary-query-keys';
 
-import { type GeoChatSession, type GetPrivyIdentityToken, getGeoChatApiBaseUrl, getGeoChatSession } from './api';
+import {
+  GeoChatRequestError,
+  type GeoChatSession,
+  type GetPrivyIdentityToken,
+  getGeoChatApiBaseUrl,
+  getGeoChatSession,
+} from './api';
 
 export type DebateGatewaySession = GeoChatSession;
 
@@ -512,7 +518,8 @@ export class DebateGatewayClient {
         await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true });
       })
     );
-    if (results.some(result => result.status === 'rejected')) {
+    const failures = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+    if (failures.some(result => shouldReconnectAfterInvalidationFailure(result.reason))) {
       this.recentEventIds.clear();
       this.recentEventIdOrder.length = 0;
       if (this.socket) this.forceReconnect(this.socket);
@@ -651,6 +658,15 @@ export class DebateGatewayClient {
     this.snapshot = { ...snapshot, capabilities };
     for (const listener of this.listeners) listener();
   }
+}
+
+/**
+ * Refreshing an active query can expose an application error without saying anything about the
+ * gateway socket. A deterministic 4xx will survive every reconnect, so recycling a healthy socket
+ * only turns that query bug into an endless "live updates paused" loop.
+ */
+function shouldReconnectAfterInvalidationFailure(error: unknown) {
+  return !(error instanceof GeoChatRequestError && error.status >= 400 && error.status < 500);
 }
 
 const debateGateway = new DebateGatewayClient({
