@@ -830,3 +830,27 @@ export function pendingChipsNeedFilterMode(items: PendingFilterChipItem[]): bool
   }
   return [...byColumn.values()].some(count => count >= 2);
 }
+
+/**
+ * Fold a commit's rows into an existing filter list, replacing every touched column in
+ * place. Shared by the real commit and by the preview the filter chips render from while
+ * the popover is still open, so the chips can never disagree with what dismissing applies.
+ */
+export function mergeFilterRows(
+  current: Filter[],
+  rows: TableBlockNewFilterRow[],
+  touchedColumnIds: string[]
+): Filter[] {
+  const touched = new Set(touchedColumnIds);
+  const base = current.filter(f => !touched.has(f.columnId));
+  const replacements = rows.map(row => ({
+    valueType: row.valueType,
+    columnId: row.columnId,
+    columnName: row.columnName,
+    value: row.value,
+    valueName: row.valueName,
+  }));
+  const firstTouchedIndex = current.findIndex(f => touched.has(f.columnId));
+  const insertIndex = firstTouchedIndex === -1 ? base.length : firstTouchedIndex;
+  return [...base.slice(0, insertIndex), ...replacements, ...base.slice(insertIndex)];
+}
