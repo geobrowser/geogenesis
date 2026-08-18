@@ -84,6 +84,7 @@ export function useCuratorOnboardingStatus() {
   const completedCount = CURATOR_ONBOARDING_STEPS.filter(step => completion[step.id]).length;
   const totalCount = CURATOR_ONBOARDING_STEPS.length;
   const progressPercent = Math.round((completedCount / totalCount) * 100);
+  const allComplete = completedCount === totalCount;
 
   return {
     personalSpaceId,
@@ -91,7 +92,11 @@ export function useCuratorOnboardingStatus() {
     completedCount,
     totalCount,
     progressPercent,
+    allComplete,
     isLoading: Boolean(personalSpaceId) && isLoading,
-    isVisible: Boolean(personalSpaceId) && isPersonalSpaceFetched,
+    // Onboarding is finished work, so it stops taking up the panel once every step is done.
+    // `completion` reads all-false until the query settles, which keeps the checklist visible
+    // through the load rather than hiding it on an answer we don't have yet.
+    isVisible: Boolean(personalSpaceId) && isPersonalSpaceFetched && !allComplete,
   };
 }

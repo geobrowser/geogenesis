@@ -5,11 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { type DailyActivityTask } from '~/core/space/daily-activities';
-import {
-  useDailyUploadActivityComplete,
-  useRankingDailyActivityComplete,
-  useSpaceDailyActivityTasks,
-} from '~/core/space/use-space-daily-activities';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
@@ -37,21 +32,7 @@ function DailyActivityStepIndicator({ complete }: { complete: boolean }) {
   );
 }
 
-function RankingActivityRow({
-  task,
-  spaceId,
-  onCompleteChange,
-}: {
-  task: Extract<DailyActivityTask, { kind: 'ranking' }>;
-  spaceId: string;
-  onCompleteChange: (id: string, complete: boolean) => void;
-}) {
-  const { complete, isLoading } = useRankingDailyActivityComplete(task.blockId, spaceId);
-
-  React.useEffect(() => {
-    if (!isLoading) onCompleteChange(task.id, complete);
-  }, [complete, isLoading, onCompleteChange, task.id]);
-
+function DailyActivityRow({ task, complete }: { task: DailyActivityTask; complete: boolean }) {
   return (
     <li className="flex gap-3">
       <DailyActivityStepIndicator complete={complete} />
@@ -65,62 +46,21 @@ function RankingActivityRow({
   );
 }
 
-function UploadActivityRow({
-  task,
-  spaceId,
-  onCompleteChange,
+export function SpaceDailyActivitiesSection({
+  tasks,
+  completionById,
+  isLoading,
 }: {
-  task: Extract<DailyActivityTask, { kind: 'upload' }>;
-  spaceId: string;
-  onCompleteChange: (id: string, complete: boolean) => void;
+  tasks: DailyActivityTask[];
+  completionById: Record<string, boolean>;
+  isLoading: boolean;
 }) {
-  const complete = useDailyUploadActivityComplete(spaceId);
-
-  React.useEffect(() => {
-    onCompleteChange(task.id, complete);
-  }, [complete, onCompleteChange, task.id]);
-
-  return (
-    <li className="flex gap-3">
-      <DailyActivityStepIndicator complete={complete} />
-      <div className="min-w-0 flex-1">
-        <p className="text-[16px] leading-[17px] font-medium tracking-[-0.35px] text-text">{task.title}</p>
-        <p className="mt-1 text-[16px] leading-[16px] font-normal tracking-[-0.35px] text-grey-04">
-          {task.description}
-        </p>
-      </div>
-    </li>
-  );
-}
-
-export function SpaceDailyActivitiesSection({ spaceId }: { spaceId: string }) {
-  const { tasks } = useSpaceDailyActivityTasks(spaceId);
   const [expanded, setExpanded] = React.useState(true);
-  const [completionById, setCompletionById] = React.useState<Record<string, boolean>>({});
-
-  const onCompleteChange = React.useCallback((id: string, complete: boolean) => {
-    setCompletionById(prev => (prev[id] === complete ? prev : { ...prev, [id]: complete }));
-  }, []);
-
-  // Drop stale completion keys when the task list changes (e.g. block removed).
-  React.useEffect(() => {
-    const ids = new Set(tasks.map(t => t.id));
-    setCompletionById(prev => {
-      let changed = false;
-      const next: Record<string, boolean> = {};
-      for (const [id, value] of Object.entries(prev)) {
-        if (ids.has(id)) next[id] = value;
-        else changed = true;
-      }
-      return changed ? next : prev;
-    });
-  }, [tasks]);
 
   if (tasks.length === 0) return null;
 
   const completedCount = tasks.reduce((count, task) => count + (completionById[task.id] ? 1 : 0), 0);
   const progressPercent = Math.round((completedCount / tasks.length) * 100);
-  const isLoading = tasks.some(task => completionById[task.id] === undefined);
 
   return (
     <section className="flex flex-col rounded-lg border border-grey-02 bg-white p-5 shadow-panel">
@@ -160,13 +100,9 @@ export function SpaceDailyActivitiesSection({ spaceId }: { spaceId: string }) {
 
       {expanded ? (
         <ul className="mt-5 flex flex-col gap-5">
-          {tasks.map(task =>
-            task.kind === 'ranking' ? (
-              <RankingActivityRow key={task.id} task={task} spaceId={spaceId} onCompleteChange={onCompleteChange} />
-            ) : (
-              <UploadActivityRow key={task.id} task={task} spaceId={spaceId} onCompleteChange={onCompleteChange} />
-            )
-          )}
+          {tasks.map(task => (
+            <DailyActivityRow key={task.id} task={task} complete={completionById[task.id] ?? false} />
+          ))}
         </ul>
       ) : null}
     </section>
