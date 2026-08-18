@@ -25,6 +25,7 @@ import { useSyncEngine } from './use-sync-engine';
 type QueryEntityOptions = {
   id?: string;
   spaceId?: string;
+  includeDeleted?: boolean;
   /**
    * By default we query the local store for the entity without
    * querying the remote server. This assumes that the entity
@@ -204,7 +205,7 @@ export function useHydrateEntities({ ids, enabled = true, spaceId }: HydrateEnti
  * not stable (as of July 2025). Once it's stable we should just
  * migrate to @tanstack/db and use that instead.
  */
-export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptions) {
+export function useQueryEntity({ id, spaceId, includeDeleted = false, enabled = true }: QueryEntityOptions) {
   const { store } = useSyncEngine();
   const { isFetched } = useHydrateEntity({ id, enabled });
 
@@ -215,7 +216,7 @@ export function useQueryEntity({ id, spaceId, enabled = true }: QueryEntityOptio
         return null;
       }
 
-      return store.getEntity(id, { spaceId }) ?? null;
+      return store.getEntity(id, { includeDeleted, spaceId }) ?? null;
     },
     equal
   );
@@ -316,7 +317,7 @@ export function useQueryEntities({
   sort,
   orderBy,
 }: QueryEntitiesOptions & {
-  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+  sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
   /** Entity-level ordering (e.g. created-at) applied server-side when no property `sort` is set. */
   orderBy?: EntitiesOrderBy[];
 }) {
@@ -339,7 +340,7 @@ export function useQueryEntities({
    * To prevent flicker when adding new items to collections, callers should explicitly
    * pass keepPreviousData when they want to maintain the previous data during refetches.
    */
-  const { isFetched, isLoading, isPlaceholderData, data } = useQuery({
+  const { isFetched, isLoading, isPlaceholderData, data, error } = useQuery({
     enabled,
     placeholderData,
     queryKey: [...GeoStore.queryKeys(where, first, after, offset), sort ?? null, orderBy ?? null],
@@ -457,6 +458,12 @@ export function useQueryEntities({
      * the prior page.
      */
     isPlaceholderData,
+    /**
+     * The sync error, if the remote fetch failed. Callers rendering an empty
+     * state need it to tell "nothing matched" from "the query never came back";
+     * a KG timeout otherwise reads as no results.
+     */
+    error,
     endCursor: data?.endCursor ?? null,
     hasNextPage: data?.hasNextPage ?? false,
   };

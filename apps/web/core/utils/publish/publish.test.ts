@@ -153,6 +153,22 @@ describe('prepareLocalDataForPublishing', () => {
       expect(updateOp.unset).toHaveLength(1);
       expect(updateOp.unset[0].property).toBeDefined();
     });
+
+    it('should pass SCHEDULE values through unmodified, including embedded newlines', () => {
+      const schedule = 'DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=MO,TH';
+      const values = [
+        createMockValue({
+          property: { id: IdUtils.generate(), name: 'Schedule', dataType: 'SCHEDULE' },
+          value: schedule,
+        }),
+      ];
+
+      const result = prepareLocalDataForPublishing(values, [], 'test-space');
+      const updateOp = result[0] as UpdateEntityOp;
+      const setValue = updateOp.set[0].value as { type: string; value: string };
+      expect(setValue.type).toBe('schedule');
+      expect(setValue.value).toBe(schedule);
+    });
   });
 
   describe('filtering', () => {

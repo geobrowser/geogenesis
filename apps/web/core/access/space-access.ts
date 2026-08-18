@@ -26,6 +26,21 @@ export function normalizeSpaceId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
 
+/**
+ * Decide membership from the denormalized participant list when it provably
+ * contains every participant — the API caps these lists, so only trust a scan
+ * when totalCount fits within what was loaded. Returns null when the list is
+ * absent or truncated and a server-filtered query is required.
+ */
+function membershipFromCompleteList(
+  list: string[] | undefined,
+  totalCount: number | undefined,
+  normalizedParticipantId: string
+): boolean | null {
+  if (!list || typeof totalCount !== 'number' || totalCount > list.length) return null;
+  return list.some(id => normalizeSpaceId(id) === normalizedParticipantId);
+}
+
 export function getSpaceAccess(space: Space, personalSpaceId: string, signal?: AbortController['signal']) {
   const normalizedSpaceId = normalizeSpaceId(space.id);
   const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
@@ -41,9 +56,16 @@ export function getSpaceAccess(space: Space, personalSpaceId: string, signal?: A
   }
 
   return Effect.gen(function* () {
+    const memberFromList = membershipFromCompleteList(space.members, space.totalMembers, normalizedPersonalSpaceId);
+    const editorFromList = membershipFromCompleteList(space.editors, space.totalEditors, normalizedPersonalSpaceId);
+
     const [isMember, isEditor] = yield* Effect.all([
-      getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId, signal),
-      getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId, signal),
+      memberFromList === null
+        ? getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId, signal)
+        : Effect.succeed(memberFromList),
+      editorFromList === null
+        ? getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId, signal)
+        : Effect.succeed(editorFromList),
     ]);
 
     return toSpaceAccess({ isEditor, isMember });

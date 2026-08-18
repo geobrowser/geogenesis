@@ -5,12 +5,14 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import cx from 'classnames';
 import NextImage from 'next/image';
 
+import { isBlockMediaColumn } from '~/core/blocks/data/resolve-main-media-property';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import type { BlockMainMedia } from '~/core/hooks/use-block-main-media';
+import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media-url';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useSpaceAwareRelation, useSpaceAwareValue } from '~/core/sync/use-store';
+import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
-import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -23,7 +25,7 @@ import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata'
 import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import {
   LIST_GALLERY_BROWSE_BODY_CLASS,
@@ -41,6 +43,7 @@ type Props = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   properties?: Record<string, Property>;
+  mainMedia?: BlockMainMedia | null;
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
@@ -57,6 +60,7 @@ export function TableBlockListItem({
   onChangeEntry,
   onLinkEntry,
   properties,
+  mainMedia,
   relationId,
   source,
   autoFocus = false,
@@ -67,7 +71,7 @@ export function TableBlockListItem({
   const nameCell = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
-  let { image } = nameCell;
+  const nameCellImageHint = nameCell?.image ?? null;
 
   const name =
     useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })
@@ -79,39 +83,27 @@ export function TableBlockListItem({
   });
   const description = descriptionValue?.value ?? nameCell.description ?? null;
 
-  const avatarRelation = useSpaceAwareRelation({
-    selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
+  const { url: image, isResolving: isImageResolving } = useBlockMainMediaUrl({
+    entityId: rowEntityId,
     spaceId: currentSpaceId,
+    mediaPropertyId: mainMedia?.propertyId ?? null,
+    mediaKind: mainMedia?.kind,
+    fallbackHint: nameCellImageHint,
   });
 
-  const maybeAvatarUrl = avatarRelation?.toEntity.value;
-
-  const coverRelation = useSpaceAwareRelation({
-    selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === rowEntityId,
-    spaceId: currentSpaceId,
-  });
-
-  const maybeCoverUrl = coverRelation?.toEntity.value;
-
-  // Always show cover if available, then fall back to avatar.
-  // This ensures images render even when cover/avatar aren't
-  // configured as shown columns on the data block.
-  image = maybeCoverUrl ?? maybeAvatarUrl ?? image;
+  const imageUploadProperty =
+    mainMedia && mainMedia.kind === 'IMAGE'
+      ? { id: mainMedia.propertyId, name: mainMedia.name ?? 'Image' }
+      : { id: ContentIds.AVATAR_PROPERTY, name: 'Avatar' };
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
-  const otherPropertyData = Object.values(columns).filter(
-    c =>
-      c.slotId !== SystemIds.NAME_PROPERTY &&
-      c.slotId !== ContentIds.AVATAR_PROPERTY &&
-      c.slotId !== SystemIds.COVER_PROPERTY &&
-      c.slotId !== SystemIds.DESCRIPTION_PROPERTY
-  );
-
-  const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
-  if (image && imageUrl) {
-    image = imageUrl;
-  }
+  const otherPropertyData = Object.values(columns).filter(c => {
+    if (c.slotId === SystemIds.NAME_PROPERTY) return false;
+    if (c.slotId === SystemIds.DESCRIPTION_PROPERTY) return false;
+    if (isBlockMediaColumn(c.slotId, properties)) return false;
+    return true;
+  });
 
   if (isEditing && source.type !== 'RELATIONS') {
     return (
@@ -129,14 +121,12 @@ export function TableBlockListItem({
               variant="avatar"
               imageSrc={image ?? undefined}
               onFileChange={async file => {
-                // List items default to avatar for new uploads since
-                // the small thumbnail is a natural fit for avatar images.
                 await storage.images.createAndLink({
                   file,
                   fromEntityId: rowEntityId,
                   fromEntityName: name,
-                  relationPropertyId: ContentIds.AVATAR_PROPERTY,
-                  relationPropertyName: 'Avatar',
+                  relationPropertyId: imageUploadProperty.id,
+                  relationPropertyName: imageUploadProperty.name,
                   spaceId: currentSpaceId,
                 });
               }}
@@ -170,6 +160,7 @@ export function TableBlockListItem({
                     spaceId={currentSpaceId}
                     entitySpaceIdForPanel={nameCell?.space ?? currentSpaceId}
                     openedWithMainViewEditing={isEditing}
+                    hideHoverActions
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
@@ -188,6 +179,7 @@ export function TableBlockListItem({
                     onLinkEntry={onLinkEntry}
                     showSidePanel={!isPlaceholder}
                     openedWithMainViewEditing={isEditing}
+                    hideHoverActions
                   >
                     <PageStringField
                       placeholder="Entity name..."
@@ -239,13 +231,38 @@ export function TableBlockListItem({
                 </div>
               );
             })}
+
+          {!isPlaceholder && (
+            <div className="mt-2 flex items-center justify-end gap-2">
+              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+                {source.type === 'COLLECTION' ? (
+                  <CollectionRowActions
+                    isEditing={true}
+                    currentSpaceId={currentSpaceId}
+                    entityId={rowEntityId}
+                    spaceId={nameCell?.space}
+                    relationId={relationId}
+                    verified={verified}
+                    onLinkEntry={onLinkEntry}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                ) : (
+                  <DataBlockOpenSidePanelButton
+                    entityId={rowEntityId}
+                    entitySpaceId={nameCell?.space ?? currentSpaceId}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="group flex w-full max-w-full items-start rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider md:relative md:block md:pr-1">
+    <div className="group flex w-full max-w-full items-start rounded-[17px] p-1 pr-5 transition duration-200 hover:bg-divider md:block md:pr-1">
       <div className="flex min-w-0 flex-1 items-start gap-6 pr-2 md:w-full md:pr-0">
         <Link
           entityId={rowEntityId}
@@ -260,7 +277,7 @@ export function TableBlockListItem({
               alt=""
               fill
             />
-          ) : (
+          ) : isImageResolving ? null : ( // Still looking it up — an empty frame beats flashing the fallback and swapping.
             <NextImage
               src={PLACEHOLDER_SPACE_IMAGE}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
@@ -272,7 +289,7 @@ export function TableBlockListItem({
           )}
         </Link>
         <div className="w-full min-w-0">
-          <div className="md:pr-16">
+          <div>
             {source.type !== 'COLLECTION' ? (
               <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
                 <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
@@ -326,32 +343,32 @@ export function TableBlockListItem({
               </div>
             );
           })}
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-1 md:absolute md:top-1 md:right-1">
-        {!isPlaceholder && (
-          <div className="invisible opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden">
-            {source.type === 'COLLECTION' ? (
-              <CollectionRowActions
-                isEditing={false}
-                currentSpaceId={currentSpaceId}
-                entityId={rowEntityId}
-                spaceId={nameCell?.space}
-                relationId={relationId}
-                verified={verified}
-                onLinkEntry={onLinkEntry}
-                openedWithMainViewEditing={isEditing}
-              />
-            ) : (
-              <DataBlockOpenSidePanelButton
-                entityId={rowEntityId}
-                entitySpaceId={nameCell?.space ?? currentSpaceId}
-                openedWithMainViewEditing={isEditing}
-              />
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <EntityRowActions entityId={rowEntityId} spaceId={currentSpaceId} />
+            {!isPlaceholder && (
+              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+                {source.type === 'COLLECTION' ? (
+                  <CollectionRowActions
+                    isEditing={false}
+                    currentSpaceId={currentSpaceId}
+                    entityId={rowEntityId}
+                    spaceId={nameCell?.space}
+                    relationId={relationId}
+                    verified={verified}
+                    onLinkEntry={onLinkEntry}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                ) : (
+                  <DataBlockOpenSidePanelButton
+                    entityId={rowEntityId}
+                    entitySpaceId={nameCell?.space ?? currentSpaceId}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                )}
+              </div>
             )}
           </div>
-        )}
-        <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+        </div>
       </div>
     </div>
   );

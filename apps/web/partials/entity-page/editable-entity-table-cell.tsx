@@ -7,6 +7,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Source } from '~/core/blocks/data/source';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
@@ -21,7 +22,8 @@ import { PageStringField, TableImageField, TableStringField } from '~/design-sys
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
-import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
@@ -122,11 +124,8 @@ export function EditableEntityTableCell({
                 onChangeEntry(entityId, spaceId, { type: 'SET_NAME', name: value });
               }}
             />
-            <div className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-hover/name-cell:block">
-              <NavigateButton spaceId={spaceId} entityId={entityId} />
-            </div>
             {!isPlaceholderRow && (
-              <div className="pointer-events-none flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/name-cell:pointer-events-auto group-hover/name-cell:opacity-100 md:hidden">
+              <div className="invisible flex shrink-0 flex-nowrap items-center gap-0.5 group-hover/name-cell:visible md:hidden">
                 <DataBlockOpenSidePanelButton
                   entityId={entityId}
                   entitySpaceId={spaceId}
@@ -145,7 +144,7 @@ export function EditableEntityTableCell({
                 name={name}
                 currentSpaceId={currentSpaceId}
                 entityId={entityId}
-                spaceId={toSpaceId ?? currentSpaceId}
+                spaceId={toSpaceId}
                 collectionId={collectionId}
                 relationId={relationId}
                 verified={verified}
@@ -348,20 +347,23 @@ function NavigateButton({ spaceId, entityId }: { spaceId: string; entityId: stri
   const router = useRouter();
 
   const handleClick = (e: MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     router.push(NavUtils.toEntity(spaceId, entityId, true));
   };
 
   return (
-    <SquareButton
-      className="box-border !h-5 !w-5"
-      icon={<RightArrowLongSmall />}
-      onClick={handleClick}
+    <Link
+      href={NavUtils.toEntity(spaceId, entityId, true)}
+      entityId={entityId}
+      spaceId={spaceId}
       aria-label="Navigate to entity"
-      onMouseDown={e => {
-        e.stopPropagation();
-      }}
-    />
+      className="inline-flex shrink-0 items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+      onMouseDown={e => e.stopPropagation()}
+      onClick={handleClick}
+    >
+      <RightArrowLongChip />
+    </Link>
   );
 }
 

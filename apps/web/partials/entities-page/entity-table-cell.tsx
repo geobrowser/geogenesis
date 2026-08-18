@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import { dedupeRelationsByToEntityId } from '~/core/utils/dedupe-relations';
@@ -21,7 +22,6 @@ import { CellContent } from '~/design-system/table/cell-content';
 
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
-import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 
 type Props = {
   entityId: string;
@@ -63,22 +63,13 @@ export const EntityTableCell = ({
     return (
       <Fragment key={entityId}>
         {source.type !== 'COLLECTION' ? (
-          <div className="group/name-table-browse flex w-full min-w-0 items-center gap-2">
-            <Link
-              entityId={entityId}
-              href={href}
-              className="min-w-0 flex-1 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
-            >
-              {name || entityId}
-            </Link>
-            <div className="pointer-events-none shrink-0 opacity-0 transition-opacity group-hover/name-table-browse:pointer-events-auto group-hover/name-table-browse:opacity-100 md:hidden">
-              <DataBlockOpenSidePanelButton
-                entityId={entityId}
-                entitySpaceId={spaceId}
-                openedWithMainViewEditing={openedWithMainViewEditing}
-              />
-            </div>
-          </div>
+          <Link
+            entityId={entityId}
+            href={href}
+            className="block min-w-0 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
+          >
+            {name || entityId}
+          </Link>
         ) : (
           <div className="group/name-table-browse-coll w-full min-w-0">
             <CollectionMetadata
@@ -168,7 +159,7 @@ function RelationGroup({ entityId, property, spaceId, truncateLabel = false }: R
         currentSpaceId={spaceId}
         entityId={relationValue}
         relationEntityId={relation.entityId}
-        spaceId={relation.spaceId}
+        spaceId={relation.toSpaceId}
         relationId={relationId}
         truncateLabel={truncateLabel}
       >

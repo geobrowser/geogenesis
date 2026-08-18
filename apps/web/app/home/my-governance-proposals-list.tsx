@@ -81,12 +81,14 @@ export async function MyGovernanceProposalsList({
             key={p.id}
             spaceId={p.spaceId}
             proposalId={p.id}
+            proposalVersion={p.version}
             displayTitle={p.displayTitle}
             spaceName={spaceName}
             spaceImage={spaceImage}
             creatorName={creatorName}
             creatorAvatarUrl={creator.avatarUrl}
             creatorValue={creatorValue}
+            startTime={p.startTime}
             endTime={p.endTime}
             status={p.status}
             canExecute={p.canExecute}

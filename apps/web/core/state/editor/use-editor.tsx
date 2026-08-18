@@ -8,6 +8,7 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 import { useSearchParams } from 'next/navigation';
 
+import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { storage } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
 import { store } from '~/core/sync/use-sync-engine';
@@ -16,13 +17,21 @@ import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
+import { dataBlockViewFromRelations } from '../../blocks/data/data-block-view';
 import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
+import { readBlockPageSizeFromValues } from '../../blocks/data/parse-block-page-size';
+import { readBlockMediaDimensions } from '../../blocks/data/read-block-media-dimensions';
 import { makeInitialRankingBlockRelations } from '../../blocks/ranking/initialize';
+import {
+  RANKING_DATE_PROPERTY_IDS,
+  RANKING_END_PROPERTY_IDS,
+  RANKING_START_PROPERTY_IDS,
+  resolveRankingDate,
+} from '../../blocks/ranking/ranking-block-dates';
 import { isRankingBlockEntity, isRankingSetupConfigured } from '../../blocks/ranking/ranking-block-state';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
-import { RANKING_END_DATE_PROPERTY_ID, RANKING_START_DATE_PROPERTY_ID } from '../../ranking-block-ids';
 import { getRelationForBlockType } from './block-types';
 import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
@@ -251,7 +260,7 @@ export function useEditorStoreLite() {
 }
 
 export function useEditorStore() {
-  const { id: entityId, spaceId } = useEditorInstance();
+  const { id: entityId, spaceId, initialBlocks } = useEditorInstance();
   const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
 
   const tabId = useActiveTabIdForEditor();
@@ -271,6 +280,13 @@ export function useEditorStore() {
     return initialBlockEntities.flatMap(b => b.relations);
   }, [initialBlockEntities]);
 
+  // Shown-column property entities are only ever attached to the page's own blocks, never to a
+  // tab's, so a tab's data blocks have to look outside their own scope to size their media frame.
+  const mediaPropertySource = React.useMemo(
+    () => (initialBlockEntities === initialBlocks ? initialBlockEntities : [...initialBlockEntities, ...initialBlocks]),
+    [initialBlockEntities, initialBlocks]
+  );
+
   const markdownValues = useValues({
     selector: value => blockIds.includes(value.entity.id) && value.property.id === SystemIds.MARKDOWN_CONTENT,
   });
@@ -281,8 +297,7 @@ export function useEditorStore() {
       value.spaceId === spaceId &&
       (value.property.id === SystemIds.NAME_PROPERTY ||
         value.property.id === SystemIds.FILTER ||
-        value.property.id === RANKING_START_DATE_PROPERTY_ID ||
-        value.property.id === RANKING_END_DATE_PROPERTY_ID),
+        RANKING_DATE_PROPERTY_IDS.has(value.property.id)),
   });
 
   const blockTypesRelations = useRelations({
@@ -396,28 +411,14 @@ export function useEditorStore() {
             configuredFilters,
             spaceId
           );
-          const rankingStartDate =
-            RANKING_START_DATE_PROPERTY_ID != null
-              ? (getValues({
-                  mergeWith: initialBlockValues,
-                  selector: v =>
-                    v.entity.id === block.block.id &&
-                    v.property.id === RANKING_START_DATE_PROPERTY_ID &&
-                    v.spaceId === spaceId &&
-                    !v.isDeleted,
-                })[0]?.value ?? null)
-              : null;
-          const rankingEndDate =
-            RANKING_END_DATE_PROPERTY_ID != null
-              ? (getValues({
-                  mergeWith: initialBlockValues,
-                  selector: v =>
-                    v.entity.id === block.block.id &&
-                    v.property.id === RANKING_END_DATE_PROPERTY_ID &&
-                    v.spaceId === spaceId &&
-                    !v.isDeleted,
-                })[0]?.value ?? null)
-              : null;
+          const readRankingDate = (propertyId: string) =>
+            getValues({
+              mergeWith: initialBlockValues,
+              selector: v =>
+                v.entity.id === block.block.id && v.property.id === propertyId && v.spaceId === spaceId && !v.isDeleted,
+            })[0]?.value ?? null;
+          const rankingStartDate = resolveRankingDate(RANKING_START_PROPERTY_IDS, readRankingDate) || null;
+          const rankingEndDate = resolveRankingDate(RANKING_END_PROPERTY_IDS, readRankingDate) || null;
 
           return [
             {
@@ -435,7 +436,26 @@ export function useEditorStore() {
         }
 
         if (toEntity?.type === 'DATA') {
-          sBlocks.push({ type: 'data' });
+          // Shape the pre-hydration placeholder exactly like what's about to replace it: same
+          // view, same page size, same card ratio. All three come off the BLOCKS relation entity
+          // and the shown-column properties the server sends down with the page, so a gallery
+          // block never has to flash a table skeleton or a default-ratio one on its way to cards.
+          const blockRelationEntity = initialBlockEntities.find(b => b.id === block.entityId);
+          const viewRelations = getRelations({
+            mergeWith: initialBlockEntityRelations,
+            selector: r =>
+              r.fromEntity.id === block.entityId &&
+              r.type.id === SystemIds.VIEW_PROPERTY &&
+              r.spaceId === spaceId &&
+              !r.isDeleted,
+          });
+
+          sBlocks.push({
+            type: 'data',
+            view: dataBlockViewFromRelations(viewRelations),
+            pageSize: readBlockPageSizeFromValues(blockRelationEntity?.values, spaceId),
+            mediaFrame: blockMediaFrame(readBlockMediaDimensions(block.entityId, mediaPropertySource)),
+          });
 
           const dataSourceType = getRelations({
             mergeWith: initialBlockEntityRelations,
@@ -540,6 +560,7 @@ export function useEditorStore() {
     spaceId,
     initialBlockValues,
     initialBlockEntities,
+    mediaPropertySource,
     markdownValues,
     blockConfigValues,
     blockTypesRelations,

@@ -48,6 +48,7 @@
   --shadow-onboarding: 0px 0px 71.36363220214844px 0px;
   --shadow-dropdown: 0px 6px 8px #60606033;
   --shadow-button: 0px 1px 2px #f0f0f0;
+  --shadow-panel: 0 8px 20px 0 rgba(0, 0, 0, 0.04);
   --shadow-card: 0px 26px 45px rgba(0, 0, 0, 0.09);
   --shadow-light: 0px 1px 2px #f0f0f0;
   --shadow-big: 0 1px 21px #dbdbdb;
@@ -75,6 +76,10 @@
   --breakpoint-*: initial;
 
   /* Animations */
+  /* One bounce cycle of the debates feed scroll nudge. Its duration is mirrored by
+     BOUNCE_DURATION_MS in apps/web/core/debates/browse/debate-scroll-hint.tsx, which
+     sets the iteration count and times the auto-dismiss — keep the two in sync. */
+  --animate-debate-scroll-hint: debateScrollHint 700ms ease-in-out;
   --animate-fade-in: fadeIn 0.15s ease-in-out;
   --animate-pulse-strong: pulseStrong 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   --animate-slide-down: slideDown 300ms ease-in-out;
@@ -230,6 +235,11 @@
   --text-textLinkSemibold: 1.1875rem;
   --text-textLinkSemibold--line-height: 1.8125rem;
   --text-textLinkSemibold--font-weight: 600;
+
+  /* Debate recording overlay phrase, e.g. "Wrap it up!" */
+  --text-recordingLabel: 1.875rem;
+  --text-recordingLabel--line-height: 2.25rem;
+  --text-recordingLabel--font-weight: 600;
 }
 
 /* Desktop-first breakpoints (max-width) */
@@ -239,6 +249,18 @@
 @custom-variant xl (@media (max-width: 1279px));
 @custom-variant 2xl (@media (max-width: 1535px));
 @custom-variant 3xl (@media (max-width: 1920px));
+
+/* Lifts the debate and the indicator and settles them back, miming the direction the
+   content travels when the viewer scrolls on to the next debate. */
+@keyframes debateScrollHint {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
 
 @keyframes fadeIn {
   0% {

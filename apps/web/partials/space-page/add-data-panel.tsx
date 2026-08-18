@@ -2,32 +2,15 @@
 
 import * as React from 'react';
 
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom } from 'jotai';
 
-import type { ClassifyUrlResponse } from '~/core/chat/inject-types';
+import { useUrlIngestionSubmit } from '~/core/hooks/use-url-ingestion-submit';
 import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
-import { addDataPanelExpandedAtom, assistantSeedAtom, isChatOpenAtom } from '~/core/state/chat-store';
+import { addDataPanelExpandedAtom } from '~/core/state/chat-store';
 
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { ChevronUpBig } from '~/design-system/icons/chevron-up-big';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
-
-// Normalizes a pasted URL to a parseable http(s) URL, defaulting a bare domain
-// (`example.com/article`) to https. Returns null if it can't be made into an
-// http(s) URL (e.g. a non-web scheme like ftp:). Returns the canonical string
-// so the inject / ingestion pipelines always receive a full URL.
-function normalizeHttpUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
-  try {
-    const url = new URL(withScheme);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
 
 type Props = {
   spaceId: string;
@@ -36,70 +19,12 @@ type Props = {
 export function AddDataPanel({ spaceId }: Props) {
   const canEdit = useCanUserEdit(spaceId);
   const [expanded, setExpanded] = useAtom(addDataPanelExpandedAtom);
-  const setSeed = useSetAtom(assistantSeedAtom);
-  const setChatOpen = useSetAtom(isChatOpenAtom);
-  const [url, setUrl] = React.useState('');
-  const [submitting, setSubmitting] = React.useState(false);
+  const { url, setUrl, canSubmit, handleSubmit } = useUrlIngestionSubmit({
+    logTag: 'AddDataPanel',
+    onComplete: () => setExpanded(false),
+  });
 
   if (!canEdit || !expanded) return null;
-
-  const normalizedUrl = normalizeHttpUrl(url);
-  const canSubmit = normalizedUrl !== null && !submitting;
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!normalizedUrl || submitting) return;
-    setSubmitting(true);
-
-    let classification: ClassifyUrlResponse = { route: 'chat' };
-    try {
-      const res = await fetch('/api/chat/classify-url', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: normalizedUrl }),
-      });
-      if (res.ok) {
-        classification = (await res.json()) as ClassifyUrlResponse;
-      } else {
-        console.warn('[AddDataPanel] classify-url returned', res.status);
-      }
-    } catch (err) {
-      console.warn('[AddDataPanel] classify-url failed; falling back to chat flow', err);
-    }
-
-    if (classification.route === 'inject') {
-      try {
-        const res = await fetch('/api/chat/inject', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: normalizedUrl, type: classification.type }),
-        });
-        if (res.ok || res.status === 202) {
-          const body = (await res.json()) as { jobId: string };
-          if (body.jobId) {
-            setSeed({ mode: 'inject', url: normalizedUrl, jobId: body.jobId, injectType: classification.type });
-            setChatOpen(true);
-            setExpanded(false);
-            setUrl('');
-            setSubmitting(false);
-            return;
-          }
-        } else {
-          console.warn('[AddDataPanel] inject submit returned', res.status);
-        }
-      } catch (err) {
-        console.warn('[AddDataPanel] inject submit failed; falling back to chat flow', err);
-      }
-    }
-
-    setSeed({ mode: 'ingestion', url: normalizedUrl });
-    setChatOpen(true);
-    setExpanded(false);
-    setUrl('');
-    setSubmitting(false);
-  };
 
   return (
     <div className="relative h-[10.0625rem] w-full overflow-hidden rounded-[0.75rem] bg-[#E9E9E9]">
@@ -119,25 +44,18 @@ export function AddDataPanel({ spaceId }: Props) {
         <ChevronUpBig />
       </button>
 
-      <h2 className="absolute top-[1.5rem] left-[1.5rem] text-smallTitle tracking-[-0.5px] text-[#151515]">
-        Add data and we&rsquo;ll extract and organize it for you
+      <h2 className="absolute top-[2.5rem] left-[1.5rem] text-smallTitle tracking-[-0.5px] text-[#151515]">
+        Link a news story and we&rsquo;ll extract and organize it for you
       </h2>
-
-      <div className="absolute top-[4.3125rem] left-[1.5rem] flex items-center gap-4 text-[1rem] leading-[22px] font-medium tracking-[-0.32px]">
-        <span className="text-[#2A2B2E]">Import from URL</span>
-        <span aria-disabled="true" title="Coming soon" className="cursor-not-allowed text-[#606060]">
-          Upload files
-        </span>
-      </div>
 
       <form
         onSubmit={handleSubmit}
-        className="absolute top-[5.9375rem] left-[1.5rem] flex h-[2.5625rem] w-[34.375rem] max-w-[calc(100%-3rem)] items-center justify-between rounded-full bg-white/80 pr-[0.40625rem] pl-3"
+        className="absolute top-[5rem] left-[1.5rem] flex h-[2.5625rem] w-[34.375rem] max-w-[calc(100%-3rem)] items-center justify-between rounded-full bg-white/80 pr-[0.40625rem] pl-3"
       >
         <input
           value={url}
           onChange={event => setUrl(event.target.value)}
-          placeholder="URL…"
+          placeholder="Paste news, podcast, tweet, blog URLs…"
           inputMode="url"
           className="w-full bg-transparent text-[1.125rem] tracking-[-0.36px] text-text outline-none placeholder:text-[#B6B6B6]"
         />

@@ -9,8 +9,7 @@ export const isChatOpenAtom = atom(false);
 export const hasSeenAssistantAtom = atomWithStorage('geo:has-seen-assistant', false);
 
 export type AssistantSeed =
-  | { mode: 'ingestion'; url: string }
-  | { mode: 'inject'; url: string; jobId: string; injectType: InjectType };
+  { mode: 'ingestion'; url: string } | { mode: 'inject'; url: string; jobId: string; injectType: InjectType };
 
 // Active in-flight inject job inline UI state. Shared via atom so
 // `chat-messages` can render a custom inline progress UI in place of the

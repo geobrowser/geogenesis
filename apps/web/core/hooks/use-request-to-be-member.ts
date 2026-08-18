@@ -1,12 +1,12 @@
 'use client';
 
-import { daoSpace } from '@geoprotocol/geo-sdk';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
 
+import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -15,24 +15,24 @@ import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseRequestToBeMemberArgs {
   /** The space ID (bytes16 hex without 0x, e.g., UUID format) of the space to join */
   spaceId: string | null;
+  /** Optional display data so the optimistic "pending" row can render a name/image immediately. */
+  space?: { name?: string; image?: string | null };
 }
 
-export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
+export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArgs) {
   const { dispatch } = useStatusBar();
 
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const queryClient = useQueryClient();
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleRequestToBeMember = useCallback(async () => {
     if (!smartAccount) {
@@ -66,41 +66,16 @@ export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
       throw new Error('User is already a member or editor of the space');
     }
 
-    console.log('Requesting to be member', {
-      authorSpaceId: personalSpaceId,
-      spaceId,
-    });
+    try {
+      await requestSpaceMembership({ spaceId, personalSpaceId, tx, queryClient, space });
+    } catch (error) {
+      dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeMember });
+      // Necessary to propagate error status to useMutation
+      throw error;
+    }
+  }, [dispatch, smartAccount, personalSpaceId, isRegistered, isAccountSetupPending, spaceId, space, tx, queryClient]);
 
-    const { calldata: callData } = daoSpace.proposeRequestMembership({
-      authorSpaceId: personalSpaceId,
-      spaceId,
-    });
-
-    const writeTxEffect = tx(callData).pipe(
-      Effect.withSpan('web.write.requestMembership'),
-      Effect.annotateSpans({
-        'io.operation': 'request_membership',
-        'space.type': 'DAO',
-        'governance.action': 'membership_requested',
-      })
-    );
-
-    const result = await runEffectEither(writeTxEffect);
-
-    Either.match(result, {
-      onLeft: error => {
-        console.error('Failed to request membership', { spaceId, personalSpaceId }, error);
-        dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeMember });
-        // Necessary to propagate error status to useMutation
-        throw error;
-      },
-      onRight: hash => console.log('Successfully requested to be member. Transaction hash:', hash),
-    });
-  }, [dispatch, smartAccount, personalSpaceId, isRegistered, isAccountSetupPending, spaceId, tx]);
-
-  const { mutate, status } = useMutation({
-    mutationFn: handleRequestToBeMember,
-  });
+  const { mutate, status } = useMutation({ mutationFn: handleRequestToBeMember });
 
   return {
     requestToBeMember: mutate,

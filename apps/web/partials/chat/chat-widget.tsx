@@ -30,6 +30,7 @@ import { useWebFetchDispatcher } from '~/core/chat/web-fetch-dispatcher';
 import { ROOT_SPACE } from '~/core/constants';
 import { useInjectJob } from '~/core/hooks/use-inject-job';
 import { useSpace } from '~/core/hooks/use-space';
+import { completeDailyUploadActivity } from '~/core/space/use-space-daily-activities';
 import {
   HISTORY_CAP,
   type PersistedChat,
@@ -991,6 +992,10 @@ export function ChatWidget() {
         return;
       }
       const result = applyInjectOpsToStore(injectState.ops, injectJob.spaceId);
+      // Ingestion genuinely succeeded here (job polled to `completed` and its ops
+      // applied to the store), so this is the only place we mark the daily upload
+      // activity done — not at submission time, where the job could still fail.
+      completeDailyUploadActivity(injectJob.spaceId);
       const primaryPill =
         result.primaryEntityId && result.primaryEntityName
           ? `[${result.primaryEntityName.replace(/[\[\]]/g, '')}](geo://entity/${result.primaryEntityId}?space=${injectJob.spaceId})`

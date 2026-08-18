@@ -550,6 +550,29 @@ describe('GeoStore', () => {
       expect(entities).toHaveLength(2);
       expect(entities.map(e => e.id)).toEqual(['entity-1', 'entity-2']);
     });
+
+    it('includes local-only entities that exist only in the value/relation indexes (GEO-2189)', () => {
+      // A new entity created in the UI lives only in the value/relation indexes
+      // (via setValue/setRelation) and never gets a syncedEntities entry until
+      // it is fetched back from remote. getEntities() feeds relation and global
+      // search, so these unpublished entities must still be surfaced.
+      store.setValue({
+        ...mockValue1,
+        id: 'local-value',
+        entity: { id: 'value-only-entity', name: 'Value Only Entity' },
+      });
+      store.setRelation({
+        ...mockRelation1,
+        id: 'local-relation',
+        entityId: 'relation-only-entity',
+        fromEntity: { id: 'relation-only-entity', name: 'Relation Only Entity' },
+      });
+
+      const ids = store.getEntities().map(e => e.id);
+
+      expect(ids).toContain('value-only-entity');
+      expect(ids).toContain('relation-only-entity');
+    });
   });
 
   describe('getResolvedValues', () => {

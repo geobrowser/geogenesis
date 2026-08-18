@@ -7,7 +7,6 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { browseSidebarDataQueryKey } from '~/core/browse/browse-sidebar-query';
-import { FEATURED_BROWSE_SPACES } from '~/core/browse/featured-spaces';
 import {
   type BrowseSidebarData,
   type BrowseSpaceRow,
@@ -71,12 +70,11 @@ function browseRowToQueryRow(row: BrowseSpaceRow, tier: 0 | 1 | 2): QueryFromSpa
 
 function spaceToBrowseRow(space: Space): BrowseSpaceRow {
   const rawName = space.entity.name?.trim() ?? '';
-  const featuredFallback = FEATURED_BROWSE_SPACES.find(f => f.id === space.id)?.name;
-  const unnamed = rawName.length === 0 && !featuredFallback;
+  const unnamed = rawName.length === 0;
 
   return {
     id: space.id,
-    name: rawName || featuredFallback || space.id.slice(0, 8),
+    name: rawName || space.id.slice(0, 8),
     unnamed,
     image: space.entity.image || null,
   };
@@ -196,9 +194,7 @@ export function useQueryFromSpacesList(memberSpaceId: string | undefined, enable
     if (memberSpaceId) memberIds.add(memberSpaceId);
     const excludedFeaturedIds = new Set([...editorIds, ...memberIds]);
 
-    const sidebarFeaturedRows = sidebar?.featured.length
-      ? sidebar.featured
-      : FEATURED_BROWSE_SPACES.map(row => ({ ...row, image: null, unnamed: false }));
+    const sidebarFeaturedRows = sidebar?.featured ?? [];
     const featuredRows = sidebarFeaturedRows.filter(row => !excludedFeaturedIds.has(row.id));
 
     const editorRows = sidebar?.editorOf ?? editorRowsQuery.data ?? [];

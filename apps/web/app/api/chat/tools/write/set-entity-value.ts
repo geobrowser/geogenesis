@@ -13,7 +13,7 @@ type SetEntityValueInput = {
 
 export const setEntityValue = tool({
   description:
-    'Set or update a property value on an entity. Use when the user wants to fill in a field, rename an entity, change a description, etc. For RELATION-type properties use setEntityRelation instead. Before calling, use searchGraph to find the property id if the user gave you a name.',
+    'Set or update a SCALAR property value on an entity (text, number, date, URL, boolean). Use when the user wants to fill in a field, rename an entity, change a description, etc. Do NOT write the name of another entity — a person, org, place, category, tag, or a comma-separated list of such names — into a TEXT value; that is a RELATION (create/reuse each entity and use setEntityRelation instead). Numbers use a numeric-typed property, dates a date-typed one — not TEXT. Before calling, use searchGraph to find the property id if the user gave you a name.',
   inputSchema: jsonSchema<SetEntityValueInput>({
     type: 'object',
     properties: {
@@ -61,7 +61,7 @@ type AddPropertyToEntityInput = {
 
 export const addPropertyToEntity = tool({
   description:
-    'Add a property to an entity that doesn\'t yet have a value for it. If the user\'s phrasing is "add a Title field to this page", use this. With initialValue set, the new field starts with that value; omit it to leave the field empty. Use setEntityValue if the entity already has a value for the property.',
+    "Add a property to an entity that doesn't yet have a value for it. If the user's phrasing is \"add a Title field to this page\", use this. With initialValue set, the new field starts with that value; omit it to leave the field empty. Use setEntityValue if the entity already has a value for the property. This is for SCALAR values only — if the value is (or names) another entity, or a comma-separated list of such names (tags, authors, categories, …), that property is a RELATION: create/reuse each entity and use setEntityRelation, don't put the names in a TEXT field.",
   inputSchema: jsonSchema<AddPropertyToEntityInput>({
     type: 'object',
     properties: {

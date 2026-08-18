@@ -1,9 +1,11 @@
+import { cache } from 'react';
+
 import * as Effect from 'effect/Effect';
 
 import { getSpacesWhereMember } from '~/core/io/queries';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 
-export async function getGovernanceHomeSpaceContext(memberSpaceId: string) {
+export const getGovernanceHomeSpaceContext = cache(async (memberSpaceId: string) => {
   const [editorIds, memberSpaces] = await Promise.all([
     fetchEditorSpaceIds(memberSpaceId),
     Effect.runPromise(getSpacesWhereMember(memberSpaceId)),
@@ -13,4 +15,4 @@ export async function getGovernanceHomeSpaceContext(memberSpaceId: string) {
   const myProposalSpaceIds = [...new Set([...editorIds, ...memberIds])];
 
   return { editorIds, myProposalSpaceIds };
-}
+});

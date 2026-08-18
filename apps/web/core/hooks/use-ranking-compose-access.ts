@@ -5,32 +5,22 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { useCallback, useRef } from 'react';
 
-import { Either } from 'effect';
 import { useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
-import { getSpaceAccessById, normalizeSpaceId } from '~/core/access/space-access';
+import { ensureSpaceMembership } from '~/core/access/request-space-membership';
+import { normalizeSpaceId } from '~/core/access/space-access';
 import { trackPrivyAuth } from '~/core/analytics';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
-import { hasActiveMemberProposal } from '~/core/io/subgraph/fetch-proposed-members';
-import { runEffectEither } from '~/core/telemetry/effect-runtime';
 
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 export type RankingComposeAccessStatus =
-  | 'loading'
-  | 'needs-login'
-  | 'needs-onboarding'
-  | 'needs-membership'
-  | 'not-found'
-  | 'ready';
-
-/** Dedupes automatic membership requests across compose screen + embedded block mounts. */
-const autoRequestedMemberships = new Set<string>();
+  'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'not-found' | 'ready';
 
 export function useRankingComposeAccess(spaceId: string) {
   const router = useRouter();
@@ -39,7 +29,7 @@ export function useRankingComposeAccess(spaceId: string) {
   const { personalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace, isFetched } = usePersonalSpaceId();
   const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
   const { canEdit, isLoading: isLoadingAccess } = useAccessControl(spaceId);
-  const { requestToBeMember, status: membershipRequestStatus } = useRequestToBeMember({ spaceId });
+  const tx = useSmartAccountTransaction();
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
@@ -86,39 +76,13 @@ export function useRankingComposeAccess(spaceId: string) {
     [setName, setTopicId, setAvatar, setSpaceId, setStep, login]
   );
 
-  const ensureMembership = useCallback(async (): Promise<boolean> => {
-    if (!personalSpaceId) return false;
-
-    const access = await runEffectEither(getSpaceAccessById(spaceId, personalSpaceId));
-    if (Either.isRight(access) && access.right.canEdit) {
-      return true;
-    }
-
-    if (isLoadingSpace) {
-      return false;
-    }
-
-    if (space?.type === 'DAO') {
-      const requestKey = `${normalizeSpaceId(spaceId)}:${normalizeSpaceId(personalSpaceId)}`;
-      if (!autoRequestedMemberships.has(requestKey) && membershipRequestStatus !== 'pending') {
-        autoRequestedMemberships.add(requestKey);
-        const alreadyPending = await hasActiveMemberProposal(spaceId, personalSpaceId).catch(() => false);
-        if (!alreadyPending) {
-          requestToBeMember();
-        }
-      }
-    }
-
-    return false;
-  }, [personalSpaceId, spaceId, isLoadingSpace, space?.type, membershipRequestStatus, requestToBeMember]);
-
   const ensureAccess = useCallback(async (): Promise<boolean> => {
     if (!smartAccount || !isRegistered || !personalSpaceId) {
       return false;
     }
 
-    return ensureMembership();
-  }, [smartAccount, isRegistered, personalSpaceId, ensureMembership]);
+    return ensureSpaceMembership({ spaceId, personalSpaceId, tx, queryClient });
+  }, [smartAccount, isRegistered, personalSpaceId, spaceId, tx, queryClient]);
 
   const recheckAccess = useCallback(() => {
     if (!personalSpaceId) return;

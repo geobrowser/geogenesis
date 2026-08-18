@@ -2,10 +2,6 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { useState } from 'react';
-
-import cx from 'classnames';
-
 import { Source } from '~/core/blocks/data/source';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
@@ -19,7 +15,7 @@ import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/cha
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 type Props = {
   columns: Record<string, Cell>;
@@ -59,7 +55,6 @@ export function TableBlockBulletedListItem({
       ?.value ?? null;
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
-  const [isNameHovered, setIsNameHovered] = useState(false);
 
   if (isEditing && source.type !== 'RELATIONS') {
     return (
@@ -130,33 +125,10 @@ export function TableBlockBulletedListItem({
     <div className="group relative flex w-full items-start gap-2 rounded-md px-1 py-0.5 transition duration-200 hover:bg-divider">
       <div className="mt-1 shrink-0 text-xl leading-none text-text">•</div>
       <div className="relative min-w-0 flex-1">
-        <div className="hidden md:float-right md:ml-2 md:block md:translate-y-[5px]">
-          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
-        </div>
         {source.type !== 'COLLECTION' ? (
-          <div
-            className="relative min-w-0"
-            onMouseEnter={() => setIsNameHovered(true)}
-            onMouseLeave={() => setIsNameHovered(false)}
-          >
-            <Link
-              entityId={rowEntityId}
-              spaceId={currentSpaceId}
-              href={href}
-              className={cx('block min-w-0 text-body', !isPlaceholder && 'pr-9 md:pr-0')}
-            >
-              {name}
-            </Link>
-            {!isPlaceholder && isNameHovered && (
-              <div className="absolute top-0 right-0 flex shrink-0 flex-nowrap items-center md:hidden">
-                <DataBlockOpenSidePanelButton
-                  entityId={rowEntityId}
-                  entitySpaceId={nameCell?.space ?? currentSpaceId}
-                  openedWithMainViewEditing={isEditing}
-                />
-              </div>
-            )}
-          </div>
+          <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href} className="block min-w-0 text-body">
+            {name}
+          </Link>
         ) : (
           <CollectionMetadata
             view="BULLETED_LIST"
@@ -177,9 +149,18 @@ export function TableBlockBulletedListItem({
             </Link>
           </CollectionMetadata>
         )}
+        <EntityRowActions entityId={rowEntityId} spaceId={currentSpaceId} className="mt-1" />
       </div>
-      <div className="flex shrink-0 items-center md:hidden">
-        <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+      <div className="flex h-[1.8125rem] shrink-0 items-center gap-1 md:hidden">
+        {!isPlaceholder && source.type !== 'COLLECTION' && (
+          <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 [&>button]:h-5 [&>button]:w-5">
+            <DataBlockOpenSidePanelButton
+              entityId={rowEntityId}
+              entitySpaceId={nameCell?.space ?? currentSpaceId}
+              openedWithMainViewEditing={isEditing}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

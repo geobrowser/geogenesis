@@ -12,9 +12,11 @@ import { toGeoFilterState } from '~/core/blocks/data/filters';
 import { makeInitialDataEntityRelations } from '~/core/blocks/data/initialize';
 import { makeRelationForSourceType } from '~/core/blocks/data/source';
 import { DATA_TYPE_ENTITY_IDS, DATA_TYPE_PROPERTY, RENDERABLE_TYPE_PROPERTY } from '~/core/constants';
+import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
 import { queryClient } from '~/core/query-client';
+import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { useEditable } from '~/core/state/editable-store';
 import { getRelationForBlockType } from '~/core/state/editor/block-types';
 import { E } from '~/core/sync/orm';
@@ -43,6 +45,8 @@ const VIEW_TO_SYSTEM_ID: Record<DataBlockView, string> = {
   LIST: SystemIds.LIST_VIEW,
   GALLERY: SystemIds.GALLERY_VIEW,
   BULLETED_LIST: SystemIds.BULLETED_LIST_VIEW,
+  EXPLORE: DATA_BLOCK_VIEW_EXPLORE_ID,
+  PILL: RANKING_VIEW_PILL_ID,
 };
 
 const VIEW_TO_NAME: Record<DataBlockView, string> = {
@@ -50,6 +54,8 @@ const VIEW_TO_NAME: Record<DataBlockView, string> = {
   LIST: 'List',
   GALLERY: 'Gallery',
   BULLETED_LIST: 'Bulleted List',
+  EXPLORE: 'Explore',
+  PILL: 'Pill',
 };
 
 export type ApplyCtx = {

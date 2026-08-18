@@ -2,23 +2,23 @@
 
 import { useCallback, useState } from 'react';
 
-import { getVideoPath, getVideoPathFallback } from '~/core/utils/utils';
+import { IPFS_GATEWAY_COUNT, getVideoPathAtLevel } from '~/core/utils/utils';
 
 /**
- * Resolves a raw video value to a Pinata gateway URL.
- * Falls back to Lighthouse for legacy CIDs not yet migrated to Pinata.
+ * Resolves a raw video value to an IPFS gateway URL, walking the fallback chain
+ * (Filebase → Pinata → Lighthouse) one gateway per load error.
  */
 export function useVideoWithFallback(value: string | undefined | null) {
-  const [useFallback, setUseFallback] = useState(false);
+  const [level, setLevel] = useState(0);
 
   const onError = useCallback(() => {
-    if (!useFallback && value?.startsWith('ipfs://')) {
-      setUseFallback(true);
+    if (value?.startsWith('ipfs://')) {
+      setLevel(prev => Math.min(prev + 1, IPFS_GATEWAY_COUNT - 1));
     }
-  }, [useFallback, value]);
+  }, [value]);
 
   if (!value) return { src: undefined, onError };
 
-  const src = useFallback ? getVideoPathFallback(value) : getVideoPath(value);
+  const src = getVideoPathAtLevel(value, level);
   return { src, onError };
 }

@@ -47,6 +47,7 @@ const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
     $spaceIds: [UUID!]!
     $typeIds: [UUID!]
     $spaceIdsForLists: [UUID!]!
+    $includeWithoutValue: Boolean
   ) {
     entitiesOrderedByPropertyConnection(
       first: $first
@@ -57,6 +58,7 @@ const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
       sortDirection: $sortDirection
       spaceIds: $spaceIds
       typeIds: $typeIds
+      includeWithoutValue: $includeWithoutValue
     ) {
       pageInfo {
         endCursor

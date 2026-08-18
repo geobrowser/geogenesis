@@ -7,7 +7,7 @@ import * as React from 'react';
 import { useSetAtom } from 'jotai';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
-import { PAGE_SIZE, useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { loadLocalMyRankingDraft, saveLocalMyRankingDraft } from '~/core/blocks/ranking/local-ranking-my-draft';
 import {
@@ -25,8 +25,8 @@ import {
   getPendingProposerSpaceIds,
   isPlaceholderRankingEntry,
 } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
-import { formatRankingPeriodLabel, getRankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import { formatRollingSubmissionLabel } from '~/core/blocks/ranking/ranking-rolling';
 import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 import {
   buildAbsoluteRankingShareUrl,
@@ -38,6 +38,7 @@ import { useRankingBlockDates } from '~/core/blocks/ranking/use-ranking-block-da
 import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-block-relations';
 import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
+import { useRankingPeriod } from '~/core/blocks/ranking/use-ranking-period';
 import { useRankingScope } from '~/core/blocks/ranking/use-ranking-scope';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useSharedRanking } from '~/core/blocks/ranking/use-shared-ranking';
@@ -120,13 +121,21 @@ export function useRankingBlockState({
   const setRankingComposeReturnHref = useSetAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
 
-  const { name, entityId, relationId, rows } = useDataBlock();
+  const {
+    name,
+    entityId,
+    relationId,
+    rows,
+    pageSize,
+    view: stateView,
+    viewRelation: stateViewRelation,
+  } = useDataBlock();
   const { id: parentEntityId } = useEditorInstance();
   const { blockRelations } = useEditorStoreLite();
 
   const canEdit = useCanUserEdit(spaceId);
 
-  const { filterState, setFilterState } = useFilters(canEdit);
+  const { filterState, resolvedFilterState, filterMode, setFilterState, setFilterMode } = useFilters(canEdit);
   const { source, setSource } = useRankingScope({ filterState, setFilterState });
 
   const { startDate, endDate } = useRankingBlockDates({
@@ -140,8 +149,19 @@ export function useRankingBlockState({
     initialSharedRanking?.rankingName?.trim() ||
     'Untitled ranking';
 
-  const { submissions, hasMySubmission, mySubmission, saveMySubmission, isSaving, personalSpaceId } =
-    useRankingSubmissions(entityId, spaceId, displayName);
+  const {
+    submissions,
+    hasMySubmission,
+    mySubmission,
+    saveMySubmission,
+    isSaving,
+    personalSpaceId,
+    isRolling,
+    submissionFrequencyHours,
+    hasRolledOff,
+    isSubmissionLive,
+    submittedAtMs,
+  } = useRankingSubmissions(entityId, spaceId, displayName);
 
   const [sharedRankOverride, setSharedRankOverride] = React.useState<{
     rankEntityId: string;
@@ -163,7 +183,11 @@ export function useRankingBlockState({
     hasSharedRankingUrl && personalSpaceId && ID.equals(activeSharedAuthorSpaceId, personalSpaceId)
   );
   const isSharedRankingView = hasSharedRankingUrl && !isViewingOwnSharedRanking;
-  const displayedSubmission = isSharedRankingView ? sharedSubmission : (sharedSubmission ?? mySubmission);
+  // When viewing our own ranking (including right after publishing) trust the live
+  // `mySubmission` query, which `saveMySubmission` refetches once the indexer reflects
+  // the new order. `sharedSubmission` has a 60s staleTime and isn't invalidated on
+  // publish, so preferring it here showed the pre-edit order until a hard refresh.
+  const displayedSubmission = isSharedRankingView ? sharedSubmission : (mySubmission ?? sharedSubmission);
 
   const { globalRankingEntityIds, aggregatedSubmitterRefs, aggregatedSubmitterSpaceIds, aggregatedRankingCount } =
     useRankingBlockRelations();
@@ -212,12 +236,7 @@ export function useRankingBlockState({
 
   const rowsByEntityId = React.useMemo(() => new Map(rows.map(r => [r.entityId, r])), [rows]);
 
-  const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);
-
-  const periodLabel = React.useMemo(
-    () => formatRankingPeriodLabel(periodState, startDate, endDate),
-    [periodState, startDate, endDate]
-  );
+  const { periodState, periodLabel } = useRankingPeriod(startDate, endDate);
 
   // Fall back to the server-resolved order until block relations load client-side.
   const globalDisplayEntityIds = globalRankingEntityIds.length > 0 ? globalRankingEntityIds : initialOrderedIds;
@@ -298,7 +317,7 @@ export function useRankingBlockState({
     setEmbeddedMyPageNumber(0);
   }, [entityId, myRankingIdsKey]);
 
-  const embeddedMyTotalPages = Math.max(1, Math.ceil(myDisplayEntityIds.length / PAGE_SIZE));
+  const embeddedMyTotalPages = Math.max(1, Math.ceil(myDisplayEntityIds.length / pageSize));
 
   React.useEffect(() => {
     setEmbeddedMyPageNumber(prev => Math.min(prev, embeddedMyTotalPages - 1));
@@ -306,15 +325,15 @@ export function useRankingBlockState({
 
   const paginatedMyDisplayEntityIds = React.useMemo(() => {
     if (!paginateEmbeddedRanking) return myDisplayEntityIds;
-    const start = embeddedMyPageNumber * PAGE_SIZE;
-    return myDisplayEntityIds.slice(start, start + PAGE_SIZE);
-  }, [embeddedMyPageNumber, myDisplayEntityIds, paginateEmbeddedRanking]);
+    const start = embeddedMyPageNumber * pageSize;
+    return myDisplayEntityIds.slice(start, start + pageSize);
+  }, [embeddedMyPageNumber, myDisplayEntityIds, paginateEmbeddedRanking, pageSize]);
 
   const myRankingListEntityIds = paginateEmbeddedRanking ? paginatedMyDisplayEntityIds : myDisplayEntityIds;
 
   const hasEmbeddedMyPreviousPage = paginateEmbeddedRanking && embeddedMyPageNumber > 0;
   const hasEmbeddedMyNextPage = paginateEmbeddedRanking && embeddedMyPageNumber < embeddedMyTotalPages - 1;
-  const showEmbeddedMyPagination = paginateEmbeddedRanking && myDisplayEntityIds.length > PAGE_SIZE;
+  const showEmbeddedMyPagination = paginateEmbeddedRanking && myDisplayEntityIds.length > pageSize;
 
   const setEmbeddedMyPage = React.useCallback(
     (page: number | 'previous' | 'next') => {
@@ -461,7 +480,7 @@ export function useRankingBlockState({
     setEmbeddedGlobalPageNumber(0);
   }, [entityId, visibleGlobalIdsKey]);
 
-  const embeddedGlobalTotalPages = Math.max(1, Math.ceil(visibleGlobalDisplayEntityIds.length / PAGE_SIZE));
+  const embeddedGlobalTotalPages = Math.max(1, Math.ceil(visibleGlobalDisplayEntityIds.length / pageSize));
 
   React.useEffect(() => {
     setEmbeddedGlobalPageNumber(prev => Math.min(prev, embeddedGlobalTotalPages - 1));
@@ -469,9 +488,9 @@ export function useRankingBlockState({
 
   const paginatedGlobalDisplayEntityIds = React.useMemo(() => {
     if (!paginateEmbeddedRanking) return visibleGlobalDisplayEntityIds;
-    const start = embeddedGlobalPageNumber * PAGE_SIZE;
-    return visibleGlobalDisplayEntityIds.slice(start, start + PAGE_SIZE);
-  }, [embeddedGlobalPageNumber, visibleGlobalDisplayEntityIds, paginateEmbeddedRanking]);
+    const start = embeddedGlobalPageNumber * pageSize;
+    return visibleGlobalDisplayEntityIds.slice(start, start + pageSize);
+  }, [embeddedGlobalPageNumber, paginateEmbeddedRanking, pageSize, visibleGlobalDisplayEntityIds]);
 
   const globalRankingListEntityIds = paginateEmbeddedRanking
     ? paginatedGlobalDisplayEntityIds
@@ -479,7 +498,7 @@ export function useRankingBlockState({
 
   const hasEmbeddedGlobalPreviousPage = paginateEmbeddedRanking && embeddedGlobalPageNumber > 0;
   const hasEmbeddedGlobalNextPage = paginateEmbeddedRanking && embeddedGlobalPageNumber < embeddedGlobalTotalPages - 1;
-  const showEmbeddedGlobalPagination = paginateEmbeddedRanking && visibleGlobalDisplayEntityIds.length > PAGE_SIZE;
+  const showEmbeddedGlobalPagination = paginateEmbeddedRanking && visibleGlobalDisplayEntityIds.length > pageSize;
 
   const setEmbeddedGlobalPage = React.useCallback(
     (page: number | 'previous' | 'next') => {
@@ -770,8 +789,17 @@ export function useRankingBlockState({
   const shareRankEntityId = activeSharedRankEntityId || mySubmission?.id || '';
   const shareAuthorSpaceId = activeSharedAuthorSpaceId || mySubmission?.authorSpaceId || '';
   const effectiveOgVersion = React.useMemo(() => {
-    if (sharedOgVersion) return sharedOgVersion;
-    if (!mySubmission || !shareRankEntityId) return '';
+    // Mirror `displayedSubmission`'s precedence: when viewing our OWN ranking
+    // (even via a `/r/{id}` share link), derive the version from the live
+    // `mySubmission` so the `?v=` cache-buster tracks post-edit content. The
+    // server-seeded `sharedOgVersion` is captured once by the resolver and never
+    // updates after we edit/refetch, so preferring it here would leave the share
+    // URL stuck on the pre-edit version and X wouldn't re-scrape. For someone
+    // else's shared ranking the seeded version stays authoritative.
+    const canDeriveFromMine = Boolean(mySubmission && shareRankEntityId);
+    if (sharedOgVersion && !(isViewingOwnSharedRanking && canDeriveFromMine)) return sharedOgVersion;
+    // Narrowing guard (equivalent to `!canDeriveFromMine`) so TS knows `mySubmission` is non-null below.
+    if (!mySubmission || !shareRankEntityId) return sharedOgVersion;
     return buildRankingOgVersion({
       rankEntityId: shareRankEntityId,
       orderedEntityIds: mySubmission.orderedEntityIds,
@@ -781,7 +809,15 @@ export function useRankingBlockState({
       authorName: mySubmission.author.name,
       authorAvatarUrl: mySubmission.author.avatarUrl,
     });
-  }, [displayName, mySubmission, rankingEndDate, rankingStartDate, shareRankEntityId, sharedOgVersion]);
+  }, [
+    displayName,
+    isViewingOwnSharedRanking,
+    mySubmission,
+    rankingEndDate,
+    rankingStartDate,
+    shareRankEntityId,
+    sharedOgVersion,
+  ]);
   const effectiveGlobalOgVersion = React.useMemo(
     () =>
       buildGlobalRankingOgVersion({
@@ -798,7 +834,7 @@ export function useRankingBlockState({
   // so the share button's visibility is unchanged.
   const personalSharePath =
     shareRankEntityId && shareAuthorSpaceId && effectiveRelationId
-      ? buildShortPersonalRankingSharePath(shareRankEntityId)
+      ? buildShortPersonalRankingSharePath(shareRankEntityId, effectiveOgVersion)
       : null;
   const canSharePersonalRanking = Boolean(personalSharePath && !isSharedRankingView && hasMySubmission);
 
@@ -845,7 +881,18 @@ export function useRankingBlockState({
     return () => window.clearTimeout(timer);
   }, [canSharePersonalRanking, effectiveOgVersion, ensurePersonalRankingOg]);
 
-  const globalSharePath = effectiveRelationId ? buildShortGlobalRankingSharePath(entityId) : null;
+  // Share-link visibility is unchanged: expose it whenever the block relation
+  // resolves, just as before. Only attach the `?v=` cache-buster once relations
+  // have hydrated (`globalRankingEntityIds.length > 0`) — before then
+  // `effectiveGlobalOgVersion` hashes an empty list, so we'd emit a cache-buster
+  // that wouldn't match the populated version once data arrives. With no version
+  // the builder returns the bare `/r/g/{id}` path, matching prior behavior.
+  const globalSharePath = effectiveRelationId
+    ? buildShortGlobalRankingSharePath(
+        entityId,
+        globalRankingEntityIds.length > 0 ? effectiveGlobalOgVersion : undefined
+      )
+    : null;
 
   const ensureGlobalRankingOg = React.useCallback(async () => {
     if (!effectiveGlobalOgVersion) return;
@@ -866,6 +913,15 @@ export function useRankingBlockState({
     aggregatedRankingCount === 0 &&
     myDisplayEntityIds.length === 0;
 
+  const embeddedBrowseDisplayEntityIds = globalRankingListEntityIds;
+  const embeddedBrowseEntryByEntityId = globalRankingEntryByEntityId;
+  const embeddedBrowseTotalCount = visibleGlobalDisplayEntityIds.length;
+  const embeddedBrowseShowPagination = showEmbeddedGlobalPagination;
+  const embeddedBrowsePageNumber = embeddedGlobalPageNumber;
+  const embeddedBrowseHasPreviousPage = hasEmbeddedGlobalPreviousPage;
+  const embeddedBrowseHasNextPage = hasEmbeddedGlobalNextPage;
+  const embeddedBrowseSetPage = setEmbeddedGlobalPage;
+
   return {
     spaceId,
     rankingStartDate,
@@ -873,7 +929,10 @@ export function useRankingBlockState({
     isMobile,
     canEdit,
     filterState,
+    resolvedFilterState,
+    filterMode,
     setFilterState,
+    setFilterMode,
     source,
     setSource,
     isFilterOpen,
@@ -883,6 +942,8 @@ export function useRankingBlockState({
     submissions,
     periodState,
     periodLabel,
+    view: stateView,
+    viewRelation: stateViewRelation,
     hasRankedByOthers,
     aggregatedSubmitterRefs,
     aggregatedSubmitterSpaceIds,
@@ -891,6 +952,7 @@ export function useRankingBlockState({
     totalGlobalRankingEntityCount: visibleGlobalDisplayEntityIds.length,
     globalRankByEntityId,
     showEmbeddedGlobalPagination,
+    pageSize,
     embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
     hasEmbeddedGlobalNextPage,
@@ -923,6 +985,8 @@ export function useRankingBlockState({
     showAddMyRankingInGlobalHeader,
     showFirstRankingPrompt,
     showEditRankingButton,
+    isRolling,
+    isRollingRolledOff: hasRolledOff,
     canSharePersonalRanking,
     sharePersonalRanking,
     globalSharePath,
@@ -945,8 +1009,19 @@ export function useRankingBlockState({
     removeFromMyRanking,
     reorderMyRanking,
     openEntitySheet,
+    resolveEntitySpaceId,
+    embeddedBrowseDisplayEntityIds,
+    embeddedBrowseEntryByEntityId,
+    embeddedBrowseTotalCount,
+    embeddedBrowseShowPagination,
+    embeddedBrowsePageNumber,
+    embeddedBrowseHasPreviousPage,
+    embeddedBrowseHasNextPage,
+    embeddedBrowseSetPage,
     hasMyRankingData,
     hasGlobalRankingData,
+    stateView,
+    stateViewRelation,
   };
 }
 

@@ -450,6 +450,12 @@ export const spaceFragment = graphql(/* GraphQL */ `
       memberSpaceId
     }
 
+    # DAO voting settings. Only populated on DAO spaces after the indexer has
+    # ingested the DAO's createDAOSpaceProxy event.
+    spaceVotingSetting {
+      flatSupportThreshold
+    }
+
     page {
       ...FullEntity
     }
@@ -747,36 +753,59 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
   }
 `);
 
-export const entityVoteCountQuery = graphql(/* GraphQL */ `
-  query EntityVoteCount($objectId: UUID!, $objectType: Int!) {
-    votesCountsConnection(condition: { objectId: $objectId, objectType: $objectType }) {
-      nodes {
-        spaceId
-        upvotes
-        downvotes
-      }
+export const entityResponseCountsQuery = graphql(/* GraphQL */ `
+  query EntityResponseCounts($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {
+    votesCountByObjectIdAndObjectTypeAndSpaceIdAndVoteKind(
+      objectId: $objectId
+      objectType: $objectType
+      spaceId: $spaceId
+      voteKind: $voteKind
+    ) {
+      positive
+      negative
+      voteKind
     }
   }
 `);
 
-export const userEntityVoteQuery = graphql(/* GraphQL */ `
-  query UserEntityVote($userId: UUID!, $objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {
-    userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId(
+export const userEntityResponseQuery = graphql(/* GraphQL */ `
+  query UserEntityResponse($userId: UUID!, $objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {
+    userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdAndVoteKind(
       userId: $userId
       objectId: $objectId
       objectType: $objectType
       spaceId: $spaceId
+      voteKind: $voteKind
     ) {
       voteType
     }
   }
 `);
 
-export const entityVotersQuery = graphql(/* GraphQL */ `
-  query EntityVoters($objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {
-    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId }) {
+export const entityRespondersQuery = graphql(/* GraphQL */ `
+  query EntityResponders($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {
+    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId, voteKind: $voteKind }) {
       userId
       voteType
+    }
+  }
+`);
+
+export const claimResponseSummariesQuery = graphql(/* GraphQL */ `
+  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {
+    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {
+      userId
+      objectId
+      voteType
+      voteKind
+    }
+  }
+`);
+
+export const userHasEntityVoteQuery = graphql(/* GraphQL */ `
+  query UserHasEntityVote($userId: UUID!) {
+    userVotes(condition: { userId: $userId }, first: 1) {
+      userId
     }
   }
 `);

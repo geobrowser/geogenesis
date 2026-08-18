@@ -1947,7 +1947,7 @@ function TableBlockEntityFilterInput({
         <div
           ref={setEntityDropdownEl}
           className={cx(
-            'absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02',
+            'absolute z-1 flex w-[254px] flex-col overflow-hidden rounded border border-grey-02 bg-white shadow-lg',
             entityDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
             entityDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'
           )}
@@ -2290,7 +2290,7 @@ function TableBlockSpaceFilterInput({
     ) : null;
 
   const spaceDropdownClassName = cx(
-    'absolute z-1 flex w-[254px] flex-col overflow-hidden rounded bg-white shadow-inner-grey-02',
+    'absolute z-1 flex w-[254px] flex-col overflow-hidden rounded border border-grey-02 bg-white shadow-lg',
     spaceDropdownPlacement.side === 'top' ? 'bottom-[calc(100%+8px)]' : 'top-[calc(100%+8px)]',
     spaceDropdownPlacement.align === 'end' ? 'right-0' : 'left-0'
   );

@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { PAGE_SIZE } from '~/core/blocks/data/use-data-block';
 import { isPlaceholderRankingEntry } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
 
 import { Button } from '~/design-system/button';
@@ -24,6 +23,7 @@ import {
 import { RankingComposeEntitySheet } from './ranking-compose-entity-sheet';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingEntryRow, RankingEntryRowSkeleton } from './ranking-entry-row';
+import { RankingEntryVoteControls } from './ranking-entry-vote-controls';
 import { RankingMyRankingDndList } from './ranking-my-ranking-dnd';
 import type { RankingBlockPresentation, RankingBlockState } from './use-ranking-block-state';
 
@@ -51,6 +51,9 @@ function buildMobileFullscreenEditButton(state: RankingBlockState) {
 function buildMyRankingActionButton(state: RankingBlockState) {
   const { showEditRankingButton, isSaving, openRankingCompose } = state;
 
+  // A rolled-off ballot is treated as absent (useRankingSubmissions blanks
+  // `mySubmission`), so `showEditRankingButton` clears on roll-off and this
+  // naturally falls back to the fresh "Add my ranking" call to action.
   return showEditRankingButton ? (
     <Button
       variant="secondary"
@@ -134,7 +137,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     pendingEntityIds,
     entriesResolving,
     showEmbeddedGlobalPagination,
-    embeddedGlobalPageNumber,
     hasEmbeddedGlobalPreviousPage,
     hasEmbeddedGlobalNextPage,
     setEmbeddedGlobalPage,
@@ -158,12 +160,14 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
     isSharedRankingView,
     reorderMyRanking,
     openEntitySheet,
+    resolveEntitySpaceId,
     activeSwipeRowKey,
     setActiveSwipeRowKey,
     isMyRankingDragging,
     setIsMyRankingDragging,
     entitySheetTarget,
     setEntitySheetTarget,
+    pageSize,
   } = state;
 
   // The standalone /r/ ranking pages (fullscreen) are for viewing/sharing
@@ -224,7 +228,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const globalRankingPagination =
     presentation === 'embedded' && showEmbeddedGlobalPagination ? (
       <RankingBlockGlobalPagination
-        pageNumber={embeddedGlobalPageNumber}
         hasPreviousPage={hasEmbeddedGlobalPreviousPage}
         hasNextPage={hasEmbeddedGlobalNextPage}
         onSetPage={setEmbeddedGlobalPage}
@@ -254,7 +257,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               if (!entry || (entriesResolving && isPlaceholderRankingEntry(entry))) {
                 return (
                   <div key={entityId} className="w-full">
-                    <RankingEntryRowSkeleton rank={rank} />
+                    <RankingEntryRowSkeleton rank={rank} reserveVoteControls />
                   </div>
                 );
               }
@@ -266,6 +269,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   spaceId={spaceId}
                   linkToEntity={!isMobile}
                   pending={pendingEntityIds.has(entityId)}
+                  actions={<RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />}
                 />
               );
               return (
@@ -295,7 +299,6 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
   const myRankingPagination =
     presentation === 'embedded' && showEmbeddedMyPagination ? (
       <RankingBlockGlobalPagination
-        pageNumber={embeddedMyPageNumber}
         hasPreviousPage={hasEmbeddedMyPreviousPage}
         hasNextPage={hasEmbeddedMyNextPage}
         onSetPage={setEmbeddedMyPage}
@@ -323,7 +326,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
             onDragEnd={() => setIsMyRankingDragging(false)}
             className="flex flex-col gap-3"
             renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
-              const rank = embeddedMyPageNumber * PAGE_SIZE + index + 1;
+              const rank = embeddedMyPageNumber * pageSize + index + 1;
               const resolvedEntry = myRankingEntryByEntityId.get(entityId);
               // Mirror the global list: while a row's name is still resolving,
               // show a skeleton rather than flashing "Untitled". On a shared
@@ -332,7 +335,7 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
               if (!resolvedEntry || (entriesResolving && isPlaceholderRankingEntry(resolvedEntry))) {
                 return (
                   <div className="w-full">
-                    <RankingEntryRowSkeleton rank={rank} />
+                    <RankingEntryRowSkeleton rank={rank} reserveVoteControls />
                   </div>
                 );
               }
@@ -346,6 +349,11 @@ export function RankingBlockBody({ state, presentation = 'embedded' }: Props) {
                   spaceId={spaceId}
                   imageUrl={overlayImageUrl}
                   pending={pendingEntityIds.has(entityId)}
+                  actions={
+                    !isDragActive ? (
+                      <RankingEntryVoteControls entityId={entityId} spaceId={resolveEntitySpaceId(entityId)} />
+                    ) : null
+                  }
                 />
               );
               return (

@@ -26,9 +26,10 @@ import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
 import type { onChangeEntryFn, onLinkEntryFn } from './change-entry';
@@ -332,7 +333,7 @@ export const TableBlockTable = ({
               const cells = row.getVisibleCells();
 
               return (
-                <tr key={row.original.entityId ?? index} className="hover:bg-bg">
+                <tr key={row.original.entityId ?? index} className="group/table-row hover:bg-bg">
                   {cells.map((cell, cellIndex) => {
                     const cellId = `${row.original.entityId}-${cell.column.id}-${cellIndex}`;
                     const isShown = shownColumnIds.includes(cell.column.id);
@@ -345,7 +346,26 @@ export const TableBlockTable = ({
                   })}
                   {!isEditing && (
                     <TableCell isShown={true} isEditMode={false}>
-                      <EntityVoteButtons entityId={row.original.entityId} spaceId={space} />
+                      <div className="flex items-center gap-1">
+                        {source.type !== 'COLLECTION' && (
+                          <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 md:hidden [&>button]:h-5 [&>button]:w-5">
+                            <DataBlockOpenSidePanelButton
+                              entityId={row.original.entityId}
+                              entitySpaceId={row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space}
+                              openedWithMainViewEditing={false}
+                            />
+                          </div>
+                        )}
+                        {/* The entity's own space, not the block's — a data block lists rows
+                            from many spaces, and the Debate button forwards this to geo-chat,
+                            which rejects the claim if it does not belong to the space given
+                            (GEO-2581). Same resolution the side-panel button above and the name
+                            cell already use. */}
+                        <EntityRowActions
+                          entityId={row.original.entityId}
+                          spaceId={row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space}
+                        />
+                      </div>
                     </TableCell>
                   )}
                 </tr>

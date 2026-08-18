@@ -5,7 +5,12 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
-import { LIGHTHOUSE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, ROOT_SPACE } from '~/core/constants';
+import {
+  FILEBASE_GATEWAY_READ_PATH,
+  LIGHTHOUSE_GATEWAY_READ_PATH,
+  PINATA_GATEWAY_READ_PATH,
+  ROOT_SPACE,
+} from '~/core/constants';
 import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
@@ -304,6 +309,55 @@ export class GeoDate {
     }
   }
 
+  static toISOStringLocal({
+    day,
+    month,
+    year,
+    hour,
+    minute,
+  }: {
+    day: string;
+    month: string;
+    year: string;
+    hour: string;
+    minute: string;
+  }): string {
+    let paddedHour = hour;
+    let paddedMinute = minute;
+
+    if (Number(minute) < 10 && minute !== '') {
+      paddedMinute = minute.padStart(2, '0');
+    }
+
+    if (Number(hour) < 10 && hour !== '') {
+      paddedHour = hour.padStart(2, '0');
+    }
+
+    if (minute === '') {
+      paddedMinute = '00';
+    }
+
+    if (hour === '') {
+      paddedHour = '00';
+    }
+
+    try {
+      const localDate = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        Number(paddedHour),
+        Number(paddedMinute),
+        0,
+        0
+      );
+      return localDate.toISOString();
+    } catch (e) {
+      console.error('failed parsing local datetime', e);
+      throw e;
+    }
+  }
+
   /**
    * Normalizes a stored date/time value to a full ISO string that `new Date()` can parse.
    * Handles RFC 3339 date-only ("2024-01-15"), time-only ("14:30:00Z"),
@@ -347,6 +401,37 @@ export class GeoDate {
     if (hour !== '' && Number(hour) > 12) {
       const hourAsNumber = Number(hour);
       hour = (hourAsNumber - 12).toString();
+    }
+
+    if (hour !== '' && Number(hour) === 0) {
+      hour = '12';
+      meridiem = 'am';
+    }
+
+    return { day, month, year, hour, minute, meridiem: meridiem as 'am' | 'pm' };
+  }
+
+  /** Parses a stored UTC ISO string into day/month/year/hour/minute in the user's local timezone. */
+  static fromISOStringLocal(dateString: string): {
+    day: string;
+    month: string;
+    year: string;
+    hour: string;
+    minute: string;
+    meridiem: 'am' | 'pm';
+  } {
+    const normalized = GeoDate.toFullISOString(dateString);
+    const date = new Date(normalized);
+    const isDate = GeoDate.isValidDate(date);
+    const day = isDate ? date.getDate().toString() : '';
+    const month = isDate ? (date.getMonth() + 1).toString() : '';
+    const year = isDate ? date.getFullYear().toString() : '';
+    let hour = isDate ? date.getHours().toString() : '';
+    const minute = isDate ? date.getMinutes().toString() : '';
+    let meridiem = isDate && hour !== '' ? (Number(hour) < 12 ? 'am' : 'pm') : 'am';
+
+    if (hour !== '' && Number(hour) > 12) {
+      hour = (Number(hour) - 12).toString();
     }
 
     if (hour !== '' && Number(hour) === 0) {
@@ -425,11 +510,17 @@ export class GeoDate {
   };
 }
 
-// Extract the IPFS CID from a gateway URL, ipfs:// URI, or raw hash
+// IPFS read gateways in fallback priority order, so content pinned on any
+// provider still resolves.
+const IPFS_GATEWAYS = [FILEBASE_GATEWAY_READ_PATH, PINATA_GATEWAY_READ_PATH, LIGHTHOUSE_GATEWAY_READ_PATH];
+
+/** Number of gateways in the fallback chain. */
+export const IPFS_GATEWAY_COUNT = IPFS_GATEWAYS.length;
+
+// Extract the IPFS CID from a known gateway URL, ipfs:// URI, or raw hash.
 export const getImageHash = (value: string) => {
-  if (value.startsWith(PINATA_GATEWAY_READ_PATH)) {
-    const [, hash] = value.split(PINATA_GATEWAY_READ_PATH);
-    return hash;
+  for (const gateway of IPFS_GATEWAYS) {
+    if (value.startsWith(gateway)) return value.slice(gateway.length);
   }
   const ipfsPathIndex = value.indexOf('/ipfs/');
   if (ipfsPathIndex !== -1) {
@@ -442,38 +533,34 @@ export const getImageHash = (value: string) => {
   return value;
 };
 
-// Resolve an image triple value to a Pinata gateway URL
-export const getImagePath = (value: string) => {
-  if (value.startsWith('ipfs://')) {
-    return `${PINATA_GATEWAY_READ_PATH}${getImageHash(value)}`;
-  } else if (value.startsWith('http')) {
-    return value;
-  } else {
-    return value;
-  }
+// Resolve an ipfs:// value to a gateway URL at the given fallback level
+// (0 = Filebase, 1 = Pinata, 2 = Lighthouse); levels past the end clamp to the
+// last gateway. Non-ipfs values (http, paths) pass through unchanged.
+export const getImagePathAtLevel = (value: string, level: number) => {
+  if (!value.startsWith('ipfs://')) return value;
+  const index = Math.min(Math.max(level, 0), IPFS_GATEWAYS.length - 1);
+  return `${IPFS_GATEWAYS[index]}${getImageHash(value)}`;
 };
 
-// Lighthouse fallback for legacy CIDs not yet migrated to Pinata
-export const getImagePathFallback = (value: string) => {
-  if (value.startsWith('ipfs://')) {
-    return `${LIGHTHOUSE_GATEWAY_READ_PATH}${getImageHash(value)}`;
+// Primary gateway (Filebase). For single-shot callers with no runtime fallback.
+export const getImagePath = (value: string) => getImagePathAtLevel(value, 0);
+
+// Image values are free-text entity properties, so an author can type anything.
+// next/image throws on a src that is neither root-relative nor an absolute URL,
+// which kills the whole page that rendered it.
+export const isRenderableImageSrc = (src: string) => {
+  if (src.startsWith('/')) return true;
+  try {
+    new URL(src);
+    return true;
+  } catch {
+    return false;
   }
-  return value;
 };
 
 export const getVideoHash = getImageHash;
-
-export const getVideoPath = (value: string) => {
-  if (value.startsWith('ipfs://')) {
-    return `${PINATA_GATEWAY_READ_PATH}${getVideoHash(value)}`;
-  } else if (value.startsWith('http')) {
-    return value;
-  } else {
-    return value;
-  }
-};
-
-export const getVideoPathFallback = getImagePathFallback;
+export const getVideoPathAtLevel = getImagePathAtLevel;
+export const getVideoPath = (value: string) => getImagePathAtLevel(value, 0);
 
 export function getRandomArrayItem(array: string[]) {
   const randomIndex = Math.floor(Math.random() * array.length);
@@ -526,23 +613,34 @@ export function toTitleCase(value: string) {
 }
 
 export function getProposalName(proposal: { name: string; type: Proposal['type']; space: Proposal['space'] }) {
+  // A space's name is nullable — it lives on the space's home entity, which is empty
+  // during the indexer-lag window after creation. Interpolating it blindly rendered
+  // titles like "Update governance settings for null", so drop the qualifier instead
+  // of naming a space we can't name.
+  const inSpace = proposal.space.name ? ` ${proposal.space.name}` : '';
+
   switch (proposal.type) {
     case 'ADD_EDIT':
       return proposal.name;
     case 'ADD_EDITOR':
-      return `Add editor to ${proposal.space.name}`;
+      return `Add editor to${inSpace || ' space'}`;
     case 'REMOVE_EDITOR':
-      return `Remove editor from ${proposal.space.name}`;
+      return `Remove editor from${inSpace || ' space'}`;
     case 'ADD_MEMBER':
-      return `Add member to ${proposal.space.name}`;
+      return `Add member to${inSpace || ' space'}`;
     case 'REMOVE_MEMBER':
-      return `Remove member from ${proposal.space.name}`;
+      return `Remove member from${inSpace || ' space'}`;
     case 'ADD_SUBSPACE':
-      return `Add space to ${proposal.space.name}`;
+      return `Add space to${inSpace || ' space'}`;
     case 'REMOVE_SUBSPACE':
-      return `Remove space from ${proposal.space.name}`;
+      return `Remove space from${inSpace || ' space'}`;
+    // UNSET_TOPIC is normalized to SET_TOPIC by the proposal DTO, so it never lands here.
     case 'SET_TOPIC':
-      return `Set topic for ${proposal.space.name}`;
+      return `Set topic for${inSpace || ' space'}`;
+    case 'UPDATE_VOTING_SETTINGS':
+      return proposal.space.name
+        ? `Update governance settings for ${proposal.space.name}`
+        : 'Update governance settings';
   }
 }
 
@@ -564,13 +662,16 @@ export function getMembershipProposalDisplayName(type: Proposal['type'], targetP
 
 export function deriveProposalStatus(executedAt: string | null, endTime: number): ProposalStatus {
   if (executedAt) return 'ACCEPTED';
+  // v2 contracts: the voting window opens on the first vote, so endTime is 0
+  // until then. Treat a zero endTime as "not started" rather than "already
+  // ended" to avoid falsely reporting fresh un-voted proposals as REJECTED.
   const now = Math.floor(Date.now() / 1000);
-  if (endTime < now) return 'REJECTED';
+  if (endTime > 0 && endTime < now) return 'REJECTED';
   return 'PROPOSED';
 }
 
 export function getIsProposalEnded(status: Proposal['status'], endTime: number) {
-  return status === 'REJECTED' || status === 'ACCEPTED' || endTime < GeoDate.toGeoTime(Date.now());
+  return status === 'REJECTED' || status === 'ACCEPTED' || (endTime > 0 && endTime < GeoDate.toGeoTime(Date.now()));
 }
 
 export function getIsProposalExecutable(proposal: Proposal, yesVotesPercentage: number) {
@@ -595,12 +696,13 @@ export function getNoVotePercentage(votes: SubstreamVote[], votesCount: number) 
   return Math.floor((votes.filter(v => v.vote === 'REJECT').length / votesCount) * 100);
 }
 
-export function getUserVote(votes: SubstreamVote[], address: string) {
-  return votes.find(v => v.accountId.toLowerCase() === address.toLowerCase());
-}
-
 export function getProposalTimeRemaining(endTime: number) {
-  const timeRemaining = endTime - GeoDate.toGeoTime(Date.now());
+  // Clamp at zero. A past endTime produced component-wise negatives that rendered as
+  // "-19h -44m remaining" on Home — reachable whenever the proposal's block-derived
+  // endTime trails wall-clock, which testnet's slow blocks make routine. A finished
+  // proposal has no time remaining; callers distinguish ended from active via
+  // getIsProposalEnded, not by the sign of these numbers.
+  const timeRemaining = Math.max(0, endTime - GeoDate.toGeoTime(Date.now()));
   const days = Math.floor(timeRemaining / 86400);
   const hours = Math.floor((timeRemaining % 86400) / 3600);
   const minutes = Math.floor((timeRemaining % 3600) / 60);
@@ -610,29 +712,58 @@ export function getProposalTimeRemaining(endTime: number) {
 }
 
 /**
- * Calendar date for a resolved proposal (uses voting end time as resolution time; UTC).
- * Same calendar year as `now`: "Feb 26". Other years: "Dec 31, 2025".
+ * Resolves the current runtime's IANA timezone (e.g. "America/New_York"),
+ * falling back to "UTC" if it can't be determined.
+ *
+ * NOTE: "viewer" here means the JS runtime this executes in. In the browser
+ * that's the actual user's timezone, but during SSR / server actions / route
+ * handlers it resolves to the *server's* timezone (typically UTC), NOT the
+ * viewer's. Only call this in client components — or code guaranteed to run in
+ * the browser — when you need the real viewer timezone. On the server, pass an
+ * explicit timeZone to the formatting functions instead of relying on this
+ * default.
  */
-export function formatGovernanceOutcomeDate(geoTimeSeconds: number, nowMs: number = Date.now()): string {
-  const date = GeoDate.fromGeoTime(geoTimeSeconds);
-  const now = new Date(nowMs);
-  if (date.getUTCFullYear() === now.getUTCFullYear()) {
-    return formatInTimeZone(date, 'UTC', 'MMM d');
+export function getViewerTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
   }
-  return formatInTimeZone(date, 'UTC', 'MMM d, yyyy');
-}
-
-/** Time of day (UTC) for governance resolution, e.g. "2:30pm". */
-export function formatGovernanceOutcomeTime(geoTimeSeconds: number): string {
-  return formatInTimeZone(GeoDate.fromGeoTime(geoTimeSeconds), 'UTC', 'h:mmaaa');
 }
 
 /**
- * Single string date + time (UTC). Prefer separate `formatGovernanceOutcomeDate` + `formatGovernanceOutcomeTime`
- * in flex layouts so middot spacing matches between name, date, and time.
+ * Calendar date for when a proposal was submitted (voting start), in the viewer's timezone.
+ * Same calendar year as `now`: "Feb 26". Other years: "Dec 31, 2025".
  */
-export function formatGovernanceOutcomeDateTime(geoTimeSeconds: number, nowMs: number = Date.now()): string {
-  return `${formatGovernanceOutcomeDate(geoTimeSeconds, nowMs)} · ${formatGovernanceOutcomeTime(geoTimeSeconds)}`;
+export function formatGovernanceOutcomeDate(
+  geoTimeSeconds: number,
+  nowMs: number = Date.now(),
+  timeZone: string = getViewerTimeZone()
+): string {
+  const date = GeoDate.fromGeoTime(geoTimeSeconds);
+  const nowYear = formatInTimeZone(new Date(nowMs), timeZone, 'yyyy');
+  const dateYear = formatInTimeZone(date, timeZone, 'yyyy');
+  if (dateYear === nowYear) {
+    return formatInTimeZone(date, timeZone, 'MMM d');
+  }
+  return formatInTimeZone(date, timeZone, 'MMM d, yyyy');
+}
+
+/** Time of day for when a proposal was submitted, in the viewer's timezone, e.g. "2:30pm". */
+export function formatGovernanceOutcomeTime(geoTimeSeconds: number, timeZone: string = getViewerTimeZone()): string {
+  return formatInTimeZone(GeoDate.fromGeoTime(geoTimeSeconds), timeZone, 'h:mmaaa');
+}
+
+/**
+ * Single string date + time in the viewer's timezone. Prefer separate
+ * `formatGovernanceOutcomeDate` + `formatGovernanceOutcomeTime` in flex layouts.
+ */
+export function formatGovernanceOutcomeDateTime(
+  geoTimeSeconds: number,
+  nowMs: number = Date.now(),
+  timeZone: string = getViewerTimeZone()
+): string {
+  return `${formatGovernanceOutcomeDate(geoTimeSeconds, nowMs, timeZone)} · ${formatGovernanceOutcomeTime(geoTimeSeconds, timeZone)}`;
 }
 export const uuidValidateV4 = (uuid: string) => {
   if (!uuid) return false;

@@ -2,6 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { redirect } from 'next/navigation';
 
+import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import type { Tabs } from '~/core/state/editor/editor-provider';
 import type { Entity, Relation, TabEntity } from '~/core/types';
@@ -38,11 +39,7 @@ export type EntityPageData = {
  * in sync; consumers can derive any view-specific flags from the returned
  * data at the call site.
  */
-export async function fetchEntityPageData(
-  spaceId: string,
-  entityId: string,
-  options?: { canClaimTopic?: boolean }
-): Promise<EntityPageData> {
+export async function fetchEntityPageData(spaceId: string, entityId: string): Promise<EntityPageData> {
   const entityPage = await cachedFetchEntityPage(entityId, spaceId);
 
   const entity = entityPage?.entity;
@@ -53,13 +50,8 @@ export async function fetchEntityPageData(
   /**
    * Only redirect to the space front page if this entity is the page
    * entity for the current space, not a SPACE_TYPE from another space.
-   *
-   * Skip the redirect when the entity is a claimable topic so the user lands
-   * on the topic entity page where the "Claim topic" button lives. Without
-   * this, claimed topics (which have SPACE_TYPE and a matching space) would
-   * bounce the user away before the button can render.
    */
-  if (!options?.canClaimTopic && entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE) && deterministicSpaceId) {
+  if (entity?.types.map(t => t.id).includes(SystemIds.SPACE_TYPE) && deterministicSpaceId) {
     const space = await cachedFetchSpace(deterministicSpaceId);
     if (space?.entity?.id === entityId && !Spaces.hasExternalTopic(space)) {
       redirect(NavUtils.toSpace(deterministicSpaceId));
@@ -108,7 +100,14 @@ export async function fetchEntityPageData(
   const blocks = allBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allBlockIds) : [];
 
   const allBlocks = [...blocks, ...tabBlocks.flat()];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId);
+  const allBlockRelations = [
+    ...(blockRelations ?? []),
+    ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
+  ];
+  const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
+    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
+  ]);
 
   return {
     id: entityId,
@@ -125,7 +124,9 @@ export async function fetchEntityPageData(
     relationEntityRelations,
 
     blockRelations: blockRelations ?? [],
-    blocks,
+    // Shown-column properties ride along with the blocks so the editor hydrates them in the same
+    // pass — a gallery needs the dimensions on them to size its cards on the first paint.
+    blocks: [...blocks, ...shownPropertyEntities],
     initialCollectionItems,
   };
 }

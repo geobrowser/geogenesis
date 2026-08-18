@@ -8,14 +8,7 @@ import { cva } from 'class-variance-authority';
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 
 export type ButtonVariant =
-  | 'primary'
-  | 'secondary'
-  | 'tertiary'
-  | 'ghost'
-  | 'transparent'
-  | 'done'
-  | 'success'
-  | 'error';
+  'primary' | 'secondary' | 'tertiary' | 'ghost' | 'transparent' | 'done' | 'success' | 'error';
 
 type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   variant?: ButtonVariant;

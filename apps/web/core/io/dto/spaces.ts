@@ -18,6 +18,11 @@ export type Space = {
   members: string[];
   totalMembers: number;
   totalEditors: number;
+
+  /** Fast-path editor votes required, from the DAO's on-chain voting settings.
+   *  Null for personal spaces or when the indexer hasn't attached a
+   *  SpaceVotingSetting row yet. */
+  flatSupportThreshold: number | null;
 };
 
 export function SpaceDto(space: RemoteSpace): Space {
@@ -34,6 +39,7 @@ export function SpaceDto(space: RemoteSpace): Space {
     members: space.membersList.map(member => member.memberSpaceId),
     totalMembers: space.members.totalCount,
     totalEditors: space.editors.totalCount,
+    flatSupportThreshold: space.spaceVotingSetting ? Number(space.spaceVotingSetting.flatSupportThreshold) : null,
   };
 }
 

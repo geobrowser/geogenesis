@@ -6,24 +6,29 @@ import type { Entity } from '~/core/types';
 import {
   buildMyRankingEntityFilter,
   getMyRankingOrderedEntityIds,
-  pickMostRecentlyUpdatedRankingEntity,
+  pickMostRecentlyCreatedRankingEntity,
 } from './my-ranking-entity';
 
 function rankEntity({
   id,
+  createdAt,
   updatedAt,
   relations = [],
 }: {
   id: string;
+  createdAt?: string | number;
   updatedAt?: string | number;
   relations?: Entity['relations'];
 }): Entity {
   return {
     id,
     name: null,
+    description: null,
+    spaces: [],
     types: [],
     values: [],
     relations,
+    createdAt,
     updatedAt,
   } as Entity;
 }
@@ -41,9 +46,27 @@ describe('buildMyRankingEntityFilter', () => {
   });
 });
 
-describe('pickMostRecentlyUpdatedRankingEntity', () => {
-  it('returns the entity with the latest updatedAt', () => {
-    const picked = pickMostRecentlyUpdatedRankingEntity([
+describe('pickMostRecentlyCreatedRankingEntity', () => {
+  it('returns the entity with the latest createdAt', () => {
+    const picked = pickMostRecentlyCreatedRankingEntity([
+      rankEntity({ id: 'old', createdAt: '2026-01-01T00:00:00.000Z' }),
+      rankEntity({ id: 'new', createdAt: '2026-06-01T00:00:00.000Z' }),
+    ]);
+
+    expect(picked?.id).toBe('new');
+  });
+
+  it('prefers the newest ballot even when an older one was edited more recently', () => {
+    const picked = pickMostRecentlyCreatedRankingEntity([
+      rankEntity({ id: 'old', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-07-01T00:00:00.000Z' }),
+      rankEntity({ id: 'new', createdAt: '2026-06-01T00:00:00.000Z', updatedAt: '2026-06-01T00:00:00.000Z' }),
+    ]);
+
+    expect(picked?.id).toBe('new');
+  });
+
+  it('falls back to updatedAt for entities without a createdAt', () => {
+    const picked = pickMostRecentlyCreatedRankingEntity([
       rankEntity({ id: 'old', updatedAt: '2026-01-01T00:00:00.000Z' }),
       rankEntity({ id: 'new', updatedAt: '2026-06-01T00:00:00.000Z' }),
     ]);

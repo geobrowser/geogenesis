@@ -108,7 +108,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
         className={cx(
           'relative z-0 overflow-x-auto overflow-y-clip select-none',
           isScrollable && 'cursor-grab active:cursor-grabbing',
-          '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          '[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
           className
         )}
         onPointerDown={handlePointerDown}
@@ -238,7 +238,7 @@ type BadgeProps = {
   children: React.ReactNode;
 };
 
-const Badge = ({ children }: BadgeProps) => {
+export const Badge = ({ children }: BadgeProps) => {
   return (
     <div className="shrink-0">
       <div className="rounded bg-black px-1.25 py-0.5 text-xs leading-none text-white">{children}</div>

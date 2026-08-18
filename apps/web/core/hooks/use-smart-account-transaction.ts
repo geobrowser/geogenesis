@@ -1,49 +1,81 @@
+import { useCallback } from 'react';
+
 import { Duration, Effect } from 'effect';
 
 import { TransactionWriteFailedError } from '../errors';
 import { useSmartAccount } from './use-smart-account';
 
-interface Args {
-  address: string | null;
+type SendTxArgs = {
+  to: `0x${string}`;
+  data: `0x${string}`;
+  value?: bigint;
+};
+
+/**
+ * Returns an Effect-returning function that signs and submits a transaction via the
+ * smart account. Each caller provides the destination `to` and `data` per call, which
+ * lets us forward the `to` the SDK already returns rather than pinning a contract
+ * address at hook setup.
+ *
+ * Sends are serialized with all other smart-account writes (see useSmartAccount), so
+ * this call may queue behind a pending publish before it submits. Timeout layering:
+ * the queue abandons any send that waits > MAX_QUEUE_WAIT_MS (120s) before starting
+ * (QueuedSendTimeoutError — guaranteed never submitted, safe to retry), and the
+ * post-submission receipt wait is bounded at 90s inside useSmartAccount. The outer
+ * timeout below is only a backstop for a hung submission, so it must exceed both
+ * bounds combined — if it raced them, it would report failure for a still-queued
+ * send that later executes, and a user retry double-submits.
+ */
+function sanitizeErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message.replace(/0x[a-fA-F0-9]{16,}/g, '[redacted-hex]').slice(0, 300);
+  }
+
+  return 'Transaction write failed';
 }
 
-export function useSmartAccountTransaction({ address }: Args) {
+export function useSmartAccountTransaction() {
   const { smartAccount } = useSmartAccount();
 
-  const sanitizeErrorMessage = (error: unknown) => {
-    if (error instanceof Error) {
-      return error.message.replace(/0x[a-fA-F0-9]{16,}/g, '[redacted-hex]').slice(0, 300);
-    }
+  // Memoized so callers can put it in a `useCallback`/`useEffect` dependency list
+  // without re-running on every render — `useRankingComposeAccess` fires its
+  // membership check from an effect keyed on the callback it builds from this.
+  const sendTransaction = useCallback(
+    ({ to, data, value = 0n }: SendTxArgs) =>
+      Effect.gen(function* () {
+        if (!smartAccount) {
+          return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));
+        }
 
-    return 'Transaction write failed';
-  };
+        if (!to) {
+          return yield* Effect.fail(new TransactionWriteFailedError('Missing transaction target'));
+        }
 
-  const sendTransaction = (calldata: `0x${string}`) => {
-    return Effect.gen(function* () {
-      if (!smartAccount || !address) {
-        return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account or transaction target'));
-      }
+        const hash = yield* Effect.tryPromise({
+          try: async () => {
+            return await smartAccount.sendTransaction({
+              to,
+              value,
+              data,
+            });
+          },
+          catch: error => new TransactionWriteFailedError(sanitizeErrorMessage(error), { cause: error }),
+        }).pipe(
+          Effect.timeoutFail({
+            // > MAX_QUEUE_WAIT_MS (120s) + the 90s receipt bound.
+            duration: Duration.seconds(240),
+            onTimeout: () =>
+              new TransactionWriteFailedError(
+                'Transaction timed out. It may have been submitted and could still land on-chain — check before retrying.'
+              ),
+          })
+        );
 
-      const hash = yield* Effect.tryPromise({
-        try: async () => {
-          return await smartAccount.sendTransaction({
-            to: address as `0x${string}`,
-            value: 0n,
-            data: calldata,
-          });
-        },
-        catch: error => new TransactionWriteFailedError(sanitizeErrorMessage(error), { cause: error }),
-      }).pipe(
-        Effect.timeoutFail({
-          duration: Duration.seconds(45),
-          onTimeout: () => new TransactionWriteFailedError('Transaction timed out'),
-        })
-      );
-
-      console.log('Transaction successful', hash);
-      return hash;
-    }).pipe(Effect.withSpan('web.write.sendTransaction'));
-  };
+        console.log('Transaction successful', hash);
+        return hash;
+      }).pipe(Effect.withSpan('web.write.sendTransaction')),
+    [smartAccount]
+  );
 
   return sendTransaction;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { PINATA_GATEWAY_READ_PATH } from '~/core/constants';
+import { FILEBASE_GATEWAY_READ_PATH } from '~/core/constants';
 
 import type { RankingOgEntryData } from './ranking-og-data';
 import { resolveRankingOgEntryImageSrc } from './ranking-og-image';
@@ -28,7 +28,7 @@ describe('resolveRankingOgEntryImageSrc', () => {
 
   it('keeps renderable IPFS gateway images', () => {
     expect(resolveRankingOgEntryImageSrc(entry({ image: 'ipfs://bafy-image-cid' }))).toBe(
-      `${PINATA_GATEWAY_READ_PATH}bafy-image-cid`
+      `${FILEBASE_GATEWAY_READ_PATH}bafy-image-cid`
     );
   });
 });

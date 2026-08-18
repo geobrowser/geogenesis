@@ -5,13 +5,7 @@ import { Effect } from 'effect';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProfile } from '~/core/io/subgraph';
 import { Address } from '~/core/io/substream-schema';
-import {
-  NavUtils,
-  formatGovernanceOutcomeDate,
-  formatGovernanceOutcomeTime,
-  getIsProposalEnded,
-  getProposalTimeRemaining,
-} from '~/core/utils/utils';
+import { NavUtils, getIsProposalEnded, getProposalName, getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
@@ -19,6 +13,7 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { GovernanceRejectedProposalMenu } from '~/partials/governance/governance-rejected-proposal-menu';
 
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
@@ -157,9 +152,11 @@ async function PendingMembershipProposal({
     <AcceptOrRejectMember
       spaceId={proposal.space.id}
       proposalId={proposal.id}
+      proposalVersion={proposal.version}
       proposalName={proposalName}
       proposalType={proposal.type}
       governanceHomeReturnSearch={governanceHomeReturnSearch}
+      startTime={proposal.startTime}
       endTime={proposal.endTime}
       isProposalEnded={isProposalEnded}
       canExecute={proposal.canExecute}
@@ -213,19 +210,17 @@ async function PendingContentProposal({
   const [space, proposalName] = await Promise.all([
     cachedFetchSpace(proposal.space.id),
     (async () => {
-      switch (proposal.type) {
-        case 'ADD_EDIT':
-          return proposal.name;
-        case 'ADD_EDITOR':
-        case 'REMOVE_EDITOR':
-          return await getMembershipProposalName(proposal.type, proposal);
-        case 'ADD_SUBSPACE':
-        case 'REMOVE_SUBSPACE':
-        case 'SET_TOPIC':
-          return proposal.name;
-        default:
-          throw new Error('Unsupported proposal type');
+      // This component is the `default` branch of the caller's switch, so it receives
+      // every type except ADD_MEMBER/REMOVE_MEMBER — including any added later. It is
+      // also a server component, so throwing here takes down the whole Review-proposals
+      // tab rather than degrading one card: UPDATE_VOTING_SETTINGS was missing from the
+      // old switch and one such proposal crashed Home into "Reconnecting". Never throw;
+      // defer to the shared name formatter, which covers every known type.
+      if (proposal.type === 'ADD_EDITOR' || proposal.type === 'REMOVE_EDITOR') {
+        return await getMembershipProposalName(proposal.type, proposal);
       }
+
+      return getProposalName({ ...proposal, name: proposal.name ?? '' }) ?? proposal.name ?? 'Proposal';
     })(),
   ]);
 
@@ -245,14 +240,17 @@ async function PendingContentProposal({
   const footerLeft =
     proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <span className="shrink-0">{formatGovernanceOutcomeDate(proposal.endTime)}</span>
+        <GovernanceOutcomeDate geoTimeSeconds={proposal.startTime} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <time className="shrink-0 tabular-nums" dateTime={new Date(proposal.endTime * 1000).toISOString()}>
-          {formatGovernanceOutcomeTime(proposal.endTime)}
-        </time>
+        <GovernanceOutcomeTime geoTimeSeconds={proposal.startTime} className="shrink-0 tabular-nums" />
       </div>
+    ) : proposal.endTime <= 0 ? (
+      // v2 contracts don't stamp startTime/endTime until the first vote fires,
+      // so a countdown here would render negative values for freshly proposed
+      // items with zero votes.
+      <p className="text-metadataMedium">Voting opens on first vote</p>
     ) : (
       <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
     );
@@ -329,6 +327,7 @@ async function PendingContentProposal({
         <AcceptOrRejectEditor
           spaceId={proposal.space.id}
           proposalId={proposal.id}
+          proposalVersion={proposal.version}
           isProposalEnded={isProposalEnded}
           canExecute={proposal.canExecute}
           status={proposal.status}
