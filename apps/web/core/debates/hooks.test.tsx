@@ -114,9 +114,13 @@ describe('useDebateRematchClaimsForIds', () => {
 
     await waitFor(() => expect(result.current.data.claims).toHaveLength(150));
     const batchSizes = mocks.listDebateRematchClaims.mock.calls.map(([, claimIds]) => claimIds.length);
-    expect(batchSizes).toEqual([100, 50]);
+    expect(batchSizes.length).toBeGreaterThan(1);
+    expect(batchSizes.every(size => size <= 100)).toBe(true);
+    expect(batchSizes.reduce((sum, size) => sum + size, 0)).toBe(150);
     // Exclusions from every batch count, deduped.
-    expect(result.current.data.excluded_claim_ids.sort()).toEqual(['excluded-100', 'excluded-50']);
+    expect(result.current.data.excluded_claim_ids.sort()).toEqual(
+      [...new Set(batchSizes.map(size => `excluded-${size}`))].sort()
+    );
   });
 
   it('asks once for a list that fits', async () => {
@@ -160,8 +164,45 @@ describe('useDebateClaimsBySpaces', () => {
     );
 
     await waitFor(() => expect(result.current.claims).toHaveLength(101));
-    expect(mocks.listDebateClaims.mock.calls.map(([, claimIds]) => claimIds.length)).toEqual([50, 50, 1]);
+    const requestedIds = mocks.listDebateClaims.mock.calls.map(([, claimIds]) => claimIds as string[]);
+    expect(requestedIds.every(claimIds => claimIds.length <= 50)).toBe(true);
+    expect(new Set(requestedIds.flat())).toEqual(new Set(ids));
+    expect(requestedIds.flat()).toHaveLength(101);
     expect(new Set(result.current.claims.map(claim => claim.claim_entity_id))).toEqual(new Set(ids));
+  });
+
+  it('keeps existing batches cached when a claim is inserted ahead of them', async () => {
+    const ids = Array.from({ length: 101 }, (_, index) => `claim-${String(index).padStart(3, '0')}`);
+    mocks.listDebateClaims.mockImplementation((_spaceId: string, claimIds: string[]) =>
+      Promise.resolve({ claims: claimIds.map(claim_entity_id => ({ claim_entity_id })) })
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result, rerender } = renderHook(
+      ({ claimIds }: { claimIds: string[] }) => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds }]),
+      {
+        initialProps: { claimIds: ids },
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      }
+    );
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(101));
+    const firstPassBatches = mocks.listDebateClaims.mock.calls.map(([, claimIds]) => (claimIds as string[]).join(','));
+    mocks.listDebateClaims.mockClear();
+
+    // Sorts ahead of every existing id, which under fixed-size slicing would shift every boundary
+    // and re-request all 102 ids.
+    rerender({ claimIds: ['claim-000-a', ...ids] });
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(102));
+    const refetchedIds = mocks.listDebateClaims.mock.calls.flatMap(([, claimIds]) => claimIds as string[]);
+    expect(refetchedIds.length).toBeLessThan(101);
+    const untouchedBatches = firstPassBatches.filter(batch =>
+      mocks.listDebateClaims.mock.calls.every(([, claimIds]) => (claimIds as string[]).join(',') !== batch)
+    );
+    expect(untouchedBatches.length).toBeGreaterThan(0);
   });
 });
 

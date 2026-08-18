@@ -2,8 +2,13 @@ import { QueryClient, QueryObserver } from '@tanstack/react-query';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoChatRequestError } from './api';
+import { GeoChatRequestError, resetGeoChatSession } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
+
+vi.mock('./api', async importOriginal => {
+  const actual = await importOriginal<typeof import('./api')>();
+  return { ...actual, resetGeoChatSession: vi.fn() };
+});
 
 type MessageHandler = (event: { data: unknown }) => void;
 
@@ -317,6 +322,8 @@ describe('DebateGatewayClient', () => {
     queryClient.setQueryData(['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:veracity']], new Map());
     queryClient.setQueryData(['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:veracity']], new Map());
     queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-9']], {});
+    queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-2']], {});
+    queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', []], {});
     const refetchQueries = vi.spyOn(queryClient, 'refetchQueries').mockResolvedValue();
 
     client.start(
@@ -366,13 +373,30 @@ describe('DebateGatewayClient', () => {
           .find({ queryKey: ['claim-response-summary-data', 'profile-1', 'space-1', ['claim-2:veracity']] })!
       )
     ).toBe(true);
-    // The rematch picker draws both participants' sides, so any claim change has to reach it —
-    // even one it isn't holding an id for, since the opponent's response is what it's waiting on.
+    // The rematch picker draws both participants' sides, so a claim change has to reach the batch
+    // holding that claim — the opponent's response is what it's waiting on. Batches that don't hold
+    // it learn nothing from the event and must stay put: refreshing them all cancelled every
+    // in-flight batch on each event and none ever landed.
     expect(
       predicate!(
         queryClient
           .getQueryCache()
           .find({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-9']] })!
+      )
+    ).toBe(false);
+    expect(
+      predicate!(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-2']] })!
+      )
+    ).toBe(true);
+    // The id-less query is the session's own list; any response can add a row to it.
+    expect(
+      predicate!(
+        queryClient
+          .getQueryCache()
+          .find({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', []] })!
       )
     ).toBe(true);
     expect(
@@ -676,6 +700,49 @@ describe('DebateGatewayClient', () => {
     expect(sockets).toHaveLength(1);
   });
 
+  it('retries the invalidation instead of the socket when a refetch is rate limited', async () => {
+    invalidateQueries.mockRejectedValueOnce(new GeoChatRequestError('slow down', 'rate_limited', 429));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    // A 429 says nothing about the socket, and the affected queries use `retry: false` — nothing
+    // else would refetch them if this flush gave up.
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    const callsBeforeRetry = invalidateQueries.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(250);
+    expect(invalidateQueries.mock.calls.length).toBeGreaterThan(callsBeforeRetry);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    expect(sockets).toHaveLength(1);
+    expect(resetGeoChatSession).not.toHaveBeenCalled();
+  });
+
+  it('resets the cached session before reconnecting when a refetch is rejected as unauthorized', async () => {
+    // `restoreAllMocks` does not clear a factory-created `vi.fn`, so start from a known count.
+    vi.mocked(resetGeoChatSession).mockClear();
+    invalidateQueries.mockRejectedValueOnce(new GeoChatRequestError('token expired', 'unauthorized', 401));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    // Reconnecting alone would re-present the rejected credentials: `getGeoChatSession` returns the
+    // stored session until it is nearly expired.
+    expect(resetGeoChatSession).toHaveBeenCalled();
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets).toHaveLength(2);
+  });
+
   it('cancels an in-flight snapshot before invalidating it', async () => {
     const cancelQueries = vi.spyOn(queryClient, 'cancelQueries').mockResolvedValue();
     client.start(
@@ -689,6 +756,47 @@ describe('DebateGatewayClient', () => {
 
     expect(cancelQueries).toHaveBeenCalledWith({ predicate: expect.any(Function), refetchType: 'active' });
     expect(cancelQueries.mock.invocationCallOrder[0]).toBeLessThan(invalidateQueries.mock.invocationCallOrder[0]!);
+  });
+
+  it('leaves a first-load query running while cancelling one that already holds data', async () => {
+    queryClient.setQueryData(['debates', 'claims', 'space-1', ['claim-2']], { claims: [] });
+    const firstLoad = new QueryObserver(queryClient, {
+      queryKey: ['debates', 'claims', 'space-1', ['claim-3']],
+      queryFn: () => new Promise(() => undefined),
+      retry: false,
+    });
+    const unsubscribe = firstLoad.subscribe(() => undefined);
+    await vi.runAllTicks();
+    const cancelQueries = vi.spyOn(queryClient, 'cancelQueries');
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-claims',
+      event_type: 'debate.claims_changed',
+      payload: { space_id: 'space-1', claim_entity_ids: ['claim-2', 'claim-3'] },
+    });
+    await flushInvalidations();
+
+    // Cancelling protects fresh data from a stale write. The first-load query has no data to
+    // protect, and aborting it only restarts a request that was about to land.
+    const cancelFilters = cancelQueries.mock.calls.map(([filters]) => filters).find(filters => filters?.predicate);
+    expect(cancelFilters?.predicate).toBeTypeOf('function');
+    const cache = queryClient.getQueryCache();
+    expect(cancelFilters!.predicate!(cache.find({ queryKey: ['debates', 'claims', 'space-1', ['claim-2']] })!)).toBe(
+      true
+    );
+    expect(cancelFilters!.predicate!(cache.find({ queryKey: ['debates', 'claims', 'space-1', ['claim-3']] })!)).toBe(
+      false
+    );
+    expect(cache.find({ queryKey: ['debates', 'claims', 'space-1', ['claim-3']] })!.state.fetchStatus).toBe('fetching');
+    unsubscribe();
   });
 
   it('rotates the socket thirty seconds before token expiry', async () => {

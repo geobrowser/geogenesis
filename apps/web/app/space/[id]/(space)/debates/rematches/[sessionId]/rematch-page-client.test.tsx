@@ -6,7 +6,7 @@ import { type ReactElement, StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateRematchClaim, DebateRematchSession } from '~/core/debates/api';
 
 import { DebateRematchPageClient } from './rematch-page-client';
@@ -43,7 +43,7 @@ const mocks = vi.hoisted(() => ({
     Promise.resolve({ claim: null, match: null })
   ),
   openSidePanel: vi.fn(),
-  entityQueries: [] as Array<{ where?: unknown; after?: string }>,
+  entityQueries: [] as Array<{ search: string; after: string | undefined }>,
   entityQueryPlaceholder: false,
   entityQueryHasNextPage: false,
   entityQueryLoading: false,
@@ -61,6 +61,8 @@ const mocks = vi.hoisted(() => ({
   scrollSentinelIntoView: null as null | (() => void),
   claimReadinessLoading: false,
   claimReadinessError: false,
+  /** Every group list the per-space readiness lookup was asked for, in render order. */
+  perSpaceReadinessGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
   claimReadiness: [] as Array<{
     claim_entity_id: string;
     viewer_debate_ready: boolean;
@@ -106,11 +108,14 @@ vi.mock('~/core/debates/hooks', () => ({
     };
   },
   useDebate: () => ({ data: { claim: { claim_entity_id: CLAIM_SOURCE } } }),
-  useDebateClaimsBySpaces: () => ({
-    claims: mocks.claimReadiness,
-    isLoading: mocks.claimReadinessLoading,
-    isError: mocks.claimReadinessError,
-  }),
+  useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
+    mocks.perSpaceReadinessGroups.push(groups);
+    return {
+      claims: mocks.claimReadiness,
+      isLoading: mocks.claimReadinessLoading,
+      isError: mocks.claimReadinessError,
+    };
+  },
   useCreateDebateRematchRequest: () => mutation(),
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
@@ -150,8 +155,10 @@ function render(ui: ReactElement) {
   };
 }
 
-vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: (options: { where?: unknown; after?: string }) => {
+// The picker's browsed page comes from its own narrow query now, not the entity store. Its
+// `{ search, after }` arguments are what the tests below inspect.
+vi.mock('~/core/debates/claim-picker-page', () => ({
+  useClaimPickerPage: (options: { search: string; after: string | undefined }) => {
     mocks.entityQueries.push(options);
     return {
       entities: mocks.entities,
@@ -288,6 +295,7 @@ beforeEach(() => {
   } as unknown as typeof ResizeObserver;
   mocks.session = session();
   mocks.claims = [sharedClaim()];
+  mocks.perSpaceReadinessGroups = [];
   document.body.style.overflow = '';
   document.documentElement.style.overflow = '';
 });
@@ -902,6 +910,46 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).not.toBeChecked();
   });
 
+  // geo-chat now carries readiness on the rematch claims themselves — the rows the picker already
+  // asked for. The per-space lookup used to cost one request per space on screen; when the rematch
+  // response has the answer, that fan-out must not run at all.
+  describe('when the rematch response carries readiness', () => {
+    it('draws the toggle from it and skips the per-space lookup', () => {
+      mocks.claims = [{ ...sharedClaim(), viewer_debate_ready: true, readiness_disabled_reason: null }];
+      // Left empty on purpose: if the card read this the switch would be off.
+      mocks.claimReadiness = [];
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeChecked();
+      expect(mocks.perSpaceReadinessGroups.every(groups => groups.length === 0)).toBe(true);
+    });
+
+    it('treats a claim the response omits as settled not-ready', () => {
+      // A published claim the graph knows about but geo-chat has no row for: it can hold no
+      // readiness, so `false` is the truth and the switch belongs on screen, off.
+      mocks.claims = [{ ...sharedClaim(), viewer_debate_ready: false, readiness_disabled_reason: null }];
+      mocks.claimReadiness = [];
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).not.toBeChecked();
+    });
+  });
+
+  // A backend that predates the fields answers `undefined`, and the picker must keep working
+  // exactly as before against it.
+  it('falls back to the per-space lookup when the rematch response has no readiness', () => {
+    mocks.claimReadiness = [
+      { claim_entity_id: CLAIM_SHARED, viewer_debate_ready: true, readiness_disabled_reason: null },
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeChecked();
+    expect(mocks.perSpaceReadinessGroups.some(groups => groups.length > 0)).toBe(true);
+  });
+
   // `keepPreviousData` keeps the previous term's page on screen while the new one fetches. Filing
   // it under the new term would let a prior search's claims survive into this one — and into the
   // unfiltered list once the term is cleared.
@@ -915,7 +963,7 @@ describe('DebateRematchPageClient', () => {
     mocks.entities = [publishedEntity(STALE, 'A stale claim from the previous search')];
     mocks.entityQueryPlaceholder = true;
     fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'claim' } });
-    await waitFor(() => expect(browsedClaimsWhere()).toMatchObject({ name: { contains: 'claim' } }));
+    await waitFor(() => expect(browsedClaimsQueryOptions()?.search).toBe('claim'));
 
     // The real page for this term lands.
     mocks.entities = [publishedEntity()];
@@ -992,7 +1040,7 @@ describe('DebateRematchPageClient', () => {
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'Fast fashion' } });
 
-    await waitFor(() => expect(browsedClaimsWhere()).toMatchObject({ name: { contains: 'Fast fashion' } }));
+    await waitFor(() => expect(browsedClaimsQueryOptions()?.search).toBe('Fast fashion'));
   });
 
   it('renders the card’s Debate toggle against real readiness', () => {
@@ -1178,18 +1226,9 @@ describe('DebateRematchPageClient', () => {
   });
 });
 
-/** The where clause of the query that browses published claims, not the curated lookups beside it. */
+/** The latest arguments the picker handed its browsed-claims page query. */
 function browsedClaimsQueryOptions() {
-  return mocks.entityQueries
-    .filter(options => {
-      const where = options.where as { types?: Array<{ id?: { equals?: string } }> } | undefined;
-      return where?.types?.[0]?.id?.equals === CLAIM_TYPE_ID;
-    })
-    .at(-1);
-}
-
-function browsedClaimsWhere() {
-  return browsedClaimsQueryOptions()?.where;
+  return mocks.entityQueries.at(-1);
 }
 
 /** The picker opens on the opponent's positions; most assertions want the unfiltered list. */

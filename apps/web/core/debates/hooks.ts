@@ -158,17 +158,9 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
 
   const batches = React.useMemo(
     () =>
-      groups.flatMap(group => {
-        const uniqueClaimIds = [...new Set(group.claimIds)];
-        const chunks: Array<{ spaceId: string; claimIds: string[] }> = [];
-        for (let index = 0; index < uniqueClaimIds.length; index += DEBATE_CLAIM_ID_BATCH_SIZE) {
-          chunks.push({
-            spaceId: group.spaceId,
-            claimIds: uniqueClaimIds.slice(index, index + DEBATE_CLAIM_ID_BATCH_SIZE),
-          });
-        }
-        return chunks;
-      }),
+      groups.flatMap(group =>
+        stableClaimIdChunks(group.claimIds).map(claimIds => ({ spaceId: group.spaceId, claimIds }))
+      ),
     [groups]
   );
 
@@ -192,6 +184,59 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
 
 /** Maximum number of ids accepted by geo-chat's per-space debate-claims endpoint. */
 export const DEBATE_CLAIM_ID_BATCH_SIZE = 50;
+
+/**
+ * Smallest chunk a content-defined boundary may close, and how often such a boundary occurs. Chosen
+ * so the average chunk lands just under {@link DEBATE_CLAIM_ID_BATCH_SIZE} — batching stays about as
+ * dense as fixed-size slicing while boundaries remain content-defined.
+ */
+const DEBATE_CLAIM_ID_MIN_CHUNK = 32;
+const DEBATE_CLAIM_ID_BOUNDARY_DIVISOR = 16;
+
+/**
+ * Splits ids into query batches whose boundaries come from the ids themselves rather than from their
+ * position in the list.
+ *
+ * Fixed-size slicing makes every chunk after an insertion point change, and each chunk *is* a query
+ * key — so one claim arriving at the head of the list re-fetches the entire space and flips every
+ * readiness switch on screen back to unresolved. The rematch picker rebuilds this list on every page
+ * and filter change, so that is the ordinary case. Sorting alone would only fix reordering of an
+ * unchanged set; deriving the cut points from the ids makes an insertion rebuild the chunk it lands
+ * in and then resynchronise at the next boundary, leaving the rest of the space cached.
+ */
+function stableClaimIdChunks(claimIds: string[], batchSize = DEBATE_CLAIM_ID_BATCH_SIZE) {
+  const uniqueClaimIds = [...new Set(claimIds)].sort();
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  // Scale the boundary rule with the cap so the average chunk stays just under it.
+  const minChunk = Math.max(1, Math.round((batchSize * DEBATE_CLAIM_ID_MIN_CHUNK) / DEBATE_CLAIM_ID_BATCH_SIZE));
+  const boundaryDivisor = Math.max(
+    1,
+    Math.round((batchSize * DEBATE_CLAIM_ID_BOUNDARY_DIVISOR) / DEBATE_CLAIM_ID_BATCH_SIZE)
+  );
+
+  for (const claimId of uniqueClaimIds) {
+    current.push(claimId);
+    const atContentBoundary = current.length >= minChunk && claimIdHash(claimId) % boundaryDivisor === 0;
+    if (atContentBoundary || current.length >= batchSize) {
+      chunks.push(current);
+      current = [];
+    }
+  }
+  if (current.length > 0) chunks.push(current);
+
+  return chunks;
+}
+
+/** FNV-1a. Only needs to spread ids evenly across boundary buckets, so 32 bits is plenty. */
+function claimIdHash(claimId: string) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < claimId.length; index += 1) {
+    hash ^= claimId.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
 
 export function useJoinDebateQueue(spaceId: string) {
   const queryClient = useQueryClient();
@@ -494,14 +539,9 @@ export const REMATCH_CLAIM_ID_BATCH_SIZE = 100;
 export function useDebateRematchClaimsForIds(sessionId: string, claimIds: string[], enabled = true) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  const batches = React.useMemo(() => {
-    const unique = [...new Set(claimIds)];
-    const chunks: string[][] = [];
-    for (let index = 0; index < unique.length; index += REMATCH_CLAIM_ID_BATCH_SIZE) {
-      chunks.push(unique.slice(index, index + REMATCH_CLAIM_ID_BATCH_SIZE));
-    }
-    return chunks;
-  }, [claimIds]);
+  // Content-defined chunks for the same reason as `useDebateClaimsBySpaces`: the picker prepends
+  // as it pages and filters, and index-sliced batches would all change key on every insertion.
+  const batches = React.useMemo(() => stableClaimIdChunks(claimIds, REMATCH_CLAIM_ID_BATCH_SIZE), [claimIds]);
 
   // Stable by contract, as in `useDebateClaimsBySpaces`.
   const combine = React.useCallback(
