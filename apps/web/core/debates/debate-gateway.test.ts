@@ -750,6 +750,67 @@ describe('DebateGatewayClient', () => {
     expect(sockets).toHaveLength(1);
   });
 
+  it('gives up retrying a transient failure after the retry cap without touching the socket', async () => {
+    invalidateQueries.mockRejectedValue(new GeoChatRequestError('slow down', 'rate_limited', 429));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+
+    // Backoff is 250, 500, 1000ms for the three retries; well past the last one nothing else fires.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+  });
+
+  it('drops pending invalidation retries when the client stops', async () => {
+    invalidateQueries.mockRejectedValue(new GeoChatRequestError('slow down', 'rate_limited', 429));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+
+    client.stop();
+    // A retry landing after stop would refetch queries `stop()` just removed for a signed-out account.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(invalidateQueries).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves knowledge-graph queries out of the broad reconcile', async () => {
+    queryClient.setQueryData(['claim-picker', 'page', '', null], { entities: [] });
+    queryClient.setQueryData(['debates', 'claims', 'space-1', 'all'], { claims: [] });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
+    const invalidationCalls = invalidateQueries.mock.calls as unknown as Array<[InvalidationFilters]>;
+    const predicate = invalidationCalls.map(call => call[0]).find(filters => 'predicate' in filters)?.predicate;
+    expect(predicate).toBeTypeOf('function');
+    const cache = queryClient.getQueryCache();
+    // The picker page comes from the knowledge graph; a socket event says nothing about it, and a
+    // failing graph refetch under the reconcile would be read as a broken socket.
+    expect(predicate!(cache.find({ queryKey: ['claim-picker', 'page', '', null] })!)).toBe(false);
+    expect(predicate!(cache.find({ queryKey: ['debates', 'claims', 'space-1', 'all'] })!)).toBe(true);
+  });
+
   it('ignores a refetch cancelled by a later flush instead of recycling the socket', async () => {
     invalidateQueries.mockRejectedValueOnce(new CancelledError());
     client.start(

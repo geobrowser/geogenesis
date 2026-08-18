@@ -95,6 +95,9 @@ type DebateRoomConnectionStage =
  * from this client re-running `connect`.
  */
 const debateRoomStagesAfterJoin: ReadonlySet<DebateRoomConnectionStage> = new Set([
+  // `mark_joined` itself is in the set: a client-side timeout can land after the server recorded
+  // the join, and a spurious retry costs one request while a missing one strands the participant.
+  'mark_joined',
   'local_tracks',
   'publish_tracks',
   'noise_filter',
@@ -103,6 +106,8 @@ const debateRoomStagesAfterJoin: ReadonlySet<DebateRoomConnectionStage> = new Se
 
 /** One silent re-attempt after a post-join failure; beyond that a repeating camera error would spin. */
 const maxAutomaticPostJoinRecoveries = 1;
+/** A device that just reported itself busy usually still is a moment later; give it a beat. */
+const postJoinRecoveryDelayMs = 750;
 
 const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
   initializing: 'Loading…',
@@ -257,6 +262,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingStopTimerRef = React.useRef<number | null>(null);
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
   const postJoinRecoveryAttemptsRef = React.useRef(0);
+  const postJoinRecoveryTimerRef = React.useRef<number | null>(null);
+  const connectRef = React.useRef<(options?: { takeover?: boolean }) => Promise<void>>(() => Promise.resolve());
   const connectionFailureHandledRef = React.useRef(false);
   const reportedConflictGenerationRef = React.useRef<number | null>(null);
   const reportedRecoveryGenerationRef = React.useRef<number | null>(null);
@@ -1075,7 +1082,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             setPostJoinConnectionFailure(true);
             if (postJoinRecoveryAttemptsRef.current < maxAutomaticPostJoinRecoveries) {
               postJoinRecoveryAttemptsRef.current += 1;
-              autoConnectAttemptedRef.current = null;
+              // Re-run `connect` directly rather than through the auto-connect effect: that effect
+              // only fires from `roomState === 'idle'`, and while the debate is still `connecting`
+              // the state below stays 'connecting'. Clearing `autoConnectAttemptedRef` instead
+              // would also turn every later disconnect into an automatic reconnect.
+              if (postJoinRecoveryTimerRef.current !== null) window.clearTimeout(postJoinRecoveryTimerRef.current);
+              postJoinRecoveryTimerRef.current = window.setTimeout(() => {
+                postJoinRecoveryTimerRef.current = null;
+                // A manual retry or teardown in the meantime moved the generation on; it owns the room now.
+                if (!isCurrent()) return;
+                const status = debateStatusRef.current;
+                if (status === 'complete' || status === 'cancelled' || status === 'thanking') return;
+                void connectRef.current();
+              }, postJoinRecoveryDelayMs);
             }
           }
           // Read the live status: `debate` is captured from the render that built this callback, and
@@ -1098,6 +1117,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setPreviewStream,
     ]
   );
+
+  connectRef.current = connect;
 
   const retryConnection = React.useCallback(() => {
     void connect();
@@ -1390,6 +1411,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (remoteParticipantRefetchTimerRef.current !== null) {
         window.clearTimeout(remoteParticipantRefetchTimerRef.current);
         remoteParticipantRefetchTimerRef.current = null;
+      }
+      if (postJoinRecoveryTimerRef.current !== null) {
+        window.clearTimeout(postJoinRecoveryTimerRef.current);
+        postJoinRecoveryTimerRef.current = null;
       }
       clearRecordingTimers();
       void discardLocalRecorder();

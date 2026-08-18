@@ -6,7 +6,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { graphql } from '~/core/io/graphql-client';
 
-import { fetchClaimPickerPage } from './claim-picker-page';
+import { claimPickerPageQueryKey, fetchClaimPickerPage } from './claim-picker-page';
 
 vi.mock('~/core/io/graphql-client', () => ({
   graphql: vi.fn(),
@@ -35,7 +35,8 @@ describe('fetchClaimPickerPage', () => {
       topicsPropertyId: TOPICS_PROPERTY_ID,
       first: 50,
     });
-    expect(variables.filter).toBeUndefined();
+    // The ORM path excluded nameless claims server-side; the picker cannot render them either.
+    expect(variables.filter).toEqual({ name: { isNull: false, isNot: '' } });
   });
 
   it('maps the search term to the same case-insensitive substring the ORM used', async () => {
@@ -45,7 +46,7 @@ describe('fetchClaimPickerPage', () => {
 
     expect(graphqlMock.mock.calls.at(-1)?.[0]?.variables).toMatchObject({
       after: 'c-1',
-      filter: { name: { includesInsensitive: 'fast fashion' } },
+      filter: { name: { isNull: false, isNot: '', includesInsensitive: 'fast fashion' } },
     });
     expect(page.endCursor).toBe('c-2');
     expect(page.hasNextPage).toBe(true);
@@ -106,4 +107,11 @@ describe('fetchClaimPickerPage', () => {
 
     expect(page).toEqual({ entities: [], endCursor: null, hasNextPage: false });
   });
+});
+
+// The gateway reconciles and the debates mutations invalidate everything under `'debates'`; a
+// knowledge-graph page under that root would refetch on every reconnect and, when the graph
+// failed, be read as a broken socket.
+it('keys the picker page outside the debates family', () => {
+  expect(claimPickerPageQueryKey('', undefined)[0]).not.toBe('debates');
 });

@@ -17,6 +17,8 @@ import {
   type MatchmakingTopic,
 } from '~/core/debates/api';
 import { type ClaimPickerEntity, useClaimPickerPage } from '~/core/debates/claim-picker-page';
+import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
+import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { defaultDebateFormatId } from '~/core/debates/formats';
@@ -28,6 +30,7 @@ import {
   useDebateRematch,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
+  useGeoChatAuth,
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
@@ -237,15 +240,30 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     }
     if (allowlistPending) return [];
 
+    // The batches geo-chat answers come back in id-sorted chunks, so a Map fed from them would
+    // reorder the list every time a new page joins. Lay the rows out in the order the picker
+    // asked for them: saved, then curated, then the browsed page as the knowledge graph paged it.
+    const orderByClaimId = new Map<string, number>();
+    for (const claimId of [
+      ...(savedClaimsQuery.data?.claims ?? []).map(claim => claim.claim.claim_entity_id),
+      ...recommendedClaimIds,
+      ...claimEntities.map(claim => claim.id),
+    ]) {
+      if (!orderByClaimId.has(claimId)) orderByClaimId.set(claimId, orderByClaimId.size);
+    }
+    const orderOf = (claim: DebateRematchClaim) =>
+      orderByClaimId.get(claim.claim.claim_entity_id) ?? Number.MAX_SAFE_INTEGER;
+
     return [...synchronizedClaims.values()]
       .filter(claim => !excludedClaimIds.has(claim.claim.claim_entity_id))
       .filter(claim => isClaimSpaceAllowed(claim.claim.space_id, spaceAllowlist))
-      .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
+      .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference) || orderOf(a) - orderOf(b));
   }, [
     allowlistPending,
     browsedClaimsQuery.data,
     claimEntities,
     curatedClaimsQuery.data,
+    recommendedClaimIds,
     savedClaimsQuery.data,
     session?.participants,
     sourceDebateQuery.data,
@@ -402,6 +420,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   React.useEffect(() => {
     if (!session) return;
     if (session.status === 'converted' && session.converted_debate_id) {
+      // The requester walks into the room the same way the accepter does, and without the intent
+      // `DebateCoordinator` reads the walk as an unannounced debate and reopens the dialog.
+      markEnteringDebate(session.converted_debate_id);
       router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
     } else if (session.status === 'ended' || session.status === 'expired') {
       returnFromSession(session);
@@ -642,6 +663,16 @@ function useClaimReadinessByClaimId({
   // loaded yet the answer is unknown, and asking the per-space endpoint on a guess would spend the
   // very requests this exists to save — so treat that as "carried" and let `unresolved` hold.
   const rematchCarriesReadiness = rematchClaims.length === 0 || rematchClaims[0]!.viewer_debate_ready !== undefined;
+
+  // `debate.claims_changed` is delivered per space, so the picker has to hold a scope on every
+  // space it shows or the opponent's responses only appear after a reconnect. That used to ride on
+  // the per-space readiness query below; it must not depend on where readiness comes from.
+  const { authenticated } = useGeoChatAuth();
+  const spaceIds = React.useMemo(
+    () => [...new Set(claims.map(claim => claim.claim.space_id))].sort((a, b) => a.localeCompare(b)),
+    [claims]
+  );
+  useDebateGatewaySpaceScopes(spaceIds, authenticated && spaceIds.length > 0);
 
   const claimIdsBySpace = React.useMemo(() => {
     if (rematchCarriesReadiness) return [];

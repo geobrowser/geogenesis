@@ -63,6 +63,9 @@ const mocks = vi.hoisted(() => ({
   claimReadinessError: false,
   /** Every group list the per-space readiness lookup was asked for, in render order. */
   perSpaceReadinessGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
+  /** Every space-scope retention the picker asked the gateway for, in render order. */
+  gatewaySpaceScopes: [] as Array<{ spaceIds: string[]; enabled: boolean }>,
+  markEnteringDebate: vi.fn(),
   claimReadiness: [] as Array<{
     claim_entity_id: string;
     viewer_debate_ready: boolean;
@@ -126,6 +129,7 @@ vi.mock('~/core/debates/hooks', () => ({
     matchmakingClaimsRoot: (accountKey: string | null) =>
       ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
     matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+    rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
   // The card's Debate switch shares the entity page's queue-backed readiness machine.
@@ -154,6 +158,18 @@ function render(ui: ReactElement) {
       view.rerender(<QueryClientProvider client={queryClient}>{next}</QueryClientProvider>),
   };
 }
+
+// `debate.claims_changed` is delivered per space; the picker has to hold a scope on every space
+// it shows regardless of where readiness comes from. Record what it retains.
+vi.mock('~/core/debates/debate-gateway', () => ({
+  useDebateGatewaySpaceScopes: (spaceIds: string[], enabled: boolean) => {
+    mocks.gatewaySpaceScopes.push({ spaceIds, enabled });
+  },
+}));
+
+vi.mock('~/core/debates/debate-entry-intent', () => ({
+  markEnteringDebate: (debateId: string) => mocks.markEnteringDebate(debateId),
+}));
 
 // The picker's browsed page comes from its own narrow query now, not the entity store. Its
 // `{ search, after }` arguments are what the tests below inspect.
@@ -296,6 +312,8 @@ beforeEach(() => {
   mocks.session = session();
   mocks.claims = [sharedClaim()];
   mocks.perSpaceReadinessGroups = [];
+  mocks.gatewaySpaceScopes = [];
+  mocks.markEnteringDebate.mockReset();
   document.body.style.overflow = '';
   document.documentElement.style.overflow = '';
 });
@@ -925,9 +943,21 @@ describe('DebateRematchPageClient', () => {
       expect(mocks.perSpaceReadinessGroups.every(groups => groups.length === 0)).toBe(true);
     });
 
-    it('treats a claim the response omits as settled not-ready', () => {
-      // A published claim the graph knows about but geo-chat has no row for: it can hold no
-      // readiness, so `false` is the truth and the switch belongs on screen, off.
+    // The per-space lookup used to be what retained the gateway's space scopes, and
+    // `debate.claims_changed` is delivered per space: skip the lookup without keeping the scopes
+    // and the opponent's responses only ever show up after a reconnect.
+    it('still holds a gateway scope on every space it shows', () => {
+      mocks.claims = [{ ...sharedClaim(), viewer_debate_ready: true, readiness_disabled_reason: null }];
+      mocks.claimReadiness = [];
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      showAllClaims();
+
+      const retained = mocks.gatewaySpaceScopes.filter(scope => scope.enabled).at(-1);
+      expect(retained?.spaceIds).toEqual([SPACE_1, SPACE_2].sort());
+    });
+
+    it('shows the toggle off for a claim it reports as not ready', () => {
       mocks.claims = [{ ...sharedClaim(), viewer_debate_ready: false, readiness_disabled_reason: null }];
       mocks.claimReadiness = [];
 
@@ -935,6 +965,57 @@ describe('DebateRematchPageClient', () => {
 
       expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).not.toBeChecked();
     });
+
+    it('treats a claim the response omits as settled not-ready', () => {
+      // A published claim the graph knows about but geo-chat has no row for: it can hold no
+      // readiness, so `false` is the truth and the switch belongs on screen, off. The saved claim
+      // carries the field so the response counts as one that has readiness at all.
+      mocks.claims = [{ ...sharedClaim(), viewer_debate_ready: true, readiness_disabled_reason: null }];
+      mocks.claimReadiness = [];
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      showAllClaims();
+
+      const switches = screen.getAllByRole('switch', { name: 'Ready to debate this claim' });
+      expect(switches).toHaveLength(2);
+      // The saved claim's switch reads its own field; the graph-only claim's is settled off.
+      expect(switches.filter(element => element.getAttribute('aria-checked') === 'true')).toHaveLength(1);
+      expect(switches.filter(element => element.getAttribute('aria-checked') === 'false')).toHaveLength(1);
+    });
+  });
+
+  // geo-chat answers the browsed lookup in id-sorted batches, so a list laid out in response order
+  // would reshuffle every time a new page's ids landed in the middle of the sorted range.
+  it('keeps the All tab in the order the page returned the claims', () => {
+    const FIRST = '019fedb4-3f74-7c61-8d44-5fa08b1e7a01';
+    const SECOND = '019fedb4-3f74-7c61-8d44-5fa08b1e7a02';
+    const THIRD = '019fedb4-3f74-7c61-8d44-5fa08b1e7a03';
+    mocks.entities = [
+      publishedEntity(FIRST, 'Ordered claim one'),
+      publishedEntity(SECOND, 'Ordered claim two'),
+      publishedEntity(THIRD, 'Ordered claim three'),
+    ];
+    mocks.savedClaims = [];
+    mocks.claims = [
+      { ...sharedClaim(), shared_preference: false, claim: claimSummary(THIRD, 'Ordered claim three') },
+      { ...sharedClaim(), shared_preference: false, claim: claimSummary(FIRST, 'Ordered claim one') },
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    const names = screen.getAllByText(/^Ordered claim/).map(element => element.textContent);
+    expect(names).toEqual(['Ordered claim one', 'Ordered claim two', 'Ordered claim three']);
+  });
+
+  it('marks the requester as entering the debate before routing into the room', () => {
+    mocks.session = session({ status: 'converted', converted_debate_id: 'debate-9' });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.markEnteringDebate).toHaveBeenCalledWith('debate-9');
+    expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates/debate-9`);
+    expect(mocks.markEnteringDebate.mock.invocationCallOrder[0]).toBeLessThan(mocks.replace.mock.invocationCallOrder[0]!);
   });
 
   // A backend that predates the fields answers `undefined`, and the picker must keep working

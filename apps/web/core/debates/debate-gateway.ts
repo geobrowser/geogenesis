@@ -542,6 +542,10 @@ export class DebateGatewayClient {
       })
     );
 
+    // `stop()` may have run while the refetches were in flight; a stopped client owns no socket to
+    // recycle and no queries to retry.
+    if (!this.enabled) return;
+
     // `allSettled` preserves order, so a rejection at index i belongs to invalidations[i] — keep the
     // pairing so only the filters that actually failed transiently get flushed again.
     const retryable: InvalidationFilters[] = [];
@@ -587,6 +591,7 @@ export class DebateGatewayClient {
     const timer = setTimeout(
       () => {
         this.invalidationRetryTimers.delete(timer);
+        if (!this.enabled) return;
         void this.flushInvalidations(invalidations, attempt);
       },
       INVALIDATION_RETRY_BASE_MS * 2 ** (attempt - 1)

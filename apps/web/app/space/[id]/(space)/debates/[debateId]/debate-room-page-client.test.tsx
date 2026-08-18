@@ -1074,6 +1074,70 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: 'Retry connection' })).toBeEnabled();
   });
 
+  it('re-runs connect once by itself when local media fails while the debate is still connecting', async () => {
+    mocks.createLocalTracks.mockRejectedValueOnce(
+      Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' })
+    );
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // The server counted the join, so the connecting-deadline rematch can no longer rescue us and
+    // the room has to try again on its own — the auto-connect effect will not, since the debate is
+    // still `connecting` and the room never returns to idle.
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalled());
+    expect(mocks.markJoinedMutateAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops after the one silent re-attempt when local media keeps failing', async () => {
+    mocks.createLocalTracks.mockRejectedValue(
+      Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' })
+    );
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    // A repeating camera error would otherwise spin; the second failure leaves it to the viewer.
+    expect(await screen.findByRole('button', { name: 'Retry connection' })).toBeEnabled();
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not turn a later lost connection into an automatic reconnect after a post-join recovery', async () => {
+    mocks.createLocalTracks.mockRejectedValueOnce(
+      Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' })
+    );
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalled(), { timeout: 3000 });
+    expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(2);
+
+    // Recovery must not leave the auto-connect latch open: a network drop stops at "Lost connection"
+    // with a Retry button, as it always did, rather than reconnecting behind the viewer's back.
+    act(() => emitRoomEvent('disconnected', 99));
+    expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(2);
+  });
+
   it('enables the microphone from the turn that is live when local media finally arrives', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
     const audioTrack = createLocalAudioTrack();

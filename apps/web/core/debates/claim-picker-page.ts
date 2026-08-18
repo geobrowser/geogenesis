@@ -83,7 +83,7 @@ type ClaimPickerPageVariables = {
   topicsPropertyId: string;
   first: number;
   after?: string;
-  filter?: { name?: { includesInsensitive?: string } };
+  filter: { name: { isNull: false; isNot: ''; includesInsensitive?: string } };
 };
 
 const claimPickerPageDocument = parse(CLAIM_PICKER_PAGE_SOURCE) as TypedDocumentNode<
@@ -154,16 +154,23 @@ export function fetchClaimPickerPage(
         topicsPropertyId: TOPICS_PROPERTY_ID,
         first: CLAIM_PICKER_PAGE_SIZE,
         after,
-        // Same case-insensitive substring the ORM's `contains` maps to, so search behaves as before.
-        filter: search ? { name: { includesInsensitive: search } } : undefined,
+        // Same filter the ORM built: nameless claims are excluded (the picker cannot show them) and
+        // the search term is the case-insensitive substring `contains` maps to.
+        filter: { name: { isNull: false, isNot: '', ...(search ? { includesInsensitive: search } : null) } },
       },
       signal,
     })
   );
 }
 
+/**
+ * Deliberately not under `'debates'`: that root is what the gateway reconciles and refetches on
+ * every (re)connect and what the debates mutations invalidate. This page comes from the knowledge
+ * graph, not geo-chat, so a socket event says nothing about it — and a failing graph refetch under
+ * that root would be read as a broken socket and recycle the connection over it.
+ */
 export const claimPickerPageQueryKey = (search: string, after: string | undefined) =>
-  ['debates', 'claim-picker', 'page', search, after ?? null] as const;
+  ['claim-picker', 'page', search, after ?? null] as const;
 
 /**
  * One page of the picker's browsed claims. `keepPreviousData` holds the prior page on screen while
