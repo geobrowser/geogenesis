@@ -101,9 +101,27 @@ export function useBountyInterestActions(detail: BountyDetail | null | undefined
 }
 
 export type AllocationResult =
-  | { status: 'allocated'; notified: boolean }
+  | { status: 'allocated'; notified: boolean; reason?: string | null }
   | { status: 'rejected'; reason: string }
   | { status: 'failed'; reason: string };
+
+/** curator-backend's `reason` codes for an unsent allocation email, in plain words. */
+export function describeNotifyReason(reason: string): string {
+  switch (reason) {
+    case 'email-not-configured':
+      return 'the curator service has no email provider configured';
+    case 'email-not-found':
+      return 'no email is known for this curator';
+    case 'already-sent':
+      return 'they were already notified for this allocation';
+    case 'already-processing':
+      return 'a notification is already in flight';
+    case 'email-send-failed':
+      return 'the email provider rejected the message';
+    default:
+      return reason;
+  }
+}
 
 /**
  * Editor-side allocation, three steps mirroring curator-app:
@@ -158,6 +176,7 @@ export function useBountyAllocationActions(detail: BountyDetail | null | undefin
         if (!ok) return { status: 'failed', reason: 'Publish failed' };
 
         let notified = false;
+        let notifyReason: string | null = null;
         try {
           const result = await notifyBountyAllocation({
             spaceId: bounty.spaceId,
@@ -166,18 +185,30 @@ export function useBountyAllocationActions(detail: BountyDetail | null | undefin
             allocatedRelationId: relationId,
           });
           notified = result.sent;
-        } catch {
+          notifyReason = result.reason;
+        } catch (error) {
           notified = false;
+          notifyReason = error instanceof CuratorApiError ? error.message : 'curator service unreachable';
+        }
+        if (!notified) {
+          console.warn('[bounties] allocation notification not sent', {
+            bountyId: bounty.id,
+            allocatedPersonId: person.id,
+            reason: notifyReason,
+          });
         }
         await invalidate();
         setToast(
           notified ? (
             <>Allocated and notified {person.name ?? 'the curator'}.</>
           ) : (
-            <>Allocated {person.name ?? 'the curator'}. The notification email could not be sent.</>
+            <>
+              Allocated {person.name ?? 'the curator'}. The notification email was not sent
+              {notifyReason ? ` (${describeNotifyReason(notifyReason)})` : ''}.
+            </>
           )
         );
-        return { status: 'allocated', notified };
+        return { status: 'allocated', notified, reason: notifyReason };
       } finally {
         setPendingPersonId(null);
       }

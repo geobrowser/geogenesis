@@ -168,7 +168,7 @@ describe('useBountyAllocationActions', () => {
     await act(async () => {
       outcome = await result.current.allocate(bob);
     });
-    expect(outcome).toEqual({ status: 'allocated', notified: false });
+    expect(outcome).toEqual({ status: 'allocated', notified: false, reason: 'curator service unreachable' });
     const call = mocks.makeProposal.mock.calls[0][0];
     expect(call.spaceId).toBe('dao-1');
     expect(call.relations[0]).toMatchObject({
@@ -196,5 +196,18 @@ describe('useBountyAllocationActions', () => {
       expect(await result.current.remove({ id: 'nobody', name: null })).toBe(false);
     });
     expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces the backend reason when the notification is declined', async () => {
+    mocks.validate.mockResolvedValue({ ok: true });
+    mocks.notify.mockResolvedValue({ sent: false, reason: 'email-not-found' });
+    publishSucceeds();
+    const { result } = renderHook(() => useBountyAllocationActions(detail));
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.allocate(bob);
+    });
+    expect(outcome).toEqual({ status: 'allocated', notified: false, reason: 'email-not-found' });
+    expect(mocks.setToast).toHaveBeenLastCalledWith(expect.anything());
   });
 });
