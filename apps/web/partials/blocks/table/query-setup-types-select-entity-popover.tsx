@@ -131,6 +131,21 @@ export function QuerySetupTypesSelectEntityPopover({
 
   useKey('Escape', handleEscape);
 
+  /**
+   * Every draft edit is published to the parent as it happens, so the confirm button
+   * beside this trigger can never read a stale selection: a click on it dismisses this
+   * popover and runs its own handler within the same gesture, which is too tight to
+   * rely on a commit that only fires on close.
+   */
+  const applyDraft = React.useCallback(
+    (next: QuerySetupTypePick[]) => {
+      draftRef.current = next;
+      setDraft(next);
+      onChangeSelectedTypes(next);
+    },
+    [onChangeSelectedTypes]
+  );
+
   const toggleDraftType = React.useCallback(
     (result: SearchResult) => {
       if (!isResultPickable(result)) return;
@@ -138,13 +153,9 @@ export function QuerySetupTypesSelectEntityPopover({
       const name = result.name;
       const prev = draftRef.current;
       const exists = prev.some(p => ID.equals(p.id, id));
-      if (exists) {
-        setDraft(prev => prev.filter(p => !ID.equals(p.id, id)));
-        return;
-      }
-      setDraft(prev => [...prev, { id, name }]);
+      applyDraft(exists ? prev.filter(p => !ID.equals(p.id, id)) : [...prev, { id, name }]);
     },
-    [isResultPickable]
+    [applyDraft, isResultPickable]
   );
 
   const commitDraftWithSpace = React.useCallback(
@@ -154,21 +165,19 @@ export function QuerySetupTypesSelectEntityPopover({
       const name = result.name;
       const spaceName = spaceLabelForResult(result, space);
       const spaceId = space.spaceId ?? space.id;
-      setDraft(prev => {
-        const without = prev.filter(p => !ID.equals(p.id, id));
-        return [...without, { id, name, spaceId, spaceName }];
-      });
+      const without = draftRef.current.filter(p => !ID.equals(p.id, id));
+      applyDraft([...without, { id, name, spaceId, spaceName }]);
       setPendingSpacePick(null);
     },
-    [isResultPickable]
+    [applyDraft, isResultPickable]
   );
 
   const removeDraftType = React.useCallback(
-    (id: string) => setDraft(prev => prev.filter(p => !ID.equals(p.id, id))),
-    []
+    (id: string) => applyDraft(draftRef.current.filter(p => !ID.equals(p.id, id))),
+    [applyDraft]
   );
 
-  const clearDraft = React.useCallback(() => setDraft([]), []);
+  const clearDraft = React.useCallback(() => applyDraft([]), [applyDraft]);
 
   const doneDisabled = draft.length === 0 && baseline.length === 0;
 
