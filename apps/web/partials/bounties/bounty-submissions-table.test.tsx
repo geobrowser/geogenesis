@@ -140,4 +140,33 @@ describe('BountySubmissionsTable', () => {
     expect(h.onRetryCredit).toHaveBeenCalled();
     expect(screen.getByText('There are no submissions yet.')).toBeInTheDocument();
   });
+
+  it('shows a review indicator on reviewed rows and a Reviews button for non-editors', () => {
+    const h = handlers();
+    const review = {
+      id: 'rev-1',
+      spaceId: 'reviewer',
+      proposalIds: ['p1'],
+      pass: true,
+      comment: 'Nice',
+      ratings: { completeness: 1, accuracy: 0.8, skill: 0.8, effort: 1 },
+      createdAt: new Date('2026-08-18T00:00:00Z'),
+    };
+    render(
+      <BountySubmissionsTable
+        spaceId="dao"
+        submissions={[row()]}
+        reviewsByKey={new Map([['k1', [review]]])}
+        isLoading={false}
+        isError={false}
+        lifecycleUnavailable={false}
+        busyKey={null}
+        pendingCredit={null}
+        {...h}
+      />
+    );
+    expect(screen.getByTestId('review-indicator')).toHaveTextContent('Reviewed · Pass · ★ 4.5');
+    fireEvent.click(screen.getByRole('button', { name: 'Reviews (1)' }));
+    expect(h.onOpenReview).toHaveBeenCalled();
+  });
 });

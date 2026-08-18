@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { SubmissionLifecycleStatus } from '~/core/bounties/api';
+import type { BountyReview } from '~/core/bounties/fetch-submissions';
 import type { GroupedSubmission, SubmissionSegmentInput } from '~/core/bounties/group-submissions';
 import { formatPoints } from '~/core/bounties/payout';
 import type { PendingPayoutCredit } from '~/core/bounties/use-review-payout-actions';
@@ -21,9 +22,17 @@ const STATUS_LABELS: Record<SubmissionLifecycleStatus, { label: string; classNam
   rejected: { label: 'Rejected', className: 'bg-red-01/10 text-red-01' },
 };
 
+/** Average of the four 0..1 ratings as stars out of 5, one decimal. */
+export function reviewStars(review: Pick<BountyReview, 'ratings'>): number {
+  const { completeness, accuracy, skill, effort } = review.ratings;
+  return Math.round(((completeness + accuracy + skill + effort) / 4) * 5 * 10) / 10;
+}
+
 type Props = {
   spaceId: string;
   submissions: GroupedSubmission[];
+  /** Existing reviews per submission key (matched by proposal set). */
+  reviewsByKey?: Map<string, BountyReview[]>;
   isLoading: boolean;
   isError: boolean;
   lifecycleUnavailable: boolean;
@@ -39,6 +48,7 @@ type Props = {
 export function BountySubmissionsTable({
   spaceId,
   submissions,
+  reviewsByKey,
   isLoading,
   isError,
   lifecycleUnavailable,
@@ -120,6 +130,8 @@ export function BountySubmissionsTable({
                 const status = STATUS_LABELS[submission.status];
                 const busy = busyKey === submission.submissionKey;
                 const isOpen = expanded.has(submission.submissionKey);
+                const reviews = reviewsByKey?.get(submission.submissionKey) ?? [];
+                const latestReview = reviews[0];
                 return (
                   <React.Fragment key={submission.submissionKey}>
                     <tr data-testid="submission-row" data-status={submission.status}>
@@ -137,6 +149,15 @@ export function BountySubmissionsTable({
                         </span>
                         {submission.needsPayoutRetry ? (
                           <span className="ml-2 text-footnote text-orange">Lifecycle out of sync</span>
+                        ) : null}
+                        {latestReview ? (
+                          <span
+                            className={cx('ml-2 text-footnote', latestReview.pass ? 'text-green' : 'text-red-01')}
+                            data-testid="review-indicator"
+                          >
+                            Reviewed · {latestReview.pass ? 'Pass' : 'Fail'} · ★ {reviewStars(latestReview)}
+                            {reviews.length > 1 ? ` · ${reviews.length} reviews` : ''}
+                          </span>
                         ) : null}
                       </td>
                       <td className="px-3 py-2 text-grey-04">{submission.lastActiveAt.toLocaleDateString('en-US')}</td>
@@ -170,7 +191,11 @@ export function BountySubmissionsTable({
                           ) : null}
                           {submission.canReviewAndPayout ? (
                             <SmallButton disabled={busy} onClick={() => onOpenReview(submission)}>
-                              Review
+                              {reviews.length > 0 ? 'Review again' : 'Review'}
+                            </SmallButton>
+                          ) : reviews.length > 0 ? (
+                            <SmallButton onClick={() => onOpenReview(submission)}>
+                              Reviews ({reviews.length})
                             </SmallButton>
                           ) : null}
                         </div>

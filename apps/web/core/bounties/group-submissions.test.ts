@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SubmissionLifecycleRecord } from './api';
-import { type PayoutItem, type SubmissionItem, buildSubmissionKey, groupSubmissions } from './group-submissions';
+import {
+  type PayoutItem,
+  type SubmissionItem,
+  buildProposalSetKey,
+  buildSubmissionKey,
+  groupSubmissions,
+  reviewsBySubmissionKey,
+} from './group-submissions';
 
 // Ported from curator-app's group-submissions.test.ts — the semantics must stay identical across apps.
 
@@ -175,5 +182,28 @@ describe('groupSubmissions', () => {
     expect(grouped[0].creatorEntityId).toBe(`unknown:${proposalOneId}`);
     expect(grouped[0].firstProposalId).toBe(proposalOneId);
     expect(grouped[0].canRequestReview).toBe(false);
+  });
+});
+
+describe('reviewsBySubmissionKey', () => {
+  it('matches reviews to rows by proposal set regardless of order or id format', () => {
+    const grouped = groupSubmissions({
+      bountyId,
+      submissions: [
+        submission({ name: 'One' }),
+        submission({ id: 'r2', entityId: proposalTwoId, name: 'Two', createdAt: new Date('2026-04-04T11:00:00.000Z') }),
+      ],
+      payoutItems: [],
+      proposalStatuses: new Map(),
+      lifecycleRecords: [],
+      isSpaceEditor: true,
+    });
+    const reviews = [
+      { id: 'rev-both', proposalIds: ['dddddddd-dddd-dddd-dddd-dddddddddddd', proposalOneId] },
+      { id: 'rev-other', proposalIds: ['ffffffffffffffffffffffffffffffff'] },
+    ];
+    const matched = reviewsBySubmissionKey(grouped, reviews);
+    expect(matched.get(grouped[0].submissionKey)?.map(r => r.id)).toEqual(['rev-both']);
+    expect(buildProposalSetKey([proposalTwoId, proposalOneId])).toBe(`${proposalOneId}:${proposalTwoId}`);
   });
 });

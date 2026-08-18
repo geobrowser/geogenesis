@@ -213,3 +213,26 @@ export function groupSubmissions({
 
   return grouped.sort((a, b) => b.lastActiveAt.getTime() - a.lastActiveAt.getTime());
 }
+
+/** Reviews cover a proposal set; the key is the sorted, normalized set. Same rule as curator-app. */
+export function buildProposalSetKey(proposalIds: readonly string[]): string {
+  return [...new Set(proposalIds.map(uuidToHex))].sort().join(':');
+}
+
+/** Groups reviews (anything with `proposalIds`) under the submission rows whose proposal set they cover. */
+export function reviewsBySubmissionKey<T extends { proposalIds: readonly string[] }>(
+  submissions: readonly GroupedSubmission[],
+  reviews: readonly T[]
+): Map<string, T[]> {
+  const byProposalSet = new Map<string, T[]>();
+  for (const review of reviews) {
+    const key = buildProposalSetKey(review.proposalIds);
+    byProposalSet.set(key, [...(byProposalSet.get(key) ?? []), review]);
+  }
+  const out = new Map<string, T[]>();
+  for (const submission of submissions) {
+    const matched = byProposalSet.get(buildProposalSetKey(submission.proposalIds));
+    if (matched && matched.length > 0) out.set(submission.submissionKey, matched);
+  }
+  return out;
+}

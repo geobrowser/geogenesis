@@ -43,6 +43,8 @@ function toApiSegment(spaceId: string, bountyId: string, segment: SubmissionSegm
   };
 }
 
+const REFETCH_DELAYS_MS = [3_000, 7_000, 12_000];
+
 /** A payout that reached the graph but whose points credit did not land — held for retry. */
 export type PendingPayoutCredit = PayoutCreditInput & { segment: SubmissionSegmentInput };
 
@@ -84,6 +86,13 @@ export function useReviewPayoutActions(detail: BountyDetail | null | undefined, 
     () => queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all }),
     [queryClient]
   );
+
+  // Newly published reviews/payouts take a few seconds to be indexed, so one
+  // refetch right after the publish usually misses them. Re-invalidate a few
+  // times on a short schedule (curator-app polls for the same reason).
+  const invalidateSoon = React.useCallback(() => {
+    for (const delay of REFETCH_DELAYS_MS) window.setTimeout(() => void invalidate(), delay);
+  }, [invalidate]);
 
   const spaceId = detail?.bounty.spaceId ?? '';
   const bountyId = detail?.bounty.id ?? '';
@@ -181,12 +190,14 @@ export function useReviewPayoutActions(detail: BountyDetail | null | undefined, 
         if (!input.pass) {
           await rejectSubmission(toApiSegment(spaceId, bountyId, submission.segmentInput)).catch(() => {});
           await invalidate();
+          invalidateSoon();
           setToast(<>Review saved.</>);
           return { status: 'saved' };
         }
 
         if (input.payoutAmount == null || input.payoutAmount <= 0) {
           await invalidate();
+          invalidateSoon();
           setToast(<>Review saved.</>);
           return { status: 'saved' };
         }
@@ -235,13 +246,14 @@ export function useReviewPayoutActions(detail: BountyDetail | null | undefined, 
           () => false
         );
         await invalidate();
+        invalidateSoon();
         setToast(marked ? <>Review and payout saved.</> : <>Payout saved. Mark the submission paid to finish.</>);
         return marked ? { status: 'saved-and-paid' } : { status: 'lifecycle-pending' };
       } finally {
         setBusyKey(null);
       }
     },
-    [bountyId, detail, invalidate, makeProposal, roles.personalSpaceId, setToast, spaceId]
+    [bountyId, detail, invalidate, invalidateSoon, makeProposal, roles.personalSpaceId, setToast, spaceId]
   );
 
   return { requestReview, reject, retryMarkPaid, retryPayoutCredit, submitReview, busyKey, pendingCredit };

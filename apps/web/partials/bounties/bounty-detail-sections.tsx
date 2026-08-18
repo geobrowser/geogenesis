@@ -6,10 +6,11 @@ import * as React from 'react';
 
 import { getSpaceMetrics } from '~/core/bounties/api';
 import { CURATOR_API_BASE_URL } from '~/core/bounties/config';
-import type { GroupedSubmission } from '~/core/bounties/group-submissions';
+import { type GroupedSubmission, reviewsBySubmissionKey } from '~/core/bounties/group-submissions';
 import { useBountyDetail } from '~/core/bounties/use-bounty-detail';
 import { useBountyRoles } from '~/core/bounties/use-bounty-roles';
 import { useBountySubmissions } from '~/core/bounties/use-bounty-submissions';
+import { useEntityNames } from '~/core/bounties/use-entity-names';
 import { useReviewPayoutActions } from '~/core/bounties/use-review-payout-actions';
 
 import { BountyAllocationTabs } from './bounty-allocation-tabs';
@@ -33,6 +34,11 @@ export function BountyDetailSections({ spaceId, bountyId }: Props) {
   const submissions = useBountySubmissions(data, roles);
   const actions = useReviewPayoutActions(data, roles);
   const [reviewing, setReviewing] = React.useState<GroupedSubmission | null>(null);
+  const reviewsByKey = React.useMemo(
+    () => reviewsBySubmissionKey(submissions.grouped, submissions.reviews),
+    [submissions.grouped, submissions.reviews]
+  );
+  const reviewerNames = useEntityNames(submissions.reviews.map(review => review.spaceId));
 
   const metrics = useQuery({
     queryKey: ['bounties', 'space-metrics', spaceId],
@@ -49,6 +55,7 @@ export function BountyDetailSections({ spaceId, bountyId }: Props) {
       <BountySubmissionsTable
         spaceId={spaceId}
         submissions={submissions.grouped}
+        reviewsByKey={reviewsByKey}
         isLoading={submissions.isLoading}
         isError={submissions.isError}
         lifecycleUnavailable={submissions.lifecycleUnavailable}
@@ -73,6 +80,9 @@ export function BountyDetailSections({ spaceId, bountyId }: Props) {
         onSubmit={actions.submitReview}
         busy={reviewing !== null && actions.busyKey === reviewing.submissionKey}
         availablePoints={metrics.data?.balance ?? null}
+        existingReviews={reviewing ? (reviewsByKey.get(reviewing.submissionKey) ?? []) : []}
+        reviewerNames={reviewerNames.data}
+        canReview={reviewing?.canReviewAndPayout ?? false}
       />
     </div>
   );

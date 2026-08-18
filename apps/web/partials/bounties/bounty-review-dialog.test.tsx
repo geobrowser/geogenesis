@@ -145,4 +145,40 @@ describe('BountyReviewDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ pass: false, payoutAmount: null });
   });
+
+  it('lists existing reviews, and is read-only when the viewer cannot review', () => {
+    const review = {
+      id: 'rev-1',
+      spaceId: 'aaaa0000000000000000000000000001',
+      proposalIds: ['p1', 'p2'],
+      pass: false,
+      comment: 'Incomplete',
+      ratings: { completeness: 0.4, accuracy: 0.6, skill: 0.6, effort: 0.8 },
+      createdAt: new Date('2026-08-18T00:00:00Z'),
+    };
+    render(
+      <BountyReviewDialog
+        bounty={bounty}
+        submission={submission}
+        open
+        onOpenChange={vi.fn()}
+        onSubmit={vi.fn<OnSubmit>(async () => ({ status: 'saved' }))}
+        busy={false}
+        availablePoints={null}
+        existingReviews={[review]}
+        reviewerNames={new Map([['aaaa0000000000000000000000000001', 'Alice']])}
+        canReview={false}
+      />
+    );
+    const list = screen.getByTestId('existing-reviews');
+    expect(list).toHaveTextContent('Fail');
+    expect(list).toHaveTextContent('Completeness 2/5');
+    expect(list).toHaveTextContent('by Alice');
+    expect(list).toHaveTextContent('Incomplete');
+    // No form: no rating radios, no save button — just Close.
+    expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Save review/ })).not.toBeInTheDocument();
+    // The header X and the footer Close both close the dialog.
+    expect(screen.getAllByRole('button', { name: 'Close' })).toHaveLength(2);
+  });
 });

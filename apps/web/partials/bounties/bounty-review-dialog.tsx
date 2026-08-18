@@ -4,6 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
+import type { BountyReview } from '~/core/bounties/fetch-submissions';
 import type { GroupedSubmission } from '~/core/bounties/group-submissions';
 import { formatPayoutRange, formatPoints, payoutRange } from '~/core/bounties/payout';
 import { type ReviewRatings, starsToRating } from '~/core/bounties/review-ops';
@@ -67,6 +68,12 @@ type Props = {
   busy: boolean;
   /** Space points available for payout, when known. */
   availablePoints: number | null;
+  /** Reviews already published for this submission's proposal set. */
+  existingReviews?: BountyReview[];
+  /** Names for reviewer space ids, when resolved. */
+  reviewerNames?: Map<string, string | null>;
+  /** When false the dialog only lists existing reviews (non-editors, paid/rejected rows). */
+  canReview?: boolean;
 };
 
 const initialState = (): ReviewFormState => ({
@@ -76,7 +83,18 @@ const initialState = (): ReviewFormState => ({
   payoutAmount: '',
 });
 
-export function BountyReviewDialog({ bounty, submission, open, onOpenChange, onSubmit, busy, availablePoints }: Props) {
+export function BountyReviewDialog({
+  bounty,
+  submission,
+  open,
+  onOpenChange,
+  onSubmit,
+  busy,
+  availablePoints,
+  existingReviews = [],
+  reviewerNames,
+  canReview = true,
+}: Props) {
   const [state, setState] = React.useState<ReviewFormState>(initialState);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -142,88 +160,129 @@ export function BountyReviewDialog({ bounty, submission, open, onOpenChange, onS
               </Dialog.Close>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {RATING_LABELS.map(({ key, label }) => (
-                <div key={key} className="flex flex-col gap-1">
-                  <Text variant="metadataMedium">{label}</Text>
-                  <StarInput
-                    value={state.stars[key]}
-                    onChange={value => setState(s => ({ ...s, stars: { ...s.stars, [key]: value } }))}
-                    label={label}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <Text variant="metadataMedium">Outcome</Text>
-              <div className="flex gap-2">
-                <Button
-                  variant={state.pass ? 'primary' : 'secondary'}
-                  onClick={() => setState(s => ({ ...s, pass: true }))}
-                >
-                  Pass
-                </Button>
-                <Button
-                  variant={!state.pass ? 'primary' : 'secondary'}
-                  onClick={() => setState(s => ({ ...s, pass: false }))}
-                >
-                  Fail
-                </Button>
-              </div>
-            </div>
-
-            {state.pass ? (
-              <label className="flex flex-col gap-1">
-                <Text variant="metadataMedium">Payout (points)</Text>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  step={1}
-                  value={state.payoutAmount}
-                  onChange={e => setState(s => ({ ...s, payoutAmount: e.target.value }))}
-                  placeholder={hasBudget ? (formatPayoutRange(range) ?? '') : 'Optional'}
-                  className="w-full rounded-md border border-grey-02 px-3 py-2 text-metadata"
-                />
-                <Text variant="footnote" color="grey-04">
-                  {hasBudget ? `Suggested range ${formatPayoutRange(range)}. ` : ''}
-                  {availablePoints != null ? `${formatPoints(availablePoints)} points available. ` : ''}
-                  Leave blank to save the review without a payout.
+            {existingReviews.length > 0 ? (
+              <section aria-label="Existing reviews" className="flex flex-col gap-2" data-testid="existing-reviews">
+                <Text variant="metadataMedium">
+                  {existingReviews.length === 1 ? 'Existing review' : `${existingReviews.length} existing reviews`}
                 </Text>
-              </label>
+                {existingReviews.map(review => (
+                  <div key={review.id} className="rounded-md border border-grey-02 bg-bg p-3">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-metadata">
+                      <span className={review.pass ? 'text-green' : 'text-red-01'}>
+                        {review.pass ? 'Pass' : 'Fail'}
+                      </span>
+                      <span className="text-grey-04">
+                        Completeness {stars(review.ratings.completeness)} · Accuracy {stars(review.ratings.accuracy)} ·
+                        Skill {stars(review.ratings.skill)} · Effort {stars(review.ratings.effort)}
+                      </span>
+                      <span className="text-grey-04">
+                        by {reviewerNames?.get(review.spaceId)?.trim() || `${review.spaceId.slice(0, 6)}…`}
+                        {review.createdAt.getTime() > 0 ? ` · ${review.createdAt.toLocaleDateString('en-US')}` : ''}
+                      </span>
+                    </div>
+                    {review.comment ? <p className="mt-1 text-metadata text-text">{review.comment}</p> : null}
+                  </div>
+                ))}
+              </section>
             ) : null}
 
-            <label className="flex flex-col gap-1">
-              <Text variant="metadataMedium">Comment</Text>
-              <textarea
-                value={state.comment}
-                onChange={e => setState(s => ({ ...s, comment: e.target.value }))}
-                rows={3}
-                placeholder="Optional feedback for the curator"
-                className="w-full rounded-md border border-grey-02 px-3 py-2 text-metadata"
-              />
-            </label>
+            {canReview ? (
+              <>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {RATING_LABELS.map(({ key, label }) => (
+                    <div key={key} className="flex flex-col gap-1">
+                      <Text variant="metadataMedium">{label}</Text>
+                      <StarInput
+                        value={state.stars[key]}
+                        onChange={value => setState(s => ({ ...s, stars: { ...s.stars, [key]: value } }))}
+                        label={label}
+                      />
+                    </div>
+                  ))}
+                </div>
 
-            {error ? (
-              <p role="alert" className="text-metadata text-red-01">
-                {error}
-              </p>
-            ) : null}
+                <div className="flex flex-col gap-1">
+                  <Text variant="metadataMedium">Outcome</Text>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={state.pass ? 'primary' : 'secondary'}
+                      onClick={() => setState(s => ({ ...s, pass: true }))}
+                    >
+                      Pass
+                    </Button>
+                    <Button
+                      variant={!state.pass ? 'primary' : 'secondary'}
+                      onClick={() => setState(s => ({ ...s, pass: false }))}
+                    >
+                      Fail
+                    </Button>
+                  </div>
+                </div>
 
-            <div className="flex justify-end gap-2">
-              <Dialog.Close asChild>
-                <Button variant="secondary">Cancel</Button>
-              </Dialog.Close>
-              <Button variant="primary" disabled={busy || !submission} onClick={() => void submit()}>
-                {busy ? 'Saving…' : willPay ? 'Save review & pay' : 'Save review'}
-              </Button>
-            </div>
+                {state.pass ? (
+                  <label className="flex flex-col gap-1">
+                    <Text variant="metadataMedium">Payout (points)</Text>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      step={1}
+                      value={state.payoutAmount}
+                      onChange={e => setState(s => ({ ...s, payoutAmount: e.target.value }))}
+                      placeholder={hasBudget ? (formatPayoutRange(range) ?? '') : 'Optional'}
+                      className="w-full rounded-md border border-grey-02 px-3 py-2 text-metadata"
+                    />
+                    <Text variant="footnote" color="grey-04">
+                      {hasBudget ? `Suggested range ${formatPayoutRange(range)}. ` : ''}
+                      {availablePoints != null ? `${formatPoints(availablePoints)} points available. ` : ''}
+                      Leave blank to save the review without a payout.
+                    </Text>
+                  </label>
+                ) : null}
+
+                <label className="flex flex-col gap-1">
+                  <Text variant="metadataMedium">Comment</Text>
+                  <textarea
+                    value={state.comment}
+                    onChange={e => setState(s => ({ ...s, comment: e.target.value }))}
+                    rows={3}
+                    placeholder="Optional feedback for the curator"
+                    className="w-full rounded-md border border-grey-02 px-3 py-2 text-metadata"
+                  />
+                </label>
+
+                {error ? (
+                  <p role="alert" className="text-metadata text-red-01">
+                    {error}
+                  </p>
+                ) : null}
+
+                <div className="flex justify-end gap-2">
+                  <Dialog.Close asChild>
+                    <Button variant="secondary">Cancel</Button>
+                  </Dialog.Close>
+                  <Button variant="primary" disabled={busy || !submission} onClick={() => void submit()}>
+                    {busy ? 'Saving…' : willPay ? 'Save review & pay' : 'Save review'}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-end">
+                <Dialog.Close asChild>
+                  <Button variant="secondary">Close</Button>
+                </Dialog.Close>
+              </div>
+            )}
           </div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
   );
+}
+
+/** 0..1 rating as "n/5". */
+function stars(rating: number): string {
+  return `${Math.round(rating * 5 * 10) / 10}/5`;
 }
 
 function StarInput({ value, onChange, label }: { value: number; onChange: (value: number) => void; label: string }) {
