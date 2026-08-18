@@ -65,17 +65,31 @@ export function ClaimsTab() {
   const pages = React.useMemo(() => claimsQuery.data?.pages ?? [], [claimsQuery.data]);
   const facets = pages[0]?.facets;
 
-  const { allowlist: spaceAllowlist } = useClaimSpaceAllowlist();
+  const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+
+  // Until the allowlist settles there is no telling an allowed space from one the viewer has
+  // nothing to do with, so the tab waits instead of showing the unfiltered set and trimming it
+  // under the viewer a moment later — which put spaces in the menu that then vanished, and offered
+  // picks that were never the viewer's to make.
+  //
+  // Only while it is genuinely still resolving. A lookup that settled without an answer leaves
+  // this false and falls through to the unfiltered list: a list that is too wide beats a panel
+  // that never fills.
+  const allowlistPending = spaceAllowlist === null && allowlistLoading;
+
   const serverClaims = React.useMemo(
-    () => pages.flatMap(page => page.claims).filter(entry => isClaimSpaceAllowed(entry.claim.space_id, spaceAllowlist)),
-    [pages, spaceAllowlist]
+    () =>
+      allowlistPending
+        ? []
+        : pages.flatMap(page => page.claims).filter(entry => isClaimSpaceAllowed(entry.claim.space_id, spaceAllowlist)),
+    [allowlistPending, pages, spaceAllowlist]
   );
 
   // The space menu offers only what the list can actually show, so picking an option never lands
   // the viewer on an empty list they can't explain.
   const facetSpaceIds = React.useMemo(
-    () => (facets?.space_ids ?? []).filter(id => isClaimSpaceAllowed(id, spaceAllowlist)),
-    [facets?.space_ids, spaceAllowlist]
+    () => (allowlistPending ? [] : (facets?.space_ids ?? []).filter(id => isClaimSpaceAllowed(id, spaceAllowlist))),
+    [allowlistPending, facets?.space_ids, spaceAllowlist]
   );
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
@@ -176,7 +190,7 @@ export function ClaimsTab() {
       />
 
       <HubQueryState
-        isLoading={claimsQuery.isLoading}
+        isLoading={claimsQuery.isLoading || allowlistPending}
         error={claimsQuery.error}
         onRetry={() => void claimsQuery.refetch()}
         isEmpty={visibleClaims.length === 0}

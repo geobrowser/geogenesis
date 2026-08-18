@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   claims: [] as MatchmakingClaim[],
   facetSpaceIds: [] as string[],
   spaceAllowlist: null as Set<string> | null,
+  allowlistLoading: false,
   sidebarData: null as unknown,
   fetchedSpaceIds: [] as string[][],
   spacesLoading: false,
@@ -21,7 +22,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
-  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: false }),
+  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -112,8 +113,10 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 beforeEach(() => {
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
-  // Null is "the allowlist hasn't resolved", which every pre-existing case here runs under.
+  // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
+  // unfiltered list — what every pre-existing case here runs under.
   mocks.spaceAllowlist = null;
+  mocks.allowlistLoading = false;
   mocks.sidebarData = null;
   mocks.fetchedSpaceIds = [];
   mocks.spacesLoading = false;
@@ -237,11 +240,29 @@ describe('ClaimsTab', () => {
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
 
-  // Until the sources settle there is no allowlist to filter against, and hiding claims the viewer
-  // is entitled to and then flashing them back in reads worse than a beat of everything.
-  it('filters nothing while the allowlist is still resolving', () => {
+  // The reported bug: the menu opened on every space the server faceted, then trimmed itself to
+  // the viewer's own a moment later — spaces appearing and vanishing, and offering picks that were
+  // never theirs to make.
+  it('shows nothing until the allowlist settles, rather than trimming under the viewer', () => {
+    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    render(<ClaimsTab />);
+
+    expect(screen.queryByText('Bitcoin will never top $250K')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    expect(screen.queryByLabelText('Loading space name')).toBeNull();
+    expect(screen.queryByText('Space')).toBeNull();
+  });
+
+  // A lookup that settles without an answer must not leave the panel permanently empty — too wide
+  // a list beats one that never fills.
+  it('falls through to the unfiltered list when the allowlist lookup comes back empty', () => {
     mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
     mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = false;
     render(<ClaimsTab />);
 
     expect(screen.getByText('Bitcoin will never top $250K')).toBeInTheDocument();

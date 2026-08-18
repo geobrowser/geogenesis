@@ -162,7 +162,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Featured spaces plus the ones the viewer belongs to. Applied to the whole pool rather than to
   // the All tab alone, so every tab, the space menu and the opponent-position count all describe
   // the same set of claims.
-  const { allowlist: spaceAllowlist } = useClaimSpaceAllowlist();
+  const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+
+  // While it is still resolving there is no telling an allowed space from one the viewer has
+  // nothing to do with, so the picker waits rather than listing the unfiltered set and trimming it
+  // under them. A lookup that settled without an answer leaves this false and falls through to the
+  // unfiltered list — too wide beats never filling.
+  const allowlistPending = spaceAllowlist === null && allowlistLoading;
 
   const claimEntities = React.useMemo(() => {
     const byId = new Map(publishedClaims.entities.map(claim => [claim.id, claim]));
@@ -179,13 +185,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const curatedClaimsQuery = useDebateRematchClaimsForIds(sessionId, recommendedClaimIds);
   // Narrowed to the allowed spaces before the lookup, not after: the browsed scan is graph-wide,
   // and asking geo-chat about claims the picker is going to drop is a batch of round trips spent
-  // on rows nobody sees.
+  // on rows nobody sees. Held entirely while the allowlist is still resolving, when every id would
+  // be such a row.
   const browsedClaimIds = React.useMemo(
     () =>
-      publishedClaims.entities
-        .filter(claim => isClaimSpaceAllowed(claimHomeSpaceId(claim), spaceAllowlist))
-        .map(claim => claim.id),
-    [publishedClaims.entities, spaceAllowlist]
+      allowlistPending
+        ? []
+        : publishedClaims.entities
+            .filter(claim => isClaimSpaceAllowed(claimHomeSpaceId(claim), spaceAllowlist))
+            .map(claim => claim.id),
+    [allowlistPending, publishedClaims.entities, spaceAllowlist]
   );
   const browsedClaimsQuery = useDebateRematchClaimsForIds(sessionId, browsedClaimIds);
 
@@ -231,11 +240,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         });
       }
     }
+    if (allowlistPending) return [];
+
     return [...synchronizedClaims.values()]
       .filter(claim => !excludedClaimIds.has(claim.claim.claim_entity_id))
       .filter(claim => isClaimSpaceAllowed(claim.claim.space_id, spaceAllowlist))
       .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
   }, [
+    allowlistPending,
     browsedClaimsQuery.data,
     claimEntities,
     curatedClaimsQuery.data,
@@ -358,9 +370,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   });
 
   // Each tab draws from a different set of queries, so each waits on its own. The browsed scan is
-  // the slow one and only the All tab reads it.
+  // the slow one and only the All tab reads it. The allowlist is the exception — it narrows the
+  // pool every tab reads, so all of them wait on it.
   const tabIsLoading =
     sessionQuery.isLoading ||
+    allowlistPending ||
     (tab === 'recommended'
       ? recommendedLoading || curatedClaimsQuery.isLoading
       : tab === 'opponent'
