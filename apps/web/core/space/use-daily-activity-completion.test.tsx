@@ -45,7 +45,7 @@ function makeWrapper(queryClient: QueryClient) {
 
 /** Mounts the probes and the hook together, the way the side panel does. */
 function Harness({ tasks }: { tasks: DailyActivityTask[] }) {
-  const { onCompleteChange, allComplete, isLoading } = useDailyActivityCompletion(SPACE_ID, tasks);
+  const { onCompleteChange, allComplete, isLoading } = useDailyActivityCompletion(tasks);
 
   return (
     <>
@@ -100,22 +100,6 @@ describe('useDailyActivityCompletion', () => {
     expect(screen.getByTestId('state')).toHaveTextContent('open');
   });
 
-  // The header sizes itself on this while the panel draws from it. Separate state would let the
-  // header keep its with-sidebar width against a page whose sidebar had gone.
-  it('shares one answer across everything reading the same space', () => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    mocks.rankingComplete.set('block-1', { complete: true, isLoading: false });
-
-    render(<Harness tasks={[rankingTask]} />, { wrapper: makeWrapper(queryClient) });
-
-    // A second reader that mounts no probes of its own still sees it.
-    const { result } = renderHook(() => useDailyActivityCompletion(SPACE_ID, [rankingTask]), {
-      wrapper: makeWrapper(queryClient),
-    });
-
-    expect(result.current.allComplete).toBe(true);
-  });
-
   it('forgets a task that no longer exists rather than counting it done', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     mocks.rankingComplete.set('block-1', { complete: true, isLoading: false });
@@ -137,15 +121,12 @@ describe('useDailyActivityCompletion', () => {
     });
 
     expect(screen.getByTestId('state')).toHaveTextContent('loading');
-    expect(queryClient.getQueryData(['space-daily-activity-completion', SPACE_ID])).not.toHaveProperty(
-      'ranking:block-1'
-    );
   });
 
   it('is never complete with no tasks at all', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-    const { result } = renderHook(() => useDailyActivityCompletion(SPACE_ID, []), {
+    const { result } = renderHook(() => useDailyActivityCompletion([]), {
       wrapper: makeWrapper(queryClient),
     });
 

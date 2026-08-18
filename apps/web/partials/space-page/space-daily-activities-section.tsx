@@ -4,8 +4,9 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useChecklistExpansion } from '~/core/hooks/use-checklist-expansion';
 import { type DailyActivityTask } from '~/core/space/daily-activities';
-import type { DailyActivityCompletionById } from '~/core/space/use-daily-activity-completion';
+import { DailyActivityCompletionProbes, useDailyActivityCompletion } from '~/core/space/use-daily-activity-completion';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
@@ -47,16 +48,9 @@ function DailyActivityRow({ task, complete }: { task: DailyActivityTask; complet
   );
 }
 
-export function SpaceDailyActivitiesSection({
-  tasks,
-  completionById,
-  isLoading,
-}: {
-  tasks: DailyActivityTask[];
-  completionById: DailyActivityCompletionById;
-  isLoading: boolean;
-}) {
-  const [expanded, setExpanded] = React.useState(true);
+export function SpaceDailyActivitiesSection({ spaceId, tasks }: { spaceId: string; tasks: DailyActivityTask[] }) {
+  const { completionById, onCompleteChange, allComplete, isLoading } = useDailyActivityCompletion(tasks);
+  const { expanded, onToggle } = useChecklistExpansion({ allComplete, isLoading });
 
   if (tasks.length === 0) return null;
 
@@ -71,7 +65,7 @@ export function SpaceDailyActivitiesSection({
           type="button"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse daily activities' : 'Expand daily activities'}
-          onClick={() => setExpanded(prev => !prev)}
+          onClick={onToggle}
           className="mt-1.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-grey-04 transition-colors hover:text-text"
         >
           <span className={cx('transition-transform', expanded ? 'rotate-180' : 'rotate-0')}>
@@ -98,6 +92,11 @@ export function SpaceDailyActivitiesSection({
           {isLoading ? 'Loading…' : `${progressPercent}% complete`}
         </p>
       </div>
+
+      {/* Draws nothing, and deliberately outside the collapse below. These are what watch each
+          task, so folding them away with the list would leave nothing to notice the daily reset —
+          the checklist would stay closed, reading 100%, for the rest of the session. */}
+      <DailyActivityCompletionProbes tasks={tasks} spaceId={spaceId} onCompleteChange={onCompleteChange} />
 
       {expanded ? (
         <ul className="mt-5 flex flex-col gap-5">

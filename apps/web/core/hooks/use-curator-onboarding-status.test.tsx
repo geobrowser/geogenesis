@@ -71,26 +71,25 @@ describe('useCuratorOnboardingStatus', () => {
     expect(result.current.isVisible).toBe(true);
   });
 
-  // Onboarding is finished work — once every step is done the panel is a wall of ticks.
-  it('hides the checklist once every step is done', async () => {
+  // Reports done rather than hiding: the section folds itself down and keeps showing 100%.
+  it('reports every step done, and stays visible', async () => {
     completeEverything();
 
     const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
 
     await waitFor(() => expect(result.current.allComplete).toBe(true));
     expect(result.current.progressPercent).toBe(100);
-    expect(result.current.isVisible).toBe(false);
+    expect(result.current.isVisible).toBe(true);
   });
 
-  // Completion reads all-false until the query settles. Hiding on that would blink the panel out
-  // for everyone on first paint, so an unknown answer keeps it up.
-  it('stays visible while completion is still unknown', () => {
+  // Completion reads all-false until the query settles, so nothing downstream may act on it yet.
+  it('is not complete while the answer is still unknown', () => {
     completeEverything();
 
     const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
 
     expect(result.current.isLoading).toBe(true);
-    expect(result.current.isVisible).toBe(true);
+    expect(result.current.allComplete).toBe(false);
   });
 
   it('stays hidden without a personal space, complete or not', async () => {

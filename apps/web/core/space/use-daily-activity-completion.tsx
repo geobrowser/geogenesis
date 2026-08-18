@@ -1,7 +1,5 @@
 'use client';
 
-import { hashKey, useQueryClient } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import { type DailyActivityTask } from '~/core/space/daily-activities';
@@ -17,68 +15,36 @@ import {
  */
 export type DailyActivityCompletionById = Partial<Record<string, boolean>>;
 
-const EMPTY_COMPLETION: DailyActivityCompletionById = {};
-
 /**
- * Shared because two parts of the page have to agree on it: the overview side panel decides
- * whether to draw the checklist, and the space header sizes itself on whether a sidebar is there
- * at all. Read from separate state they could disagree, and the header would keep its narrower
- * with-sidebar width against a page that no longer has one.
- */
-function completionQueryKey(spaceId: string) {
-  return ['space-daily-activity-completion', spaceId] as const;
-}
-
-/**
- * Completion for a space's daily activities, held outside the checklist that displays it.
+ * Completion for a space's daily activities, held outside the list that displays it.
  *
  * Each task owns its own answer — a ranking's query is keyed on its block, and the upload task
  * watches a storage write and local midnight — so knowing a task is done means having something
- * mounted watching it. Keeping that inside the checklist would make "hide it once it's done"
- * self-defeating: hiding would unmount the watchers, and nothing would be left to notice the daily
- * reset. {@link DailyActivityCompletionProbes} mounts them alongside, and writes here.
+ * mounted watching it. Keeping that inside the collapsible list would make a checklist that folds
+ * itself away on completion self-defeating: collapsing unmounts the watchers, and nothing would be
+ * left to notice the reset that makes it worth opening again.
+ *
+ * So {@link DailyActivityCompletionProbes} mounts them beside the list rather than within it, and
+ * reports here.
  */
-export function useDailyActivityCompletion(
-  spaceId: string,
-  tasks: DailyActivityTask[]
-): {
+export function useDailyActivityCompletion(tasks: DailyActivityTask[]): {
   completionById: DailyActivityCompletionById;
   onCompleteChange: (id: string, complete: boolean) => void;
   /** Every task reported done. False while any is still unknown, so loading never reads as done. */
   allComplete: boolean;
   isLoading: boolean;
 } {
-  const queryClient = useQueryClient();
-  const queryKey = React.useMemo(() => completionQueryKey(spaceId), [spaceId]);
-  const queryHash = React.useMemo(() => hashKey(queryKey), [queryKey]);
+  const [completionById, setCompletionById] = React.useState<DailyActivityCompletionById>({});
 
-  const getSnapshot = React.useCallback(
-    () => queryClient.getQueryData<DailyActivityCompletionById>(queryKey) ?? EMPTY_COMPLETION,
-    [queryClient, queryKey]
-  );
-  const subscribe = React.useCallback(
-    (onStoreChange: () => void) =>
-      queryClient.getQueryCache().subscribe(event => {
-        if (event.query.queryHash === queryHash) onStoreChange();
-      }),
-    [queryClient, queryHash]
-  );
-  const completionById = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-
-  const onCompleteChange = React.useCallback(
-    (id: string, complete: boolean) => {
-      queryClient.setQueryData<DailyActivityCompletionById>(queryKey, (prev = EMPTY_COMPLETION) =>
-        prev[id] === complete ? prev : { ...prev, [id]: complete }
-      );
-    },
-    [queryClient, queryKey]
-  );
+  const onCompleteChange = React.useCallback((id: string, complete: boolean) => {
+    setCompletionById(prev => (prev[id] === complete ? prev : { ...prev, [id]: complete }));
+  }, []);
 
   // Drop stale keys when the task list changes (e.g. block removed), so a task that no longer
-  // exists can't hold the checklist open — or, worse, keep reporting it complete.
+  // exists can't hold the list open — or, worse, keep reporting it complete.
   React.useEffect(() => {
     const ids = new Set(tasks.map(task => task.id));
-    queryClient.setQueryData<DailyActivityCompletionById>(queryKey, (prev = EMPTY_COMPLETION) => {
+    setCompletionById(prev => {
       const next: DailyActivityCompletionById = {};
       let changed = false;
       for (const [id, value] of Object.entries(prev)) {
@@ -87,7 +53,7 @@ export function useDailyActivityCompletion(
       }
       return changed ? next : prev;
     });
-  }, [queryClient, queryKey, tasks]);
+  }, [tasks]);
 
   const isLoading = tasks.some(task => completionById[task.id] === undefined);
   const allComplete = tasks.length > 0 && tasks.every(task => completionById[task.id] === true);
