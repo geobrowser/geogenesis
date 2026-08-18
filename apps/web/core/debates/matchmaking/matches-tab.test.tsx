@@ -1,5 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+
+import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,7 +12,8 @@ import { MatchesTab } from './matches-tab';
 const mocks = vi.hoisted(() => ({
   matches: [] as MatchmakingMatch[],
   outbound: null as unknown,
-  readinessMutate: vi.fn(),
+  joinMutateAsync: vi.fn(),
+  leaveMutateAsync: vi.fn(),
   createRequestMutate: vi.fn(),
   submitResponse: vi.fn(),
   indexing: { status: 'idle', pending: null, runId: null } as {
@@ -24,12 +28,22 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../hooks', () => ({
   useDebateActivity: () => ({ data: { outbound_request: null, available_to_debate: mocks.availableToDebate } }),
+  // The readiness switch rides the shared queue-backed machine rather than a one-shot mutation.
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  },
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutateAsync, reset: vi.fn(), isPending: false, error: null }),
+  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutateAsync, isPending: false, error: null }),
 }));
 
 vi.mock('./hooks', () => ({
   useMatchmakingMatches: () => ({ data: { matches: mocks.matches }, isLoading: false, error: null }),
   useDebateRequests: () => ({ data: { outbound: mocks.outbound, incoming: [] }, isLoading: false, error: null }),
-  useClaimReadiness: () => ({ mutate: mocks.readinessMutate, isPending: false, error: null }),
   useCreateDebateRequest: () => ({ mutate: mocks.createRequestMutate, isPending: false, error: null }),
   useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
@@ -52,6 +66,16 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
 }));
+
+function render(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return {
+    ...view,
+    rerender: (next: ReactElement) =>
+      view.rerender(<QueryClientProvider client={queryClient}>{next}</QueryClientProvider>),
+  };
+}
 
 // Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
 // refuses to touch the graph for anything else.
@@ -99,7 +123,10 @@ function match(overrides: Partial<MatchmakingMatch> = {}): MatchmakingMatch {
 beforeEach(() => {
   mocks.matches = [match()];
   mocks.outbound = null;
-  mocks.readinessMutate.mockReset();
+  mocks.joinMutateAsync.mockReset();
+  mocks.joinMutateAsync.mockResolvedValue({ claim: null, match: null });
+  mocks.leaveMutateAsync.mockReset();
+  mocks.leaveMutateAsync.mockResolvedValue({ claim: null, match: null });
   mocks.createRequestMutate.mockReset();
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
@@ -218,16 +245,12 @@ describe('MatchesTab', () => {
     expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeInTheDocument();
   });
 
-  it('stands down from a claim by turning readiness off, never by clearing a response', () => {
+  it('stands down from a claim by turning readiness off, never by clearing a response', async () => {
     render(<MatchesTab onTabChange={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('switch', { name: 'Ready to debate this claim' }));
 
-    expect(mocks.readinessMutate).toHaveBeenCalledWith({
-      spaceId: SPACE_ID,
-      claimId: CLAIM_ENTITY_ID,
-      ready: false,
-    });
+    await waitFor(() => expect(mocks.leaveMutateAsync).toHaveBeenCalledWith({ claimId: CLAIM_ENTITY_ID }));
     expect(mocks.submitResponse).not.toHaveBeenCalled();
   });
 

@@ -13,9 +13,8 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
-import { Text } from '~/design-system/text';
 
-import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic } from '../api';
+import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic } from '../api';
 import { isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { useMatchmakingClaims } from './hooks';
@@ -135,19 +134,6 @@ export function ClaimsTab() {
     [claims, topicsByClaimId, topicId]
   );
 
-  // The claims you've already taken a side on lead, since those are the ones that can become
-  // debates. The split is dropped when a filter already narrows to one of the two groups, where a
-  // heading over the whole list would say nothing.
-  const showSections = filter === 'all';
-  const myClaims = React.useMemo(
-    () => (showSections ? visibleClaims.filter(entry => entry.viewer_response !== null) : []),
-    [showSections, visibleClaims]
-  );
-  const otherClaims = React.useMemo(
-    () => (showSections ? visibleClaims.filter(entry => entry.viewer_response === null) : visibleClaims),
-    [showSections, visibleClaims]
-  );
-
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
       <Input
@@ -195,12 +181,20 @@ export function ClaimsTab() {
             : undefined
         }
       >
-        <>
-          {myClaims.length > 0 ? <ClaimSection label="My positions" claims={myClaims} /> : null}
-          {otherClaims.length > 0 ? (
-            <ClaimSection label={showSections && myClaims.length > 0 ? 'All claims' : null} claims={otherClaims} />
-          ) : null}
-        </>
+        {/* One list, in the server's order. Splitting out the claims you'd already answered
+            re-ranked the tab by something the Position filter in the dropdown already covers, and
+            it moved a card between two sections the moment you took a side. */}
+        <HubCardList>
+          {visibleClaims.map(entry => (
+            <MatchmakingClaimCard
+              key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
+              claim={entry.claim}
+              positions={entry.positions}
+              readiness={entry}
+              activeDebate={entry.active_debate}
+            />
+          ))}
+        </HubCardList>
       </HubQueryState>
 
       {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
@@ -211,29 +205,6 @@ export function ClaimsTab() {
           left, so it can't sit in view asking for one that isn't there. */}
       {claimsQuery.hasNextPage ? <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" /> : null}
     </div>
-  );
-}
-
-function ClaimSection({ label, claims }: { label: string | null; claims: MatchmakingClaim[] }) {
-  return (
-    <section className="flex flex-col gap-2 not-first:mt-4">
-      {label ? (
-        <Text as="h3" variant="footnote" color="grey-04">
-          {label}
-        </Text>
-      ) : null}
-      <HubCardList>
-        {claims.map(entry => (
-          <MatchmakingClaimCard
-            key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
-            claim={entry.claim}
-            positions={entry.positions}
-            readiness={entry}
-            activeDebate={entry.active_debate}
-          />
-        ))}
-      </HubCardList>
-    </section>
   );
 }
 

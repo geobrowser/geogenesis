@@ -1,5 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+
+import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -34,7 +37,21 @@ vi.mock('./hooks', () => ({
       refetch: vi.fn(),
     };
   },
-  useClaimReadiness: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+}));
+
+// The readiness switch rides the shared queue-backed machine, which reaches for geo-chat auth and
+// the join/leave mutations rather than a one-shot readiness mutation.
+vi.mock('../hooks', () => ({
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  },
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
+  useLeaveDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -50,6 +67,11 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [] }),
 }));
+
+function render(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
 const OTHER_SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c599';
@@ -137,27 +159,32 @@ describe('ClaimsTab', () => {
     expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
   });
 
-  // The claims you've taken a side on are the ones that can turn into debates, so they lead.
-  it('leads with the claims the viewer has a position on', () => {
+  // The tab is one list in the server's order. Leading with the claims you'd already answered
+  // re-ranked it by something the Position filter in the dropdown already covers, and it moved a
+  // card between two sections the moment you took a side.
+  it('renders one unsectioned list in the order the server returned', () => {
     render(<ClaimsTab />);
 
-    const mine = screen.getByRole('heading', { name: 'My positions' });
-    const all = screen.getByRole('heading', { name: 'All claims' });
-    expect(mine.compareDocumentPosition(all) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'My positions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'All claims' })).not.toBeInTheDocument();
 
+    // `claim(MINE, …)` is answered and `claim(THEIRS, …)` is not; the answered one no longer jumps
+    // the queue, so the server's order stands.
     const first = screen.getByText('Chips are better than fries');
     const second = screen.getByText('Bitcoin will never top $250K');
     expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  // With nothing to separate them from, a heading over the whole list says nothing.
-  it('drops the headings when every claim falls on one side of the split', () => {
-    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false)];
+  it('leaves an answered claim where the server put it rather than promoting it', () => {
+    mocks.claims = [
+      claim(THEIRS, 'Bitcoin will never top $250K', false),
+      claim(MINE, 'Chips are better than fries', true),
+    ];
     render(<ClaimsTab />);
 
-    expect(screen.queryByRole('heading', { name: 'My positions' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'All claims' })).not.toBeInTheDocument();
-    expect(screen.getByText('Bitcoin will never top $250K')).toBeInTheDocument();
+    const unanswered = screen.getByText('Bitcoin will never top $250K');
+    const answered = screen.getByText('Chips are better than fries');
+    expect(unanswered.compareDocumentPosition(answered) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   // "My positions" means every claim the viewer holds a response for, whether or not they are
@@ -240,16 +267,6 @@ describe('ClaimsTab', () => {
     act(() => mocks.trigger?.());
 
     expect(mocks.fetchNextPage).toHaveBeenCalled();
-  });
-
-  it('drops the split once a filter already narrows to one group', () => {
-    render(<ClaimsTab />);
-
-    fireEvent.click(screen.getByRole('button', { name: /All claims/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
-
-    expect(screen.queryByRole('heading', { name: 'My positions' })).not.toBeInTheDocument();
-    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
 });
 
