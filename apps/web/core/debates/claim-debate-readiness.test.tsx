@@ -16,12 +16,20 @@ const mocks = vi.hoisted(() => ({
   joinReset: vi.fn(),
   leaveMutateAsync: vi.fn(),
   responseKinds: [] as Array<'stance' | 'veracity' | null>,
+  authReady: true,
   authenticated: true,
   accountKey: 'account-1' as string | null,
 }));
 
 vi.mock('./hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  },
+  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   useJoinDebateQueue: () => ({
     mutateAsync: mocks.joinMutateAsync,
     reset: mocks.joinReset,
@@ -49,6 +57,7 @@ beforeEach(() => {
   mocks.leaveMutateAsync.mockReset();
   mocks.leaveMutateAsync.mockReturnValue(deferred(queueResponse(false)).promise);
   mocks.responseKinds.length = 0;
+  mocks.authReady = true;
   mocks.authenticated = true;
   mocks.accountKey = 'account-1';
 });

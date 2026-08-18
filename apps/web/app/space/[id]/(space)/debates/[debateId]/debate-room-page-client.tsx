@@ -61,7 +61,7 @@ import {
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
-import { useDebatesEnabled, useFeatureFlag } from '~/core/state/feature-flags';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
@@ -142,17 +142,6 @@ const connectionFailureRedirectDelayMs = 750;
 const maximumBrowserTimeoutMs = 2_147_483_647;
 
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
-  const isDebatesEnabled = useDebatesEnabled();
-  const router = useRouter();
-
-  React.useEffect(() => {
-    if (!isDebatesEnabled) {
-      router.replace(`/space/${spaceId}`);
-    }
-  }, [isDebatesEnabled, router, spaceId]);
-
-  if (!isDebatesEnabled) return null;
-
   return (
     <DebateMediaSessionBoundary>
       <DebateRoomSurface spaceId={spaceId} debateId={debateId} />
@@ -275,6 +264,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     Boolean(debate?.rematch_session_id) && debate?.status !== 'cancelled'
   );
   const leaveRematch = useLeaveDebateRematch(debate?.rematch_session_id ?? '');
+  // Read from the recording-cancellation effect, which must not re-run on every mutation render.
+  const leaveRematchRef = React.useRef(leaveRematch.mutateAsync);
+  leaveRematchRef.current = leaveRematch.mutateAsync;
   const countdown = useDebateCountdown(countdownDebate, serverClock.now);
   debateStatusRef.current = countdown.effectiveStatus;
   const currentUserId = getCurrentGeoChatUserId();
@@ -362,16 +354,26 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     (recordingCancelledBy !== null && !opponentCancelledRecording) ||
     idleRematchDestination !== null;
 
-  const returnFromDebate = React.useCallback(() => {
-    if (debateExitStartedRef.current) return;
-    debateExitStartedRef.current = true;
-    clearDebateActivity(debateId);
-    if (window.history.length > 1) {
-      router.back();
-      return;
-    }
-    router.replace(`/space/${spaceId}/debates`);
-  }, [clearDebateActivity, debateId, router, spaceId]);
+  const returnFromDebate = React.useCallback(
+    ({ forwardOnly = false }: { forwardOnly?: boolean } = {}) => {
+      if (debateExitStartedRef.current) return;
+      debateExitStartedRef.current = true;
+      clearDebateActivity(debateId);
+      // Going back restores whatever opened the room, which is where an ordinary exit belongs.
+      // A debate that ended under us is different: the entry behind us is often this same room
+      // (hub → room → rematch → room), and stepping back into it re-runs the exit from a fresh
+      // mount. That is the flicker, and it is why the removal dialog needed a second Okay.
+      if (!forwardOnly && window.history.length > 1) {
+        router.back();
+        return;
+      }
+      router.replace(`/space/${spaceId}/debates`);
+    },
+    [clearDebateActivity, debateId, router, spaceId]
+  );
+
+  /** The exit for a debate whose recording was cancelled — it can never be re-entered. */
+  const leaveCancelledDebate = React.useCallback(() => returnFromDebate({ forwardOnly: true }), [returnFromDebate]);
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
@@ -1432,19 +1434,32 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localMediaStreamRef.current = null;
     setRemoteVideoReady(false);
     setRoomState('idle');
-    // The canceller already saw the confirmation in the upload banner; only the opponent needs
-    // the "your debate was removed" popup, so return the canceller to their previous page.
-    if (!opponentCancelledRecording) {
-      returnFromDebate();
+    // The rematch this debate anchored ends with it. Both sides leave: the session is what keeps
+    // the pair "in a flow" — every Debate control stays disabled and DebateCoordinator keeps
+    // routing back into this room — and neither of them can act on it any more.
+    if (debate.rematch_session_id) {
+      void leaveRematchRef.current().catch(() => undefined);
     }
-  }, [currentUserId, debate, discardLocalRecorder, opponentCancelledRecording, recordingCancelledBy, returnFromDebate]);
+    // The canceller already saw the confirmation in the upload banner; only the opponent needs
+    // the "your debate was removed" popup, so return the canceller to the debates page.
+    if (!opponentCancelledRecording) {
+      leaveCancelledDebate();
+    }
+  }, [
+    currentUserId,
+    debate,
+    discardLocalRecorder,
+    leaveCancelledDebate,
+    opponentCancelledRecording,
+    recordingCancelledBy,
+  ]);
 
   if (debate && opponentCancelledRecording) {
     return (
       <DebateRecordingRemovedDialog
         cancellerName={recordingCanceller ? speakerName(recordingCanceller) : 'Your opponent'}
         claim={debate.claim.claim}
-        onAcknowledge={returnFromDebate}
+        onAcknowledge={leaveCancelledDebate}
       />
     );
   }

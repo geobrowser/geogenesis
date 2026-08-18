@@ -3,7 +3,6 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useRouter } from 'next/navigation';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
@@ -18,7 +17,6 @@ import {
   useClaimResponseSummaryBatch,
 } from '~/core/responses/use-claim-response-summaries';
 import { useDiff } from '~/core/state/diff-store';
-import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
@@ -52,21 +50,6 @@ const relatedFields: RelatedField[] = [
 ];
 
 export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
-  const isDebatesEnabled = useDebatesEnabled();
-  const router = useRouter();
-
-  React.useEffect(() => {
-    if (!isDebatesEnabled) {
-      router.replace(`/space/${spaceId}`);
-    }
-  }, [isDebatesEnabled, router, spaceId]);
-
-  if (!isDebatesEnabled) return null;
-
-  return <ClaimsTabSurface spaceId={spaceId} debatesEnabled={isDebatesEnabled} />;
-}
-
-function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & { debatesEnabled: boolean }) {
   const [formOpen, setFormOpen] = React.useState(false);
   const { entities: claims, isLoading } = useQueryEntities({
     where: {
@@ -78,7 +61,7 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
     includeUnpublishedLocal: true,
   });
   const publishedClaimIds = React.useMemo(() => claims.filter(isClaimPublished).map(claim => claim.id), [claims]);
-  const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, debatesEnabled);
+  const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, true);
   const debateClaimsByEntityId = React.useMemo(() => {
     const map = new Map<string, DebateClaim>();
     for (const claim of debateClaimsQuery.data?.claims ?? []) {
@@ -109,7 +92,7 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
   const responseBatch = useClaimResponseSummaryBatch({
     spaceId,
     targets: responseTargets,
-    enabled: debatesEnabled,
+    enabled: true,
   });
   const responseBatchReady = responseTargets.length === 0 || responseBatch.isSuccess;
   return (
@@ -141,7 +124,6 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
             claims={claims}
             isLoading={isLoading}
             spaceId={spaceId}
-            debatesEnabled={debatesEnabled}
             debateJoinBlocked={activeDebates.length > 0}
             debateClaimsByEntityId={debateClaimsByEntityId}
             responseKindsByEntityId={responseKindsByEntityId}
@@ -262,7 +244,6 @@ function ClaimsList({
   claims,
   isLoading,
   spaceId,
-  debatesEnabled,
   debateJoinBlocked,
   debateClaimsByEntityId,
   responseKindsByEntityId,
@@ -271,7 +252,6 @@ function ClaimsList({
   claims: Entity[];
   isLoading: boolean;
   spaceId: string;
-  debatesEnabled: boolean;
   debateJoinBlocked: boolean;
   debateClaimsByEntityId: Map<string, DebateClaim>;
   responseKindsByEntityId: Map<string, 'stance' | 'veracity'>;
@@ -300,7 +280,7 @@ function ClaimsList({
 
   return (
     <div className="space-y-3">
-      {debateStatus && debatesEnabled && (
+      {debateStatus && (
         <div className="rounded-lg border border-red-01 bg-white px-5 py-3">
           <Text color="red-01">{debateStatus}</Text>
         </div>
@@ -310,7 +290,6 @@ function ClaimsList({
           key={claim.id}
           claim={claim}
           spaceId={spaceId}
-          debatesEnabled={debatesEnabled}
           debateJoinBlocked={debateJoinBlocked}
           debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
           responseKind={responseKindsByEntityId.get(claim.id) ?? claimResponseKind(claim, spaceId)}
@@ -323,14 +302,12 @@ function ClaimsList({
 function ClaimListItem({
   claim,
   spaceId,
-  debatesEnabled,
   debateJoinBlocked,
   debateClaim,
   responseKind,
 }: {
   claim: Entity;
   spaceId: string;
-  debatesEnabled: boolean;
   debateJoinBlocked: boolean;
   debateClaim: DebateClaim | null;
   responseKind: 'stance' | 'veracity';
@@ -346,14 +323,14 @@ function ClaimListItem({
           {claim.name ?? claim.id}
         </Text>
 
-        {!published && debatesEnabled && (
+        {!published && (
           <Text as="p" variant="body" color="grey-04" className="mt-2">
             Publish this claim before starting a debate.
           </Text>
         )}
       </div>
 
-      {debatesEnabled && published && (
+      {published && (
         <div className="mt-3 flex items-center gap-4">
           <DebateEntityResponseControls entityId={claim.id} spaceId={spaceId} responseKind={responseKind} />
           <ClaimDebateReadiness
@@ -366,7 +343,7 @@ function ClaimListItem({
         </div>
       )}
 
-      {debatesEnabled && <ClaimDebateStatus debateClaim={debateClaim} published={published} />}
+      <ClaimDebateStatus debateClaim={debateClaim} published={published} />
 
       {topics.length > 0 && (
         <div className="mt-3 grid gap-2 md:grid-cols-3">

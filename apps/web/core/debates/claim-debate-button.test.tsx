@@ -13,14 +13,12 @@ import type { DebateClaim } from './api';
 import { ClaimDebateButton } from './claim-debate-button';
 
 const mocks = vi.hoisted(() => ({
-  debatesEnabled: vi.fn(),
   debateClaims: vi.fn(),
   joinMutate: vi.fn(),
   leaveMutate: vi.fn(),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useDebatesEnabled: () => mocks.debatesEnabled(),
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -34,7 +32,14 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('./hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  },
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => mocks.debateClaims(),
   useDebateActivity: () => ({ data: null }),
   useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null }),
@@ -46,7 +51,6 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 }));
 
 beforeEach(() => {
-  mocks.debatesEnabled.mockReturnValue(true);
   mocks.debateClaims.mockReturnValue({ data: { claims: [] } });
   mocks.joinMutate.mockReset();
   mocks.joinMutate.mockReturnValue(new Promise(() => undefined));

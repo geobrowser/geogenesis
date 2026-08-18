@@ -7,7 +7,7 @@ import { useSetAtom } from 'jotai';
 import { DataBlockProvider } from '~/core/blocks/data/use-data-block';
 import { type RankingComposeMode } from '~/core/blocks/ranking/ranking-compose-url';
 import { useRankingComposePage } from '~/core/blocks/ranking/use-ranking-compose-page';
-import { EditorProvider } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 
 import { RankingComposeScreen } from '~/partials/blocks/table/ranking-compose-screen';
@@ -89,7 +89,7 @@ export function RankingComposeClientPage({
 
   return (
     <EntityStoreProvider id={parentEntityId} spaceId={spaceId}>
-      <EditorProvider
+      <RouteEditorProvider
         id={parentEntityId}
         spaceId={spaceId}
         initialBlocks={blocks}
@@ -115,7 +115,7 @@ export function RankingComposeClientPage({
             />
           )}
         </DataBlockProvider>
-      </EditorProvider>
+      </RouteEditorProvider>
     </EntityStoreProvider>
   );
 }

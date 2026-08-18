@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { EditorProvider } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 
@@ -49,7 +49,7 @@ export default async function PostEntityPage({
       preventRedirect={isEditing}
     >
       <EntityStoreProvider id={props.id} spaceId={props.spaceId}>
-        <EditorProvider
+        <RouteEditorProvider
           id={props.id}
           spaceId={props.spaceId}
           initialBlocks={props.blocks}
@@ -80,7 +80,7 @@ export default async function PostEntityPage({
               </React.Suspense>
             </TrackedErrorBoundary>
           </EntityPageContentContainer>
-        </EditorProvider>
+        </RouteEditorProvider>
       </EntityStoreProvider>
     </SpaceRedirect>
   );

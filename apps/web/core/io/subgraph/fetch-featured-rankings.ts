@@ -15,6 +15,7 @@ import {
 } from '~/core/blocks/ranking/ranking-block-relations';
 import { getRankingPeriodState, rankingSubmissionsOpen } from '~/core/blocks/ranking/ranking-period';
 import { FEATURED_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import { MAX_FEATURED_RANKING_ENTRIES } from '~/core/explore/featured-rankings-config';
 import type { EntityFilter } from '~/core/gql/graphql';
 import { getAllEntities, getEntityPage, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { RANKING_BLOCK_TYPE_ID, RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
@@ -49,7 +50,7 @@ export interface FeaturedRanking {
   /** Name/image of the space the block lives in — feeds the card's space badge. */
   spaceName: string | null;
   spaceImage: string | null;
-  /** Current aggregated leaderboard, best first — the card pages through it in threes. */
+  /** Current aggregated leaderboard, best first — the card pages through it in fives. */
   topEntries: FeaturedRankingEntry[];
 }
 
@@ -59,10 +60,6 @@ export interface FeaturedRanking {
 const MAX_CANDIDATES = 25;
 const MAX_FEATURED_RANKINGS = 10;
 const RESOLVE_CONCURRENCY = 6;
-
-// The card shows three leaderboard entries per page; nine covers three pages
-// without fetching the whole standings.
-const MAX_TOP_ENTRIES = 9;
 
 // Entities that are Ranking Blocks AND tagged Featured.
 const FEATURED_RANKINGS_FILTER: EntityFilter = {
@@ -253,7 +250,7 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
           blockEntityId,
           RANK_POSITION_PROPERTY_ID,
           spaceId
-        ).slice(0, MAX_TOP_ENTRIES);
+        ).slice(0, MAX_FEATURED_RANKING_ENTRIES);
         const topEntries = await resolveTopEntries(orderedEntityIds, spaceId);
 
         return {

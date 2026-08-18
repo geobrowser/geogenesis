@@ -14,6 +14,7 @@ import {
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
+  type DebateRematchClaimsResponse,
   GeoChatRequestError,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
@@ -254,8 +255,19 @@ function useClearDebateActivityCache({ clearCooldown, reconcile }: { clearCooldo
   return React.useCallback(
     (debateId: string) => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => {
-        if (!current || current.debate?.id !== debateId) return current;
-        return clearCooldown ? { ...current, debate: null, cooldown_until: null } : { ...current, debate: null };
+        if (!current) return current;
+        const clearsDebate = current.debate?.id === debateId;
+        // The rematch anchored to this debate goes with it. DebateCoordinator navigates into
+        // `source_debate_id` for as long as a session is deciding, so leaving the room while the
+        // session sat in activity sent the viewer straight back into the room they just left.
+        const clearsRematch = current.rematch?.source_debate_id === debateId;
+        if (!clearsDebate && !clearsRematch) return current;
+        return {
+          ...current,
+          ...(clearsDebate ? { debate: null } : null),
+          ...(clearsDebate && clearCooldown ? { cooldown_until: null } : null),
+          ...(clearsRematch ? { rematch: null } : null),
+        };
       });
       if (reconcile) {
         void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
@@ -444,6 +456,55 @@ export function useLeaveDebateRematch(sessionId: string) {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, session.id) });
       void queryClient.invalidateQueries({ queryKey: activityKey });
     },
+  });
+}
+
+/**
+ * geo-chat rejects a request naming more than this many claims outright, so a caller browsing more
+ * claims than this has to ask in batches rather than in one request that 400s.
+ */
+export const REMATCH_CLAIM_ID_BATCH_SIZE = 100;
+
+/**
+ * {@link useDebateRematchClaims} for a list of ids of any length, split across as many requests as
+ * the server's per-request cap needs. The rematch picker accumulates claims a page at a time and
+ * adds curated ones on top, so it passes the cap in ordinary use — and losing the whole response
+ * to a 400 takes every claim's positions with it, not just the ones past the limit.
+ */
+export function useDebateRematchClaimsForIds(sessionId: string, claimIds: string[], enabled = true) {
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  const batches = React.useMemo(() => {
+    const unique = [...new Set(claimIds)];
+    const chunks: string[][] = [];
+    for (let index = 0; index < unique.length; index += REMATCH_CLAIM_ID_BATCH_SIZE) {
+      chunks.push(unique.slice(index, index + REMATCH_CLAIM_ID_BATCH_SIZE));
+    }
+    return chunks;
+  }, [claimIds]);
+
+  // Stable by contract, as in `useDebateClaimsBySpaces`.
+  const combine = React.useCallback(
+    (results: UseQueryResult<DebateRematchClaimsResponse>[]) => ({
+      data: {
+        claims: results.flatMap(result => result.data?.claims ?? []),
+        excluded_claim_ids: [...new Set(results.flatMap(result => result.data?.excluded_claim_ids ?? []))],
+      },
+      isLoading: results.some(result => result.isLoading),
+      error: results.find(result => result.error)?.error ?? null,
+    }),
+    []
+  );
+
+  return useQueries({
+    queries: batches.map(batch => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.rematchClaims(accountKey, sessionId, batch),
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        listDebateRematchClaims(sessionId, batch, getPrivyIdentityToken, accountKey, signal),
+      enabled: enabled && Boolean(sessionId),
+    })),
+    combine,
   });
 }
 

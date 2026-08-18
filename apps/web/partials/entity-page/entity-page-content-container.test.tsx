@@ -31,20 +31,22 @@ describe('EntityPageContentContainer', () => {
 });
 
 describe('EntityPageSidebarLayout', () => {
-  it('keeps the standard width when there is no sidebar', () => {
+  it('sizes from the rendered aside via the auto-sidebar variant', () => {
     render(<EntityPageSidebarLayout>Content</EntityPageSidebarLayout>);
 
     const container = screen.getByText('Content').closest('[data-entity-page-content-variant]');
 
-    expect(container?.getAttribute('data-entity-page-content-variant')).toBe('content');
+    expect(container?.getAttribute('data-entity-page-content-variant')).toBe('auto-sidebar');
+    expect(container?.className).toContain('has-[aside]:max-w-[var(--entity-page-with-sidebar-max-width)]');
+    expect(screen.queryByRole('complementary')).toBeNull();
   });
 
-  it('opts into the sidebar width when a sidebar is present', () => {
+  it('renders the sidebar aside when one is provided', () => {
     render(<EntityPageSidebarLayout sidebar={<aside>Sidebar</aside>}>Content</EntityPageSidebarLayout>);
 
     const container = screen.getByText('Content').closest('[data-entity-page-content-variant]');
 
-    expect(container?.getAttribute('data-entity-page-content-variant')).toBe('with-sidebar');
+    expect(container?.getAttribute('data-entity-page-content-variant')).toBe('auto-sidebar');
     expect(screen.getByRole('complementary').textContent).toBe('Sidebar');
   });
 });
