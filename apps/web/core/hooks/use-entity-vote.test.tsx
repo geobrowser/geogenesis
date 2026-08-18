@@ -24,6 +24,11 @@ const mocks = vi.hoisted(() => ({
   waitForIndexedEntityResponse: vi.fn(),
   loadResponseSummaryCaches: vi.fn(),
   personalSpaceId: 'd4bee0928fb5405baba3b1513f085835' as string | null,
+  ensureSpaceMembership: vi.fn(),
+}));
+
+vi.mock('~/core/access/request-space-membership', () => ({
+  ensureSpaceMembership: (...args: unknown[]) => mocks.ensureSpaceMembership(...args),
 }));
 
 vi.mock('~/core/responses/entity-response', async importOriginal => {
@@ -92,6 +97,8 @@ beforeEach(() => {
   mocks.loadResponseSummaryCaches.mockResolvedValue(new Map());
   mocks.runEffectEither.mockResolvedValue({ _tag: 'Right', right: '0xtransaction' });
   mocks.personalSpaceId = PERSONAL_SPACE_ID;
+  mocks.ensureSpaceMembership.mockReset();
+  mocks.ensureSpaceMembership.mockResolvedValue(false);
 });
 
 afterEach(() => {
@@ -510,6 +517,85 @@ describe('useEntityResponse indexing reconciliation', () => {
       await Promise.resolve();
     });
     expect(result.current.indexingStatus).toBe('idle');
+    consoleError.mockRestore();
+  });
+});
+
+describe('useEntityResponse claim-space membership', () => {
+  it.each(['stance', 'veracity'] as const)(
+    'requests membership of the claim space after a %s response lands',
+    async responseKind => {
+      mocks.fetchResponse.mockReturnValue('positive');
+      const { wrapper } = createHarness();
+      const { result } = renderHook(
+        () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind }),
+        { wrapper }
+      );
+
+      act(() => result.current.submitResponse('positive'));
+      await act(async () => Promise.resolve());
+
+      expect(mocks.ensureSpaceMembership).toHaveBeenCalledWith(
+        expect.objectContaining({ spaceId: TARGET_SPACE_ID, personalSpaceId: PERSONAL_SPACE_ID })
+      );
+    }
+  );
+
+  it('requests membership for a negative claim response too', async () => {
+    mocks.fetchResponse.mockReturnValue('negative');
+    const { wrapper } = createHarness();
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'veracity' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('negative'));
+    await act(async () => Promise.resolve());
+
+    expect(mocks.ensureSpaceMembership).toHaveBeenCalledOnce();
+  });
+
+  it('does not request membership for curation votes', async () => {
+    mocks.fetchResponse.mockReturnValue('positive');
+    const { wrapper } = createHarness();
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'entity-1', spaceId: TARGET_SPACE_ID, responseKind: 'curation' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+
+    expect(mocks.ensureSpaceMembership).not.toHaveBeenCalled();
+  });
+
+  it('does not request membership when a response is withdrawn', async () => {
+    mocks.fetchResponse.mockReturnValue(null);
+    const { wrapper } = createHarness();
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('clear'));
+    await act(async () => Promise.resolve());
+
+    expect(mocks.ensureSpaceMembership).not.toHaveBeenCalled();
+  });
+
+  it('does not request membership when the response transaction fails', async () => {
+    mocks.runEffectEither.mockResolvedValue({ _tag: 'Left', left: new Error('rejected') });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { wrapper } = createHarness();
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'stance' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+
+    expect(mocks.ensureSpaceMembership).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
 });

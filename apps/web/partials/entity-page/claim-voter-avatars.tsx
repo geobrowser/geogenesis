@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
+import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { getEntityResponders } from '~/core/io/queries';
 import {
   type ActiveResponseDirection,
@@ -49,6 +50,15 @@ export function ClaimResponderAvatars({
     const otherResponderIds = indexedResponderIds.filter(id => id !== viewerSpaceId);
     return optimisticViewerResponse === null ? otherResponderIds : [viewerSpaceId, ...otherResponderIds];
   }, [optimisticViewerResponse, responders, viewerSpaceId]);
+
+  // Batched claim views render their avatars with queries disabled, relying on a cache primed
+  // before this response existed — so nothing there would ever fetch the viewer's own profile.
+  // Usually it's already cached from the navbar and this resolves without a request.
+  const optimisticViewerSpaceIds = React.useMemo(
+    () => (viewerSpaceId && optimisticViewerResponse != null ? [viewerSpaceId] : []),
+    [optimisticViewerResponse, viewerSpaceId]
+  );
+  useProfilesBySpaceIds(optimisticViewerSpaceIds);
 
   if (responderSpaceIds.length === 0) return null;
 
