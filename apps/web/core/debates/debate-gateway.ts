@@ -1,6 +1,6 @@
 'use client';
 
-import type { QueryClient, QueryKey } from '@tanstack/react-query';
+import { CancelledError, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -92,6 +92,7 @@ const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const INVALIDATION_COALESCE_MS = 50;
 const INVALIDATION_RETRY_BASE_MS = 250;
+/** Re-flushes after the first attempt fails transiently, so up to four attempts in all. */
 const MAX_INVALIDATION_RETRIES = 3;
 const BROAD_INVALIDATION_KEY = 'debates:all';
 
@@ -129,7 +130,7 @@ export class DebateGatewayClient {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenRotationTimer: ReturnType<typeof setTimeout> | null = null;
   private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
-  private invalidationRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private invalidationRetryTimers = new Set<ReturnType<typeof setTimeout>>();
   private connectionGeneration = 0;
 
   constructor(options: DebateGatewayClientOptions) {
@@ -579,14 +580,18 @@ export class DebateGatewayClient {
   }
 
   private scheduleInvalidationRetry(invalidations: InvalidationFilters[], attempt: number) {
-    if (this.invalidationRetryTimer) clearTimeout(this.invalidationRetryTimer);
-    this.invalidationRetryTimer = setTimeout(
+    // Each failed batch keeps its own backoff. Replacing a pending retry with a newer one would
+    // drop the older batch's filters, and with `retry: false` on these queries nothing else would
+    // ever refetch them. A retry may re-run filters a later flush has since refreshed; that costs
+    // one extra refetch of active queries and is accepted over the alternative of losing one.
+    const timer = setTimeout(
       () => {
-        this.invalidationRetryTimer = null;
+        this.invalidationRetryTimers.delete(timer);
         void this.flushInvalidations(invalidations, attempt);
       },
       INVALIDATION_RETRY_BASE_MS * 2 ** (attempt - 1)
     );
+    this.invalidationRetryTimers.add(timer);
   }
 
   private sendSubscription(scope: DebateGatewayScope, op: 'SUBSCRIBE' | 'UNSUBSCRIBE') {
@@ -691,8 +696,8 @@ export class DebateGatewayClient {
     this.clearTimer('reconnect');
     if (this.invalidationTimer) clearTimeout(this.invalidationTimer);
     this.invalidationTimer = null;
-    if (this.invalidationRetryTimer) clearTimeout(this.invalidationRetryTimer);
-    this.invalidationRetryTimer = null;
+    for (const timer of this.invalidationRetryTimers) clearTimeout(timer);
+    this.invalidationRetryTimers.clear();
   }
 
   private clearTimer(timer: 'handshake' | 'heartbeat' | 'reconnect' | 'token') {
@@ -746,6 +751,11 @@ const deterministicInvalidationErrorCodes = new Set(['too_many_claim_ids']);
  * recycling it for a 429 does nothing to refetch the query that was rate limited.
  */
 function invalidationFailureRecovery(error: unknown): InvalidationRecovery {
+  // A refetch this flush started can be cancelled by the next flush's `cancelQueries` before it
+  // lands. That flush owns the refresh from here on; recycling the socket over it would be a
+  // spurious "live updates paused".
+  if (error instanceof CancelledError) return 'ignore';
+  if (error instanceof DOMException && error.name === 'AbortError') return 'ignore';
   if (!(error instanceof GeoChatRequestError)) return 'reconnect';
   if (error.code && deterministicInvalidationErrorCodes.has(error.code)) return 'ignore';
   if (error.status === 401 || error.status === 403) return 'reauthenticate';

@@ -1,4 +1,4 @@
-import { QueryClient, QueryObserver } from '@tanstack/react-query';
+import { CancelledError, QueryClient, QueryObserver } from '@tanstack/react-query';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -720,6 +720,54 @@ describe('DebateGatewayClient', () => {
     expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
     expect(sockets).toHaveLength(1);
     expect(resetGeoChatSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps every failed batch retry rather than replacing one with the next', async () => {
+    // Two flushes fail transiently a moment apart. Replacing the first retry with the second would
+    // drop the first batch's filters, and with `retry: false` nothing else refetches them.
+    invalidateQueries.mockRejectedValue(new GeoChatRequestError('slow down', 'rate_limited', 429));
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-a',
+      event_type: 'debate.claims_changed',
+      payload: { space_id: 'space-1', claim_entity_ids: ['claim-1'] },
+    });
+    await flushInvalidations();
+    const flushCount = invalidateQueries.mock.calls.length;
+    // The READY flush is one broad invalidation, the claim event one scoped invalidation.
+    expect(flushCount).toBe(2);
+
+    // Both retries fire on their own backoff; the first flush's retry was not lost to the second.
+    await vi.advanceTimersByTimeAsync(300);
+    expect(invalidateQueries.mock.calls.length).toBe(flushCount + 2);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it('ignores a refetch cancelled by a later flush instead of recycling the socket', async () => {
+    invalidateQueries.mockRejectedValueOnce(new CancelledError());
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    // The later flush owns the refresh; this is not a gateway problem.
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    const callsAfterFlush = invalidateQueries.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(invalidateQueries.mock.calls.length).toBe(callsAfterFlush);
+    expect(sockets).toHaveLength(1);
   });
 
   it('resets the cached session before reconnecting when a refetch is rejected as unauthorized', async () => {

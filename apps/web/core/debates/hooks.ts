@@ -131,6 +131,9 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
  * The same per-space payload as {@link useDebateClaims}, for callers holding claims spread across
  * several spaces — the rematch picker mixes geo-chat's session claims with published ones from
  * anywhere. A hook per space is impossible when the list changes length, so this fans out.
+ *
+ * `claims` comes back in no particular order: batches are keyed by sorted id so their query keys
+ * survive the caller reordering or prepending ids. Key the result by `claim_entity_id`.
  */
 export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
