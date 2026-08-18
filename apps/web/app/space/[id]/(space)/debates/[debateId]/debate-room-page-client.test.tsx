@@ -1036,6 +1036,93 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.publishTrack).not.toHaveBeenCalled();
   });
 
+  it('keeps a retry reachable when local media fails after the debate has advanced past connecting', async () => {
+    const pendingTracks = deferred<Awaited<ReturnType<typeof mocks.createLocalTracks>>>();
+    mocks.createLocalTracks.mockReturnValue(pendingTracks.promise);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledOnce());
+
+    // The server counts us as joined, so it will start the debate rather than time the pair out and
+    // rematch them. Getting media is still outstanding when that happens.
+    mocks.debate = {
+      ...mocks.debate,
+      status: 'in_progress',
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      turn_started_at: '2099-07-02T00:00:30.000Z',
+      turn_ends_at: '2099-07-02T00:01:00.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    pendingTracks.reject(Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' }));
+
+    await waitFor(() =>
+      expect(mocks.capture).toHaveBeenCalledWith(
+        'debate_room_connection_failed',
+        expect.objectContaining({ stage: 'local_tracks', error_name: 'NotReadableError' })
+      )
+    );
+    // Nothing on the server side can rescue this participant now, so the way back in has to survive
+    // the status change that removed the connecting-deadline rematch.
+    expect(await screen.findByRole('button', { name: 'Retry connection' })).toBeEnabled();
+  });
+
+  it('enables the microphone from the turn that is live when local media finally arrives', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+    const audioTrack = createLocalAudioTrack();
+    const pendingTracks = deferred<Awaited<ReturnType<typeof mocks.createLocalTracks>>>();
+    mocks.createLocalTracks.mockReturnValue(pendingTracks.promise);
+    // The remote slot holds the turn as `connect` is built, so the closure it captures says the
+    // local microphone should stay off.
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
+
+    // The turn passes to the local slot while `createLocalTracks` is still cold. The reconciliation
+    // effect fires here against an empty track list, so it has nothing to act on.
+    mocks.debate = {
+      ...mocks.debate,
+      current_turn_index: 1,
+      current_speaker_slot: 1,
+      turn_started_at: '2026-07-02T00:00:15.000Z',
+      turn_ends_at: '2026-07-02T00:00:45.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    pendingTracks.resolve([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+
+    // Guards the end state only. The underlying race — `connect` writing a captured, now-stale
+    // countdown over tracks that landed after the turn changed — needs the same `connect`
+    // invocation to survive the advance, and this harness starts a fresh one instead. That the
+    // microphone is live for the current turn after a cold media start is still worth pinning.
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalledTimes(2));
+    const publishedAudioTrack = mocks.publishTrack.mock.calls
+      .map(([track]) => track)
+      .find(track => track?.sourceMediaStreamTrack?.kind === 'audio');
+    expect(publishedAudioTrack).toBeDefined();
+    expect(publishedAudioTrack.sourceMediaStreamTrack.enabled).toBe(true);
+  });
+
   it('reports the exact connection stage when LiveKit signaling fails', async () => {
     mocks.roomConnect.mockRejectedValue(new Error('signaling failed'));
     mocks.debate = {

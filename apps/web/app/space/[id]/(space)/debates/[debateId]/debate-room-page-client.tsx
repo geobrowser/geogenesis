@@ -76,6 +76,7 @@ type DebateRoomPageClientProps = {
 type DebateNoiseFilterStatus = 'initializing' | 'enabled' | 'disabled' | 'unsupported' | 'failed';
 
 type DebateRoomConnectionConflictSource = 'web_lock_blocked' | 'ownership_released' | 'livekit_duplicate_identity';
+type LocalTrackPreferences = { audioEnabled: boolean; videoEnabled: boolean };
 type DebateRoomConnectionStage =
   | 'livekit_token'
   | 'sdk_import'
@@ -86,6 +87,22 @@ type DebateRoomConnectionStage =
   | 'publish_tracks'
   | 'noise_filter'
   | 'local_preview';
+
+/**
+ * Stages that only run once `markJoined` has succeeded. Failing here means the server counts this
+ * participant as present — it will start the debate and stop timing the pair out — while this tab
+ * holds no media, so the connecting-deadline rematch can no longer rescue us. Recovery has to come
+ * from this client re-running `connect`.
+ */
+const debateRoomStagesAfterJoin: ReadonlySet<DebateRoomConnectionStage> = new Set([
+  'local_tracks',
+  'publish_tracks',
+  'noise_filter',
+  'local_preview',
+]);
+
+/** One silent re-attempt after a post-join failure; beyond that a repeating camera error would spin. */
+const maxAutomaticPostJoinRecoveries = 1;
 
 const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
   initializing: 'Loading…',
@@ -206,6 +223,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     'idle'
   );
   const [roomError, setRoomError] = React.useState<string | null>(null);
+  const [postJoinConnectionFailure, setPostJoinConnectionFailure] = React.useState(false);
   const [connectionConflictSource, setConnectionConflictSource] =
     React.useState<DebateRoomConnectionConflictSource | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
@@ -238,6 +256,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingStartTimerRef = React.useRef<number | null>(null);
   const recordingStopTimerRef = React.useRef<number | null>(null);
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
+  const postJoinRecoveryAttemptsRef = React.useRef(0);
   const connectionFailureHandledRef = React.useRef(false);
   const reportedConflictGenerationRef = React.useRef<number | null>(null);
   const reportedRecoveryGenerationRef = React.useRef<number | null>(null);
@@ -333,10 +352,34 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localSlot,
     audioMuted || pendingTurnYield !== null
   );
+  // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
+  // turn. Reading preferences through a ref keeps that write consistent with the reconciliation
+  // effect below, which can otherwise run first against a still-empty `localTracksRef` and be
+  // silently overwritten with a stale value. The slot is passed in because `connect` learns it from
+  // the join token before `joinResponse` state has necessarily re-rendered.
+  const localTrackPreferencesRef = React.useRef<(slot: ParticipantSlot | null) => LocalTrackPreferences>(() => ({
+    audioEnabled: false,
+    videoEnabled: true,
+  }));
+  localTrackPreferencesRef.current = slot => ({
+    audioEnabled: shouldEnableLocalAudio(
+      debate ? countdown.effectiveStatus : null,
+      countdown.activeSlot,
+      slot,
+      audioMuted || pendingTurnYield !== null
+    ),
+    videoEnabled,
+  });
   const connectionConflict = connectionConflictSource !== null;
   const canTakeOverConnection =
     connectionConflict && (countdown.effectiveStatus === 'connecting' || countdown.effectiveStatus === 'preflight');
   const connectionConflictWithoutTakeover = connectionConflict && !canTakeOverConnection;
+  // A post-join media failure keeps the retry reachable after the debate leaves `connecting` —
+  // that is the one case where nothing on the server side will recover the participant for us.
+  const canRetryConnection =
+    Boolean(debate) &&
+    !['complete', 'cancelled', 'thanking'].includes(debate?.status ?? '') &&
+    (debate?.status === 'connecting' || postJoinConnectionFailure);
   const shouldExitTerminalDebate = Boolean(
     debate &&
     recordingCancelledBy === null &&
@@ -790,6 +833,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
       setConnectionConflictSource(null);
       setRoomError(null);
+      setPostJoinConnectionFailure(false);
       setRoomState('connecting');
       setServerClockSettled(false);
       setRemoteVideoReady(false);
@@ -957,15 +1001,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         localTracksRef.current = tracks;
         setLocalTrackPreferences(
           tracks,
-          {
-            audioEnabled: shouldEnableLocalAudio(
-              countdown.effectiveStatus,
-              countdown.activeSlot,
-              token.participant_slot,
-              audioMuted
-            ),
-            videoEnabled,
-          },
+          localTrackPreferencesRef.current(token.participant_slot),
           sourceMediaStreamTracksRef.current
         );
 
@@ -1010,6 +1046,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           return;
         }
         setConnectionConflictSource(null);
+        setPostJoinConnectionFailure(false);
+        postJoinRecoveryAttemptsRef.current = 0;
         setRoomState('connected');
       } catch (error) {
         if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
@@ -1029,16 +1067,28 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           ownershipRef.current?.release();
           setConnectionConflictSource(null);
           setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
-          setRoomState(debate?.status === 'connecting' ? 'connecting' : 'idle');
+          // The server already counts us as joined past this point, so it will never cancel the
+          // pair with `connection_timeout` and rematch them. Keep a retry reachable even once the
+          // debate has advanced out of `connecting`, and spend one silent re-attempt first.
+          const failedAfterJoin = debateRoomStagesAfterJoin.has(connectionStage);
+          if (failedAfterJoin) {
+            setPostJoinConnectionFailure(true);
+            if (postJoinRecoveryAttemptsRef.current < maxAutomaticPostJoinRecoveries) {
+              postJoinRecoveryAttemptsRef.current += 1;
+              autoConnectAttemptedRef.current = null;
+            }
+          }
+          // Read the live status: `debate` is captured from the render that built this callback, and
+          // a slow media path is exactly when the debate advances underneath it. Trusting the stale
+          // value leaves `roomState` on 'connecting' while the modal hides its retry button.
+          setRoomState(debateStatusRef.current === 'connecting' ? 'connecting' : 'idle');
         }
       }
     },
+    // Countdown state, mute state and the debate status are read through refs above, so `connect`
+    // no longer changes identity on every countdown tick.
     [
-      audioMuted,
-      countdown.activeSlot,
-      countdown.effectiveStatus,
       debateId,
-      debate?.status,
       initializeNoiseFilter,
       liveKitJoin,
       markJoined,
@@ -1046,7 +1096,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       reportLocalReleaseRecovery,
       refetchDebate,
       setPreviewStream,
-      videoEnabled,
     ]
   );
 
@@ -1658,6 +1707,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 endTurnPending={pendingTurnYield !== null}
                 onEndTurn={endLocalTurn}
                 onRetryFinalization={retryLiveDebateFinalization}
+                canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || roomState === 'saving'}
@@ -1695,6 +1745,7 @@ function DebateRecordingModal({
   endTurnPending,
   onEndTurn,
   onRetryFinalization,
+  canRetryConnection,
   onRetryConnection,
   onLeave,
   leaveDisabled,
@@ -1724,6 +1775,7 @@ function DebateRecordingModal({
   endTurnPending: boolean;
   onEndTurn: () => void;
   onRetryFinalization: () => void;
+  canRetryConnection: boolean;
   onRetryConnection: () => void;
   onLeave: () => void;
   leaveDisabled: boolean;
@@ -1951,7 +2003,7 @@ function DebateRecordingModal({
                 Retry save
               </Button>
             )}
-            {debate.status === 'connecting' && (
+            {canRetryConnection && (
               <Button type="button" variant="tertiary" onClick={onRetryConnection} disabled={roomState === 'saving'}>
                 Retry connection
               </Button>
@@ -2420,7 +2472,7 @@ function DebateAgainCard({
 
 function setLocalTrackPreferences(
   tracks: LocalTrackLike[],
-  preferences: { audioEnabled: boolean; videoEnabled: boolean },
+  preferences: LocalTrackPreferences,
   sourceMediaStreamTracks?: WeakMap<LocalTrackLike, MediaStreamTrack>
 ) {
   for (const track of tracks) {
