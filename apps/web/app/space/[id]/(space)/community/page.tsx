@@ -6,6 +6,7 @@ import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-call
 
 import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
 import { CommunityTabPage } from '~/partials/community-tab/community-tab-page';
+import { EntityPageSideRail } from '~/partials/entity-page/entity-page-side-rail';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 
 type Props = {
@@ -25,7 +26,11 @@ export default async function CommunityPage(props: Props) {
   return (
     <EntityPageSidebarLayout
       sidebar={
-        communityCalls.length > 0 ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null
+        communityCalls.length > 0 ? (
+          <EntityPageSideRail>
+            <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} />
+          </EntityPageSideRail>
+        ) : null
       }
     >
       <CommunityTabPage spaceId={spaceId} />

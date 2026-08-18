@@ -6,6 +6,7 @@ import type { CallSeries } from '~/core/community-calls/types';
 import { useSpaceDailyActivityTasks } from '~/core/space/use-space-daily-activities';
 
 import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
+import { EntityPageSideRail } from '~/partials/entity-page/entity-page-side-rail';
 
 import { SpaceDailyActivitiesSection } from './space-daily-activities-section';
 
@@ -27,11 +28,9 @@ export function SpaceOverviewSidePanel({ spaceId, communityCalls }: Props) {
   if (!showDaily && !showCalls) return null;
 
   return (
-    <aside className="ml-8 w-[300px] shrink-0 border-l border-divider pl-8 lg:hidden">
-      <div className="flex flex-col gap-6 pb-4">
-        {showDaily ? <SpaceDailyActivitiesSection spaceId={spaceId} tasks={tasks} /> : null}
-        {showCalls ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null}
-      </div>
-    </aside>
+    <EntityPageSideRail>
+      {showDaily ? <SpaceDailyActivitiesSection spaceId={spaceId} tasks={tasks} /> : null}
+      {showCalls ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null}
+    </EntityPageSideRail>
   );
 }

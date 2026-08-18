@@ -3,6 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { EntityPageContentContainer } from './entity-page-content-container';
+import { EntityPageSideRail } from './entity-page-side-rail';
 import { EntityPageSidebarLayout } from './entity-page-sidebar-layout';
 
 afterEach(cleanup);
@@ -48,5 +49,39 @@ describe('EntityPageSidebarLayout', () => {
 
     expect(container?.getAttribute('data-entity-page-content-variant')).toBe('auto-sidebar');
     expect(screen.getByRole('complementary').textContent).toBe('Sidebar');
+  });
+});
+
+describe('EntityPageSideRail', () => {
+  it('renders an aside at the fixed rail width so the content column keeps its size', () => {
+    render(
+      <EntityPageSidebarLayout
+        sidebar={
+          <EntityPageSideRail>
+            <div>Panel</div>
+          </EntityPageSideRail>
+        }
+      >
+        Content
+      </EntityPageSidebarLayout>
+    );
+
+    const rail = screen.getByRole('complementary');
+
+    // A rail that isn't `w-[...] shrink-0` sizes to its own content and squeezes the
+    // content column — the community-tab regression this guards against.
+    expect(rail.className).toContain('w-[300px]');
+    expect(rail.className).toContain('shrink-0');
+    expect(rail.textContent).toBe('Panel');
+  });
+
+  it('widens the page container, because the auto-sidebar variant keys off the aside', () => {
+    render(
+      <EntityPageSidebarLayout sidebar={<EntityPageSideRail>Panel</EntityPageSideRail>}>Content</EntityPageSidebarLayout>
+    );
+
+    const container = screen.getByText('Content').closest('[data-entity-page-content-variant]');
+
+    expect(container?.className).toContain('has-[aside]:max-w-[var(--entity-page-with-sidebar-max-width)]');
   });
 });
