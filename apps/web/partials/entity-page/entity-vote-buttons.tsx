@@ -137,8 +137,29 @@ export function EntityVoteButtons({
     if (queuedResponse !== undefined && optimisticResponse !== undefined) setQueuedResponse(undefined);
   }, [queuedResponse, optimisticResponse]);
 
+  // Direction a signed-out user picked before sign-in opened.
+  const pendingSignInDirectionRef = React.useRef<ActiveResponseDirection | undefined>(undefined);
+
+  function queueVoteWrite(direction: ActiveResponseDirection) {
+    setQueuedResponse(direction);
+    enqueuePendingAction({
+      id: voteActionId,
+      label: 'your vote',
+      requires: 'personalSpace',
+      run: () => submitResponseAsync(direction).then(() => {}),
+    });
+  }
+
   const { login } = useGeoLogin({
-    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
+    onComplete: args => {
+      trackPrivyAuth(args, { auth_flow: 'manual_login' });
+
+      const direction = pendingSignInDirectionRef.current;
+      if (direction !== undefined) {
+        pendingSignInDirectionRef.current = undefined;
+        queueVoteWrite(direction);
+      }
+    },
   });
 
   const [respondersOpen, setRespondersOpen] = React.useState(false);
@@ -193,16 +214,13 @@ export function EntityVoteButtons({
     login();
   }
 
-  // Signed-out or personal-space-not-ready: show the vote optimistically and queue the write.
   function queueResponse(direction: ActiveResponseDirection) {
-    setQueuedResponse(direction);
-    enqueuePendingAction({
-      id: voteActionId,
-      label: 'your vote',
-      requires: 'personalSpace',
-      run: () => submitResponseAsync(direction).then(() => {}),
-    });
-    if (!smartAccount) openPrivySignIn();
+    if (!smartAccount) {
+      pendingSignInDirectionRef.current = direction;
+      openPrivySignIn();
+      return;
+    }
+    queueVoteWrite(direction);
   }
 
   function handlePositiveResponse() {

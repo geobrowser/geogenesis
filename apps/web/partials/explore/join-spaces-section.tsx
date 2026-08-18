@@ -7,6 +7,7 @@ import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { useDeferredJoin } from '~/core/state/pending-join-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Dots } from '~/design-system/dots';
@@ -69,13 +70,7 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
   const enqueuePendingAction = useEnqueuePendingAction();
   const [optimisticRequested, setOptimisticRequested] = React.useState(false);
 
-  const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
-
-  const handleClick = () => {
-    if (canRequestLive) {
-      requestToBeMember();
-      return;
-    }
+  const queueJoinRequest = React.useCallback(() => {
     setOptimisticRequested(true);
     enqueuePendingAction({
       id: `join:${space.spaceId}`,
@@ -83,7 +78,23 @@ function JoinSpacePill({ space }: { space: FeaturedSpace }) {
       requires: 'personalSpace',
       run: () => requestToBeMemberAsync(),
     });
-    if (!smartAccount) openSignInPrompt('join');
+  }, [enqueuePendingAction, space.spaceId, requestToBeMemberAsync]);
+
+  const deferJoin = useDeferredJoin(space.spaceId, Boolean(smartAccount), queueJoinRequest);
+
+  const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
+
+  const handleClick = () => {
+    if (canRequestLive) {
+      requestToBeMember();
+      return;
+    }
+    if (!smartAccount) {
+      deferJoin();
+      openSignInPrompt('join');
+      return;
+    }
+    queueJoinRequest();
   };
 
   const isPending = status === 'pending' || optimisticRequested;

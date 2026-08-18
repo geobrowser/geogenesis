@@ -1,5 +1,6 @@
 'use client';
 
+import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { hashKey, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
@@ -27,6 +28,8 @@ import {
 import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
+
+import { personalSpaceIdQueryKey } from './use-personal-space-id';
 
 interface UseEntityResponseArgs {
   entityId: string;
@@ -144,10 +147,24 @@ export function useResetEntityResponseIndexingSnapshot({ entityId, spaceId, resp
   );
 }
 
+type PersonalSpaceIdCache = { isRegistered: boolean; personalSpaceId: string | null };
+
 export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntityResponseArgs) {
   const queryClient = useQueryClient();
   const responseIndexingRegistry = getResponseIndexingRegistry(queryClient);
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+
+  const readRegisteredSpace = useCallback((): { personalSpaceId: string | null; isRegistered: boolean } => {
+    if (personalSpaceId && isRegistered) return { personalSpaceId, isRegistered };
+    const cachedAccounts = queryClient
+      .getQueriesData<GeoWalletClient | null>({ queryKey: ['smart-account'] })
+      .map(([, cached]) => cached)
+      .filter((cached): cached is GeoWalletClient => Boolean(cached));
+    const currentAddress = cachedAccounts.length === 1 ? cachedAccounts[0].account.address : null;
+    const cached = queryClient.getQueryData<PersonalSpaceIdCache>(personalSpaceIdQueryKey(currentAddress));
+    return { personalSpaceId: cached?.personalSpaceId ?? null, isRegistered: cached?.isRegistered ?? false };
+  }, [personalSpaceId, isRegistered, queryClient]);
+
   const indexingQueryKey = useMemo(
     () => entityResponseIndexingQueryKey(personalSpaceId, entityId, spaceId, responseKind),
     [entityId, personalSpaceId, responseKind, spaceId]
@@ -159,6 +176,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
 
   const pendingResponseIndex = useCallback(
     (direction: ResponseDirection): PendingEntityResponseIndex | null => {
+      const { personalSpaceId, isRegistered } = readRegisteredSpace();
       if (!responseKind || !personalSpaceId || !isRegistered || !validateSpaceId(spaceId)) return null;
 
       return {
@@ -169,7 +187,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         spaceId,
       };
     },
-    [entityId, isRegistered, personalSpaceId, responseKind, spaceId]
+    [entityId, readRegisteredSpace, responseKind, spaceId]
   );
 
   const isCurrentIndexingRun = useCallback(
@@ -283,6 +301,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         throw new Error('Invalid space ID format. Cannot submit response.');
       }
 
+      const { personalSpaceId, isRegistered } = readRegisteredSpace();
       if (!personalSpaceId || !isRegistered) {
         throw new Error('You need a registered personal space to respond');
       }
@@ -321,7 +340,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       if (!pending) throw new Error('Response indexing context is unavailable.');
       return { pending, transaction: result.right };
     },
-    [personalSpaceId, isRegistered, spaceId, entityId, responseKind, tx, pendingResponseIndex]
+    [readRegisteredSpace, spaceId, entityId, responseKind, tx, pendingResponseIndex]
   );
 
   const responseMutation = useMutation({

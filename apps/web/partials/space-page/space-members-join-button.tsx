@@ -8,6 +8,7 @@ import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { useDeferredJoin } from '~/core/state/pending-join-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Pending } from '~/design-system/pending';
@@ -30,14 +31,7 @@ export function SpaceMembersJoinButton({ spaceId, memberRequest }: SpaceMembersJ
   // refresh) reflects here without waiting on this page's SSR memberRequest.
   const isPending = useIsMembershipPending(spaceId);
 
-  const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
-
-  const handleJoin = () => {
-    if (canRequestLive) {
-      requestToBeMember();
-      return;
-    }
-
+  const queueJoinRequest = React.useCallback(() => {
     // The PendingActionsRunner submits it once the space registers.
     setOptimisticRequested(true);
     enqueuePendingAction({
@@ -46,7 +40,23 @@ export function SpaceMembersJoinButton({ spaceId, memberRequest }: SpaceMembersJ
       requires: 'personalSpace',
       run: () => requestToBeMemberAsync(),
     });
-    if (!smartAccount) openSignInPrompt('join');
+  }, [enqueuePendingAction, spaceId, requestToBeMemberAsync]);
+
+  const deferJoin = useDeferredJoin(spaceId, Boolean(smartAccount), queueJoinRequest);
+
+  const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
+
+  const handleJoin = () => {
+    if (canRequestLive) {
+      requestToBeMember();
+      return;
+    }
+    if (!smartAccount) {
+      deferJoin();
+      openSignInPrompt('join');
+      return;
+    }
+    queueJoinRequest();
   };
 
   // A still-listed request whose vote has ended is busted: executed requests drop

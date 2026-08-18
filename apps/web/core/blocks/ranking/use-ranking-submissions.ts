@@ -1,6 +1,8 @@
 'use client';
 
+import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { Ops } from '@geoprotocol/geo-sdk';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -9,7 +11,7 @@ import { Duration, Effect, Either, Schedule } from 'effect';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { personalSpaceIdQueryKey, usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
@@ -66,10 +68,13 @@ function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
   );
 }
 
+type PersonalSpaceIdCache = { isRegistered: boolean; personalSpaceId: string | null };
+
 export function useRankingSubmissions(blockId: string, spaceId: string, blockName: string) {
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
+  const queryClient = useQueryClient();
   const { profile } = useGeoProfile(walletAddress);
   const [, setToast] = useToast();
   const reportError = useReportError();
@@ -151,11 +156,21 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
 
   const saveMySubmission = React.useCallback(
     async (slots: RankingSubmissionSlot[]): Promise<RankingSubmissionPublishResult | null> => {
-      if (!personalSpaceId) return null;
-      if (!smartAccount) {
+      const account =
+        smartAccount ??
+        queryClient
+          .getQueriesData<GeoWalletClient>({ queryKey: ['smart-account'] })
+          .map(([, cached]) => cached)
+          .find((cached): cached is GeoWalletClient => Boolean(cached)) ??
+        null;
+      if (!account) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
         return null;
       }
+      const personalSpaceId =
+        queryClient.getQueryData<PersonalSpaceIdCache>(personalSpaceIdQueryKey(account.account.address))
+          ?.personalSpaceId ?? null;
+      if (!personalSpaceId) return null;
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
       const votes = filteredSlots.map((slot, index) => ({
@@ -235,7 +250,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           const txHash = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                smartAccount.sendUserOperation({
+                account.sendUserOperation({
                   calls: [{ to: result.to, value: 0n, data: result.calldata }],
                 }),
               catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
@@ -338,7 +353,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       isRolling,
       isSubmissionLive,
       myRankEntity,
-      personalSpaceId,
+      queryClient,
       profile?.avatarUrl,
       profile?.name,
       refetchMyRanking,

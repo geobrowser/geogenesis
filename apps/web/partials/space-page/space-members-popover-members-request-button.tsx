@@ -8,6 +8,7 @@ import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { useDeferredJoin } from '~/core/state/pending-join-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Pending } from '~/design-system/pending';
@@ -37,13 +38,7 @@ export function SpaceMembersPopoverMemberRequestButton({
   // off the list, so this one can no longer execute and the vote can't be revived.
   const isStuck = Boolean(memberRequest?.isVotingEnded);
 
-  const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
-
-  const handleJoin = () => {
-    if (canRequestLive) {
-      requestToBeMember();
-      return;
-    }
+  const queueJoinRequest = React.useCallback(() => {
     setOptimisticRequested(true);
     enqueuePendingAction({
       id: `join:${spaceId}`,
@@ -51,7 +46,23 @@ export function SpaceMembersPopoverMemberRequestButton({
       requires: 'personalSpace',
       run: () => requestToBeMemberAsync(),
     });
-    if (!smartAccount) openSignInPrompt('join');
+  }, [enqueuePendingAction, spaceId, requestToBeMemberAsync]);
+
+  const deferJoin = useDeferredJoin(spaceId, Boolean(smartAccount), queueJoinRequest);
+
+  const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
+
+  const handleJoin = () => {
+    if (canRequestLive) {
+      requestToBeMember();
+      return;
+    }
+    if (!smartAccount) {
+      deferJoin();
+      openSignInPrompt('join');
+      return;
+    }
+    queueJoinRequest();
   };
 
   // Open vote, or just submitted (before the indexer catches up) — show the live

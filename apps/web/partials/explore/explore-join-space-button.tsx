@@ -7,6 +7,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { useDeferredJoin } from '~/core/state/pending-join-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Pending } from '~/design-system/pending';
@@ -34,6 +35,19 @@ export function ExploreJoinSpaceButton({
   const enqueuePendingAction = useEnqueuePendingAction();
   const [optimisticRequested, setOptimisticRequested] = React.useState(false);
 
+  const queueJoinRequest = React.useCallback(() => {
+    // The PendingActionsRunner submits it once the space registers.
+    setOptimisticRequested(true);
+    enqueuePendingAction({
+      id: `join:${spaceId}`,
+      label: 'your membership request',
+      requires: 'personalSpace',
+      run: () => requestToBeMemberAsync(),
+    });
+  }, [enqueuePendingAction, spaceId, requestToBeMemberAsync]);
+
+  const deferJoin = useDeferredJoin(spaceId, Boolean(smartAccount), queueJoinRequest);
+
   // Durable + persisted pending state so a request made anywhere (space page,
   // the "Join spaces" pills) flips every card for this space to "Membership
   // pending" without a refresh.
@@ -47,16 +61,12 @@ export function ExploreJoinSpaceButton({
       requestToBeMember();
       return;
     }
-
-    // The PendingActionsRunner submits it once the space registers.
-    setOptimisticRequested(true);
-    enqueuePendingAction({
-      id: `join:${spaceId}`,
-      label: 'your membership request',
-      requires: 'personalSpace',
-      run: () => requestToBeMemberAsync(),
-    });
-    if (!smartAccount) openSignInPrompt('join');
+    if (!smartAccount) {
+      deferJoin();
+      openSignInPrompt('join');
+      return;
+    }
+    queueJoinRequest();
   };
 
   return (
@@ -68,13 +78,7 @@ export function ExploreJoinSpaceButton({
           type="button"
           className="flex h-[18px] items-center rounded-full border border-grey-02 px-1.5 text-[14px] leading-[13px] text-text transition-colors duration-150 hover:border-text"
           disabled={status !== 'idle'}
-          onClick={() => {
-            if (!smartAccount) {
-              openSignInPrompt('join');
-              return;
-            }
-            requestToBeMember();
-          }}
+          onClick={handleJoin}
         >
           {label}
         </button>
