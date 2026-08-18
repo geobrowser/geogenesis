@@ -72,8 +72,13 @@ export function useSpaceLabels(spaceIds: string[]): UseSpaceLabelsResult {
     return [...byNormalized.values()].sort();
   }, [sidebarLabels, spaceIds]);
 
-  const { spacesById, isLoading } = useSpacesByIds(missingIds);
+  const { spacesById, isLoading, isPlaceholderData } = useSpacesByIds(missingIds);
 
+  // Enumerated rather than read id by id, which `useSpacesByIds` warns about: while it holds the
+  // previous id set's map, this picks up names for spaces the caller is no longer asking about.
+  // Safe here, and useful — every entry is a real name for the space it is keyed on, callers only
+  // ever read the map by an id they are rendering, and carrying the extras means a label the
+  // viewer has already seen doesn't drop back to a skeleton when the id set grows around it.
   const labelsById = React.useMemo(() => {
     const labels = new Map(sidebarLabels);
     for (const [id, space] of spacesById) {
@@ -84,8 +89,11 @@ export function useSpaceLabels(spaceIds: string[]): UseSpaceLabelsResult {
     return labels;
   }, [sidebarLabels, spacesById]);
 
+  // Held-over data is not an answer about the ids just added, so it counts as still loading. Only
+  // the ids missing from `labelsById` read it, so the spaces the held-over map does name are
+  // unaffected — they are already resolved.
   return React.useMemo(
-    () => ({ labelsById, isLoading: missingIds.length > 0 && isLoading }),
-    [isLoading, labelsById, missingIds.length]
+    () => ({ labelsById, isLoading: missingIds.length > 0 && (isLoading || isPlaceholderData) }),
+    [isLoading, isPlaceholderData, labelsById, missingIds.length]
   );
 }

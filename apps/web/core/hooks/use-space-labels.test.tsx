@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   requestedIds: [] as string[][],
   fetched: new Map<string, { entity: { name: string | null; image: string | null } }>(),
   isLoading: false,
+  isPlaceholderData: false,
 }));
 
 vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
@@ -32,7 +33,12 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
 vi.mock('./use-spaces-by-ids', () => ({
   useSpacesByIds: (spaceIds: string[]) => {
     mocks.requestedIds.push(spaceIds);
-    return { spaces: [], spacesById: mocks.fetched, isLoading: mocks.isLoading };
+    return {
+      spaces: [],
+      spacesById: mocks.fetched,
+      isLoading: mocks.isLoading,
+      isPlaceholderData: mocks.isPlaceholderData,
+    };
   },
 }));
 
@@ -56,6 +62,7 @@ beforeEach(() => {
   mocks.requestedIds = [];
   mocks.fetched = new Map();
   mocks.isLoading = false;
+  mocks.isPlaceholderData = false;
 });
 
 afterEach(cleanup);
@@ -168,6 +175,24 @@ describe('useSpaceLabels', () => {
 
     const { result: pending } = renderHook(() => useSpaceLabels([UNKNOWN]));
     expect(pending.current.isLoading).toBe(true);
+  });
+
+  // `useSpacesByIds` holds the previous id set's map while the new one loads, so a name already on
+  // screen must not drop back to a skeleton just because another id joined the list.
+  it('keeps a name it already resolved while a wider lookup is in flight', () => {
+    mocks.fetched = new Map([[UNKNOWN, { entity: { name: 'Places', image: null } }]]);
+    mocks.isPlaceholderData = true;
+    const { result } = renderHook(() => useSpaceLabels([UNKNOWN, UNNAMED]));
+
+    expect(spaceLabel(result.current.labelsById, UNKNOWN)?.name).toBe('Places');
+  });
+
+  // ...but the ids that map says nothing about are still unanswered, not absent.
+  it('counts held-over data as still loading', () => {
+    mocks.isPlaceholderData = true;
+    const { result } = renderHook(() => useSpaceLabels([UNKNOWN]));
+
+    expect(result.current.isLoading).toBe(true);
   });
 
   it('falls back to the fetch entirely when the sidebar has not loaded', () => {
