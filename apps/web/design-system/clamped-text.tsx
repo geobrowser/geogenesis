@@ -25,6 +25,52 @@ const TOGGLE_CLASS =
 
 const TOGGLE_GUTTER_CLASS = 'pr-11';
 
+function isEllipsisActive(e: HTMLElement, maxLines: number): boolean {
+  const parent = e.parentElement;
+  const display = e.getBoundingClientRect();
+
+  if (!parent || (display.width === 0 && display.height === 0)) {
+    return e.scrollHeight > e.clientHeight + 1;
+  }
+
+  const temp = e.cloneNode(true) as HTMLElement;
+
+  temp.style.position = 'fixed';
+  temp.style.overflow = 'visible';
+  temp.style.visibility = 'hidden';
+  temp.style.pointerEvents = 'none';
+  temp.style.height = 'auto';
+  temp.style.maxHeight = 'none';
+  temp.style.webkitLineClamp = 'none';
+  temp.style.setProperty('line-clamp', 'none');
+  temp.style.display = 'block';
+
+  for (const clampClass of Object.values(LINE_CLAMP_CLASS)) {
+    temp.classList.remove(clampClass);
+  }
+  temp.classList.remove(TOGGLE_GUTTER_CLASS);
+
+  if (maxLines === 1) {
+    temp.style.whiteSpace = 'nowrap';
+  } else {
+    temp.style.whiteSpace = 'normal';
+    temp.style.width = `${display.width}px`;
+    temp.style.boxSizing = 'border-box';
+  }
+
+  parent.appendChild(temp);
+
+  try {
+    const full = temp.getBoundingClientRect();
+    if (maxLines === 1) {
+      return full.width > display.width + 1;
+    }
+    return full.height > display.height + 1;
+  } finally {
+    temp.remove();
+  }
+}
+
 /**
  * Text clamped to `maxLines` with a More/Less toggle, so nothing is permanently
  * hidden from a reader who can't switch the page into edit mode.
@@ -32,26 +78,23 @@ const TOGGLE_GUTTER_CLASS = 'pr-11';
 export function ClampedText({ text, as: Tag = 'p', maxLines = 3, textClassName = '' }: ClampedTextProps) {
   const [expanded, setExpanded] = React.useState(false);
   const [isOverflowing, setIsOverflowing] = React.useState(false);
-  const measureRef = React.useRef<HTMLElement>(null);
+  const textRef = React.useRef<HTMLElement>(null);
+
+  React.useEffect(() => setExpanded(false), [text]);
 
   React.useLayoutEffect(() => {
-    const el = measureRef.current;
-    if (!el) return;
+    const el = textRef.current;
+    if (!el || expanded) return;
 
-    const measure = () => {
-      const lineHeight = parseFloat(getComputedStyle(el).lineHeight || '0');
-      const fullHeight = el.scrollHeight;
-      if (lineHeight > 0) {
-        setIsOverflowing(fullHeight > lineHeight * maxLines + 1);
-      }
-    };
-
+    const measure = () => setIsOverflowing(isEllipsisActive(el, maxLines));
     measure();
+
+    if (typeof ResizeObserver === 'undefined') return;
 
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [text, maxLines]);
+  }, [text, maxLines, expanded]);
 
   const showToggle = isOverflowing;
   const clamp = !expanded;
@@ -59,8 +102,11 @@ export function ClampedText({ text, as: Tag = 'p', maxLines = 3, textClassName =
   const reserveToggle = showToggle && clamp;
 
   return (
-    <div className="relative">
-      <Tag className={cx(textClassName, clamp && LINE_CLAMP_CLASS[maxLines], reserveToggle && TOGGLE_GUTTER_CLASS)}>
+    <div className="relative w-full min-w-0">
+      <Tag
+        ref={textRef as React.Ref<never>}
+        className={cx(textClassName, clamp && LINE_CLAMP_CLASS[maxLines], reserveToggle && TOGGLE_GUTTER_CLASS)}
+      >
         {text}
         {showToggle && expanded && (
           <>
@@ -81,13 +127,6 @@ export function ClampedText({ text, as: Tag = 'p', maxLines = 3, textClassName =
           More
         </button>
       )}
-      <Tag
-        ref={measureRef as React.Ref<never>}
-        aria-hidden="true"
-        className={cx('pointer-events-none invisible absolute inset-x-0 top-0', textClassName)}
-      >
-        {text}
-      </Tag>
     </div>
   );
 }
