@@ -44,13 +44,11 @@ describe('FeatureFlagsDialog', () => {
       .getAllByRole('button')
       .filter(button => button.getAttribute('aria-label') !== 'Close feature flags');
     expect(featureFlagButtons.map(button => button.getAttribute('aria-label'))).toEqual([
-      'Claims and debates',
       'Debate debugging',
       'Debate format selector',
       'Debates debug tab per space',
     ]);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Claims and debates' }));
     fireEvent.click(screen.getByRole('button', { name: 'Debate debugging' }));
     fireEvent.click(screen.getByRole('button', { name: 'Debate format selector' }));
     fireEvent.click(screen.getByRole('button', { name: 'Debates debug tab per space' }));
@@ -58,7 +56,6 @@ describe('FeatureFlagsDialog', () => {
     await waitFor(() => {
       expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(
         JSON.stringify({
-          questionsTab: true,
           debugDebatesPage: true,
           debateDebugging: true,
           debateFormatSelector: true,

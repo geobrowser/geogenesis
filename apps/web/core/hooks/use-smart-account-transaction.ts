@@ -1,6 +1,8 @@
 import type { GeoWalletClient } from '@geogenesis/auth/account';
 import { useQueryClient } from '@tanstack/react-query';
 
+import { useCallback } from 'react';
+
 import { Duration, Effect } from 'effect';
 
 import { TransactionWriteFailedError } from '../errors';
@@ -11,6 +13,14 @@ type SendTxArgs = {
   data: `0x${string}`;
   value?: bigint;
 };
+
+function sanitizeErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message.replace(/0x[a-fA-F0-9]{16,}/g, '[redacted-hex]').slice(0, 300);
+  }
+
+  return 'Transaction write failed';
+}
 
 /**
  * Returns an Effect-returning function that signs and submits a transaction via the
@@ -31,54 +41,51 @@ export function useSmartAccountTransaction() {
   const { smartAccount } = useSmartAccount();
   const queryClient = useQueryClient();
 
-  const sanitizeErrorMessage = (error: unknown) => {
-    if (error instanceof Error) {
-      return error.message.replace(/0x[a-fA-F0-9]{16,}/g, '[redacted-hex]').slice(0, 300);
-    }
+  // Memoized so callers can put it in a `useCallback`/`useEffect` dependency list
+  // without re-running on every render — `useRankingComposeAccess` fires its
+  // membership check from an effect keyed on the callback it builds from this.
+  const sendTransaction = useCallback(
+    ({ to, data, value = 0n }: SendTxArgs) =>
+      Effect.gen(function* () {
+        const cachedAccounts = queryClient
+          .getQueriesData<GeoWalletClient | null>({ queryKey: ['smart-account'] })
+          .map(([, cached]) => cached)
+          .filter((cached): cached is GeoWalletClient => Boolean(cached));
+        const account = smartAccount ?? (cachedAccounts.length === 1 ? cachedAccounts[0] : null) ?? null;
 
-    return 'Transaction write failed';
-  };
+        if (!account) {
+          return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));
+        }
 
-  const sendTransaction = ({ to, data, value = 0n }: SendTxArgs) => {
-    return Effect.gen(function* () {
-      const cachedAccounts = queryClient
-        .getQueriesData<GeoWalletClient | null>({ queryKey: ['smart-account'] })
-        .map(([, cached]) => cached)
-        .filter((cached): cached is GeoWalletClient => Boolean(cached));
-      const account = smartAccount ?? (cachedAccounts.length === 1 ? cachedAccounts[0] : null) ?? null;
+        if (!to) {
+          return yield* Effect.fail(new TransactionWriteFailedError('Missing transaction target'));
+        }
 
-      if (!account) {
-        return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));
-      }
+        const hash = yield* Effect.tryPromise({
+          try: async () => {
+            return await account.sendTransaction({
+              to,
+              value,
+              data,
+            });
+          },
+          catch: error => new TransactionWriteFailedError(sanitizeErrorMessage(error), { cause: error }),
+        }).pipe(
+          Effect.timeoutFail({
+            // > MAX_QUEUE_WAIT_MS (120s) + the 90s receipt bound.
+            duration: Duration.seconds(240),
+            onTimeout: () =>
+              new TransactionWriteFailedError(
+                'Transaction timed out. It may have been submitted and could still land on-chain — check before retrying.'
+              ),
+          })
+        );
 
-      if (!to) {
-        return yield* Effect.fail(new TransactionWriteFailedError('Missing transaction target'));
-      }
-
-      const hash = yield* Effect.tryPromise({
-        try: async () => {
-          return await account.sendTransaction({
-            to,
-            value,
-            data,
-          });
-        },
-        catch: error => new TransactionWriteFailedError(sanitizeErrorMessage(error), { cause: error }),
-      }).pipe(
-        Effect.timeoutFail({
-          // > MAX_QUEUE_WAIT_MS (120s) + the 90s receipt bound.
-          duration: Duration.seconds(240),
-          onTimeout: () =>
-            new TransactionWriteFailedError(
-              'Transaction timed out. It may have been submitted and could still land on-chain — check before retrying.'
-            ),
-        })
-      );
-
-      console.log('Transaction successful', hash);
-      return hash;
-    }).pipe(Effect.withSpan('web.write.sendTransaction'));
-  };
+        console.log('Transaction successful', hash);
+        return hash;
+      }).pipe(Effect.withSpan('web.write.sendTransaction')),
+    [smartAccount, queryClient]
+  );
 
   return sendTransaction;
 }

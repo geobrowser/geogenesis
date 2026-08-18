@@ -8,10 +8,8 @@ type Props = {
 };
 
 export function EntityPageSidebarLayout({ children, sidebar = null }: Props) {
-  const hasSidebar = sidebar !== null && sidebar !== false;
-
   return (
-    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>
+    <EntityPageContentContainer variant="auto-sidebar">
       <div className="flex items-start">
         <div className="min-w-0 flex-1">{children}</div>
         {sidebar}

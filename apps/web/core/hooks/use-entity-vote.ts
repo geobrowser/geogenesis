@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 
 import { Effect, Either } from 'effect';
 
+import { ensureSpaceMembership } from '~/core/access/request-space-membership';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getUserEntityResponse } from '~/core/io/queries';
@@ -358,7 +359,24 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       });
       return { previousState, runId, runOrder };
     },
-    onSuccess: (submission, _direction, context) => {
+    onSuccess: (submission, direction, context) => {
+      // Taking a position on a claim (agree/disagree, verify/dispute) says the user wants to
+      // take part in the space the claim is published in, so join them to it the same way
+      // submitting a ranking does. Curation upvotes are excluded — those apply to every
+      // entity on every surface, and auto-joining on them would flood spaces with membership
+      // proposals. Withdrawing a position isn't participation either.
+      //
+      // Fired once the response transaction has landed so the two user operations never race
+      // for the same smart-account nonce.
+      if (direction !== 'clear' && submission.pending.responseKind !== 'curation') {
+        void ensureSpaceMembership({
+          spaceId: submission.pending.spaceId,
+          personalSpaceId: submission.pending.personalSpaceId,
+          tx,
+          queryClient,
+        });
+      }
+
       if (!context) return;
       const run = responseIndexingRegistry.submissionRuns.get(indexingKeyId)?.get(context.runId);
       if (!run) return;

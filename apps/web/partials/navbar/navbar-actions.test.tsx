@@ -9,7 +9,6 @@ import { NavbarActions } from './navbar-actions';
 const address = '0x1234567890abcdef1234567890abcdef12345678';
 
 const mocks = vi.hoisted(() => ({
-  debatesEnabled: true,
   logout: vi.fn(),
   setToast: vi.fn(),
   debateActivityHook: vi.fn(),
@@ -57,7 +56,6 @@ vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => mocks.pendingPersonalSpace,
 }));
 vi.mock('~/core/state/feature-flags', () => ({
-  useDebatesEnabled: () => mocks.debatesEnabled,
 }));
 vi.mock('~/core/debates/hooks', () => ({
   useDebateActivity: (enabled: boolean) => {
@@ -130,7 +128,6 @@ describe('NavbarActions debate availability menu', () => {
   afterEach(cleanup);
 
   beforeEach(() => {
-    mocks.debatesEnabled = true;
     mocks.logout.mockReset();
     mocks.setToast.mockReset();
     mocks.debateActivityHook.mockReset();
@@ -155,22 +152,7 @@ describe('NavbarActions debate availability menu', () => {
     };
   });
 
-  it('keeps the legacy menu when the debate flag is off', async () => {
-    mocks.debatesEnabled = false;
-    const user = userEvent.setup();
-    render(<NavbarActions />);
-
-    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
-
-    expect(screen.getByText('Personal space')).toBeInTheDocument();
-    expect(screen.getByText('Sign out')).toBeInTheDocument();
-    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
-    expect(screen.queryByText('max@example.com')).not.toBeInTheDocument();
-    expect(mocks.debateActivityHook).toHaveBeenCalledWith(false);
-    expect(mocks.mutateAvailability).not.toHaveBeenCalled();
-  });
-
-  it('renders the wider flagged identity layout and personal-space link', async () => {
+  it('renders the wider identity layout and personal-space link', async () => {
     const user = userEvent.setup();
     render(<NavbarActions />);
 

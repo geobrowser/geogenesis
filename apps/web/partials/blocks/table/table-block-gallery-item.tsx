@@ -83,7 +83,7 @@ export function TableBlockGalleryItem({
     nameCell.description ??
     null;
 
-  const image = useBlockMainMediaUrl({
+  const { url: image, isResolving: isImageResolving } = useBlockMainMediaUrl({
     entityId: rowEntityId,
     spaceId: currentSpaceId,
     mediaPropertyId: mainMedia?.propertyId ?? null,
@@ -283,7 +283,10 @@ export function TableBlockGalleryItem({
               alt=""
               fill
             />
-          ) : (
+          ) : isImageResolving ? // Still looking the image up. Leaving the frame empty reads as the card still
+          // loading; dropping the placeholder in here would show every card the fallback
+          // image and then swap it for the real one.
+          null : (
             <NextImage
               src={PLACEHOLDER_SPACE_IMAGE}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
@@ -353,7 +356,9 @@ export function TableBlockGalleryItem({
           );
         })}
         <div className="mt-1 flex items-center justify-between gap-2">
-          <EntityRowActions entityId={rowEntityId} spaceId={currentSpaceId} />
+          {/* The entity's own space, not the block's (GEO-2581) — every other space-scoped
+              prop in this component already resolves it this way. */}
+          <EntityRowActions entityId={rowEntityId} spaceId={nameCell?.space ?? currentSpaceId} />
           {!isPlaceholder && (
             <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
               {source.type === 'COLLECTION' ? (

@@ -1,7 +1,5 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -14,10 +12,9 @@ import {
 import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 
-import { type DebateClaim, type DebateClaimsResponse, GeoChatRequestError } from './api';
+import type { DebateClaim } from './api';
 import { DebateEntityResponseControls } from './debate-entity-response-controls';
-import { useDebateReadinessIntent } from './debate-readiness-intent';
-import { useGeoChatAuth, useJoinDebateQueue, useLeaveDebateQueue } from './hooks';
+import { readinessReasonMessage, useClaimDebateReadiness } from './use-claim-debate-readiness';
 
 type ClaimDebateReadinessProps = {
   debateClaim: DebateClaim | null;
@@ -66,10 +63,6 @@ function ClaimDebateReadinessContent({
   textVariant = 'metadata',
   compact = false,
 }: Omit<ClaimDebateReadinessProps, 'debateClaim'> & { debateClaim: DebateClaim }) {
-  const queryClient = useQueryClient();
-  const joinQueue = useJoinDebateQueue(spaceId);
-  const leaveQueue = useLeaveDebateQueue(spaceId);
-  const { accountKey, authenticated } = useGeoChatAuth();
   const responseIndexing = useEntityResponseIndexingSnapshot({
     entityId,
     spaceId,
@@ -80,171 +73,18 @@ function ClaimDebateReadinessContent({
     spaceId,
     responseKind: debateClaim.response_kind,
   });
-  const { intent, setIntent, updateIntent } = useDebateReadinessIntent(
-    accountKey,
-    spaceId,
+  const {
+    checked,
+    disabled,
+    isSaving,
+    error,
+    toggle: onToggle,
+  } = useClaimDebateReadiness({
+    readiness: debateClaim,
     entityId,
-    debateClaim.response_kind
-  );
-
-  const pendingResponse = responseIndexing.status === 'idle' ? null : responseIndexing.pending;
-  const optimisticPosition =
-    pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
-  const viewerPosition = pendingResponse ? optimisticPosition : (debateClaim.viewer_response?.position ?? null);
-  const backendReady = debateClaim.viewer_debate_ready;
-  const responseWithdrawalPending = Boolean(pendingResponse && pendingResponse.expectedResponse === null);
-  const checked = responseWithdrawalPending ? false : (intent?.desiredReady ?? backendReady);
-  const intentRequestInFlight = intent?.inFlightReady !== null && intent?.inFlightReady !== undefined;
-  const isSaving = intentRequestInFlight || joinQueue.isPending || leaveQueue.isPending;
-  const canEnableToggle = viewerPosition !== null && authenticated && canEnable;
-  const disabled = !checked && !canEnableToggle;
-
-  React.useEffect(
-    function reconcileReadinessIntent() {
-      if (!intent) return;
-      if (!authenticated || !accountKey) {
-        setIntent(null);
-        return;
-      }
-
-      if (responseWithdrawalPending) {
-        setIntent(null);
-        return;
-      }
-
-      if (intent.inFlightReady !== null) return;
-      if (intent.refreshing) return;
-
-      if (intent.desiredReady === intent.confirmedReady) {
-        if (backendReady === intent.confirmedReady && !intent.error) setIntent(null);
-        return;
-      }
-
-      if (intent.desiredReady && intent.responseRunId) {
-        if (responseIndexing.status === 'idle' || responseIndexing.runId !== intent.responseRunId) {
-          setIntent(null);
-          return;
-        }
-        if (
-          !responseIndexing.pending?.expectedResponse ||
-          (responseIndexing.pending.expectedResponse === 'positive') !== intent.expectedPosition
-        ) {
-          setIntent(null);
-          return;
-        }
-      }
-
-      if (intent.desiredReady && debateClaim.viewer_response?.position !== intent.expectedPosition) {
-        if (!intent.responseRunId || responseIndexing.status === 'idle') setIntent(null);
-        return;
-      }
-
-      const submittedReady = intent.desiredReady;
-      let requestStarted = false;
-      updateIntent(current => {
-        if (
-          !current ||
-          current.inFlightReady !== null ||
-          current.refreshing ||
-          current.desiredReady !== submittedReady
-        ) {
-          return current;
-        }
-        requestStarted = true;
-        return { ...current, inFlightReady: submittedReady };
-      });
-      if (!requestStarted) return;
-
-      const request = submittedReady
-        ? joinQueue.mutateAsync({ claimId: entityId })
-        : leaveQueue.mutateAsync({ claimId: entityId });
-
-      void request.then(
-        result => {
-          queryClient.setQueriesData<DebateClaimsResponse>({ queryKey: ['debates', 'claims', spaceId] }, current =>
-            current
-              ? {
-                  ...current,
-                  claims: current.claims.map(claim =>
-                    claim.claim_entity_id === result.claim.claim_entity_id ? result.claim : claim
-                  ),
-                }
-              : current
-          );
-          updateIntent(current => {
-            if (current?.inFlightReady !== submittedReady) return current;
-            return {
-              ...current,
-              confirmedReady: submittedReady,
-              inFlightReady: null,
-              error: null,
-            };
-          });
-        },
-        error => {
-          let retryAfterRefetch = false;
-          updateIntent(current => {
-            if (current?.inFlightReady !== submittedReady) return current;
-            if (
-              submittedReady &&
-              current.desiredReady &&
-              error instanceof GeoChatRequestError &&
-              error.code === 'claim_response_required' &&
-              !current.hasRetried
-            ) {
-              retryAfterRefetch = true;
-              return {
-                ...current,
-                hasRetried: true,
-                inFlightReady: null,
-                refreshing: true,
-                error: null,
-              };
-            }
-
-            const requestError =
-              current.desiredReady !== current.confirmedReady
-                ? error instanceof Error
-                  ? error.message
-                  : 'Could not update debate readiness.'
-                : null;
-            return {
-              ...current,
-              desiredReady: current.confirmedReady,
-              inFlightReady: null,
-              refreshing: false,
-              error: requestError,
-            };
-          });
-
-          if (retryAfterRefetch) {
-            joinQueue.reset();
-            void queryClient.refetchQueries({ queryKey: ['debates', 'claims', spaceId] }).finally(() => {
-              updateIntent(current =>
-                current?.desiredReady && current.refreshing ? { ...current, refreshing: false } : current
-              );
-            });
-            return;
-          }
-        }
-      );
-    },
-    [
-      accountKey,
-      authenticated,
-      backendReady,
-      debateClaim.viewer_response?.position,
-      entityId,
-      intent,
-      joinQueue,
-      queryClient,
-      responseIndexing,
-      responseWithdrawalPending,
-      setIntent,
-      spaceId,
-      updateIntent,
-    ]
-  );
+    spaceId,
+    canEnable,
+  });
 
   React.useEffect(
     function retireConfirmedOptimisticResponse() {
@@ -259,29 +99,13 @@ function ClaimDebateReadinessContent({
     [debateClaim.viewer_response, resetResponseIndexing, responseIndexing]
   );
 
-  const handleToggle = () => {
-    const desiredReady = !checked;
-    if (desiredReady && (viewerPosition === null || !canEnableToggle)) return;
-
-    setIntent({
-      desiredReady,
-      confirmedReady: intent?.confirmedReady ?? backendReady,
-      inFlightReady: intent?.inFlightReady ?? null,
-      expectedPosition: desiredReady ? viewerPosition : (intent?.expectedPosition ?? viewerPosition),
-      responseRunId: desiredReady ? (pendingResponse ? responseIndexing.runId : null) : (intent?.responseRunId ?? null),
-      hasRetried: desiredReady ? false : (intent?.hasRetried ?? false),
-      refreshing: false,
-      error: null,
-    });
-  };
-
   const toggle = (
     <DebateToggle
       checked={checked}
       disabled={disabled}
       busy={isSaving}
       className={compact ? className : undefined}
-      onClick={handleToggle}
+      onClick={onToggle}
     />
   );
 
@@ -296,9 +120,9 @@ function ClaimDebateReadinessContent({
         {toggle}
       </div>
 
-      {(intent?.error || readinessMessage) && (
+      {(error || readinessMessage) && (
         <Text as="p" variant={textVariant} color="red-01" className="mt-2">
-          {intent?.error ?? readinessMessage}
+          {error ?? readinessMessage}
         </Text>
       )}
     </div>
@@ -347,18 +171,4 @@ function DebateToggle({
       )}
     </button>
   );
-}
-
-export function readinessReasonMessage(reason: string | null) {
-  switch (reason) {
-    case 'user_disabled':
-    case 'claim_response_withdrawn':
-      return null;
-    case 'claim_response_kind_changed':
-      return 'This claim’s response type changed. Respond and enable Debate again.';
-    case 'claim_response_validation_failed':
-      return 'Your response could not be verified yet. Debate will remain enabled while verification retries.';
-    default:
-      return reason;
-  }
 }
