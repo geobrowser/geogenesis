@@ -9,6 +9,7 @@ import { RANKING_BLOCK_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 
 import { ID_CHUNK_SIZE, afterArg, chunk, collectConnection, gqlId, gqlIdList, runQuery } from './community-graphql';
+import { isExcludedCurator } from './curator-leaderboard-exclusions';
 import { type CuratorLeaderboardWindow, curatorLeaderboardWindow } from './curator-leaderboard-period';
 import type {
   CuratorLeaderboardPeriod,
@@ -463,7 +464,21 @@ export async function fetchCuratorLeaderboard({
     accumulate(curatorSpaceId, counts => (counts.newsStories += count));
   }
 
-  const normalizedCurrentUserSpaceId = currentUserSpaceId ? gqlId(currentUserSpaceId) : null;
+  // Dropped here rather than per source, so everything downstream agrees: the rows, the active
+  // curator count, and the profiles fetched below all read this one map. The space-wide totals
+  // beside them (rankings, news stories) are deliberately left alone — they count what the space
+  // holds, not who is on the board, and an excluded curator's rankings are still the space's.
+  // Over a snapshot of the keys rather than the live iterator: deleting the current key mid-loop is
+  // well defined, but it reads like a bug and invites one the next time this moves.
+  for (const curatorSpaceId of [...countsByCurator.keys()]) {
+    if (isExcludedCurator(curatorSpaceId)) countsByCurator.delete(curatorSpaceId);
+  }
+
+  // An excluded curator is excluded from their own view too. Left as-is, `buildRows` would append
+  // them their own row — with zeroed counts, since the real ones were just dropped — which is both
+  // a leak of the thing being hidden and wrong about their activity.
+  const viewerSpaceId = isExcludedCurator(currentUserSpaceId) ? null : currentUserSpaceId;
+  const normalizedCurrentUserSpaceId = viewerSpaceId ? gqlId(viewerSpaceId) : null;
 
   const profileSpaceIds = [...countsByCurator.keys()];
   if (normalizedCurrentUserSpaceId && !profileSpaceIds.includes(normalizedCurrentUserSpaceId)) {
