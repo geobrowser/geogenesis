@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
-import { DEBATE_TYPE_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -16,6 +16,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { PublishedRecordingPlayer } from '~/partials/community-calls/published-recording-player';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { RankingCardBody } from './explore-ranking-card-body';
@@ -135,35 +136,28 @@ function CommunityCallCardBody({ item, actions }: CardBodyProps) {
   );
 }
 
-/** A Debate body: the rendered debate video already contains both participant views. */
-function DebateCardBody({ item, actions }: CardBodyProps) {
-  const sources = useRecordingSources({
-    entityId: item.entityId,
-    spaceId: item.spaceId,
-    serverRecordingUrls: item.debateVideoUrls,
-    relationTypeId: DEBATE_VIDEOS_PROPERTY_ID,
-  });
-
-  return (
-    <div className="flex min-w-0 flex-col gap-3">
-      <CardTitle item={item} />
-      {sources.length > 0 ? (
-        <div className="w-full max-w-[484px]">
-          <PublishedRecordingPlayer
-            sources={sources}
-            spaceId={item.spaceId}
-            videoClassName="aspect-[484/291] rounded-xl object-contain"
-          />
-        </div>
-      ) : null}
-      {actions}
-    </div>
-  );
+/**
+ * Debates get the same custom rendition they have on the full-screen `/debates` feed — the two
+ * debater videos with winner voting — with the generic card as the fallback whenever the debate
+ * can't actually be watched. Everything else renders the generic card.
+ */
+export function ExploreFeedCard(props: ExploreFeedCardProps) {
+  const isDebate = props.item.types.some(type => normalizeId(type.id) === DEBATE_TYPE);
+  if (isDebate) {
+    return (
+      <DebateExploreFeedCard
+        item={props.item}
+        hideSpaceLink={props.hideSpaceLink}
+        hideJoinButton={props.hideJoinButton}
+        fallback={<BaseExploreFeedCard {...props} />}
+      />
+    );
+  }
+  return <BaseExploreFeedCard {...props} />;
 }
 
-export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = false }: ExploreFeedCardProps) {
+function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = false }: ExploreFeedCardProps) {
   const isCommunityCall = item.types.some(type => normalizeId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
-  const isDebate = item.types.some(type => normalizeId(type.id) === DEBATE_TYPE);
   const isRanking = item.types.some(type => normalizeId(type.id) === RANKING_BLOCK_TYPE);
   const uniqueTypes = React.useMemo(() => {
     const seen = new Set<string>();
@@ -229,6 +223,12 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
     </div>
   );
 
+  const rankingActions = (
+    <div className="flex items-center gap-6 text-metadataMedium text-text">
+      <ExploreFeedCommentLink href={entityHref} count={item.commentCount} />
+    </div>
+  );
+
   return (
     <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
       {showSpace || dottedSegments.length > 0 ? (
@@ -254,11 +254,10 @@ export function ExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = 
 
       {isCommunityCall ? (
         <CommunityCallCardBody item={item} actions={cardActions} />
-      ) : isDebate ? (
-        <DebateCardBody item={item} actions={cardActions} />
       ) : isRanking ? (
-        // No `actions`: this body renders its own RankingVoteButton in the ranking title row.
-        <RankingCardBody item={item} />
+        // The ranking body renders its own RankingVoteButton in the title row; `actions` carries
+        // only the comment link.
+        <RankingCardBody item={item} actions={rankingActions} />
       ) : (
         <DefaultCardBody item={item} actions={cardActions} />
       )}

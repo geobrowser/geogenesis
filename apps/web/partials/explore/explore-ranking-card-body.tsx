@@ -58,7 +58,7 @@ function useRankingBlockPlacement(blockEntityId: string, spaceId: string) {
 }
 
 function useExploreRankingBlockData(blockId: string, spaceId: string) {
-  const { entity: blockEntity } = useQueryEntity({ spaceId, id: blockId });
+  const { entity: blockEntity, isLoading: isBlockLoading } = useQueryEntity({ spaceId, id: blockId });
   const blockRelations = blockEntity?.relations ?? [];
 
   const globalRankingEntityIds = React.useMemo(
@@ -82,6 +82,7 @@ function useExploreRankingBlockData(blockId: string, spaceId: string) {
     globalRankingEntityIds,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
+    isBlockLoading,
   };
 }
 
@@ -168,12 +169,10 @@ export function RankingRow({
 }
 
 /** Ranking Block body: ordered leaderboard rows; images only when the entry has avatar/cover. */
-export function RankingCardBody({ item }: { item: ExploreFeedItem }) {
+export function RankingCardBody({ item, actions }: { item: ExploreFeedItem; actions?: React.ReactNode }) {
   const [pageNumber, setPageNumber] = React.useState(0);
-  const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount } = useExploreRankingBlockData(
-    item.entityId,
-    item.spaceId
-  );
+  const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount, isBlockLoading } =
+    useExploreRankingBlockData(item.entityId, item.spaceId);
 
   const totalPages = Math.max(1, Math.ceil(globalRankingEntityIds.length / EXPLORE_RANKING_PAGE_SIZE));
   const safePage = Math.min(pageNumber, totalPages - 1);
@@ -187,6 +186,11 @@ export function RankingCardBody({ item }: { item: ExploreFeedItem }) {
 
   const hasRankedBy = aggregatedSubmitterSpaceIds.length > 0;
   const showPagination = globalRankingEntityIds.length > EXPLORE_RANKING_PAGE_SIZE;
+
+  // While the block entity resolves we have no ids yet, so show skeleton rows rather than the
+  // empty state. Only call it empty once the block has loaded and still has no ranked ids.
+  const rowsLoading = isBlockLoading || isLoading;
+  const showEmpty = !rowsLoading && pageIds.length === 0;
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -214,9 +218,17 @@ export function RankingCardBody({ item }: { item: ExploreFeedItem }) {
             />
           );
         })}
-        {!isLoading && pageIds.length === 0 ? (
-          <p className="text-metadata text-grey-04">No published items yet</p>
-        ) : null}
+        {pageIds.length === 0 && rowsLoading
+          ? Array.from({ length: EXPLORE_RANKING_PAGE_SIZE }).map((_, index) => (
+              <div key={index} className="flex w-full min-w-0 items-center gap-3">
+                <span className="w-5 shrink-0 text-center text-[16px] leading-[20px] font-normal tracking-[-0.35px] text-grey-04 tabular-nums">
+                  {index + 1}
+                </span>
+                <Skeleton className="h-5 w-full max-w-sm rounded" />
+              </div>
+            ))
+          : null}
+        {showEmpty ? <p className="text-metadata text-grey-04">No published items yet</p> : null}
       </div>
 
       {hasRankedBy || showPagination ? (
@@ -248,6 +260,8 @@ export function RankingCardBody({ item }: { item: ExploreFeedItem }) {
           ) : null}
         </div>
       ) : null}
+
+      {actions}
     </div>
   );
 }
