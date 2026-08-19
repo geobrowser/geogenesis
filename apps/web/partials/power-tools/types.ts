@@ -16,6 +16,8 @@ export type PowerToolsData = {
   propertiesById: Record<string, Property>;
   isLoading: boolean;
   isInitialLoading: boolean;
+  /** Filter display names are still being looked up, so an unresolved one is a wait, not an answer. */
+  isFilterResolving: boolean;
   hasMore: boolean;
   loadMore: () => void;
   totalCount?: number;

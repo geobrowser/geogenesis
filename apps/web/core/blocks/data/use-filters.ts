@@ -139,6 +139,11 @@ export function useFilters(canEdit?: boolean) {
     filterStateRef.current = filterState;
   }, [filterState]);
 
+  const resolvedStateRef = React.useRef(effectiveResolvedState);
+  React.useEffect(() => {
+    resolvedStateRef.current = effectiveResolvedState;
+  }, [effectiveResolvedState]);
+
   const writeFilterTriple = React.useCallback(
     (filters: Filter[], mode: FilterMode) => {
       const newFiltersString = filters.length === 0 && mode === 'AND' ? '' : toGeoFilterState(filters, mode);
@@ -168,7 +173,12 @@ export function useFilters(canEdit?: boolean) {
 
   const setFilterState = React.useCallback(
     (filters: Filter[]) => {
-      setOptimisticFilterState(filters);
+      // Carry over the names we have already resolved. Callers build the new list from
+      // `filterState`, which is the raw parse and carries no names at all — so adding one filter
+      // used to blank out the names of every filter already on screen, leaving them as raw entity
+      // ids until the re-resolve came back. A filter that hasn't changed keeps its identity, so
+      // its name is still ours to reuse.
+      setOptimisticFilterState(mergeFilterDisplayNames(filters, resolvedStateRef.current));
       writeFilterTriple(filters, filterModeRef.current);
     },
     [writeFilterTriple]
@@ -210,7 +220,7 @@ function areSameFilterSet(a: Filter[], b: Filter[]): boolean {
   return aKeys.every((key, index) => key === bKeys[index]);
 }
 
-function mergeFilterDisplayNames(filters: Filter[], displayNameSource: Filter[]): Filter[] {
+export function mergeFilterDisplayNames(filters: Filter[], displayNameSource: Filter[]): Filter[] {
   const namesByKey = new Map(displayNameSource.map(f => [filterIdentity(f), f]));
 
   return filters.map(filter => {

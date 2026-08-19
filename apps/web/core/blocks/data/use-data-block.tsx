@@ -485,6 +485,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     // From useFilters
     filterState: effectiveFilterState,
     resolvedFilterState: dbResolvedFilterState,
+    isFilterResolving,
     filterMode: effectiveFilterMode,
     dbFilterState,
     dbFilterMode,

@@ -483,6 +483,7 @@ export function usePowerToolsData(options?: {
     propertiesById,
     isLoading,
     isInitialLoading,
+    isFilterResolving,
     hasMore,
     loadMore,
     totalCount: source.type === 'COLLECTION' ? collectionLength : undefined,
