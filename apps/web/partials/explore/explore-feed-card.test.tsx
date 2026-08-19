@@ -26,6 +26,8 @@ vi.mock('./explore-join-space-button', () => ({
   ExploreJoinSpaceButton: () => null,
 }));
 
+// The ranking body pulls the sync store; stub it and surface whatever `actions` it is handed so we
+// can assert the card still threads a comment link into rankings.
 vi.mock('./explore-ranking-card-body', () => ({
   RankingCardBody: ({ actions }: { actions?: React.ReactNode }) => <div data-testid="ranking-body">{actions}</div>,
 }));

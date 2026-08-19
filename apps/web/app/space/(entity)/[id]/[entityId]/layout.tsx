@@ -6,9 +6,10 @@ import { Metadata } from 'next';
 
 import { notFound } from 'next/navigation';
 
+import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { firstLine } from '~/core/opengraph';
-import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TabEntity } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
@@ -75,7 +76,7 @@ export default async function ProfileLayout(props: Props) {
 
   return (
     <EntityStoreProvider id={entityId} spaceId={spaceId}>
-      <EditorProvider
+      <RouteEditorProvider
         id={profile.id}
         spaceId={spaceId}
         initialBlocks={profile.blocks}
@@ -109,7 +110,7 @@ export default async function ProfileLayout(props: Props) {
 
           {children}
         </EntityPageContentContainer>
-      </EditorProvider>
+      </RouteEditorProvider>
     </EntityStoreProvider>
   );
 }
@@ -191,12 +192,10 @@ async function getProfilePage(
     ...(blockRelations ?? []),
     ...orderedTabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
   ];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(
-    allBlocks,
-    cachedFetchEntitiesBatch,
-    spaceId,
-    allBlockRelations
-  );
+  const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
+    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
+  ]);
 
   return {
     ...person,
@@ -204,7 +203,9 @@ async function getProfilePage(
     avatarUrl: Entities.avatar(person.relations),
     coverUrl: Entities.cover(person.relations),
     blockRelations: blockRelations,
-    blocks,
+    // Shown-column properties ride along with the blocks so the editor hydrates them in the same
+    // pass — a gallery needs the dimensions on them to size its cards on the first paint.
+    blocks: [...blocks, ...shownPropertyEntities],
     tabEntities,
     tabRelations,
     tabs,

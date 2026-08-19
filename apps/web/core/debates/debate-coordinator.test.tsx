@@ -3,12 +3,17 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateActivity, DebateSharePrompt } from './api';
+import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt } from './api';
 import { DebateCoordinator } from './debate-coordinator';
+import { clearEnteringDebate, markEnteringDebate } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   activity: null as DebateActivity | null,
+  requests: { outbound: null, incoming: [] } as DebateRequestsResponse,
+  acceptRequestMutate: vi.fn(),
+  dismissRequestMutate: vi.fn(),
+  blockUserMutate: vi.fn(),
   pathname: '/space/space-1/debates',
   prompts: [] as DebateSharePrompt[],
   promptsFetching: false,
@@ -26,8 +31,11 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   gatewayPaused: false,
   currentUserId: 'user-for' as string | null,
+  // What the token exchange answers with when the stored session hasn't been written yet.
+  resolvedUserId: null as string | null,
   refetch: vi.fn(),
-  reconcileActivity: null as (() => Promise<DebateActivity | null>) | null,
+  abortMutateAsync: vi.fn(),
+  clearDebateActivity: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -39,7 +47,11 @@ vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
-  return { ...actual, getCurrentGeoChatUserId: () => mocks.currentUserId };
+  return {
+    ...actual,
+    getCurrentGeoChatUserId: () => mocks.currentUserId,
+    resolveCurrentGeoChatUserId: () => Promise.resolve(mocks.resolvedUserId),
+  };
 });
 
 vi.mock('./hooks', () => ({
@@ -50,22 +62,48 @@ vi.mock('./hooks', () => ({
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallengeMutate, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
+  useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
+  useClearDebateActivity: () => mocks.clearDebateActivity,
 }));
 
 vi.mock('./debate-gateway', () => ({
-  useDebateGateway: () => ({ status: mocks.gatewayPaused ? 'degraded' : 'ready', paused: mocks.gatewayPaused }),
+  useDebateGateway: () => ({
+    status: mocks.gatewayPaused ? 'degraded' : 'ready',
+    paused: mocks.gatewayPaused,
+    capabilities: [],
+  }),
+  useDebateGatewayScope: () => undefined,
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-  useDebatesEnabled: () => true,
+vi.mock('./matchmaking/hooks', () => ({
+  useDebateRequests: () => ({ data: mocks.requests, isLoading: false, error: null }),
+  useAcceptDebateRequest: () => ({ mutate: mocks.acceptRequestMutate, isPending: false, error: null }),
+  useDismissDebateRequest: () => ({ mutate: mocks.dismissRequestMutate, isPending: false, error: null }),
+  useBlockDebateUser: () => ({ mutate: mocks.blockUserMutate, isPending: false, error: null }),
+  useClaimReadiness: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
-vi.mock('./match-prompt', () => ({
-  DebateMatchPrompt: ({ reconcileActivity }: { reconcileActivity?: () => Promise<DebateActivity | null> }) => {
-    mocks.reconcileActivity = reconcileActivity ?? null;
-    return <div>Global match prompt</div>;
-  },
+// useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
+// suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useBrowseSidebarQuerySource: () => ({
+    personalSpaceId: null,
+    walletAddress: undefined,
+    keyInput: null,
+    isLoading: false,
+  }),
+  useCachedBrowseSidebarData: () => null,
 }));
+
+vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
+  useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
+}));
+
+vi.mock('./claim-response-indexed-notifier', () => ({
+  useClaimResponseIndexedNotifier: vi.fn(),
+}));
+
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -81,14 +119,21 @@ beforeEach(() => {
   mocks.downloadClick.mockClear();
   mocks.capture.mockReset();
   mocks.activity = null;
+  mocks.requests = { outbound: null, incoming: [] };
+  mocks.acceptRequestMutate.mockReset();
+  mocks.dismissRequestMutate.mockReset();
+  mocks.blockUserMutate.mockReset();
   mocks.pathname = '/space/space-1/debates';
   mocks.prompts = [];
   mocks.promptsFetching = false;
   mocks.authenticated = true;
   mocks.gatewayPaused = false;
   mocks.currentUserId = 'user-for';
+  mocks.resolvedUserId = null;
   mocks.refetch.mockReset();
-  mocks.reconcileActivity = null;
+  mocks.abortMutateAsync.mockReset();
+  mocks.abortMutateAsync.mockResolvedValue(undefined);
+  mocks.clearDebateActivity.mockReset();
   Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
   Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
   Object.defineProperty(URL, 'createObjectURL', {
@@ -111,6 +156,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   sessionStorage.clear();
+  clearEnteringDebate();
   vi.restoreAllMocks();
 });
 
@@ -134,90 +180,146 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
-  it('keeps the match prompt mounted until the debate route takes over', async () => {
-    mocks.activity = activityWithMatch();
-    const view = render(<DebateCoordinator />);
-
-    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
-
-    mocks.activity = activityWithDebate();
-    view.rerender(<DebateCoordinator />);
-
-    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
-    expect(mocks.push).not.toHaveBeenCalledWith('/space/space-1/debates/debate-1');
-
-    mocks.pathname = '/space/space-1/debates/debate-1';
-    view.rerender(<DebateCoordinator />);
-
-    expect(screen.queryByText('Global match prompt')).not.toBeInTheDocument();
-  });
-
-  it('leaves retained handoff ownership with the mounted match prompt', () => {
-    mocks.activity = activityWithMatch();
-    seedConfirmedOwnership();
-    const view = render(<DebateCoordinator />);
-
-    mocks.activity = activityWithDebate();
-    view.rerender(<DebateCoordinator />);
-
-    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
-    expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).not.toBeNull();
-    expect(mocks.push).not.toHaveBeenCalled();
-  });
-
   it('leaves a secondary tab on its current page when shared activity contains a debate', async () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = activityWithDebate();
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
-    expect(screen.queryByText('Global match prompt')).not.toBeInTheDocument();
+    // Offered, never taken: the tab that accepted routed itself, and yanking every other tab into
+    // the room is what the deleted match-ownership handoff existed to prevent.
+    expect(await screen.findByRole('button', { name: /Your debate is/ })).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
   });
 
-  it('routes only a reloaded owning tab when activity contains only the debate', async () => {
+  // GEO-2514: the person who sent the request is told their debate exists, and nothing else tells
+  // them — accepting no longer produces a match prompt on either side.
+  it('offers a way into a debate the viewer is not looking at', async () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = activityWithDebate();
-    seedConfirmedOwnership();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
+
+    expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
   });
 
-  it('makes activity reconciliation throw when refetch fails', async () => {
-    mocks.activity = activityWithMatch();
-    mocks.refetch.mockRejectedValue(new Error('Offline'));
-
-    render(<DebateCoordinator />);
-
-    await expect(mocks.reconcileActivity?.()).rejects.toThrow('Offline');
-    expect(mocks.refetch).toHaveBeenCalledWith({ throwOnError: true });
-  });
-
-  it('clears stale handoff ownership when an unrelated debate becomes active', async () => {
+  // Declining is the opposite of the request popup's "Not now" one line below: there is an opponent
+  // in the ready screen waiting on this answer, so it goes to the server instead of being snoozed.
+  it('cancels the debate when the viewer declines it', async () => {
+    mocks.pathname = '/space/space-1/claims';
     mocks.activity = activityWithDebate();
-    mocks.activity.debate = {
-      ...mocks.activity.debate!,
-      claim: { ...mocks.activity.debate!.claim, id: 'claim-2' },
-    };
-    seedConfirmedOwnership();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull());
+    fireEvent.click(await screen.findByRole('button', { name: 'Decline' }));
+
+    await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1'));
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
-  it('clears match handoff state after explicitly reaching the debate URL', async () => {
+  // The reported flicker. `useAcceptDebateRequest` pushes into the room and invalidates activity in
+  // the same tick, but the room is a server segment with no loading boundary: the accepting tab
+  // keeps this pathname for seconds while the debate arrives in activity. Reading that as "not
+  // there yet" reopened the dialog they had just accepted from, with the buttons swapped, and then
+  // took it away again when the room landed.
+  it('does not prompt the accepting tab to join the debate it is walking into', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-1');
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+    // Nor the fallback in its place — that would be the same flicker wearing a smaller hat.
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  it('still tells the other tab about the same debate', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-2');
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
+  });
+
+  // Held only until the room lands: leaving it set would suppress the prompt for a debate the
+  // viewer has since walked back out of.
+  it('releases the entry intent once the room is on screen', async () => {
     mocks.pathname = '/space/space-1/debates/debate-1';
     mocks.activity = activityWithDebate();
-    seedConfirmedOwnership();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-1');
+
+    const view = render(<DebateCoordinator />);
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+
+    mocks.pathname = '/space/space-1/claims';
+    view.rerender(<DebateCoordinator />);
+
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
+  });
+
+  // Decline cancels the debate on the server, which is the honest answer to one that has not
+  // started and a destructive one to anything past that: `in_progress` is a room the pair is
+  // recording in, `thanking` is a recording that is finished but not yet published. The prompt is
+  // app-wide and covers the page with no other way out, so a second tab would hand that button to
+  // someone mid-debate.
+  it('does not offer to cancel a debate that is already under way', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'in_progress', participants: bothParticipants() };
+
+    const view = render(<DebateCoordinator />);
+
+    // The rejoin bar instead: still a way in, with nothing on it that ends the debate.
+    expect(await screen.findByRole('button', { name: /Your debate is under way/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'thanking', participants: bothParticipants() };
+    view.rerender(<DebateCoordinator />);
+
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+  });
+
+  // Impatient viewers leave. The intent has to end with whichever navigation commits first, or the
+  // debate they walked away from goes unmentioned — no prompt, no rejoin bar — for the rest of the
+  // 30s window.
+  it('releases the entry intent when the viewer navigates somewhere else instead', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-1');
+
+    const view = render(<DebateCoordinator />);
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+
+    mocks.pathname = '/space/space-1/people';
+    view.rerender(<DebateCoordinator />);
+
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
+  });
+
+  it('does not offer a debate the viewer is already in', async () => {
+    mocks.pathname = '/space/space-1/debates/debate-1';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull());
-    expect(mocks.push).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
   });
 
   it('waits for the debate room to finalize its recording before routing to a rematch', async () => {
@@ -229,24 +331,142 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
+  // The rematch the viewer is already looking at, plus the debate it came from still reported in
+  // activity. Neither may move them off the rematch page.
+  // The popup and its snooze had no coverage at all: the harness mocks the request hooks and never
+  // puts a request in the list, so every one of these paths was live and unexercised.
+  it('prompts for an incoming request and keeps "Not now" local to this session', async () => {
+    mocks.activity = { ...idleActivity(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+    // Local only — nothing was sent, so the request is still the viewer's to answer in the hub.
+    expect(mocks.dismissRequestMutate).not.toHaveBeenCalled();
+    expect(mocks.acceptRequestMutate).not.toHaveBeenCalled();
+  });
+
+  // A claimless challenge interrupts the person who has to answer it, and nobody else. The sender
+  // has no decision to make, so their copy lives under Sent in the hub's Requests tab.
+  it('prompts the recipient of a claimless challenge', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
+  it('does not interrupt the sender of a challenge while it waits to be answered', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+    expect(screen.queryByText(/Waiting for .* to accept/)).not.toBeInTheDocument();
+  });
+
+  // The stored geo-chat session is what names the viewer, and it isn't always written yet. An
+  // absent id used to read as "not the recipient", which left the person the challenge was *for*
+  // with no popup at all — the bug this hook exists to close.
+  it('still prompts the recipient when the viewer id has to be resolved', async () => {
+    mocks.currentUserId = null;
+    mocks.resolvedUserId = 'user-recipient';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
+  it('keeps the sender uninterrupted once their id resolves', async () => {
+    mocks.currentUserId = null;
+    mocks.resolvedUserId = 'user-requester';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+  });
+
+  // The sender learns it was accepted the same way every other flow does: activity gains a rematch
+  // and the routing effect walks them into the claim picker. No popup is involved either way.
+  it('routes the sender into the claim picker once the challenge is accepted', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = { ...activityWithRematch('browsing'), challenge: null };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
+  it('does not prompt for a request while a debate is under way', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = { ...activityWithDebate(), incoming_request_count: 1 };
+    mocks.requests = { outbound: null, incoming: [incomingRequest()] };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+  });
+
   it('does not route stale debate activity over an active rematch page', async () => {
     mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
     mocks.activity = {
-      online: true,
-      available_to_debate: true,
-      cooldown_until: null,
-      match: null,
+      ...activityWithRematch('browsing'),
       debate: {
         id: 'debate-1',
         claim: { space_id: 'space-1' },
+        participants: bothParticipants(),
       } as NonNullable<DebateActivity['debate']>,
-      rematch: null,
-      challenge: null,
     };
 
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  // The loop this stops: the room hides itself and returns whoever opens a debate whose recording
+  // was cancelled, so routing into it from here bounced the viewer back and forth — the screen
+  // flickered, and the opponent's "your debate was removed" dialog reappeared after Okay.
+  it('does not route into a deciding rematch whose debate had its recording cancelled', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithRematch('deciding'),
+      debate: {
+        ...activityWithDebate().debate!,
+        status: 'thanking',
+        participants: bothParticipants(),
+        recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+        recording_cancelled_by: 'user-against',
+      },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    // Nor may it be offered: there is nothing left to join.
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  it('still routes into a deciding rematch while the debate is intact', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithRematch('deciding');
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
   });
 
   it.each(['complete', 'cancelled'] as const)('does not reopen a %s debate from stale activity', async status => {
@@ -256,51 +476,14 @@ describe('DebateCoordinator', () => {
       debate: {
         ...activityWithDebate().debate!,
         status,
+        participants: bothParticipants(),
       },
     };
-    seedConfirmedOwnership();
 
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
-    expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull();
-  });
-
-  it('clears ownership when loaded activity confirms the match flow expired', async () => {
-    mocks.activity = activityWithMatch();
-    seedConfirmedOwnership();
-    const view = render(<DebateCoordinator />);
-
-    expect(screen.getByText('Global match prompt')).toBeInTheDocument();
-
-    mocks.activity = { ...activityWithMatch(), match: null };
-    view.rerender(<DebateCoordinator />);
-
-    await waitFor(() => expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull());
-    expect(mocks.push).not.toHaveBeenCalled();
-  });
-
-  it('clears ownership when a different match replaces the owned flow', async () => {
-    const replacementActivity = activityWithMatch();
-    replacementActivity.match = {
-      ...replacementActivity.match!,
-      id: 'match-2',
-      claim: {
-        ...replacementActivity.match!.claim,
-        id: 'claim-2',
-        claim_entity_id: 'claim-entity-2',
-      },
-    };
-    mocks.activity = replacementActivity;
-    seedConfirmedOwnership();
-    const view = render(<DebateCoordinator />);
-
-    await waitFor(() => expect(sessionStorage.getItem('geo:debate-match-owner:user-for')).toBeNull());
-
-    mocks.activity = activityWithDebate();
-    view.rerender(<DebateCoordinator />);
-
-    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
   });
 
   it('requests the exact social preview and starts preparing the MP4 on open', async () => {
@@ -393,7 +576,7 @@ describe('DebateCoordinator', () => {
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
-    mocks.activity = activityWithMatch();
+    mocks.activity = activityWithDebate();
     view.rerender(<DebateCoordinator />);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
@@ -689,27 +872,6 @@ function videoResponse() {
   });
 }
 
-function seedConfirmedOwnership() {
-  const now = Date.now();
-  sessionStorage.setItem(
-    'geo:debate-match-owner:user-for',
-    JSON.stringify({
-      version: 1,
-      state: 'confirmed',
-      userId: 'user-for',
-      matchId: 'match-1',
-      claimId: 'claim-1',
-      spaceId: 'space-1',
-      instanceId: 'previous-instance',
-      createdAt: now,
-      acceptedAt: now,
-    })
-  );
-  vi.spyOn(performance, 'getEntriesByType').mockImplementation(type =>
-    type === 'navigation' ? ([{ type: 'reload' }] as PerformanceNavigationTiming[]) : []
-  );
-}
-
 function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
   return {
     online: true,
@@ -735,14 +897,14 @@ function activityWithRematch(status: 'deciding' | 'browsing'): DebateActivity {
   };
 }
 
-function activityWithMatch(): DebateActivity {
+function activityWithDebate(): DebateActivity {
   return {
     online: true,
     available_to_debate: true,
     cooldown_until: null,
-    match: {
-      id: 'match-1',
-      status: 'pending',
+    match: null,
+    debate: {
+      id: 'debate-1',
       claim: {
         id: 'claim-1',
         space_id: 'space-1',
@@ -750,27 +912,88 @@ function activityWithMatch(): DebateActivity {
         claim: 'Debates should hand off without flashing the page',
         description: null,
       },
-      participants: [],
-      turn_format_id: null,
-      debate_id: null,
-      created_at: '2026-07-02T00:00:00.000Z',
-      updated_at: '2026-07-02T00:00:00.000Z',
+      participants: [{ user_id: 'user-for' }],
+    } as NonNullable<DebateActivity['debate']>,
+    rematch: null,
+    challenge: null,
+  };
+}
+
+/** The ready prompt describes both sides, so it only surfaces for a debate that names them. */
+function bothParticipants(): NonNullable<DebateActivity['debate']>['participants'] {
+  return [
+    { user_id: 'user-for', profile_space_id: 'space-for', display_name: 'You', participant_slot: 1, position: true },
+    {
+      user_id: 'user-against',
+      profile_space_id: 'space-against',
+      display_name: 'Salina Mitchell',
+      participant_slot: 2,
+      position: false,
     },
+  ] as NonNullable<DebateActivity['debate']>['participants'];
+}
+
+function idleActivity(): DebateActivity {
+  return {
+    online: true,
+    available_to_debate: true,
+    cooldown_until: null,
+    match: null,
     debate: null,
     rematch: null,
     challenge: null,
   };
 }
 
-function activityWithDebate(): DebateActivity {
-  const matchActivity = activityWithMatch();
+function pendingChallenge() {
+  const party = (userId: string, name: string) => ({
+    user_id: userId,
+    profile_space_id: `space-${userId}`,
+    display_name: name,
+    avatar_cid: null,
+  });
+
   return {
-    ...matchActivity,
-    match: null,
-    debate: {
-      id: 'debate-1',
-      claim: matchActivity.match!.claim,
-      participants: [{ user_id: 'user-for' }],
-    } as NonNullable<DebateActivity['debate']>,
-  };
+    id: 'challenge-1',
+    status: 'pending',
+    source_space_id: 'space-1',
+    requester: party('user-requester', 'Ada'),
+    recipient: party('user-recipient', 'Grace'),
+    rematch_session_id: null,
+    created_at: '2026-08-12T11:00:00.000Z',
+    // Comfortably ahead of the countdown filter, which drops expired challenges before they prompt.
+    expires_at: '2099-01-01T00:00:00.000Z',
+  } as DebateActivity['challenge'];
+}
+
+function incomingRequest() {
+  const party = (userId: string, name: string, position: boolean) => ({
+    user_id: userId,
+    profile_space_id: `space-${userId}`,
+    display_name: name,
+    avatar_cid: null,
+    online: true,
+    available_to_debate: true,
+    in_debate: false,
+    online_since: '2026-08-11T11:00:00.000Z',
+    position,
+    position_label: position ? 'Yes' : 'No',
+  });
+
+  return {
+    id: 'request-1',
+    status: 'pending',
+    claim: {
+      id: 'claim-row-1',
+      space_id: 'space-1',
+      claim_entity_id: 'claim-entity-1',
+      claim: 'Debates should hand off without flashing the page',
+      description: null,
+    },
+    requester: party('user-against', 'Salina Mitchell', false),
+    recipient: party('user-for', 'You', true),
+    turn_format_id: null,
+    created_at: '2026-08-11T12:00:00.000Z',
+    expires_at: '2099-01-01T00:00:00.000Z',
+  } as unknown as NonNullable<DebateRequestsResponse['incoming']>[number];
 }

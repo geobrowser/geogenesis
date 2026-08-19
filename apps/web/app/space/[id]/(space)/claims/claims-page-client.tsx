@@ -1,26 +1,28 @@
 'use client';
 
-import { keepPreviousData } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useRouter } from 'next/navigation';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublished } from '~/core/claims/publish';
-import type { DebateClaim, DebateOnlineChoice } from '~/core/debates/api';
-import { useDebateClaims, useJoinDebateQueue } from '~/core/debates/hooks';
+import type { DebateClaim } from '~/core/debates/api';
+import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
+import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
+import { useDebateClaims } from '~/core/debates/hooks';
+import { uuidToHex } from '~/core/id/normalize';
+import {
+  ClaimResponseBatchBoundary,
+  useClaimResponseSummaryBatch,
+} from '~/core/responses/use-claim-response-summaries';
 import { useDiff } from '~/core/state/diff-store';
-import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
 
-import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
-import { Check } from '~/design-system/icons/check';
+import { getChecked } from '~/design-system/checkbox';
 import { Plus } from '~/design-system/icons/plus';
 import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
 import { Text } from '~/design-system/text';
@@ -48,21 +50,6 @@ const relatedFields: RelatedField[] = [
 ];
 
 export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
-  const isDebatesEnabled = useDebatesEnabled();
-  const router = useRouter();
-
-  React.useEffect(() => {
-    if (!isDebatesEnabled) {
-      router.replace(`/space/${spaceId}`);
-    }
-  }, [isDebatesEnabled, router, spaceId]);
-
-  if (!isDebatesEnabled) return null;
-
-  return <ClaimsTabSurface spaceId={spaceId} debatesEnabled={isDebatesEnabled} />;
-}
-
-function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & { debatesEnabled: boolean }) {
   const [formOpen, setFormOpen] = React.useState(false);
   const { entities: claims, isLoading } = useQueryEntities({
     where: {
@@ -70,11 +57,11 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
       types: [{ id: { equals: CLAIM_TYPE_ID } }],
     },
     first: 50,
-    placeholderData: keepPreviousData,
+    deferUntilFetched: true,
     includeUnpublishedLocal: true,
   });
   const publishedClaimIds = React.useMemo(() => claims.filter(isClaimPublished).map(claim => claim.id), [claims]);
-  const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, debatesEnabled);
+  const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, true);
   const debateClaimsByEntityId = React.useMemo(() => {
     const map = new Map<string, DebateClaim>();
     for (const claim of debateClaimsQuery.data?.claims ?? []) {
@@ -82,10 +69,32 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
     }
     return map;
   }, [debateClaimsQuery.data?.claims]);
-  const activeMatches = React.useMemo(
-    () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_match ? [claim.active_match] : [])),
+  const activeDebates = React.useMemo(
+    () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_debate ? [claim.active_debate] : [])),
     [debateClaimsQuery.data?.claims]
   );
+  const responseKindsByEntityId = React.useMemo(
+    () =>
+      new Map(
+        claims
+          .filter(isClaimPublished)
+          .map(claim => [
+            claim.id,
+            debateClaimsByEntityId.get(claim.id)?.response_kind ?? claimResponseKind(claim, spaceId),
+          ])
+      ),
+    [claims, debateClaimsByEntityId, spaceId]
+  );
+  const responseTargets = React.useMemo(
+    () => publishedClaimIds.map(entityId => ({ entityId, responseKind: responseKindsByEntityId.get(entityId)! })),
+    [publishedClaimIds, responseKindsByEntityId]
+  );
+  const responseBatch = useClaimResponseSummaryBatch({
+    spaceId,
+    targets: responseTargets,
+    enabled: true,
+  });
+  const responseBatchReady = responseTargets.length === 0 || responseBatch.isSuccess;
   return (
     <div className="py-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -102,15 +111,25 @@ function ClaimsTabSurface({ spaceId, debatesEnabled }: ClaimsPageClientProps & {
       {formOpen && <AddClaimForm spaceId={spaceId} onCancel={() => setFormOpen(false)} />}
 
       <div className={cx(formOpen && 'mt-6')}>
-        <ClaimsList
-          claims={claims}
-          isLoading={isLoading}
-          spaceId={spaceId}
-          debatesEnabled={debatesEnabled}
-          debateJoinBlocked={activeMatches.length > 0}
-          debateClaimsByEntityId={debateClaimsByEntityId}
-          debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
-        />
+        <ClaimResponseBatchBoundary ready={responseBatchReady}>
+          {responseBatch.isError ? (
+            <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white px-5 py-3">
+              <Text color="grey-04">Response data could not be loaded.</Text>
+              <Button type="button" variant="secondary" onClick={() => void responseBatch.refetch()}>
+                Retry
+              </Button>
+            </div>
+          ) : null}
+          <ClaimsList
+            claims={claims}
+            isLoading={isLoading}
+            spaceId={spaceId}
+            debateJoinBlocked={activeDebates.length > 0}
+            debateClaimsByEntityId={debateClaimsByEntityId}
+            responseKindsByEntityId={responseKindsByEntityId}
+            debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
+          />
+        </ClaimResponseBatchBoundary>
       </div>
     </div>
   );
@@ -225,17 +244,17 @@ function ClaimsList({
   claims,
   isLoading,
   spaceId,
-  debatesEnabled,
   debateJoinBlocked,
   debateClaimsByEntityId,
+  responseKindsByEntityId,
   debateStatus,
 }: {
   claims: Entity[];
   isLoading: boolean;
   spaceId: string;
-  debatesEnabled: boolean;
   debateJoinBlocked: boolean;
   debateClaimsByEntityId: Map<string, DebateClaim>;
+  responseKindsByEntityId: Map<string, 'stance' | 'veracity'>;
   debateStatus: string | null;
 }) {
   if (isLoading && claims.length === 0) {
@@ -261,7 +280,7 @@ function ClaimsList({
 
   return (
     <div className="space-y-3">
-      {debateStatus && debatesEnabled && (
+      {debateStatus && (
         <div className="rounded-lg border border-red-01 bg-white px-5 py-3">
           <Text color="red-01">{debateStatus}</Text>
         </div>
@@ -271,9 +290,9 @@ function ClaimsList({
           key={claim.id}
           claim={claim}
           spaceId={spaceId}
-          debatesEnabled={debatesEnabled}
           debateJoinBlocked={debateJoinBlocked}
           debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
+          responseKind={responseKindsByEntityId.get(claim.id) ?? claimResponseKind(claim, spaceId)}
         />
       ))}
     </div>
@@ -283,31 +302,19 @@ function ClaimsList({
 function ClaimListItem({
   claim,
   spaceId,
-  debatesEnabled,
   debateJoinBlocked,
   debateClaim,
+  responseKind,
 }: {
   claim: Entity;
   spaceId: string;
-  debatesEnabled: boolean;
   debateJoinBlocked: boolean;
   debateClaim: DebateClaim | null;
+  responseKind: 'stance' | 'veracity';
 }) {
   const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
   const published = isClaimPublished(claim);
-  const joinQueue = useJoinDebateQueue(spaceId);
-  const activeMatch = debateClaim?.active_match ?? null;
   const activeDebate = debateClaim?.active_debate ?? null;
-  const mutationError = joinQueue.error instanceof Error ? joinQueue.error.message : null;
-
-  const joinPosition = (position: boolean) => {
-    joinQueue.mutate({
-      claimId: claim.id,
-      request: {
-        position,
-      },
-    });
-  };
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
@@ -316,26 +323,27 @@ function ClaimListItem({
           {claim.name ?? claim.id}
         </Text>
 
-        {!published && debatesEnabled && (
+        {!published && (
           <Text as="p" variant="body" color="grey-04" className="mt-2">
             Publish this claim before starting a debate.
           </Text>
         )}
       </div>
 
-      <PositionButtonGroup
-        debatesEnabled={debatesEnabled}
-        canJoinDebate={published && !activeDebate && !activeMatch && !debateJoinBlocked}
-        pendingPosition={debateClaim?.viewer_waiting_position ?? null}
-        onlineChoices={debateClaim?.online_choices ?? []}
-        joinPending={joinQueue.isPending}
-        onJoinPosition={joinPosition}
-        className="mt-3"
-      />
-
-      {debatesEnabled && (
-        <ClaimDebateStatus debateClaim={debateClaim} mutationError={mutationError} published={published} />
+      {published && (
+        <div className="mt-3 flex items-center gap-4">
+          <DebateEntityResponseControls entityId={claim.id} spaceId={spaceId} responseKind={responseKind} />
+          <ClaimDebateReadiness
+            compact
+            debateClaim={debateClaim}
+            entityId={claim.id}
+            spaceId={spaceId}
+            canEnable={!activeDebate && !debateJoinBlocked}
+          />
+        </div>
       )}
+
+      <ClaimDebateStatus debateClaim={debateClaim} published={published} />
 
       {topics.length > 0 && (
         <div className="mt-3 grid gap-2 md:grid-cols-3">
@@ -346,151 +354,13 @@ function ClaimListItem({
   );
 }
 
-function PositionButtonGroup({
-  debatesEnabled,
-  canJoinDebate,
-  pendingPosition,
-  onlineChoices,
-  joinPending,
-  onJoinPosition,
-  className,
-}: {
-  debatesEnabled: boolean;
-  canJoinDebate: boolean;
-  pendingPosition: boolean | null;
-  onlineChoices: DebateOnlineChoice[];
-  joinPending: boolean;
-  onJoinPosition: (position: boolean) => void;
-  className?: string;
-}) {
-  const positions = [
-    { label: 'Yes', value: true },
-    { label: 'No', value: false },
-  ];
-
-  return (
-    <div className={className}>
-      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-1">
-        Position
-      </Text>
-      <div className="grid grid-cols-2 gap-2">
-        {positions.map(position => {
-          const choice = onlineChoices.find(choice => choice.position === position.value);
-          const label = choice?.position_label ?? position.label;
-          const participantCount = choice?.participant_count ?? 0;
-          const selected = pendingPosition === position.value;
-          const accessibleLabel = `${label}, ${participantCount} participant${participantCount === 1 ? '' : 's'} available${selected ? ', selected' : ''}`;
-
-          if (debatesEnabled) {
-            return (
-              <button
-                key={position.label}
-                type="button"
-                aria-label={accessibleLabel}
-                aria-pressed={selected}
-                onClick={() => onJoinPosition(position.value)}
-                disabled={!canJoinDebate || joinPending || selected}
-                className={cx(
-                  'flex min-h-11 min-w-0 items-center justify-between gap-2 rounded-full px-3 text-button transition-colors disabled:opacity-60 sm:px-4',
-                  selected ? 'bg-green text-text' : 'bg-bg text-text'
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  {selected && (
-                    <span aria-hidden="true" className="shrink-0">
-                      <Check />
-                    </span>
-                  )}
-                  <span className="truncate">{label}</span>
-                </span>
-                {choice && <OnlineChoiceParticipants choice={choice} />}
-              </button>
-            );
-          }
-
-          return (
-            <span
-              key={position.label}
-              className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
-            >
-              <span className="truncate">{label}</span>
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function OnlineChoiceParticipants({ choice }: { choice: DebateOnlineChoice }) {
-  const participants = choice.participants.slice(0, 2);
-  const overflowCount = Math.max(0, choice.participant_count - participants.length);
-
-  if (participants.length === 0 && overflowCount === 0) return null;
-
-  return (
-    <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
-      {participants.map(participant => {
-        const label = participant.display_name || participant.profile_space_id;
-
-        return (
-          <span
-            key={participant.user_id}
-            title={label}
-            className="relative box-content block h-5 w-5 overflow-hidden rounded-full border-2 border-white"
-          >
-            <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} alt={label} size={20} />
-          </span>
-        );
-      })}
-      {overflowCount > 0 && (
-        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums">
-          +{overflowCount}
-        </span>
-      )}
-    </span>
-  );
-}
-
-function ClaimDebateStatus({
-  debateClaim,
-  mutationError,
-  published,
-}: {
-  debateClaim: DebateClaim | null;
-  mutationError: string | null;
-  published: boolean;
-}) {
-  if (mutationError) {
-    return (
-      <Text as="p" variant="body" color="red-01" className="mt-3">
-        {mutationError}
-      </Text>
-    );
-  }
-
+function ClaimDebateStatus({ debateClaim, published }: { debateClaim: DebateClaim | null; published: boolean }) {
   if (!published) return null;
 
   if (debateClaim?.active_debate) {
     return (
       <Text as="p" variant="body" color="grey-04" className="mt-3">
         Debate {debateClaim.active_debate.status.replace('_', ' ')}
-      </Text>
-    );
-  }
-
-  if (debateClaim?.active_match) {
-    return (
-      <Text as="p" variant="body" color="grey-04" className="mt-3">
-        Match found. Both speakers need to accept.
-      </Text>
-    );
-  }
-
-  if (debateClaim?.viewer_waiting_position !== null && debateClaim?.viewer_waiting_position !== undefined) {
-    return (
-      <Text as="p" variant="body" color="grey-04" className="mt-3">
-        Waiting for someone with the opposite position.
       </Text>
     );
   }
@@ -530,4 +400,14 @@ function RelationChipGroup({
 
 function relationsForProperty(relations: Relation[], propertyId: string): Relation[] {
   return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
+}
+
+function claimResponseKind(claim: Entity, spaceId: string): 'stance' | 'veracity' {
+  const isFactual = claim.values.find(
+    value =>
+      value.isDeleted !== true &&
+      uuidToHex(value.spaceId) === uuidToHex(spaceId) &&
+      uuidToHex(value.property.id) === uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID)
+  )?.value;
+  return getChecked(isFactual) === true ? 'veracity' : 'stance';
 }

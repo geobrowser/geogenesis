@@ -16,11 +16,11 @@ vi.mock('~/core/hooks/use-properties', () => ({
 }));
 
 vi.mock('~/core/hooks/use-block-main-media', () => ({
-  useBlockMainMedia: () => null,
+  useBlockMainMedia: () => ({ mainMedia: null, isFramePending: false }),
 }));
 
 vi.mock('~/core/hooks/use-block-main-media-url', () => ({
-  useBlockMainMediaUrl: () => null,
+  useBlockMainMediaUrl: () => ({ url: null, isResolving: false }),
 }));
 
 vi.mock('~/core/utils/use-entity-media', () => ({
@@ -37,8 +37,8 @@ vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: ({ entityId, spaceId }: { entityId: string; spaceId: string }) => (
+vi.mock('~/partials/entity-page/entity-row-actions', () => ({
+  EntityRowActions: ({ entityId, spaceId }: { entityId: string; spaceId: string }) => (
     <div data-entity-id={entityId} data-space-id={spaceId} data-vote-actions />
   ),
 }));

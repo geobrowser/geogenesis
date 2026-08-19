@@ -138,8 +138,10 @@ function CommunityCallCardBody({ item, actions }: CardBodyProps) {
 
 /**
  * Debates get the same custom rendition they have on the full-screen `/debates` feed — the two
- * debater videos with winner voting — with the generic card as the fallback whenever the debate
- * can't actually be watched. Everything else renders the generic card.
+ * debater videos with winner voting — from `DebateExploreFeedCard` (added in #2129), which
+ * viewport-gates its geo-chat lookups (the feed pre-mounts cards ~8000px below the fold, so an
+ * ungated debate would start fetching video on mount) and falls back to the generic card whenever
+ * the debate can't actually be watched. Everything else renders one of the bodies below.
  */
 export function ExploreFeedCard(props: ExploreFeedCardProps) {
   const isDebate = props.item.types.some(type => normalizeId(type.id) === DEBATE_TYPE);
@@ -218,11 +220,13 @@ function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = fal
 
   const cardActions = (
     <div className="flex items-center gap-6 text-metadataMedium text-text">
-      <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} claimVoterAvatarsPosition="trailing" />
+      <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} claimResponderAvatarsPosition="trailing" />
       <ExploreFeedCommentLink href={entityHref} count={item.commentCount} />
     </div>
   );
 
+  // Ranking cards use the "Rank" button in place of the up/down vote controls, but they still
+  // get the comment link so every card type keeps a way into its comments.
   const rankingActions = (
     <div className="flex items-center gap-6 text-metadataMedium text-text">
       <ExploreFeedCommentLink href={entityHref} count={item.commentCount} />

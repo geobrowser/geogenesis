@@ -14,10 +14,10 @@ type ExploreJoinSpaceButtonProps = {
    * Render style.
    * - 'text' (default): inline text CTA ("Join space")
    * - 'button': chip-styled button
-   * - 'compact': small pill next to the space name on explore cards ("Join")
+   * - 'compact' / 'pill': small rounded pill next to a space badge on explore cards ("Join")
    */
-  variant?: 'text' | 'button' | 'compact';
-  /** CTA label for the idle state. Defaults to 'Join space'; compact use passes 'Join'. */
+  variant?: 'text' | 'button' | 'compact' | 'pill';
+  /** CTA label for the idle state. Defaults to 'Join space'; compact/pill use passes 'Join'. */
   label?: string;
 };
 
@@ -49,6 +49,21 @@ export function ExploreJoinSpaceButton({
     <Pending isPending={status === 'pending'} position="end">
       {showPendingLabel ? (
         <span className="text-smallButton text-grey-04">Membership pending</span>
+      ) : variant === 'pill' ? (
+        <button
+          type="button"
+          className="flex h-[18px] items-center rounded-full border border-grey-02 px-1.5 text-[14px] leading-[13px] text-text transition-colors duration-150 hover:border-text"
+          disabled={status !== 'idle'}
+          onClick={() => {
+            if (!smartAccount) {
+              openSignInPrompt('join');
+              return;
+            }
+            requestToBeMember();
+          }}
+        >
+          {label}
+        </button>
       ) : variant === 'button' ? (
         <button
           type="button"

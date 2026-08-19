@@ -1,50 +1,16 @@
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { parse } from 'graphql';
 
-import { EVENT_SCHEMA } from '~/core/community-calls/constants';
-import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
+import { exploreCardNodeFields, exploreCardPropertyFragment } from './explore-card-selection';
 
-import {
-  EXPLORE_AVATAR_PROPERTY_ID,
-  EXPLORE_COVER_PROPERTY_ID,
-  EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID,
-  EXPLORE_ENTITY_NAME_PROPERTY_ID,
-} from './explore-constants';
+const FRAGMENT = 'ExploreByPropertyFragment';
 
-// Kept in sync with exploreEntitiesConnectionDocument so the shared decoder works.
-const CARD_VALUE_PROPERTY_IDS = [
-  EXPLORE_ENTITY_NAME_PROPERTY_ID,
-  EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID,
-  EXPLORE_COVER_PROPERTY_ID,
-  EXPLORE_AVATAR_PROPERTY_ID,
-];
-const CARD_RELATION_TYPE_IDS = [
-  SystemIds.COVER_PROPERTY,
-  ContentIds.AVATAR_PROPERTY,
-  SystemIds.TYPES_PROPERTY,
-  EVENT_SCHEMA.RECORDINGS_PROPERTY,
-  DEBATE_VIDEOS_PROPERTY_ID,
-];
-
-const valuePropertyIdList = CARD_VALUE_PROPERTY_IDS.map(id => `"${id}"`).join(', ');
-const relationTypeIdList = CARD_RELATION_TYPE_IDS.map(id => `"${id}"`).join(', ');
-
-// Mirrors `ExploreEntitiesConnection`'s selection set so the shared decoder/cards
-// can render results from `entitiesOrderedByPropertyConnection` unchanged. Used
-// by the "Top" sort, where `propertyId` is the integer score property.
+// Shares `ExploreEntitiesConnection`'s selection set (see explore-card-selection) so the
+// shared decoder/cards can render results from `entitiesOrderedByPropertyConnection`
+// unchanged. Used by the "Top" sort, where `propertyId` is the integer score property.
 const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
-  fragment ExploreByPropertyFragment on PropertyInfo {
-    id
-    name
-    dataTypeId
-    dataTypeName
-    renderableTypeId
-    renderableTypeName
-    format
-    isType
-  }
+  ${exploreCardPropertyFragment(FRAGMENT)}
 
   query ExploreEntitiesByPropertyConnection(
     $first: Int
@@ -74,74 +40,7 @@ const EXPLORE_ENTITIES_BY_PROPERTY_SOURCE = /* GraphQL */ `
         hasNextPage
       }
       nodes {
-        id
-        name
-        description
-        spaceIds
-        createdAt
-
-        backlinks(filter: { typeId: { is: "310d4a240e5b451cb2151bfce40d0fe6" } }) {
-          totalCount
-        }
-
-        types {
-          id
-          name
-        }
-
-        valuesList(filter: {
-          spaceId: { in: $spaceIdsForLists }
-          propertyId: { in: [${valuePropertyIdList}] }
-        }) {
-          spaceId
-          property {
-            ...ExploreByPropertyFragment
-          }
-          text
-          integer
-          float
-          point
-          boolean
-          time
-          language
-          unit
-          datetime
-          date
-          decimal
-          schedule
-        }
-
-        relationsList(filter: {
-          spaceId: { in: $spaceIdsForLists }
-          typeId: { in: [${relationTypeIdList}] }
-        }) {
-          id
-          spaceId
-          position
-          verified
-          entityId
-          fromEntity {
-            id
-            name
-          }
-          toEntity {
-            id
-            name
-            types {
-              id
-            }
-            valuesList(filter: { spaceId: { in: $spaceIdsForLists } }) {
-              spaceId
-              propertyId
-              text
-            }
-          }
-          toSpaceId
-          type {
-            id
-            name
-          }
-        }
+        ${exploreCardNodeFields(FRAGMENT)}
       }
     }
   }
