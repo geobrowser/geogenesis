@@ -32,7 +32,7 @@ function debateBody(overrides: Record<string, unknown> = {}) {
 }
 
 /** Routes each geo-chat path the loader touches — plus the object store it redirects to — to a canned response. */
-function mockGeoChat(media: unknown, debate = debateBody(), artifactStatus = 200) {
+function mockGeoChat(media: unknown, debate = debateBody(), artifactStatus = 200, claims: unknown = null) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL, init?: RequestInit) => {
@@ -42,11 +42,13 @@ function mockGeoChat(media: unknown, debate = debateBody(), artifactStatus = 200
       }
       const body = url.endsWith('/media')
         ? media
-        : url.includes('/transcript')
-          ? { segments: [] }
-          : url.includes('/media/artifacts/url')
-            ? { upload: { url: presignedUrlFor(String(init?.body)) } }
-            : debate;
+        : url.endsWith('/claims')
+          ? claims
+          : url.includes('/transcript')
+            ? { segments: [] }
+            : url.includes('/media/artifacts/url')
+              ? { upload: { url: presignedUrlFor(String(init?.body)) } }
+              : debate;
       return new Response(JSON.stringify(body), { status: 200 });
     })
   );
@@ -90,6 +92,37 @@ describe('loadDebatePublishSource media gating', () => {
 
     const { input } = await loadDebatePublishSource(DEBATE_ID);
     expect(input.keyframeUrl).toBe('ipfs://cid-for-preview_image');
+  });
+
+  it('uses geo-chat canonical turns + pre-attributed claims when available', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), 200, {
+      turns: [
+        { turn_index: 0, participant_slot: 1, attributed_space_id: 'space-1', speaker_name: 'Specter', text: 'Nuclear program was advancing.' },
+        { turn_index: 1, participant_slot: 2, attributed_space_id: 'space-2', speaker_name: 'Antispecter', text: 'There was no congressional approval.' },
+      ],
+      claims: [
+        { text: 'The nuclear program was advancing.', is_factual: true, turn_index: 0 },
+        { text: 'The action was unjustified.', is_factual: false, turn_index: 1 },
+      ],
+    });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    // Transcript blocks come from geo-chat's canonical turns, attributed to each speaker's space entity.
+    expect(input.transcriptTurns.map(t => t.speakerSpaceEntityId)).toEqual(['space-1', 'space-2']);
+    expect(input.transcriptTurns[0].text).toBe('Nuclear program was advancing.');
+    // Claims arrive pre-attributed, keyed to the same turn indices.
+    expect(input.claims).toEqual([
+      { text: 'The nuclear program was advancing.', isFactual: true, turnIndex: 0 },
+      { text: 'The action was unjustified.', isFactual: false, turnIndex: 1 },
+    ]);
+  });
+
+  it('falls back to the raw transcript with no claims when geo-chat reports none', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    expect(input.claims).toEqual([]);
+    expect(input.transcriptTurns).toEqual([]); // /transcript mock returns no segments
   });
 
   it('publishes without a keyframe when the worker composed no preview_image', async () => {
