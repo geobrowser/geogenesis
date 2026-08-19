@@ -8,6 +8,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
+import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { GEO_ROLES_PROPERTY } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -18,11 +19,9 @@ import { pendingPersonalSpaceAtom, pendingPersonalSpaceId } from '~/core/state/p
 import { useReportError } from '~/core/state/status-bar-store';
 import { storage } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/sdk/geo-network';
 import { readRegisteredSpaceId } from '~/core/utils/contracts/create-personal-space-on-chain';
 import { devLog } from '~/core/utils/dev-log';
 import { describeError } from '~/core/utils/error-diagnostics';
-import { requestToBeMemberDirect } from '~/core/utils/request-to-be-member';
 
 import { avatarAtom, nameAtom, selectedRoleIdsAtom, selectedTopicIdsAtom, spaceIdAtom } from './dialog';
 
@@ -79,7 +78,7 @@ export function PendingPersonalSpaceRunner() {
   const queryClient = useQueryClient();
   const reportError = useReportError();
 
-  const tx = useSmartAccountTransaction({ address: SPACE_REGISTRY_ADDRESS });
+  const tx = useSmartAccountTransaction();
 
   // The onboarding role/interest picks are applied once creation resolves. Read
   // them through a ref so they don't re-trigger the creation effect.
@@ -173,10 +172,15 @@ export function PendingPersonalSpaceRunner() {
                 const targetSpace = await Effect.runPromise(getSpace(targetSpaceId));
                 if (!targetSpace?.address) continue;
 
-                await requestToBeMemberDirect({
+                await requestSpaceMembership({
                   spaceId: targetSpaceId,
                   personalSpaceId: spaceId,
                   tx,
+                  queryClient,
+                  space: {
+                    name: targetSpace.entity.name ?? undefined,
+                    image: targetSpace.entity.image,
+                  },
                 });
               } catch (error) {
                 console.error('[PendingPersonalSpace] membership proposal failed for', targetSpaceId, error);
