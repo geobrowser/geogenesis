@@ -7,7 +7,21 @@ import { statusKeyForId } from '~/core/bounties/labels';
 import type { BoardBounty } from '~/core/bounties/types';
 import type { SpaceBounty } from '~/core/community/bounty-types';
 
-import { AvailableBountyCard, BountyCard, InProgressBountyCard } from '~/partials/community-tab/bounty-card';
+import {
+  AVAILABLE_CARD_HEIGHT_PX,
+  AVAILABLE_CARD_WIDTH_PX,
+  AvailableBountyCard,
+  BountyCard,
+  InProgressBountyCard,
+} from '~/partials/community-tab/bounty-card';
+
+/**
+ * The board mixes statuses in one grid, so every card gets the same
+ * footprint — the available card's, the largest of the three. The Community
+ * tab keeps each card's own size because its sections never mix.
+ */
+export const BOARD_CARD_WIDTH_PX = AVAILABLE_CARD_WIDTH_PX;
+export const BOARD_CARD_HEIGHT_PX = AVAILABLE_CARD_HEIGHT_PX;
 
 /**
  * The interest bindings an available card needs, lifted to the grid so one
@@ -32,15 +46,17 @@ export function BoardBountyCard({ bounty, interest }: { bounty: BoardBounty; int
   switch (statusKeyForId(bounty.statusId)) {
     case 'done':
     case 'cancelled':
-      return <BountyCard bounty={spaceBounty} />;
+      return <BountyCard bounty={spaceBounty} width={BOARD_CARD_WIDTH_PX} height={BOARD_CARD_HEIGHT_PX} />;
     case 'in-progress':
     case 'in-review':
-      return <InProgressBountyCard bounty={spaceBounty} />;
+      return <InProgressBountyCard bounty={spaceBounty} width={BOARD_CARD_WIDTH_PX} height={BOARD_CARD_HEIGHT_PX} />;
     case 'backlog':
     case 'todo':
       return (
         <AvailableBountyCard
           bounty={spaceBounty}
+          width={BOARD_CARD_WIDTH_PX}
+          height={BOARD_CARD_HEIGHT_PX}
           isInterested={interest.interestedIds.has(bounty.id)}
           isPending={interest.pendingBountyId === bounty.id}
           isInterestLoading={interest.isInterestLoading}

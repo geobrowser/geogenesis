@@ -16,17 +16,24 @@ import type { BoardBounty } from '~/core/bounties/types';
 
 import { BoardBountyCard, type BoardInterestBindings } from './board-bounty-card';
 
-vi.mock('~/partials/community-tab/bounty-card', () => ({
-  BountyCard: ({ bounty }: { bounty: { name: string } }) => <div data-testid="completed-card">{bounty.name}</div>,
-  InProgressBountyCard: ({ bounty }: { bounty: { name: string } }) => (
-    <div data-testid="in-progress-card">{bounty.name}</div>
-  ),
-  AvailableBountyCard: ({ bounty, isInterested }: { bounty: { name: string }; isInterested: boolean }) => (
-    <div data-testid="available-card" data-interested={isInterested}>
-      {bounty.name}
-    </div>
-  ),
-}));
+vi.mock('~/partials/community-tab/bounty-card', () => {
+  type CardProps = { bounty: { name: string }; width?: number; height?: number; isInterested?: boolean };
+  const sized = (testId: string) =>
+    function Card({ bounty, width, height, isInterested }: CardProps) {
+      return (
+        <div data-testid={testId} data-width={width} data-height={height} data-interested={isInterested}>
+          {bounty.name}
+        </div>
+      );
+    };
+  return {
+    AVAILABLE_CARD_WIDTH_PX: 378,
+    AVAILABLE_CARD_HEIGHT_PX: 240,
+    BountyCard: sized('completed-card'),
+    InProgressBountyCard: sized('in-progress-card'),
+    AvailableBountyCard: sized('available-card'),
+  };
+});
 
 afterEach(cleanup);
 
@@ -72,7 +79,11 @@ describe('BoardBountyCard', () => {
     ];
     for (const [statusId, testId] of cases) {
       const { unmount } = render(<BoardBountyCard bounty={bounty(statusId)} interest={interest} />);
-      expect(screen.getByTestId(testId)).toBeInTheDocument();
+      const card = screen.getByTestId(testId);
+      expect(card).toBeInTheDocument();
+      // Every card on the board gets the same footprint.
+      expect(card).toHaveAttribute('data-width', '378');
+      expect(card).toHaveAttribute('data-height', '240');
       unmount();
     }
   });
