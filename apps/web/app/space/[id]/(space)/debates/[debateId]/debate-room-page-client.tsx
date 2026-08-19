@@ -76,6 +76,38 @@ type DebateRoomPageClientProps = {
 type DebateNoiseFilterStatus = 'initializing' | 'enabled' | 'disabled' | 'unsupported' | 'failed';
 
 type DebateRoomConnectionConflictSource = 'web_lock_blocked' | 'ownership_released' | 'livekit_duplicate_identity';
+type LocalTrackPreferences = { audioEnabled: boolean; videoEnabled: boolean };
+type DebateRoomConnectionStage =
+  | 'livekit_token'
+  | 'sdk_import'
+  | 'audio_output'
+  | 'livekit_connect'
+  | 'mark_joined'
+  | 'local_tracks'
+  | 'publish_tracks'
+  | 'noise_filter'
+  | 'local_preview';
+
+/**
+ * Stages that only run once `markJoined` has succeeded. Failing here means the server counts this
+ * participant as present — it will start the debate and stop timing the pair out — while this tab
+ * holds no media, so the connecting-deadline rematch can no longer rescue us. Recovery has to come
+ * from this client re-running `connect`.
+ */
+const debateRoomStagesAfterJoin: ReadonlySet<DebateRoomConnectionStage> = new Set([
+  // `mark_joined` itself is in the set: a client-side timeout can land after the server recorded
+  // the join, and a spurious retry costs one request while a missing one strands the participant.
+  'mark_joined',
+  'local_tracks',
+  'publish_tracks',
+  'noise_filter',
+  'local_preview',
+]);
+
+/** One silent re-attempt after a post-join failure; beyond that a repeating camera error would spin. */
+const maxAutomaticPostJoinRecoveries = 1;
+/** A device that just reported itself busy usually still is a moment later; give it a beat. */
+const postJoinRecoveryDelayMs = 750;
 
 const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
   initializing: 'Loading…',
@@ -196,6 +228,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     'idle'
   );
   const [roomError, setRoomError] = React.useState<string | null>(null);
+  const [postJoinConnectionFailure, setPostJoinConnectionFailure] = React.useState(false);
   const [connectionConflictSource, setConnectionConflictSource] =
     React.useState<DebateRoomConnectionConflictSource | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
@@ -228,6 +261,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingStartTimerRef = React.useRef<number | null>(null);
   const recordingStopTimerRef = React.useRef<number | null>(null);
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
+  const postJoinRecoveryAttemptsRef = React.useRef(0);
+  const postJoinRecoveryTimerRef = React.useRef<number | null>(null);
+  const connectRef = React.useRef<(options?: { takeover?: boolean }) => Promise<void>>(() => Promise.resolve());
   const connectionFailureHandledRef = React.useRef(false);
   const reportedConflictGenerationRef = React.useRef<number | null>(null);
   const reportedRecoveryGenerationRef = React.useRef<number | null>(null);
@@ -323,10 +359,34 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localSlot,
     audioMuted || pendingTurnYield !== null
   );
+  // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
+  // turn. Reading preferences through a ref keeps that write consistent with the reconciliation
+  // effect below, which can otherwise run first against a still-empty `localTracksRef` and be
+  // silently overwritten with a stale value. The slot is passed in because `connect` learns it from
+  // the join token before `joinResponse` state has necessarily re-rendered.
+  const localTrackPreferencesRef = React.useRef<(slot: ParticipantSlot | null) => LocalTrackPreferences>(() => ({
+    audioEnabled: false,
+    videoEnabled: true,
+  }));
+  localTrackPreferencesRef.current = slot => ({
+    audioEnabled: shouldEnableLocalAudio(
+      debate ? countdown.effectiveStatus : null,
+      countdown.activeSlot,
+      slot,
+      audioMuted || pendingTurnYield !== null
+    ),
+    videoEnabled,
+  });
   const connectionConflict = connectionConflictSource !== null;
   const canTakeOverConnection =
     connectionConflict && (countdown.effectiveStatus === 'connecting' || countdown.effectiveStatus === 'preflight');
   const connectionConflictWithoutTakeover = connectionConflict && !canTakeOverConnection;
+  // A post-join media failure keeps the retry reachable after the debate leaves `connecting` —
+  // that is the one case where nothing on the server side will recover the participant for us.
+  const canRetryConnection =
+    Boolean(debate) &&
+    !['complete', 'cancelled', 'thanking'].includes(debate?.status ?? '') &&
+    (debate?.status === 'connecting' || postJoinConnectionFailure);
   const shouldExitTerminalDebate = Boolean(
     debate &&
     recordingCancelledBy === null &&
@@ -746,6 +806,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     async (options: { takeover?: boolean } = {}) => {
       const generation = connectionGenerationRef.current + 1;
       connectionGenerationRef.current = generation;
+      const connectionStartedAt = performance.now();
+      let connectionStage: DebateRoomConnectionStage = 'livekit_token';
       const isCurrent = () => mountedRef.current && connectionGenerationRef.current === generation;
       let connectingRoom: RoomLike | null = null;
       let newlyCreatedTracks: LocalTrackLike[] = [];
@@ -778,6 +840,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
       setConnectionConflictSource(null);
       setRoomError(null);
+      setPostJoinConnectionFailure(false);
       setRoomState('connecting');
       setServerClockSettled(false);
       setRemoteVideoReady(false);
@@ -800,8 +863,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         if (!isCurrent()) return;
         setJoinResponse(token);
 
+        connectionStage = 'sdk_import';
         const livekit = await import('livekit-client');
         if (!isCurrent()) return;
+        connectionStage = 'audio_output';
         await audioOutputSelectionPromiseRef.current;
         if (!isCurrent()) return;
         // A debate is a live, recorded 1:1 call, so both cameras must stream the whole time.
@@ -901,6 +966,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           }
         });
 
+        connectionStage = 'livekit_connect';
         await room.connect(token.url, token.token);
         if (!isCurrent()) {
           room.disconnect();
@@ -909,7 +975,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
         connectingRoomRef.current = null;
         roomRef.current = room;
+
+        // The server's connecting deadline measures whether both participants reached LiveKit, not
+        // whether camera setup and publication have finished. Report the successful room connection
+        // immediately: a cold getUserMedia call can otherwise consume the entire deadline after the
+        // participant is already present in the room.
+        connectionStage = 'mark_joined';
+        await markJoined.mutateAsync();
+        if (!isCurrent()) {
+          room.disconnect();
+          stopLocalTracks(localTracksRef);
+          localMediaStreamRef.current = null;
+          if (roomRef.current === room) roomRef.current = null;
+          return;
+        }
+
         const hasPreviewTracks = localTracksRef.current.length > 0;
+        connectionStage = 'local_tracks';
         const tracks = hasPreviewTracks
           ? localTracksRef.current
           : ((await livekit.createLocalTracks({
@@ -926,31 +1008,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         localTracksRef.current = tracks;
         setLocalTrackPreferences(
           tracks,
-          {
-            audioEnabled: shouldEnableLocalAudio(
-              countdown.effectiveStatus,
-              countdown.activeSlot,
-              token.participant_slot,
-              audioMuted
-            ),
-            videoEnabled,
-          },
+          localTrackPreferencesRef.current(token.participant_slot),
           sourceMediaStreamTracksRef.current
         );
 
-        // Mark joined now that we're in the room and hold local media, before publishing. publishTrack
-        // awaits WebRTC media negotiation (ICE/TURN), which between two peers behind NAT can take
-        // several seconds; that's long enough to miss the server's connecting deadline and get the
-        // debate cancelled with connection_timeout even though both participants are present.
-        await markJoined.mutateAsync();
-        if (!isCurrent()) {
-          room.disconnect();
-          stopLocalTracks(localTracksRef);
-          localMediaStreamRef.current = null;
-          if (roomRef.current === room) roomRef.current = null;
-          return;
-        }
-
+        connectionStage = 'publish_tracks';
         for (const track of tracks) {
           await publishTrackWithRetry(room, track, isCurrent);
           if (!isCurrent()) {
@@ -965,6 +1027,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // LiveKit supplies the audio context required by audio processors while publishing the
         // microphone. Attach Krisp afterwards, then read mediaStreamTrack so this stream contains
         // the same processed track used by the outbound publication.
+        connectionStage = 'noise_filter';
         await initializeNoiseFilter(tracks, isCurrent);
         if (!isCurrent()) {
           room.disconnect();
@@ -973,6 +1036,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (roomRef.current === room) roomRef.current = null;
           return;
         }
+        connectionStage = 'local_preview';
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
         setPreviewStream(stream);
         if (localVideoRef.current) {
@@ -989,6 +1053,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           return;
         }
         setConnectionConflictSource(null);
+        setPostJoinConnectionFailure(false);
+        postJoinRecoveryAttemptsRef.current = 0;
         setRoomState('connected');
       } catch (error) {
         if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
@@ -999,19 +1065,49 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         if (isCurrent()) {
+          captureDebateRoomConnectionFailure({
+            debateId,
+            stage: connectionStage,
+            elapsedMs: performance.now() - connectionStartedAt,
+            error,
+          });
           ownershipRef.current?.release();
           setConnectionConflictSource(null);
           setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
-          setRoomState(debate?.status === 'connecting' ? 'connecting' : 'idle');
+          // The server already counts us as joined past this point, so it will never cancel the
+          // pair with `connection_timeout` and rematch them. Keep a retry reachable even once the
+          // debate has advanced out of `connecting`, and spend one silent re-attempt first.
+          const failedAfterJoin = debateRoomStagesAfterJoin.has(connectionStage);
+          if (failedAfterJoin) {
+            setPostJoinConnectionFailure(true);
+            if (postJoinRecoveryAttemptsRef.current < maxAutomaticPostJoinRecoveries) {
+              postJoinRecoveryAttemptsRef.current += 1;
+              // Re-run `connect` directly rather than through the auto-connect effect: that effect
+              // only fires from `roomState === 'idle'`, and while the debate is still `connecting`
+              // the state below stays 'connecting'. Clearing `autoConnectAttemptedRef` instead
+              // would also turn every later disconnect into an automatic reconnect.
+              if (postJoinRecoveryTimerRef.current !== null) window.clearTimeout(postJoinRecoveryTimerRef.current);
+              postJoinRecoveryTimerRef.current = window.setTimeout(() => {
+                postJoinRecoveryTimerRef.current = null;
+                // A manual retry or teardown in the meantime moved the generation on; it owns the room now.
+                if (!isCurrent()) return;
+                const status = debateStatusRef.current;
+                if (status === 'complete' || status === 'cancelled' || status === 'thanking') return;
+                void connectRef.current();
+              }, postJoinRecoveryDelayMs);
+            }
+          }
+          // Read the live status: `debate` is captured from the render that built this callback, and
+          // a slow media path is exactly when the debate advances underneath it. Trusting the stale
+          // value leaves `roomState` on 'connecting' while the modal hides its retry button.
+          setRoomState(debateStatusRef.current === 'connecting' ? 'connecting' : 'idle');
         }
       }
     },
+    // Countdown state, mute state and the debate status are read through refs above, so `connect`
+    // no longer changes identity on every countdown tick.
     [
-      audioMuted,
-      countdown.activeSlot,
-      countdown.effectiveStatus,
       debateId,
-      debate?.status,
       initializeNoiseFilter,
       liveKitJoin,
       markJoined,
@@ -1019,9 +1115,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       reportLocalReleaseRecovery,
       refetchDebate,
       setPreviewStream,
-      videoEnabled,
     ]
   );
+
+  connectRef.current = connect;
 
   const retryConnection = React.useCallback(() => {
     void connect();
@@ -1315,6 +1412,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         window.clearTimeout(remoteParticipantRefetchTimerRef.current);
         remoteParticipantRefetchTimerRef.current = null;
       }
+      if (postJoinRecoveryTimerRef.current !== null) {
+        window.clearTimeout(postJoinRecoveryTimerRef.current);
+        postJoinRecoveryTimerRef.current = null;
+      }
       clearRecordingTimers();
       void discardLocalRecorder();
       disconnectConnectingRoom(connectingRoomRef);
@@ -1342,6 +1443,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!debate || debate.status !== 'ready' || roomState !== 'idle') return;
+    // Warm the route's largest client-only dependency before the ten/finite-second connecting
+    // window starts. The import is cached by the module loader; media preview remains independent.
+    void import('livekit-client').catch(() => undefined);
     void ensureLocalPreview().catch(() => undefined);
   }, [debate, ensureLocalPreview, roomState]);
 
@@ -1628,6 +1732,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 endTurnPending={pendingTurnYield !== null}
                 onEndTurn={endLocalTurn}
                 onRetryFinalization={retryLiveDebateFinalization}
+                canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || roomState === 'saving'}
@@ -1665,6 +1770,7 @@ function DebateRecordingModal({
   endTurnPending,
   onEndTurn,
   onRetryFinalization,
+  canRetryConnection,
   onRetryConnection,
   onLeave,
   leaveDisabled,
@@ -1694,6 +1800,7 @@ function DebateRecordingModal({
   endTurnPending: boolean;
   onEndTurn: () => void;
   onRetryFinalization: () => void;
+  canRetryConnection: boolean;
   onRetryConnection: () => void;
   onLeave: () => void;
   leaveDisabled: boolean;
@@ -1921,7 +2028,7 @@ function DebateRecordingModal({
                 Retry save
               </Button>
             )}
-            {debate.status === 'connecting' && (
+            {canRetryConnection && (
               <Button type="button" variant="tertiary" onClick={onRetryConnection} disabled={roomState === 'saving'}>
                 Retry connection
               </Button>
@@ -2390,7 +2497,7 @@ function DebateAgainCard({
 
 function setLocalTrackPreferences(
   tracks: LocalTrackLike[],
-  preferences: { audioEnabled: boolean; videoEnabled: boolean },
+  preferences: LocalTrackPreferences,
   sourceMediaStreamTracks?: WeakMap<LocalTrackLike, MediaStreamTrack>
 ) {
   for (const track of tracks) {
@@ -2516,6 +2623,34 @@ function captureDebateRoomConnectionEvent(
     });
   } catch {
     // Analytics is best-effort and must never affect room ownership or connection recovery.
+  }
+}
+
+function captureDebateRoomConnectionFailure({
+  debateId,
+  stage,
+  elapsedMs,
+  error,
+}: {
+  debateId: string;
+  stage: DebateRoomConnectionStage;
+  elapsedMs: number;
+  error: unknown;
+}) {
+  try {
+    capture('debate_room_connection_failed', {
+      debate_id: debateId,
+      stage,
+      elapsed_ms: Math.max(0, Math.round(elapsedMs)),
+      error_name: error instanceof Error ? error.name : 'UnknownError',
+      error_message: error instanceof Error ? error.message : String(error),
+      online: typeof navigator === 'undefined' ? null : navigator.onLine,
+      visibility_state: typeof document === 'undefined' ? 'unknown' : document.visibilityState,
+      has_focus: typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus(),
+      navigation_type: currentNavigationType(),
+    });
+  } catch {
+    // Diagnostics are best-effort and must never interfere with room cleanup or retry.
   }
 }
 

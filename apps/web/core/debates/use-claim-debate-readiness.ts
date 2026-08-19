@@ -6,7 +6,12 @@ import * as React from 'react';
 
 import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 
-import { type DebateClaimsResponse, GeoChatRequestError, type MatchmakingReadiness } from './api';
+import {
+  type DebateClaimsResponse,
+  type DebateRematchClaimsResponse,
+  GeoChatRequestError,
+  type MatchmakingReadiness,
+} from './api';
 import { useDebateReadinessIntent } from './debate-readiness-intent';
 import { debateQueryKeys, useGeoChatAuth, useJoinDebateQueue, useLeaveDebateQueue } from './hooks';
 
@@ -75,6 +80,8 @@ export function useClaimDebateReadiness({
       ['debates', 'claims', spaceId] as const,
       debateQueryKeys.matchmakingClaimsRoot(accountKey),
       debateQueryKeys.matches(accountKey),
+      // The rematch picker reads readiness off its own claim lists once geo-chat carries it there.
+      debateQueryKeys.rematchRoot(accountKey),
     ],
     [accountKey, spaceId]
   );
@@ -165,6 +172,25 @@ export function useClaimDebateReadiness({
                   ),
                 }
               : current
+          );
+          queryClient.setQueriesData<DebateRematchClaimsResponse>(
+            { queryKey: debateQueryKeys.rematchRoot(accountKey) },
+            current =>
+              current && Array.isArray(current.claims)
+                ? {
+                    ...current,
+                    claims: current.claims.map(claim =>
+                      claim.claim.claim_entity_id === result.claim.claim_entity_id &&
+                      claim.viewer_debate_ready !== undefined
+                        ? {
+                            ...claim,
+                            viewer_debate_ready: result.claim.viewer_debate_ready,
+                            readiness_disabled_reason: result.claim.readiness_disabled_reason,
+                          }
+                        : claim
+                    ),
+                  }
+                : current
           );
           updateIntent(current => {
             if (current?.inFlightReady !== submittedReady) return current;
