@@ -6,6 +6,7 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
+import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
@@ -52,7 +53,7 @@ const mocks = vi.hoisted(() => ({
   ownershipRequestTakeover: vi.fn(),
   ownershipRelease: vi.fn(),
   ownershipClose: vi.fn(),
-  ownershipTakeoverHandler: null as null | (() => boolean | Promise<boolean>),
+  ownershipTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
   ownershipCoordinationMode: 'lock-and-broadcast' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
@@ -303,6 +304,9 @@ beforeEach(() => {
   mocks.clearTimedOutDebateActivity.mockReset();
   mocks.roomOn.mockReset();
   mocks.capture.mockReset();
+  // Tests run as an unfocused tab by default so the auto-takeover-on-focus effect stays quiet;
+  // focused-tab scenarios opt in per test.
+  vi.spyOn(document, 'hasFocus').mockReturnValue(false);
   mocks.ownershipAcquire.mockReset().mockResolvedValue({ acquired: true, waitedForLocalRelease: false });
   mocks.ownershipRequestTakeover.mockReset().mockResolvedValue(true);
   mocks.ownershipRelease.mockReset();
@@ -1332,6 +1336,69 @@ describe('DebateRoomPageClient', () => {
     );
   });
 
+  it('automatically reclaims the debate when the blocked tab is the focused one', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // No "Continue here" click: the lock race landed the room in another tab while the user is
+    // looking at this one, so the focused tab issues the takeover itself.
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('does not auto-reclaim across devices after a duplicate-identity disconnect', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    act(() => emitRoomEvent('disconnected', 2));
+
+    // The other participant identity may be the user's phone; evicting it must stay behind the
+    // explicit "Continue here" click even though this tab is focused.
+    expect(await screen.findByText('This debate is active in another tab or device.')).toBeInTheDocument();
+    expect(mocks.ownershipRequestTakeover).not.toHaveBeenCalled();
+  });
+
+  it('does not retry a refused auto-takeover until the tab is refocused', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.ownershipRequestTakeover.mockResolvedValue(false);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce());
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // A refusal must not spin: the next attempt waits for a real focus transition.
+    expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce();
+    expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledTimes(2));
+  });
+
   it('keeps takeover available during a preflight ownership conflict', async () => {
     const now = Date.parse('2026-07-02T00:00:05.000Z');
     vi.spyOn(Date, 'now').mockReturnValue(now);
@@ -1369,7 +1436,9 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
 
-    await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(true);
+    await expect(
+      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 }))
+    ).resolves.toBe(true);
     expect(mocks.roomDisconnect).toHaveBeenCalledOnce();
     expect(mocks.capture).toHaveBeenCalledOnce();
     expect(mocks.capture).toHaveBeenCalledWith(
@@ -1422,7 +1491,9 @@ describe('DebateRoomPageClient', () => {
     // must compare against the clock directly instead of trusting the last rendered status.
     now.mockReturnValue(Date.parse('2026-07-02T00:00:11.000Z'));
     monotonicNow.mockReturnValue(3_000);
-    await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(false);
+    await expect(
+      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 }))
+    ).resolves.toBe(false);
     expect(mocks.roomDisconnect).not.toHaveBeenCalled();
   });
 
@@ -1561,7 +1632,7 @@ describe('DebateRoomPageClient', () => {
     // emit Disconnected, so the CLIENT_INITIATED from our own room.disconnect() never reaches the
     // handler body — no "Lost connection" error, no drop metric.
     await act(async () => {
-      await mocks.ownershipTakeoverHandler?.();
+      await mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 });
     });
     mocks.capture.mockClear();
     act(() => emitRoomEvent('disconnected', 1));

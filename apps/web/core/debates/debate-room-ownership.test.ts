@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type DebateRoomOwnershipCoordinator, createDebateRoomOwnershipCoordinator } from './debate-room-ownership';
+import {
+  type DebateRoomOwnershipCoordinator,
+  type DebateRoomTabPriority,
+  type DebateRoomTakeoverContext,
+  createDebateRoomOwnershipCoordinator,
+} from './debate-room-ownership';
 
 type QueuedLock = {
   callback: (lock: Lock | null) => Promise<void> | void;
@@ -103,10 +108,15 @@ beforeEach(() => {
   vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
   let instanceNumber = 0;
   vi.stubGlobal('crypto', { randomUUID: vi.fn(() => `instance-${++instanceNumber}`) });
+  // Tests that don't inject getTabPriority run as a focused tab, so the acquisition stagger stays
+  // out of every pre-existing timing expectation.
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
   Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
 });
 
@@ -379,5 +389,127 @@ describe('debate room ownership', () => {
     await expect(second.acquire()).resolves.toEqual({ acquired: true, waitedForLocalRelease: false });
 
     await closeCoordinators(first, second);
+  });
+});
+
+describe('focus-weighted acquisition', () => {
+  function createTab(
+    getTabPriority: () => DebateRoomTabPriority,
+    onTakeoverRequested: (context: DebateRoomTakeoverContext) => boolean | Promise<boolean> = () => true
+  ) {
+    return createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested,
+      getTabPriority,
+    });
+  }
+
+  it('lets a focused tab win the lock over a hidden tab that asked first', async () => {
+    vi.useFakeTimers();
+    const hidden = createTab(() => 0);
+    const focused = createTab(() => 2);
+
+    const hiddenAcquisition = hidden.acquire();
+    const focusedAcquisition = focused.acquire();
+
+    await expect(focusedAcquisition).resolves.toEqual({ acquired: true, waitedForLocalRelease: false });
+    await vi.advanceTimersByTimeAsync(700);
+    await expect(hiddenAcquisition).resolves.toEqual({ acquired: false, waitedForLocalRelease: false });
+
+    await closeCoordinators(hidden, focused);
+  });
+
+  it('keeps first-come ordering between two hidden tabs', async () => {
+    vi.useFakeTimers();
+    const first = createTab(() => 0);
+    const second = createTab(() => 0);
+
+    const firstAcquisition = first.acquire();
+    const secondAcquisition = second.acquire();
+    await vi.advanceTimersByTimeAsync(700);
+
+    await expect(firstAcquisition).resolves.toEqual({ acquired: true, waitedForLocalRelease: false });
+    await expect(secondAcquisition).resolves.toEqual({ acquired: false, waitedForLocalRelease: false });
+
+    await closeCoordinators(first, second);
+  });
+
+  it('acquires early when the tab gains focus mid-stagger', async () => {
+    vi.useFakeTimers();
+    let priority: DebateRoomTabPriority = 0;
+    const tab = createTab(() => priority);
+
+    const acquisition = tab.acquire();
+    priority = 2;
+    window.dispatchEvent(new Event('focus'));
+
+    // Resolves without the 700ms hidden-tab stagger elapsing.
+    await expect(acquisition).resolves.toEqual({ acquired: true, waitedForLocalRelease: false });
+
+    await closeCoordinators(tab);
+  });
+
+  it('does not acquire when closed during the stagger', async () => {
+    vi.useFakeTimers();
+    const tab = createTab(() => 0);
+
+    const acquisition = tab.acquire();
+    tab.close();
+    await vi.advanceTimersByTimeAsync(700);
+
+    await expect(acquisition).resolves.toEqual({ acquired: false, waitedForLocalRelease: false });
+    expect(tab.ownsConnection()).toBe(false);
+
+    await closeCoordinators(tab);
+  });
+
+  it('skips the stagger for explicit takeovers and hands both priorities to the owner', async () => {
+    vi.useFakeTimers();
+    const onTakeoverRequested = vi.fn().mockResolvedValue(true);
+    const owner = createTab(() => 0, onTakeoverRequested);
+    const requester = createDebateRoomOwnershipCoordinator({
+      debateId: 'debate-1',
+      userId: 'user-a',
+      onTakeoverRequested: () => true,
+      getTabPriority: () => 2,
+    });
+
+    const ownerAcquisition = owner.acquire();
+    await vi.advanceTimersByTimeAsync(700);
+    await expect(ownerAcquisition).resolves.toEqual({ acquired: true, waitedForLocalRelease: false });
+
+    // No timer advance: a hidden owner's release must not delay the takeover by another stagger.
+    await expect(requester.requestTakeover()).resolves.toBe(true);
+    expect(onTakeoverRequested).toHaveBeenCalledWith({ requesterPriority: 2, ownerPriority: 0 });
+
+    await closeCoordinators(owner, requester);
+  });
+
+  it('treats a takeover request without a priority as coming from a focused tab', async () => {
+    const onTakeoverRequested = vi.fn().mockResolvedValue(false);
+    const owner = createTab(() => 1, onTakeoverRequested);
+    await owner.acquire();
+
+    // An old tab running a build that predates requesterPriority omits the field entirely.
+    const legacyChannel = new FakeBroadcastChannel('geo:debate-room:debate-1:user-a');
+    legacyChannel.postMessage({ type: 'takeover-request', requestId: 'legacy-1', requesterId: 'legacy-instance' });
+    await new Promise(resolve => queueMicrotask(() => resolve(undefined)));
+
+    expect(onTakeoverRequested).toHaveBeenCalledWith({ requesterPriority: 2, ownerPriority: 1 });
+
+    legacyChannel.close();
+    await closeCoordinators(owner);
+  });
+
+  it('does not stagger the LiveKit fallback, where last connect wins', async () => {
+    Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
+    const hidden = createTab(() => 0);
+
+    // Resolves immediately under real timers: a delay here would hand the room to the hidden tab,
+    // because DUPLICATE_IDENTITY arbitration favors the LAST tab to connect.
+    await expect(hidden.acquire()).resolves.toEqual({ acquired: true, waitedForLocalRelease: false });
+
+    await closeCoordinators(hidden);
   });
 });

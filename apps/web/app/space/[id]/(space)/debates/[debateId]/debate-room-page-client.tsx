@@ -30,6 +30,7 @@ import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
   createDebateRoomOwnershipCoordinator,
+  debateRoomTabPriority,
 } from '~/core/debates/debate-room-ownership';
 import {
   useAbortDebate,
@@ -259,6 +260,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // ended by our own teardown (leave, takeover, unmount) close no analytics event, so
   // debate_room_reconnecting counts can exceed the sum of the two closing events.
   const reconnectingStartedAtRef = React.useRef<number | null>(null);
+  // The connection generation whose conflict this tab last tried to auto-resolve, so a refused
+  // takeover doesn't retry on every focus event within the same conflict.
+  const autoTakeoverGenerationRef = React.useRef<number | null>(null);
   const ownershipRef = React.useRef<DebateRoomOwnershipCoordinator | null>(null);
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
@@ -508,13 +512,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const coordinator = createDebateRoomOwnershipCoordinator({
       debateId,
       userId: currentUserId,
-      onTakeoverRequested: () => {
+      onTakeoverRequested: ({ requesterPriority, ownerPriority }) => {
         const status = debateStatusRef.current;
         const preflightStillPending =
           status === 'preflight' &&
           recordingStartedAtRef.current === null &&
           (preflightEndsAtMsRef.current === null || serverNowRef.current() < preflightEndsAtMsRef.current);
-        const canReleaseOwnership = status === 'connecting' || preflightStillPending;
+        // A focused tab may pull the connection from an unfocused one while nothing has been
+        // recorded yet. Once recording starts the owner keeps the room: releasing would tear down
+        // an in-flight MediaRecorder, which cannot finish persisting inside the takeover budget.
+        const focusHandoff =
+          requesterPriority === 2 && ownerPriority < 2 && recordingStartedAtRef.current === null;
+        const canReleaseOwnership = status === 'connecting' || preflightStillPending || focusHandoff;
         if (!canReleaseOwnership) return false;
 
         const generation = connectionGenerationRef.current + 1;
@@ -1178,6 +1187,34 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const takeOverConnection = React.useCallback(() => {
     void connect({ takeover: true });
   }, [connect]);
+
+  // A blocked tab the user focuses reclaims the debate by itself instead of dead-ending on
+  // "already open in another tab" until they find the Continue button. Limited to same-browser
+  // conflict sources: reclaiming across devices (livekit_duplicate_identity) would evict a call
+  // the user may be actively holding on their phone, so that stays behind the explicit click.
+  React.useEffect(() => {
+    if (roomState !== 'idle') return;
+    if (connectionConflictSource !== 'web_lock_blocked' && connectionConflictSource !== 'ownership_released') return;
+    const attemptTakeover = () => {
+      const status = debateStatusRef.current;
+      if (status === null || ['complete', 'cancelled', 'thanking'].includes(status)) return;
+      if (debateRoomTabPriority() !== 2) return;
+      const generation = connectionGenerationRef.current;
+      if (autoTakeoverGenerationRef.current === generation) return;
+      autoTakeoverGenerationRef.current = generation;
+      void connectRef.current({ takeover: true });
+    };
+    window.addEventListener('focus', attemptTakeover);
+    document.addEventListener('visibilitychange', attemptTakeover);
+    // The conflict can land while this tab is already focused (it lost the connect race to a
+    // background tab that navigated earlier); reclaim immediately rather than waiting for a
+    // focus transition that will never come.
+    attemptTakeover();
+    return () => {
+      window.removeEventListener('focus', attemptTakeover);
+      document.removeEventListener('visibilitychange', attemptTakeover);
+    };
+  }, [connectionConflictSource, roomState]);
 
   const toggleAudioMuted = React.useCallback(() => {
     setAudioMuted(current => !current);
