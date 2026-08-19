@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { usePathname } from 'next/navigation';
 
+import { useSpaceDailyActivityTasks } from '~/core/space/use-space-daily-activities';
+
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 
 /**
@@ -31,4 +33,23 @@ export function SpaceHeaderContentContainer({ children, hasSidebar }: SpaceHeade
       {children}
     </EntityPageContentContainer>
   );
+}
+
+type SpaceHeaderContentGateProps = {
+  children: React.ReactNode;
+  spaceId: string;
+  hasCommunityCalls: boolean;
+  isExternalTopic: boolean;
+};
+
+export function SpaceHeaderContentGate({
+  children,
+  spaceId,
+  hasCommunityCalls,
+  isExternalTopic,
+}: SpaceHeaderContentGateProps) {
+  const { tasks } = useSpaceDailyActivityTasks(spaceId);
+  const hasSidebar = !isExternalTopic && (hasCommunityCalls || tasks.length > 0);
+
+  return <SpaceHeaderContentContainer hasSidebar={hasSidebar}>{children}</SpaceHeaderContentContainer>;
 }

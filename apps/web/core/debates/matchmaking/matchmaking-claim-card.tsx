@@ -11,7 +11,9 @@ import {
   useEntityResponseIndexingSnapshot,
   useResetEntityResponseIndexingSnapshot,
 } from '~/core/hooks/use-entity-vote';
+import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { ID } from '~/core/id';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
@@ -22,7 +24,12 @@ import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 import { Text } from '~/design-system/text';
 
-import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
+import type {
+  DebateClaimPositionSummary,
+  DebateClaimSummary,
+  DebateParticipantSummary,
+  MatchmakingReadiness,
+} from '../api';
 import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { hubCardMotion } from './hub-motion';
 
@@ -34,6 +41,24 @@ type Props = {
   activeDebate?: boolean;
   /** Rendered under the controls — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
+  /**
+   * Replaces the claim's link to its entity page. The rematch picker opens the side panel instead:
+   * following a link there would navigate out of the app shell and abandon the live session.
+   */
+  onOpenClaim?: () => void;
+  /**
+   * Leaves the readiness switch out. For hosts that can't yet say whether the viewer is standing
+   * ready — the switch reads `viewer_debate_ready`, so drawing it from an unresolved lookup would
+   * report "not ready" on a claim they are in fact ready on.
+   */
+  hideReadinessToggle?: boolean;
+  /**
+   * Set when `positions` cannot be trusted to say which side the viewer is on — the rematch picker
+   * identifies the viewer inside the summaries by geo-chat user id, which is null until its token
+   * exchange lands. Suppresses the optimistic adjustment rather than making it from a "no position"
+   * that only means "don't know yet", which would draw the viewer onto two sides at once.
+   */
+  viewerIdentityPending?: boolean;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -53,7 +78,17 @@ export function isResolvableClaim(claim: Pick<DebateClaimSummary, 'space_id' | '
  * there are deliberately no separate vote arrows here. Readiness, the geo-chat half, rides
  * alongside them.
  */
-export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate, footer, ref }: Props) {
+export function MatchmakingClaimCard({
+  claim,
+  positions,
+  readiness,
+  activeDebate,
+  footer,
+  onOpenClaim,
+  hideReadinessToggle,
+  viewerIdentityPending,
+  ref,
+}: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
   // asking the graph about it fails the request, so don't offer or ask.
   const isOnGraph = isResolvableClaim(claim);
@@ -63,9 +98,24 @@ export function MatchmakingClaimCard({ claim, positions, readiness, activeDebate
     // collapse to its content width as it fades.
     <motion.article ref={ref} {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
       {isOnGraph ? (
-        <RespondableControls claim={claim} positions={positions} readiness={readiness} activeDebate={activeDebate} />
+        <RespondableControls
+          claim={claim}
+          positions={positions}
+          readiness={readiness}
+          activeDebate={activeDebate}
+          onOpenClaim={onOpenClaim}
+          hideReadinessToggle={hideReadinessToggle}
+          viewerIdentityPending={viewerIdentityPending}
+        />
       ) : (
-        <UnresolvableControls positions={positions} readiness={readiness} claim={claim} activeDebate={activeDebate} />
+        <UnresolvableControls
+          positions={positions}
+          readiness={readiness}
+          claim={claim}
+          activeDebate={activeDebate}
+          onOpenClaim={onOpenClaim}
+          hideReadinessToggle={hideReadinessToggle}
+        />
       )}
 
       {footer}
@@ -82,11 +132,32 @@ function ClaimHeader({
   claim,
   isOnGraph,
   toggle,
+  onOpenClaim,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
   toggle: React.ReactNode;
+  onOpenClaim?: () => void;
 }) {
+  const openable = isOnGraph ? (
+    onOpenClaim ? (
+      <button type="button" onClick={onOpenClaim} className="mb-3 block text-left text-metadataMedium hover:underline">
+        {claim.claim}
+      </button>
+    ) : (
+      <Link
+        href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
+        className="mb-3 block text-metadataMedium hover:underline"
+      >
+        {claim.claim}
+      </Link>
+    )
+  ) : (
+    <Text as="p" variant="metadataMedium" className="mb-3">
+      {claim.claim}
+    </Text>
+  );
+
   return (
     <>
       {/* `items-start` so the chip stays put when the toggle stacks an explanation beneath it. */}
@@ -94,18 +165,7 @@ function ClaimHeader({
         <SpaceChip spaceId={claim.space_id} />
         {toggle}
       </div>
-      {isOnGraph ? (
-        <Link
-          href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
-          className="mb-3 block text-metadataMedium hover:underline"
-        >
-          {claim.claim}
-        </Link>
-      ) : (
-        <Text as="p" variant="metadataMedium" className="mb-3">
-          {claim.claim}
-        </Text>
-      )}
+      {openable}
     </>
   );
 }
@@ -116,18 +176,24 @@ function RespondableControls({
   positions,
   readiness,
   activeDebate,
+  onOpenClaim,
+  hideReadinessToggle,
+  viewerIdentityPending,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
+  onOpenClaim?: () => void;
+  hideReadinessToggle?: boolean;
+  viewerIdentityPending?: boolean;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
     spaceId: claim.space_id,
     responseKind: readiness.response_kind,
   };
-  const { submitResponse, isConnected } = useEntityResponse(target);
+  const { submitResponse, isConnected, personalSpaceId } = useEntityResponse(target);
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
   // Publishing before the personal space finishes registering fails, so wait it out the same way
@@ -145,7 +211,38 @@ function RespondableControls({
   const optimisticPosition =
     pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
   const viewerPosition = pendingResponse ? optimisticPosition : (readiness.viewer_response?.position ?? null);
-  const isPublishing = responseIndexing.status === 'reconciling' || responseIndexing.status === 'delayed';
+
+  // Already cached from the navbar, so the viewer's own avatar can join the side they picked in the
+  // same frame the pill fills in — rather than after geo-chat has indexed the response and told us
+  // about someone we knew about all along.
+  const viewerSpaceIds = React.useMemo(() => (personalSpaceId ? [personalSpaceId] : []), [personalSpaceId]);
+  const { profilesBySpaceId } = useProfilesBySpaceIds(viewerSpaceIds);
+  const viewerProfile = personalSpaceId ? profilesBySpaceId.get(personalSpaceId) : undefined;
+
+  const optimisticPositions = React.useMemo(
+    () =>
+      viewerIdentityPending
+        ? positions
+        : withViewerPosition({
+            positions,
+            responseKind: readiness.response_kind,
+            serverPosition: readiness.viewer_response?.position ?? null,
+            viewerPosition,
+            viewerSpaceId: personalSpaceId,
+            viewerName: viewerProfile?.name ?? null,
+            viewerAvatarUrl: viewerProfile?.avatarUrl ?? null,
+          }),
+    [
+      personalSpaceId,
+      positions,
+      readiness.response_kind,
+      readiness.viewer_response?.position,
+      viewerIdentityPending,
+      viewerPosition,
+      viewerProfile?.avatarUrl,
+      viewerProfile?.name,
+    ]
+  );
 
   // Hand back to the server's copy only once it actually agrees, so there is no window where
   // neither side reports the response.
@@ -182,22 +279,22 @@ function RespondableControls({
       <ClaimHeader
         claim={claim}
         isOnGraph
+        onOpenClaim={onOpenClaim}
         toggle={
-          <ClaimReadinessToggle
-            claim={claim}
-            readiness={readiness}
-            activeDebate={activeDebate}
-            hasResponse={viewerPosition !== null}
-            responseIndexing={isPublishing}
-          />
+          hideReadinessToggle ? null : (
+            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
+          )
         }
       />
       <PositionRow
-        positions={positions}
+        positions={optimisticPositions}
         responseKind={readiness.response_kind}
         viewerPosition={viewerPosition}
         onRespond={respond}
-        disabled={!isConnected || isPublishing || isAccountSetupPending}
+        // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
+        // overlapping submissions, so there is nothing to protect against — and dimming the pills
+        // for the length of an indexing round trip read as the response not having landed.
+        disabled={!isConnected || isAccountSetupPending}
         titleFor={actionTitle}
       />
       {responseError ? (
@@ -211,31 +308,110 @@ function RespondableControls({
   );
 }
 
+/**
+ * Move the viewer between the two sides to match the response they just gave, before geo-chat has
+ * indexed it and can report them itself.
+ *
+ * geo-chat's summaries are the only source of the avatar stacks, and they trail the viewer's own
+ * response by a publish, an index and a notification — so without this the side you just took
+ * fills in with your colour but not your face, which reads as the response not having counted.
+ */
+export function withViewerPosition({
+  positions,
+  responseKind,
+  serverPosition,
+  viewerPosition,
+  viewerSpaceId,
+  viewerName,
+  viewerAvatarUrl,
+}: {
+  positions: DebateClaimPositionSummary[];
+  responseKind: MatchmakingReadiness['response_kind'];
+  /** The position geo-chat currently reports for the viewer. */
+  serverPosition: boolean | null;
+  /** The position this client knows the viewer holds. */
+  viewerPosition: boolean | null;
+  viewerSpaceId: string | null;
+  viewerName: string | null;
+  viewerAvatarUrl: string | null;
+}): DebateClaimPositionSummary[] {
+  if (!viewerSpaceId || viewerPosition === serverPosition) return positions;
+
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const viewer = {
+    // Not geo-chat's id for this user — we don't have it here. Keyed on the personal space instead,
+    // which is unique per viewer and is what the avatar renders from anyway.
+    user_id: `viewer:${viewerSpaceId}`,
+    profile_space_id: viewerSpaceId,
+    display_name: viewerName,
+    avatar_cid: viewerAvatarUrl,
+  };
+
+  // `ID.equals` rather than `===`: `viewerSpaceId` is a graph id, which is always bare hex, while
+  // geo-chat ids are treated as possibly dashed throughout this directory. A raw comparison against
+  // a dashed `profile_space_id` silently fails to match, which would leave the viewer drawn on both
+  // sides at once — the count decrements either way.
+  const heldByViewer = (participant: DebateParticipantSummary) =>
+    ID.equals(participant.profile_space_id, viewerSpaceId);
+
+  // Counts follow `serverPosition`, but the participant lists are rebuilt from scratch on every
+  // side. Removing the viewer only from the side the server reports assumed those two agree about
+  // who the viewer is; where they don't, the viewer ends up on two sides at once.
+  const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
+    ...side,
+    total_count: side.total_count + (serverPosition === side.position ? 0 : 1),
+    participants: [viewer, ...side.participants.filter(participant => !heldByViewer(participant))],
+  });
+  const withoutViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
+    ...side,
+    total_count: Math.max(0, side.total_count - (serverPosition === side.position ? 1 : 0)),
+    participants: side.participants.filter(participant => !heldByViewer(participant)),
+  });
+
+  const adjusted = positions.map(side => (side.position === viewerPosition ? withViewer(side) : withoutViewer(side)));
+
+  // A side nobody has taken yet has no summary to adjust, so the viewer would have nowhere to
+  // appear. The label matches what PositionRow falls back to for a missing side.
+  if (viewerPosition !== null && !adjusted.some(side => side.position === viewerPosition)) {
+    adjusted.push({
+      position: viewerPosition,
+      position_label: viewerPosition ? copy.positiveAction : copy.negativeAction,
+      total_count: 1,
+      available_now_count: 0,
+      participants: [viewer],
+    });
+  }
+
+  return adjusted;
+}
+
 /** The graph can't resolve this claim, so the sides are read-only and there's nothing to respond to. */
 function UnresolvableControls({
   claim,
   positions,
   readiness,
   activeDebate,
+  onOpenClaim,
+  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: boolean;
+  onOpenClaim?: () => void;
+  hideReadinessToggle?: boolean;
 }) {
   return (
     <>
       <ClaimHeader
         claim={claim}
         isOnGraph={false}
+        onOpenClaim={onOpenClaim}
         toggle={
           /* Readiness is geo-chat state, so it still works without a graph id. */
-          <ClaimReadinessToggle
-            claim={claim}
-            readiness={readiness}
-            activeDebate={activeDebate}
-            hasResponse={readiness.viewer_response !== null}
-          />
+          hideReadinessToggle ? null : (
+            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
+          )
         }
       />
       <PositionRow

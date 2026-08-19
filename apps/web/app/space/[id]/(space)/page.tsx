@@ -6,10 +6,11 @@ import type { Metadata } from 'next';
 
 import { notFound } from 'next/navigation';
 
+import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
-import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
@@ -20,13 +21,13 @@ import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
-import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
+import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
@@ -83,16 +84,15 @@ export default async function SpacePage(props0: Props) {
     resolveSpaceSidebar(spaceId),
   ]);
 
-  let sidebar: React.ReactNode = null;
-  if (isRootSpace) {
-    sidebar = (
-      <React.Suspense fallback={null}>
-        <RootExploreSidePanelContainer />
-      </React.Suspense>
-    );
-  } else if (communityCalls.length > 0) {
-    sidebar = <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} />;
-  }
+  // The root space shows the explore rail instead of the space overview one, and
+  // streams it so its own fetches don't hold up the page.
+  const sidebar = isRootSpace ? (
+    <React.Suspense fallback={null}>
+      <RootExploreSidePanelContainer />
+    </React.Suspense>
+  ) : (
+    <SpaceOverviewSidePanel spaceId={spaceId} communityCalls={communityCalls} />
+  );
 
   return (
     <EntityPageSidebarLayout sidebar={sidebar}>
@@ -124,7 +124,7 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
 
   return (
     <EntityStoreProvider id={topicEntityId} spaceId={spaceId}>
-      <EditorProvider
+      <RouteEditorProvider
         id={topicEntityId}
         spaceId={spaceId}
         initialBlocks={topic.blocks}
@@ -148,7 +148,7 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
             </React.Suspense>
           </TrackedErrorBoundary>
         </EntityPageContentContainer>
-      </EditorProvider>
+      </RouteEditorProvider>
     </EntityStoreProvider>
   );
 }
@@ -198,14 +198,14 @@ async function getTopicEntityData(spaceId: string, topicEntityId: string) {
     ...blockRelations,
     ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
   ];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(
-    allBlocks,
-    cachedFetchEntitiesBatch,
-    spaceId,
-    allBlockRelations
-  );
+  const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
+    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
+  ]);
 
-  return { blocks, blockRelations, tabs, initialCollectionItems };
+  // Shown-column properties ride along with the blocks so the editor hydrates them in the same
+  // pass — a gallery needs the dimensions on them to size its cards on the first paint.
+  return { blocks: [...blocks, ...shownPropertyEntities], blockRelations, tabs, initialCollectionItems };
 }
 
 const SubtopicGallerySkeleton = () => {

@@ -12,6 +12,7 @@ import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
+import { useComments } from '~/core/hooks/use-comments';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -21,13 +22,14 @@ import { Button } from '~/design-system/button';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Text } from '~/design-system/text';
 
+import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
+
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
-
 import { debateFullscreenActiveAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
@@ -107,8 +109,10 @@ export function DebatesBrowseFeed({
   // An anchored feed starts active on the anchor so the linked debate is the one
   // that autoplays, before any IntersectionObserver has fired.
   const [activeId, setActiveId] = React.useState<string | null>(initialDebateId ?? null);
-  const [joinOpen, setJoinOpen] = React.useState(false);
-  const [claimsDebate, setClaimsDebate] = React.useState<Debate | null>(null);
+  // Which panel is open, not which debate it was opened from: the claims and
+  // comments panels describe the debate you're watching, so they follow the feed
+  // as you scroll rather than staying pinned to the one whose button you pressed.
+  const [openPanel, setOpenPanel] = React.useState<'join' | 'claims' | 'comments' | null>(null);
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
@@ -207,13 +211,21 @@ export function DebatesBrowseFeed({
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
           onActivate={() => setActiveId(debate.id)}
+          // Pressing a debate's own control makes it the active one rather than
+          // waiting for the scroll observer: its bar is reachable from 0%
+          // visibility but activation needs 60%, so mid-scroll the panel would
+          // otherwise open on the debate being scrolled away from.
           onOpenJoin={() => {
-            setClaimsDebate(null);
-            setJoinOpen(true);
+            setActiveId(debate.id);
+            setOpenPanel('join');
           }}
           onOpenClaims={() => {
-            setJoinOpen(false);
-            setClaimsDebate(debate);
+            setActiveId(debate.id);
+            setOpenPanel('claims');
+          }}
+          onOpenComments={() => {
+            setActiveId(debate.id);
+            setOpenPanel('comments');
           }}
         />
       ))}
@@ -223,11 +235,19 @@ export function DebatesBrowseFeed({
     </div>
   );
 
-  const sidePanel = joinOpen ? (
-    <JoinDebatePanel spaceId={spaceId} onClose={() => setJoinOpen(false)} />
-  ) : claimsDebate ? (
-    <DebateClaimsPanel debate={claimsDebate} count={0} onClose={() => setClaimsDebate(null)} />
-  ) : null;
+  const activeDebate = visibleDebates.find(debate => debate.id === activeId) ?? null;
+  const closePanel = () => setOpenPanel(null);
+
+  const sidePanel =
+    openPanel === 'join' ? (
+      <JoinDebatePanel spaceId={spaceId} onClose={closePanel} />
+    ) : openPanel === 'claims' && activeDebate ? (
+      <DebateClaimsPanel debate={activeDebate} count={0} onClose={closePanel} />
+    ) : openPanel === 'comments' && activeDebate ? (
+      // Keyed so scrolling to the next debate resets the panel rather than
+      // carrying a half-typed reply across to a different debate's thread.
+      <EntityCommentsPanel key={activeDebate.id} entityId={activeDebate.id} spaceId={spaceId} onClose={closePanel} />
+    ) : null;
 
   // Keep the feed in the same tree position whether or not a side panel is open, so
   // toggling the claims/join panel doesn't remount the players and restart playback.
@@ -251,6 +271,7 @@ function DebateFeedItem({
   onActivate,
   onOpenJoin,
   onOpenClaims,
+  onOpenComments,
 }: {
   debate: Debate;
   spaceId: string;
@@ -263,10 +284,16 @@ function DebateFeedItem({
   onActivate: () => void;
   onOpenJoin: () => void;
   onOpenClaims: () => void;
+  onOpenComments: () => void;
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const winnerVotes = useDebateVotes(debate);
   const shareAction = useDebateShareAction(debate, active);
+  // Comments live on the Debate entity — same query key as the panel, so posting
+  // there updates this count without a refetch of our own.
+  // Same arguments as the Comments panel's own useComments, so the two share a
+  // cache entry and posting there updates this count without a refetch.
+  const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId });
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -286,9 +313,9 @@ function DebateFeedItem({
   const interactionProps = {
     entityId: debate.id,
     spaceId,
-    commentCount: 0,
+    commentCount,
     claimsCount: 0,
-    onComment: () => undefined,
+    onComment: onOpenComments,
     onClaims: onOpenClaims,
     shareAction,
   };
@@ -427,7 +454,7 @@ function DebateTitleHeader({
       <h2
         ref={claimRef}
         title={isClaimOverflowing ? claim : undefined}
-        className={`text-cardEntityTitle text-text !text-[22.4px] !leading-[21px] !tracking-[-0.672px] md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
+        className={`text-cardEntityTitle !text-[22.4px] !leading-[21px] !tracking-[-0.672px] text-text md:!text-[24px] md:!leading-6 md:!tracking-[-0.75px] ${
           isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
         }`}
       >

@@ -10,7 +10,7 @@ import {
   getClaimResponseSummaryPage,
   getSpaces,
 } from '~/core/io/queries';
-import { profilesBySpaceIdsQueryKey, spacesByIdsQueryKey } from '~/core/io/query-keys';
+import { profileBySpaceIdQueryKey, profilesBySpaceIdsQueryKey, spacesByIdsQueryKey } from '~/core/io/query-keys';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Profile } from '~/core/types';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
@@ -261,6 +261,13 @@ export async function loadClaimResponderMetadataCaches({
   const spacesById = new Map(responderSpaces.map(space => [space.id, space]));
 
   signal?.throwIfAborted();
+
+  // Avatar groups read profiles per space id so that adding a responder doesn't invalidate the
+  // rest of the group. Batched claim views render with their queries disabled, so this priming
+  // is the only thing that fills that cache for them.
+  for (const [responderSpaceId, profile] of profilesBySpaceId) {
+    queryClient.setQueryData(profileBySpaceIdQueryKey(responderSpaceId), profile);
+  }
 
   for (const target of normalizedTargets) {
     const summary = summaries.get(claimResponseTargetKey(target)) ?? emptySummary();

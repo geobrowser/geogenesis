@@ -6,9 +6,10 @@ import { Avatar } from '~/design-system/avatar';
 import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
-import { type DebateChallenge, getCurrentGeoChatUserId } from '../api';
+import type { DebateChallenge } from '../api';
 import { useAcceptDebateChallenge, useDebateActivity, useRejectDebateChallenge } from '../hooks';
 import { speakerLabel } from '../playback-utils';
+import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { SpaceTopicFilters } from './claims-tab';
 import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
@@ -67,10 +68,16 @@ export function RequestsTab() {
     React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
   );
   const challenge = liveChallenges[0] ?? null;
-  const currentUserId = getCurrentGeoChatUserId();
-  // A claimless challenge belongs to no space, so a space filter can only hide it.
+  const currentUserId = useCurrentGeoChatUserId();
+  // A claimless challenge belongs to no space, so a space filter can only hide it. Role is left
+  // undecided until the viewer's id is known — guessing files an incoming challenge under Sent,
+  // where it reads as something the viewer sent and offers them "Cancel request" for it.
   const challengeRole =
-    !challenge || spaceId ? null : challenge.recipient.user_id === currentUserId ? 'recipient' : 'requester';
+    !challenge || spaceId || !currentUserId
+      ? null
+      : challenge.recipient.user_id === currentUserId
+        ? 'recipient'
+        : 'requester';
   const incomingChallenge = challengeRole === 'recipient' && status !== 'sent' ? challenge : null;
   const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
 
@@ -168,6 +175,11 @@ function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 
   const isRecipient = role === 'recipient';
   const other = isRecipient ? challenge.requester : challenge.recipient;
   const busy = acceptChallenge.isPending || rejectChallenge.isPending;
+  // Both roles act from this card and neither could report a failure before: the sender has no
+  // popup left to carry one, and the recipient's Dismiss/Explore claims live here as well as in
+  // theirs. Each `useMutation` call owns its own state, so only the action this card actually
+  // offers can ever set this.
+  const actionError = acceptChallenge.error ?? rejectChallenge.error;
 
   return (
     <article className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3">
@@ -221,6 +233,15 @@ function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 
           Cancel request
         </HubPillButton>
       )}
+
+      {actionError instanceof Error ? (
+        // role="alert" so a failed action is announced, not just drawn under the button.
+        <div role="alert">
+          <Text as="p" variant="footnote" color="red-01">
+            {actionError.message}
+          </Text>
+        </div>
+      ) : null}
     </article>
   );
 }

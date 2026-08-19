@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -26,6 +26,11 @@ vi.mock('~/partials/entity-page/entity-row-actions', () => ({
 
 vi.mock('./explore-join-space-button', () => ({
   ExploreJoinSpaceButton: () => null,
+}));
+
+const openComments = vi.fn();
+vi.mock('~/core/hooks/use-entity-comments-panel', () => ({
+  useEntityCommentsPanel: () => ({ commentsTarget: null, openComments, closeComments: vi.fn() }),
 }));
 
 vi.mock('./debate-explore-feed-card', () => ({
@@ -78,5 +83,17 @@ describe('ExploreFeedCard', () => {
   it('does not route non-debate items to the debate card', () => {
     render(<ExploreFeedCard item={item} />);
     expect(screen.queryByTestId('debate-card')).toBeNull();
+  });
+
+  // Reading a card is not the same as wanting the entity's page: comments open
+  // beside the feed rather than navigating the reader away from it.
+  it('opens the comments panel for the card instead of linking to the entity page', () => {
+    render(<ExploreFeedCard item={item} />);
+
+    const commentsButton = screen.getByRole('button', { name: 'Comments (2)' });
+    expect(commentsButton.closest('a')).toBeNull();
+
+    fireEvent.click(commentsButton);
+    expect(openComments).toHaveBeenCalledWith('claim-1', 'space-1');
   });
 });

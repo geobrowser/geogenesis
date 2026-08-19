@@ -4,19 +4,22 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
-import { Text } from '~/design-system/text';
 
-import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic } from '../api';
+import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic } from '../api';
+import { isClaimSpaceAllowed } from '../claim-space-allowlist';
+import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { useMatchmakingClaims } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
-import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { useStableListOrder } from './use-stable-list-order';
@@ -34,6 +37,11 @@ const FILTER_OPTIONS: HubFilterOption<MatchmakingClaimsFilter>[] = [
  * available now → total positions → recency) run server-side. Topics are a Knowledge Graph
  * notion geo-chat doesn't model — the server returns `topics: []` and ignores `topic_id` — so
  * topic labels, the topic facet, and topic filtering are resolved here over the loaded pages.
+ *
+ * The set of spaces a viewer may see claims from is resolved here too, for the same reason:
+ * `/matchmaking/claims` takes a single `space_id`, so a viewer-specific list of spaces has no
+ * query to go into. That makes it a page-local filter — a page can come back mostly or entirely
+ * disallowed — so the sentinel that asks for the next page sits outside the empty state below.
  */
 export function ClaimsTab() {
   const [search, setSearch] = React.useState('');
@@ -54,8 +62,20 @@ export function ClaimsTab() {
 
   const claimsQuery = useMatchmakingClaims(query, true);
   const pages = React.useMemo(() => claimsQuery.data?.pages ?? [], [claimsQuery.data]);
-  const serverClaims = React.useMemo(() => pages.flatMap(page => page.claims), [pages]);
   const facets = pages[0]?.facets;
+
+  const { allowlist: spaceAllowlist } = useClaimSpaceAllowlist();
+  const serverClaims = React.useMemo(
+    () => pages.flatMap(page => page.claims).filter(entry => isClaimSpaceAllowed(entry.claim.space_id, spaceAllowlist)),
+    [pages, spaceAllowlist]
+  );
+
+  // The space menu offers only what the list can actually show, so picking an option never lands
+  // the viewer on an empty list they can't explain.
+  const facetSpaceIds = React.useMemo(
+    () => (facets?.space_ids ?? []).filter(id => isClaimSpaceAllowed(id, spaceAllowlist)),
+    [facets?.space_ids, spaceAllowlist]
+  );
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
@@ -100,25 +120,18 @@ export function ClaimsTab() {
 
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId || filter !== 'all');
 
+  const sentinelRef = useInfiniteScrollSentinel({
+    hasNextPage: claimsQuery.hasNextPage,
+    isFetchingNextPage: claimsQuery.isFetchingNextPage,
+    fetchNextPage: claimsQuery.fetchNextPage,
+  });
+
   const visibleClaims = React.useMemo(
     () =>
       topicId
         ? claims.filter(entry => topicsByClaimId.get(entry.claim.claim_entity_id)?.some(topic => topic.id === topicId))
         : claims,
     [claims, topicsByClaimId, topicId]
-  );
-
-  // The claims you've already taken a side on lead, since those are the ones that can become
-  // debates. The split is dropped when a filter already narrows to one of the two groups, where a
-  // heading over the whole list would say nothing.
-  const showSections = filter === 'all';
-  const myClaims = React.useMemo(
-    () => (showSections ? visibleClaims.filter(entry => entry.viewer_response !== null) : []),
-    [showSections, visibleClaims]
-  );
-  const otherClaims = React.useMemo(
-    () => (showSections ? visibleClaims.filter(entry => entry.viewer_response === null) : visibleClaims),
-    [showSections, visibleClaims]
   );
 
   return (
@@ -136,7 +149,7 @@ export function ClaimsTab() {
         onSpaceChange={setSpaceId}
         topicId={topicId}
         onTopicChange={setTopicId}
-        facetSpaceIds={facets?.space_ids ?? []}
+        facetSpaceIds={facetSpaceIds}
         facetTopics={facetTopics}
         leading={
           <HubFilterMenu
@@ -168,47 +181,30 @@ export function ClaimsTab() {
             : undefined
         }
       >
-        <>
-          {myClaims.length > 0 ? <ClaimSection label="My positions" claims={myClaims} /> : null}
-          {otherClaims.length > 0 ? (
-            <ClaimSection label={showSections && myClaims.length > 0 ? 'All claims' : null} claims={otherClaims} />
-          ) : null}
-          {claimsQuery.hasNextPage ? (
-            <HubPillButton
-              onClick={() => void claimsQuery.fetchNextPage()}
-              pending={claimsQuery.isFetchingNextPage}
-              pendingLabel="Loading…"
-              className="mt-2 w-full"
-            >
-              Load more
-            </HubPillButton>
-          ) : null}
-        </>
+        {/* One list, in the server's order. Splitting out the claims you'd already answered
+            re-ranked the tab by something the Position filter in the dropdown already covers, and
+            it moved a card between two sections the moment you took a side. */}
+        <HubCardList>
+          {visibleClaims.map(entry => (
+            <MatchmakingClaimCard
+              key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
+              claim={entry.claim}
+              positions={entry.positions}
+              readiness={entry}
+              activeDebate={entry.active_debate}
+            />
+          ))}
+        </HubCardList>
       </HubQueryState>
-    </div>
-  );
-}
 
-function ClaimSection({ label, claims }: { label: string | null; claims: MatchmakingClaim[] }) {
-  return (
-    <section className="flex flex-col gap-2 not-first:mt-4">
-      {label ? (
-        <Text as="h3" variant="footnote" color="grey-04">
-          {label}
-        </Text>
-      ) : null}
-      <HubCardList>
-        {claims.map(entry => (
-          <MatchmakingClaimCard
-            key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
-            claim={entry.claim}
-            positions={entry.positions}
-            readiness={entry}
-            activeDebate={entry.active_debate}
-          />
-        ))}
-      </HubCardList>
-    </section>
+      {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
+          the empty state deliberately: the space allowlist and the topic filter both run over the
+          loaded pages, so a page can arrive with nothing to show — and with the sentinel rendered
+          only alongside results, the list would stop at the first such page and report "no claims"
+          while the corpus still had matches in it. The sentinel only exists while there is a page
+          left, so it can't sit in view asking for one that isn't there. */}
+      {claimsQuery.hasNextPage ? <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" /> : null}
+    </div>
   );
 }
 
@@ -222,6 +218,8 @@ type SpaceTopicFiltersProps = {
   facetTopics?: { id: string; name: string | null }[];
   /** Rendered before the space filter — the Claims tab puts its position filter here. */
   leading?: React.ReactNode;
+  /** Overrides the row layout — the rematch picker spreads the two menus across its width. */
+  className?: string;
 };
 
 /**
@@ -236,6 +234,7 @@ export function SpaceTopicFilters({
   facetSpaceIds,
   facetTopics,
   leading,
+  className,
 }: SpaceTopicFiltersProps) {
   const { spacesById } = useSpacesByIds(facetSpaceIds);
 
@@ -263,7 +262,7 @@ export function SpaceTopicFilters({
   const topicLabel = topicId ? (facetTopics?.find(topic => topic.id === topicId)?.name ?? 'Topic') : 'Any topic';
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className={cx('flex flex-wrap items-center gap-2', className)}>
       {leading}
       <HubFilterMenu
         label={spaceLabel}

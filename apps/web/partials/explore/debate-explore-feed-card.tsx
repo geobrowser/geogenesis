@@ -13,16 +13,15 @@ import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { ID } from '~/core/id';
-import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Tooltip } from '~/design-system/tooltip';
 
+import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { ExploreClaimsIcon } from './explore-claims-icon';
-import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
@@ -52,7 +51,6 @@ export function DebateExploreFeedCard({
   hideJoinButton = false,
   fallback,
 }: DebateExploreFeedCardProps) {
-  const debatesEnabled = useDebatesEnabled();
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
   const debateId = ID.hexToUuid(item.entityId);
 
@@ -91,26 +89,27 @@ export function DebateExploreFeedCard({
     return () => observer.disconnect();
   }, [container]);
 
-  const enabled = debatesEnabled && nearViewport;
-  const debateQuery = useDebate(debateId, enabled);
+  const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
   const watchable = debate != null && isWatchableDebate(debate);
 
   // Same two-stage gate as the full-screen feed (GEO-2412): both recordings existing doesn't
   // prove the media job produced a playable final video.
-  const mediaQuery = useDebateMedia(debateId, enabled && watchable);
+  const mediaQuery = useDebateMedia(debateId, nearViewport && watchable);
   const processed = hasProcessedVideo(mediaQuery.data);
 
   const notWatchable =
-    debateQuery.isError || (debate != null && !watchable) || mediaQuery.isError || (mediaQuery.data != null && !processed);
+    debateQuery.isError ||
+    (debate != null && !watchable) ||
+    mediaQuery.isError ||
+    (mediaQuery.data != null && !processed);
 
-  if (!debatesEnabled || notWatchable) {
+  if (notWatchable) {
     return <>{fallback}</>;
   }
 
   const readyDebate = debate != null && watchable && processed ? debate : null;
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-  const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
 
   return (
     <article ref={setContainer} className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
@@ -161,10 +160,7 @@ export function DebateExploreFeedCard({
       </div>
 
       <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
-        <Link href={entityHref} className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text">
-          <ExploreCommentsIcon className="text-grey-04" />
-          <span className="text-[14px] font-normal tabular-nums">{item.commentCount}</span>
-        </Link>
+        <EntityCommentsButton entityId={item.entityId} spaceId={item.spaceId} count={item.commentCount} />
         {readyDebate ? <DebateCardExtras debate={readyDebate} active={active} /> : null}
       </EntityRowActions>
     </article>

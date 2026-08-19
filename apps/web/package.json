@@ -112,7 +112,7 @@
     "react-textarea-autosize": "^8.5.9",
     "react-use-measure": "^2.1.7",
     "sharp": "^0.35.2",
-    "viem": "^2.54.2",
+    "viem": "^2.55.16",
     "wagmi": "^3.6.21"
   },
   "devDependencies": {

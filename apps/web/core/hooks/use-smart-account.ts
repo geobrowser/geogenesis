@@ -9,7 +9,7 @@ import { useCookies } from 'react-cookie';
 
 import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { GEO_NETWORK } from '../sdk/geo-network';
-import { MAX_QUEUE_WAIT_MS, enqueueFor } from './smart-account-send-queue';
+import { MAX_QUEUE_WAIT_MS, enqueueFor, withNonceRetry } from './smart-account-send-queue';
 
 export function useSmartAccount() {
   const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
@@ -57,7 +57,7 @@ export function useSmartAccount() {
         signer: signer as Parameters<typeof generateZeroDevAccount>[0]['signer'],
       });
 
-      // Two failure modes to defend against here (the shared per-EOA queue in
+      // Three failure modes to defend against here (the shared per-EOA queue in
       // ./smart-account-send-queue is the mechanism):
       //
       // 1. AA25 nonce races: the kernel client computes the nonce at submit time,
@@ -68,6 +68,15 @@ export function useSmartAccount() {
       //    sendUserOperation alike — through the per-EOA queue, and hold
       //    each sendUserOperation slot until its receipt confirms inclusion.
       //    (kernel sendTransaction already waits for its receipt internally.)
+      //
+      // 1b. AA25 even with serialization: the account's nonce is read fresh via a
+      //    plain RPC `client` (Conduit) that is a separate backend from the
+      //    bundler (ZeroDev) confirming inclusion. If that RPC lags the bundler's
+      //    view by even one block, the very next send after a confirmed one can
+      //    read a stale nonce and get rejected as InvalidAccountNonceError. This
+      //    rejection happens at eth_sendUserOperation, before any hash exists, so
+      //    by the ERC-4337 spec nothing was submitted — a short retry (see
+      //    withNonceRetry) is safe and re-reads the nonce fresh.
       //
       // 2. Duplicate submissions on retry: callers wrap sends in Effect.retry
       //    (~10s windows). Once the bundler has accepted a UserOp, a failure
@@ -141,7 +150,7 @@ export function useSmartAccount() {
         // useSmartAccountTransaction's timeout, and the bound is what guarantees a
         // timed-out call never submits later (see QueuedSendTimeoutError).
         sendTransaction: (...args: Parameters<typeof zeroDevAccount.sendTransaction>) =>
-          enqueueFor(eoaAddress, () => zeroDevAccount.sendTransaction(...args), {
+          enqueueFor(eoaAddress, () => withNonceRetry(() => zeroDevAccount.sendTransaction(...args)), {
             maxQueueWaitMs: MAX_QUEUE_WAIT_MS,
           }),
         // Deliberately NOT queue-wait bounded: publish/comment/deploy callers have no
@@ -150,11 +159,13 @@ export function useSmartAccount() {
         sendUserOperation: (args: {
           calls: ReadonlyArray<{ to: `0x${string}`; data: `0x${string}`; value?: bigint }>;
         }) =>
-          enqueueFor(eoaAddress, async () => {
-            const hash = await zeroDevAccount.sendUserOperation(args);
-            await confirmInclusion(hash);
-            return hash;
-          }),
+          enqueueFor(eoaAddress, () =>
+            withNonceRetry(async () => {
+              const hash = await zeroDevAccount.sendUserOperation(args);
+              await confirmInclusion(hash);
+              return hash;
+            })
+          ),
       };
 
       if (!cookies.walletAddress || cookies.walletAddress !== wrapped.account.address) {

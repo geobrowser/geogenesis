@@ -42,7 +42,6 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: () => true,
-  useDebatesEnabled: () => true,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -61,6 +60,17 @@ vi.mock('~/core/hooks/use-space', () => ({
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
+}));
+
+// The feed's comment button opens a panel backed by the entity-comments stack,
+// whose storage-backed atoms initialize at import time. Stub it (and the live
+// count) the way the other debate suites do.
+vi.mock('~/partials/comments/entity-comments-panel', () => ({
+  EntityCommentsPanel: () => <div>Comments panel</div>,
+}));
+
+vi.mock('~/core/hooks/use-comments', () => ({
+  useComments: () => ({ comments: [], totalCount: 0, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
