@@ -5,7 +5,12 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { collectSkillNames, skillIdsByName, toSpaceBounty } from '~/core/bounties/community-adapter';
-import { type CommunitySection, buildBountiesHref, communitySectionFilters } from '~/core/bounties/filters';
+import {
+  type CommunitySection,
+  buildBountiesHref,
+  communitySectionFilters,
+  countFacetOptions,
+} from '~/core/bounties/filters';
 import { type DifficultyKey, statusKeyForId } from '~/core/bounties/labels';
 import { useBoardBounties } from '~/core/bounties/use-bounties';
 import type { SpaceBounty } from '~/core/community/bounty-types';
@@ -224,16 +229,51 @@ function useBountyFilterPresentation(
     selectedSkills ? [...selectedSkills].sort().join(',') : '*'
   }`;
 
+  // Facet counts composed with the section's other filters: each option shows
+  // how many bounties it would yield on its own, and options sort by that.
+  const scopeCounts = React.useMemo<Record<BountyScope, number>>(
+    () => ({
+      featured: applyFilters(bounties, 'featured', difficulties, skillSelection, skills).length,
+      all: applyFilters(bounties, 'all', difficulties, skillSelection, skills).length,
+    }),
+    [bounties, difficulties, skillSelection, skills]
+  );
+  const difficultyOptions = React.useMemo(
+    () =>
+      countFacetOptions(
+        bounties,
+        BOUNTY_DIFFICULTY_LEVELS.map(level => ({ key: level, label: level })),
+        bounty => applyFilters([bounty], scope, new Set(BOUNTY_DIFFICULTY_LEVELS), skillSelection, skills).length > 0,
+        (bounty, level) => bounty.difficulty === level
+      ),
+    [bounties, scope, skillSelection, skills]
+  );
+  const skillOptions = React.useMemo(
+    () =>
+      countFacetOptions(
+        bounties,
+        skills.map(skill => ({ key: skill, label: skill })),
+        bounty => applyFilters([bounty], scope, difficulties, new Set(skills), skills).length > 0,
+        (bounty, skill) => bounty.skills.includes(skill)
+      ),
+    [bounties, scope, difficulties, skills]
+  );
+
   const controls = (
     <>
-      <ScopeFilter value={scope} onChange={setScope} />
+      <ScopeFilter value={scope} onChange={setScope} counts={scopeCounts} />
       <CheckboxFilter
         allLabel="Any difficulty"
-        options={[...BOUNTY_DIFFICULTY_LEVELS]}
+        options={difficultyOptions}
         selected={difficulties}
         onChange={setDifficulties}
       />
-      <CheckboxFilter allLabel="Any skill" options={skills} selected={skillSelection} onChange={setSelectedSkills} />
+      <CheckboxFilter
+        allLabel="Any skill"
+        options={skillOptions}
+        selected={skillSelection}
+        onChange={setSelectedSkills}
+      />
     </>
   );
 
@@ -260,10 +300,10 @@ function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bounty
 }
 
 /**
- * "View all" deep-links into the space's bounty board with this section's
- * statuses and its current controls applied. The board filters are
- * single-select for difficulty and skill, so those carry over only when the
- * section has exactly one selected; the Featured scope always carries over.
+ * "View all" deep-links into the space's bounty board (the Bounties tab) with
+ * this section's statuses and its current controls applied: Featured scope,
+ * the selected difficulties, and the selected skills (by id). A selection that
+ * covers every option carries nothing — that's "any" on both sides.
  */
 export function viewAllHref(
   spaceId: string,
@@ -272,19 +312,24 @@ export function viewAllHref(
   skills: string[],
   skillIds: Map<string, string>
 ): string {
-  const singleDifficulty =
-    values.difficulties.size === 1 ? ([...values.difficulties][0].toLowerCase() as DifficultyKey) : null;
+  const allDifficulties =
+    values.difficulties.size === 0 || values.difficulties.size === BOUNTY_DIFFICULTY_LEVELS.length;
+  const difficulties = allDifficulties
+    ? []
+    : BOUNTY_DIFFICULTY_LEVELS.filter(level => values.difficulties.has(level)).map(
+        level => level.toLowerCase() as DifficultyKey
+      );
   const selectedSkillNames = values.selectedSkills ?? new Set(skills);
-  const singleSkillId =
-    selectedSkillNames.size === 1 && selectedSkillNames.size !== skills.length
-      ? (skillIds.get([...selectedSkillNames][0]) ?? null)
-      : null;
+  const allSkills = selectedSkillNames.size === 0 || skills.every(skill => selectedSkillNames.has(skill));
+  const selectedSkillIds = allSkills
+    ? []
+    : skills.filter(skill => selectedSkillNames.has(skill)).flatMap(skill => skillIds.get(skill) ?? []);
   return buildBountiesHref(
     NavUtils.toSpaceBounties(spaceId),
     communitySectionFilters(section, {
       featuredOnly: values.scope === 'featured',
-      difficulty: singleDifficulty,
-      skillId: singleSkillId,
+      difficulties,
+      skillIds: selectedSkillIds,
     })
   );
 }

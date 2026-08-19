@@ -1,4 +1,5 @@
 import {
+  DIFFICULTIES,
   type DifficultyKey,
   OPEN_WORKFLOW_STATUS_KEYS,
   WORKFLOW_STATUSES,
@@ -26,8 +27,10 @@ export type BountyFilters = {
   featuredOnly: boolean;
   /** Statuses shown. Default = the open statuses; an empty set is normalized back to the default. */
   statuses: readonly WorkflowStatusKey[];
-  difficulty: DifficultyKey | null;
-  skillId: string | null;
+  /** Difficulties shown; empty ⇒ any. */
+  difficulties: readonly DifficultyKey[];
+  /** Skill ids, any of which qualifies; empty ⇒ any. */
+  skillIds: readonly string[];
   query: string;
   sort: BountySort;
   groupBy: BountyGroupBy;
@@ -37,8 +40,8 @@ export const DEFAULT_BOUNTY_FILTERS: BountyFilters = {
   spaceId: null,
   featuredOnly: false,
   statuses: OPEN_WORKFLOW_STATUS_KEYS,
-  difficulty: null,
-  skillId: null,
+  difficulties: [],
+  skillIds: [],
   query: '',
   sort: 'updated-desc',
   groupBy: 'none',
@@ -79,8 +82,8 @@ export function parseBountyFilters(params: RawParams): BountyFilters {
     spaceId: space && space !== 'all' ? space : null,
     featuredOnly: scope === 'featured',
     statuses,
-    difficulty: difficultyRaw && isDifficultyKey(difficultyRaw) ? difficultyRaw : null,
-    skillId: skill && skill.length > 0 ? skill : null,
+    difficulties: difficultyRaw ? [...new Set(difficultyRaw.split(',').filter(isDifficultyKey))] : [],
+    skillIds: skill ? [...new Set(skill.split(',').filter(Boolean))] : [],
     query,
     sort:
       sortRaw && (SORTS as readonly string[]).includes(sortRaw) ? (sortRaw as BountySort) : DEFAULT_BOUNTY_FILTERS.sort,
@@ -104,8 +107,8 @@ export function serializeBountyFilters(filters: BountyFilters): URLSearchParams 
   if (!sameStatusSet(filters.statuses, DEFAULT_BOUNTY_FILTERS.statuses)) {
     params.set('status', sameStatusSet(filters.statuses, ALL_STATUS_KEYS) ? 'all' : filters.statuses.join(','));
   }
-  if (filters.difficulty) params.set('difficulty', filters.difficulty);
-  if (filters.skillId) params.set('skill', filters.skillId);
+  if (filters.difficulties.length > 0) params.set('difficulty', filters.difficulties.join(','));
+  if (filters.skillIds.length > 0) params.set('skill', filters.skillIds.join(','));
   if (filters.query) params.set('q', filters.query);
   if (filters.sort !== DEFAULT_BOUNTY_FILTERS.sort) params.set('sort', filters.sort);
   if (filters.groupBy !== DEFAULT_BOUNTY_FILTERS.groupBy) params.set('groupBy', filters.groupBy);
@@ -127,8 +130,11 @@ export function applyBountyFilters(bounties: readonly BoardBounty[], filters: Bo
     if (filters.spaceId && bounty.spaceId !== filters.spaceId) return false;
     if (filters.featuredOnly && !bounty.isFeatured) return false;
     if (!statusSet.has(statusKeyForId(bounty.statusId))) return false;
-    if (filters.difficulty && difficultyKeyForId(bounty.difficultyId) !== filters.difficulty) return false;
-    if (filters.skillId && !bounty.skills.some(skill => skill.id === filters.skillId)) return false;
+    if (filters.difficulties.length > 0) {
+      const key = difficultyKeyForId(bounty.difficultyId);
+      if (!key || !filters.difficulties.includes(key)) return false;
+    }
+    if (filters.skillIds.length > 0 && !bounty.skills.some(skill => filters.skillIds.includes(skill.id))) return false;
     if (needle) {
       const haystack = `${bounty.name}\n${bounty.description ?? ''}`.toLowerCase();
       if (!haystack.includes(needle)) return false;
@@ -230,14 +236,82 @@ export const COMMUNITY_SECTION_STATUSES: Record<CommunitySection, readonly Workf
  */
 export function communitySectionFilters(
   section: CommunitySection,
-  options: { featuredOnly?: boolean; difficulty?: DifficultyKey | null; skillId?: string | null } = {}
+  options: { featuredOnly?: boolean; difficulties?: readonly DifficultyKey[]; skillIds?: readonly string[] } = {}
 ): BountyFilters {
   return {
     ...DEFAULT_BOUNTY_FILTERS,
     statuses: COMMUNITY_SECTION_STATUSES[section],
     featuredOnly: options.featuredOnly ?? false,
-    difficulty: options.difficulty ?? null,
-    skillId: options.skillId ?? null,
+    difficulties: options.difficulties ?? [],
+    skillIds: options.skillIds ?? [],
     sort: 'updated-desc',
   };
+}
+
+// -- Facet counts ---------------------------------------------------------------------
+
+export type FacetOption<K extends string = string> = { key: K; label: string; count: number };
+
+/**
+ * Faceted counts: for each option of one facet, how many items match every
+ * OTHER active filter plus that option alone. This answers "if I pick this,
+ * how many will I see?" and ignores the facet's own current selection, so a
+ * multi-select facet's counts don't collapse to what is already selected.
+ * Options are ordered by count (desc), then label — zero-count options last.
+ */
+export function countFacetOptions<T, K extends string>(
+  items: readonly T[],
+  options: readonly { key: K; label: string }[],
+  matchesOthers: (item: T) => boolean,
+  matchesOption: (item: T, key: K) => boolean
+): FacetOption<K>[] {
+  const candidates = items.filter(matchesOthers);
+  return options
+    .map(option => ({ ...option, count: candidates.filter(item => matchesOption(item, option.key)).length }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+export type BountyFacet = 'status' | 'difficulty' | 'skill' | 'space';
+
+/**
+ * Facet counts for the board's filters, composed with the other current
+ * filters. `skills`/`spaces` supply the option universe (collected from the
+ * loaded bounties by the caller).
+ */
+export function bountyFacetCounts(
+  bounties: readonly BoardBounty[],
+  filters: BountyFilters,
+  facet: BountyFacet,
+  universe: { skills?: readonly { id: string; name: string }[]; spaces?: readonly { id: string; label: string }[] } = {}
+): FacetOption[] {
+  switch (facet) {
+    case 'status':
+      return countFacetOptions(
+        bounties,
+        WORKFLOW_STATUSES.map(status => ({ key: status.key, label: status.label })),
+        bounty => applyBountyFilters([bounty], { ...filters, statuses: WORKFLOW_STATUSES.map(s => s.key) }).length > 0,
+        (bounty, key) => statusKeyForId(bounty.statusId) === key
+      );
+    case 'difficulty':
+      return countFacetOptions(
+        bounties,
+        DIFFICULTIES.map(d => ({ key: d.key, label: d.label })),
+        bounty => applyBountyFilters([bounty], { ...filters, difficulties: [] }).length > 0,
+        (bounty, key) => difficultyKeyForId(bounty.difficultyId) === key
+      );
+    case 'skill':
+      return countFacetOptions(
+        bounties,
+        (universe.skills ?? []).map(skill => ({ key: skill.id, label: skill.name })),
+        bounty => applyBountyFilters([bounty], { ...filters, skillIds: [] }).length > 0,
+        (bounty, key) => bounty.skills.some(skill => skill.id === key)
+      );
+    case 'space':
+      return countFacetOptions(
+        bounties,
+        (universe.spaces ?? []).map(space => ({ key: space.id, label: space.label })),
+        bounty => applyBountyFilters([bounty], { ...filters, spaceId: null }).length > 0,
+        (bounty, key) => bounty.spaceId === key
+      );
+  }
 }

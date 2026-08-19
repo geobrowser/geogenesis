@@ -40,7 +40,7 @@ describe('viewAllHref', () => {
     ).toBe('/space/space-1/bounties?status=in-progress');
   });
 
-  it('carries a single selected difficulty and skill (the board filters are single-select)', () => {
+  it('carries the selected difficulties and skills (by id); a selection covering everything carries nothing', () => {
     expect(
       viewAllHref(
         spaceId,
@@ -50,12 +50,20 @@ describe('viewAllHref', () => {
         skillIds
       )
     ).toBe('/space/space-1/bounties?status=todo&difficulty=hard&skill=skill-writing');
-    // Multiple selections are not representable on the board — drop them rather than guess.
     expect(
       viewAllHref(
         spaceId,
         'available',
-        { scope: 'all', difficulties: new Set(['Easy', 'Hard']), selectedSkills: new Set(skills) },
+        { scope: 'all', difficulties: new Set(['Hard', 'Easy']), selectedSkills: new Set(skills) },
+        skills,
+        skillIds
+      )
+    ).toBe('/space/space-1/bounties?status=todo&difficulty=easy%2Chard');
+    expect(
+      viewAllHref(
+        spaceId,
+        'available',
+        { scope: 'all', difficulties: new Set(), selectedSkills: new Set(['Pharmacology', 'Writing']) },
         skills,
         skillIds
       )

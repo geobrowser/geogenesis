@@ -170,23 +170,49 @@ describe('BountyBoard', () => {
   });
 
   it('writes filter changes back to the URL with router.replace', () => {
-    mocks.query.data = { bounties: [bounty({ id: 'x' })], spaces };
+    mocks.query.data = {
+      bounties: [bounty({ id: 'x', difficultyId: HARD_DIFFICULTY_ID, difficulty: 'Hard' })],
+      spaces,
+    };
     render(<BountyBoard />);
     fireEvent.click(screen.getByRole('button', { name: /Any difficulty/ }));
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Hard' }));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Hard/ }));
     expect(mocks.replace).toHaveBeenCalledWith('/bounties?difficulty=hard', { scroll: false });
+  });
+
+  it('shows result counts next to options, orders by count, and disables zero-count options', () => {
+    mocks.query.data = {
+      bounties: [
+        bounty({ id: 'h1', difficultyId: HARD_DIFFICULTY_ID, difficulty: 'Hard' }),
+        bounty({ id: 'h2', difficultyId: HARD_DIFFICULTY_ID, difficulty: 'Hard' }),
+        bounty({ id: 'e1', difficultyId: EASY_DIFFICULTY_ID, difficulty: 'Easy' }),
+      ],
+      spaces,
+    };
+    render(<BountyBoard />);
+    fireEvent.click(screen.getByRole('button', { name: /Any difficulty/ }));
+    const rows = screen
+      .getAllByRole('menuitemcheckbox')
+      .filter(el => !/Any difficulty/.test(el.textContent ?? ''))
+      .map(el => el.textContent);
+    // Hard (2) first, then Easy (1), then Medium (0) last and disabled.
+    expect(rows).toEqual(['Hard2', 'Easy1', 'Medium0']);
+    expect(screen.getByRole('menuitemcheckbox', { name: /Medium/ })).toBeDisabled();
   });
 
   it('pins the space on the space tab: queries only that space and never writes a space param', () => {
     mocks.pathname = '/space/space-b/bounties';
     mocks.search = 'space=space-a';
-    mocks.query.data = { bounties: [bounty({ id: 'x', spaceId: 'space-b' })], spaces: [spaces[1]] };
+    mocks.query.data = {
+      bounties: [bounty({ id: 'x', spaceId: 'space-b', difficultyId: EASY_DIFFICULTY_ID, difficulty: 'Easy' })],
+      spaces: [spaces[1]],
+    };
     render(<BountyBoard spaceId="space-b" />);
     expect(mocks.lastSpaceIds).toEqual(['space-b']);
     // The space filter menu is hidden when scoped to one space.
     expect(screen.queryByRole('button', { name: /All spaces/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Any difficulty/ }));
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Easy' }));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Easy/ }));
     expect(mocks.replace).toHaveBeenCalledWith('/space/space-b/bounties?difficulty=easy', { scroll: false });
   });
 
@@ -204,19 +230,26 @@ describe('BountyBoard', () => {
 });
 
 describe('BountyBoard status filter', () => {
-  it('shows which statuses are selected and toggles them without closing the menu', () => {
-    mocks.query.data = { bounties: [bounty({ id: 'x' })], spaces };
+  it('shows which statuses are selected (with counts) and toggles them without closing the menu', () => {
+    mocks.query.data = {
+      bounties: [bounty({ id: 'x' }), bounty({ id: 'd', statusId: BOUNTY_STATUS_DONE_ID })],
+      spaces,
+    };
     render(<BountyBoard />);
     fireEvent.click(screen.getByRole('button', { name: /^Open/ }));
-    const checked = screen.getAllByRole('menuitemcheckbox', { checked: true }).map(el => el.textContent);
-    expect(checked).toEqual(['Backlog', 'To do', 'In progress', 'In review']);
-    expect(screen.getAllByRole('menuitemcheckbox', { checked: false }).map(el => el.textContent)).toEqual([
-      'Done',
-      'Cancelled',
+    const rows = screen.getAllByRole('menuitemcheckbox').filter(el => !/All statuses/.test(el.textContent ?? ''));
+    // Ordered by count (Backlog and Done have one each), then label; the default open set is checked.
+    expect(rows.map(el => `${el.textContent}:${el.getAttribute('aria-checked')}`)).toEqual([
+      'Backlog1:true',
+      'Done1:false',
+      'Cancelled0:false',
+      'In progress0:true',
+      'In review0:true',
+      'To do0:true',
     ]);
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Done/ }));
     // Menu stays open (multi-select) and the URL now carries the explicit set.
-    expect(screen.getByRole('menuitemcheckbox', { name: 'Done' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitemcheckbox', { name: /Done/ })).toBeInTheDocument();
     expect(mocks.replace).toHaveBeenCalledWith('/bounties?status=backlog%2Ctodo%2Cin-progress%2Cin-review%2Cdone', {
       scroll: false,
     });

@@ -3,15 +3,17 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_BOUNTY_FILTERS,
   applyBountyFilters,
+  bountyFacetCounts,
   buildBountiesHref,
   communitySectionFilters,
+  countFacetOptions,
   groupBounties,
   parseBountyFilters,
   serializeBountyFilters,
   sortBounties,
 } from './filters';
 import { EASY_DIFFICULTY_ID, HARD_DIFFICULTY_ID, MEDIUM_DIFFICULTY_ID } from './ontology';
-import { BOUNTY_STATUS_DONE_ID, BOUNTY_STATUS_IN_PROGRESS_ID } from './ontology';
+import { BOUNTY_STATUS_DONE_ID, BOUNTY_STATUS_IN_PROGRESS_ID, BOUNTY_STATUS_TODO_ID } from './ontology';
 import type { BoardBounty } from './types';
 
 function bounty(overrides: Partial<BoardBounty> & { id: string }): BoardBounty {
@@ -49,8 +51,8 @@ describe('parseBountyFilters / serializeBountyFilters', () => {
       spaceId: 'space-b',
       featuredOnly: true,
       statuses: ['done', 'cancelled'] as const,
-      difficulty: 'hard' as const,
-      skillId: 'skill-1',
+      difficulties: ['hard'] as const,
+      skillIds: ['skill-1', 'skill-2'],
       query: 'drugs',
       sort: 'payout-asc' as const,
       groupBy: 'space' as const,
@@ -76,7 +78,7 @@ describe('parseBountyFilters / serializeBountyFilters', () => {
     });
     expect(parsed.spaceId).toBeNull();
     expect(parsed.statuses).toEqual(['done']);
-    expect(parsed.difficulty).toBeNull();
+    expect(parsed.difficulties).toEqual([]);
     expect(parsed.sort).toBe(DEFAULT_BOUNTY_FILTERS.sort);
     expect(parsed.groupBy).toBe(DEFAULT_BOUNTY_FILTERS.groupBy);
     // All-junk status list falls back to the default set rather than an empty set.
@@ -105,8 +107,16 @@ describe('applyBountyFilters', () => {
     expect(applyBountyFilters([open, backlog, done], { ...all, spaceId: 'space-b' }).map(b => b.id)).toEqual([
       'backlog',
     ]);
-    expect(applyBountyFilters([open, backlog, done], { ...all, difficulty: 'easy' }).map(b => b.id)).toEqual(['open']);
-    expect(applyBountyFilters([open, backlog, done], { ...all, skillId: 'skill-1' }).map(b => b.id)).toEqual(['done']);
+    expect(applyBountyFilters([open, backlog, done], { ...all, difficulties: ['easy'] }).map(b => b.id)).toEqual([
+      'open',
+    ]);
+    expect(applyBountyFilters([open, backlog, done], { ...all, skillIds: ['skill-1'] }).map(b => b.id)).toEqual([
+      'done',
+    ]);
+    // Multi-select is an OR within the facet.
+    expect(
+      applyBountyFilters([open, backlog, done], { ...all, difficulties: ['easy', 'hard'] }).map(b => b.id)
+    ).toEqual(['open']);
     expect(applyBountyFilters([open, backlog, done], { ...all, query: 'BACK' }).map(b => b.id)).toEqual(['backlog']);
   });
 });
@@ -164,12 +174,12 @@ describe('community section filters', () => {
   it('maps each section to its workflow statuses and carries the section controls into the URL', () => {
     const filters = communitySectionFilters('available', {
       featuredOnly: true,
-      difficulty: 'hard',
-      skillId: 'skill-1',
+      difficulties: ['hard', 'easy'],
+      skillIds: ['skill-1'],
     });
     expect(filters.statuses).toEqual(['todo']);
     expect(buildBountiesHref('/space/s/bounties', filters)).toBe(
-      '/space/s/bounties?scope=featured&status=todo&difficulty=hard&skill=skill-1'
+      '/space/s/bounties?scope=featured&status=todo&difficulty=hard%2Ceasy&skill=skill-1'
     );
     expect(communitySectionFilters('completed').statuses).toEqual(['done']);
     expect(communitySectionFilters('in-progress').statuses).toEqual(['in-progress']);
@@ -183,5 +193,73 @@ describe('community section filters', () => {
     expect(
       applyBountyFilters([featured, plain], { ...DEFAULT_BOUNTY_FILTERS, featuredOnly: true }).map(b => b.id)
     ).toEqual(['f']);
+  });
+});
+
+describe('facet counts', () => {
+  it('countFacetOptions counts each option against the other filters and sorts by count then label', () => {
+    const items = [
+      { kind: 'a', ok: true },
+      { kind: 'b', ok: true },
+      { kind: 'b', ok: true },
+      { kind: 'b', ok: false },
+      { kind: 'c', ok: true },
+    ];
+    const counted = countFacetOptions(
+      items,
+      [
+        { key: 'a', label: 'Alpha' },
+        { key: 'b', label: 'Beta' },
+        { key: 'c', label: 'Gamma' },
+        { key: 'd', label: 'Delta' },
+      ],
+      item => item.ok,
+      (item, key) => item.kind === key
+    );
+    expect(counted).toEqual([
+      { key: 'b', label: 'Beta', count: 2 },
+      { key: 'a', label: 'Alpha', count: 1 },
+      { key: 'c', label: 'Gamma', count: 1 },
+      { key: 'd', label: 'Delta', count: 0 },
+    ]);
+  });
+
+  it("bountyFacetCounts ignores the facet's own selection but honours every other filter", () => {
+    const easyTodo = bounty({ id: 'e', difficultyId: EASY_DIFFICULTY_ID, statusId: BOUNTY_STATUS_TODO_ID });
+    const hardTodo = bounty({
+      id: 'h',
+      difficultyId: HARD_DIFFICULTY_ID,
+      statusId: BOUNTY_STATUS_TODO_ID,
+      skills: [{ id: 's1', name: 'Writing' }],
+    });
+    const hardDone = bounty({ id: 'hd', difficultyId: HARD_DIFFICULTY_ID, statusId: BOUNTY_STATUS_DONE_ID });
+    const all = [easyTodo, hardTodo, hardDone];
+
+    // Difficulty counts with the default (open) status filter: the Done bounty is excluded, and the
+    // current difficulty selection (hard) does not shrink the Easy count.
+    const difficulty = bountyFacetCounts(all, { ...DEFAULT_BOUNTY_FILTERS, difficulties: ['hard'] }, 'difficulty');
+    expect(difficulty.map(o => [o.key, o.count])).toEqual([
+      ['easy', 1],
+      ['hard', 1],
+      ['medium', 0],
+    ]);
+
+    // Status counts ignore the status selection entirely (so Done shows its real count) but honour difficulty.
+    const status = bountyFacetCounts(all, { ...DEFAULT_BOUNTY_FILTERS, difficulties: ['hard'] }, 'status');
+    expect(status.find(o => o.key === 'todo')?.count).toBe(1);
+    expect(status.find(o => o.key === 'done')?.count).toBe(1);
+    expect(status.find(o => o.key === 'backlog')?.count).toBe(0);
+
+    // Skill universe comes from the caller; a skill only present on the excluded Done bounty counts 0.
+    const skill = bountyFacetCounts(all, DEFAULT_BOUNTY_FILTERS, 'skill', {
+      skills: [
+        { id: 's1', name: 'Writing' },
+        { id: 's9', name: 'Zzz' },
+      ],
+    });
+    expect(skill.map(o => [o.key, o.count])).toEqual([
+      ['s1', 1],
+      ['s9', 0],
+    ]);
   });
 });

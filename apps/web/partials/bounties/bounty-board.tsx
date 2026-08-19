@@ -41,7 +41,11 @@ export function BountyBoard({ spaceId, header }: Props) {
   const pathname = usePathname() ?? '/bounties';
   const searchParams = useSearchParams();
 
-  const filters = React.useMemo(() => parseBountyFilters(searchParams ?? new URLSearchParams()), [searchParams]);
+  const filters = React.useMemo(() => {
+    const parsed = parseBountyFilters(searchParams ?? new URLSearchParams());
+    // The space tab pins its space: a stray ?space= param must neither filter nor persist.
+    return spaceId ? { ...parsed, spaceId: null } : parsed;
+  }, [searchParams, spaceId]);
   const spaceIds = React.useMemo(() => (spaceId ? [spaceId] : CURRENT_BOUNTY_SPACE_IDS), [spaceId]);
   const { data, isLoading, isError, refetch } = useBoardBounties(spaceIds);
 
@@ -68,6 +72,7 @@ export function BountyBoard({ spaceId, header }: Props) {
       <BountyFilterBar
         filters={filters}
         onChange={setFilters}
+        bounties={bounties}
         spaces={spaceId ? undefined : data?.spaces}
         skills={skills}
       />
