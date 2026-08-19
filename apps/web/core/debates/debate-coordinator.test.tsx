@@ -83,6 +83,18 @@ vi.mock('./matchmaking/hooks', () => ({
   useClaimReadiness: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
+// useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
+// suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useBrowseSidebarQuerySource: () => ({
+    personalSpaceId: null,
+    walletAddress: undefined,
+    keyInput: null,
+    isLoading: false,
+  }),
+  useCachedBrowseSidebarData: () => null,
+}));
+
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
 }));
@@ -91,8 +103,7 @@ vi.mock('./claim-response-indexed-notifier', () => ({
   useClaimResponseIndexedNotifier: vi.fn(),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 beforeEach(() => {
   sessionStorage.clear();

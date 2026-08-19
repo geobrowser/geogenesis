@@ -8,37 +8,39 @@ import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
 
 import type { DebateClaimSummary, MatchmakingReadiness } from '../api';
-import { readinessReasonMessage } from '../claim-debate-readiness';
-import { useClaimReadiness } from './hooks';
+import { readinessReasonMessage, useClaimDebateReadiness } from '../use-claim-debate-readiness';
 
 type Props = {
   claim: DebateClaimSummary;
   readiness: MatchmakingReadiness;
   /** A claim already being debated can't take new readiness. */
   activeDebate?: boolean;
-  /**
-   * Whether the viewer has a response as *this client* sees it. geo-chat only learns about a
-   * response once it has been published and indexed, so its own copy lags — trusting it alone
-   * leaves the toggle dead for someone who has just responded.
-   */
-  hasResponse: boolean;
-  /** A response is still being published or indexed. */
-  responseIndexing?: boolean;
 };
 
 /**
  * Readiness is the half of matchmaking the hub owns — the position underneath it is an on-chain
  * claim response. So this can always stand you down, but it can only stand you up on a claim you
  * have responded to.
+ *
+ * Same control as the one on a claim's entity page: a click moves the switch now and
+ * {@link useClaimDebateReadiness} holds the queue request until geo-chat can see the response.
+ * The hub used to disable itself and say "Publishing your response…" for the minute or so that
+ * took, which made standing ready a second trip back to a claim you had just taken a side on.
  */
-export function ClaimReadinessToggle({ claim, readiness, activeDebate, hasResponse, responseIndexing }: Props) {
-  const setReadiness = useClaimReadiness();
-
-  const ready = readiness.viewer_debate_ready;
-  // Offer the toggle as soon as the viewer has responded. If geo-chat hasn't caught up it rejects
-  // the request and says so, which beats a dead control with no explanation.
-  const canTurnOn = hasResponse && !activeDebate && !responseIndexing;
-  const disabled = setReadiness.isPending || (!ready && !canTurnOn);
+export function ClaimReadinessToggle({ claim, readiness, activeDebate }: Props) {
+  const {
+    checked: ready,
+    disabled,
+    isSaving,
+    error,
+    viewerPosition,
+    toggle,
+  } = useClaimDebateReadiness({
+    readiness,
+    entityId: claim.claim_entity_id,
+    spaceId: claim.space_id,
+    canEnable: !activeDebate,
+  });
 
   // `readiness_disabled_reason` explains why readiness is currently off; it never blocks turning
   // it back on. Standing yourself down reports `user_disabled`, which the mapper drops entirely —
@@ -47,12 +49,9 @@ export function ClaimReadinessToggle({ claim, readiness, activeDebate, hasRespon
     ? undefined
     : activeDebate
       ? 'This claim is being debated right now.'
-      : responseIndexing
-        ? 'Publishing your response…'
-        : !hasResponse
-          ? 'Respond to this claim to debate it.'
-          : (readinessReasonMessage(readiness.readiness_disabled_reason) ?? undefined);
-  const error = setReadiness.error instanceof Error ? setReadiness.error.message : null;
+      : viewerPosition === null
+        ? 'Respond to this claim to debate it.'
+        : (readinessReasonMessage(readiness.readiness_disabled_reason) ?? undefined);
 
   const explanationId = React.useId();
 
@@ -64,15 +63,9 @@ export function ClaimReadinessToggle({ claim, readiness, activeDebate, hasRespon
         aria-checked={ready}
         aria-label="Ready to debate this claim"
         aria-describedby={explanation ? explanationId : undefined}
-        aria-busy={setReadiness.isPending || undefined}
+        aria-busy={isSaving || undefined}
         disabled={disabled}
-        onClick={() =>
-          setReadiness.mutate({
-            spaceId: claim.space_id,
-            claimId: claim.claim_entity_id,
-            ready: !ready,
-          })
-        }
+        onClick={toggle}
         className={cx(
           // `min-h-4` matches the space chip's avatar so the two sit on one line in the card header.
           // Per the design the label is grey whether or not readiness is on — the switch alone

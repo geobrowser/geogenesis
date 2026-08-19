@@ -11,7 +11,9 @@ import {
   useEntityResponseIndexingSnapshot,
   useResetEntityResponseIndexingSnapshot,
 } from '~/core/hooks/use-entity-vote';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { ID } from '~/core/id';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
@@ -20,9 +22,15 @@ import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
+import type {
+  DebateClaimPositionSummary,
+  DebateClaimSummary,
+  DebateParticipantSummary,
+  MatchmakingReadiness,
+} from '../api';
 import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { hubCardMotion } from './hub-motion';
 
@@ -45,6 +53,13 @@ type Props = {
    * report "not ready" on a claim they are in fact ready on.
    */
   hideReadinessToggle?: boolean;
+  /**
+   * Set when `positions` cannot be trusted to say which side the viewer is on — the rematch picker
+   * identifies the viewer inside the summaries by geo-chat user id, which is null until its token
+   * exchange lands. Suppresses the optimistic adjustment rather than making it from a "no position"
+   * that only means "don't know yet", which would draw the viewer onto two sides at once.
+   */
+  viewerIdentityPending?: boolean;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -72,6 +87,7 @@ export function MatchmakingClaimCard({
   footer,
   onOpenClaim,
   hideReadinessToggle,
+  viewerIdentityPending,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -90,6 +106,7 @@ export function MatchmakingClaimCard({
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
           hideReadinessToggle={hideReadinessToggle}
+          viewerIdentityPending={viewerIdentityPending}
         />
       ) : (
         <UnresolvableControls
@@ -162,6 +179,7 @@ function RespondableControls({
   activeDebate,
   onOpenClaim,
   hideReadinessToggle,
+  viewerIdentityPending,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -169,13 +187,14 @@ function RespondableControls({
   activeDebate?: boolean;
   onOpenClaim?: () => void;
   hideReadinessToggle?: boolean;
+  viewerIdentityPending?: boolean;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
     spaceId: claim.space_id,
     responseKind: readiness.response_kind,
   };
-  const { submitResponse, isConnected } = useEntityResponse(target);
+  const { submitResponse, isConnected, personalSpaceId } = useEntityResponse(target);
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
   // Publishing before the personal space finishes registering fails, so wait it out the same way
@@ -193,7 +212,38 @@ function RespondableControls({
   const optimisticPosition =
     pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
   const viewerPosition = pendingResponse ? optimisticPosition : (readiness.viewer_response?.position ?? null);
-  const isPublishing = responseIndexing.status === 'reconciling' || responseIndexing.status === 'delayed';
+
+  // Already cached from the navbar, so the viewer's own avatar can join the side they picked in the
+  // same frame the pill fills in — rather than after geo-chat has indexed the response and told us
+  // about someone we knew about all along.
+  const viewerSpaceIds = React.useMemo(() => (personalSpaceId ? [personalSpaceId] : []), [personalSpaceId]);
+  const { profilesBySpaceId } = useProfilesBySpaceIds(viewerSpaceIds);
+  const viewerProfile = personalSpaceId ? profilesBySpaceId.get(personalSpaceId) : undefined;
+
+  const optimisticPositions = React.useMemo(
+    () =>
+      viewerIdentityPending
+        ? positions
+        : withViewerPosition({
+            positions,
+            responseKind: readiness.response_kind,
+            serverPosition: readiness.viewer_response?.position ?? null,
+            viewerPosition,
+            viewerSpaceId: personalSpaceId,
+            viewerName: viewerProfile?.name ?? null,
+            viewerAvatarUrl: viewerProfile?.avatarUrl ?? null,
+          }),
+    [
+      personalSpaceId,
+      positions,
+      readiness.response_kind,
+      readiness.viewer_response?.position,
+      viewerIdentityPending,
+      viewerPosition,
+      viewerProfile?.avatarUrl,
+      viewerProfile?.name,
+    ]
+  );
 
   // Hand back to the server's copy only once it actually agrees, so there is no window where
   // neither side reports the response.
@@ -233,22 +283,19 @@ function RespondableControls({
         onOpenClaim={onOpenClaim}
         toggle={
           hideReadinessToggle ? null : (
-            <ClaimReadinessToggle
-              claim={claim}
-              readiness={readiness}
-              activeDebate={activeDebate}
-              hasResponse={viewerPosition !== null}
-              responseIndexing={isPublishing}
-            />
+            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
           )
         }
       />
       <PositionRow
-        positions={positions}
+        positions={optimisticPositions}
         responseKind={readiness.response_kind}
         viewerPosition={viewerPosition}
         onRespond={respond}
-        disabled={!isConnected || isPublishing || isAccountSetupPending}
+        // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
+        // overlapping submissions, so there is nothing to protect against — and dimming the pills
+        // for the length of an indexing round trip read as the response not having landed.
+        disabled={!isConnected || isAccountSetupPending}
         titleFor={actionTitle}
       />
       {responseError ? (
@@ -260,6 +307,83 @@ function RespondableControls({
       ) : null}
     </>
   );
+}
+
+/**
+ * Move the viewer between the two sides to match the response they just gave, before geo-chat has
+ * indexed it and can report them itself.
+ *
+ * geo-chat's summaries are the only source of the avatar stacks, and they trail the viewer's own
+ * response by a publish, an index and a notification — so without this the side you just took
+ * fills in with your colour but not your face, which reads as the response not having counted.
+ */
+export function withViewerPosition({
+  positions,
+  responseKind,
+  serverPosition,
+  viewerPosition,
+  viewerSpaceId,
+  viewerName,
+  viewerAvatarUrl,
+}: {
+  positions: DebateClaimPositionSummary[];
+  responseKind: MatchmakingReadiness['response_kind'];
+  /** The position geo-chat currently reports for the viewer. */
+  serverPosition: boolean | null;
+  /** The position this client knows the viewer holds. */
+  viewerPosition: boolean | null;
+  viewerSpaceId: string | null;
+  viewerName: string | null;
+  viewerAvatarUrl: string | null;
+}): DebateClaimPositionSummary[] {
+  if (!viewerSpaceId || viewerPosition === serverPosition) return positions;
+
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const viewer = {
+    // Not geo-chat's id for this user — we don't have it here. Keyed on the personal space instead,
+    // which is unique per viewer and is what the avatar renders from anyway.
+    user_id: `viewer:${viewerSpaceId}`,
+    profile_space_id: viewerSpaceId,
+    display_name: viewerName,
+    avatar_cid: viewerAvatarUrl,
+  };
+
+  // `ID.equals` rather than `===`: `viewerSpaceId` is a graph id, which is always bare hex, while
+  // geo-chat ids are treated as possibly dashed throughout this directory. A raw comparison against
+  // a dashed `profile_space_id` silently fails to match, which would leave the viewer drawn on both
+  // sides at once — the count decrements either way.
+  const heldByViewer = (participant: DebateParticipantSummary) =>
+    ID.equals(participant.profile_space_id, viewerSpaceId);
+
+  // Counts follow `serverPosition`, but the participant lists are rebuilt from scratch on every
+  // side. Removing the viewer only from the side the server reports assumed those two agree about
+  // who the viewer is; where they don't, the viewer ends up on two sides at once.
+  const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
+    ...side,
+    total_count: side.total_count + (serverPosition === side.position ? 0 : 1),
+    participants: [viewer, ...side.participants.filter(participant => !heldByViewer(participant))],
+  });
+  const withoutViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
+    ...side,
+    total_count: Math.max(0, side.total_count - (serverPosition === side.position ? 1 : 0)),
+    participants: side.participants.filter(participant => !heldByViewer(participant)),
+  });
+
+  const adjusted = positions.map(side => (side.position === viewerPosition ? withViewer(side) : withoutViewer(side)));
+
+  // A side nobody has taken yet has no summary to adjust, so the viewer would have nowhere to
+  // appear. The label matches what PositionRow falls back to for a missing side.
+  if (viewerPosition !== null && !adjusted.some(side => side.position === viewerPosition)) {
+    adjusted.push({
+      position: viewerPosition,
+      position_label: viewerPosition ? copy.positiveAction : copy.negativeAction,
+      total_count: 1,
+      available_now_count: 0,
+      participants: [viewer],
+    });
+  }
+
+  return adjusted;
 }
 
 /** The graph can't resolve this claim, so the sides are read-only and there's nothing to respond to. */
@@ -287,12 +411,7 @@ function UnresolvableControls({
         toggle={
           /* Readiness is geo-chat state, so it still works without a graph id. */
           hideReadinessToggle ? null : (
-            <ClaimReadinessToggle
-              claim={claim}
-              readiness={readiness}
-              activeDebate={activeDebate}
-              hasResponse={readiness.viewer_response !== null}
-            />
+            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
           )
         }
       />
@@ -356,10 +475,24 @@ function PositionRow({
 }
 
 export function SpaceChip({ spaceId }: { spaceId: string }) {
-  const { spacesById } = useSpacesByIds(React.useMemo(() => (validateSpaceId(spaceId) ? [spaceId] : []), [spaceId]));
-  const space = spacesById.get(spaceId);
-  const name = space?.entity?.name ?? 'Space';
-  const image = space?.entity?.image ?? null;
+  // Same resolution as the space filter above the list, so a card and the menu option naming its
+  // space are never one loaded and the other still reading "Space".
+  const { labelsById, isLoading } = useSpaceLabels(
+    React.useMemo(() => (validateSpaceId(spaceId) ? [spaceId] : []), [spaceId])
+  );
+  const label = spaceLabel(labelsById, spaceId);
+  const name = label?.name ?? 'Space';
+  const image = label?.image ?? null;
+
+  // A whole list of cards eyebrowed "Space" reads as though every claim lives somewhere called
+  // Space. A skeleton says the name is coming, and holds the line's height while it does.
+  if (!label && isLoading) {
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <Skeleton className="h-3 w-20" aria-label="Loading space name" />
+      </span>
+    );
+  }
 
   return (
     <span className="flex min-w-0 items-center gap-1.5">

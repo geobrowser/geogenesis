@@ -356,7 +356,9 @@ export function TableBlockGalleryItem({
           );
         })}
         <div className="mt-1 flex items-center justify-between gap-2">
-          <EntityRowActions entityId={rowEntityId} spaceId={currentSpaceId} />
+          {/* The entity's own space, not the block's (GEO-2581) — every other space-scoped
+              prop in this component already resolves it this way. */}
+          <EntityRowActions entityId={rowEntityId} spaceId={nameCell?.space ?? currentSpaceId} />
           {!isPlaceholder && (
             <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
               {source.type === 'COLLECTION' ? (

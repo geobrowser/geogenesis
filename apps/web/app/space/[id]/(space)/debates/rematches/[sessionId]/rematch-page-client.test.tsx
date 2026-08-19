@@ -1,7 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
-import { StrictMode } from 'react';
+import { type ReactElement, StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -35,6 +36,12 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
   setReadiness: vi.fn(),
+  joinQueue: vi.fn((_variables: { spaceId: string; claimId: string }) => Promise.resolve({ claim: null, match: null })),
+  /** Which space each card wired its readiness machine to, in mount order. */
+  joinQueueSpaceIds: [] as string[],
+  leaveQueue: vi.fn((_variables: { spaceId: string; claimId: string }) =>
+    Promise.resolve({ claim: null, match: null })
+  ),
   openSidePanel: vi.fn(),
   entityQueries: [] as Array<{ where?: unknown; after?: string }>,
   entityQueryPlaceholder: false,
@@ -49,6 +56,8 @@ const mocks = vi.hoisted(() => ({
   savedClaims: null as DebateRematchClaim[] | null,
   browsedLookupLoading: false,
   currentUserId: 'user-local' as string | null,
+  spaceAllowlist: null as Set<string> | null,
+  allowlistLoading: false,
   scrollSentinelIntoView: null as null | (() => void),
   claimReadinessLoading: false,
   claimReadinessError: false,
@@ -106,8 +115,40 @@ vi.mock('~/core/debates/hooks', () => ({
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
+  // The card's Debate switch shares the entity page's queue-backed readiness machine.
+  useJoinDebateQueue: (spaceId: string) => {
+    mocks.joinQueueSpaceIds.push(spaceId);
+    return {
+      mutateAsync: (variables: { claimId: string }) => mocks.joinQueue({ spaceId, ...variables }),
+      reset: vi.fn(),
+      isPending: false,
+      error: null,
+    };
+  },
+  useLeaveDebateQueue: (spaceId: string) => ({
+    mutateAsync: (variables: { claimId: string }) => mocks.leaveQueue({ spaceId, ...variables }),
+    isPending: false,
+    error: null,
+  }),
 }));
+
+function render(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  return {
+    ...view,
+    rerender: (next: ReactElement) =>
+      view.rerender(<QueryClientProvider client={queryClient}>{next}</QueryClientProvider>),
+  };
+}
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: (options: { where?: unknown; after?: string }) => {
@@ -129,7 +170,13 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     isConnected: true,
     personalSpaceId: 'personal-space',
   }),
-  useEntityResponseIndexingSnapshot: () => ({ status: 'idle', pending: null, runId: null }),
+  // In production `optimisticResponse` is derived from this snapshot, so the two can't disagree.
+  // Mocking them independently let a test assert an optimistic side the snapshot denied.
+  useEntityResponseIndexingSnapshot: ({ entityId }: { entityId: string }) => {
+    const expectedResponse = mocks.optimisticResponses.get(entityId);
+    if (expectedResponse === undefined) return { status: 'idle', pending: null, runId: null };
+    return { status: 'reconciling', pending: { entityId, expectedResponse }, runId: `run-${entityId}` };
+  },
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
 
@@ -147,8 +194,25 @@ vi.mock('~/core/debates/recommended-claims', () => ({
   }),
 }));
 
+// Null is "the allowlist hasn't resolved", which every case that isn't about it runs under.
+vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
+  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
+}));
+
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, sidePanelTarget: null, closeSidePanel: vi.fn() }),
+}));
+
+// useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
+// suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useBrowseSidebarQuerySource: () => ({
+    personalSpaceId: null,
+    walletAddress: undefined,
+    keyInput: null,
+    isLoading: false,
+  }),
+  useCachedBrowseSidebarData: () => null,
 }));
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
@@ -179,6 +243,9 @@ beforeEach(() => {
   mocks.claimReadinessLoading = false;
   mocks.claimReadinessError = false;
   mocks.setReadiness.mockReset();
+  mocks.joinQueue.mockClear();
+  mocks.leaveQueue.mockClear();
+  mocks.joinQueueSpaceIds.length = 0;
   mocks.openSidePanel.mockReset();
   mocks.entityQueries.length = 0;
   mocks.entityQueryPlaceholder = false;
@@ -193,6 +260,8 @@ beforeEach(() => {
   mocks.savedClaims = null;
   mocks.browsedLookupLoading = false;
   mocks.currentUserId = 'user-local';
+  mocks.spaceAllowlist = null;
+  mocks.allowlistLoading = false;
   // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
   // the callback so a test can say the sentinel scrolled into view.
   mocks.scrollSentinelIntoView = null;
@@ -714,6 +783,71 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
   });
 
+  // Featured spaces plus the ones the viewer belongs to. The picker browses the whole published
+  // corpus, so without this it offers claims from spaces the viewer has nothing to do with.
+  it('drops claims from spaces outside the viewer’s allowed set', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_1.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    // The shared claim sits in Crypto (allowed); the published one is in Governance space.
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+  });
+
+  // Applied to the pool, not to the All tab alone, so the tab a viewer lands on describes the same
+  // set of claims as every other one.
+  it('drops disallowed claims from the opponent tab too', async () => {
+    mocks.claims = [sharedClaim()];
+    mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    // The count follows the same pool, so it can't advertise a position the tab no longer lists.
+    const tab = screen.getByRole('button', { name: /Salina’s positions/ });
+    expect(within(tab).getByText('0')).toBeInTheDocument();
+  });
+
+  // The browsed scan is graph-wide; asking geo-chat about claims the picker will drop spends a
+  // batch of round trips on rows nobody sees.
+  it('keeps disallowed claims out of the geo-chat lookup entirely', () => {
+    mocks.spaceAllowlist = new Set([SPACE_1.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.rematchClaimIds.flat()).not.toContain(CLAIM_MORE);
+  });
+
+  // Listing the unfiltered pool and trimming it once the allowlist lands means claims and spaces
+  // appear and then vanish under the viewer. Waiting is the honest state.
+  it('shows nothing while the allowlist is still resolving', async () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+  });
+
+  // Nor does it spend a batch of geo-chat round trips on a pool it is about to throw away.
+  it('holds the geo-chat lookup while the allowlist is still resolving', () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.rematchClaimIds.flat()).not.toContain(CLAIM_MORE);
+  });
+
+  // A lookup that settles without an answer must not leave the picker permanently empty.
+  it('falls through to the unfiltered list when the allowlist lookup comes back empty', async () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = false;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+  });
+
   it('searches claim text, and keeps searching across a tab switch', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();
@@ -948,7 +1082,7 @@ describe('DebateRematchPageClient', () => {
   // Readiness is rejected for a claim geo-chat has no response for, and `useClaimReadiness` rolls
   // the switch back when that happens — so opting in off the optimistic position made the toggle
   // visibly flip on and straight back off.
-  it('waits for the response to settle before standing the viewer ready', () => {
+  it('waits for the response to settle before standing the viewer ready', async () => {
     const unresponded = {
       ...sharedClaim(),
       participants: [
@@ -958,12 +1092,12 @@ describe('DebateRematchPageClient', () => {
     };
     mocks.claims = [unresponded];
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
-    expect(mocks.setReadiness).not.toHaveBeenCalled();
+    expect(mocks.joinQueue).not.toHaveBeenCalled();
 
     // The side is picked: optimistic only, geo-chat still has nothing.
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-    expect(mocks.setReadiness).not.toHaveBeenCalled();
+    expect(mocks.joinQueue).not.toHaveBeenCalled();
 
     // geo-chat catches up, and only now is readiness sent.
     mocks.claims = [
@@ -977,11 +1111,7 @@ describe('DebateRematchPageClient', () => {
     ];
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(mocks.setReadiness).toHaveBeenCalledWith({
-      spaceId: SPACE_1,
-      claimId: CLAIM_SHARED,
-      ready: true,
-    });
+    await waitFor(() => expect(mocks.joinQueue).toHaveBeenCalledWith({ spaceId: SPACE_1, claimId: CLAIM_SHARED }));
   });
 
   // `entity.spaces` is rank-ordered and counts any space that merely references the claim, so
@@ -995,7 +1125,12 @@ describe('DebateRematchPageClient', () => {
         // Crypto (rank 2) outranks Podcasts (rank 8), but only Podcasts names the claim.
         spaces: [CRYPTO_SPACE, PODCASTS_SPACE],
         values: [
-          { isDeleted: false, property: { id: NAME_PROPERTY }, spaceId: PODCASTS_SPACE, value: 'A claim that lives in Podcasts' },
+          {
+            isDeleted: false,
+            property: { id: NAME_PROPERTY },
+            spaceId: PODCASTS_SPACE,
+            value: 'A claim that lives in Podcasts',
+          },
         ],
       },
     ];
@@ -1004,17 +1139,15 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();
 
-    const card = screen.getByText('A claim that lives in Podcasts').closest('article');
-    fireEvent.click(within(card!).getByRole('switch', { name: 'Ready to debate this claim' }));
-
-    expect(mocks.setReadiness).toHaveBeenCalledWith({
-      spaceId: PODCASTS_SPACE,
-      claimId: CLAIM_MORE,
-      ready: true,
-    });
+    // The space is fixed when the card wires its readiness machine, not when the request goes out —
+    // a browsed claim has no indexed response yet, so the machine holds the request until geo-chat
+    // has one. What matters here is which space it is bound to.
+    expect(screen.getByText('A claim that lives in Podcasts')).toBeInTheDocument();
+    expect(mocks.joinQueueSpaceIds).toContain(PODCASTS_SPACE);
+    expect(mocks.joinQueueSpaceIds).not.toContain(CRYPTO_SPACE);
   });
 
-  it('stands the viewer ready only once, even as the claim keeps refetching', () => {
+  it('stands the viewer ready only once, even as the claim keeps refetching', async () => {
     mocks.claims = [
       {
         ...sharedClaim(),
@@ -1041,7 +1174,7 @@ describe('DebateRematchPageClient', () => {
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(mocks.setReadiness).toHaveBeenCalledOnce();
+    await waitFor(() => expect(mocks.joinQueue).toHaveBeenCalledOnce());
   });
 });
 

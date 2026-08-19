@@ -44,15 +44,33 @@ export const FEATURED_TAG_ID = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
 export const SUBTOPIC_RELATION_TYPE_ID = '39e40cadb23d4f63ab2faea1596436c7';
 
 // Bounty ontology ids live in ~/core/bounties/ontology (canonical geo-sdk
-// re-exports, shared with curator-app). The two aliases below are the names
-// the pre-existing bounty-linking code still imports; new code imports from
-// the ontology module directly. The former BOUNTY_STATUS_PROPERTY_ID
+// re-exports, shared with curator-app). The aliases below are the names the
+// pre-existing bounty-linking and community-tab code import; new code imports
+// from the ontology module directly. The former BOUNTY_STATUS_PROPERTY_ID
 // (f54a8163…) was removed: that id is the generic "Status" property used by
 // non-bounty entities, never part of the bounty ontology.
-export { BOUNTY_TYPE_ID, BOUNTY_SUBMISSION_PROPERTY_ID as BOUNTIES_RELATION_TYPE } from '~/core/bounties/ontology';
+export {
+  BOUNTY_TYPE_ID,
+  BOUNTY_SUBMISSION_PROPERTY_ID as BOUNTIES_RELATION_TYPE,
+  BOUNTY_DESCRIPTION_PROPERTY_ID,
+  BOUNTY_BUDGET_PROPERTY_ID,
+  BOUNTY_DIFFICULTY_PROPERTY_ID,
+  BOUNTY_ALLOCATED_PROPERTY_ID,
+  BOUNTY_TASK_STATUS_PROPERTY_ID,
+  BOUNTY_STATUS_DONE_ID as BOUNTY_TASK_STATUS_DONE_ENTITY_ID,
+  BOUNTY_STATUS_IN_PROGRESS_ID as BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID,
+  BOUNTY_STATUS_TODO_ID as BOUNTY_TASK_STATUS_TODO_ENTITY_ID,
+  INTERESTED_IN_BOUNTY_PROPERTY_ID as INTERESTED_IN_RELATION_TYPE_ID,
+  BOUNTY_SKILLS_PROPERTY_ID,
+} from '~/core/bounties/ontology';
+export const BOUNTY_DIFFICULTY_LEVELS = ['Easy', 'Medium', 'Hard'] as const;
+export type BountyDifficultyLevel = (typeof BOUNTY_DIFFICULTY_LEVELS)[number];
 /** Share of a bounty's budget shown as the per-contributor estimated payout. */
 export const BOUNTY_EST_PAYOUT_RATIO = 0.2;
 export const PROPOSAL_TYPE_ID = '490a7c90ad4b4029b2b4d85d22fe203a';
+
+export const NEWS_STORY_TYPE_ID = 'e550fe517e904b2c8fffdf13408f5634';
+export const AVATAR_PROPERTY_ID = '1155befffad549b7a2e0da4777b8792c';
 
 // Video file types and upload constraints
 export const VALID_VIDEO_TYPES = [

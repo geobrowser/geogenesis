@@ -1,5 +1,8 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+
+import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,6 +11,12 @@ import { ClaimsTab } from './claims-tab';
 
 const mocks = vi.hoisted(() => ({
   claims: [] as MatchmakingClaim[],
+  facetSpaceIds: [] as string[],
+  spaceAllowlist: null as Set<string> | null,
+  allowlistLoading: false,
+  sidebarData: null as unknown,
+  fetchedSpaceIds: [] as string[][],
+  spacesLoading: false,
   lastQuery: null as unknown,
   hasNextPage: false,
   fetchNextPage: vi.fn(),
@@ -15,11 +24,15 @@ const mocks = vi.hoisted(() => ({
   trigger: null as null | (() => void),
 }));
 
+vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
+  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
+}));
+
 vi.mock('./hooks', () => ({
   useMatchmakingClaims: (query: unknown) => {
     mocks.lastQuery = query;
     return {
-      data: { pages: [{ claims: mocks.claims, next_cursor: null, facets: { space_ids: [] } }] },
+      data: { pages: [{ claims: mocks.claims, next_cursor: null, facets: { space_ids: mocks.facetSpaceIds } }] },
       isLoading: false,
       error: null,
       hasNextPage: mocks.hasNextPage,
@@ -28,7 +41,21 @@ vi.mock('./hooks', () => ({
       refetch: vi.fn(),
     };
   },
-  useClaimReadiness: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+}));
+
+// The readiness switch rides the shared queue-backed machine, which reaches for geo-chat auth and
+// the join/leave mutations rather than a one-shot readiness mutation.
+vi.mock('../hooks', () => ({
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  },
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
+  useLeaveDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -37,19 +64,59 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
 
+// useSpaceLabels reads the browse sidebar's cache before falling back to the query below. These
+// suites render without a QueryClientProvider, so the read is stubbed; `sidebarData` lets a test
+// put rows in it.
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useBrowseSidebarQuerySource: () => ({
+    personalSpaceId: null,
+    walletAddress: undefined,
+    keyInput: null,
+    isLoading: false,
+  }),
+  useCachedBrowseSidebarData: () => mocks.sidebarData,
+}));
+
+// Deliberately answers nothing: a name that shows up on screen came from the sidebar cache above.
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
-  useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
+  useSpacesByIds: (spaceIds: string[]) => {
+    mocks.fetchedSpaceIds.push(spaceIds);
+    return { spaces: [], spacesById: new Map(), isLoading: mocks.spacesLoading };
+  },
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [] }),
 }));
 
-const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
+function render(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
 
-function claim(entityId: string, text: string, viewerResponded: boolean, debateReady = false): MatchmakingClaim {
+const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
+const OTHER_SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c599';
+
+/** What `BrowseSidebar` has already loaded by the time the debates panel opens. */
+function sidebarData() {
   return {
-    claim: { id: `row-${entityId}`, space_id: SPACE_ID, claim_entity_id: entityId, claim: text, description: null },
+    featured: [{ id: SPACE_ID, name: 'Crypto', image: null }],
+    editorOf: [],
+    memberOf: [],
+    documentationImage: null,
+    personalSpaceId: null,
+  };
+}
+
+function claim(
+  entityId: string,
+  text: string,
+  viewerResponded: boolean,
+  debateReady = false,
+  spaceId = SPACE_ID
+): MatchmakingClaim {
+  return {
+    claim: { id: `row-${entityId}`, space_id: spaceId, claim_entity_id: entityId, claim: text, description: null },
     topics: [],
     response_kind: 'stance',
     viewer_position: viewerResponded ? true : null,
@@ -67,8 +134,19 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
 beforeEach(() => {
   mocks.hasNextPage = false;
+  mocks.facetSpaceIds = [];
+  // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
+  // unfiltered list — what every pre-existing case here runs under.
+  mocks.spaceAllowlist = null;
+  mocks.allowlistLoading = false;
+  mocks.sidebarData = null;
+  mocks.fetchedSpaceIds = [];
+  mocks.spacesLoading = false;
   mocks.fetchNextPage.mockReset();
   mocks.observed = [];
+  // Cleared with it: a trigger left over from the previous test still closes over that test's
+  // observer, so a case where nothing is observed could "scroll" a sentinel that isn't there.
+  mocks.trigger = null;
   // Records the sentinel and hands back a way to say it scrolled into view.
   vi.stubGlobal(
     'IntersectionObserver',
@@ -121,27 +199,32 @@ describe('ClaimsTab', () => {
     expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
   });
 
-  // The claims you've taken a side on are the ones that can turn into debates, so they lead.
-  it('leads with the claims the viewer has a position on', () => {
+  // The tab is one list in the server's order. Leading with the claims you'd already answered
+  // re-ranked it by something the Position filter in the dropdown already covers, and it moved a
+  // card between two sections the moment you took a side.
+  it('renders one unsectioned list in the order the server returned', () => {
     render(<ClaimsTab />);
 
-    const mine = screen.getByRole('heading', { name: 'My positions' });
-    const all = screen.getByRole('heading', { name: 'All claims' });
-    expect(mine.compareDocumentPosition(all) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'My positions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'All claims' })).not.toBeInTheDocument();
 
+    // `claim(MINE, …)` is answered and `claim(THEIRS, …)` is not; the answered one no longer jumps
+    // the queue, so the server's order stands.
     const first = screen.getByText('Chips are better than fries');
     const second = screen.getByText('Bitcoin will never top $250K');
     expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  // With nothing to separate them from, a heading over the whole list says nothing.
-  it('drops the headings when every claim falls on one side of the split', () => {
-    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false)];
+  it('leaves an answered claim where the server put it rather than promoting it', () => {
+    mocks.claims = [
+      claim(THEIRS, 'Bitcoin will never top $250K', false),
+      claim(MINE, 'Chips are better than fries', true),
+    ];
     render(<ClaimsTab />);
 
-    expect(screen.queryByRole('heading', { name: 'My positions' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'All claims' })).not.toBeInTheDocument();
-    expect(screen.getByText('Bitcoin will never top $250K')).toBeInTheDocument();
+    const unanswered = screen.getByText('Bitcoin will never top $250K');
+    const answered = screen.getByText('Chips are better than fries');
+    expect(unanswered.compareDocumentPosition(answered) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   // "My positions" means every claim the viewer holds a response for, whether or not they are
@@ -164,14 +247,187 @@ describe('ClaimsTab', () => {
     expect(screen.getByText('Rust belongs in the kernel')).toBeInTheDocument();
   });
 
-  it('drops the split once a filter already narrows to one group', () => {
+  // Featured spaces plus the viewer's own; `/matchmaking/claims` takes a single space_id, so the
+  // list has to be narrowed here.
+  it('shows only claims from spaces the viewer is allowed to see', () => {
+    mocks.claims = [
+      claim(MINE, 'Chips are better than fries', true),
+      claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID),
+    ];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     render(<ClaimsTab />);
 
-    fireEvent.click(screen.getByRole('button', { name: /All claims/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
-
-    expect(screen.queryByRole('heading', { name: 'My positions' })).not.toBeInTheDocument();
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+    expect(screen.queryByText('Bitcoin will never top $250K')).not.toBeInTheDocument();
+  });
+
+  // The allowlist is keyed on normalized ids; a claim row carries the hyphen-less form.
+  it('matches allowed spaces across id formats', () => {
+    mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '').toLowerCase()]);
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+  });
+
+  // The reported bug: the menu opened on every space the server faceted, then trimmed itself to
+  // the viewer's own a moment later — spaces appearing and vanishing, and offering picks that were
+  // never theirs to make.
+  it('shows nothing until the allowlist settles, rather than trimming under the viewer', () => {
+    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    render(<ClaimsTab />);
+
+    expect(screen.queryByText('Bitcoin will never top $250K')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    expect(screen.queryByLabelText('Loading space name')).toBeNull();
+    expect(screen.queryByText('Space')).toBeNull();
+  });
+
+  // The tab shows a four-row skeleton while the allowlist resolves, so a sentinel below it sits in
+  // view and reads "the viewer reached the end" off a list that isn't rendered.
+  it('does not page the corpus while the allowlist is still resolving', () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    mocks.hasNextPage = true;
+    render(<ClaimsTab />);
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+
+    act(() => mocks.trigger?.());
+
+    expect(mocks.fetchNextPage).not.toHaveBeenCalled();
+  });
+
+  // A lookup that settles without an answer must not leave the panel permanently empty — too wide
+  // a list beats one that never fills.
+  it('falls through to the unfiltered list when the allowlist lookup comes back empty', () => {
+    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = false;
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Bitcoin will never top $250K')).toBeInTheDocument();
+  });
+
+  // The space menu comes from the server's facets, which span every space the query touched.
+  it('offers only allowed spaces in the space filter', () => {
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+
+    // Names resolve through useSpacesByIds, mocked empty here, so every allowed space reads "Space".
+    expect(screen.getAllByRole('button', { name: /Space$/ })).toHaveLength(1);
+  });
+
+  // The allowlist runs over the loaded page, so a page can arrive with nothing left in it. With
+  // the sentinel rendered only alongside results the list would stop there and report "no claims"
+  // while the corpus still held matches.
+  it('keeps asking for pages when the allowlist empties the one it has', () => {
+    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.hasNextPage = true;
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('No debatable claims yet.')).toBeInTheDocument();
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+
+    act(() => mocks.trigger?.());
+
+    expect(mocks.fetchNextPage).toHaveBeenCalled();
+  });
+
+  // The reported bug: the space menu opened as a column of "Space" placeholders while it re-fetched
+  // names the browse sidebar had been showing since first paint.
+  it('names the space options from the sidebar rows without fetching them again', () => {
+    mocks.facetSpaceIds = [SPACE_ID];
+    mocks.sidebarData = sidebarData();
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+
+    expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Space$/ })).toBeNull();
+    // Not one id reached the knowledge graph — neither from the menu nor from the cards below it.
+    expect(mocks.fetchedSpaceIds.flat()).toEqual([]);
+  });
+
+  // The same placeholder showed on every card in the list, from the same missing names.
+  it('names each card space from the sidebar rows too', () => {
+    mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
+    mocks.sidebarData = sidebarData();
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Crypto')).toBeInTheDocument();
+  });
+
+  // On a cold load the sidebar hasn't cached anything yet either. A column of identical "Space"
+  // rows reads as a list of real, indistinguishable choices; skeletons read as names on their way.
+  it('draws unresolved space options as skeletons rather than a column of "Space"', () => {
+    mocks.claims = [];
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.spacesLoading = true;
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+
+    expect(screen.getAllByLabelText('Loading space name')).toHaveLength(2);
+    expect(screen.queryByText('Space')).toBeNull();
+  });
+
+  // Picking a space nobody can name yet filters the list to something the viewer can't read back.
+  it('does not let an unresolved space be picked', () => {
+    mocks.claims = [];
+    mocks.facetSpaceIds = [SPACE_ID];
+    mocks.spacesLoading = true;
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    const option = screen.getByLabelText('Loading space name').closest('button');
+    expect(option).toBeDisabled();
+
+    fireEvent.click(option!);
+
+    expect(mocks.lastQuery).toMatchObject({ spaceId: null });
+  });
+
+  // A settled lookup that still can't name the space really does leave "Space" as the best label
+  // there is — the skeleton must not become the permanent state.
+  it('falls back to the plain label once the lookup settles with no name', () => {
+    mocks.claims = [];
+    mocks.facetSpaceIds = [SPACE_ID];
+    mocks.spacesLoading = false;
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+
+    expect(screen.queryByLabelText('Loading space name')).toBeNull();
+    // The option's accessible name picks up its avatar initial, so it reads "SSpace".
+    expect(screen.getByRole('button', { name: /Space$/ })).toBeEnabled();
+  });
+
+  // The same placeholder ran down every card in the list.
+  it('draws an unresolved card space as a skeleton', () => {
+    mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
+    mocks.spacesLoading = true;
+    render(<ClaimsTab />);
+
+    expect(screen.getAllByLabelText('Loading space name').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Space')).toBeNull();
+  });
+
+  // A space the sidebar has no row for still has to resolve the old way.
+  it('still fetches a space the sidebar has never heard of', () => {
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.sidebarData = sidebarData();
+    render(<ClaimsTab />);
+
+    expect(mocks.fetchedSpaceIds.flat()).toEqual([OTHER_SPACE_ID]);
   });
 });
 
