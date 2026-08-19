@@ -52,6 +52,7 @@ import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import type { Row } from '~/core/types';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
 
@@ -98,6 +99,53 @@ type UseRankingBlockStateParams = {
 const EMPTY_ENTITY_IDS: string[] = [];
 const EMPTY_ENTITY_ID_SET: ReadonlySet<string> = new Set<string>();
 const EMPTY_RANKING_ENTRIES: RankingEntryDisplay[] = [];
+
+function buildRankingEntryMap(
+  seedEntries: RankingEntryDisplay[],
+  rows: Row[],
+  entries: RankingEntryDisplay[]
+): Map<string, RankingEntryDisplay> {
+  const map = new Map<string, RankingEntryDisplay>();
+
+  for (const entry of seedEntries) {
+    map.set(entry.entityId, entry);
+  }
+
+  for (const row of rows) {
+    if (!row.entityId || row.placeholder) continue;
+    map.set(row.entityId, {
+      entityId: row.entityId,
+      name: getRowDisplayName(row),
+      description: getRowDescription(row),
+      image: row.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
+    });
+  }
+
+  for (const entry of entries) {
+    const fromRow = map.get(entry.entityId);
+    map.set(entry.entityId, {
+      entityId: entry.entityId,
+      name: entry.name,
+      description: entry.description ?? fromRow?.description ?? null,
+      image: entry.image ?? fromRow?.image ?? null,
+    });
+  }
+
+  return map;
+}
+
+/** Overlays governance-pending names onto entries the indexer couldn't resolve. */
+function withPendingEntries(
+  base: Map<string, RankingEntryDisplay>,
+  pendingEntriesByEntityId: ReadonlyMap<string, RankingEntryDisplay>
+): Map<string, RankingEntryDisplay> {
+  if (pendingEntriesByEntityId.size === 0) return base;
+  const map = new Map(base);
+  for (const [id, entry] of pendingEntriesByEntityId) {
+    if (isPlaceholderRankingEntry(map.get(id))) map.set(id, entry);
+  }
+  return map;
+}
 
 export function useRankingBlockState({
   spaceId,
@@ -386,68 +434,15 @@ export function useRankingBlockState({
   const globalEntriesById = React.useMemo(() => new Map(globalEntries.map(e => [e.entityId, e])), [globalEntries]);
   const myEntriesById = React.useMemo(() => new Map(myEntries.map(e => [e.entityId, e])), [myEntries]);
 
-  const globalRankingEntryByEntityIdBase = React.useMemo(() => {
-    const map = new Map<string, RankingEntryDisplay>();
+  const globalRankingEntryByEntityIdBase = React.useMemo(
+    () => buildRankingEntryMap(initialGlobalEntries, rows, globalEntries),
+    [globalEntries, initialGlobalEntries, rows]
+  );
 
-    // Seed from the server ranking; live `rows`/`globalEntries` below override with the same data.
-    for (const entry of initialGlobalEntries) {
-      map.set(entry.entityId, entry);
-    }
-
-    for (const row of rows) {
-      if (!row.entityId || row.placeholder) continue;
-      map.set(row.entityId, {
-        entityId: row.entityId,
-        name: getRowDisplayName(row),
-        description: getRowDescription(row),
-        image: row.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
-      });
-    }
-
-    for (const entry of globalEntries) {
-      const fromRow = map.get(entry.entityId);
-      map.set(entry.entityId, {
-        entityId: entry.entityId,
-        name: entry.name,
-        description: entry.description ?? fromRow?.description ?? null,
-        image: entry.image ?? fromRow?.image ?? null,
-      });
-    }
-
-    return map;
-  }, [globalEntries, initialGlobalEntries, rows]);
-
-  const myRankingEntryByEntityIdBase = React.useMemo(() => {
-    const map = new Map<string, RankingEntryDisplay>();
-
-    // Seed from the server-resolved shared ranking; live `rows`/`myEntries`
-    // below override with the same data once they hydrate.
-    for (const entry of initialSharedEntries) {
-      map.set(entry.entityId, entry);
-    }
-
-    for (const row of rows) {
-      if (!row.entityId || row.placeholder) continue;
-      map.set(row.entityId, {
-        entityId: row.entityId,
-        name: getRowDisplayName(row),
-        description: getRowDescription(row),
-        image: row.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
-      });
-    }
-
-    for (const entry of myEntries) {
-      const fromRow = map.get(entry.entityId);
-      map.set(entry.entityId, {
-        entityId: entry.entityId,
-        name: entry.name,
-        description: entry.description ?? fromRow?.description ?? null,
-        image: entry.image ?? fromRow?.image ?? null,
-      });
-    }
-
-    return map;
-  }, [myEntries, rows, initialSharedEntries]);
+  const myRankingEntryByEntityIdBase = React.useMemo(
+    () => buildRankingEntryMap(initialSharedEntries, rows, myEntries),
+    [myEntries, rows, initialSharedEntries]
+  );
 
   // Hide unresolved rows from the global leaderboard for everyone. A row is
   // "unresolved" when the indexer returns no real name for it (placeholder) — this
@@ -520,6 +515,12 @@ export function useRankingBlockState({
 
   const entriesSettled = !isLoadingGlobalEntries && !isLoadingMyEntries;
 
+  const showViewerOwnTab = isSharedRankingView && hasMySubmission;
+  const viewerOwnDisplayEntityIds = React.useMemo(
+    () => (showViewerOwnTab ? (mySubmission?.orderedEntityIds ?? EMPTY_ENTITY_IDS) : EMPTY_ENTITY_IDS),
+    [showViewerOwnTab, mySubmission]
+  );
+
   const unresolvedRankingEntityIds = React.useMemo(() => {
     if (!entriesSettled) return EMPTY_ENTITY_IDS;
     // Global placeholders are already computed (and hidden from the leaderboard);
@@ -540,14 +541,23 @@ export function useRankingBlockState({
     const ids = new Set<string>();
     for (const id of ownRankingEntityIds) if (id) ids.add(id);
     for (const id of unresolvedRankingEntityIds) if (id) ids.add(id);
+    for (const id of viewerOwnDisplayEntityIds) if (id) ids.add(id);
     return ids.size > 0 ? [...ids] : EMPTY_ENTITY_IDS;
-  }, [ownRankingEntityIds, unresolvedRankingEntityIds]);
+  }, [ownRankingEntityIds, unresolvedRankingEntityIds, viewerOwnDisplayEntityIds]);
 
   const pendingProposerSpaceIds = React.useMemo(() => {
-    const submitters = unresolvedRankingEntityIds.length > 0 ? aggregatedSubmitterSpaceIds : [];
+    // Only worth widening the proposer search when something actually needs one.
+    const needsSubmitters = unresolvedRankingEntityIds.length > 0 || viewerOwnDisplayEntityIds.length > 0;
+    const submitters = needsSubmitters ? aggregatedSubmitterSpaceIds : [];
     const extra = [personalSpaceId, sharedAuthorSpaceId].filter(Boolean) as string[];
     return getPendingProposerSpaceIds(submitters, extra);
-  }, [unresolvedRankingEntityIds, aggregatedSubmitterSpaceIds, personalSpaceId, sharedAuthorSpaceId]);
+  }, [
+    unresolvedRankingEntityIds,
+    viewerOwnDisplayEntityIds,
+    aggregatedSubmitterSpaceIds,
+    personalSpaceId,
+    sharedAuthorSpaceId,
+  ]);
 
   const { pendingEntityIds, pendingEntriesByEntityId, isPendingLoading } = useRankingPendingEntities({
     targetSpaceId: pendingTargetSpaceId,
@@ -555,29 +565,15 @@ export function useRankingBlockState({
     proposerSpaceIds: pendingProposerSpaceIds,
   });
 
-  // An unresolved row's name may still arrive from the entity store or the
-  // pending-proposal fetch. While that's in flight, render a skeleton instead of
-  // flashing "Untitled" — on a throttled shortlink the seed can carry "Untitled"
-  // for governance-pending or cross-space entries until the live data lands.
-  const entriesResolving = isLoadingGlobalEntries || isLoadingMyEntries || isPendingLoading;
+  const globalRankingEntryByEntityId = React.useMemo(
+    () => withPendingEntries(globalRankingEntryByEntityIdBase, pendingEntriesByEntityId),
+    [globalRankingEntryByEntityIdBase, pendingEntriesByEntityId]
+  );
 
-  const globalRankingEntryByEntityId = React.useMemo(() => {
-    if (pendingEntriesByEntityId.size === 0) return globalRankingEntryByEntityIdBase;
-    const map = new Map(globalRankingEntryByEntityIdBase);
-    for (const [id, entry] of pendingEntriesByEntityId) {
-      if (isPlaceholderRankingEntry(map.get(id))) map.set(id, entry);
-    }
-    return map;
-  }, [globalRankingEntryByEntityIdBase, pendingEntriesByEntityId]);
-
-  const myRankingEntryByEntityId = React.useMemo(() => {
-    if (pendingEntriesByEntityId.size === 0) return myRankingEntryByEntityIdBase;
-    const map = new Map(myRankingEntryByEntityIdBase);
-    for (const [id, entry] of pendingEntriesByEntityId) {
-      if (isPlaceholderRankingEntry(map.get(id))) map.set(id, entry);
-    }
-    return map;
-  }, [myRankingEntryByEntityIdBase, pendingEntriesByEntityId]);
+  const myRankingEntryByEntityId = React.useMemo(
+    () => withPendingEntries(myRankingEntryByEntityIdBase, pendingEntriesByEntityId),
+    [myRankingEntryByEntityIdBase, pendingEntriesByEntityId]
+  );
 
   // Global ranks renumber contiguously over the visible (placeholder-free) list.
   const globalRankByEntityId = React.useMemo(
@@ -585,39 +581,24 @@ export function useRankingBlockState({
     [visibleGlobalDisplayEntityIds]
   );
 
-  const showViewerOwnTab = isSharedRankingView && hasMySubmission;
-  const viewerOwnDisplayEntityIds = React.useMemo(
-    () => (showViewerOwnTab ? (mySubmission?.orderedEntityIds ?? EMPTY_ENTITY_IDS) : EMPTY_ENTITY_IDS),
-    [showViewerOwnTab, mySubmission]
+  const { entries: viewerOwnEntries, isLoading: isLoadingViewerOwnEntries } = useRankingEntryEntities(
+    spaceId,
+    viewerOwnDisplayEntityIds
   );
 
-  const { entries: viewerOwnEntries } = useRankingEntryEntities(spaceId, viewerOwnDisplayEntityIds);
+  const viewerOwnEntryByEntityIdBase = React.useMemo(
+    () => buildRankingEntryMap(EMPTY_RANKING_ENTRIES, rows, viewerOwnEntries),
+    [viewerOwnEntries, rows]
+  );
 
-  const viewerOwnEntryByEntityId = React.useMemo(() => {
-    const map = new Map<string, RankingEntryDisplay>();
+  // Same pending overlay the global and my maps get.
+  const viewerOwnEntryByEntityId = React.useMemo(
+    () => withPendingEntries(viewerOwnEntryByEntityIdBase, pendingEntriesByEntityId),
+    [viewerOwnEntryByEntityIdBase, pendingEntriesByEntityId]
+  );
 
-    for (const row of rows) {
-      if (!row.entityId || row.placeholder) continue;
-      map.set(row.entityId, {
-        entityId: row.entityId,
-        name: getRowDisplayName(row),
-        description: getRowDescription(row),
-        image: row.columns[SystemIds.NAME_PROPERTY]?.image ?? null,
-      });
-    }
-
-    for (const entry of viewerOwnEntries) {
-      const fromRow = map.get(entry.entityId);
-      map.set(entry.entityId, {
-        entityId: entry.entityId,
-        name: entry.name,
-        description: entry.description ?? fromRow?.description ?? null,
-        image: entry.image ?? fromRow?.image ?? null,
-      });
-    }
-
-    return map;
-  }, [viewerOwnEntries, rows]);
+  const entriesResolving =
+    isLoadingGlobalEntries || isLoadingMyEntries || isLoadingViewerOwnEntries || isPendingLoading;
 
   const viewerOwnRankEntityId = showViewerOwnTab ? (mySubmission?.id ?? '') : '';
   const viewerOwnSharePath = viewerOwnRankEntityId ? buildShortPersonalRankingSharePath(viewerOwnRankEntityId) : null;
