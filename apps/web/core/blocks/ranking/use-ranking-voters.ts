@@ -94,8 +94,9 @@ export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
   // A space is only fetched to borrow its image, and that image is only reached
   // for when the profile didn't supply an avatar.
   const spaceIdsNeedingImage = React.useMemo(
-    () => spaceIds.filter(spaceId => !usableAvatarUrl(profilesBySpaceId.get(spaceId)?.avatarUrl)),
-    [spaceIds, profilesBySpaceId]
+    () =>
+      isLoadingProfiles ? [] : spaceIds.filter(spaceId => !usableAvatarUrl(profilesBySpaceId.get(spaceId)?.avatarUrl)),
+    [isLoadingProfiles, spaceIds, profilesBySpaceId]
   );
 
   const { data: spacesById = EMPTY_SPACE_MAP } = useQuery({
@@ -120,7 +121,7 @@ export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
       resolvedRefs.map(ref => {
         const profile = profilesBySpaceId.get(ref.spaceId);
         const profileAvatarUrl = usableAvatarUrl(profile?.avatarUrl);
-        const spaceAvatarUrl = usableAvatarUrl(spacesById.get(ref.spaceId)?.entity.image);
+        const spaceAvatarUrl = usableAvatarUrl(spacesById.get(ref.spaceId)?.entity?.image);
         return {
           rankEntityId: ref.rankEntityId,
           spaceId: ref.spaceId,

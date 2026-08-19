@@ -39,9 +39,11 @@ const profile = (spaceId: string, avatarUrl: string | null) => ({
 
 const space = (id: string, image: string) => ({ id, entity: { image } });
 
-function wrapper({ children }: { children: ReactNode }) {
+function createWrapper() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  };
 }
 
 beforeEach(() => {
@@ -65,7 +67,7 @@ describe('useRankingVoters', () => {
       Effect.succeed([profile('space-a', 'ipfs://a'), profile('space-b', 'ipfs://b')])
     );
 
-    const { result } = renderHook(() => useRankingVoters(refs), { wrapper });
+    const { result } = renderHook(() => useRankingVoters(refs), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     await waitFor(() => expect(result.current.voters[0].avatarUrl).toBe('ipfs://a'));
@@ -79,7 +81,7 @@ describe('useRankingVoters', () => {
     );
     mocks.getSpaces.mockReturnValue(Effect.succeed([space('space-b', 'ipfs://from-space')]));
 
-    const { result } = renderHook(() => useRankingVoters(refs), { wrapper });
+    const { result } = renderHook(() => useRankingVoters(refs), { wrapper: createWrapper() });
 
     await waitFor(() => expect(mocks.getSpaces).toHaveBeenCalled());
 
@@ -93,7 +95,7 @@ describe('useRankingVoters', () => {
       Effect.succeed([profile('space-a', PLACEHOLDER_SPACE_IMAGE), profile('space-b', 'ipfs://b')])
     );
 
-    const { result } = renderHook(() => useRankingVoters(refs), { wrapper });
+    const { result } = renderHook(() => useRankingVoters(refs), { wrapper: createWrapper() });
 
     await waitFor(() => expect(mocks.getSpaces).toHaveBeenCalled());
 
