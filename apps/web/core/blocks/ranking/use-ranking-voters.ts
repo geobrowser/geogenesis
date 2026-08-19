@@ -10,10 +10,10 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { Space } from '~/core/io/dto/spaces';
 import { getSpaces } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { useQueryEntities } from '~/core/sync/use-store';
 import type { Profile } from '~/core/types';
 
 import type { AggregatedRankingSubmitterRef } from './ranking-block-relations';
+import { useRankEntitySpaceById } from './use-ranking-submitter-space-ids';
 
 export type RankingVoter = {
   rankEntityId: string;
@@ -42,25 +42,7 @@ function chunkSpaceIds(spaceIds: string[]): string[][] {
 }
 
 export function useRankingVoters(refs: AggregatedRankingSubmitterRef[]) {
-  const rankEntityIdsNeedingSpace = React.useMemo(
-    () => refs.filter(ref => !ref.spaceId).map(ref => ref.rankEntityId),
-    [refs]
-  );
-
-  const { entities } = useQueryEntities({
-    enabled: rankEntityIdsNeedingSpace.length > 0,
-    where: { id: { in: rankEntityIdsNeedingSpace } },
-    first: rankEntityIdsNeedingSpace.length || undefined,
-  });
-
-  const rankEntitySpaceById = React.useMemo(() => {
-    const map = new Map<string, string>();
-    for (const entity of entities) {
-      const homeSpaceId = entity.spaces?.[0];
-      if (homeSpaceId) map.set(entity.id, homeSpaceId);
-    }
-    return map;
-  }, [entities]);
+  const rankEntitySpaceById = useRankEntitySpaceById(refs);
 
   const resolvedRefs = React.useMemo(() => {
     const seen = new Set<string>();
