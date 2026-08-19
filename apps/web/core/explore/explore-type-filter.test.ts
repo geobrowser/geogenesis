@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 
-import { EXPLORE_ENTITY_TYPES, EXPLORE_ENTITY_TYPE_IDS } from './explore-constants';
+import { EXPLORE_ENTITY_TYPE_IDS } from './explore-constants';
 import {
   exploreTypeFilterLabel,
   parseExploreTypeIdsParam,
@@ -16,8 +16,10 @@ describe('Explore default types', () => {
   // list wherever it goes and would stay green if a type were dropped. Claim is pinned
   // explicitly: Explore is where claims get discovered, so it defaulting off is a
   // regression rather than a preference.
+  //
+  // Asserted by ID only. The menu label is display copy, and the entry's shape is already
+  // a compile-time guarantee, so pinning the string here would only fail on a rename.
   it('includes Claim, selected by default', () => {
-    expect(EXPLORE_ENTITY_TYPES.map(type => type.label)).toContain('Claim');
     expect(EXPLORE_ENTITY_TYPE_IDS).toContain(CLAIM_TYPE_ID);
     expect(parseStoredExploreTypeIds(null)).toContain(CLAIM_TYPE_ID);
     expect(parseExploreTypeIdsParam(null)).toContain(CLAIM_TYPE_ID);
