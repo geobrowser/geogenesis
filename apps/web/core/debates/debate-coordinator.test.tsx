@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate } from './debate-entry-intent';
+import { debateReturnPath } from './debate-return-path';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -170,6 +171,21 @@ describe('DebateCoordinator', () => {
     mocks.gatewayPaused = false;
     rerender(<DebateCoordinator />);
     expect(screen.queryByText('Live debate updates are paused while reconnecting.')).not.toBeInTheDocument();
+  });
+
+  // The room needs to know where the viewer was before it took the screen, and this is the only
+  // component mounted everywhere they might have been.
+  it('records the screen the viewer is on so a debate can return them to it', async () => {
+    mocks.pathname = '/space/space-9/claims';
+
+    const view = render(<DebateCoordinator />);
+    expect(debateReturnPath()).toBe('/space/space-9/claims');
+
+    // The room itself is not somewhere to come back to.
+    mocks.pathname = '/space/space-1/debates/debate-1';
+    view.rerender(<DebateCoordinator />);
+
+    expect(debateReturnPath()).toBe('/space/space-9/claims');
   });
 
   it('routes an available participant into a shared rematch browser', async () => {

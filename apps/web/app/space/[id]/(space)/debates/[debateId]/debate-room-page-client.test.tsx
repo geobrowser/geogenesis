@@ -6,6 +6,7 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
+import { rememberDebateReturnPath } from '~/core/debates/debate-return-path';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
 
@@ -286,6 +287,8 @@ beforeEach(() => {
   // The media session remembers a hand-picked microphone across sessions, which is the point of it
   // — but that outlives a test too, and a device chosen in one is not a device chosen in the next.
   window.localStorage.clear();
+  // The way back out of a debate is remembered per tab, so it outlives a test the same way.
+  window.sessionStorage.clear();
   mocks.enumerateDevices.mockReset().mockResolvedValue([
     { kind: 'audioinput', deviceId: 'mic-1', groupId: 'mic-group-1', label: 'Shure MV7+' },
     { kind: 'audioinput', deviceId: 'mic-2', groupId: 'mic-group-2', label: 'Studio Mic' },
@@ -420,6 +423,33 @@ describe('isDebateInThankYouPeriod', () => {
 });
 
 describe('DebateRoomPageClient', () => {
+  // The reported bug: a debate that ends hands you `/space/{debateSpaceId}/debates`, which for a
+  // claim held in a personal space is a page that does not meaningfully exist. Where the viewer
+  // actually was is recorded by the coordinator, so use that.
+  it('returns the viewer to the screen they were on when the debate started', async () => {
+    setHistoryLength(1);
+    rememberDebateReturnPath('/space/space-9/claims');
+    mocks.debate = { ...completedDebate(), status: 'cancelled', completed_at: null };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-9/claims'));
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates');
+    expect(mocks.back).not.toHaveBeenCalled();
+  });
+
+  // Preferred over `back()` too: the entry behind the room is only sometimes where they came from,
+  // and never is for a room opened in a fresh tab.
+  it('prefers the remembered screen over stepping back through history', async () => {
+    setHistoryLength(5);
+    rememberDebateReturnPath('/space/space-9/claims');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-9/claims'));
+    expect(mocks.back).not.toHaveBeenCalled();
+  });
+
   it('returns through browser history without rendering an already-completed room', async () => {
     setHistoryLength(2);
 

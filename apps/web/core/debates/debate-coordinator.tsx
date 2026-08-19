@@ -17,6 +17,7 @@ import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
+import { rememberDebateReturnPath } from './debate-return-path';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -94,6 +95,12 @@ export function DebateCoordinator() {
       ? null
       : (incomingRequests.find(request => request.status === 'pending' && !snoozedRequestIds.includes(request.id)) ??
         null);
+
+  // Mounted app-wide, so this is the one place that sees where the viewer was before a debate took
+  // the screen — whichever way they got into the room. `returnFromDebate` reads it on the way out.
+  React.useEffect(() => {
+    rememberDebateReturnPath(pathname);
+  }, [pathname]);
 
   React.useEffect(() => {
     const liveIds = new Set(incomingRequests.map(request => request.id));

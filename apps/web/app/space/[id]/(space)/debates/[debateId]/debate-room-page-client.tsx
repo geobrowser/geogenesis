@@ -17,6 +17,7 @@ import {
   getServerTime,
 } from '~/core/debates/api';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
+import { clearDebateReturnPath, debateReturnPath } from '~/core/debates/debate-return-path';
 import {
   CameraIcon,
   LeaveIcon,
@@ -419,10 +420,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (debateExitStartedRef.current) return;
       debateExitStartedRef.current = true;
       clearDebateActivity(debateId);
-      // Going back restores whatever opened the room, which is where an ordinary exit belongs.
-      // A debate that ended under us is different: the entry behind us is often this same room
-      // (hub → room → rematch → room), and stepping back into it re-runs the exit from a fresh
-      // mount. That is the flicker, and it is why the removal dialog needed a second Okay.
+      // Back where they started. `DebateCoordinator` records the last screen that was not a debate
+      // surface, so this is the page the room opened over however they got here — and going forward
+      // to it rather than back avoids the entry behind us often being this same room
+      // (hub → room → rematch → room), which re-ran the exit from a fresh mount. That was the
+      // flicker, and it is why the removal dialog needed a second Okay.
+      const origin = debateReturnPath();
+      if (origin) {
+        clearDebateReturnPath();
+        router.replace(origin);
+        return;
+      }
+      // Nothing recorded — a room opened cold in a fresh tab. Back still beats guessing at a space
+      // page that may not exist, and the debate's own space is the last resort it always was.
       if (!forwardOnly && window.history.length > 1) {
         router.back();
         return;
