@@ -1,6 +1,7 @@
 'use client';
 
 import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
+import type { RoomConnectOptions, RoomOptions } from 'livekit-client';
 
 import * as React from 'react';
 
@@ -61,6 +62,7 @@ import {
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
+import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
@@ -124,7 +126,7 @@ type RemoteTrackLike = {
 };
 
 type RoomLike = {
-  connect: (url: string, token: string) => Promise<void>;
+  connect: (url: string, token: string, options?: RoomConnectOptions) => Promise<void>;
   disconnect: () => void;
   localParticipant: {
     publishTrack: (track: unknown) => Promise<unknown>;
@@ -252,6 +254,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
   const roomRef = React.useRef<RoomLike | null>(null);
   const connectingRoomRef = React.useRef<RoomLike | null>(null);
+  // Marks the start of an in-flight LiveKit reconnect episode so telemetry can report how long
+  // recovery took (Reconnected) or how long we retried before giving up (Disconnected). Episodes
+  // ended by our own teardown (leave, takeover, unmount) close no analytics event, so
+  // debate_room_reconnecting counts can exceed the sum of the two closing events.
+  const reconnectingStartedAtRef = React.useRef<number | null>(null);
   const ownershipRef = React.useRef<DebateRoomOwnershipCoordinator | null>(null);
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
@@ -844,6 +851,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       setRoomState('connecting');
       setServerClockSettled(false);
       setRemoteVideoReady(false);
+      reconnectingStartedAtRef.current = null;
       if (remoteParticipantRefetchTimerRef.current !== null) {
         window.clearTimeout(remoteParticipantRefetchTimerRef.current);
         remoteParticipantRefetchTimerRef.current = null;
@@ -922,17 +930,43 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           remoteMediaRef.current?.replaceChildren();
           setRemoteVideoReady(false);
           setRoomState('reconnecting');
+          // A reconnect episode fires Reconnecting once per underlying attempt; report only the
+          // first so elapsed_ms on the closing event spans the whole episode.
+          if (reconnectingStartedAtRef.current === null) {
+            reconnectingStartedAtRef.current = performance.now();
+            captureDebateRoomResilienceEvent('debate_room_reconnecting', {
+              debateId,
+              debateStatus: debateStatusRef.current,
+              roomState: roomStateRef.current,
+            });
+          }
         });
         room.on(livekit.RoomEvent.Reconnected, () => {
           if (!isCurrent() || roomRef.current !== room) return;
           setRoomState('connected');
+          if (reconnectingStartedAtRef.current !== null) {
+            captureDebateRoomResilienceEvent('debate_room_reconnected', {
+              debateId,
+              debateStatus: debateStatusRef.current,
+              roomState: roomStateRef.current,
+              elapsedMs: performance.now() - reconnectingStartedAtRef.current,
+            });
+            reconnectingStartedAtRef.current = null;
+          }
         });
-        // A non-client-initiated Disconnected means auto-reconnect gave up. Our own teardown always
-        // disconnects with CLIENT_INITIATED, so this branch only fires on a genuinely dropped call:
-        // tear the room down and return to idle, where the "Retry connection" affordance lives.
+        // A Disconnected that passes these guards is never our own teardown: every in-app teardown
+        // bumps the connection generation or nulls roomRef synchronously, and the SDK emits
+        // Disconnected only after awaiting its internal disconnect lock (at least a microtask
+        // later). That covers CLIENT_INITIATED too — the SDK registers its `freeze` listener
+        // unconditionally (disconnectOnPageLeave only gates pagehide/beforeunload), so Chromium
+        // freezing a backgrounded tab disconnects the room "client initiated". Treat everything
+        // that lands here as a genuinely dropped call: tear the room down and return to idle,
+        // where the "Retry connection" affordance lives.
         room.on(livekit.RoomEvent.Disconnected, payload => {
           if (!isCurrent() || roomRef.current !== room) return;
-          if (payload === livekit.DisconnectReason.CLIENT_INITIATED) return;
+          const reconnectElapsedMs =
+            reconnectingStartedAtRef.current !== null ? performance.now() - reconnectingStartedAtRef.current : undefined;
+          reconnectingStartedAtRef.current = null;
           const conflictGeneration = connectionGenerationRef.current + 1;
           connectionGenerationRef.current = conflictGeneration;
           // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
@@ -963,11 +997,28 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               'livekit_duplicate_identity',
               ownershipRef.current?.coordinationMode ?? 'livekit-fallback'
             );
+          } else {
+            // Duplicate identity is already reported as a connection conflict above; everything
+            // else is a genuine drop worth measuring, including how long we retried first.
+            captureDebateRoomResilienceEvent('debate_room_disconnected', {
+              debateId,
+              debateStatus: debateStatusRef.current,
+              roomState: roomStateRef.current,
+              disconnectReason: disconnectReasonName(livekit.DisconnectReason, payload),
+              elapsedMs: reconnectElapsedMs,
+            });
           }
         });
 
         connectionStage = 'livekit_connect';
-        await room.connect(token.url, token.token);
+        // The SDK's initial-join defaults (1 retry, 15s websocket/peer-connection timeouts) are
+        // marginal on slow mobile links; reconnection after a successful join is governed by the
+        // reconnectPolicy in debateRoomOptions, not by these.
+        await room.connect(token.url, token.token, {
+          maxRetries: 3,
+          websocketTimeout: 20_000,
+          peerConnectionTimeout: 25_000,
+        });
         if (!isCurrent()) {
           room.disconnect();
           if (connectingRoomRef.current === room) connectingRoomRef.current = null;
@@ -2566,10 +2617,35 @@ function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex
   return firstParticipantSlot === 1 ? 2 : 1;
 }
 
-function debateRoomOptions(audioOutputSupported: boolean, selectedAudioOutputId: string) {
+function debateRoomOptions(audioOutputSupported: boolean, selectedAudioOutputId: string): RoomOptions {
   return {
     adaptiveStream: false,
     dynacast: false,
+    // The SDK's default policy gives up after ~45 seconds of retries, which drops debaters whose
+    // network blip (wifi handoff, brief cellular gap) would have recovered. Community calls
+    // already retry for 3 minutes; debates deserve at least the same patience.
+    reconnectPolicy: new ExtendedReconnectPolicy(),
+    // The SDK default also disconnects on pagehide/beforeunload, which mobile browsers fire when
+    // the phone locks or the tab is backgrounded. We tear the room down explicitly on unmount and
+    // leave instead. Note this option does NOT gate the SDK's `freeze` listener — a frozen
+    // Chromium tab still disconnects with CLIENT_INITIATED, which the Disconnected handler treats
+    // as a genuine drop.
+    disconnectOnPageLeave: false,
+    publishDefaults: {
+      simulcast: true,
+      // Cap the primary layer at h540's budget. Capture stays at the 720p default so the local
+      // recording keeps its resolution; only the published encode is capped, roughly halving the
+      // ~2.3 Mbps uplink the SDK defaults ask of a 1:1 call rendered in a small tile.
+      videoEncoding: { maxBitrate: 800_000, maxFramerate: 25 },
+      // A talking head reads far better as soft video than as a slideshow: under congestion shed
+      // resolution before framerate. The SDK otherwise computes 'balanced' for sub-1080p cameras.
+      degradationPreference: 'maintain-framerate',
+      videoCodec: 'vp8',
+      // Redundant audio and DTX are already the mono defaults; pin them — they are the audio
+      // armor slow connections rely on, and must not regress silently on an SDK upgrade.
+      red: true,
+      dtx: true,
+    },
     ...(audioOutputSupported ? { audioOutput: { deviceId: selectedAudioOutputId } } : {}),
   };
 }
@@ -2624,6 +2700,43 @@ function captureDebateRoomConnectionEvent(
   } catch {
     // Analytics is best-effort and must never affect room ownership or connection recovery.
   }
+}
+
+function captureDebateRoomResilienceEvent(
+  eventName: 'debate_room_reconnecting' | 'debate_room_reconnected' | 'debate_room_disconnected',
+  details: {
+    debateId: string;
+    debateStatus: Debate['status'] | null;
+    roomState: string;
+    elapsedMs?: number;
+    disconnectReason?: string;
+  }
+) {
+  try {
+    capture(eventName, {
+      debate_id: details.debateId,
+      debate_status: details.debateStatus ?? 'unknown',
+      room_state: details.roomState,
+      online: typeof navigator === 'undefined' ? null : navigator.onLine,
+      visibility_state: typeof document === 'undefined' ? 'unknown' : document.visibilityState,
+      has_focus: typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus(),
+      ...(details.elapsedMs !== undefined ? { elapsed_ms: Math.max(0, Math.round(details.elapsedMs)) } : {}),
+      ...(details.disconnectReason ? { disconnect_reason: details.disconnectReason } : {}),
+    });
+  } catch {
+    // Analytics is best-effort and must never affect reconnection or room teardown.
+  }
+}
+
+// LiveKit's DisconnectReason is a numeric protobuf enum; resolve the payload back to its name so
+// analytics reads "SERVER_SHUTDOWN" instead of "3". Numeric-enum objects carry reverse mappings
+// (numeric keys), which are skipped. Unknown values fall back to their stringified form.
+function disconnectReasonName(disconnectReasons: Record<string, unknown>, payload: unknown) {
+  if (payload === undefined || payload === null) return 'unknown';
+  for (const [name, value] of Object.entries(disconnectReasons)) {
+    if (value === payload && Number.isNaN(Number(name))) return name;
+  }
+  return String(payload);
 }
 
 function captureDebateRoomConnectionFailure({

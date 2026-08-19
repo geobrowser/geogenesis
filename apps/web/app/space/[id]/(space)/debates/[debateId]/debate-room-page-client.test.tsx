@@ -6,6 +6,7 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
+import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
 
@@ -168,9 +169,15 @@ vi.mock('livekit-client', () => ({
     Reconnected: 'reconnected',
     Disconnected: 'disconnected',
   },
+  // Mirrors the runtime shape of the protobuf numeric enum: forward name -> number entries plus
+  // reverse number -> name entries, so disconnectReasonName's reverse-mapping filter is exercised.
   DisconnectReason: {
     CLIENT_INITIATED: 1,
     DUPLICATE_IDENTITY: 2,
+    SERVER_SHUTDOWN: 3,
+    1: 'CLIENT_INITIATED',
+    2: 'DUPLICATE_IDENTITY',
+    3: 'SERVER_SHUTDOWN',
   },
 }));
 
@@ -693,6 +700,16 @@ describe('DebateRoomPageClient', () => {
       expect(mocks.roomConstruct).toHaveBeenCalledWith({
         adaptiveStream: false,
         dynacast: false,
+        reconnectPolicy: expect.any(ExtendedReconnectPolicy),
+        disconnectOnPageLeave: false,
+        publishDefaults: {
+          simulcast: true,
+          videoEncoding: { maxBitrate: 800_000, maxFramerate: 25 },
+          degradationPreference: 'maintain-framerate',
+          videoCodec: 'vp8',
+          red: true,
+          dtx: true,
+        },
         audioOutput: { deviceId: 'speaker-2' },
       })
     );
@@ -1472,7 +1489,41 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Reconnecting to the debate room…')).not.toBeInTheDocument();
   });
 
-  it('shows an error on an unexpected disconnect but ignores our own teardown', async () => {
+  it('reports a reconnect episode once, with its duration, and joins with resilient connect options', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+    expect(mocks.roomConnect).toHaveBeenCalledWith(expect.any(String), expect.any(String), {
+      maxRetries: 3,
+      websocketTimeout: 20_000,
+      peerConnectionTimeout: 25_000,
+    });
+
+    act(() => emitRoomEvent('reconnecting'));
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_reconnecting',
+      expect.objectContaining({ debate_id: 'debate-1' })
+    );
+
+    // LiveKit emits Reconnecting once per underlying attempt; a second attempt must not restart
+    // the episode clock or double-report.
+    act(() => emitRoomEvent('reconnecting'));
+    expect(mocks.capture.mock.calls.filter(([eventName]) => eventName === 'debate_room_reconnecting')).toHaveLength(1);
+
+    act(() => emitRoomEvent('reconnected'));
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_reconnected',
+      expect.objectContaining({ debate_id: 'debate-1', elapsed_ms: expect.any(Number) })
+    );
+  });
+
+  it('reports the disconnect reason and retry duration when auto-reconnect gives up', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
       status: 'connecting',
@@ -1483,12 +1534,63 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
 
-    // CLIENT_INITIATED (our own disconnect) must not surface an error.
-    act(() => emitRoomEvent('disconnected', 1));
-    expect(screen.queryByText('Lost connection to the debate room.')).not.toBeInTheDocument();
+    act(() => emitRoomEvent('reconnecting'));
+    act(() => emitRoomEvent('disconnected', 3));
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_disconnected',
+      expect.objectContaining({
+        debate_id: 'debate-1',
+        disconnect_reason: 'SERVER_SHUTDOWN',
+        elapsed_ms: expect.any(Number),
+      })
+    );
+  });
 
-    act(() => emitRoomEvent('disconnected', 99));
+  it('stays silent when our own teardown disconnects the room', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    // A takeover release nulls roomRef and bumps the connection generation before the SDK can
+    // emit Disconnected, so the CLIENT_INITIATED from our own room.disconnect() never reaches the
+    // handler body — no "Lost connection" error, no drop metric.
+    await act(async () => {
+      await mocks.ownershipTakeoverHandler?.();
+    });
+    mocks.capture.mockClear();
+    act(() => emitRoomEvent('disconnected', 1));
+
+    expect(screen.queryByText('Lost connection to the debate room.')).not.toBeInTheDocument();
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_room_disconnected', expect.anything());
+  });
+
+  it('treats a frozen-tab CLIENT_INITIATED disconnect on a live room as a genuine drop', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    // The SDK's `freeze` listener is not gated by disconnectOnPageLeave, so Chromium freezing a
+    // backgrounded tab disconnects the live room with CLIENT_INITIATED. Our own teardowns never
+    // reach the handler (they null roomRef or bump the generation first), so this must surface as
+    // a drop rather than leaving a dead room behind a "connected" UI.
+    act(() => emitRoomEvent('disconnected', 1));
     expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_disconnected',
+      expect.objectContaining({ disconnect_reason: 'CLIENT_INITIATED' })
+    );
   });
 
   it('explains when LiveKit disconnects a duplicate participant identity', async () => {
