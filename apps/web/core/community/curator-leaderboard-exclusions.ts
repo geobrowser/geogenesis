@@ -14,7 +14,7 @@ import { ID } from '~/core/id';
  * To add someone: put their personal space id in this array with a comment saying who it is and
  * why, so the next person reading it doesn't have to guess.
  */
-export const EXCLUDED_CURATOR_SPACE_IDS: string[] = ['cc0bf85a27c217d75993bc785a15b198'];
+export const EXCLUDED_CURATOR_SPACE_IDS: readonly string[] = ['cc0bf85a27c217d75993bc785a15b198'];
 
 const excludedSpaceIds = new Set(EXCLUDED_CURATOR_SPACE_IDS.map(id => ID.uuidToHex(id)));
 

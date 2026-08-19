@@ -468,7 +468,9 @@ export async function fetchCuratorLeaderboard({
   // curator count, and the profiles fetched below all read this one map. The space-wide totals
   // beside them (rankings, news stories) are deliberately left alone — they count what the space
   // holds, not who is on the board, and an excluded curator's rankings are still the space's.
-  for (const curatorSpaceId of countsByCurator.keys()) {
+  // Over a snapshot of the keys rather than the live iterator: deleting the current key mid-loop is
+  // well defined, but it reads like a bug and invites one the next time this moves.
+  for (const curatorSpaceId of [...countsByCurator.keys()]) {
     if (isExcludedCurator(curatorSpaceId)) countsByCurator.delete(curatorSpaceId);
   }
 

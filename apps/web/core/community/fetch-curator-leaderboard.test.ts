@@ -24,20 +24,34 @@ vi.mock('./community-graphql', async importOriginal => {
 
   return {
     ...actual,
+    // Every label is answered explicitly, and an unrecognised one throws rather than falling back
+    // to an empty result. A new query added to the fetcher would otherwise be answered with
+    // "nothing", quietly narrowing what these tests cover while they carried on passing.
     runQuery: async (label: string) => {
-      if (label === 'space ranking blocks') {
-        return { entitiesConnection: { nodes: [{ id: RANKING_BLOCK }] } };
+      switch (label) {
+        case 'space ranking blocks':
+          return { entitiesConnection: { nodes: [{ id: RANKING_BLOCK }] } };
+        // Reached only when the fixtures above give them something to look up, which they don't.
+        case 'bounty-linked proposals':
+        case 'news story edit versions':
+          return null;
+        default:
+          throw new Error(`unstubbed community query: "${label}"`);
       }
-      return null;
     },
     collectConnection: async (label: string) => {
-      if (label === 'submitted to ranking block relations') {
-        return { nodes: mocks.rankingRelations, truncated: false, totalCount: mocks.rankingRelations.length };
+      switch (label) {
+        case 'submitted to ranking block relations':
+          return { nodes: mocks.rankingRelations, truncated: false, totalCount: mocks.rankingRelations.length };
+        case 'user votes':
+          return { nodes: mocks.votes, truncated: false };
+        case 'bounty links':
+        case 'news story entities':
+        case 'news story type relation versions':
+          return { nodes: [], truncated: false, totalCount: 0 };
+        default:
+          throw new Error(`unstubbed community connection: "${label}"`);
       }
-      if (label === 'user votes') {
-        return { nodes: mocks.votes, truncated: false };
-      }
-      return { nodes: [], truncated: false, totalCount: 0 };
     },
   };
 });
