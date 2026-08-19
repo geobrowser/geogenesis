@@ -36,6 +36,7 @@ function LoadingSkeleton() {
 }
 
 const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
+  { value: 'best', label: 'Best' },
   { value: 'new', label: 'New' },
   { value: 'top', label: 'Top' },
 ];
@@ -63,7 +64,7 @@ type EntityFeedProps = {
   initialSort?: ExploreSort;
   /** Whether to render the time-range dropdown. Defaults to true. */
   showTimeFilter?: boolean;
-  /** Whether to render the sort dropdown (New / Top). Defaults to false. */
+  /** Whether to render the sort dropdown (Best / New / Top). Defaults to false. */
   showSortFilter?: boolean;
   /** Whether to render the Explore-only, locally persisted type checklist. Defaults to false. */
   showTypeFilter?: boolean;
