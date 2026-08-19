@@ -18,6 +18,7 @@ vi.mock('livekit-client', () => ({
 }));
 
 beforeEach(() => {
+  window.localStorage.clear();
   mocks.createLocalTracks.mockReset();
   mocks.enumerateDevices.mockReset().mockResolvedValue([]);
   mocks.selectAudioOutput.mockReset().mockResolvedValue({
@@ -122,6 +123,54 @@ describe('DebateMediaSessionProvider', () => {
     expect(stop).not.toHaveBeenCalled();
   });
 
+  // macOS hands the default microphone to a nearby iPhone over Continuity, and the complaint is
+  // that it happens on *every* join — so the viewer's correction has to outlive the session.
+  it('opens the microphone the viewer picked last time rather than the system default', async () => {
+    window.localStorage.setItem('geo.debates.devices', JSON.stringify({ audioinput: 'iphone-mic' }));
+    mocks.enumerateDevices.mockResolvedValue([
+      { deviceId: 'iphone-mic', groupId: 'audio', kind: 'audioinput', label: "Bryan's iPhone Microphone" },
+      { deviceId: 'mic-1', groupId: 'audio', kind: 'audioinput', label: 'MacBook Pro Microphone' },
+      { deviceId: 'camera-1', groupId: 'video', kind: 'videoinput', label: 'FaceTime HD Camera' },
+    ]);
+    mocks.createLocalTracks.mockResolvedValue([
+      { mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() },
+      { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() },
+    ]);
+
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure preview' }));
+
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    // The camera was never picked by hand, so it is left to the system the way it always was.
+    expect(mocks.createLocalTracks).toHaveBeenCalledWith({ audio: { deviceId: 'iphone-mic' }, video: true });
+  });
+
+  it('remembers a microphone the viewer picks by hand', async () => {
+    mocks.createLocalTracks.mockResolvedValue([
+      { mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() },
+      { mediaStreamTrack: { kind: 'video' }, stop: vi.fn() },
+    ]);
+
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select mic' }));
+
+    await waitFor(() =>
+      expect(window.localStorage.getItem('geo.debates.devices')).toBe(JSON.stringify({ audioinput: 'mic-1' }))
+    );
+  });
+
   it('allows speaker selection to recover in a later session', async () => {
     mocks.supportsAudioOutputSelection.mockReturnValue(true);
     mocks.enumerateDevices.mockResolvedValue([
@@ -182,6 +231,9 @@ function MediaSessionHarness() {
       </button>
       <button type="button" onClick={() => void media.changeAudioOutput('speaker-1')}>
         Select speaker
+      </button>
+      <button type="button" onClick={() => media.changeAudioInput('mic-1')}>
+        Select mic
       </button>
       <button type="button" onClick={() => media.releaseSession('match:match-1')}>
         Release match

@@ -47,9 +47,15 @@ export function FeatureFlagsDialog() {
   return (
     <Root open={open} onOpenChange={onOpenChange}>
       <Portal>
-        <Overlay className="fixed inset-0 z-100 bg-text/20" />
+        {/* Above the debate band, which is a layer of its own: the full-screen room and pre-join
+            screen start at z-1000 and the coordinator's surfaces top out at the gateway banner's
+            z-1400. This is a Radix modal, so underneath that band it still trapped focus and
+            swallowed every click while rendering behind the debate UI — the shortcut pressed during
+            a recording locked people out of a screen they could see but not touch, with nothing on
+            top to close (GEO-2542). Being above the navbar is not enough; it has to clear the lot. */}
+        <Overlay className="fixed inset-0 z-[1500] bg-text/20" />
 
-        <Content className="fixed inset-0 z-101 flex items-start justify-center focus:outline-hidden">
+        <Content className="fixed inset-0 z-[1501] flex items-start justify-center focus:outline-hidden">
           <div className="mt-32 flex w-[420px] max-w-[calc(100vw-32px)] flex-col gap-4 rounded-xl bg-white p-4 shadow-lg">
             <div className="flex items-start justify-between gap-4">
               <Title asChild>
