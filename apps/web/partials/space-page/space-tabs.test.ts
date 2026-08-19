@@ -109,4 +109,31 @@ describe('buildSpaceTabs', () => {
       { label: 'Debug debates', href: `/space/${spaceId}/debug-debates`, priority: 3 },
     ]);
   });
+
+  it('adds a Bounties tab (system route) when enabled, reserving the label over an authored tab', () => {
+    const off = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [...dynamicTabs, { label: 'Bounties', href: `${overviewHref}?tabId=bounties` }],
+      typeIds: [SystemIds.SPACE_TYPE],
+      isDebugDebatesPageEnabled: false,
+    });
+    expect(off.filter(tab => tab.label === 'Bounties')).toEqual([
+      { label: 'Bounties', href: `${overviewHref}?tabId=bounties`, priority: 1 },
+    ]);
+
+    const on = buildSpaceTabs({
+      spaceId,
+      overviewHref,
+      dynamicTabs: [...dynamicTabs, { label: 'Bounties', href: `${overviewHref}?tabId=bounties` }],
+      typeIds: [SystemIds.SPACE_TYPE],
+      isDebugDebatesPageEnabled: false,
+      isBountiesTabEnabled: true,
+    });
+    expect(on.filter(tab => tab.label === 'Bounties')).toEqual([
+      { label: 'Bounties', href: `/space/${spaceId}/bounties`, priority: 1 },
+    ]);
+    // Still before Governance and Activity.
+    expect(on.map(tab => tab.label).indexOf('Bounties')).toBeLessThan(on.map(tab => tab.label).indexOf('Governance'));
+  });
 });
