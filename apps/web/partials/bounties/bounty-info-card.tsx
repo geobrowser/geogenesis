@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { formatPayoutRange, formatPoints, payoutRange } from '~/core/bounties/payout';
+import { formatDeadline, formatPayoutRange, formatPoints, isBountyEnded, payoutRange } from '~/core/bounties/payout';
 import type { BoardBounty } from '~/core/bounties/types';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { NavUtils } from '~/core/utils/utils';
@@ -12,8 +12,6 @@ import { Gem } from '~/design-system/icons/gem';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Tag } from '~/design-system/tag';
 import { Tooltip } from '~/design-system/tooltip';
-
-import { formatDeadline, isBountyEnded } from './bounty-board-card';
 
 /** Field explanations, ported from curator-app's bounty-tooltips so both apps say the same thing. */
 export const BOUNTY_FIELD_HELP = {

@@ -15,10 +15,11 @@ import {
 } from '~/core/bounties/filters';
 import type { BoardBounty } from '~/core/bounties/types';
 import { useBoardBounties } from '~/core/bounties/use-bounties';
+import { useInterestedBountyIds, useInterestedInBounty } from '~/core/community/use-interested-in-bounty';
 
 import { Text } from '~/design-system/text';
 
-import { BountyBoardCard } from './bounty-board-card';
+import { BoardBountyCard, type BoardInterestBindings } from './board-bounty-card';
 import { BountyBoardSkeleton } from './bounty-board-skeleton';
 import { BountyFilterBar } from './bounty-filter-bar';
 
@@ -58,8 +59,24 @@ export function BountyBoard({ spaceId, header }: Props) {
     [pathname, router, spaceId]
   );
 
-  const bounties = data?.bounties ?? [];
+  const bounties = React.useMemo(() => data?.bounties ?? [], [data?.bounties]);
   const skills = React.useMemo(() => collectSkills(bounties), [bounties]);
+
+  // One interest query for every loaded bounty; the available cards bind to it.
+  const bountyIds = React.useMemo(() => bounties.map(bounty => bounty.id), [bounties]);
+  const { interestedIds, isLoading: isInterestLoading } = useInterestedBountyIds(bountyIds);
+  const { registerInterest, pendingBountyId, canRegisterInterest } = useInterestedInBounty();
+  const interest: BoardInterestBindings = React.useMemo(
+    () => ({
+      interestedIds,
+      isInterestLoading,
+      canRegisterInterest,
+      pendingBountyId,
+      onRegisterInterest: target =>
+        void registerInterest({ bountyId: target.id, bountyName: target.name, bountySpaceId: target.spaceId }),
+    }),
+    [canRegisterInterest, interestedIds, isInterestLoading, pendingBountyId, registerInterest]
+  );
   const groups = React.useMemo(() => {
     const visible = sortBounties(applyBountyFilters(bounties, filters), filters.sort);
     return groupBounties(visible, filters.groupBy, spaceIds);
@@ -108,9 +125,9 @@ export function BountyBoard({ spaceId, header }: Props) {
                   </Text>
                 </div>
               ) : null}
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+              <div className="flex flex-wrap gap-4">
                 {group.bounties.map(bounty => (
-                  <BountyBoardCard key={bounty.id} bounty={bounty} />
+                  <BoardBountyCard key={bounty.id} bounty={bounty} interest={interest} />
                 ))}
               </div>
             </section>

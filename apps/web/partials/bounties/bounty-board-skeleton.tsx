@@ -1,29 +1,31 @@
 import { Skeleton } from '~/design-system/skeleton';
 
-export function BountyBoardCardSkeleton() {
-  return (
-    <div className="flex min-h-[220px] flex-col rounded-lg border border-grey-02 bg-white p-4">
-      <div className="flex items-center justify-between">
-        <Skeleton className="h-4 w-24" />
-        <Skeleton className="h-5 w-14" />
-      </div>
-      <Skeleton className="mt-3 h-5 w-3/4" />
-      <Skeleton className="mt-2 h-4 w-full" />
-      <Skeleton className="mt-1 h-4 w-5/6" />
-      <div className="mt-auto flex gap-4 pt-4">
-        <Skeleton className="h-4 w-20" />
-        <Skeleton className="h-4 w-16" />
-      </div>
-    </div>
-  );
-}
+import {
+  AVAILABLE_CARD_HEIGHT_PX,
+  AVAILABLE_CARD_WIDTH_PX,
+  CARD_WIDTH_PX,
+  IN_PROGRESS_CARD_HEIGHT_PX,
+} from '~/partials/community-tab/bounty-card';
 
+/** Placeholder grid in the Community-tab card dimensions (a mix of available and in-progress sizes). */
 export function BountyBoardSkeleton({ cards = 6 }: { cards?: number }) {
   return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4" aria-busy>
-      {Array.from({ length: cards }, (_, i) => (
-        <BountyBoardCardSkeleton key={i} />
-      ))}
+    <div className="flex flex-wrap gap-4" aria-busy>
+      {Array.from({ length: cards }, (_, i) =>
+        i % 2 === 0 ? (
+          <Skeleton
+            key={i}
+            className="rounded-lg"
+            style={{ width: AVAILABLE_CARD_WIDTH_PX, height: AVAILABLE_CARD_HEIGHT_PX }}
+          />
+        ) : (
+          <Skeleton
+            key={i}
+            className="rounded-lg"
+            style={{ width: CARD_WIDTH_PX, height: IN_PROGRESS_CARD_HEIGHT_PX }}
+          />
+        )
+      )}
     </div>
   );
 }

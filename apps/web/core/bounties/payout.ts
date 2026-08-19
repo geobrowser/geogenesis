@@ -23,3 +23,16 @@ export function formatPayoutRange(range: { min: number; max: number } | null): s
   if (!range) return null;
   return range.min === range.max ? formatPoints(range.min) : `${formatPoints(range.min)} – ${formatPoints(range.max)}`;
 }
+
+export function formatDeadline(deadline: string | null): string | null {
+  if (!deadline) return null;
+  const ms = Date.parse(deadline);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export function isBountyEnded(deadline: string | null, now: number = Date.now()): boolean {
+  if (!deadline) return false;
+  const ms = Date.parse(deadline);
+  return Number.isFinite(ms) && ms < now;
+}

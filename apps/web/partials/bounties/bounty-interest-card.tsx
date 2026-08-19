@@ -3,13 +3,12 @@
 import * as React from 'react';
 
 import type { BountyDetail } from '~/core/bounties/fetch-bounty-detail';
+import { isBountyEnded } from '~/core/bounties/payout';
 import { useBountyInterestActions } from '~/core/bounties/use-bounty-actions';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
 
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
-
-import { isBountyEnded } from './bounty-board-card';
 
 export type InterestCardState =
   'signed-out' | 'no-personal-space' | 'ended' | 'allocated' | 'spots-filled' | 'interested' | 'can-apply';

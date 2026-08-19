@@ -41,16 +41,20 @@ vi.mock('~/core/bounties/constants', () => ({
   CURRENT_BOUNTY_SPACE_IDS: ['space-a', 'space-b'],
 }));
 
-vi.mock('~/design-system/geo-image', () => ({
-  ThumbGeoImage: () => <span data-thumb-image />,
+vi.mock('~/partials/community-tab/bounty-card', () => ({
+  CARD_WIDTH_PX: 249,
+  COMPLETED_CARD_HEIGHT_PX: 143,
+  IN_PROGRESS_CARD_HEIGHT_PX: 110,
+  AVAILABLE_CARD_WIDTH_PX: 378,
+  AVAILABLE_CARD_HEIGHT_PX: 240,
+  BountyCard: ({ bounty }: { bounty: { name: string } }) => <div data-card="completed">{bounty.name}</div>,
+  InProgressBountyCard: ({ bounty }: { bounty: { name: string } }) => <div data-card="in-progress">{bounty.name}</div>,
+  AvailableBountyCard: ({ bounty }: { bounty: { name: string } }) => <div data-card="available">{bounty.name}</div>,
 }));
 
-vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href, ...rest }: React.ComponentPropsWithoutRef<'a'>) => (
-    <a href={href} {...rest}>
-      {children}
-    </a>
-  ),
+vi.mock('~/core/community/use-interested-in-bounty', () => ({
+  useInterestedBountyIds: () => ({ interestedIds: new Set<string>(), isLoading: false }),
+  useInterestedInBounty: () => ({ registerInterest: vi.fn(), pendingBountyId: null, canRegisterInterest: true }),
 }));
 
 class ResizeObserverStub {
