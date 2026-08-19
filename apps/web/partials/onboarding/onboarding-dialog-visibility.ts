@@ -1,7 +1,6 @@
 export type OnboardingStep =
   | 'start'
   | 'existing-entity-match'
-  | 'describe-you'
   | 'interested-in'
   | 'completed'
   | 'done'

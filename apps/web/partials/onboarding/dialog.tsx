@@ -16,7 +16,7 @@ import { useRouter } from 'next/navigation';
 
 import type { BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { CURIOUS_EXPLORER_ROLE, DEVELOPER_ROLE, DOMAIN_EXPERT_ROLE, ROOT_SPACE } from '~/core/constants';
+import { ROOT_SPACE } from '~/core/constants';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { SUPPRESS_ONBOARDING_PARAM, useOnboarding } from '~/core/hooks/use-onboarding';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
@@ -57,10 +57,11 @@ export const avatarAtom = atomWithStorage<string>('onboardingAvatar', '');
 export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 
 /**
- * Role/topic picks from the 'describe-you' and 'interested-in' steps. Onboarding
- * no longer blocks on space creation, so these are persisted for the background
- * PendingPersonalSpaceRunner, which applies them (Geo roles relations, membership
- * proposals) once a real spaceId exists, then clears them.
+ * Topic picks from the 'interested-in' step. Onboarding no longer blocks on space
+ * creation, so these are persisted for the background PendingPersonalSpaceRunner,
+ * which applies them (Geo roles relations, membership proposals) once a real
+ * spaceId exists, then clears them. `selectedRoleIdsAtom` is retained (and still
+ * consumed by the runner) even though the role-picking step was removed.
  */
 export const selectedRoleIdsAtom = atomWithStorage<string[]>('onboardingSelectedRoles', []);
 export const selectedTopicIdsAtom = atomWithStorage<string[]>('onboardingSelectedTopics', []);
@@ -69,8 +70,7 @@ type Step = OnboardingStep;
 
 const stepOrder: Partial<Record<Step, number>> = {
   start: 1,
-  'describe-you': 2,
-  'interested-in': 3,
+  'interested-in': 2,
 };
 
 const stepByOrder = Object.fromEntries(Object.entries(stepOrder).map(([step, order]) => [order, step])) as Record<
@@ -104,14 +104,12 @@ export const OnboardingDialog = () => {
   const router = useRouter();
 
   const { smartAccount } = useSmartAccount();
-  const name = useAtomValue(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setName = useSetAtom(nameAtom);
   const setPending = useSetAtom(pendingPersonalSpaceAtom);
   const setChatOpen = useSetAtom(isChatOpenAtom);
   const [hasSeenAssistant, setHasSeenAssistant] = useAtom(hasSeenAssistantAtom);
 
-  const [selectedRolesIds, setSelectedRolesIds] = useAtom(selectedRoleIdsAtom);
   const [selectedTopicIds, setSelectedTopicIds] = useAtom(selectedTopicIdsAtom);
   const [featuredSpaces, setFeaturedSpaces] = useState<BrowseSpaceRow[]>([]);
 
@@ -211,7 +209,7 @@ export const OnboardingDialog = () => {
       setStep('existing-entity-match');
     } else {
       setTopicId('');
-      setStep('describe-you');
+      setStep('interested-in');
     }
   }
 
@@ -220,16 +218,8 @@ export const OnboardingDialog = () => {
     beginOptimisticOnboarding('');
   }
 
-  const handleSelectRoles = (id: string) => {
-    setSelectedRolesIds(prev => (prev.includes(id) ? prev.filter(roleId => roleId !== id) : [...prev, id]));
-  };
-
   const handleSelectTopics = (id: string) => {
     setSelectedTopicIds(prev => (prev.includes(id) ? prev.filter(topicId => topicId !== id) : [...prev, id]));
-  };
-
-  const handleNextStep = (nextStep: Step) => {
-    setStep(nextStep);
   };
 
   // `stepAtom` is persisted via atomWithStorage, but entityMatchCandidates
@@ -268,19 +258,12 @@ export const OnboardingDialog = () => {
                 candidates={entityMatchCandidates}
                 onSkip={() => {
                   setTopicId('');
-                  setStep('describe-you');
+                  setStep('interested-in');
                 }}
                 onSelect={(entityId, entityName) => {
                   if (entityName) setName(entityName);
                   beginOptimisticOnboarding(entityId);
                 }}
-              />
-            )}
-            {effectiveStep === 'describe-you' && (
-              <StepDescribeYou
-                handleSelectRoles={handleSelectRoles}
-                selectedRolesIds={selectedRolesIds}
-                handleNextStep={handleNextStep}
               />
             )}
             {effectiveStep === 'interested-in' && (
@@ -289,7 +272,6 @@ export const OnboardingDialog = () => {
                 handleSelectTopics={handleSelectTopics}
                 onCompleteOnboard={onCompleteOnboard}
                 featuredSpaces={featuredSpaces}
-                name={name}
               />
             )}
             {effectiveStep === 'completed' && <StepComplete />}
@@ -321,31 +303,22 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
   );
 };
 
-const STEPS_WITH_HEADER = ['start', 'describe-you', 'interested-in', 'existing-entity-match'] as const;
+const STEPS_WITH_HEADER = ['start', 'interested-in', 'existing-entity-match'] as const;
 type StepWithHeader = (typeof STEPS_WITH_HEADER)[number];
 
 type DotConfig = { width: 'w-4' | 'w-8'; active: boolean };
 
-const DOT_CONFIGS: Record<StepWithHeader, [DotConfig, DotConfig, DotConfig, DotConfig?]> = {
+const DOT_CONFIGS: Record<StepWithHeader, DotConfig[]> = {
   start: [
-    { width: 'w-8', active: true },
-    { width: 'w-4', active: false },
-    { width: 'w-4', active: false },
-  ],
-  'describe-you': [
-    { width: 'w-4', active: true },
     { width: 'w-8', active: true },
     { width: 'w-4', active: false },
   ],
   'interested-in': [
     { width: 'w-4', active: true },
-    { width: 'w-4', active: true },
     { width: 'w-8', active: true },
-    { width: 'w-4', active: false },
   ],
   'existing-entity-match': [
     { width: 'w-8', active: true },
-    { width: 'w-4', active: false },
     { width: 'w-4', active: false },
   ],
 };
@@ -745,92 +718,16 @@ function MatchCard({ result, isSelected, hasDivider, onSelect }: MatchCardProps)
   );
 }
 
-function StepDescribeYou({
-  handleSelectRoles,
-  selectedRolesIds,
-  handleNextStep,
-}: {
-  handleSelectRoles: (id: string) => void;
-  selectedRolesIds: string[];
-  handleNextStep: (step: Step) => void;
-}) {
-  const describedRoles = [
-    {
-      label: 'Domain expert',
-      description: 'I want to upload documents and articles',
-      id: DOMAIN_EXPERT_ROLE,
-      emoji: '📚',
-    },
-    {
-      label: 'Developer',
-      description: 'I want to add content programmatically',
-      id: DEVELOPER_ROLE,
-      emoji: '⌨️',
-    },
-    {
-      label: 'Curious explorer',
-      description: 'I just want to browse',
-      id: CURIOUS_EXPLORER_ROLE,
-      emoji: '👀',
-    },
-  ];
-
-  return (
-    <div className="flex h-full flex-col justify-between">
-      <StepContents childKey="describe-you">
-        <div className="w-full">
-          <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl leading-[29px]">
-            What best describes you?
-          </Text>
-          <Text
-            as="p"
-            variant="body"
-            className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
-          >
-            We’ll use this to tailor your onboarding experience
-          </Text>
-        </div>
-      </StepContents>
-      <div className="mt-[32px] flex grow flex-col items-center justify-start gap-2">
-        {describedRoles.map(role => {
-          return (
-            <div
-              key={`role-id-${role.id}`}
-              role="button"
-              onClick={() => handleSelectRoles(role.id)}
-              className={`flex h-[70px] w-full cursor-pointer items-center justify-start rounded-md border p-4 ${selectedRolesIds.includes(role.id) ? 'border-[#2A2B2E]' : 'border-grey-02'}`}
-            >
-              <span className="text-2xl">{role.emoji}</span>
-              <div className="ml-5 flex flex-col">
-                <span className="text-[19px] leading-[19px] font-semibold text-[#2A2B2E]">{role.label}</span>
-                <span className="mt-1 text-[14px] leading-[14px] font-normal text-grey-04">{role.description}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <Button
-        onClick={() => handleNextStep('interested-in')}
-        className="h-6 w-full rounded-md bg-ctaHover pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal"
-      >
-        Continue
-      </Button>
-    </div>
-  );
-}
-
 function StepInterestedIn({
   handleSelectTopics,
   selectedTopicIds,
   onCompleteOnboard,
   featuredSpaces,
-  name,
 }: {
   handleSelectTopics: (id: string) => void;
   selectedTopicIds: string[];
   onCompleteOnboard: () => void;
   featuredSpaces: BrowseSpaceRow[];
-  name: string;
 }) {
   return (
     <div className="flex h-full flex-col justify-between">
@@ -844,7 +741,7 @@ function StepInterestedIn({
             variant="body"
             className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
           >
-            We need copy for this subline @{name}
+            Select one or more spaces that you are interested in
           </Text>
         </div>
       </StepContents>
@@ -897,7 +794,7 @@ function StepComplete() {
         <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl!">
           Creating your space...
         </Text>
-        <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
+        <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base! text-balance">
           Your space is your area to curate and rank collections, write posts, complete your profile etc.
         </Text>
       </div>
