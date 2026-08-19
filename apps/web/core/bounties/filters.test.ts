@@ -4,6 +4,7 @@ import {
   DEFAULT_BOUNTY_FILTERS,
   applyBountyFilters,
   buildBountiesHref,
+  communitySectionFilters,
   groupBounties,
   parseBountyFilters,
   serializeBountyFilters,
@@ -30,6 +31,8 @@ function bounty(overrides: Partial<BoardBounty> & { id: string }): BoardBounty {
     allocatedIds: [],
     interestedCount: 0,
     updatedAt: null,
+    isFeatured: false,
+    contributors: [],
     ...overrides,
   };
 }
@@ -44,6 +47,7 @@ describe('parseBountyFilters / serializeBountyFilters', () => {
   it('round-trips every field', () => {
     const filters = {
       spaceId: 'space-b',
+      featuredOnly: true,
       statuses: ['done', 'cancelled'] as const,
       difficulty: 'hard' as const,
       skillId: 'skill-1',
@@ -153,5 +157,31 @@ describe('groupBounties', () => {
       'space-b',
       'space-a',
     ]);
+  });
+});
+
+describe('community section filters', () => {
+  it('maps each section to its workflow statuses and carries the section controls into the URL', () => {
+    const filters = communitySectionFilters('available', {
+      featuredOnly: true,
+      difficulty: 'hard',
+      skillId: 'skill-1',
+    });
+    expect(filters.statuses).toEqual(['todo']);
+    expect(buildBountiesHref('/space/s/bounties', filters)).toBe(
+      '/space/s/bounties?scope=featured&status=todo&difficulty=hard&skill=skill-1'
+    );
+    expect(communitySectionFilters('completed').statuses).toEqual(['done']);
+    expect(communitySectionFilters('in-progress').statuses).toEqual(['in-progress']);
+    // And it parses back to the same filters.
+    expect(parseBountyFilters(serializeBountyFilters(filters))).toEqual(filters);
+  });
+
+  it('featuredOnly keeps only featured bounties', () => {
+    const featured = bounty({ id: 'f', isFeatured: true });
+    const plain = bounty({ id: 'p' });
+    expect(
+      applyBountyFilters([featured, plain], { ...DEFAULT_BOUNTY_FILTERS, featuredOnly: true }).map(b => b.id)
+    ).toEqual(['f']);
   });
 });

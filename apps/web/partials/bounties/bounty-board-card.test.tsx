@@ -42,6 +42,8 @@ function bounty(overrides: Partial<BoardBounty> = {}): BoardBounty {
     allocatedIds: [],
     interestedCount: 0,
     updatedAt: null,
+    isFeatured: false,
+    contributors: [],
     ...overrides,
   };
 }

@@ -22,6 +22,8 @@ export type BountyGroupBy = 'none' | 'difficulty' | 'space';
 export type BountyFilters = {
   /** Space id, or null for all participating spaces. */
   spaceId: string | null;
+  /** Only bounties tagged Featured (the community tab's "Featured" scope). */
+  featuredOnly: boolean;
   /** Statuses shown. Default = the open statuses; an empty set is normalized back to the default. */
   statuses: readonly WorkflowStatusKey[];
   difficulty: DifficultyKey | null;
@@ -33,6 +35,7 @@ export type BountyFilters = {
 
 export const DEFAULT_BOUNTY_FILTERS: BountyFilters = {
   spaceId: null,
+  featuredOnly: false,
   statuses: OPEN_WORKFLOW_STATUS_KEYS,
   difficulty: null,
   skillId: null,
@@ -56,6 +59,7 @@ function readParam(params: RawParams, key: string): string | undefined {
 
 export function parseBountyFilters(params: RawParams): BountyFilters {
   const space = readParam(params, 'space')?.trim();
+  const scope = readParam(params, 'scope')?.trim();
   const statusRaw = readParam(params, 'status')?.trim();
   const difficultyRaw = readParam(params, 'difficulty')?.trim();
   const skill = readParam(params, 'skill')?.trim();
@@ -73,6 +77,7 @@ export function parseBountyFilters(params: RawParams): BountyFilters {
 
   return {
     spaceId: space && space !== 'all' ? space : null,
+    featuredOnly: scope === 'featured',
     statuses,
     difficulty: difficultyRaw && isDifficultyKey(difficultyRaw) ? difficultyRaw : null,
     skillId: skill && skill.length > 0 ? skill : null,
@@ -95,6 +100,7 @@ function sameStatusSet(a: readonly WorkflowStatusKey[], b: readonly WorkflowStat
 export function serializeBountyFilters(filters: BountyFilters): URLSearchParams {
   const params = new URLSearchParams();
   if (filters.spaceId) params.set('space', filters.spaceId);
+  if (filters.featuredOnly) params.set('scope', 'featured');
   if (!sameStatusSet(filters.statuses, DEFAULT_BOUNTY_FILTERS.statuses)) {
     params.set('status', sameStatusSet(filters.statuses, ALL_STATUS_KEYS) ? 'all' : filters.statuses.join(','));
   }
@@ -119,6 +125,7 @@ export function applyBountyFilters(bounties: readonly BoardBounty[], filters: Bo
 
   return bounties.filter(bounty => {
     if (filters.spaceId && bounty.spaceId !== filters.spaceId) return false;
+    if (filters.featuredOnly && !bounty.isFeatured) return false;
     if (!statusSet.has(statusKeyForId(bounty.statusId))) return false;
     if (filters.difficulty && difficultyKeyForId(bounty.difficultyId) !== filters.difficulty) return false;
     if (filters.skillId && !bounty.skills.some(skill => skill.id === filters.skillId)) return false;
@@ -203,4 +210,34 @@ export function groupBounties(
     return index === -1 ? order.length : index;
   };
   return [...buckets.values()].sort((a, b) => rank(a.key) - rank(b.key) || a.label.localeCompare(b.label));
+}
+
+// -- Community-tab sections ---------------------------------------------------------
+
+/** The community tab's three bounty sections, each a slice of workflow status. */
+export type CommunitySection = 'completed' | 'in-progress' | 'available';
+
+export const COMMUNITY_SECTION_STATUSES: Record<CommunitySection, readonly WorkflowStatusKey[]> = {
+  completed: ['done'],
+  'in-progress': ['in-progress'],
+  available: ['todo'],
+};
+
+/**
+ * Filters for "View all" on a community-tab section: the section's statuses
+ * plus whatever the section's own controls had selected (featured scope,
+ * difficulty, skill). Sorted newest-first, which is how the sections read.
+ */
+export function communitySectionFilters(
+  section: CommunitySection,
+  options: { featuredOnly?: boolean; difficulty?: DifficultyKey | null; skillId?: string | null } = {}
+): BountyFilters {
+  return {
+    ...DEFAULT_BOUNTY_FILTERS,
+    statuses: COMMUNITY_SECTION_STATUSES[section],
+    featuredOnly: options.featuredOnly ?? false,
+    difficulty: options.difficulty ?? null,
+    skillId: options.skillId ?? null,
+    sort: 'updated-desc',
+  };
 }

@@ -47,6 +47,8 @@ const bounty: BoardBounty = {
   allocatedIds: ['person-2'],
   interestedCount: 5,
   updatedAt: null,
+  isFeatured: false,
+  contributors: [],
 };
 
 function field(label: string) {

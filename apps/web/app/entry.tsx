@@ -33,7 +33,7 @@ import { StatusBar } from '~/partials/review/status-bar';
 import { SearchDialog } from '~/partials/search';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
-import { communityFullscreenActiveAtom, rankingFullscreenActiveAtom } from '~/atoms';
+import { rankingFullscreenActiveAtom } from '~/atoms';
 
 const OnboardingDialog = dynamic(
   () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
@@ -91,9 +91,7 @@ const DebatesHubPanel = dynamic(
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
-  const rankingFullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
-  const communityFullscreenActive = useAtomValue(communityFullscreenActiveAtom);
-  const fullscreenActive = rankingFullscreenActive || communityFullscreenActive;
+  const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 

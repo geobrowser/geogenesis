@@ -183,6 +183,8 @@ describe('BountyForm', () => {
       allocatedIds: [],
       interestedCount: 0,
       updatedAt: null,
+      isFeatured: false,
+      contributors: [],
     };
     render(<BountyForm mode="edit" spaceId="space-1" initial={{ bounty, relations: [] }} />);
     expect(screen.getByDisplayValue('Existing')).toBeInTheDocument();

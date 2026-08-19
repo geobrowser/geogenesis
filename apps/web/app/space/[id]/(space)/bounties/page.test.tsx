@@ -33,21 +33,16 @@ describe('SpaceBountiesPage', () => {
     await expect(SpaceBountiesPage({ params: Promise.resolve({ id: 'invalid' }) })).rejects.toThrow('not found');
   });
 
-  it('404s when the network gate is off or the space is not in the program', async () => {
+  it('404s when the network gate is off', async () => {
     mocks.isValid.mockReturnValue(true);
     mocks.enabled = false;
-    mocks.isBountySpace.mockReturnValue(true);
-    await expect(SpaceBountiesPage({ params: Promise.resolve({ id: 'space-1' }) })).rejects.toThrow('not found');
-
-    mocks.enabled = true;
-    mocks.isBountySpace.mockReturnValue(false);
     await expect(SpaceBountiesPage({ params: Promise.resolve({ id: 'space-1' }) })).rejects.toThrow('not found');
   });
 
-  it('renders the client page for a participating space', async () => {
+  it('renders the client page for any space when the gate is on (not just participating ones)', async () => {
     mocks.isValid.mockReturnValue(true);
     mocks.enabled = true;
-    mocks.isBountySpace.mockReturnValue(true);
+    mocks.isBountySpace.mockReturnValue(false);
     const element = await SpaceBountiesPage({ params: Promise.resolve({ id: 'space-1' }) });
     expect(element.props.spaceId).toBe('space-1');
   });

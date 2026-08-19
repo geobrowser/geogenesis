@@ -30,6 +30,8 @@ const bounty: BoardBounty = {
   allocatedIds: [],
   interestedCount: 0,
   updatedAt: null,
+  isFeatured: false,
+  contributors: [],
 };
 
 const segment = {

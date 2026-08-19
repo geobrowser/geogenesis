@@ -33,4 +33,14 @@ export type BoardBounty = Bounty & {
   interestedCount: number;
   /** ISO string of the last time the entity was updated, when the API provides it. */
   updatedAt: string | null;
+  /** Tagged with the Featured tag (TAG_PROPERTY → FEATURED_TAG). */
+  isFeatured: boolean;
+  /** Allocated curators resolved to display profiles (name + avatar), for the community-tab cards. */
+  contributors: BountyContributor[];
+};
+
+export type BountyContributor = {
+  entityId: string;
+  name: string;
+  avatarUrl: string | null;
 };

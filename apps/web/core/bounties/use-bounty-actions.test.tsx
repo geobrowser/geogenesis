@@ -49,6 +49,8 @@ const detail: BountyDetail = {
     allocatedIds: ['person-2'],
     interestedCount: 0,
     updatedAt: null,
+    isFeatured: false,
+    contributors: [],
   },
   interest: [],
   submissions: [],

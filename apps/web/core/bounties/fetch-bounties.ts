@@ -1,9 +1,10 @@
 import { Effect } from 'effect';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { FEATURED_TAG_ID, PLACEHOLDER_SPACE_IMAGE, TAG_PROPERTY_ID } from '~/core/constants';
 import { uuidToHex } from '~/core/id/normalize';
 import type { Space } from '~/core/io/dto/spaces';
 import { ENTITY_ID_BATCH_SIZE, getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Entity } from '~/core/types';
 
 import { buildBounty } from './bounty-dto';
@@ -18,7 +19,7 @@ import {
   BOUNTY_TYPE_ID,
   INTERESTED_IN_BOUNTY_PROPERTY_ID,
 } from './ontology';
-import type { BoardBounty } from './types';
+import type { BoardBounty, BountyContributor } from './types';
 
 /**
  * Read layer for the bounty board. One entities query (multi-space, typed,
@@ -88,7 +89,36 @@ export function toBoardBounty(entity: Entity, fallbackSpaceId: string): BoardBou
     allocatedIds: relationTargets(entity, BOUNTY_ALLOCATED_PROPERTY_ID).map(target => target.id),
     interestedCount: 0,
     updatedAt,
+    isFeatured: relationTargets(entity, TAG_PROPERTY_ID).some(
+      target => uuidToHex(target.id) === uuidToHex(FEATURED_TAG_ID)
+    ),
+    // Filled in by fetchBoardBounties once allocated targets are resolved to profiles.
+    contributors: relationTargets(entity, BOUNTY_ALLOCATED_PROPERTY_ID)
+      .filter(target => !!target.name?.trim())
+      .map(target => ({ entityId: target.id, name: target.name!.trim(), avatarUrl: null })),
   };
+}
+
+/**
+ * Resolves allocated targets (personal-space or person entity ids) to display
+ * profiles. Targets that do not resolve keep the relation's own name (no avatar).
+ */
+export function resolveContributors(targetIds: readonly string[]) {
+  return Effect.gen(function* () {
+    const byTarget = new Map<string, BountyContributor>();
+    if (targetIds.length === 0) return byTarget;
+    const profiles = yield* Effect.tryPromise({
+      try: () => Effect.runPromise(fetchProfilesBySpaceIds([...targetIds])),
+      catch: () => null,
+    }).pipe(Effect.catchAll(() => Effect.succeed(null)));
+    if (!profiles) return byTarget;
+    profiles.forEach((profile, index) => {
+      const name = profile?.name?.trim();
+      if (!profile || !name) return;
+      byTarget.set(uuidToHex(targetIds[index]), { entityId: profile.id, name, avatarUrl: profile.avatarUrl });
+    });
+    return byTarget;
+  });
 }
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
@@ -142,12 +172,14 @@ export function fetchBoardBounties(spaceIds: readonly string[]) {
     const bounties = page.entities.map(entity => toBoardBounty(entity, spaceIds[0]));
     const bountyIds = bounties.map(bounty => bounty.id);
 
-    const [interestCounts, submissionCounts] = yield* Effect.all(
+    const allocatedTargetIds = [...new Set(bounties.flatMap(bounty => bounty.allocatedIds.map(uuidToHex)))];
+    const [interestCounts, submissionCounts, contributorsByTarget] = yield* Effect.all(
       [
         countBacklinks(bountyIds, INTERESTED_IN_BOUNTY_PROPERTY_ID),
         countBacklinks(bountyIds, BOUNTY_SUBMISSION_PROPERTY_ID),
+        resolveContributors(allocatedTargetIds),
       ],
-      { concurrency: 2 }
+      { concurrency: 3 }
     );
 
     for (const bounty of bounties) {
@@ -156,6 +188,16 @@ export function fetchBoardBounties(spaceIds: readonly string[]) {
       bounty.spaceImage = row?.image ?? PLACEHOLDER_SPACE_IMAGE;
       bounty.interestedCount = interestCounts.get(uuidToHex(bounty.id)) ?? 0;
       bounty.submissionsCount = submissionCounts.get(uuidToHex(bounty.id)) ?? 0;
+      const seen = new Set<string>();
+      bounty.contributors = bounty.allocatedIds
+        .map(
+          id =>
+            contributorsByTarget.get(uuidToHex(id)) ??
+            bounty.contributors.find(c => uuidToHex(c.entityId) === uuidToHex(id))
+        )
+        .filter(
+          (c): c is BountyContributor => !!c && !seen.has(uuidToHex(c.entityId)) && !!seen.add(uuidToHex(c.entityId))
+        );
     }
 
     return { bounties, spaces: spaceIds.map(id => rows.get(id)!) } satisfies BoardData;

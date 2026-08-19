@@ -1,18 +1,20 @@
 'use client';
 
-import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { Effect } from 'effect';
 
-import { INTERESTED_IN_RELATION_TYPE_ID } from '~/core/constants';
+import { buildExpressInterestOps } from '~/core/bounties/interest-ops';
+import { INTERESTED_IN_BOUNTY_PROPERTY_ID } from '~/core/bounties/ontology';
+import { bountyQueryKeys } from '~/core/bounties/use-bounties';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getRelationsByToEntityIds } from '~/core/io/queries';
-import { useMutate } from '~/core/sync/use-mutate';
-import type { Relation } from '~/core/types';
 
 const INTERESTED_IN_QUERY_KEY = 'bounty-interested-in';
 
@@ -20,17 +22,17 @@ export function useInterestedBountyIds(bountyIds: string[]) {
   const { personalSpaceId } = usePersonalSpaceId();
   const key = [...bountyIds].sort().join(',');
 
-  // Scoped to the personal space but deliberately not to a `fromEntityId`: interest
-  // registered before the switch to the system entity (0c82f19) comes from the space's
-  // topic entity instead, and those should still read as interested. Only the viewer's
-  // own relations are in scope either way, so the looser filter can't leak someone
-  // else's interest.
+  // Scoped to the viewer's personal space but deliberately not to a `fromEntityId`:
+  // interest relations may be authored from the person entity (curator-app and this
+  // app) or from the space's system entity (earlier geogenesis builds), and both should
+  // read as interested. Only the viewer's own space is in scope either way, so the
+  // looser filter can't leak someone else's interest.
   const { data, isLoading } = useQuery({
     enabled: Boolean(personalSpaceId) && bountyIds.length > 0,
     queryKey: [INTERESTED_IN_QUERY_KEY, personalSpaceId, key],
     queryFn: () => {
       if (!personalSpaceId) return Promise.resolve([]);
-      return Effect.runPromise(getRelationsByToEntityIds(bountyIds, INTERESTED_IN_RELATION_TYPE_ID, personalSpaceId));
+      return Effect.runPromise(getRelationsByToEntityIds(bountyIds, INTERESTED_IN_BOUNTY_PROPERTY_ID, personalSpaceId));
     },
     staleTime: 60_000,
   });
@@ -52,16 +54,27 @@ type ProposeInterestArgs = {
 };
 
 /**
- * Registers interest in a bounty by writing an `Interested in` relation from the
- * user's personal-space system entity to the bounty.
+ * Registers interest in a bounty: one `Interested In` relation, published into the
+ * viewer's personal space.
  *
- * The system entity is the one whose entity id *is* the space id, which is why the
- * relation comes from `personalSpaceId` rather than the space's topic entity.
+ * Write shape — deliberately the same as curator-app's `create-interested-in-bounty-relation.ts`
+ * and every interest row already on testnet: `person entity → bounty`, no `toSpaceId`.
+ * An earlier geogenesis build authored this from the personal space's *system* entity
+ * (the entity whose id is the space id) with a `toSpaceId`; we chose the curator shape
+ * so the two apps produce identical rows and neither app's readers need to special-case
+ * the other. Readers on both sides accept both shapes (see `useBountyRoles` /
+ * `buildBountyAllocationTargets`), so rows written by the old build still count. The
+ * person entity falls back to the space's system entity only when no profile entity
+ * exists — the same fallback curator-app's profile resolution makes.
+ *
+ * Ops are built by `buildExpressInterestOps` (shared with the bounty detail page) and
+ * handed straight to `makeProposal`, like the rest of the bounty writes.
  */
 export function useInterestedInBounty() {
-  const { storage } = useMutate();
   const { makeProposal } = usePublish();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { smartAccount } = useSmartAccount();
+  const { profile } = useGeoProfile(smartAccount?.account.address);
   const queryClient = useQueryClient();
   const [pendingBountyId, setPendingBountyId] = React.useState<string | null>(null);
   // Bounties already submitted this session. The interested-in query only refreshes
@@ -73,41 +86,32 @@ export function useInterestedInBounty() {
   const canRegisterInterest = Boolean(personalSpaceId && isRegistered);
 
   const registerInterest = React.useCallback(
-    async ({ bountyId, bountyName, bountySpaceId }: ProposeInterestArgs) => {
+    async ({ bountyId, bountyName }: ProposeInterestArgs) => {
       if (!personalSpaceId || !isRegistered) return;
       if (submittedBountyIds.current.has(bountyId)) return;
 
       submittedBountyIds.current.add(bountyId);
       setPendingBountyId(bountyId);
 
-      const relation: Relation = {
-        id: IdUtils.generate(),
-        entityId: IdUtils.generate(),
-        spaceId: personalSpaceId,
-        toSpaceId: bountySpaceId,
-        position: Position.generate(),
-        renderableType: 'RELATION',
-        isLocal: true,
-        hasBeenPublished: false,
-        isDeleted: false,
-        type: { id: INTERESTED_IN_RELATION_TYPE_ID, name: 'Interested in' },
-        fromEntity: { id: personalSpaceId, name: null },
-        toEntity: { id: bountyId, name: bountyName, value: bountyId },
-      };
-
-      storage.relations.set(relation);
+      const personEntityId =
+        profile?.id && IdUtils.isValid(profile.id) && profile.id !== profile.spaceId ? profile.id : personalSpaceId;
+      const { relations } = buildExpressInterestOps({
+        personalSpaceId,
+        person: { id: personEntityId, name: profile?.name ?? null },
+        bounty: { id: bountyId, name: bountyName },
+      });
 
       try {
         await makeProposal({
           values: [],
-          relations: [relation],
+          relations,
           spaceId: personalSpaceId,
           name: `Interested in: ${bountyName}`,
           onSuccess: () => {
             void queryClient.invalidateQueries({ queryKey: [INTERESTED_IN_QUERY_KEY, personalSpaceId] });
+            void queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all });
           },
           onError: () => {
-            storage.relations.delete(relation);
             // Failed publishes are retryable, so release the guard.
             submittedBountyIds.current.delete(bountyId);
           },
@@ -116,7 +120,7 @@ export function useInterestedInBounty() {
         setPendingBountyId(null);
       }
     },
-    [isRegistered, makeProposal, personalSpaceId, queryClient, storage.relations]
+    [isRegistered, makeProposal, personalSpaceId, profile, queryClient]
   );
 
   return { registerInterest, pendingBountyId, canRegisterInterest };

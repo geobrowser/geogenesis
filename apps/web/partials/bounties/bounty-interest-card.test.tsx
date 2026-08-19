@@ -41,6 +41,8 @@ function detail(overrides: Partial<BountyDetail['bounty']> = {}): BountyDetail {
       allocatedIds: [],
       interestedCount: 0,
       updatedAt: null,
+      isFeatured: false,
+      contributors: [],
       maxContributors: null,
       ...overrides,
     },
