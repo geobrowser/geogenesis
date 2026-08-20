@@ -5,6 +5,7 @@ import {
   type DebateRoomTabPriority,
   type DebateRoomTakeoverContext,
   createDebateRoomOwnershipCoordinator,
+  debateRoomTabPriority,
 } from './debate-room-ownership';
 
 type QueuedLock = {
@@ -392,13 +393,54 @@ describe('debate room ownership', () => {
   });
 });
 
+describe('debateRoomTabPriority', () => {
+  function stubVisibility(visibilityState: DocumentVisibilityState, hasFocus: boolean | undefined) {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: visibilityState });
+    Object.defineProperty(document, 'hasFocus', {
+      configurable: true,
+      value: hasFocus === undefined ? undefined : () => hasFocus,
+    });
+  }
+
+  afterEach(() => {
+    // Restore the jsdom prototype getters shadowed by the instance properties above.
+    Reflect.deleteProperty(document, 'visibilityState');
+    Reflect.deleteProperty(document, 'hasFocus');
+  });
+
+  it('ranks hidden below visible below focused, and fails open without hasFocus', () => {
+    stubVisibility('hidden', true);
+    expect(debateRoomTabPriority()).toBe(0);
+
+    stubVisibility('visible', false);
+    expect(debateRoomTabPriority()).toBe(1);
+
+    stubVisibility('visible', true);
+    expect(debateRoomTabPriority()).toBe(2);
+
+    // Browsers without hasFocus must claim focus: the worst case is the pre-stagger race, never
+    // a tab that voluntarily delays itself behind everyone else.
+    stubVisibility('visible', undefined);
+    expect(debateRoomTabPriority()).toBe(2);
+  });
+});
+
 describe('focus-weighted acquisition', () => {
+  // Unique per test: the local-release barrier map is module-global and keyed by debateId/userId,
+  // so a mid-stagger close leaking a barrier must not be able to hang the next test.
+  let staggerDebateId = 'debate-stagger-0';
+  let staggerDebateNumber = 0;
+
+  beforeEach(() => {
+    staggerDebateId = `debate-stagger-${++staggerDebateNumber}`;
+  });
+
   function createTab(
     getTabPriority: () => DebateRoomTabPriority,
     onTakeoverRequested: (context: DebateRoomTakeoverContext) => boolean | Promise<boolean> = () => true
   ) {
     return createDebateRoomOwnershipCoordinator({
-      debateId: 'debate-1',
+      debateId: staggerDebateId,
       userId: 'user-a',
       onTakeoverRequested,
       getTabPriority,
@@ -440,7 +482,14 @@ describe('focus-weighted acquisition', () => {
     let priority: DebateRoomTabPriority = 0;
     const tab = createTab(() => priority);
 
+    let settled = false;
     const acquisition = tab.acquire();
+    void acquisition.then(() => {
+      settled = true;
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(settled).toBe(false);
+
     priority = 2;
     window.dispatchEvent(new Event('focus'));
 
@@ -448,6 +497,34 @@ describe('focus-weighted acquisition', () => {
     await expect(acquisition).resolves.toEqual({ acquired: true, waitedForLocalRelease: false });
 
     await closeCoordinators(tab);
+  });
+
+  it('settles a mid-stagger acquire immediately when a takeover arrives', async () => {
+    vi.useFakeTimers();
+    const tab = createTab(() => 0);
+
+    const acquisition = tab.acquire();
+    // No timer advance: the takeover hits the acquisition dedup slot while its 700ms stagger is
+    // pending and must force-settle it rather than inherit the residual delay.
+    await expect(tab.requestTakeover()).resolves.toBe(true);
+    await expect(acquisition).resolves.toEqual({ acquired: true, waitedForLocalRelease: false });
+
+    await closeCoordinators(tab);
+  });
+
+  it('does not make a same-tab successor wait out a predecessor stagger after close', async () => {
+    vi.useFakeTimers();
+    const hidden = createTab(() => 0);
+
+    void hidden.acquire();
+    hidden.close();
+
+    // No timer advance: close() must settle the cancelled stagger so the local-release barrier
+    // resolves now, not 700ms later — a StrictMode remount would otherwise pay the delay twice.
+    const successor = createTab(() => 2);
+    await expect(successor.acquire()).resolves.toEqual({ acquired: true, waitedForLocalRelease: true });
+
+    await closeCoordinators(hidden, successor);
   });
 
   it('does not acquire when closed during the stagger', async () => {
@@ -468,12 +545,7 @@ describe('focus-weighted acquisition', () => {
     vi.useFakeTimers();
     const onTakeoverRequested = vi.fn().mockResolvedValue(true);
     const owner = createTab(() => 0, onTakeoverRequested);
-    const requester = createDebateRoomOwnershipCoordinator({
-      debateId: 'debate-1',
-      userId: 'user-a',
-      onTakeoverRequested: () => true,
-      getTabPriority: () => 2,
-    });
+    const requester = createTab(() => 2);
 
     const ownerAcquisition = owner.acquire();
     await vi.advanceTimersByTimeAsync(700);
@@ -492,7 +564,7 @@ describe('focus-weighted acquisition', () => {
     await owner.acquire();
 
     // An old tab running a build that predates requesterPriority omits the field entirely.
-    const legacyChannel = new FakeBroadcastChannel('geo:debate-room:debate-1:user-a');
+    const legacyChannel = new FakeBroadcastChannel(`geo:debate-room:${staggerDebateId}:user-a`);
     legacyChannel.postMessage({ type: 'takeover-request', requestId: 'legacy-1', requesterId: 'legacy-instance' });
     await new Promise(resolve => queueMicrotask(() => resolve(undefined)));
 

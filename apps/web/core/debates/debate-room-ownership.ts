@@ -121,16 +121,22 @@ export function createDebateRoomOwnershipCoordinator({
     }
   };
 
+  // Resolves the in-flight acquisition stagger immediately: a takeover arriving mid-stagger and
+  // release()/close() must not sit out the residual delay (nothing else re-checks cancellation
+  // until the timer or a focus event fires).
+  let finishActiveStagger: (() => void) | null = null;
+
   // Holds off the lock request in proportion to how far the tab is from the user's attention, so
   // the focused tab reaches navigator.locks first even when a background tab's connect() started
   // earlier. Resolves early if the tab gains focus mid-wait.
-  const awaitAcquisitionStagger = async (delay: number, cancelled: () => boolean) => {
-    await new Promise<void>(resolve => {
+  const awaitAcquisitionStagger = (delay: number, cancelled: () => boolean) =>
+    new Promise<void>(resolve => {
       let settled = false;
       let timer: number | null = null;
       const finish = () => {
         if (settled) return;
         settled = true;
+        if (finishActiveStagger === finish) finishActiveStagger = null;
         if (timer !== null) window.clearTimeout(timer);
         window.removeEventListener('focus', onPriorityChange);
         document.removeEventListener('visibilitychange', onPriorityChange);
@@ -142,8 +148,8 @@ export function createDebateRoomOwnershipCoordinator({
       timer = window.setTimeout(finish, delay);
       window.addEventListener('focus', onPriorityChange);
       document.addEventListener('visibilitychange', onPriorityChange);
+      finishActiveStagger = finish;
     });
-  };
 
   const acquireLock = (skipStagger = false): Promise<DebateRoomOwnershipAcquireResult> => {
     if (ownsConnection) return Promise.resolve({ acquired: true, waitedForLocalRelease: false });
@@ -155,7 +161,12 @@ export function createDebateRoomOwnershipCoordinator({
       ownsConnection = true;
       return Promise.resolve({ acquired: true, waitedForLocalRelease: false });
     }
-    if (acquisition) return acquisition;
+    if (acquisition) {
+      // The dedup slot may hold a mid-stagger acquisition; a takeover must not inherit the
+      // residual delay, so settle the stagger now and share the (correct) result.
+      if (skipStagger) finishActiveStagger?.();
+      return acquisition;
+    }
 
     const attempt = { cancelled: false };
     activeAcquisitionAttempt = attempt;
@@ -235,6 +246,9 @@ export function createDebateRoomOwnershipCoordinator({
     const activeRequest = lockRequest ?? acquisition?.then(() => undefined);
     if (!activeRequest) return;
     if (activeAcquisitionAttempt) activeAcquisitionAttempt.cancelled = true;
+    // A cancelled stagger would otherwise run out its timer, holding the local-release barrier —
+    // and any same-tab successor waiting on it — for the residual delay.
+    finishActiveStagger?.();
     ownsConnection = false;
     releaseLock?.();
     const barrier = registerLocalReleaseBarrier(coordinationName, activeRequest);

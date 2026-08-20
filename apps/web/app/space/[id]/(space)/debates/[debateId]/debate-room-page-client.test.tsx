@@ -1374,8 +1374,8 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.ownershipRequestTakeover).not.toHaveBeenCalled();
   });
 
-  it('does not retry a refused auto-takeover until the tab is refocused', async () => {
-    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  it('does not retry a refused auto-takeover until the tab genuinely loses and regains focus', async () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
     mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.ownershipRequestTakeover.mockResolvedValue(false);
     mocks.debate = {
@@ -1393,10 +1393,49 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce();
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
 
+    // Redundant focus/visibilitychange events while the tab never lost focus must not retry —
+    // browsers fire both for a single activation, and a double connect() supersedes itself.
     act(() => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce();
+
+    // A genuine blur re-arms the attempt; regaining focus retries exactly once even though the
+    // activation fires both events.
+    hasFocus.mockReturnValue(false);
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    hasFocus.mockReturnValue(true);
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
       window.dispatchEvent(new Event('focus'));
     });
     await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledTimes(2));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.ownershipRequestTakeover).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not auto-takeover once the debate is in progress', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // Past preflight the room is (or should be) recording, so the focused duplicate stays on the
+    // dead-end screen rather than pulling a live debate out from under the owner.
+    expect(
+      await screen.findByRole('heading', { name: 'This debate is already open in another tab.' })
+    ).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.ownershipRequestTakeover).not.toHaveBeenCalled();
   });
 
   it('keeps takeover available during a preflight ownership conflict', async () => {
