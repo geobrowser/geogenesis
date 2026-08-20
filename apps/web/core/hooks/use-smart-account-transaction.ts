@@ -1,3 +1,6 @@
+import type { GeoWalletClient } from '@geogenesis/auth/account';
+import { useQueryClient } from '@tanstack/react-query';
+
 import { useCallback } from 'react';
 
 import { Duration, Effect } from 'effect';
@@ -10,6 +13,14 @@ type SendTxArgs = {
   data: `0x${string}`;
   value?: bigint;
 };
+
+function sanitizeErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message.replace(/0x[a-fA-F0-9]{16,}/g, '[redacted-hex]').slice(0, 300);
+  }
+
+  return 'Transaction write failed';
+}
 
 /**
  * Returns an Effect-returning function that signs and submits a transaction via the
@@ -26,16 +37,9 @@ type SendTxArgs = {
  * bounds combined — if it raced them, it would report failure for a still-queued
  * send that later executes, and a user retry double-submits.
  */
-function sanitizeErrorMessage(error: unknown) {
-  if (error instanceof Error) {
-    return error.message.replace(/0x[a-fA-F0-9]{16,}/g, '[redacted-hex]').slice(0, 300);
-  }
-
-  return 'Transaction write failed';
-}
-
 export function useSmartAccountTransaction() {
   const { smartAccount } = useSmartAccount();
+  const queryClient = useQueryClient();
 
   // Memoized so callers can put it in a `useCallback`/`useEffect` dependency list
   // without re-running on every render — `useRankingComposeAccess` fires its
@@ -43,7 +47,13 @@ export function useSmartAccountTransaction() {
   const sendTransaction = useCallback(
     ({ to, data, value = 0n }: SendTxArgs) =>
       Effect.gen(function* () {
-        if (!smartAccount) {
+        const cachedAccounts = queryClient
+          .getQueriesData<GeoWalletClient | null>({ queryKey: ['smart-account'] })
+          .map(([, cached]) => cached)
+          .filter((cached): cached is GeoWalletClient => Boolean(cached));
+        const account = smartAccount ?? (cachedAccounts.length === 1 ? cachedAccounts[0] : null) ?? null;
+
+        if (!account) {
           return yield* Effect.fail(new TransactionWriteFailedError('Missing smart account'));
         }
 
@@ -53,7 +63,7 @@ export function useSmartAccountTransaction() {
 
         const hash = yield* Effect.tryPromise({
           try: async () => {
-            return await smartAccount.sendTransaction({
+            return await account.sendTransaction({
               to,
               value,
               data,
@@ -74,7 +84,7 @@ export function useSmartAccountTransaction() {
         console.log('Transaction successful', hash);
         return hash;
       }).pipe(Effect.withSpan('web.write.sendTransaction')),
-    [smartAccount]
+    [smartAccount, queryClient]
   );
 
   return sendTransaction;

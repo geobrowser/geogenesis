@@ -4,6 +4,7 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import cx from 'classnames';
+import { useAtom } from 'jotai';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -18,6 +19,8 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -227,6 +230,10 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
+  const enqueuePendingAction = useEnqueuePendingAction();
+  const [pendingComposer, setPendingComposer] = useAtom(pendingCommentComposerAtom);
+  const [composerExpanded, setComposerExpanded] = useState(false);
+  const [pendingReplyToId, setPendingReplyToId] = useState<string | null>(null);
   const isLoggedIn = !!smartAccount;
   const isPanel = variant === 'panel';
   const density = isPanel ? PANEL_DENSITY : PAGE_DENSITY;
@@ -238,7 +245,23 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
   const viewerAvatarUrl =
     viewerProfile?.avatarUrl && viewerProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? viewerProfile.avatarUrl : null;
   const viewerAvatarSeed = viewerProfile?.address ?? walletAddress ?? personalSpaceId ?? 'anonymous';
-  const requireSignInToComment = React.useCallback(() => openSignInPrompt('comment'), [openSignInPrompt]);
+  const requireSignInToComment = React.useCallback(
+    (replyToCommentId?: string) => {
+      setPendingComposer({ entityId, replyToCommentId: replyToCommentId ?? null });
+      openSignInPrompt('comment');
+    },
+    [entityId, openSignInPrompt, setPendingComposer]
+  );
+
+  React.useEffect(() => {
+    if (!smartAccount || !pendingComposer || pendingComposer.entityId !== entityId) return;
+    setPendingComposer(null);
+    if (pendingComposer.replyToCommentId) {
+      setPendingReplyToId(pendingComposer.replyToCommentId);
+      return;
+    }
+    setComposerExpanded(true);
+  }, [smartAccount, pendingComposer, entityId, setPendingComposer]);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
   const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
   // Resolves to an empty map unless this entity is a Debate. Gated on there being comments
@@ -287,14 +310,32 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
   // is updated via the onOptimistic callback so the row pins to the top right away.
   const handleCreateComment = React.useCallback(
     (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
+      if (!smartAccount) return;
+
       void createComment({
         text,
         targetSpaceId: spaceId,
         ancestorComments,
-        onOptimistic: id => markSessionNew(id),
+        onOptimistic: markSessionNew,
+      }).then(result => {
+        if (!result || result.published) return;
+        enqueuePendingAction({
+          id: `comment:${entityId}:${result.id}`,
+          label: 'your comment',
+          requires: 'personalSpace',
+          run: () =>
+            createComment({
+              text,
+              targetSpaceId: spaceId,
+              ancestorComments,
+              commentId: result.id,
+            }).then(published => {
+              if (!published?.published) throw new Error('Comment could not be published');
+            }),
+        });
       });
     },
-    [createComment, spaceId, markSessionNew]
+    [createComment, smartAccount, spaceId, entityId, enqueuePendingAction, markSessionNew]
   );
 
   const handleEditComment = React.useCallback(
@@ -356,6 +397,8 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
             onSubmit={handleCreateComment}
             isLoggedIn={isLoggedIn}
             onSignInRequired={requireSignInToComment}
+            expanded={composerExpanded}
+            onExpandedChange={setComposerExpanded}
             variant={variant}
             viewerAvatarUrl={viewerAvatarUrl}
             viewerAvatarSeed={viewerAvatarSeed}
@@ -395,6 +438,8 @@ export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentS
                     sortReplies={sortWithSessionPinned}
                     isLoggedIn={isLoggedIn}
                     onSignInRequired={requireSignInToComment}
+                    pendingReplyToId={pendingReplyToId}
+                    onPendingReplyConsumed={() => setPendingReplyToId(null)}
                   />
                 </DebateVoteBadgeContext.Provider>
               </>
@@ -476,27 +521,30 @@ function TopLevelCommentInput({
   onSubmit,
   isLoggedIn,
   onSignInRequired,
+  expanded,
+  onExpandedChange,
   variant = 'page',
   viewerAvatarUrl,
   viewerAvatarSeed,
 }: {
   onSubmit: (text: string) => void;
   isLoggedIn: boolean;
-  onSignInRequired: () => void;
+  onSignInRequired: (replyToCommentId?: string) => void;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
   variant?: CommentSectionVariant;
   viewerAvatarUrl?: string | null;
   viewerAvatarSeed?: string;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
   const density = useCommentDensity();
 
-  if (!isExpanded) {
+  if (!expanded) {
     const openComposer = () => {
       if (!isLoggedIn) {
         onSignInRequired();
         return;
       }
-      setIsExpanded(true);
+      onExpandedChange(true);
     };
 
     // The panel design is a borderless row — the viewer's avatar, prompt text,
@@ -534,11 +582,11 @@ function TopLevelCommentInput({
     <CommentInput
       onSubmit={text => {
         onSubmit(text);
-        setIsExpanded(false);
+        onExpandedChange(false);
       }}
       placeholder=""
       autoFocus
-      onCancel={() => setIsExpanded(false)}
+      onCancel={() => onExpandedChange(false)}
     />
   );
 }
@@ -652,6 +700,8 @@ function CommentList({
   sortReplies,
   isLoggedIn,
   onSignInRequired,
+  pendingReplyToId,
+  onPendingReplyConsumed,
   depth = 0,
   ancestors = [],
   parentCommentId,
@@ -667,7 +717,9 @@ function CommentList({
   toggleThreadCollapsed: (commentId: string) => void;
   sortReplies: (items: CommentWithReplies[]) => CommentWithReplies[];
   isLoggedIn: boolean;
-  onSignInRequired: () => void;
+  onSignInRequired: (replyToCommentId?: string) => void;
+  pendingReplyToId?: string | null;
+  onPendingReplyConsumed?: () => void;
   depth?: number;
   ancestors?: Array<{ id: string; spaceId: string }>;
   parentCommentId?: string;
@@ -731,6 +783,8 @@ function CommentList({
             sortReplies={sortReplies}
             isLoggedIn={isLoggedIn}
             onSignInRequired={onSignInRequired}
+            pendingReplyToId={pendingReplyToId}
+            onPendingReplyConsumed={onPendingReplyConsumed}
             isLast={index === comments.length - 1}
             depth={depth}
             ancestors={ancestors}
@@ -887,6 +941,8 @@ function CommentList({
               sortReplies={sortReplies}
               isLoggedIn={isLoggedIn}
               onSignInRequired={onSignInRequired}
+              pendingReplyToId={pendingReplyToId}
+              onPendingReplyConsumed={onPendingReplyConsumed}
               isLast={index === comments.length - 1}
               depth={depth}
               ancestors={ancestors}
@@ -911,6 +967,8 @@ function CommentItem({
   sortReplies,
   isLoggedIn,
   onSignInRequired,
+  pendingReplyToId,
+  onPendingReplyConsumed,
   isLast,
   depth,
   ancestors,
@@ -926,7 +984,9 @@ function CommentItem({
   toggleThreadCollapsed: (commentId: string) => void;
   sortReplies: (items: CommentWithReplies[]) => CommentWithReplies[];
   isLoggedIn: boolean;
-  onSignInRequired: () => void;
+  onSignInRequired: (replyToCommentId?: string) => void;
+  pendingReplyToId?: string | null;
+  onPendingReplyConsumed?: () => void;
   isLast: boolean;
   depth: number;
   ancestors: Array<{ id: string; spaceId: string }>;
@@ -935,6 +995,12 @@ function CommentItem({
   const [isReplying, setIsReplying] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const threadCollapsed = isThreadCollapsed(comment.id);
+
+  React.useEffect(() => {
+    if (pendingReplyToId !== comment.id) return;
+    setIsReplying(true);
+    onPendingReplyConsumed?.();
+  }, [pendingReplyToId, comment.id, onPendingReplyConsumed]);
 
   const isOwnComment = personalSpaceId != null && comment.spaceId === personalSpaceId;
 
@@ -1109,7 +1175,7 @@ function CommentItem({
           <button
             onClick={() => {
               if (!isLoggedIn) {
-                onSignInRequired();
+                onSignInRequired(comment.id);
                 return;
               }
               setIsReplying(!isReplying);
@@ -1161,6 +1227,8 @@ function CommentItem({
             sortReplies={sortReplies}
             isLoggedIn={isLoggedIn}
             onSignInRequired={onSignInRequired}
+            pendingReplyToId={pendingReplyToId}
+            onPendingReplyConsumed={onPendingReplyConsumed}
             depth={depth + 1}
             ancestors={[{ id: comment.id, spaceId: comment.spaceId }, ...ancestors]}
             parentCommentId={comment.id}
