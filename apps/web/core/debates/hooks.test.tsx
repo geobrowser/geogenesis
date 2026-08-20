@@ -10,6 +10,8 @@ import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response
 
 import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatRequestError } from './api';
 import { DebateCoordinator } from './debate-coordinator';
+import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
+import { useDebateGatewayScope } from './debate-gateway';
 import {
   debateQueryKeys,
   useAcceptDebateRematchRequest,
@@ -28,10 +30,10 @@ import {
   useMarkDebateReady,
   useUpdateDebateAvailability,
 } from './hooks';
-import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
+  spaceType: 'DAO' as 'DAO' | 'PERSONAL',
   acceptDebateRematchRequest: vi.fn(),
   getIdentityToken: vi.fn(),
   identityToken: vi.fn(),
@@ -53,13 +55,18 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, back: mocks.back }),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,
   useIdentityToken: () => ({ identityToken: mocks.identityToken() }),
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: { id: 'user-a' } }),
+}));
+
+// geo-chat only indexes DAO spaces, and the debate hooks now hold until they know the space is one.
+// These tests are all about spaces that do have debates.
+vi.mock('~/core/hooks/use-space', () => ({
+  useSpace: () => ({ space: { id: 'space-1', type: mocks.spaceType }, isLoading: false }),
 }));
 
 vi.mock('./debate-gateway', () => ({
@@ -235,6 +242,8 @@ function DebateExitHarness() {
 describe('useGeoChatAuth', () => {
   beforeEach(() => {
     mocks.authenticated = true;
+    mocks.spaceType = 'DAO';
+    vi.mocked(useDebateGatewayScope).mockClear();
     mocks.getIdentityToken.mockReset();
     mocks.identityToken.mockReset();
     mocks.consentToDebateRematch.mockReset();
@@ -312,6 +321,30 @@ describe('useGeoChatAuth', () => {
     await result.current.getPrivyIdentityToken();
 
     expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * geo-chat indexes DAO spaces only. Asked about a personal space it answers `space_not_found` and
+   * the gateway rejects the matching SUBSCRIBE, which pauses the socket with no reconnect scheduled
+   * — the "Live debate updates are paused while reconnecting" banner that never clears. A claim
+   * curated onto a personal page, or one whose own home space is personal, arrives here as exactly
+   * that space.
+   */
+  it('asks geo-chat nothing about a personal space', async () => {
+    mocks.spaceType = 'PERSONAL';
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(() => useDebateClaims('space-1', ['claim-1'], true), { wrapper });
+
+    await waitFor(() => expect(useDebateGatewayScope).toHaveBeenCalled());
+    expect(mocks.listDebateClaims).not.toHaveBeenCalled();
+    // Every call must be disabled — one enabled subscribe is all it takes to pause the socket.
+    expect(vi.mocked(useDebateGatewayScope).mock.calls.every(([, enabled]) => enabled === false)).toBe(true);
   });
 
   it('leaves indexed-response claim refreshes to the gateway notification path', async () => {

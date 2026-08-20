@@ -48,6 +48,11 @@ vi.mock('~/core/auth/identity-token', () => ({
   useIdentityTokenSync: vi.fn(),
 }));
 
+// geo-chat only indexes DAO spaces, and the debate hooks now hold until they know the space is one.
+vi.mock('~/core/hooks/use-space', () => ({
+  useSpace: () => ({ space: { id: 'space-1', type: 'DAO' }, isLoading: false }),
+}));
+
 vi.mock('./debate-gateway', () => ({
   useDebateGatewayScope: mocks.useScope,
 }));

@@ -6,6 +6,7 @@ import { type UseQueryResult, useMutation, useQueries, useQuery, useQueryClient 
 import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
+import { useSpace } from '~/core/hooks/use-space';
 
 import {
   type Debate,
@@ -105,12 +106,31 @@ export function useGeoChatAuth() {
   };
 }
 
+/**
+ * geo-chat indexes DAO spaces only. Asked about a personal space it answers `space_not_found`, and
+ * the gateway rejects the matching SUBSCRIBE — which drops the socket into a degraded state that
+ * raises "Live debate updates are paused while reconnecting" and never clears it, because a
+ * scope-level rejection schedules no reconnect (`debate-gateway.ts`).
+ *
+ * Personal spaces reach these hooks two ways: a page in someone's personal space listing claims, and
+ * a claim whose own home space is personal being listed from anywhere. Neither has debates, so
+ * asking at all is the bug.
+ *
+ * Holds while the space type is still loading rather than guessing. Guessing "indexed" fires the
+ * request we are trying to avoid; guessing "not indexed" hides readiness on a space that works.
+ */
+function useSpaceHasDebates(spaceId: string): boolean {
+  const { space, isLoading } = useSpace(spaceId);
+  return !isLoading && space?.type === 'DAO';
+}
+
 // Pass a claim-id array to enrich a known set, or `null` to list every debatable
 // claim in the space. geo-chat indexes them, so this skips the KG scan over all
 // the space's Claim entities that 504s on large spaces.
 export function useDebateClaims(spaceId: string, claimIds: string[] | null, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  const shouldFetch = enabled && (claimIds === null || claimIds.length > 0);
+  const hasDebates = useSpaceHasDebates(spaceId);
+  const shouldFetch = enabled && hasDebates && (claimIds === null || claimIds.length > 0);
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated && shouldFetch);
 
   return useQuery({
@@ -356,7 +376,11 @@ export function useClearDebateActivity() {
 
 export function useSpaceDebates(spaceId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  useDebateGatewayScope({ scope: 'space', space_id: spaceId }, enabled && authenticated);
+  // The browse feed subscribes the same way `useDebateClaims` does, so it needs the same gate:
+  // opening the debate feed on a personal space raised the banner on its own.
+  const hasDebates = useSpaceHasDebates(spaceId);
+  const shouldFetch = enabled && hasDebates;
+  useDebateGatewayScope({ scope: 'space', space_id: spaceId }, shouldFetch && authenticated);
 
   return useQuery({
     ...debateQueryNetworkOptions,
@@ -368,7 +392,7 @@ export function useSpaceDebates(spaceId: string, enabled: boolean) {
         authenticated ? accountKey : null,
         signal
       ),
-    enabled,
+    enabled: shouldFetch,
   });
 }
 
