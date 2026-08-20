@@ -436,6 +436,42 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
   });
 
+  // GEO-2604. The window this closes: the rematch session has converted, so activity reports the
+  // new `ready` debate and no longer reports a rematch, but the page's own session query has not
+  // caught up and so has not navigated yet. That is exactly the shape the ready prompt exists for —
+  // a ready debate the viewer has not been told about — so it opened over a page that was already
+  // on its way into the room, then vanished when the navigation landed. Preston reported a popup
+  // that "required no interaction" and redirected him anyway.
+  it('does not prompt over the rematch page for a debate that page is about to open', async () => {
+    mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+    // Nor the fallback bar: it would flash in exactly the same window.
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  // Still prompted anywhere else, so suppressing it above cannot swallow a real one.
+  it('still prompts for a ready debate away from the rematch page', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
+  });
+
   // The loop this stops: the room hides itself and returns whoever opens a debate whose recording
   // was cancelled, so routing into it from here bounced the viewer back and forth — the screen
   // flickered, and the opponent's "your debate was removed" dialog reappeared after Okay.
