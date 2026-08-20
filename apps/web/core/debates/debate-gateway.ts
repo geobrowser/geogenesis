@@ -562,15 +562,22 @@ export class DebateGatewayClient {
         });
         // `cancelRefetch: false`: a refetch of a query still fetching joins that request instead
         // of aborting it. Everything this flush meant to cancel has been cancelled above.
-        await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true, cancelRefetch: false });
-        if (inFlightRematchBatches.length > 0) {
-          await this.queryClient.refetchQueries(
-            {
-              type: 'active',
-              predicate: query => inFlightRematchBatches.some(batch => batch.queryHash === query.queryHash),
-            },
-            { throwOnError: true, cancelRefetch: false }
-          );
+        //
+        // The re-ask runs whether or not the invalidation settled cleanly: a hook-side refresh can
+        // cancel one joined batch, and that one batch's `CancelledError` must not cost every other
+        // batch in this flush the refetch that brings it past the event.
+        try {
+          await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true, cancelRefetch: false });
+        } finally {
+          if (inFlightRematchBatches.length > 0) {
+            await this.queryClient.refetchQueries(
+              {
+                type: 'active',
+                predicate: query => inFlightRematchBatches.some(batch => batch.queryHash === query.queryHash),
+              },
+              { throwOnError: true, cancelRefetch: false }
+            );
+          }
         }
       })
     );
@@ -794,6 +801,9 @@ function invalidationFailureRecovery(error: unknown): InvalidationRecovery {
   // spurious "live updates paused".
   if (error instanceof CancelledError) return 'ignore';
   if (error instanceof DOMException && error.name === 'AbortError') return 'ignore';
+  // The participants' positions are read from the knowledge graph, which this socket has nothing
+  // to do with. Its client has already retried; the query polls, so the next tick picks it up.
+  if (isGraphqlRequestError(error)) return 'ignore';
   if (!(error instanceof GeoChatRequestError)) return 'reconnect';
   if (error.code && deterministicInvalidationErrorCodes.has(error.code)) return 'ignore';
   if (error.status === 401 || error.status === 403) return 'reauthenticate';
@@ -802,6 +812,15 @@ function invalidationFailureRecovery(error: unknown): InvalidationRecovery {
   if (error.status === 408 || error.status === 429 || error.status >= 500) return 'retry';
   if (error.status >= 400 && error.status < 500) return 'ignore';
   return 'reconnect';
+}
+
+function isGraphqlRequestError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    '_tag' in error &&
+    (error as { _tag?: unknown })._tag === 'GraphqlRequestError'
+  );
 }
 
 const debateGateway = new DebateGatewayClient({

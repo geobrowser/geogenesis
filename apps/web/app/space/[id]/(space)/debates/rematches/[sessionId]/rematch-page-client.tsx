@@ -211,7 +211,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ...(savedClaimsQuery.data?.excluded_claim_ids ?? []),
       ...(opponentClaimsQuery.data?.excluded_claim_ids ?? []),
       ...(curatedClaimsQuery.data?.excluded_claim_ids ?? []),
-      ...(session?.recently_rejected_claim_ids ?? []),
     ]);
     const sourceClaimId = sourceDebateQuery.data?.claim.claim_entity_id;
     if (sourceClaimId) excluded.add(sourceClaimId);
@@ -223,6 +222,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     session?.recently_rejected_claim_ids,
     sourceDebateQuery.data,
   ]);
+
+  // A claim either side recently rejected stays listed with its request disabled, as geo-chat's
+  // own rows flag it; the hub's index knows nothing of this session, so its rows read the list.
+  const recentlyRejectedClaimIds = React.useMemo(
+    () => new Set(session?.recently_rejected_claim_ids ?? []),
+    [session?.recently_rejected_claim_ids]
+  );
+
+  // Whether geo-chat's rows carry readiness at all. When they do, a claim its settled batch has no
+  // row for has no readiness row either: not ready is the truth, not a guess to send per space.
+  // A backend that predates readiness on these rows leaves every claim to the per-space lookup.
+  const sessionCarriesReadiness = React.useMemo(() => {
+    const rows = [
+      ...(savedClaimsQuery.data?.claims ?? []),
+      ...(opponentClaimsQuery.data?.claims ?? []),
+      ...(curatedClaimsQuery.data?.claims ?? []),
+    ];
+    return rows.length === 0 || rows[0]!.viewer_debate_ready !== undefined;
+  }, [curatedClaimsQuery.data, opponentClaimsQuery.data, savedClaimsQuery.data]);
 
   // geo-chat's row for a claim, where it has one. It carries the session flags and readiness; the
   // sides on it are replaced by the graph's below, which are fresher by a notification round trip.
@@ -256,13 +274,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         response_kind: responseKind,
         participants: sidesOf(entity.id, sessionRow?.claim.space_id ?? homeSpaceId, responseKind),
         shared_preference: sessionRow?.shared_preference ?? false,
-        recently_rejected: sessionRow?.recently_rejected ?? false,
+        recently_rejected: sessionRow?.recently_rejected ?? recentlyRejectedClaimIds.has(entity.id),
         previously_debated: sessionRow?.previously_debated ?? false,
-        viewer_debate_ready: sessionRow?.viewer_debate_ready,
-        readiness_disabled_reason: sessionRow?.readiness_disabled_reason,
+        // These rows only list once their geo-chat batch has settled (see `sessionCarriesReadiness`).
+        viewer_debate_ready: sessionRow ? sessionRow.viewer_debate_ready : sessionCarriesReadiness ? false : undefined,
+        readiness_disabled_reason: sessionRow ? sessionRow.readiness_disabled_reason : null,
       };
     },
-    [sessionRowsByClaimId, sidesOf]
+    [recentlyRejectedClaimIds, sessionCarriesReadiness, sessionRowsByClaimId, sidesOf]
   );
 
   // Topics live on the KG claim entity, so resolve them here to label each card and drive the
@@ -333,32 +352,52 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const curatedClaims = useLastSettled(curatedClaimsNow, curatedClaimsSettling);
 
   // The All tab: geo-chat's rows, the graph's sides. Held while the allowlist resolves (see above).
-  const browsedRows = React.useMemo(
-    () =>
-      allowlistPending
-        ? []
-        : browsedPages
-            .flatMap(page => page.claims)
-            .filter(
-              entry =>
-                !excludedClaimIds.has(entry.claim.claim_entity_id) &&
-                isClaimSpaceAllowed(entry.claim.space_id, spaceAllowlist)
-            )
-            .map((entry): DebateRematchClaim => {
-              const sessionRow = sessionRowsByClaimId.get(entry.claim.claim_entity_id);
-              return {
-                claim: entry.claim,
-                response_kind: entry.response_kind,
-                participants: sidesOf(entry.claim.claim_entity_id, entry.claim.space_id, entry.response_kind),
-                shared_preference: sessionRow?.shared_preference ?? false,
-                recently_rejected: sessionRow?.recently_rejected ?? false,
-                previously_debated: sessionRow?.previously_debated ?? false,
-                viewer_debate_ready: entry.viewer_debate_ready,
-                readiness_disabled_reason: entry.readiness_disabled_reason,
-              };
-            }),
-    [allowlistPending, browsedPages, excludedClaimIds, sessionRowsByClaimId, sidesOf, spaceAllowlist]
-  );
+  // It is still every claim the picker knows: the session's own rows — what both have answered,
+  // the opponent's and the curated lists — join the pages, so a shared preference the index has
+  // not paged to yet is on the All tab, pinned first as it always was.
+  const browsedRows = React.useMemo(() => {
+    if (allowlistPending) return [];
+    const rows = new Map<string, DebateRematchClaim>();
+    for (const entry of browsedPages.flatMap(page => page.claims)) {
+      const claimId = entry.claim.claim_entity_id;
+      if (excludedClaimIds.has(claimId) || !isClaimSpaceAllowed(entry.claim.space_id, spaceAllowlist)) continue;
+      const sessionRow = sessionRowsByClaimId.get(claimId);
+      rows.set(claimId, {
+        claim: entry.claim,
+        response_kind: entry.response_kind,
+        participants: sidesOf(claimId, entry.claim.space_id, entry.response_kind),
+        shared_preference: sessionRow?.shared_preference ?? false,
+        recently_rejected: sessionRow?.recently_rejected ?? recentlyRejectedClaimIds.has(claimId),
+        previously_debated: sessionRow?.previously_debated ?? false,
+        viewer_debate_ready: entry.viewer_debate_ready,
+        readiness_disabled_reason: entry.readiness_disabled_reason,
+      });
+    }
+    const savedRows = (savedClaimsQuery.data?.claims ?? [])
+      .filter(
+        row =>
+          !excludedClaimIds.has(row.claim.claim_entity_id) && isClaimSpaceAllowed(row.claim.space_id, spaceAllowlist)
+      )
+      .map(row => ({
+        ...row,
+        participants: sidesOf(row.claim.claim_entity_id, row.claim.space_id, row.response_kind),
+      }));
+    for (const row of [...savedRows, ...opponentClaims, ...curatedClaims]) {
+      if (!rows.has(row.claim.claim_entity_id)) rows.set(row.claim.claim_entity_id, row);
+    }
+    return [...rows.values()].sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
+  }, [
+    allowlistPending,
+    browsedPages,
+    curatedClaims,
+    excludedClaimIds,
+    opponentClaims,
+    recentlyRejectedClaimIds,
+    savedClaimsQuery.data,
+    sessionRowsByClaimId,
+    sidesOf,
+    spaceAllowlist,
+  ]);
   // The server re-sorts on every readiness change, so hold the order the viewer is looking at
   // until they ask for a different list.
   const browsedClaims = useStableListOrder(
@@ -410,7 +449,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // picker lands on whichever has something to show first and stays there: once a tab has drawn
   // its list the landing is settled, so a curated page arriving afterwards adds its tab to the
   // strip rather than moving the viewer onto it. Before then Recommended wins as soon as it is
-  // known to exist, since a curator's page for this pairing is the best thing to land on.
+  // known to exist, since a curator's page for this pairing is the best thing to land on — and an
+  // opponent's tab with nothing on it waits for that lookup rather than settling on an empty state.
   const landedTabRef = React.useRef<PickerTab | null>(null);
   const tab: PickerTab = chosenTab ?? landedTabRef.current ?? (hasRecommended ? 'recommended' : 'opponent');
   const setTab = setChosenTab;
@@ -477,7 +517,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     (tab === 'recommended'
       ? recommendedLoading || curatedClaimsQuery.isLoading
       : tab === 'opponent'
-        ? positions.isLoading || opponentEntitiesQuery.isLoading || opponentClaimsQuery.isLoading
+        ? positions.isLoading ||
+          opponentEntitiesQuery.isLoading ||
+          opponentClaimsQuery.isLoading ||
+          (landedTabRef.current === null && claims.length === 0 && recommendedLoading)
         : browsedClaimsQuery.isLoading);
 
   const tabError =
@@ -488,11 +531,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ? browsedClaimsQuery.error
         : curatedClaimsQuery.error);
 
-  // Settle the landing tab once it has drawn its list (see `landedTabRef`).
+  // Settle the landing tab once it has drawn its list (see `landedTabRef`). An empty tab settles
+  // nothing: it is still the default, and Recommended may yet take over.
+  const tabHasRows = claims.length > 0;
   React.useEffect(() => {
-    if (chosenTab !== null || landedTabRef.current !== null || tabIsLoading) return;
+    if (chosenTab !== null || landedTabRef.current !== null || tabIsLoading || !tabHasRows) return;
     landedTabRef.current = tab;
-  }, [chosenTab, tab, tabIsLoading]);
+  }, [chosenTab, tab, tabHasRows, tabIsLoading]);
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
   const visibleSections = React.useMemo(() => {

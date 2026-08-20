@@ -697,6 +697,10 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     const tab = screen.getByRole('button', { name: /Salina’s positions/ });
     expect(within(tab).getByText('2')).toBeInTheDocument();
+    // geo-chat's settled batch has no row for it, so it has no readiness row: not ready, drawn
+    // without spending a per-space request to find that out.
+    expect(screen.getAllByRole('switch', { name: 'Ready to debate this claim' })).toHaveLength(2);
+    expect(mocks.perSpaceReadinessGroups.every(groups => groups.length === 0)).toBe(true);
     // Hydrated by id — exactly the claims the graph named, nothing paged.
     expect(mocks.entityIdLookups.at(-1)).toEqual([CLAIM_SHARED, FRESH]);
     // And the graph was asked about exactly these two people.
@@ -827,6 +831,39 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('button', { name: 'Recommended' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull();
+  });
+
+  // An opponent's tab with nothing on it is no place to land while a curator's page may still be
+  // on its way; it waits, and Recommended takes the landing once it is known to exist.
+  it('waits on the curated lookup while the opponent has nothing to show, then lands on Recommended', async () => {
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.positions = [];
+    mocks.recommendedLoading = true;
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByText(/hasn’t responded/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Recommended' })).toBeInTheDocument();
+
+    mocks.recommendedLoading = false;
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_MORE] }];
+    mocks.recommendedEntities = [publishedEntity()];
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Recommended' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
+  });
+
+  // A claim either side turned down recently still lists — with its request disabled and saying
+  // why — whether the row came from geo-chat or from the hub's index, which knows nothing of it.
+  it('keeps a recently rejected claim listed with its request disabled', () => {
+    mocks.claims = [];
+    mocks.session = session({ recently_rejected_claim_ids: [CLAIM_SHARED] });
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('Recently rejected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
   });
 
   // The hub's query takes a space, so the space filter runs server-side on the All tab; topics are
@@ -977,15 +1014,6 @@ describe('DebateRematchPageClient', () => {
     expect(within(tab).getByText('0')).toBeInTheDocument();
   });
 
-  // The browsed scan is graph-wide; asking geo-chat about claims the picker will drop spends a
-  // batch of round trips on rows nobody sees.
-  it('keeps disallowed claims out of the geo-chat lookup entirely', () => {
-    mocks.spaceAllowlist = new Set([SPACE_1.replace(/-/g, '')]);
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    expect(mocks.rematchClaimIds.flat()).not.toContain(CLAIM_MORE);
-  });
-
   // Listing a pool and trimming it once the allowlist lands means claims appear and then vanish
   // under the viewer. Every list waits; the count waits with it, so the tab can't advertise a
   // position it is about to drop.
@@ -1034,15 +1062,6 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.queryByText('A claim both participants chose')).toBeNull();
-  });
-
-  // Nor does it spend a batch of geo-chat round trips on a pool it is about to throw away.
-  it('holds the geo-chat lookup while the allowlist is still resolving', () => {
-    mocks.spaceAllowlist = null;
-    mocks.allowlistLoading = true;
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    expect(mocks.rematchClaimIds.flat()).not.toContain(CLAIM_MORE);
   });
 
   // A lookup that settles without an answer must not leave the picker permanently empty.
@@ -1135,7 +1154,7 @@ describe('DebateRematchPageClient', () => {
       expect(mocks.gatewaySpaceScopes.filter(scope => scope.enabled).at(-1)?.spaceIds).toEqual([SPACE_1]);
 
       showAllClaims();
-      expect(mocks.gatewaySpaceScopes.filter(scope => scope.enabled).at(-1)?.spaceIds).toEqual([SPACE_2]);
+      expect(mocks.gatewaySpaceScopes.filter(scope => scope.enabled).at(-1)?.spaceIds).toEqual([SPACE_1, SPACE_2]);
     });
 
     it('shows the toggle off for a claim it reports as not ready', () => {
