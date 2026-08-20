@@ -34,7 +34,14 @@ import { Text } from '~/design-system/text';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
-import { type CommentDensity, PAGE_DENSITY, PANEL_DENSITY, threadSpineOffsetPx } from './comment-density';
+import {
+  avatarBottomInRowPx,
+  type CommentDensity,
+  PAGE_DENSITY,
+  PANEL_DENSITY,
+  threadArmCenterPx,
+  threadSpineOffsetPx,
+} from './comment-density';
 import type { CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
 const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
@@ -759,7 +766,8 @@ function CommentList({
   // were originally drawn against.
   const density = useCommentDensity();
   const spineOffsetPx = threadSpineOffsetPx(density);
-  const armY = density.avatarCenterPx - 0.5;
+  const armCenterPx = threadArmCenterPx(density);
+  const armY = armCenterPx - 0.5;
   const elbowRadius = Math.min(9.5, Math.max(0, armY));
   const elbowPath = `M 0.5 0 L 0.5 ${armY - elbowRadius} Q 0.5 ${armY}, ${0.5 + elbowRadius} ${armY} L ${spineOffsetPx} ${armY}`;
 
@@ -825,13 +833,13 @@ function CommentList({
                       left: `${-spineOffsetPx}px`,
                       top: '-2px',
                       width: `${spineOffsetPx}px`,
-                      height: `${density.avatarCenterPx + 6}px`,
+                      height: `${armCenterPx + 6}px`,
                     }}
                   >
                     <svg
                       className="pointer-events-none overflow-visible"
-                      style={{ width: `${spineOffsetPx}px`, height: `${density.avatarCenterPx}px` }}
-                      viewBox={`0 0 ${spineOffsetPx} ${density.avatarCenterPx}`}
+                      style={{ width: `${spineOffsetPx}px`, height: `${armCenterPx}px` }}
+                      viewBox={`0 0 ${spineOffsetPx} ${armCenterPx}`}
                       fill="none"
                     >
                       <path
@@ -849,9 +857,9 @@ function CommentList({
                       left: `${-spineOffsetPx}px`,
                       top: 0,
                       width: `${spineOffsetPx}px`,
-                      height: `${density.avatarCenterPx}px`,
+                      height: `${armCenterPx}px`,
                     }}
-                    viewBox={`0 0 ${spineOffsetPx} ${density.avatarCenterPx}`}
+                    viewBox={`0 0 ${spineOffsetPx} ${armCenterPx}`}
                     fill="none"
                   >
                     <path
@@ -875,7 +883,7 @@ function CommentList({
                   className="comment-branch-hit comment-branch-parent-hit pointer-events-auto absolute -translate-y-1/2 cursor-pointer border-0 bg-transparent p-0"
                   style={{
                     left: `${-spineOffsetPx}px`,
-                    top: `${density.avatarCenterPx}px`,
+                    top: `${armCenterPx}px`,
                     width: `${spineOffsetPx}px`,
                     height: '12px',
                   }}
@@ -897,7 +905,7 @@ function CommentList({
                   )}
                   style={{
                     left: `${-spineOffsetPx}px`,
-                    top: `${density.avatarCenterPx}px`,
+                    top: `${armCenterPx}px`,
                     width: `${spineOffsetPx}px`,
                   }}
                 />
@@ -1031,12 +1039,12 @@ function CommentItem({
       const commentRect = commentRef.current.getBoundingClientRect();
       const repliesRect = repliesRef.current.getBoundingClientRect();
       // The spine starts below the avatar, so drop that much off its length.
-      setParentLineHeight(repliesRect.top - commentRect.top - density.avatarPx);
+      setParentLineHeight(repliesRect.top - commentRect.top - avatarBottomInRowPx(density));
     }
   }, [hasReplies, threadCollapsed, replies.length, isEditing, isReplying, density.avatarPx]);
 
   const expandedHeaderRow = (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3" style={{ minHeight: density.headerMinHeightPx }}>
       <div
         className="flex shrink-0 items-center justify-center"
         style={{ width: density.avatarPx, height: density.avatarPx }}
@@ -1092,8 +1100,8 @@ function CommentItem({
               : {})}
             className={
               hasReplies
-                ? 'comment-branch-parent-hit min-h-8 min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0'
-                : 'min-h-8 min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0'
+                ? 'comment-branch-parent-hit min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0'
+                : 'min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0'
             }
           />
         )}
@@ -1216,7 +1224,7 @@ function CommentItem({
   return (
     <div ref={commentRef} className={cx('relative', !isLast && 'mb-6')}>
       {threadCollapsed ? (
-        <div className="flex min-h-8 items-center gap-3">
+        <div className="flex items-center gap-3" style={{ minHeight: density.headerMinHeightPx }}>
           <div className="flex shrink-0 items-center justify-center" style={{ width: density.avatarPx }}>
             {showThreadToggle && (
               <button
@@ -1232,7 +1240,10 @@ function CommentItem({
               </button>
             )}
           </div>
-          <div className="flex min-h-8 min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
+          <div
+            className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden"
+            style={{ minHeight: density.headerMinHeightPx }}
+          >
             <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
               <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
             </a>
@@ -1246,7 +1257,8 @@ function CommentItem({
                 aria-expanded={false}
                 aria-label={hasReplies ? 'Expand comment thread' : 'Expand comment'}
                 onClick={() => toggleThreadCollapsed(comment.id)}
-                className="min-h-8 min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0"
+                style={{ minHeight: density.headerMinHeightPx }}
+                className="min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0"
               />
             )}
           </div>
@@ -1266,7 +1278,7 @@ function CommentItem({
               style={{
                 left: `${density.avatarCenterPx}px`,
                 // Starts just below the avatar it descends from.
-                top: `${density.avatarPx}px`,
+                top: `${avatarBottomInRowPx(density)}px`,
                 height: `${parentLineHeight}px`,
                 width: `${COMMENT_THREAD_LINE_HIT_PX}px`,
               }}
