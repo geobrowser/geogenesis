@@ -1,6 +1,7 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -17,9 +18,9 @@ import {
   type MatchmakingTopic,
 } from '~/core/debates/api';
 import { type ClaimPickerEntity, useClaimPickerPage } from '~/core/debates/claim-picker-page';
+import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
-import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
@@ -477,18 +478,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // Below the entity side panel (z-200) on purpose: a claim opens there rather than navigating,
     // and the panel has to land on top. Still above the navbar (z-60) and the app's z-100 band, so
     // the session keeps the screen to itself.
-    <div className="fixed inset-0 z-[150] overflow-y-auto bg-white text-text">
+    // `overflow-x-hidden` is load-bearing, not tidying: CSS computes the other axis to `auto` as
+    // soon as one of them isn't `visible`, so `overflow-y-auto` alone left this layer horizontally
+    // scrollable. Anything wider than the viewport — the tab strip, on a phone — panned the whole
+    // screen sideways instead of scrolling itself.
+    <div className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
       <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 py-8 sm:px-8">
         <header className="mb-4 flex items-center justify-between gap-4">
           <h1 className="sr-only">Rematch {remoteName}</h1>
-          <div className="flex min-w-0 items-center gap-5">
+          {/* Scrolls on its own: `min-w-0` lets it be narrower than its tabs, `overflow-x-auto`
+              gives those tabs somewhere to go, and `overscroll-x-contain` stops a swipe that
+              reaches the end from chaining into the browser's back gesture. */}
+          <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-5 overflow-x-auto overscroll-x-contain">
             {hasRecommended || recommendedLoading ? (
               <TabButton active={tab === 'recommended'} onClick={() => setTab('recommended')}>
                 Recommended
               </TabButton>
             ) : null}
             <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
-              <span className="truncate">{firstNamePossessive(remoteName)} positions</span>
+              <span className="max-w-[10rem] truncate">{firstNamePossessive(remoteName)} positions</span>
               <span
                 className={cx(
                   'inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
@@ -1038,7 +1046,9 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       onClick={onClick}
       aria-selected={active}
       className={cx(
-        'flex items-center gap-2 text-[1.4rem] leading-tight font-medium transition-colors',
+        // `shrink-0` so a narrow screen scrolls the strip rather than squeezing three tabs into
+        // the width of one; `whitespace-nowrap` so a two-word tab can't wrap into two lines.
+        'flex shrink-0 items-center gap-2 text-[1.4rem] leading-tight font-medium whitespace-nowrap transition-colors',
         active ? 'text-text' : 'text-grey-03 hover:text-grey-04'
       )}
     >
