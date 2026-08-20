@@ -769,7 +769,11 @@ function StepInterestedIn({
       </div>
       <Button
         onClick={onCompleteOnboard}
-        className="min-h-6 w-full rounded-md bg-ctaHover pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal"
+        disabled={selectedTopicIds.length === 0}
+        className={cx(
+          'min-h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal',
+          selectedTopicIds.length > 0 && 'bg-ctaHover'
+        )}
       >
         Create profile
       </Button>
@@ -794,8 +798,12 @@ function StepComplete() {
         <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl!">
           Creating your space...
         </Text>
-        <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base! text-balance">
-          Your space is your area to curate and rank collections, write posts, complete your profile etc.
+        <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
+          Your space is your area to curate and rank
+          <br />
+          collections, write posts, complete your
+          <br />
+          profile etc.
         </Text>
       </div>
     </StepContents>
