@@ -3,7 +3,6 @@
 import { usePrivy } from '@geogenesis/auth';
 import {
   type QueryClient,
-  type QueryFilters,
   type UseQueryResult,
   useMutation,
   useQueries,
@@ -68,7 +67,11 @@ import { useDebateAttention } from './debate-attention';
 import { markEnteringDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
-import { isRematchClaimsQueryKey } from './rematch-claims-query-key';
+import {
+  isRematchClaimsQueryKey,
+  refreshRematchClaimBatches,
+  rematchClaimBatchesWithClaim,
+} from './rematch-claims-query-key';
 
 export const debateQueryNetworkOptions = {
   retry: false,
@@ -249,44 +252,6 @@ function claimIdHash(claimId: string) {
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return hash;
-}
-
-/**
- * Filters for the rematch claim batches that carry `claimId` — plus the id-less session list,
- * which any response can add a row to. The batches that don't name the claim learned nothing.
- */
-export function rematchClaimBatchesWithClaim(accountKey: string | null, claimId: string, sessionId?: string) {
-  return {
-    predicate: (query: { queryKey: readonly unknown[] }) => {
-      const { queryKey } = query;
-      if (!isRematchClaimsQueryKey(queryKey) || queryKey[2] !== accountKey) return false;
-      if (sessionId !== undefined && queryKey[4] !== sessionId) return false;
-      const ids = queryKey[6];
-      return !Array.isArray(ids) || ids.length === 0 || ids.includes(claimId);
-    },
-  };
-}
-
-/**
- * Refresh rematch claim batches without restarting a request that is about to land.
- *
- * Invalidating cancels an in-flight fetch by default, which throws away a request that was about
- * to answer — and when changes arrive faster than the round trips complete, means none of them
- * ever land. A batch in flight is left to land, since its answer is still worth putting on screen,
- * and is then asked again so what the viewer ends up looking at postdates the change that prompted
- * this. The gateway does the same on its own flushes; these are the same batches.
- */
-function refreshRematchClaimBatches(queryClient: QueryClient, filters: QueryFilters) {
-  const inFlight = queryClient.getQueryCache().findAll({ ...filters, fetchStatus: 'fetching' });
-  const refreshed = queryClient.invalidateQueries(filters, { cancelRefetch: false });
-  if (inFlight.length === 0) return refreshed;
-
-  return refreshed.finally(() =>
-    queryClient.refetchQueries(
-      { type: 'active', predicate: query => inFlight.some(batch => batch.queryHash === query.queryHash) },
-      { cancelRefetch: false }
-    )
-  );
 }
 
 /**
