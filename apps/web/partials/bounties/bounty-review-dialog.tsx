@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import type { BountyReview } from '~/core/bounties/fetch-submissions';
 import type { GroupedSubmission } from '~/core/bounties/group-submissions';
-import { formatPayoutRange, formatPoints, payoutRange } from '~/core/bounties/payout';
+import { formatPayoutRange, payoutRange } from '~/core/bounties/payout';
 import { type ReviewRatings, starsToRating } from '~/core/bounties/review-ops';
 import type { BoardBounty } from '~/core/bounties/types';
 import type { ReviewOutcome, ReviewSubmitInput } from '~/core/bounties/use-review-payout-actions';
@@ -35,9 +35,9 @@ export type ReviewFormState = {
  * First problem with the form, or null. Ratings must all be set. The payout is
  * optional (curator-app's rule): blank ⇒ the review is saved with no payout and
  * the submission is not marked paid; if entered it must be a positive whole
- * number within the space's available points.
+ * number.
  */
-export function validateReviewForm(state: ReviewFormState, availablePoints: number | null): string | null {
+export function validateReviewForm(state: ReviewFormState): string | null {
   if (RATING_LABELS.some(({ key }) => state.stars[key] < 1)) return 'Rate every category before submitting.';
   if (!state.pass) return null;
   const trimmed = state.payoutAmount.trim();
@@ -45,9 +45,6 @@ export function validateReviewForm(state: ReviewFormState, availablePoints: numb
   const amount = Number(trimmed);
   if (!Number.isInteger(amount) || amount <= 0) {
     return 'Payout must be a positive whole number of points — or leave it blank to save the review without a payout.';
-  }
-  if (availablePoints != null && amount > availablePoints) {
-    return `Payout exceeds the space's available points (${formatPoints(availablePoints)}).`;
   }
   return null;
 }
@@ -66,8 +63,6 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   onSubmit: (input: ReviewSubmitInput) => Promise<ReviewOutcome>;
   busy: boolean;
-  /** Space points available for payout, when known. */
-  availablePoints: number | null;
   /** Reviews already published for this submission's proposal set. */
   existingReviews?: BountyReview[];
   /** Names for reviewer space ids, when resolved. */
@@ -90,7 +85,6 @@ export function BountyReviewDialog({
   onOpenChange,
   onSubmit,
   busy,
-  availablePoints,
   existingReviews = [],
   reviewerNames,
   canReview = true,
@@ -112,7 +106,7 @@ export function BountyReviewDialog({
 
   const submit = async () => {
     if (!submission) return;
-    const problem = validateReviewForm(state, availablePoints);
+    const problem = validateReviewForm(state);
     if (problem) return setError(problem);
     setError(null);
     const outcome = await onSubmit({
@@ -234,7 +228,6 @@ export function BountyReviewDialog({
                     />
                     <Text variant="footnote" color="grey-04">
                       {hasBudget ? `Suggested range ${formatPayoutRange(range)}. ` : ''}
-                      {availablePoints != null ? `${formatPoints(availablePoints)} points available. ` : ''}
                       Leave blank to save the review without a payout.
                     </Text>
                   </label>

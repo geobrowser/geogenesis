@@ -7,8 +7,6 @@ import * as React from 'react';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
 
-import { CuratorApiError, notifyBountyAllocation, validateBountyAllocation } from './api';
-import type { EntityPick } from './bounty-ops';
 import type { BountyDetail } from './fetch-bounty-detail';
 import {
   buildAllocateOps,
@@ -37,8 +35,9 @@ function publishOnce(
 type ActionState = { pending: boolean; error: string | null };
 
 /**
- * Curator-side interest actions. Interest is authored into the curator's own
- * personal space, so both are direct publishes with no governance.
+ * Curator-side interest actions. Interest is a knowledge-graph relation from
+ * the curator's personal-space system entity to the bounty, authored into the
+ * curator's own personal space — a direct publish with no governance.
  */
 export function useBountyInterestActions(detail: BountyDetail | null | undefined, roles: BountyRoles) {
   const { makeProposal } = usePublish();
@@ -50,18 +49,13 @@ export function useBountyInterestActions(detail: BountyDetail | null | undefined
     [queryClient]
   );
 
-  const person = React.useMemo<EntityPick | null>(
-    () => (roles.personId ? { id: roles.personId, name: null } : null),
-    [roles.personId]
-  );
-
   const expressInterest = React.useCallback(async () => {
-    if (!detail || !person || !roles.personalSpaceId) return false;
+    if (!detail || !roles.personalSpaceId) return false;
     setState({ pending: true, error: null });
     const { relations } = buildExpressInterestOps({
       personalSpaceId: roles.personalSpaceId,
-      person,
       bounty: { id: detail.bounty.id, name: detail.bounty.name },
+      bountySpaceId: detail.bounty.spaceId,
     });
     const ok = await publishOnce(makeProposal, {
       values: [],
@@ -72,14 +66,13 @@ export function useBountyInterestActions(detail: BountyDetail | null | undefined
     if (ok) await invalidate();
     setState({ pending: false, error: ok ? null : 'Could not record your interest.' });
     return ok;
-  }, [detail, invalidate, makeProposal, person, roles.personalSpaceId]);
+  }, [detail, invalidate, makeProposal, roles.personalSpaceId]);
 
   const cancelInterest = React.useCallback(async () => {
-    if (!detail || !person || !roles.personalSpaceId || roles.ownInterestRows.length === 0) return false;
+    if (!detail || !roles.personalSpaceId || roles.ownInterestRows.length === 0) return false;
     setState({ pending: true, error: null });
     const { relations } = buildCancelInterestOps({
       personalSpaceId: roles.personalSpaceId,
-      person,
       bounty: { id: detail.bounty.id, name: detail.bounty.name },
       ownInterestRows: roles.ownInterestRows,
     });
@@ -95,45 +88,28 @@ export function useBountyInterestActions(detail: BountyDetail | null | undefined
     }
     setState({ pending: false, error: ok ? null : 'Could not withdraw your interest.' });
     return ok;
-  }, [detail, invalidate, makeProposal, person, roles.ownInterestRows, roles.personalSpaceId]);
+  }, [detail, invalidate, makeProposal, roles.ownInterestRows, roles.personalSpaceId]);
 
   return { ...state, expressInterest, cancelInterest };
 }
 
-export type AllocationResult =
-  | { status: 'allocated'; notified: boolean; reason?: string | null }
-  | { status: 'rejected'; reason: string }
-  | { status: 'failed'; reason: string };
-
-/** curator-backend's `reason` codes for an unsent allocation email, in plain words. */
-export function describeNotifyReason(reason: string): string {
-  switch (reason) {
-    case 'email-not-configured':
-      return 'the curator service has no email provider configured';
-    case 'email-not-found':
-      return 'no email is known for this curator';
-    case 'already-sent':
-      return 'they were already notified for this allocation';
-    case 'already-processing':
-      return 'a notification is already in flight';
-    case 'email-send-failed':
-      return 'the email provider rejected the message';
-    default:
-      return reason;
-  }
-}
+export type CuratorTarget = {
+  /** The curator's personal space id — its system entity is the allocation target. */
+  spaceId: string;
+  name: string | null;
+};
 
 /**
- * Editor-side allocation, three steps mirroring curator-app:
- * 1. curator-backend validate — FAIL CLOSED (editor, duplicate, max-contributors);
- * 2. publish the Allocated relation into the DAO space (FAST path);
- * 3. curator-backend notification email — failure tolerated, the allocation stands.
+ * Editor-side allocation. An allocation is just an `Allocated` relation from
+ * the bounty to the curator's personal-space system entity, published into the
+ * bounty's DAO space (FAST path for editors). No external service is involved;
+ * the max-contributors limit is enforced by the UI before offering the action.
  */
 export function useBountyAllocationActions(detail: BountyDetail | null | undefined) {
   const { makeProposal } = usePublish();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
-  const [pendingPersonId, setPendingPersonId] = React.useState<string | null>(null);
+  const [pendingTargetId, setPendingTargetId] = React.useState<string | null>(null);
 
   const invalidate = React.useCallback(
     () => queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all }),
@@ -141,31 +117,16 @@ export function useBountyAllocationActions(detail: BountyDetail | null | undefin
   );
 
   const allocate = React.useCallback(
-    async (person: EntityPick): Promise<AllocationResult> => {
-      if (!detail) return { status: 'failed', reason: 'Bounty not loaded' };
+    async (curator: CuratorTarget): Promise<boolean> => {
+      if (!detail) return false;
       const { bounty } = detail;
-      setPendingPersonId(person.id);
+      setPendingTargetId(curator.spaceId);
       try {
-        try {
-          const validation = await validateBountyAllocation({
-            spaceId: bounty.spaceId,
-            bountyId: bounty.id,
-            allocatedPersonId: person.id,
-          });
-          if (!validation.ok) {
-            setToast(<>Allocation was rejected by the curator service.</>);
-            return { status: 'rejected', reason: 'Validation failed' };
-          }
-        } catch (error) {
-          const reason = error instanceof CuratorApiError ? error.message : 'Curator service unavailable';
-          setToast(<>Couldn&apos;t validate this allocation: {reason}</>);
-          return { status: 'rejected', reason };
-        }
-
-        const { relationId, relations } = buildAllocateOps({
+        const { relations } = buildAllocateOps({
           daoSpaceId: bounty.spaceId,
           bounty: { id: bounty.id, name: bounty.name },
-          person,
+          curatorSpaceId: curator.spaceId,
+          curatorName: curator.name,
         });
         const ok = await publishOnce(makeProposal, {
           values: [],
@@ -173,61 +134,30 @@ export function useBountyAllocationActions(detail: BountyDetail | null | undefin
           spaceId: bounty.spaceId,
           name: `Allocate bounty: ${bounty.name}`,
         });
-        if (!ok) return { status: 'failed', reason: 'Publish failed' };
-
-        let notified = false;
-        let notifyReason: string | null = null;
-        try {
-          const result = await notifyBountyAllocation({
-            spaceId: bounty.spaceId,
-            bountyId: bounty.id,
-            allocatedPersonId: person.id,
-            allocatedRelationId: relationId,
-          });
-          notified = result.sent;
-          notifyReason = result.reason;
-        } catch (error) {
-          notified = false;
-          notifyReason = error instanceof CuratorApiError ? error.message : 'curator service unreachable';
+        if (ok) {
+          await invalidate();
+          setToast(<>Allocated {curator.name ?? 'the curator'}.</>);
         }
-        if (!notified) {
-          console.warn('[bounties] allocation notification not sent', {
-            bountyId: bounty.id,
-            allocatedPersonId: person.id,
-            reason: notifyReason,
-          });
-        }
-        await invalidate();
-        setToast(
-          notified ? (
-            <>Allocated and notified {person.name ?? 'the curator'}.</>
-          ) : (
-            <>
-              Allocated {person.name ?? 'the curator'}. The notification email was not sent
-              {notifyReason ? ` (${describeNotifyReason(notifyReason)})` : ''}.
-            </>
-          )
-        );
-        return { status: 'allocated', notified, reason: notifyReason };
+        return ok;
       } finally {
-        setPendingPersonId(null);
+        setPendingTargetId(null);
       }
     },
     [detail, invalidate, makeProposal, setToast]
   );
 
   const remove = React.useCallback(
-    async (person: EntityPick): Promise<boolean> => {
+    async (targetId: string): Promise<boolean> => {
       if (!detail) return false;
       const { bounty } = detail;
       const { relations } = buildRemoveAllocationOps({
         daoSpaceId: bounty.spaceId,
         bounty: { id: bounty.id, name: bounty.name },
-        person,
+        targetId,
         existingRelations: detail.allocationRelations,
       });
       if (relations.length === 0) return false;
-      setPendingPersonId(person.id);
+      setPendingTargetId(targetId);
       try {
         const ok = await publishOnce(makeProposal, {
           values: [],
@@ -241,11 +171,11 @@ export function useBountyAllocationActions(detail: BountyDetail | null | undefin
         }
         return ok;
       } finally {
-        setPendingPersonId(null);
+        setPendingTargetId(null);
       }
     },
     [detail, invalidate, makeProposal]
   );
 
-  return { allocate, remove, pendingPersonId };
+  return { allocate, remove, pendingTargetId };
 }

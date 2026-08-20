@@ -1,21 +1,19 @@
 'use client';
 
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 import Textarea from 'react-textarea-autosize';
 
-import { getSpaceMetrics } from '~/core/bounties/api';
 import {
   type BountyFields,
   type EntityPick,
   buildCreateBountyOps,
   buildUpdateBountyOps,
 } from '~/core/bounties/bounty-ops';
-import { CURATOR_API_BASE_URL } from '~/core/bounties/config';
 import {
   DIFFICULTIES,
   type DifficultyKey,
@@ -26,7 +24,6 @@ import {
   isWorkflowStatusKey,
   statusKeyForId,
 } from '~/core/bounties/labels';
-import { formatPoints } from '~/core/bounties/payout';
 import { reconcileDeletedRelations } from '~/core/bounties/reconcile-store';
 import type { BoardBounty } from '~/core/bounties/types';
 import { bountyQueryKeys } from '~/core/bounties/use-bounties';
@@ -86,9 +83,6 @@ export function validateBountyForm(input: {
   maxContributors: string;
   maxSubmissionsPerPerson: string;
   deadline: string;
-  availableBalance: number | null;
-  /** In edit mode the current budget is already reserved and comes back if raised. */
-  reservedBudget: number;
 }):
   | { ok: true; budget: number | null; maxContributors: number | null; maxSubmissionsPerPerson: number | null }
   | { ok: false; message: string } {
@@ -96,12 +90,6 @@ export function validateBountyForm(input: {
 
   const budget = parseOptionalNumber(input.budget);
   if (budget === 'invalid') return { ok: false, message: 'Budget must be a positive number of points.' };
-  if (budget != null && input.availableBalance != null && budget - input.reservedBudget > input.availableBalance) {
-    return {
-      ok: false,
-      message: `Budget cannot exceed the space's available points (${formatPoints(input.availableBalance + input.reservedBudget)}).`,
-    };
-  }
 
   const maxContributors = parseOptionalNumber(input.maxContributors);
   if (maxContributors === 'invalid' || (maxContributors != null && !Number.isInteger(maxContributors))) {
@@ -151,19 +139,6 @@ export function BountyForm(props: Props) {
   const [maintainers, setMaintainers] = React.useState<EntityPick[]>(initial?.bounty.maintainers ?? []);
   const [submitting, setSubmitting] = React.useState(false);
 
-  // Available points come from curator-backend (ledger balance minus open bounty
-  // budgets). When the backend is unreachable the check is skipped, never blocked:
-  // the budget is advisory until allocation/payout, which are the enforced steps.
-  const metrics = useQuery({
-    queryKey: ['bounties', 'space-metrics', spaceId],
-    enabled: !!CURATOR_API_BASE_URL,
-    staleTime: 15_000,
-    retry: false,
-    queryFn: () => getSpaceMetrics(spaceId),
-  });
-  const availableBalance = metrics.data?.balance ?? null;
-  const reservedBudget = initial?.bounty.budget ?? 0;
-
   const isEasy = difficulty === 'easy';
   const backHref = initial ? NavUtils.toBounty(spaceId, initial.bounty.id) : NavUtils.toSpaceBounties(spaceId);
 
@@ -174,8 +149,6 @@ export function BountyForm(props: Props) {
       maxContributors,
       maxSubmissionsPerPerson,
       deadline,
-      availableBalance,
-      reservedBudget,
     });
     if (!validation.ok) return setToast(<>{validation.message}</>);
 
@@ -313,13 +286,6 @@ export function BountyForm(props: Props) {
             placeholder={isEasy ? 'Paid in full per submission' : 'Total for all contributors'}
             className={fieldClass}
           />
-          <Text variant="footnote" color="grey-04">
-            {availableBalance != null
-              ? `${formatPoints(availableBalance + reservedBudget)} points available in this space.`
-              : metrics.isError
-                ? 'Available points unavailable right now — the budget will be checked at payout.'
-                : ' '}
-          </Text>
         </label>
         <label className="flex flex-col gap-1">
           <Text variant="metadataMedium">Submission deadline</Text>

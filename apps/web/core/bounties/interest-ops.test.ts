@@ -10,53 +10,63 @@ import {
 } from './interest-ops';
 import { BOUNTY_ALLOCATED_PROPERTY_ID, INTERESTED_IN_BOUNTY_PROPERTY_ID } from './ontology';
 
-const person = { id: 'person-1', name: 'Alice' };
 const bounty = { id: 'bounty-1', name: 'Add drugs' };
 
 describe('interest ops', () => {
-  it('expresses interest as person→bounty in the personal space without a toSpaceId', () => {
-    const { relationId, relations } = buildExpressInterestOps({ personalSpaceId: 'personal-1', person, bounty });
+  it('expresses interest as personal-space entity→bounty in the personal space, with the bounty space as toSpaceId', () => {
+    const { relationId, relations } = buildExpressInterestOps({
+      personalSpaceId: 'personal-1',
+      bounty,
+      bountySpaceId: 'dao-1',
+    });
     expect(relations).toHaveLength(1);
     const [rel] = relations;
     expect(rel.id).toBe(relationId);
     expect(rel).toMatchObject({
       spaceId: 'personal-1',
-      fromEntity: { id: 'person-1' },
+      toSpaceId: 'dao-1',
+      fromEntity: { id: 'personal-1' },
       toEntity: { id: 'bounty-1' },
       type: { id: INTERESTED_IN_BOUNTY_PROPERTY_ID },
       isLocal: true,
     });
-    expect(rel.toSpaceId).toBeUndefined();
     expect(rel.isDeleted).toBeUndefined();
   });
 
-  it('cancels by tombstoning every own interest row', () => {
+  it('cancels by tombstoning every own interest row, keeping each row identity', () => {
     const { relations } = buildCancelInterestOps({
       personalSpaceId: 'personal-1',
-      person,
       bounty,
       ownInterestRows: [
-        { id: 'row-1', fromEntityId: 'person-1', spaceId: 'personal-1' },
+        // A new-shape row (from the space entity) and a legacy row (from the person entity).
+        { id: 'row-1', fromEntityId: 'personal-1', spaceId: 'personal-1' },
         { id: 'row-2', fromEntityId: 'person-1', spaceId: 'personal-1' },
       ],
     });
     expect(relations.map(r => r.id)).toEqual(['row-1', 'row-2']);
+    expect(relations.map(r => r.fromEntity.id)).toEqual(['personal-1', 'person-1']);
     expect(relations.every(r => r.isDeleted && r.isLocal && r.spaceId === 'personal-1')).toBe(true);
   });
 });
 
 describe('allocation ops', () => {
-  it('allocates as bounty→person in the DAO space', () => {
-    const { relations } = buildAllocateOps({ daoSpaceId: 'dao-1', bounty, person });
+  it('allocates as bounty→personal-space entity in the DAO space, with the personal space as toSpaceId', () => {
+    const { relations } = buildAllocateOps({
+      daoSpaceId: 'dao-1',
+      bounty,
+      curatorSpaceId: 'personal-1',
+      curatorName: 'Alice',
+    });
     expect(relations[0]).toMatchObject({
       spaceId: 'dao-1',
+      toSpaceId: 'personal-1',
       fromEntity: { id: 'bounty-1' },
-      toEntity: { id: 'person-1' },
+      toEntity: { id: 'personal-1', name: 'Alice' },
       type: { id: BOUNTY_ALLOCATED_PROPERTY_ID },
     });
   });
 
-  it('removes only the allocation rows pointing at that person', () => {
+  it('removes only the allocation rows pointing at that target (either identity shape)', () => {
     const existing: Relation[] = [
       {
         id: 'a1',
@@ -74,14 +84,14 @@ describe('allocation ops', () => {
         id: 'a3',
         type: { id: BOUNTY_ALLOCATED_PROPERTY_ID },
         fromEntity: { id: 'bounty-1' },
-        toEntity: { id: 'person-2' },
+        toEntity: { id: 'personal-2' },
       },
       { id: 'other', type: { id: 'x' }, fromEntity: { id: 'bounty-1' }, toEntity: { id: 'person-1' } },
     ] as unknown as Relation[];
     const { relations } = buildRemoveAllocationOps({
       daoSpaceId: 'dao-1',
       bounty,
-      person,
+      targetId: 'person-1',
       existingRelations: existing,
     });
     expect(relations.map(r => r.id)).toEqual(['a1', 'a2']);

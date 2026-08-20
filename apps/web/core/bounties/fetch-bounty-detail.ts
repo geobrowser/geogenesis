@@ -37,9 +37,21 @@ function toBacklink(relation: { id: string; fromEntityId: string; spaceId: strin
   return { id: relation.id, fromEntityId: relation.fromEntityId, spaceId: relation.spaceId };
 }
 
-/** Distinct interested curators (a curator may hold duplicate interest rows). */
-export function distinctInterestedIds(interest: readonly BountyBacklink[]): string[] {
-  return [...new Set(interest.map(row => uuidToHex(row.fromEntityId)))];
+/**
+ * The allocation target for an interest row: the curator's personal space id.
+ * New rows are authored from the personal-space system entity in the curator's
+ * own personal space, so both sides agree; legacy person-entity rows were also
+ * written into the curator's personal space, so the row's spaceId is the
+ * target. Rows authored into the bounty's own DAO space (an earlier geogenesis
+ * shape) already point from the personal-space entity.
+ */
+export function interestAllocationTarget(row: BountyBacklink, bountySpaceId: string): string {
+  return uuidToHex(row.spaceId) === uuidToHex(bountySpaceId) ? uuidToHex(row.fromEntityId) : uuidToHex(row.spaceId);
+}
+
+/** Distinct interested curators, deduped across relation shapes by their personal space id. */
+export function distinctInterestedIds(interest: readonly BountyBacklink[], bountySpaceId: string): string[] {
+  return [...new Set(interest.map(row => interestAllocationTarget(row, bountySpaceId)))];
 }
 
 export function fetchBountyDetail(spaceId: string, bountyId: string) {
@@ -64,7 +76,7 @@ export function fetchBountyDetail(spaceId: string, bountyId: string) {
 
     const interest = interestRelations.map(toBacklink);
     const submissions = submissionRelations.map(toBacklink);
-    bounty.interestedCount = distinctInterestedIds(interest).length;
+    bounty.interestedCount = distinctInterestedIds(interest, spaceId).length;
     bounty.submissionsCount = submissions.length;
 
     const allocationRelations = (entity.relations ?? []).filter(r => r.type.id === BOUNTY_ALLOCATED_PROPERTY_ID);

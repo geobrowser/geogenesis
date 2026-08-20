@@ -1,6 +1,5 @@
 'use client';
 
-import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -10,10 +9,8 @@ import { Effect } from 'effect';
 import { buildExpressInterestOps } from '~/core/bounties/interest-ops';
 import { INTERESTED_IN_BOUNTY_PROPERTY_ID } from '~/core/bounties/ontology';
 import { bountyQueryKeys } from '~/core/bounties/use-bounties';
-import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { getRelationsByToEntityIds } from '~/core/io/queries';
 
 const INTERESTED_IN_QUERY_KEY = 'bounty-interested-in';
@@ -57,15 +54,11 @@ type ProposeInterestArgs = {
  * Registers interest in a bounty: one `Interested In` relation, published into the
  * viewer's personal space.
  *
- * Write shape — deliberately the same as curator-app's `create-interested-in-bounty-relation.ts`
- * and every interest row already on testnet: `person entity → bounty`, no `toSpaceId`.
- * An earlier geogenesis build authored this from the personal space's *system* entity
- * (the entity whose id is the space id) with a `toSpaceId`; we chose the curator shape
- * so the two apps produce identical rows and neither app's readers need to special-case
- * the other. Readers on both sides accept both shapes (see `useBountyRoles` /
- * `buildBountyAllocationTargets`), so rows written by the old build still count. The
- * person entity falls back to the space's system entity only when no profile entity
- * exists — the same fallback curator-app's profile resolution makes.
+ * Write shape — the standardized geogenesis shape: `personal-space system entity
+ * (the entity whose id is the space id) → bounty`, with `toSpaceId` set to the
+ * bounty's DAO space. Legacy rows on testnet use curator-app's person-entity
+ * shape with no `toSpaceId`; readers on both sides accept both (see
+ * `useBountyRoles` / `buildBountyAllocationTargets`), so old rows still count.
  *
  * Ops are built by `buildExpressInterestOps` (shared with the bounty detail page) and
  * handed straight to `makeProposal`, like the rest of the bounty writes.
@@ -73,8 +66,6 @@ type ProposeInterestArgs = {
 export function useInterestedInBounty() {
   const { makeProposal } = usePublish();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const { smartAccount } = useSmartAccount();
-  const { profile } = useGeoProfile(smartAccount?.account.address);
   const queryClient = useQueryClient();
   const [pendingBountyId, setPendingBountyId] = React.useState<string | null>(null);
   // Bounties already submitted this session. The interested-in query only refreshes
@@ -86,19 +77,17 @@ export function useInterestedInBounty() {
   const canRegisterInterest = Boolean(personalSpaceId && isRegistered);
 
   const registerInterest = React.useCallback(
-    async ({ bountyId, bountyName }: ProposeInterestArgs) => {
+    async ({ bountyId, bountyName, bountySpaceId }: ProposeInterestArgs) => {
       if (!personalSpaceId || !isRegistered) return;
       if (submittedBountyIds.current.has(bountyId)) return;
 
       submittedBountyIds.current.add(bountyId);
       setPendingBountyId(bountyId);
 
-      const personEntityId =
-        profile?.id && IdUtils.isValid(profile.id) && profile.id !== profile.spaceId ? profile.id : personalSpaceId;
       const { relations } = buildExpressInterestOps({
         personalSpaceId,
-        person: { id: personEntityId, name: profile?.name ?? null },
         bounty: { id: bountyId, name: bountyName },
+        bountySpaceId,
       });
 
       try {
@@ -120,7 +109,7 @@ export function useInterestedInBounty() {
         setPendingBountyId(null);
       }
     },
-    [isRegistered, makeProposal, personalSpaceId, profile, queryClient]
+    [isRegistered, makeProposal, personalSpaceId, queryClient]
   );
 
   return { registerInterest, pendingBountyId, canRegisterInterest };

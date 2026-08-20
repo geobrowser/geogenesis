@@ -89,8 +89,6 @@ describe('validateBountyForm', () => {
     maxContributors: '',
     maxSubmissionsPerPerson: '',
     deadline: '',
-    availableBalance: null,
-    reservedBudget: 0,
   };
 
   it('requires a name and numeric fields', () => {
@@ -100,18 +98,8 @@ describe('validateBountyForm', () => {
     expect(validateBountyForm({ ...base, deadline: 'nope' })).toMatchObject({ ok: false });
   });
 
-  it('caps the budget at the available balance, crediting back the current budget on edit', () => {
-    expect(validateBountyForm({ ...base, budget: '1500', availableBalance: 1000 })).toMatchObject({ ok: false });
-    expect(validateBountyForm({ ...base, budget: '1000', availableBalance: 1000 })).toMatchObject({
-      ok: true,
-      budget: 1000,
-    });
-    // Editing a 500-point bounty when 1000 remain: up to 1500 is fine.
-    expect(validateBountyForm({ ...base, budget: '1500', availableBalance: 1000, reservedBudget: 500 })).toMatchObject({
-      ok: true,
-    });
-    // No balance known: no cap.
-    expect(validateBountyForm({ ...base, budget: '999999' })).toMatchObject({ ok: true });
+  it('does not cap the budget — the space ledger no longer gates bounty creation', () => {
+    expect(validateBountyForm({ ...base, budget: '999999' })).toMatchObject({ ok: true, budget: 999999 });
   });
 
   it('parses blanks as null', () => {

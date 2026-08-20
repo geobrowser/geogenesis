@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { EntityPick } from '~/core/bounties/bounty-ops';
 import { type BountyDetail, distinctInterestedIds } from '~/core/bounties/fetch-bounty-detail';
 import { useBountyAllocationActions } from '~/core/bounties/use-bounty-actions';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
@@ -29,7 +28,10 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
   const actions = useBountyAllocationActions(detail);
 
   const allocatedIds = React.useMemo(() => [...new Set(detail.bounty.allocatedIds.map(uuidToHex))], [detail]);
-  const interestedIds = React.useMemo(() => distinctInterestedIds(detail.interest), [detail.interest]);
+  const interestedIds = React.useMemo(
+    () => distinctInterestedIds(detail.interest, detail.bounty.spaceId),
+    [detail.interest, detail.bounty.spaceId]
+  );
   const allocatedSet = React.useMemo(() => new Set(allocatedIds), [allocatedIds]);
   const names = useEntityNames([...allocatedIds, ...interestedIds]);
 
@@ -38,7 +40,6 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
 
   const rows = tab === 'allocated' ? allocatedIds : interestedIds;
   const label = (id: string): string => names.data?.get(id)?.trim() || `${id.slice(0, 6)}…${id.slice(-4)}`;
-  const pick = (id: string): EntityPick => ({ id, name: names.data?.get(id) ?? null });
 
   return (
     <section aria-label="Curators" data-testid="bounty-allocation-tabs" className="flex flex-col gap-3">
@@ -64,7 +65,7 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
         <ul className="flex flex-col divide-y divide-grey-02">
           {rows.map(id => {
             const isAllocated = allocatedSet.has(id);
-            const pending = actions.pendingPersonId != null && uuidToHex(actions.pendingPersonId) === id;
+            const pending = actions.pendingTargetId != null && uuidToHex(actions.pendingTargetId) === id;
             return (
               <li key={id} className="flex items-center justify-between gap-3 py-2" data-testid="curator-row">
                 <Link
@@ -75,7 +76,7 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
                 </Link>
                 {roles.isEditor ? (
                   tab === 'allocated' ? (
-                    <SmallButton disabled={pending} onClick={() => void actions.remove(pick(id))}>
+                    <SmallButton disabled={pending} onClick={() => void actions.remove(id)}>
                       {pending ? 'Removing…' : 'Remove'}
                     </SmallButton>
                   ) : isAllocated ? (
@@ -83,7 +84,10 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
                       Allocated
                     </Text>
                   ) : (
-                    <SmallButton disabled={pending || spotsLeft === 0} onClick={() => void actions.allocate(pick(id))}>
+                    <SmallButton
+                      disabled={pending || spotsLeft === 0}
+                      onClick={() => void actions.allocate({ spaceId: id, name: names.data?.get(id) ?? null })}
+                    >
                       {pending ? 'Allocating…' : 'Allocate'}
                     </SmallButton>
                   )

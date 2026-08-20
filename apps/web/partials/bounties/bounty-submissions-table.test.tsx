@@ -32,9 +32,6 @@ function row(overrides: Partial<GroupedSubmission> = {}): GroupedSubmission {
     ...segment,
     creatorName: 'Alice',
     status: 'in-progress',
-    needsPayoutRetry: false,
-    retrySubmissionLifecycleInput: null,
-    segmentInput: segment,
     proposals: [
       {
         entityId: 'p1',
@@ -44,17 +41,13 @@ function row(overrides: Partial<GroupedSubmission> = {}): GroupedSubmission {
         status: 'Accepted',
       },
     ],
-    canRequestReview: false,
     canReviewAndPayout: false,
     ...overrides,
   };
 }
 
 const handlers = () => ({
-  onRequestReview: vi.fn(),
   onOpenReview: vi.fn(),
-  onRetryMarkPaid: vi.fn(),
-  onRetryCredit: vi.fn(),
   onRefresh: vi.fn(),
 });
 
@@ -66,9 +59,7 @@ describe('BountySubmissionsTable', () => {
         submissions={[row(), row({ submissionKey: 'k2', status: 'paid', payoutAmount: 250 })]}
         isLoading={false}
         isError={false}
-        lifecycleUnavailable={false}
         busyKey={null}
-        pendingCredit={null}
         {...handlers()}
       />
     );
@@ -81,64 +72,36 @@ describe('BountySubmissionsTable', () => {
     expect(screen.getByText('Add aspirin')).toHaveAttribute('href', '/space/dao/governance?proposalId=p1');
   });
 
-  it('wires the row actions by permission', () => {
+  it('offers Review only on rows the viewer can review', () => {
     const h = handlers();
-    const retryable = row({
-      submissionKey: 'k3',
-      status: 'paid',
-      needsPayoutRetry: true,
-      retrySubmissionLifecycleInput: segment,
-    });
     render(
       <BountySubmissionsTable
         spaceId="dao"
-        submissions={[
-          row({ canRequestReview: true }),
-          row({ submissionKey: 'k2', canReviewAndPayout: true }),
-          retryable,
-        ]}
+        submissions={[row(), row({ submissionKey: 'k2', canReviewAndPayout: true })]}
         isLoading={false}
         isError={false}
-        lifecycleUnavailable={false}
         busyKey={null}
-        pendingCredit={null}
         {...h}
       />
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Request review' }));
-    expect(h.onRequestReview).toHaveBeenCalledWith(segment);
+    // Only the reviewable row gets a button.
+    expect(screen.getAllByRole('button', { name: 'Review' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Review' }));
     expect(h.onOpenReview).toHaveBeenCalledWith(expect.objectContaining({ submissionKey: 'k2' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mark paid' }));
-    expect(h.onRetryMarkPaid).toHaveBeenCalledWith(segment);
-    expect(screen.getByText('Lifecycle out of sync')).toBeInTheDocument();
   });
 
-  it('surfaces a pending credit banner with retry, and the degraded-lifecycle note', () => {
-    const h = handlers();
+  it('shows the rejected status chip', () => {
     render(
       <BountySubmissionsTable
         spaceId="dao"
-        submissions={[]}
+        submissions={[row({ status: 'rejected' })]}
         isLoading={false}
         isError={false}
-        lifecycleUnavailable
         busyKey={null}
-        pendingCredit={{
-          spaceId: 'dao',
-          amount: 200,
-          bountyId: 'b',
-          payoutEntityId: 'pe',
-          recipientEntityId: 'alice',
-          segment,
-        }}
-        {...h}
+        {...handlers()}
       />
     );
-    expect(screen.getByText(/Review status is unavailable/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry credit' }));
-    expect(h.onRetryCredit).toHaveBeenCalled();
-    expect(screen.getByText('There are no submissions yet.')).toBeInTheDocument();
+    expect(screen.getByText('Rejected')).toBeInTheDocument();
   });
 
   it('shows a review indicator on reviewed rows and a Reviews button for non-editors', () => {
@@ -159,9 +122,7 @@ describe('BountySubmissionsTable', () => {
         reviewsByKey={new Map([['k1', [review]]])}
         isLoading={false}
         isError={false}
-        lifecycleUnavailable={false}
         busyKey={null}
-        pendingCredit={null}
         {...h}
       />
     );

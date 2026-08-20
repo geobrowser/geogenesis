@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Relation } from '~/core/types';
 
-import { CuratorApiError } from './api';
 import type { BountyDetail } from './fetch-bounty-detail';
 import { BOUNTY_ALLOCATED_PROPERTY_ID, INTERESTED_IN_BOUNTY_PROPERTY_ID } from './ontology';
 import { useBountyAllocationActions, useBountyInterestActions } from './use-bounty-actions';
@@ -15,22 +14,12 @@ const mocks = vi.hoisted(() => ({
   makeProposal: vi.fn(),
   invalidateQueries: vi.fn(() => Promise.resolve()),
   setToast: vi.fn(),
-  validate: vi.fn(),
-  notify: vi.fn(),
 }));
 
 vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: mocks.makeProposal }) }));
 vi.mock('./reconcile-store', () => ({ reconcileDeletedRelations: mocks.reconcile }));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.setToast] }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }) }));
-vi.mock('./api', async importOriginal => {
-  const actual = await importOriginal<typeof import('./api')>();
-  return {
-    ...actual,
-    validateBountyAllocation: (...args: unknown[]) => mocks.validate(...args),
-    notifyBountyAllocation: (...args: unknown[]) => mocks.notify(...args),
-  };
-});
 
 const detail: BountyDetail = {
   bounty: {
@@ -76,7 +65,7 @@ const roles: BountyRoles = {
   isAllocated: false,
   isInterested: true,
   ownInterestRows: [
-    { id: 'row-1', fromEntityId: 'person-1', spaceId: 'personal-1' },
+    { id: 'row-1', fromEntityId: 'personal-1', spaceId: 'personal-1' },
     { id: 'row-2', fromEntityId: 'person-1', spaceId: 'personal-1' },
   ],
   isLoading: false,
@@ -93,12 +82,11 @@ beforeEach(() => {
   mocks.makeProposal.mockReset();
   mocks.invalidateQueries.mockClear();
   mocks.setToast.mockClear();
-  mocks.validate.mockReset();
-  mocks.notify.mockReset();
+  mocks.reconcile.mockClear();
 });
 
 describe('useBountyInterestActions', () => {
-  it('publishes a single interest relation into the personal space', async () => {
+  it('publishes a single interest relation from the personal-space entity, with the bounty space as toSpaceId', async () => {
     publishSucceeds();
     const { result } = renderHook(() => useBountyInterestActions(detail, roles));
     let ok = false;
@@ -111,8 +99,9 @@ describe('useBountyInterestActions', () => {
     expect(call.relations).toHaveLength(1);
     expect(call.relations[0]).toMatchObject({
       type: { id: INTERESTED_IN_BOUNTY_PROPERTY_ID },
-      fromEntity: { id: 'person-1' },
+      fromEntity: { id: 'personal-1' },
       toEntity: { id: 'bounty-1' },
+      toSpaceId: 'dao-1',
     });
     expect(mocks.invalidateQueries).toHaveBeenCalled();
   });
@@ -134,7 +123,7 @@ describe('useBountyInterestActions', () => {
     expect(result.current.error).toBe('Could not withdraw your interest.');
   });
 
-  it('does nothing without a person or personal space', async () => {
+  it('does nothing without a personal space', async () => {
     const { result } = renderHook(() => useBountyInterestActions(detail, { ...roles, personalSpaceId: null }));
     await act(async () => {
       expect(await result.current.expressInterest()).toBe(false);
@@ -144,50 +133,43 @@ describe('useBountyInterestActions', () => {
 });
 
 describe('useBountyAllocationActions', () => {
-  const bob = { id: 'person-3', name: 'Bob' };
+  const bob = { spaceId: 'personal-3', name: 'Bob' };
 
-  it('validates first and fails closed when the backend rejects or is unreachable', async () => {
-    mocks.validate.mockResolvedValueOnce({ ok: false });
-    const { result } = renderHook(() => useBountyAllocationActions(detail));
-    await act(async () => {
-      expect(await result.current.allocate(bob)).toMatchObject({ status: 'rejected' });
-    });
-    expect(mocks.makeProposal).not.toHaveBeenCalled();
-
-    mocks.validate.mockRejectedValueOnce(new CuratorApiError('down', 503));
-    await act(async () => {
-      expect(await result.current.allocate(bob)).toMatchObject({ status: 'rejected', reason: 'down' });
-    });
-    expect(mocks.makeProposal).not.toHaveBeenCalled();
-  });
-
-  it('publishes the allocation into the DAO space and tolerates a failed notification', async () => {
-    mocks.validate.mockResolvedValue({ ok: true });
-    mocks.notify.mockRejectedValue(new Error('mail down'));
+  it('publishes the allocation to the personal-space entity into the DAO space', async () => {
     publishSucceeds();
     const { result } = renderHook(() => useBountyAllocationActions(detail));
-    let outcome: unknown;
+    let ok = false;
     await act(async () => {
-      outcome = await result.current.allocate(bob);
+      ok = await result.current.allocate(bob);
     });
-    expect(outcome).toEqual({ status: 'allocated', notified: false, reason: 'curator service unreachable' });
+    expect(ok).toBe(true);
     const call = mocks.makeProposal.mock.calls[0][0];
     expect(call.spaceId).toBe('dao-1');
     expect(call.relations[0]).toMatchObject({
       type: { id: BOUNTY_ALLOCATED_PROPERTY_ID },
       fromEntity: { id: 'bounty-1' },
-      toEntity: { id: 'person-3' },
+      toEntity: { id: 'personal-3', name: 'Bob' },
+      toSpaceId: 'personal-3',
     });
-    // The notification is keyed to the relation id we just minted.
-    expect(mocks.notify.mock.calls[0][0]).toMatchObject({ allocatedRelationId: call.relations[0].id });
     expect(mocks.invalidateQueries).toHaveBeenCalled();
+    expect(mocks.setToast).toHaveBeenCalled();
   });
 
-  it('removes by tombstoning the existing allocation rows for that person', async () => {
+  it('reports a failed allocation publish without invalidating or toasting', async () => {
+    publishFails();
+    const { result } = renderHook(() => useBountyAllocationActions(detail));
+    await act(async () => {
+      expect(await result.current.allocate(bob)).toBe(false);
+    });
+    expect(mocks.invalidateQueries).not.toHaveBeenCalled();
+    expect(mocks.setToast).not.toHaveBeenCalled();
+  });
+
+  it('removes by tombstoning the existing allocation rows for that target', async () => {
     publishSucceeds();
     const { result } = renderHook(() => useBountyAllocationActions(detail));
     await act(async () => {
-      expect(await result.current.remove({ id: 'person-2', name: null })).toBe(true);
+      expect(await result.current.remove('person-2')).toBe(true);
     });
     const call = mocks.makeProposal.mock.calls[0][0];
     expect(call.relations).toEqual([expect.objectContaining({ id: 'alloc-1', isDeleted: true })]);
@@ -195,21 +177,8 @@ describe('useBountyAllocationActions', () => {
     expect(mocks.reconcile).toHaveBeenCalledWith(call.relations);
     // Nothing to remove → no publish.
     await act(async () => {
-      expect(await result.current.remove({ id: 'nobody', name: null })).toBe(false);
+      expect(await result.current.remove('nobody')).toBe(false);
     });
     expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
-  });
-
-  it('surfaces the backend reason when the notification is declined', async () => {
-    mocks.validate.mockResolvedValue({ ok: true });
-    mocks.notify.mockResolvedValue({ sent: false, reason: 'email-not-found' });
-    publishSucceeds();
-    const { result } = renderHook(() => useBountyAllocationActions(detail));
-    let outcome: unknown;
-    await act(async () => {
-      outcome = await result.current.allocate(bob);
-    });
-    expect(outcome).toEqual({ status: 'allocated', notified: false, reason: 'email-not-found' });
-    expect(mocks.setToast).toHaveBeenLastCalledWith(expect.anything());
   });
 });

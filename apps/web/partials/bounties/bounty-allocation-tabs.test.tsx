@@ -11,9 +11,9 @@ import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
 import { BountyAllocationTabs } from './bounty-allocation-tabs';
 
 const mocks = vi.hoisted(() => ({
-  allocate: vi.fn(async () => ({ status: 'allocated', notified: true })),
+  allocate: vi.fn(async () => true),
   remove: vi.fn(async () => true),
-  pendingPersonId: null as string | null,
+  pendingTargetId: null as string | null,
   names: new Map<string, string | null>([
     ['aaaa0000000000000000000000000001', 'Alice'],
     ['bbbb0000000000000000000000000002', 'Bob'],
@@ -24,7 +24,7 @@ vi.mock('~/core/bounties/use-bounty-actions', () => ({
   useBountyAllocationActions: () => ({
     allocate: mocks.allocate,
     remove: mocks.remove,
-    pendingPersonId: mocks.pendingPersonId,
+    pendingTargetId: mocks.pendingTargetId,
   }),
 }));
 vi.mock('~/core/bounties/use-entity-names', () => ({
@@ -38,6 +38,8 @@ vi.mock('~/design-system/prefetch-link', () => ({
   ),
 }));
 
+// Identities are personal space ids — the system-entity shape both the
+// interest and allocation writers use.
 const ALICE = 'aaaa0000000000000000000000000001';
 const BOB = 'bbbb0000000000000000000000000002';
 
@@ -63,9 +65,11 @@ const detail: BountyDetail = {
     maxContributors: 2,
   },
   interest: [
-    { id: 'i1', fromEntityId: ALICE, spaceId: 'pa' },
-    { id: 'i2', fromEntityId: BOB, spaceId: 'pb' },
-    { id: 'i3', fromEntityId: BOB, spaceId: 'pb' },
+    // New shape: authored in the curator's personal space from its system entity.
+    { id: 'i1', fromEntityId: ALICE, spaceId: ALICE },
+    { id: 'i2', fromEntityId: BOB, spaceId: BOB },
+    // A legacy person-entity row for Bob, written in the same personal space — must dedupe.
+    { id: 'i3', fromEntityId: 'cccc0000000000000000000000000003', spaceId: BOB },
   ],
   submissions: [],
   allocationRelations: [],
@@ -108,13 +112,13 @@ describe('BountyAllocationTabs', () => {
   it('gives editors Remove on allocated and Allocate on interested-but-unallocated', () => {
     render(<BountyAllocationTabs detail={detail} roles={{ ...viewer, isEditor: true }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
-    expect(mocks.remove).toHaveBeenCalledWith({ id: ALICE, name: 'Alice' });
+    expect(mocks.remove).toHaveBeenCalledWith(ALICE);
 
     fireEvent.click(screen.getByRole('tab', { name: /Interested/ }));
     const allocateButtons = screen.getAllByRole('button', { name: 'Allocate' });
     expect(allocateButtons).toHaveLength(1);
     fireEvent.click(allocateButtons[0]);
-    expect(mocks.allocate).toHaveBeenCalledWith({ id: BOB, name: 'Bob' });
+    expect(mocks.allocate).toHaveBeenCalledWith({ spaceId: BOB, name: 'Bob' });
   });
 
   it('disables Allocate when no spots remain', () => {

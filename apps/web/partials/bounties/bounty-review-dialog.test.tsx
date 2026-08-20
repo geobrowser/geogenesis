@@ -44,34 +44,25 @@ const segment = {
 const submission: GroupedSubmission = {
   ...segment,
   creatorName: 'Alice',
-  status: 'ready-for-review',
-  needsPayoutRetry: false,
-  retrySubmissionLifecycleInput: null,
-  segmentInput: segment,
+  status: 'in-progress',
   proposals: [],
-  canRequestReview: false,
   canReviewAndPayout: true,
 };
 
 const full = { completeness: 5, accuracy: 4, skill: 4, effort: 5 };
 
 describe('validateReviewForm', () => {
-  it('requires every rating, and a whole-point payout within available points for a pass', () => {
-    expect(
-      validateReviewForm({ stars: { ...full, skill: 0 }, pass: true, comment: '', payoutAmount: '10' }, null)
-    ).toMatch(/Rate every/);
+  it('requires every rating, and a positive whole-point payout when one is entered', () => {
+    expect(validateReviewForm({ stars: { ...full, skill: 0 }, pass: true, comment: '', payoutAmount: '10' })).toMatch(
+      /Rate every/
+    );
     // Blank payout is allowed on a pass (review saved without paying) — curator-app's rule.
-    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '' }, null)).toBeNull();
-    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '0' }, null)).toMatch(
-      /whole number/
-    );
-    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '10.5' }, null)).toMatch(
-      /whole number/
-    );
-    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '2000' }, 1000)).toMatch(/exceeds/);
-    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '200' }, 1000)).toBeNull();
+    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '' })).toBeNull();
+    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '0' })).toMatch(/whole number/);
+    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '10.5' })).toMatch(/whole number/);
+    expect(validateReviewForm({ stars: full, pass: true, comment: '', payoutAmount: '200' })).toBeNull();
     // Failing reviews need no payout.
-    expect(validateReviewForm({ stars: full, pass: false, comment: '', payoutAmount: '' }, null)).toBeNull();
+    expect(validateReviewForm({ stars: full, pass: false, comment: '', payoutAmount: '' })).toBeNull();
   });
 });
 
@@ -89,7 +80,6 @@ describe('BountyReviewDialog', () => {
         onOpenChange={onOpenChange}
         onSubmit={onSubmit}
         busy={false}
-        availablePoints={1000}
       />
     );
     return { onSubmit, onOpenChange };
@@ -166,7 +156,6 @@ describe('BountyReviewDialog', () => {
         onOpenChange={vi.fn()}
         onSubmit={vi.fn<OnSubmit>(async () => ({ status: 'saved' }))}
         busy={false}
-        availablePoints={null}
         existingReviews={[review]}
         reviewerNames={new Map([['aaaa0000000000000000000000000001', 'Alice']])}
         canReview={false}

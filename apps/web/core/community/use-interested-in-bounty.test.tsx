@@ -74,9 +74,9 @@ afterEach(() => {
 });
 
 describe('useInterestedInBounty', () => {
-  // The write shape matches curator-app and every interest row already on testnet:
-  // person entity → bounty, published into the personal space, no toSpaceId.
-  it('writes the relation from the person entity into the personal space, without toSpaceId', async () => {
+  // The standardized geogenesis shape: personal-space system entity → bounty,
+  // published into the personal space, with the bounty's space as toSpaceId.
+  it('writes the relation from the personal-space entity into the personal space, with toSpaceId', async () => {
     const { result } = renderHook(() => useInterestedInBounty(), { wrapper });
 
     await act(async () => {
@@ -87,22 +87,11 @@ describe('useInterestedInBounty', () => {
     expect(args.spaceId).toBe(PERSONAL_SPACE_ID);
     expect(args.relations).toHaveLength(1);
     const relation = args.relations[0];
-    expect(relation.fromEntity.id).toBe(PERSON_ENTITY_ID);
+    expect(relation.fromEntity.id).toBe(PERSONAL_SPACE_ID);
     expect(relation.toEntity.id).toBe('bounty-1');
     expect(relation.spaceId).toBe(PERSONAL_SPACE_ID);
-    expect(relation.toSpaceId).toBeUndefined();
+    expect(relation.toSpaceId).toBe('bounty-space');
     expect(relation.type.id).toBe(INTERESTED_IN_RELATION_TYPE_ID);
-  });
-
-  it("falls back to the space's system entity when the viewer has no profile entity", async () => {
-    mocks.profile = null;
-    const { result } = renderHook(() => useInterestedInBounty(), { wrapper });
-
-    await act(async () => {
-      await result.current.registerInterest(interestArgs);
-    });
-
-    expect(mocks.makeProposal.mock.calls[0][0].relations[0].fromEntity.id).toBe(PERSONAL_SPACE_ID);
   });
 
   it('ignores a second registration for a bounty already submitted', async () => {

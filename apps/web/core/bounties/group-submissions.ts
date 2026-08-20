@@ -1,22 +1,20 @@
 /**
  * Groups a bounty's linked proposals into "submissions" — one row per curator
- * per segment. Ported with unchanged semantics from curator-app's
- * `group-submissions.ts` so both apps show identical rows and produce
- * identical lifecycle keys (`bountyId:creatorEntityId:firstProposalId`):
+ * per segment. Semantics follow curator-app's `group-submissions.ts` so both
+ * apps show identical rows and identical keys
+ * (`bountyId:creatorEntityId:firstProposalId`), reading ONLY the knowledge
+ * graph:
  *
  * - Proposals are walked per creator in ascending createdAt order.
  * - A change of payout (none↔some, or one payout↔another) flushes a segment.
- * - Once a lifecycle record exists for a segment, its proposalIds are frozen;
- *   later proposals start a new row.
- * - Status precedence: a payout on the KG ⇒ `paid`; else the lifecycle
- *   record's status; else `in-progress`. Proposal governance status is nested
+ * - Status is derived from the graph: a payout covering the segment ⇒ `paid`;
+ *   else a latest failing review covering the segment's proposal set ⇒
+ *   `rejected`; else `in-progress`. Proposal governance status is nested
  *   display data and never promotes the row.
- * - `needsPayoutRetry` = paid on the KG but the lifecycle record disagrees —
- *   the designed recovery loop after a failed payout phase 3.
  */
 import { uuidToHex } from '~/core/id/normalize';
 
-import type { SubmissionLifecycleRecord, SubmissionLifecycleStatus } from './api';
+export type SubmissionStatus = 'in-progress' | 'paid' | 'rejected';
 
 export type ProposalGovernanceStatus = 'PROPOSED' | 'ACCEPTED' | 'REJECTED' | 'CANCELED' | 'EXECUTED';
 export type ProposalDisplayStatus = 'Pending' | 'Accepted' | 'Rejected' | 'Executable';
@@ -27,7 +25,7 @@ export type SubmissionItem = {
   /** Proposal entity id. */
   entityId: string;
   name: string;
-  /** Creator identity = the creator's personal space id (what curator-backend authorizes lifecycle actions on). */
+  /** Creator identity = the creator's personal space id (the space the link relation was authored in). */
   creatorEntityId: string | null;
   creatorName: string | null;
   /** The DAO space the proposal was made in (for links). */
@@ -36,7 +34,7 @@ export type SubmissionItem = {
 };
 
 export type PayoutItem = {
-  /** The payout relation id — also curator-backend's idempotency handle. */
+  /** The payout relation id. */
   id: string;
   payoutEntityId: string;
   recipientEntityId: string;
@@ -54,42 +52,30 @@ export type GroupedProposal = {
   status: ProposalDisplayStatus;
 };
 
-export type SubmissionSegmentInput = {
-  submissionKey: string;
-  creatorEntityId: string;
-  firstProposalId: string;
-  proposalIds: string[];
-  lastActiveAt: Date;
-};
-
 export type GroupedSubmission = {
   submissionKey: string;
   creatorEntityId: string;
   creatorName: string | null;
   firstProposalId: string;
   proposalIds: string[];
-  status: SubmissionLifecycleStatus;
+  status: SubmissionStatus;
   lastActiveAt: Date;
   payoutId?: string;
   payoutAmount?: number;
-  needsPayoutRetry: boolean;
-  /** Present when a lifecycle record exists — the payload to re-mark it paid. */
-  retrySubmissionLifecycleInput: SubmissionSegmentInput | null;
-  /** The segment as lifecycle mutations expect it. */
-  segmentInput: SubmissionSegmentInput;
   proposals: GroupedProposal[];
-  canRequestReview: boolean;
   canReviewAndPayout: boolean;
 };
+
+/** The slice of a review that grouping needs: which proposals it covers, and its verdict. */
+export type ReviewVerdict = { proposalIds: readonly string[]; pass: boolean; createdAt: Date };
 
 type GroupSubmissionsArgs = {
   bountyId: string;
   submissions: readonly SubmissionItem[];
   payoutItems: readonly PayoutItem[];
   proposalStatuses: ReadonlyMap<string, ProposalGovernanceStatus>;
-  lifecycleRecords: readonly SubmissionLifecycleRecord[];
-  /** The viewer's personal space id — enables "Request review" on own rows. */
-  currentUserEntityId?: string | null;
+  /** Knowledge-graph reviews; a latest failing review marks its segment rejected. */
+  reviews?: readonly ReviewVerdict[];
   isSpaceEditor: boolean;
 };
 
@@ -108,8 +94,7 @@ export function groupSubmissions({
   submissions,
   payoutItems,
   proposalStatuses,
-  lifecycleRecords,
-  currentUserEntityId,
+  reviews = [],
   isSpaceEditor,
 }: GroupSubmissionsArgs): GroupedSubmission[] {
   const payoutByProposalId = new Map<string, PayoutItem>();
@@ -117,7 +102,14 @@ export function groupSubmissions({
     for (const proposalId of payout.proposalIds) payoutByProposalId.set(uuidToHex(proposalId), payout);
   }
 
-  const lifecycleBySubmissionKey = new Map(lifecycleRecords.map(record => [record.submissionKey, record]));
+  const latestReviewByProposalSet = new Map<string, ReviewVerdict>();
+  for (const review of reviews) {
+    const key = buildProposalSetKey(review.proposalIds);
+    const existing = latestReviewByProposalSet.get(key);
+    if (!existing || review.createdAt.getTime() >= existing.createdAt.getTime()) {
+      latestReviewByProposalSet.set(key, review);
+    }
+  }
 
   const submissionsByCreator = new Map<string, SubmissionItem[]>();
   for (const submission of [...submissions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())) {
@@ -129,35 +121,25 @@ export function groupSubmissions({
     submissionsByCreator.set(creatorEntityId, list);
   }
 
-  const normalizedCurrentUser = currentUserEntityId ? uuidToHex(currentUserEntityId) : undefined;
   const grouped: GroupedSubmission[] = [];
 
   for (const [creatorEntityId, creatorSubmissions] of submissionsByCreator.entries()) {
     let currentSegment: SubmissionItem[] = [];
     let currentPayoutId: string | null = null;
 
-    const currentLifecycleRecord = () => {
-      if (currentSegment.length === 0) return undefined;
-      return lifecycleBySubmissionKey.get(buildSubmissionKey(bountyId, creatorEntityId, currentSegment[0].entityId));
-    };
-
     const flushSegment = () => {
       if (currentSegment.length === 0) return;
       const first = currentSegment[0];
       const proposalIds = currentSegment.map(p => uuidToHex(p.entityId));
       const submissionKey = buildSubmissionKey(bountyId, creatorEntityId, first.entityId);
-      const lifecycleRecord = lifecycleBySubmissionKey.get(submissionKey);
       const payout = currentPayoutId ? payoutItems.find(item => item.id === currentPayoutId) : undefined;
       const lastActiveAt = new Date(Math.max(...currentSegment.map(p => p.createdAt.getTime())));
-      const segmentInput: SubmissionSegmentInput = {
-        submissionKey,
-        creatorEntityId,
-        firstProposalId: uuidToHex(first.entityId),
-        proposalIds,
-        lastActiveAt,
-      };
-      const needsPayoutRetry = !!payout && lifecycleRecord !== undefined && lifecycleRecord.status !== 'paid';
-      const status: SubmissionLifecycleStatus = payout ? 'paid' : (lifecycleRecord?.status ?? 'in-progress');
+      const latestReview = latestReviewByProposalSet.get(buildProposalSetKey(proposalIds));
+      const status: SubmissionStatus = payout
+        ? 'paid'
+        : latestReview && !latestReview.pass
+          ? 'rejected'
+          : 'in-progress';
 
       grouped.push({
         submissionKey,
@@ -169,9 +151,6 @@ export function groupSubmissions({
         lastActiveAt,
         payoutId: payout?.id,
         payoutAmount: payout?.amount,
-        needsPayoutRetry,
-        retrySubmissionLifecycleInput: lifecycleRecord ? segmentInput : null,
-        segmentInput,
         proposals: [...currentSegment]
           .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
           .map(p => ({
@@ -183,8 +162,7 @@ export function groupSubmissions({
               proposalStatuses.get(p.entityId) ?? proposalStatuses.get(uuidToHex(p.entityId))
             ),
           })),
-        canRequestReview: normalizedCurrentUser === creatorEntityId && status === 'in-progress',
-        canReviewAndPayout: isSpaceEditor && status !== 'paid' && status !== 'rejected',
+        canReviewAndPayout: isSpaceEditor && status !== 'paid',
       });
 
       currentSegment = [];
@@ -193,13 +171,11 @@ export function groupSubmissions({
 
     for (const submission of creatorSubmissions) {
       const payoutId = payoutByProposalId.get(uuidToHex(submission.entityId))?.id ?? null;
-      const record = currentLifecycleRecord();
-      const outsideFrozenSegment =
-        !!record && !record.proposalIds.map(uuidToHex).includes(uuidToHex(submission.entityId));
 
       if (
         currentSegment.length > 0 &&
-        ((payoutId !== currentPayoutId && (payoutId !== null || currentPayoutId !== null)) || outsideFrozenSegment)
+        payoutId !== currentPayoutId &&
+        (payoutId !== null || currentPayoutId !== null)
       ) {
         flushSegment();
       }

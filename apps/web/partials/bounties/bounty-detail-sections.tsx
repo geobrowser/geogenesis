@@ -1,11 +1,7 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
-import { getSpaceMetrics } from '~/core/bounties/api';
-import { CURATOR_API_BASE_URL } from '~/core/bounties/config';
 import { type GroupedSubmission, reviewsBySubmissionKey } from '~/core/bounties/group-submissions';
 import { useBountyDetail } from '~/core/bounties/use-bounty-detail';
 import { useBountyRoles } from '~/core/bounties/use-bounty-roles';
@@ -40,14 +36,6 @@ export function BountyDetailSections({ spaceId, bountyId }: Props) {
   );
   const reviewerNames = useEntityNames(submissions.reviews.map(review => review.spaceId));
 
-  const metrics = useQuery({
-    queryKey: ['bounties', 'space-metrics', spaceId],
-    enabled: !!CURATOR_API_BASE_URL && roles.isEditor,
-    staleTime: 15_000,
-    retry: false,
-    queryFn: () => getSpaceMetrics(spaceId),
-  });
-
   if (!data) return null;
 
   return (
@@ -58,13 +46,8 @@ export function BountyDetailSections({ spaceId, bountyId }: Props) {
         reviewsByKey={reviewsByKey}
         isLoading={submissions.isLoading}
         isError={submissions.isError}
-        lifecycleUnavailable={submissions.lifecycleUnavailable}
         busyKey={actions.busyKey}
-        pendingCredit={actions.pendingCredit}
-        onRequestReview={segment => void actions.requestReview(segment)}
         onOpenReview={setReviewing}
-        onRetryMarkPaid={segment => void actions.retryMarkPaid(segment)}
-        onRetryCredit={() => void actions.retryPayoutCredit()}
         onRefresh={() => void submissions.refetch()}
       />
       <BountyPayoutsTable spaceId={spaceId} payouts={submissions.payouts} />
@@ -79,7 +62,6 @@ export function BountyDetailSections({ spaceId, bountyId }: Props) {
         }}
         onSubmit={actions.submitReview}
         busy={reviewing !== null && actions.busyKey === reviewing.submissionKey}
-        availablePoints={metrics.data?.balance ?? null}
         existingReviews={reviewing ? (reviewsByKey.get(reviewing.submissionKey) ?? []) : []}
         reviewerNames={reviewerNames.data}
         canReview={reviewing?.canReviewAndPayout ?? false}
