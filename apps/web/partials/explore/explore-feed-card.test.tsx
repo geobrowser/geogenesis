@@ -97,7 +97,7 @@ describe('ExploreFeedCard', () => {
     expect(commentLink?.getAttribute('href')).toContain('#entity-comments');
   });
 
-  it('gives ranking cards a comment link even though they render no vote buttons', () => {
+  it('gives ranking cards the same actions row as every other card type', () => {
     const rankingItem: ExploreFeedItem = {
       ...item,
       types: [{ id: RANKING_BLOCK_TYPE_ID, name: 'Ranking' }],
@@ -105,12 +105,13 @@ describe('ExploreFeedCard', () => {
     };
     render(<ExploreFeedCard item={rankingItem} />);
 
-    // Rankings use the "Rank" button in the title row instead of up/down votes, so no actions row...
-    expect(screen.queryByTestId('row-actions')).toBeNull();
-    // ...but they still get the comment link, threaded through the body's `actions`.
+    // The block is voteable in its own right, so it gets the actions row rather than a bare
+    // comment link — threaded through the body's `actions` alongside its own "Rank" CTA.
+    const rowActions = screen.getByTestId('row-actions');
     const commentLink = screen.getByText('2').closest('a');
     expect(commentLink).not.toBeNull();
     expect(commentLink?.getAttribute('href')).toContain('#entity-comments');
-    expect(screen.getByTestId('ranking-body').contains(commentLink)).toBe(true);
+    expect(rowActions.contains(commentLink)).toBe(true);
+    expect(screen.getByTestId('ranking-body').contains(rowActions)).toBe(true);
   });
 });

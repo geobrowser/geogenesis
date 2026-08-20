@@ -30,6 +30,7 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { RankingBlockGlobalPagination } from '~/partials/blocks/table/ranking-block-global-pagination';
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
+import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 const EXPLORE_RANKING_PAGE_SIZE = 4;
 const ROW_IMAGE_SIZE = 32;
@@ -117,6 +118,7 @@ export function RankingRow({
   rank,
   entityId,
   spaceId,
+  voteSpaceId,
   name,
   image,
   resolving,
@@ -124,6 +126,7 @@ export function RankingRow({
   rank: number;
   entityId: string;
   spaceId: string;
+  voteSpaceId: string | null;
   name: string | null;
   image: string | null;
   resolving: boolean;
@@ -164,6 +167,11 @@ export function RankingRow({
       >
         {label}
       </Link>
+      {voteSpaceId ? (
+        <div className="shrink-0 text-metadataMedium text-text">
+          <EntityVoteButtons entityId={entityId} spaceId={voteSpaceId} claimResponderAvatarsPosition="trailing" />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -206,15 +214,17 @@ export function RankingCardBody({ item, actions }: { item: ExploreFeedItem; acti
       <div className="flex flex-col gap-2">
         {pageIds.map((entityId, index) => {
           const entry = entryById.get(entityId);
+          const entrySpaceId = entry?.spaceId ?? null;
           return (
             <RankingRow
               key={entityId}
               rank={safePage * EXPLORE_RANKING_PAGE_SIZE + index + 1}
               entityId={entityId}
-              spaceId={item.spaceId}
+              spaceId={entrySpaceId || item.spaceId}
+              voteSpaceId={entrySpaceId}
               name={entry?.name ?? null}
               image={entry?.image ?? null}
-              resolving={isLoading}
+              resolving={isLoading || !entry}
             />
           );
         })}

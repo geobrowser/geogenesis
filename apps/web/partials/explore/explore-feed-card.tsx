@@ -220,14 +220,6 @@ function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = fal
     </EntityRowActions>
   );
 
-  // Ranking cards use the "Rank" button in place of the up/down vote controls, but they still
-  // get the comment link so every card type keeps a way into its comments.
-  const rankingActions = (
-    <div className="flex items-center gap-6 text-metadataMedium text-text">
-      <ExploreFeedCommentLink href={entityHref} count={item.commentCount} />
-    </div>
-  );
-
   return (
     <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
       {showSpace || dottedSegments.length > 0 ? (
@@ -254,9 +246,7 @@ function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = fal
       {isCommunityCall ? (
         <CommunityCallCardBody item={item} actions={cardActions} />
       ) : isRanking ? (
-        // The ranking body renders its own RankingVoteButton in the title row; `actions` carries
-        // only the comment link.
-        <RankingCardBody item={item} actions={rankingActions} />
+        <RankingCardBody item={item} actions={cardActions} />
       ) : (
         <DefaultCardBody item={item} actions={cardActions} />
       )}
