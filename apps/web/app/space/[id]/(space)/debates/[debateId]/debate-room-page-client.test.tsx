@@ -6,6 +6,8 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
+import { recordDebateFlowOrigin } from '~/core/debates/debate-entry-intent';
+import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
@@ -52,7 +54,7 @@ const mocks = vi.hoisted(() => ({
   ownershipRequestTakeover: vi.fn(),
   ownershipRelease: vi.fn(),
   ownershipClose: vi.fn(),
-  ownershipTakeoverHandler: null as null | (() => boolean | Promise<boolean>),
+  ownershipTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
   ownershipCoordinationMode: 'lock-and-broadcast' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
@@ -251,6 +253,7 @@ class FakeBroadcastChannel {
 
 beforeEach(() => {
   setHistoryLength(1);
+  window.sessionStorage.clear();
   mocks.back.mockReset();
   mocks.push.mockReset();
   mocks.replace.mockReset();
@@ -303,6 +306,9 @@ beforeEach(() => {
   mocks.clearTimedOutDebateActivity.mockReset();
   mocks.roomOn.mockReset();
   mocks.capture.mockReset();
+  // Tests run as an unfocused tab by default so the auto-takeover-on-focus effect stays quiet;
+  // focused-tab scenarios opt in per test.
+  vi.spyOn(document, 'hasFocus').mockReturnValue(false);
   mocks.ownershipAcquire.mockReset().mockResolvedValue({ acquired: true, waitedForLocalRelease: false });
   mocks.ownershipRequestTakeover.mockReset().mockResolvedValue(true);
   mocks.ownershipRelease.mockReset();
@@ -434,6 +440,19 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.back).toHaveBeenCalledOnce();
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+  });
+
+  // GEO-2605. history.length says only how deep we are, not where the flow began: hub -> room ->
+  // rematch -> room leaves another room one entry back, so back() returns into the flow. The path
+  // recorded on entry is the only thing that knows where the viewer actually came from.
+  it('returns to the path the flow started from rather than one history entry back', async () => {
+    setHistoryLength(4);
+    recordDebateFlowOrigin('/space/space-1/entity-7');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/entity-7'));
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
   it('falls back to the debates page when a cancelled room has no prior history', async () => {
@@ -1332,6 +1351,108 @@ describe('DebateRoomPageClient', () => {
     );
   });
 
+  it('automatically reclaims the debate when the blocked tab is the focused one', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // No "Continue here" click: the lock race landed the room in another tab while the user is
+    // looking at this one, so the focused tab issues the takeover itself.
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('does not auto-reclaim across devices after a duplicate-identity disconnect', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    act(() => emitRoomEvent('disconnected', 2));
+
+    // The other participant identity may be the user's phone; evicting it must stay behind the
+    // explicit "Continue here" click even though this tab is focused.
+    expect(await screen.findByText('This debate is active in another tab or device.')).toBeInTheDocument();
+    expect(mocks.ownershipRequestTakeover).not.toHaveBeenCalled();
+  });
+
+  it('does not retry a refused auto-takeover until the tab genuinely loses and regains focus', async () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.ownershipRequestTakeover.mockResolvedValue(false);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce());
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // A refusal must not spin: the next attempt waits for a real focus transition.
+    expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce();
+    expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+
+    // Redundant focus/visibilitychange events while the tab never lost focus must not retry —
+    // browsers fire both for a single activation, and a double connect() supersedes itself.
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce();
+
+    // A genuine blur re-arms the attempt; regaining focus retries exactly once even though the
+    // activation fires both events.
+    hasFocus.mockReturnValue(false);
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    hasFocus.mockReturnValue(true);
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledTimes(2));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.ownershipRequestTakeover).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not auto-takeover once the debate is in progress', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // Past preflight the room is (or should be) recording, so the focused duplicate stays on the
+    // dead-end screen rather than pulling a live debate out from under the owner.
+    expect(
+      await screen.findByRole('heading', { name: 'This debate is already open in another tab.' })
+    ).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.ownershipRequestTakeover).not.toHaveBeenCalled();
+  });
+
   it('keeps takeover available during a preflight ownership conflict', async () => {
     const now = Date.parse('2026-07-02T00:00:05.000Z');
     vi.spyOn(Date, 'now').mockReturnValue(now);
@@ -1369,7 +1490,9 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
 
-    await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(true);
+    await expect(
+      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 }))
+    ).resolves.toBe(true);
     expect(mocks.roomDisconnect).toHaveBeenCalledOnce();
     expect(mocks.capture).toHaveBeenCalledOnce();
     expect(mocks.capture).toHaveBeenCalledWith(
@@ -1422,7 +1545,9 @@ describe('DebateRoomPageClient', () => {
     // must compare against the clock directly instead of trusting the last rendered status.
     now.mockReturnValue(Date.parse('2026-07-02T00:00:11.000Z'));
     monotonicNow.mockReturnValue(3_000);
-    await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(false);
+    await expect(
+      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 }))
+    ).resolves.toBe(false);
     expect(mocks.roomDisconnect).not.toHaveBeenCalled();
   });
 
@@ -1561,7 +1686,7 @@ describe('DebateRoomPageClient', () => {
     // emit Disconnected, so the CLIENT_INITIATED from our own room.disconnect() never reaches the
     // handler body — no "Lost connection" error, no drop metric.
     await act(async () => {
-      await mocks.ownershipTakeoverHandler?.();
+      await mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 });
     });
     mocks.capture.mockClear();
     act(() => emitRoomEvent('disconnected', 1));

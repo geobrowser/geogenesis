@@ -9,7 +9,7 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import { activeDebate, recordingCancelledDebateId } from './activity-state';
+import { activeDebate, unenterableDebateId } from './activity-state';
 import { type DebateSharePrompt } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebatePresence } from './debate-attention';
@@ -74,6 +74,13 @@ export function DebateCoordinator() {
   // comes straight back reporting the debate.
   const enteringDebateId = useEnteringDebateId();
   const atDebate = Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
+  // The rematch page walks the viewer into its own converted debate. Activity reports that debate
+  // before the session query reports `converted`, so for a beat this coordinator sees a `ready`
+  // debate, no rematch, and nobody at it — the exact shape it opens the ready prompt for. It opened
+  // it on top of a page that was already navigating, so it flashed up and vanished again without
+  // being touched (GEO-2604). Nothing app-wide belongs over that page: it owns its own routing, and
+  // whatever it is about to do is more current than activity is.
+  const atRematchPage = pathname.includes('/debates/rematches/');
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
@@ -136,7 +143,8 @@ export function DebateCoordinator() {
   // out. Everything past `ready` falls through to the rejoin bar, which offers the way in without
   // offering a way to destroy it.
   const describable = (debate?.participants?.length ?? 0) >= 2;
-  const promptedDebate = debate && debate.status === 'ready' && describable && !atDebate ? debate : null;
+  const promptedDebate =
+    debate && debate.status === 'ready' && describable && !atDebate && !atRematchPage ? debate : null;
 
   // Held until a navigation commits, then released. Arriving at the room is the expected end, and
   // `atDebate` carries on from the pathname there. Going anywhere else abandons the walk — holding
@@ -173,10 +181,12 @@ export function DebateCoordinator() {
     if (!activity) return;
     const rematch = activity.rematch;
     if (!rematch) return;
-    // A debate whose recording was cancelled cannot be re-entered: the room hides itself and
-    // returns whoever opens it. Pushing into it here turned that into a navigation loop — the
-    // screen flickered, and the opponent's "your debate was removed" dialog came back after Okay.
-    if (rematch.source_debate_id && rematch.source_debate_id === recordingCancelledDebateId(activity)) return;
+    // A debate that is over cannot be re-entered: the room hides itself and returns whoever opens
+    // it. Pushing into it here turned that into a navigation loop — the screen flickered, and the
+    // opponent's "your debate was removed" dialog came back after Okay. That first showed up as a
+    // cancelled recording, but GEO-2600 was the same loop over a `complete` debate: the push landed
+    // and bounced on every activity change, blanking the rematch page on a URL that never moved.
+    if (rematch.source_debate_id && rematch.source_debate_id === unenterableDebateId(activity)) return;
     const sourceDebatePath = rematch.source_debate_id ? `/debates/${rematch.source_debate_id}` : null;
     if (rematch.status === 'deciding') {
       if (sourceDebatePath && !pathname.includes(sourceDebatePath)) {
@@ -209,7 +219,9 @@ export function DebateCoordinator() {
       {promptedDebate && currentUserId && !activity?.rematch && (
         <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
-      {debate && !atDebate && !promptedDebate && !activity?.rematch && <DebateRejoinBar debate={debate} />}
+      {debate && !atDebate && !atRematchPage && !promptedDebate && !activity?.rematch && (
+        <DebateRejoinBar debate={debate} />
+      )}
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the
           hub's Requests tab, and the rematch routing effect above walks them into the claim picker
           the moment it is accepted. */}
