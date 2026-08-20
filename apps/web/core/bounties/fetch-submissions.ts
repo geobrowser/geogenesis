@@ -64,12 +64,10 @@ export function fetchEntityCreatedAt(entityIds: readonly string[]) {
  * in the creator's PERSONAL space (that is how the review flow publishes it),
  * so the relation's spaceId identifies the creator.
  *
- * The creator identity is the PERSONAL SPACE ID, not the person entity:
- * curator-backend authorizes "request review" by comparing the caller's
- * personal space id with the row's creatorEntityId, and keys Person nodes by
- * it. curator-app derives the same value whenever the space's profile entity
- * coincides with the space (its own Request review button only appears in
- * that case), so lifecycle keys stay identical wherever curator-app works.
+ * The creator identity is the PERSONAL SPACE ID, not the person entity — the
+ * same identity the interest and allocation relations use (the personal-space
+ * system entity), and the value curator-app derives when grouping, so
+ * submission keys stay identical across both apps.
  */
 export function fetchSubmissionItems(submissionLinks: readonly BountyBacklink[], bountySpaceId: string) {
   return Effect.gen(function* () {

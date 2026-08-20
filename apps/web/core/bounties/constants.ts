@@ -3,11 +3,9 @@ import { IS_TESTNET } from '~/core/sdk/geo-network';
 /**
  * DAO spaces that participate in the bounty program, per network.
  *
- * Deliberately hardcoded, not queried: the list encodes which spaces have a
- * points ledger provisioned in curator-backend (Neo4j `Space.balance`, topped
- * up out-of-band) — that is not discoverable from the knowledge graph, and
- * showing bounties from an unprovisioned space would offer work that can
- * never pay out. Keep in sync with curator-app's `ALLOWED_SPACE_IDS`
+ * Deliberately hardcoded, not queried: which spaces run the bounty program is
+ * a program decision, not something discoverable from the knowledge graph.
+ * Keep in sync with curator-app's `ALLOWED_SPACE_IDS`
  * (`packages/curator-utils/src/ids.ts`); the two lists must move together.
  */
 export const BOUNTY_SPACE_IDS: Record<'TESTNET' | 'MAINNET', readonly string[]> = {

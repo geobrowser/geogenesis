@@ -15,9 +15,9 @@
  * publish layer (e.g. 1000 → mantissa 1, exponent 3), which is the same
  * number and reads back as "1000" from the API either way.
  *
- * The outer relation id doubles as curator-backend's idempotency handle
- * (`payoutEntityId`) for the points credit — verified: the backend MERGEs a
- * ProcessedPayout node on it and only decrements once.
+ * The outer relation id is also what curator-app's tooling keys payouts on
+ * (`payoutEntityId`), so keeping the shape identical keeps payouts authored
+ * here first-class citizens there.
  */
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 

@@ -40,7 +40,6 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({ smartAccount: { account: { address: '0xabc' } }, isLoading: false }),
 }));
 vi.mock('~/core/hooks/use-geo-profile', () => ({ useGeoProfile: () => ({ profile: mocks.profile }) }));
-vi.mock('~/core/bounties/config', () => ({ CURATOR_API_BASE_URL: 'https://curator.example.com' }));
 vi.mock('~/design-system/select-entity', () => ({
   SelectEntity: () => <input aria-label="entity search" />,
 }));
