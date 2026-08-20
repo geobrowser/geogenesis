@@ -376,7 +376,9 @@ describe('useGeoChatAuth', () => {
       });
     });
 
-    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ predicate: expect.any(Function) }));
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({ predicate: expect.any(Function) }, { cancelRefetch: false })
+    );
 
     // Only the batches naming the claim, plus the id-less session list any response can add a
     // row to. The picker holds a batch per page on screen; refetching all of them for one
@@ -391,6 +393,55 @@ describe('useGeoChatAuth', () => {
     expect(
       predicate({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-2', 'claims', ['claim-1']] } as never)
     ).toBe(false);
+  });
+
+  // Cancelling a batch that is about to answer throws the request away, and when responses keep
+  // arriving it means none of them ever land — the starvation this family is invalidated around.
+  // The request in flight is left to land, then asked again so the answer postdates the response.
+  it('lets a rematch batch in flight land and asks it again once an indexed response arrives', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    let landFirst!: () => void;
+    mocks.listDebateRematchClaims.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          landFirst = () => resolve({ claims: [], excluded_claim_ids: [] });
+        })
+    );
+
+    renderHook(() => useDebateRematchClaims('rematch-1', ['claim-1']), { wrapper });
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'negative',
+          personalSpaceId: 'profile-1',
+          responseKind: 'veracity',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      });
+    });
+
+    // The request that was already on its way is not restarted out from under itself.
+    const batch = queryClient
+      .getQueryCache()
+      .find({ queryKey: debateQueryKeys.rematchClaims('user-a', 'rematch-1', ['claim-1']) })!;
+    expect(batch.state.fetchStatus).toBe('fetching');
+    expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1);
+
+    act(() => landFirst());
+
+    // ...and once it has landed, it is asked again, so what ends up on screen knows the response.
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(2));
   });
 
   // A `users/me` sent before logout can resolve after it. Writing that result back would

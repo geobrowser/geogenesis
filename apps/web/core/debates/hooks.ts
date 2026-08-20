@@ -3,6 +3,7 @@
 import { usePrivy } from '@geogenesis/auth';
 import {
   type QueryClient,
+  type QueryFilters,
   type UseQueryResult,
   useMutation,
   useQueries,
@@ -267,6 +268,28 @@ export function rematchClaimBatchesWithClaim(accountKey: string | null, claimId:
 }
 
 /**
+ * Refresh rematch claim batches without restarting a request that is about to land.
+ *
+ * Invalidating cancels an in-flight fetch by default, which throws away a request that was about
+ * to answer — and when changes arrive faster than the round trips complete, means none of them
+ * ever land. A batch in flight is left to land, since its answer is still worth putting on screen,
+ * and is then asked again so what the viewer ends up looking at postdates the change that prompted
+ * this. The gateway does the same on its own flushes; these are the same batches.
+ */
+function refreshRematchClaimBatches(queryClient: QueryClient, filters: QueryFilters) {
+  const inFlight = queryClient.getQueryCache().findAll({ ...filters, fetchStatus: 'fetching' });
+  const refreshed = queryClient.invalidateQueries(filters, { cancelRefetch: false });
+  if (inFlight.length === 0) return refreshed;
+
+  return refreshed.finally(() =>
+    queryClient.refetchQueries(
+      { type: 'active', predicate: query => inFlight.some(batch => batch.queryHash === query.queryHash) },
+      { cancelRefetch: false }
+    )
+  );
+}
+
+/**
  * Everything under `'debates'` except the rematch claim batches. The root-wide invalidation a
  * mutation used to fire refetched every batch the picker had loaded — a request per page on
  * screen — for a change that touched none of them.
@@ -290,7 +313,7 @@ function invalidateAfterReadinessChange(queryClient: QueryClient, accountKey: st
   ]) {
     void queryClient.invalidateQueries({ queryKey });
   }
-  void queryClient.invalidateQueries(rematchClaimBatchesWithClaim(accountKey, claimId));
+  void refreshRematchClaimBatches(queryClient, rematchClaimBatchesWithClaim(accountKey, claimId));
 }
 
 export function useJoinDebateQueue(spaceId: string) {
@@ -642,7 +665,10 @@ export function useDebateRematchClaims(sessionId: string, claimIds: string[] = N
         // Only the batches that name the claim, plus the session's own list. Refetching every
         // batch the picker holds — one per page on screen — for a single response is what left
         // the positions trailing on a long list.
-        void queryClient.invalidateQueries(rematchClaimBatchesWithClaim(accountKey, response.entityId, sessionId));
+        void refreshRematchClaimBatches(
+          queryClient,
+          rematchClaimBatchesWithClaim(accountKey, response.entityId, sessionId)
+        );
       });
     },
     [accountKey, claimIds, enabled, queryClient, sessionId]
@@ -704,7 +730,8 @@ export function useRejectDebateRematchRequest() {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, result.session.id) });
       // A rejection marks one claim `recently_rejected`; only the batches carrying it need to hear.
       const rejectedClaimId = result.request?.claim.claim_entity_id;
-      void queryClient.invalidateQueries(
+      void refreshRematchClaimBatches(
+        queryClient,
         rejectedClaimId
           ? rematchClaimBatchesWithClaim(accountKey, rejectedClaimId, result.session.id)
           : { queryKey: ['debates', 'account', accountKey, 'rematch', result.session.id, 'claims'] }
