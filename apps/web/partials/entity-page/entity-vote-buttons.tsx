@@ -92,17 +92,23 @@ export function EntityVoteButtons({
     includeDeleted: true,
     enabled: responseKindOverride === undefined,
   });
-  // Which space the response belongs to, which is not always the one the caller renders from. A
-  // claim collected into a curated page without a pinned target space arrives here as the page's
-  // own space, where the claim holds nothing: the counts came back empty and the percentage read
-  // 0%. Resolving it to the space the claim actually lives in is what puts the tally back.
-  const spaceId = resolveEntitySpaceId(entity, requestedSpaceId);
   const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
   const activeValues = entity?.values.filter(value => !value.isDeleted) ?? [];
   const isClaim =
     activeRelations.some(
       relation => uuidToHex(relation.type.id) === TYPES_PROPERTY && uuidToHex(relation.toEntity.id) === CLAIM_TYPE
     ) ?? false;
+  // Which space the response belongs to, which is not always the one the caller renders from. A
+  // claim collected into a curated page without a pinned target space arrives here as the page's
+  // own space, where the claim holds nothing: the counts came back empty and the percentage read
+  // 0%. Resolving it to the space the claim actually lives in is what puts the tally back.
+  //
+  // Claims only. A claim is one debate wherever it is listed, so its responses belong to the space
+  // it was published to; curation is per-space by design — the same entity is upvoted separately in
+  // each space that lists it, and this component draws those arrows too. Re-homing them would hide
+  // a reader's existing vote behind a tally from a space they never visited, then write the next
+  // one somewhere else again.
+  const spaceId = isClaim ? resolveEntitySpaceId(entity, requestedSpaceId) : requestedSpaceId;
   const isFactualClaim =
     isClaim &&
     getChecked(

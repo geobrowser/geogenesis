@@ -15,6 +15,11 @@ function named(spaceId: string, name = 'AI democracies should share computer chi
   return { property: { id: SystemIds.NAME_PROPERTY }, spaceId, value: name, isDeleted: false };
 }
 
+/** Any value that is not a name — enough to place the entity in a space without naming it there. */
+function content(spaceId: string) {
+  return { property: { id: '5c9b4c4b1e1c4a6f9d3f6c2a8b7e0d11' }, spaceId, value: 'x', isDeleted: false };
+}
+
 describe('entityHomeSpaceId', () => {
   it('prefers a space the entity is named in over a higher-ranked one that merely cites it', () => {
     const entity = { spaces: [ROOT_SPACE, AI_SPACE], values: [named(AI_SPACE)] };
@@ -22,17 +27,28 @@ describe('entityHomeSpaceId', () => {
     expect(entityHomeSpaceId(entity)).toBe(AI_SPACE);
   });
 
+  // The name value gets copied when a claim is cited, so more than one space naming it is ordinary.
+  // Picking by rank rather than by iteration order is what keeps the answer stable: `entity.values`
+  // is re-partitioned on every store merge.
+  it('picks the highest-ranked space among the ones naming it', () => {
+    const entity = { spaces: [ROOT_SPACE, AI_SPACE], values: [named(AI_SPACE), named(ROOT_SPACE)] };
+
+    expect(entityHomeSpaceId(entity)).toBe(ROOT_SPACE);
+  });
+
   it('falls back to the top-ranked space when the entity is named nowhere', () => {
     expect(entityHomeSpaceId({ spaces: [PERSONAL_SPACE, AI_SPACE] })).toBe(AI_SPACE);
   });
 
+  // The rejected names sit in the *higher*-ranked spaces on purpose: if either guard stopped
+  // working, those spaces would enter the named set and ROOT would win.
   it('ignores a deleted or blank name', () => {
     const entity = {
-      spaces: [PERSONAL_SPACE, AI_SPACE],
-      values: [{ ...named(PERSONAL_SPACE), isDeleted: true }, named(AI_SPACE, '   ')],
+      spaces: [ROOT_SPACE, AI_SPACE, PERSONAL_SPACE],
+      values: [{ ...named(ROOT_SPACE), isDeleted: true }, named(AI_SPACE, '   '), named(PERSONAL_SPACE)],
     };
 
-    expect(entityHomeSpaceId(entity)).toBe(AI_SPACE);
+    expect(entityHomeSpaceId(entity)).toBe(PERSONAL_SPACE);
   });
 
   it('answers null for an entity in no space at all', () => {
@@ -42,10 +58,31 @@ describe('entityHomeSpaceId', () => {
 
 describe('resolveEntitySpaceId', () => {
   // Every ordinary row and every entity page: the space asked for is a space the entity is in.
-  it('keeps the requested space when the entity lives in it', () => {
-    const entity = { spaces: [AI_SPACE, PERSONAL_SPACE], values: [named(AI_SPACE)] };
+  it('keeps the requested space when the entity holds content there', () => {
+    const entity = { spaces: [AI_SPACE, PERSONAL_SPACE], values: [named(AI_SPACE), content(PERSONAL_SPACE)] };
 
     expect(resolveEntitySpaceId(entity, PERSONAL_SPACE)).toBe(PERSONAL_SPACE);
+  });
+
+  // `entity.spaces` also counts relations authored *from* the entity, so one Topics link added from
+  // the curating space would otherwise satisfy the residency test and hand back the very space this
+  // exists to correct.
+  it('does not treat a space the entity merely appears in as its own', () => {
+    const entity = { spaces: [ROOT_SPACE, AI_SPACE], values: [named(AI_SPACE)] };
+
+    expect(resolveEntitySpaceId(entity, ROOT_SPACE)).toBe(AI_SPACE);
+  });
+
+  // `store.getEntity` derives `spaces` before applying the caller's `includeDeleted` filter, so a
+  // tombstoned draft would place the entity in a space for one reader and not another — and the two
+  // controls on a claim row read the entity with different flags.
+  it('ignores tombstoned content when placing the entity', () => {
+    const entity = {
+      spaces: [AI_SPACE, PERSONAL_SPACE],
+      values: [named(AI_SPACE), { ...content(PERSONAL_SPACE), isDeleted: true }],
+    };
+
+    expect(resolveEntitySpaceId(entity, PERSONAL_SPACE)).toBe(AI_SPACE);
   });
 
   // The reported bug: a claim collected onto a curated page in a personal space, with no target

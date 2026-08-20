@@ -3,7 +3,6 @@
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublishedInSpace } from '~/core/claims/publish';
 import { useQueryEntity } from '~/core/sync/use-store';
-import type { Entity } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { hasActiveDebateFlow } from './activity-state';
@@ -13,23 +12,18 @@ import { useDebateActivity, useDebateClaims } from './hooks';
 type ClaimDebateButtonProps = {
   entityId: string;
   spaceId: string;
-  /** Avoids a duplicate entity subscription when the parent already has the entity. */
-  entity?: Entity | null;
 };
 
-export function ClaimDebateButton({
-  entityId,
-  spaceId: requestedSpaceId,
-  entity: providedEntity,
-}: ClaimDebateButtonProps) {
+export function ClaimDebateButton({ entityId, spaceId: requestedSpaceId }: ClaimDebateButtonProps) {
   // Unscoped, for the reason `EntityVoteButtons` reads it unscoped: `types` is derived across every
   // space either way, and the values that say where the claim is named are what resolve the space
   // below. A lookup scoped to the space we were handed can't correct that space.
-  const { entity: fetchedEntity } = useQueryEntity({
-    id: entityId,
-    enabled: providedEntity == null,
-  });
-  const entity = providedEntity ?? fetchedEntity;
+  //
+  // This is also why the entity page no longer hands its own entity down to save a subscription:
+  // that one is scoped, and `store.getEntity` empties `relations` for every space but the one asked
+  // for. `isClaimPublishedInSpace` would then find no unpublished edit to report and call a draft
+  // published, enabling the toggle on a claim geo-chat has no row for.
+  const { entity } = useQueryEntity({ id: entityId });
   const isClaim = entity?.types.some(type => type.id === CLAIM_TYPE_ID) ?? false;
   // geo-chat keys a claim's row and its readiness on the space the claim lives in, and the response
   // that readiness depends on is published against that same space. A data block row hands us its

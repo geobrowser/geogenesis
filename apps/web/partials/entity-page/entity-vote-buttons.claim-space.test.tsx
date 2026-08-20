@@ -110,6 +110,11 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({ ClaimResponderAva
  * As `store.getEntity` returns it when no space is given: relations from every space the entity
  * lives in, so the Types relation is present whichever space the caller happens to be rendering.
  */
+/**
+ * `alsoIn` is a space the claim genuinely holds content in — a second home, not merely a space that
+ * links to it. It carries a value of its own because that is what places an entity in a space:
+ * `entity.spaces` also counts relations authored from the claim, which a citing space has.
+ */
 function claimEntity({ isFactualIn, alsoIn }: { isFactualIn?: string; alsoIn?: string } = {}) {
   return {
     id: 'claim-1',
@@ -126,6 +131,9 @@ function claimEntity({ isFactualIn, alsoIn }: { isFactualIn?: string; alsoIn?: s
     ],
     values: [
       { property: { id: SystemIds.NAME_PROPERTY }, spaceId: CLAIM_SPACE, value: 'AGI', isDeleted: false },
+      ...(alsoIn
+        ? [{ property: { id: SystemIds.DESCRIPTION_PROPERTY }, spaceId: alsoIn, value: 'A claim', isDeleted: false }]
+        : []),
       ...(isFactualIn
         ? [{ property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID }, spaceId: isFactualIn, value: '1', isDeleted: false }]
         : []),
@@ -235,6 +243,31 @@ describe('EntityVoteButtons response space resolution', () => {
     await screen.findByText('67%');
     const icons = [...view.container.querySelectorAll('svg')];
     expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
+  });
+
+  /**
+   * Curation is per-space by design: the same entity is upvoted separately in each space that lists
+   * it, and this component draws those arrows too. Re-homing them would hide a reader's existing
+   * vote behind a tally from a space they never visited, then write the next one somewhere else
+   * again — and `ensureSpaceMembership` would propose membership there on their behalf.
+   */
+  it('leaves a non-claim entity voting in the space listing it', async () => {
+    mocks.entity = {
+      id: 'entity-1',
+      name: 'Something else',
+      spaces: [CLAIM_SPACE],
+      relations: [],
+      values: [
+        { property: { id: SystemIds.NAME_PROPERTY }, spaceId: CLAIM_SPACE, value: 'Something else', isDeleted: false },
+      ],
+    };
+    renderButtons();
+
+    // The curation controls: a net score, not a percentage.
+    await screen.findByText('1');
+    expect(mocks.countsSpaceIds).toContain(BLOCK_SPACE);
+    expect(mocks.countsSpaceIds).not.toContain(CLAIM_SPACE);
+    expect(mocks.responseSpaceIds.at(-1)).toBe(BLOCK_SPACE);
   });
 
   // Every ordinary row: the block and the entity are in the same space, and nothing moves.
