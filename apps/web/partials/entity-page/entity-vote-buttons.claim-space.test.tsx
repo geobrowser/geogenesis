@@ -24,6 +24,8 @@ const CLAIM_SPACE = '41e851610e13a19441c4d980f2f2ce6b';
 const mocks = vi.hoisted(() => ({
   entity: null as unknown,
   queryEntityOptions: [] as Record<string, unknown>[],
+  countsSpaceIds: [] as string[],
+  responseSpaceIds: [] as string[],
 }));
 
 vi.mock('@geogenesis/auth', () => ({ useGeoLogin: () => ({ login: vi.fn() }) }));
@@ -36,13 +38,16 @@ vi.mock('~/core/analytics', () => ({
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
-  useEntityResponse: () => ({
-    submitResponse: vi.fn(),
-    optimisticResponse: undefined,
-    isResponseIndexingDelayed: false,
-    isConnected: true,
-    personalSpaceId: 'profile-1',
-  }),
+  useEntityResponse: ({ spaceId }: { spaceId: string }) => {
+    mocks.responseSpaceIds.push(spaceId);
+    return {
+      submitResponse: vi.fn(),
+      optimisticResponse: undefined,
+      isResponseIndexingDelayed: false,
+      isConnected: true,
+      personalSpaceId: 'profile-1',
+    };
+  },
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
@@ -54,7 +59,10 @@ vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ sma
 vi.mock('~/core/io/queries', () => ({
   getClaimResponseSummaryPage: () => Effect.succeed([]),
   // Two up, one down: a curation score reads "1", a claim percentage reads "67%".
-  getEntityResponseCounts: () => Effect.succeed({ positive: 2, negative: 1 }),
+  getEntityResponseCounts: (_entityId: string, spaceId: string) => {
+    mocks.countsSpaceIds.push(spaceId);
+    return Effect.succeed({ positive: 2, negative: 1 });
+  },
   getEntityResponders: () => Effect.succeed([]),
   getSpaces: () => Effect.succeed([]),
   getUserEntityResponse: () => Effect.succeed(null),
@@ -102,10 +110,12 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({ ClaimResponderAva
  * As `store.getEntity` returns it when no space is given: relations from every space the entity
  * lives in, so the Types relation is present whichever space the caller happens to be rendering.
  */
-function claimEntity({ isFactualIn }: { isFactualIn?: string } = {}) {
+function claimEntity({ isFactualIn, alsoIn }: { isFactualIn?: string; alsoIn?: string } = {}) {
   return {
     id: 'claim-1',
     name: 'AGI development should be paused.',
+    // As `Entities.spaces` derives it: every space holding a value or a relation of the entity.
+    spaces: [CLAIM_SPACE, ...(alsoIn ? [alsoIn] : [])],
     relations: [
       {
         type: { id: SystemIds.TYPES_PROPERTY },
@@ -114,9 +124,12 @@ function claimEntity({ isFactualIn }: { isFactualIn?: string } = {}) {
         isDeleted: false,
       },
     ],
-    values: isFactualIn
-      ? [{ property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID }, spaceId: isFactualIn, value: '1', isDeleted: false }]
-      : [],
+    values: [
+      { property: { id: SystemIds.NAME_PROPERTY }, spaceId: CLAIM_SPACE, value: 'AGI', isDeleted: false },
+      ...(isFactualIn
+        ? [{ property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID }, spaceId: isFactualIn, value: '1', isDeleted: false }]
+        : []),
+    ],
   };
 }
 
@@ -132,6 +145,8 @@ function renderButtons() {
 beforeEach(() => {
   mocks.entity = null;
   mocks.queryEntityOptions.length = 0;
+  mocks.countsSpaceIds.length = 0;
+  mocks.responseSpaceIds.length = 0;
 });
 
 afterEach(cleanup);
@@ -168,7 +183,7 @@ describe('EntityVoteButtons claim detection across spaces', () => {
   // Which *kind* of claim response is asked for stays a per-space question: the space passed in is
   // the one being responded in, and "Is factual" is a per-space value.
   it('reads the factual flag from the space it was asked to respond in', async () => {
-    mocks.entity = claimEntity({ isFactualIn: BLOCK_SPACE });
+    mocks.entity = claimEntity({ isFactualIn: BLOCK_SPACE, alsoIn: BLOCK_SPACE });
     const view = renderButtons();
 
     await screen.findByText('67%');
@@ -178,11 +193,57 @@ describe('EntityVoteButtons claim detection across spaces', () => {
   });
 
   it('ignores a factual flag set in a space other than the one being responded in', async () => {
-    mocks.entity = claimEntity({ isFactualIn: CLAIM_SPACE });
+    mocks.entity = claimEntity({ isFactualIn: CLAIM_SPACE, alsoIn: BLOCK_SPACE });
     const view = renderButtons();
 
     await screen.findByText('67%');
     const icons = [...view.container.querySelectorAll('svg')];
     expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(false);
+  });
+});
+
+/**
+ * A collection item added without a target space pins none, so a claim curated onto a page in
+ * someone's personal space reached these controls as that space — where the claim holds nothing.
+ * The tally came back empty and the percentage read 0%, beside a Debate toggle stuck loading on a
+ * geo-chat lookup for a space it has never indexed.
+ */
+describe('EntityVoteButtons response space resolution', () => {
+  it('tallies responses in the space the claim lives in, not the one listing it', async () => {
+    mocks.entity = claimEntity();
+    renderButtons();
+
+    await screen.findByText('67%');
+    expect(mocks.countsSpaceIds).toContain(CLAIM_SPACE);
+    expect(mocks.countsSpaceIds).not.toContain(BLOCK_SPACE);
+  });
+
+  it('responds in the space the claim lives in', async () => {
+    mocks.entity = claimEntity();
+    renderButtons();
+
+    await screen.findByText('67%');
+    expect(mocks.responseSpaceIds.at(-1)).toBe(CLAIM_SPACE);
+  });
+
+  // The kind follows the space: once the claim resolves to its own space, that space's flag is the
+  // one being responded against.
+  it('reads the factual flag from the resolved space', async () => {
+    mocks.entity = claimEntity({ isFactualIn: CLAIM_SPACE });
+    const view = renderButtons();
+
+    await screen.findByText('67%');
+    const icons = [...view.container.querySelectorAll('svg')];
+    expect(icons.some(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
+  });
+
+  // Every ordinary row: the block and the entity are in the same space, and nothing moves.
+  it('leaves a row listed from the claim’s own space alone', async () => {
+    mocks.entity = claimEntity({ alsoIn: BLOCK_SPACE });
+    renderButtons();
+
+    await screen.findByText('67%');
+    expect(mocks.countsSpaceIds).toContain(BLOCK_SPACE);
+    expect(mocks.countsSpaceIds).not.toContain(CLAIM_SPACE);
   });
 });

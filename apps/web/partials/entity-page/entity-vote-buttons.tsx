@@ -38,6 +38,7 @@ import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Avatar } from '~/design-system/avatar';
 import { getChecked } from '~/design-system/checkbox';
@@ -70,7 +71,7 @@ type EntityVoteButtonsProps = {
 
 export function EntityVoteButtons({
   entityId,
-  spaceId,
+  spaceId: requestedSpaceId,
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
   presentation = 'inline',
@@ -91,6 +92,11 @@ export function EntityVoteButtons({
     includeDeleted: true,
     enabled: responseKindOverride === undefined,
   });
+  // Which space the response belongs to, which is not always the one the caller renders from. A
+  // claim collected into a curated page without a pinned target space arrives here as the page's
+  // own space, where the claim holds nothing: the counts came back empty and the percentage read
+  // 0%. Resolving it to the space the claim actually lives in is what puts the tally back.
+  const spaceId = resolveEntitySpaceId(entity, requestedSpaceId);
   const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
   const activeValues = entity?.values.filter(value => !value.isDeleted) ?? [];
   const isClaim =
