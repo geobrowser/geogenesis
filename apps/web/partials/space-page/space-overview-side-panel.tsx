@@ -6,6 +6,7 @@ import type { CallSeries } from '~/core/community-calls/types';
 import { useSpaceDailyActivityTasks } from '~/core/space/use-space-daily-activities';
 
 import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
+import { EntityPageSideRail } from '~/partials/entity-page/entity-page-side-rail';
 
 import { SpaceDailyActivitiesSection } from './space-daily-activities-section';
 
@@ -15,8 +16,9 @@ type Props = {
 };
 
 /**
- * Daily activities (when the viewer is signed in and tasks exist) first,
- * then the community-calls digest. Hidden entirely when neither has content.
+ * Daily activities (when the viewer is signed in and tasks exist) first, then the community-calls
+ * digest. Hidden entirely when neither has content. A checklist with nothing left to do stays —
+ * folded down to its heading, which it handles itself.
  */
 export function SpaceOverviewSidePanel({ spaceId, communityCalls }: Props) {
   const { tasks } = useSpaceDailyActivityTasks(spaceId);
@@ -26,11 +28,9 @@ export function SpaceOverviewSidePanel({ spaceId, communityCalls }: Props) {
   if (!showDaily && !showCalls) return null;
 
   return (
-    <aside className="ml-8 w-[var(--width-side-rail)] shrink-0 lg:hidden">
-      <div className="flex flex-col gap-6 pb-4">
-        {showDaily ? <SpaceDailyActivitiesSection spaceId={spaceId} /> : null}
-        {showCalls ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null}
-      </div>
-    </aside>
+    <EntityPageSideRail>
+      {showDaily ? <SpaceDailyActivitiesSection spaceId={spaceId} tasks={tasks} /> : null}
+      {showCalls ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null}
+    </EntityPageSideRail>
   );
 }

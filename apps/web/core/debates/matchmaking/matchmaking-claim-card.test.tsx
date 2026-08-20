@@ -54,6 +54,18 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
 
+// useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
+// suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useBrowseSidebarQuerySource: () => ({
+    personalSpaceId: null,
+    walletAddress: undefined,
+    keyInput: null,
+    isLoading: false,
+  }),
+  useCachedBrowseSidebarData: () => null,
+}));
+
 // The viewer's own profile is already cached from the navbar, which is what lets their avatar join
 // the side they picked without waiting on anything.
 vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({

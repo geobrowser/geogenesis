@@ -57,6 +57,7 @@ const mocks = vi.hoisted(() => ({
   browsedLookupLoading: false,
   currentUserId: 'user-local' as string | null,
   spaceAllowlist: null as Set<string> | null,
+  allowlistLoading: false,
   scrollSentinelIntoView: null as null | (() => void),
   claimReadinessLoading: false,
   claimReadinessError: false,
@@ -195,11 +196,23 @@ vi.mock('~/core/debates/recommended-claims', () => ({
 
 // Null is "the allowlist hasn't resolved", which every case that isn't about it runs under.
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
-  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: false }),
+  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, sidePanelTarget: null, closeSidePanel: vi.fn() }),
+}));
+
+// useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
+// suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useBrowseSidebarQuerySource: () => ({
+    personalSpaceId: null,
+    walletAddress: undefined,
+    keyInput: null,
+    isLoading: false,
+  }),
+  useCachedBrowseSidebarData: () => null,
 }));
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
@@ -248,6 +261,7 @@ beforeEach(() => {
   mocks.browsedLookupLoading = false;
   mocks.currentUserId = 'user-local';
   mocks.spaceAllowlist = null;
+  mocks.allowlistLoading = false;
   // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
   // the callback so a test can say the sentinel scrolled into view.
   mocks.scrollSentinelIntoView = null;
@@ -803,8 +817,31 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.rematchClaimIds.flat()).not.toContain(CLAIM_MORE);
   });
 
-  it('filters nothing while the allowlist is still resolving', async () => {
+  // Listing the unfiltered pool and trimming it once the allowlist lands means claims and spaces
+  // appear and then vanish under the viewer. Waiting is the honest state.
+  it('shows nothing while the allowlist is still resolving', async () => {
     mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+  });
+
+  // Nor does it spend a batch of geo-chat round trips on a pool it is about to throw away.
+  it('holds the geo-chat lookup while the allowlist is still resolving', () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.rematchClaimIds.flat()).not.toContain(CLAIM_MORE);
+  });
+
+  // A lookup that settles without an answer must not leave the picker permanently empty.
+  it('falls through to the unfiltered list when the allowlist lookup comes back empty', async () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = false;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();
 

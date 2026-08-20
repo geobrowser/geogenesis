@@ -14,20 +14,18 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { EntityId } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
 import { useMutate } from '~/core/sync/use-mutate';
-import { SpaceGovernanceType, SpaceType } from '~/core/types';
+import { SpaceType } from '~/core/types';
 import { describeError } from '~/core/utils/error-diagnostics';
 import { NavUtils } from '~/core/utils/utils';
 
-import { SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
-import { Close } from '~/design-system/icons/close';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
 import { Animation } from '~/partials/onboarding/dialog';
 import { cloneEntityIntoSpace } from '~/partials/versions/clone-entity-into-space';
 
-type Step = 'select-type' | 'creating' | 'completed';
+type Step = 'creating' | 'completed';
 
 type EntityToSpaceDialogProps = {
   entityId: string;
@@ -37,23 +35,8 @@ type EntityToSpaceDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-const spaceTypeOptions: { image: string; label: string; value: SpaceType; governance: SpaceGovernanceType }[] = [
-  { image: '/images/onboarding/blank.png', label: 'Blank', value: 'default', governance: 'DAO' },
-  {
-    image: '/images/onboarding/academic-field.png',
-    label: 'Academic field',
-    value: 'academic-field',
-    governance: 'DAO',
-  },
-  { image: '/images/onboarding/company.png', label: 'Company', value: 'company', governance: 'DAO' },
-  { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao', governance: 'DAO' },
-  { image: '/images/onboarding/gov-org.png', label: 'Government org', value: 'government-org', governance: 'DAO' },
-  { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry', governance: 'DAO' },
-  { image: '/images/onboarding/interest-group.png', label: 'Interest', value: 'interest', governance: 'DAO' },
-  { image: '/images/onboarding/region.png', label: 'Region', value: 'region', governance: 'DAO' },
-  { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit', governance: 'DAO' },
-  { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol', governance: 'DAO' },
-];
+// "Turn into space" clones the source entity's own blocks onto the home entity
+const NEW_SPACE_TYPE: SpaceType = 'default';
 
 export function EntityToSpaceDialog({
   entityId,
@@ -68,7 +51,7 @@ export function EntityToSpaceDialog({
   const { storage } = useMutate();
   const reportError = useReportError();
 
-  const [step, setStep] = useState<Step>('select-type');
+  const [step, setStep] = useState<Step>('creating');
   const [newSpaceId, setNewSpaceId] = useState<string>('');
 
   const address = smartAccount?.account.address;
@@ -76,19 +59,22 @@ export function EntityToSpaceDialog({
   const title = 'Turn into space';
 
   const resetState = () => {
-    setStep('select-type');
+    setStep('creating');
     setNewSpaceId('');
   };
 
-  const createSpace = async (spaceType: SpaceType) => {
+  const createSpace = React.useCallback(async () => {
     if (!address) return;
+
+    setStep('creating');
 
     try {
       const spaceId = await deploy({
-        type: spaceType,
+        type: NEW_SPACE_TYPE,
         spaceName: entityName,
         governanceType: 'DAO',
         topicId: entityId,
+        seedOverviewTemplate: false,
       });
 
       if (!spaceId) {
@@ -102,19 +88,22 @@ export function EntityToSpaceDialog({
     } catch (error) {
       console.error(error);
       const message = describeError(error);
-      // Send the user back to the type-selection step so they can pick again or retry.
-      setStep('select-type');
-      reportError(`Space creation failed: ${message}`, () => {
-        setStep('creating');
-        createSpace(spaceType);
-      });
+      resetState();
+      onOpenChange(false);
+      reportError(`Space creation failed: ${message}`, () => onOpenChange(true));
     }
-  };
+  }, [address, deploy, entityName, entityId, sourceSpaceId, storage, reportError, onOpenChange]);
 
-  const onSelectType = (spaceType: SpaceType) => {
-    setStep('creating');
-    createSpace(spaceType);
-  };
+  const startedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!open) {
+      startedRef.current = false;
+      return;
+    }
+    if (startedRef.current || !address) return;
+    startedRef.current = true;
+    createSpace();
+  }, [open, address, createSpace]);
 
   const hasCompleted = step === 'completed';
 
@@ -130,23 +119,15 @@ export function EntityToSpaceDialog({
     <Dialog.Root
       open={open}
       onOpenChange={nextOpen => {
-        if (!nextOpen && step !== 'creating') {
-          resetState();
-          onOpenChange(false);
-        }
+        if (!nextOpen) return;
+        onOpenChange(true);
       }}
     >
       <Dialog.Portal>
         <Dialog.Content
-          onEscapeKeyDown={e => {
-            if (step === 'creating' || step === 'completed') e.preventDefault();
-          }}
-          onPointerDownOutside={e => {
-            if (step === 'creating' || step === 'completed') e.preventDefault();
-          }}
-          onInteractOutside={e => {
-            if (step === 'creating' || step === 'completed') e.preventDefault();
-          }}
+          onEscapeKeyDown={e => e.preventDefault()}
+          onPointerDownOutside={e => e.preventDefault()}
+          onInteractOutside={e => e.preventDefault()}
         >
           <Dialog.Title className="sr-only">{title}</Dialog.Title>
           <Dialog.Description className="sr-only">Turn this entity into a new space</Dialog.Description>
@@ -169,81 +150,39 @@ export function EntityToSpaceDialog({
                   {/* Header */}
                   <div className="relative z-20 flex items-center justify-between pb-2">
                     <div className="h-1 w-4" />
-                    <h3 className="text-smallTitle">{step === 'select-type' ? title : ''}</h3>
-                    {step === 'select-type' ? (
-                      <Dialog.Close asChild>
-                        <SquareButton icon={<Close color="grey-04" />} className="border-none! bg-transparent!" />
-                      </Dialog.Close>
-                    ) : (
-                      <div className="h-1 w-4" />
-                    )}
+                    <h3 className="text-smallTitle" />
+                    <div className="h-1 w-4" />
                   </div>
 
-                  {/* Template selection */}
-                  {step === 'select-type' && (
-                    <motion.div
-                      key="select-type"
-                      initial={{ opacity: 0, right: -20 }}
-                      animate={{ opacity: 1, left: 0, right: 0 }}
-                      exit={{ opacity: 0, left: -20 }}
-                      transition={{ ease: 'easeInOut', duration: 0.225 }}
-                      className="relative flex grow flex-col"
-                    >
-                      <div className="mt-1 mb-3 text-center">
-                        <Text as="p" variant="body" className="text-grey-04">
-                          Creating space for <strong className="text-text">{entityName}</strong>
-                        </Text>
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
-                        {spaceTypeOptions.map(option => (
-                          <button
-                            key={option.value}
-                            onClick={() => onSelectType(option.value)}
-                            className="flex items-center gap-3 rounded-lg border border-divider bg-white py-2 pr-3 pl-2 transition-colors duration-150 ease-in-out hover:bg-divider"
-                          >
-                            <div className="size-8 shrink-0 overflow-clip rounded">
-                              <img src={option.image} alt="" className="block h-full w-full object-cover" />
-                            </div>
-                            <div className="text-button">{option.label}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-
                   {/* Creating / completed */}
-                  {(step === 'creating' || step === 'completed') && (
-                    <>
-                      <motion.div
-                        key="creating"
-                        initial={{ opacity: 0, right: -20 }}
-                        animate={{ opacity: 1, left: 0, right: 0 }}
-                        exit={{ opacity: 0, left: -20 }}
-                        transition={{ ease: 'easeInOut', duration: 0.225 }}
-                        className="relative flex grow flex-col"
-                      >
-                        <div className="flex w-full flex-col items-center pt-3">
-                          <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center text-2xl!')}>
-                            {hasCompleted ? 'Finalizing details...' : 'Creating space...'}
-                          </Text>
-                          <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
-                            Turning entity into a new space.
-                          </Text>
-                          {!hasCompleted && <Spacer height={32} />}
-                        </div>
-                      </motion.div>
-                      <div className="absolute inset-x-4 bottom-4">
-                        <div className="absolute top-0 right-0 left-0 z-10 flex -translate-y-1/2 justify-center">
-                          <div className="flex size-11 items-center justify-center rounded-full bg-white shadow-card">
-                            <Dots />
-                          </div>
-                        </div>
-                        <div className="relative z-0">
-                          <Animation active={hasCompleted} />
-                        </div>
+                  <motion.div
+                    key="creating"
+                    initial={{ opacity: 0, right: -20 }}
+                    animate={{ opacity: 1, left: 0, right: 0 }}
+                    exit={{ opacity: 0, left: -20 }}
+                    transition={{ ease: 'easeInOut', duration: 0.225 }}
+                    className="relative flex grow flex-col"
+                  >
+                    <div className="flex w-full flex-col items-center pt-3">
+                      <Text as="h3" variant="bodySemibold" className={cx('mx-auto text-center text-2xl!')}>
+                        {hasCompleted ? 'Finalizing details...' : 'Creating space...'}
+                      </Text>
+                      <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
+                        Turning entity into a new space.
+                      </Text>
+                      {!hasCompleted && <Spacer height={32} />}
+                    </div>
+                  </motion.div>
+                  <div className="absolute inset-x-4 bottom-4">
+                    <div className="absolute top-0 right-0 left-0 z-10 flex -translate-y-1/2 justify-center">
+                      <div className="flex size-11 items-center justify-center rounded-full bg-white shadow-card">
+                        <Dots />
                       </div>
-                    </>
-                  )}
+                    </div>
+                    <div className="relative z-0">
+                      <Animation active={hasCompleted} />
+                    </div>
+                  </div>
                 </motion.div>
               </motion.div>
             </AnimatePresence>
