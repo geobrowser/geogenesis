@@ -741,7 +741,7 @@ function StepInterestedIn({
             variant="body"
             className="mx-auto mt-2 text-center text-[16px] leading-5 font-normal text-grey-04"
           >
-            Select one or more spaces that you are interested in
+            Select the first spaces you want to join
           </Text>
         </div>
       </StepContents>
