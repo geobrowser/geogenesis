@@ -746,6 +746,55 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByText('A claim both participants chose')).toBeNull();
   });
 
+  // On a phone the three tabs are wider than the screen. They were laid out in a row that could
+  // neither shrink them nor scroll, inside a layer that could scroll sideways — so a swipe at the
+  // tabs panned the whole session instead of moving the tabs.
+  describe('tab strip overflow', () => {
+    /** The row holding the tab buttons. */
+    function tabStrip() {
+      const tab = screen.getByRole('button', { name: /All/ });
+      const strip = tab.parentElement;
+      expect(strip).not.toBeNull();
+      return strip!;
+    }
+
+    it('scrolls the tabs on their own rather than the page', () => {
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(tabStrip().className).toContain('overflow-x-auto');
+      // Without this the row is only as wide as its content allows, and there is nothing to scroll.
+      expect(tabStrip().className).toContain('min-w-0');
+    });
+
+    // A swipe that reaches the end of the strip would otherwise chain outward, which on iOS is the
+    // browser's back gesture — leaving the debate.
+    it('keeps an overscrolling swipe inside the strip', () => {
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(tabStrip().className).toContain('overscroll-x-contain');
+    });
+
+    // The tabs have to keep their own width for the strip to have anything to scroll; squeezed
+    // flex children just get narrower and stay on screen.
+    it('lets each tab keep its natural width', () => {
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      for (const name of [/All/, /positions/]) {
+        expect(screen.getByRole('button', { name }).className).toContain('shrink-0');
+      }
+    });
+
+    // `overflow-y-auto` alone leaves the other axis computing to `auto`, which is what let the
+    // whole fixed layer pan sideways.
+    it('does not let the page itself scroll sideways', () => {
+      const { container } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      const shell = container.querySelector('.fixed.inset-0');
+      expect(shell).not.toBeNull();
+      expect(shell!.className).toContain('overflow-x-hidden');
+    });
+  });
+
   it('shortens the opponent tab to their first name', () => {
     const base = session();
     mocks.session = session({
@@ -1015,7 +1064,9 @@ describe('DebateRematchPageClient', () => {
 
     expect(mocks.markEnteringDebate).toHaveBeenCalledWith('debate-9');
     expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates/debate-9`);
-    expect(mocks.markEnteringDebate.mock.invocationCallOrder[0]).toBeLessThan(mocks.replace.mock.invocationCallOrder[0]!);
+    expect(mocks.markEnteringDebate.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.replace.mock.invocationCallOrder[0]!
+    );
   });
 
   // A backend that predates the fields answers `undefined`, and the picker must keep working
