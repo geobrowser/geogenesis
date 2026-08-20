@@ -149,7 +149,8 @@ export function TableBlockBulletedListItem({
             </Link>
           </CollectionMetadata>
         )}
-        <EntityRowActions entityId={rowEntityId} spaceId={currentSpaceId} className="mt-1" />
+        {/* The entity's own space, not the block's — see the note in table-block-list-item. */}
+        <EntityRowActions entityId={rowEntityId} spaceId={nameCell?.space ?? currentSpaceId} className="mt-1" />
       </div>
       <div className="flex h-[1.8125rem] shrink-0 items-center gap-1 md:hidden">
         {!isPlaceholder && source.type !== 'COLLECTION' && (
