@@ -1,14 +1,12 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { keepPreviousData } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import {
   type DebateClaimPositionSummary,
   type DebateClaimSummary,
@@ -18,6 +16,9 @@ import {
   type MatchmakingReadiness,
   type MatchmakingTopic,
 } from '~/core/debates/api';
+import { type ClaimPickerEntity, useClaimPickerPage } from '~/core/debates/claim-picker-page';
+import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
+import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { defaultDebateFormatId } from '~/core/debates/formats';
@@ -29,6 +30,7 @@ import {
   useDebateRematch,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
+  useGeoChatAuth,
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
@@ -46,7 +48,6 @@ import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
-import { useQueryEntities } from '~/core/sync/use-store';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import { getChecked } from '~/design-system/checkbox';
@@ -93,25 +94,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     isPlaceholderData: publishedClaimsPlaceholder,
     endCursor: publishedClaimsEndCursor,
     hasNextPage: publishedClaimsHasNextPage,
-  } = useQueryEntities({
     // Search runs in the query rather than over the loaded pages. The All tab browses every
     // published claim 50 at a time, so filtering locally only ever searched what had been paged
-    // in — the hub's Claims tab searches server-side, and this now matches it. `contains` maps to
-    // the same case-insensitive substring its `?search=` does.
-    where: {
-      types: [{ id: { equals: CLAIM_TYPE_ID } }],
-      ...(debouncedSearch ? { name: { contains: debouncedSearch } } : {}),
-    },
-    first: 50,
-    after: publishedClaimsCursor,
-    placeholderData: keepPreviousData,
-  });
+    // in — the hub's Claims tab searches server-side, and this matches it.
+    //
+    // A purpose-built page rather than `useQueryEntities`: that fetches whole entities — every
+    // value, every relation, every related entity's values — and this scan is graph-wide, so a
+    // page ran to a quarter of a megabyte and several seconds. The picker reads six fields.
+  } = useClaimPickerPage({ search: debouncedSearch, after: publishedClaimsCursor });
 
   // Pages accumulate as the viewer loads more, but a change of term replaces them rather than
   // piling the new matches on top of the previous corpus.
   const [publishedClaims, setPublishedClaims] = React.useState<{
     search: string;
-    entities: typeof publishedClaimsPage;
+    entities: ClaimPickerEntity[];
   }>({ search: '', entities: [] });
   React.useEffect(() => {
     // `keepPreviousData` keeps the old term's page on screen while the new one fetches. Recording
@@ -162,10 +158,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Featured spaces plus the ones the viewer belongs to. Applied to the whole pool rather than to
   // the All tab alone, so every tab, the space menu and the opponent-position count all describe
   // the same set of claims.
-  const { allowlist: spaceAllowlist } = useClaimSpaceAllowlist();
+  const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+
+  // While it is still resolving there is no telling an allowed space from one the viewer has
+  // nothing to do with, so the picker waits rather than listing the unfiltered set and trimming it
+  // under them. A lookup that settled without an answer leaves this false and falls through to the
+  // unfiltered list — too wide beats never filling.
+  const allowlistPending = spaceAllowlist === null && allowlistLoading;
 
   const claimEntities = React.useMemo(() => {
-    const byId = new Map(publishedClaims.entities.map(claim => [claim.id, claim]));
+    // The browsed pages carry the narrow projection; curated claims arrive as full entities, which
+    // satisfy the same shape. Both go through the same helpers below.
+    const byId = new Map<string, ClaimPickerEntity>(publishedClaims.entities.map(claim => [claim.id, claim]));
     for (const claim of recommendedEntities) if (!byId.has(claim.id)) byId.set(claim.id, claim);
     return [...byId.values()];
   }, [publishedClaims.entities, recommendedEntities]);
@@ -179,13 +183,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const curatedClaimsQuery = useDebateRematchClaimsForIds(sessionId, recommendedClaimIds);
   // Narrowed to the allowed spaces before the lookup, not after: the browsed scan is graph-wide,
   // and asking geo-chat about claims the picker is going to drop is a batch of round trips spent
-  // on rows nobody sees.
+  // on rows nobody sees. Held entirely while the allowlist is still resolving, when every id would
+  // be such a row.
   const browsedClaimIds = React.useMemo(
     () =>
-      publishedClaims.entities
-        .filter(claim => isClaimSpaceAllowed(claimHomeSpaceId(claim), spaceAllowlist))
-        .map(claim => claim.id),
-    [publishedClaims.entities, spaceAllowlist]
+      allowlistPending
+        ? []
+        : publishedClaims.entities
+            .filter(claim => isClaimSpaceAllowed(claimHomeSpaceId(claim), spaceAllowlist))
+            .map(claim => claim.id),
+    [allowlistPending, publishedClaims.entities, spaceAllowlist]
   );
   const browsedClaimsQuery = useDebateRematchClaimsForIds(sessionId, browsedClaimIds);
 
@@ -231,14 +238,32 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         });
       }
     }
+    if (allowlistPending) return [];
+
+    // The batches geo-chat answers come back in id-sorted chunks, so a Map fed from them would
+    // reorder the list every time a new page joins. Lay the rows out in the order the picker
+    // asked for them: saved, then curated, then the browsed page as the knowledge graph paged it.
+    const orderByClaimId = new Map<string, number>();
+    for (const claimId of [
+      ...(savedClaimsQuery.data?.claims ?? []).map(claim => claim.claim.claim_entity_id),
+      ...recommendedClaimIds,
+      ...claimEntities.map(claim => claim.id),
+    ]) {
+      if (!orderByClaimId.has(claimId)) orderByClaimId.set(claimId, orderByClaimId.size);
+    }
+    const orderOf = (claim: DebateRematchClaim) =>
+      orderByClaimId.get(claim.claim.claim_entity_id) ?? Number.MAX_SAFE_INTEGER;
+
     return [...synchronizedClaims.values()]
       .filter(claim => !excludedClaimIds.has(claim.claim.claim_entity_id))
       .filter(claim => isClaimSpaceAllowed(claim.claim.space_id, spaceAllowlist))
-      .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
+      .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference) || orderOf(a) - orderOf(b));
   }, [
+    allowlistPending,
     browsedClaimsQuery.data,
     claimEntities,
     curatedClaimsQuery.data,
+    recommendedClaimIds,
     savedClaimsQuery.data,
     session?.participants,
     sourceDebateQuery.data,
@@ -358,9 +383,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   });
 
   // Each tab draws from a different set of queries, so each waits on its own. The browsed scan is
-  // the slow one and only the All tab reads it.
+  // the slow one and only the All tab reads it. The allowlist is the exception — it narrows the
+  // pool every tab reads, so all of them wait on it.
   const tabIsLoading =
     sessionQuery.isLoading ||
+    allowlistPending ||
     (tab === 'recommended'
       ? recommendedLoading || curatedClaimsQuery.isLoading
       : tab === 'opponent'
@@ -382,23 +409,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       .filter(section => section.claims.length > 0);
   }, [recommendedSections, tab, visibleClaims]);
 
-  // Readiness drives the card's Debate toggle and the rematch claims response doesn't carry it, so
-  // read it from the per-space debate-claims endpoint instead — one query per space on screen.
-  const claimIdsBySpace = React.useMemo(() => {
-    const bySpace = new Map<string, string[]>();
-    for (const claim of claims) {
-      const existing = bySpace.get(claim.claim.space_id);
-      if (existing) existing.push(claim.claim.claim_entity_id);
-      else bySpace.set(claim.claim.space_id, [claim.claim.claim_entity_id]);
-    }
-    return bySpace;
-  }, [claims]);
-  const { byClaimId: readinessByClaimId, unresolved: readinessUnresolved } =
-    useClaimReadinessByClaimId(claimIdsBySpace);
+  // Readiness drives the card's Debate toggle. geo-chat now carries it on the rematch claims
+  // response itself; the per-space debate-claims endpoint is the fallback for a backend that
+  // predates that, and it costs one query per space on screen.
+  const { byClaimId: readinessByClaimId, unresolved: readinessUnresolved } = useClaimReadinessByClaimId({
+    claims,
+    rematchResponses: [savedClaimsQuery, curatedClaimsQuery, browsedClaimsQuery],
+  });
 
   React.useEffect(() => {
     if (!session) return;
     if (session.status === 'converted' && session.converted_debate_id) {
+      // The requester walks into the room the same way the accepter does, and without the intent
+      // `DebateCoordinator` reads the walk as an unannounced debate and reopens the dialog.
+      markEnteringDebate(session.converted_debate_id);
       router.replace(`/space/${session.source_space_id}/debates/${session.converted_debate_id}`);
     } else if (session.status === 'ended' || session.status === 'expired') {
       returnFromSession(session);
@@ -572,8 +596,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         {/* Outside the empty state deliberately: when a filter empties the list, the next page is
             the way out, so the sentinel has to stay reachable — with nothing rendered it sits in
             view and keeps paging until a match turns up or the corpus runs out. Not on the curated
-            tab, whose sections come from the page whole and have no next page to fetch. */}
-        {tab !== 'recommended' && publishedClaimsHasNextPage && (
+            tab, whose sections come from the page whole and have no next page to fetch, and not
+            while the allowlist is pending — the picker is showing a loading state then, and paging
+            the graph-wide scan against it would burn round trips on a pool held back on purpose. */}
+        {tab !== 'recommended' && publishedClaimsHasNextPage && !allowlistPending && (
           <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         )}
       </main>
@@ -603,36 +629,93 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 /** What the per-space debate-claims endpoint knows about a claim's readiness. */
 type ClaimReadinessState = { viewer_debate_ready: boolean; readiness_disabled_reason: string | null };
 
+type RematchClaimsQueryState = {
+  data?: { claims: DebateRematchClaim[] } | null;
+  isLoading: boolean;
+  error: unknown;
+};
+
 /**
- * Readiness for every claim on screen, keyed by claim entity id. The rematch claims response
- * doesn't carry it, so this reads the per-space debate-claims endpoint — one query per space —
- * letting the shared card render its Debate toggle against real state.
+ * Readiness for every claim on screen, keyed by claim entity id, so the shared card can render its
+ * Debate toggle against real state.
+ *
+ * Read from the rematch claims responses when they carry it — the same rows the picker already
+ * asked for, so nothing extra goes over the wire. A claim those responses omit has no debate-claim
+ * row in geo-chat at all, and readiness hangs off that row, so its settled truth is "not ready".
+ * A backend that predates the fields answers `undefined`; then the per-space debate-claims
+ * endpoint is asked instead, one query per space on screen, exactly as before.
  */
-function useClaimReadinessByClaimId(claimIdsBySpace: Map<string, string[]>) {
-  const groups = React.useMemo(
-    () =>
-      [...claimIdsBySpace.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([spaceId, claimIds]) => ({ spaceId, claimIds })),
-    [claimIdsBySpace]
+function useClaimReadinessByClaimId({
+  claims,
+  rematchResponses,
+}: {
+  claims: DebateRematchClaim[];
+  rematchResponses: RematchClaimsQueryState[];
+}) {
+  // Keyed on the payloads, not the array literal the caller builds each render — otherwise this
+  // map and every card below it would rebuild on every render of the page.
+  const [savedPayload, curatedPayload, browsedPayload] = rematchResponses.map(response => response.data);
+  const rematchClaims = React.useMemo(
+    () => [savedPayload, curatedPayload, browsedPayload].flatMap(payload => payload?.claims ?? []),
+    [savedPayload, curatedPayload, browsedPayload]
   );
-  const { claims, isLoading, isError } = useDebateClaimsBySpaces(groups);
+  // Every response comes from the same backend, so one claim speaks for all of them. With none
+  // loaded yet the answer is unknown, and asking the per-space endpoint on a guess would spend the
+  // very requests this exists to save — so treat that as "carried" and let `unresolved` hold.
+  const rematchCarriesReadiness = rematchClaims.length === 0 || rematchClaims[0]!.viewer_debate_ready !== undefined;
+
+  // `debate.claims_changed` is delivered per space, so the picker has to hold a scope on every
+  // space it shows or the opponent's responses only appear after a reconnect. That used to ride on
+  // the per-space readiness query below; it must not depend on where readiness comes from.
+  const { authenticated } = useGeoChatAuth();
+  const spaceIds = React.useMemo(
+    () => [...new Set(claims.map(claim => claim.claim.space_id))].sort((a, b) => a.localeCompare(b)),
+    [claims]
+  );
+  useDebateGatewaySpaceScopes(spaceIds, authenticated && spaceIds.length > 0);
+
+  const claimIdsBySpace = React.useMemo(() => {
+    if (rematchCarriesReadiness) return [];
+    const bySpace = new Map<string, string[]>();
+    for (const claim of claims) {
+      const existing = bySpace.get(claim.claim.space_id);
+      if (existing) existing.push(claim.claim.claim_entity_id);
+      else bySpace.set(claim.claim.space_id, [claim.claim.claim_entity_id]);
+    }
+    return [...bySpace.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([spaceId, claimIds]) => ({ spaceId, claimIds }));
+  }, [claims, rematchCarriesReadiness]);
+  const perSpace = useDebateClaimsBySpaces(claimIdsBySpace);
 
   const byClaimId = React.useMemo(() => {
     const map = new Map<string, ClaimReadinessState>();
-    for (const claim of claims) {
+    if (rematchCarriesReadiness) {
+      for (const claim of rematchClaims) {
+        if (claim.viewer_debate_ready === undefined) continue;
+        map.set(claim.claim.claim_entity_id, {
+          viewer_debate_ready: claim.viewer_debate_ready,
+          readiness_disabled_reason: claim.readiness_disabled_reason ?? null,
+        });
+      }
+      return map;
+    }
+    for (const claim of perSpace.claims) {
       map.set(claim.claim_entity_id, {
         viewer_debate_ready: claim.viewer_debate_ready,
         readiness_disabled_reason: claim.readiness_disabled_reason,
       });
     }
     return map;
-  }, [claims]);
+  }, [perSpace.claims, rematchCarriesReadiness, rematchClaims]);
 
   // A claim missing from a settled lookup genuinely has no readiness row, so `false` is the truth.
   // Missing while a lookup is still running or has failed means we don't know, and a switch drawn
   // from a guess is worse than one that waits.
-  return { byClaimId, unresolved: isLoading || isError };
+  const unresolved = rematchCarriesReadiness
+    ? rematchResponses.some(response => response.isLoading || response.error)
+    : perSpace.isLoading || perSpace.isError;
+  return { byClaimId, unresolved };
 }
 
 /**

@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { CURATOR_ONBOARDING_PROGRESS_COLOR, CURATOR_ONBOARDING_STEPS } from '~/core/explore/curator-onboarding-steps';
+import { useChecklistExpansion } from '~/core/hooks/use-checklist-expansion';
 import { useCuratorOnboardingStatus } from '~/core/hooks/use-curator-onboarding-status';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -34,8 +35,8 @@ function CuratorOnboardingStepIndicator({ complete }: { complete: boolean }) {
 }
 
 export function CuratorOnboardingSection() {
-  const { completion, progressPercent, isLoading, isVisible } = useCuratorOnboardingStatus();
-  const [expanded, setExpanded] = React.useState(true);
+  const { completion, progressPercent, allComplete, isLoading, isVisible } = useCuratorOnboardingStatus();
+  const { expanded, onToggle } = useChecklistExpansion({ allComplete, isLoading });
 
   if (!isVisible) return null;
 
@@ -47,7 +48,7 @@ export function CuratorOnboardingSection() {
           type="button"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse curator onboarding' : 'Expand curator onboarding'}
-          onClick={() => setExpanded(prev => !prev)}
+          onClick={onToggle}
           className="mt-1.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-grey-04 transition-colors hover:text-text"
         >
           <span className={cx('transition-transform', expanded ? 'rotate-180' : 'rotate-0')}>

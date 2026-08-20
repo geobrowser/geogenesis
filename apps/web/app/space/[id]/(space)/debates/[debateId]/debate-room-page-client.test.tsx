@@ -6,6 +6,7 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
+import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
 
@@ -168,9 +169,15 @@ vi.mock('livekit-client', () => ({
     Reconnected: 'reconnected',
     Disconnected: 'disconnected',
   },
+  // Mirrors the runtime shape of the protobuf numeric enum: forward name -> number entries plus
+  // reverse number -> name entries, so disconnectReasonName's reverse-mapping filter is exercised.
   DisconnectReason: {
     CLIENT_INITIATED: 1,
     DUPLICATE_IDENTITY: 2,
+    SERVER_SHUTDOWN: 3,
+    1: 'CLIENT_INITIATED',
+    2: 'DUPLICATE_IDENTITY',
+    3: 'SERVER_SHUTDOWN',
   },
 }));
 
@@ -693,6 +700,16 @@ describe('DebateRoomPageClient', () => {
       expect(mocks.roomConstruct).toHaveBeenCalledWith({
         adaptiveStream: false,
         dynacast: false,
+        reconnectPolicy: expect.any(ExtendedReconnectPolicy),
+        disconnectOnPageLeave: false,
+        publishDefaults: {
+          simulcast: true,
+          videoEncoding: { maxBitrate: 800_000, maxFramerate: 25 },
+          degradationPreference: 'maintain-framerate',
+          videoCodec: 'vp8',
+          red: true,
+          dtx: true,
+        },
         audioOutput: { deviceId: 'speaker-2' },
       })
     );
@@ -1018,6 +1035,200 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.publishTrack.mock.invocationCallOrder.every(callOrder => callOrder > joinedCallOrder)).toBe(true);
   });
 
+  it('marks the participant joined before a cold local-track request finishes', async () => {
+    const pendingTracks = deferred<Awaited<ReturnType<typeof mocks.createLocalTracks>>>();
+    mocks.createLocalTracks.mockReturnValue(pendingTracks.promise);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.createLocalTracks).toHaveBeenCalledOnce();
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
+  });
+
+  it('keeps a retry reachable when local media fails after the debate has advanced past connecting', async () => {
+    const pendingTracks = deferred<Awaited<ReturnType<typeof mocks.createLocalTracks>>>();
+    mocks.createLocalTracks.mockReturnValue(pendingTracks.promise);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledOnce());
+
+    // The server counts us as joined, so it will start the debate rather than time the pair out and
+    // rematch them. Getting media is still outstanding when that happens.
+    mocks.debate = {
+      ...mocks.debate,
+      status: 'in_progress',
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      turn_started_at: '2099-07-02T00:00:30.000Z',
+      turn_ends_at: '2099-07-02T00:01:00.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    pendingTracks.reject(Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' }));
+
+    await waitFor(() =>
+      expect(mocks.capture).toHaveBeenCalledWith(
+        'debate_room_connection_failed',
+        expect.objectContaining({ stage: 'local_tracks', error_name: 'NotReadableError' })
+      )
+    );
+    // Nothing on the server side can rescue this participant now, so the way back in has to survive
+    // the status change that removed the connecting-deadline rematch.
+    expect(await screen.findByRole('button', { name: 'Retry connection' })).toBeEnabled();
+  });
+
+  it('re-runs connect once by itself when local media fails while the debate is still connecting', async () => {
+    mocks.createLocalTracks.mockRejectedValueOnce(
+      Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' })
+    );
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // The server counted the join, so the connecting-deadline rematch can no longer rescue us and
+    // the room has to try again on its own — the auto-connect effect will not, since the debate is
+    // still `connecting` and the room never returns to idle.
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalled());
+    expect(mocks.markJoinedMutateAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops after the one silent re-attempt when local media keeps failing', async () => {
+    mocks.createLocalTracks.mockRejectedValue(
+      Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' })
+    );
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(2), { timeout: 3000 });
+    // A repeating camera error would otherwise spin; the second failure leaves it to the viewer.
+    expect(await screen.findByRole('button', { name: 'Retry connection' })).toBeEnabled();
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not turn a later lost connection into an automatic reconnect after a post-join recovery', async () => {
+    mocks.createLocalTracks.mockRejectedValueOnce(
+      Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' })
+    );
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalled(), { timeout: 3000 });
+    expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(2);
+
+    // Recovery must not leave the auto-connect latch open: a network drop stops at "Lost connection"
+    // with a Retry button, as it always did, rather than reconnecting behind the viewer's back.
+    act(() => emitRoomEvent('disconnected', 99));
+    expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 300));
+    expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledTimes(2);
+  });
+
+  it('enables the microphone from the turn that is live when local media finally arrives', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+    const audioTrack = createLocalAudioTrack();
+    const pendingTracks = deferred<Awaited<ReturnType<typeof mocks.createLocalTracks>>>();
+    mocks.createLocalTracks.mockReturnValue(pendingTracks.promise);
+    // The remote slot holds the turn as `connect` is built, so the closure it captures says the
+    // local microphone should stay off.
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      current_turn_index: 0,
+      current_speaker_slot: 2,
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
+
+    // The turn passes to the local slot while `createLocalTracks` is still cold. The reconciliation
+    // effect fires here against an empty track list, so it has nothing to act on.
+    mocks.debate = {
+      ...mocks.debate,
+      current_turn_index: 1,
+      current_speaker_slot: 1,
+      turn_started_at: '2026-07-02T00:00:15.000Z',
+      turn_ends_at: '2026-07-02T00:00:45.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    pendingTracks.resolve([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+
+    // Guards the end state only. The underlying race — `connect` writing a captured, now-stale
+    // countdown over tracks that landed after the turn changed — needs the same `connect`
+    // invocation to survive the advance, and this harness starts a fresh one instead. That the
+    // microphone is live for the current turn after a cold media start is still worth pinning.
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalledTimes(2));
+    const publishedAudioTrack = mocks.publishTrack.mock.calls
+      .map(([track]) => track)
+      .find(track => track?.sourceMediaStreamTrack?.kind === 'audio');
+    expect(publishedAudioTrack).toBeDefined();
+    expect(publishedAudioTrack.sourceMediaStreamTrack.enabled).toBe(true);
+  });
+
+  it('reports the exact connection stage when LiveKit signaling fails', async () => {
+    mocks.roomConnect.mockRejectedValue(new Error('signaling failed'));
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:30.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() =>
+      expect(mocks.capture).toHaveBeenCalledWith(
+        'debate_room_connection_failed',
+        expect.objectContaining({
+          debate_id: 'debate-1',
+          stage: 'livekit_connect',
+          error_name: 'Error',
+          error_message: 'signaling failed',
+        })
+      )
+    );
+    expect(mocks.markJoinedMutateAsync).not.toHaveBeenCalled();
+  });
+
   it('does not mint a token when another tab owns the participant connection', async () => {
     mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {
@@ -1278,7 +1489,41 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Reconnecting to the debate room…')).not.toBeInTheDocument();
   });
 
-  it('shows an error on an unexpected disconnect but ignores our own teardown', async () => {
+  it('reports a reconnect episode once, with its duration, and joins with resilient connect options', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+    expect(mocks.roomConnect).toHaveBeenCalledWith(expect.any(String), expect.any(String), {
+      maxRetries: 3,
+      websocketTimeout: 20_000,
+      peerConnectionTimeout: 25_000,
+    });
+
+    act(() => emitRoomEvent('reconnecting'));
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_reconnecting',
+      expect.objectContaining({ debate_id: 'debate-1' })
+    );
+
+    // LiveKit emits Reconnecting once per underlying attempt; a second attempt must not restart
+    // the episode clock or double-report.
+    act(() => emitRoomEvent('reconnecting'));
+    expect(mocks.capture.mock.calls.filter(([eventName]) => eventName === 'debate_room_reconnecting')).toHaveLength(1);
+
+    act(() => emitRoomEvent('reconnected'));
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_reconnected',
+      expect.objectContaining({ debate_id: 'debate-1', elapsed_ms: expect.any(Number) })
+    );
+  });
+
+  it('reports the disconnect reason and retry duration when auto-reconnect gives up', async () => {
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
       status: 'connecting',
@@ -1289,12 +1534,63 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
 
-    // CLIENT_INITIATED (our own disconnect) must not surface an error.
-    act(() => emitRoomEvent('disconnected', 1));
-    expect(screen.queryByText('Lost connection to the debate room.')).not.toBeInTheDocument();
+    act(() => emitRoomEvent('reconnecting'));
+    act(() => emitRoomEvent('disconnected', 3));
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_disconnected',
+      expect.objectContaining({
+        debate_id: 'debate-1',
+        disconnect_reason: 'SERVER_SHUTDOWN',
+        elapsed_ms: expect.any(Number),
+      })
+    );
+  });
 
-    act(() => emitRoomEvent('disconnected', 99));
+  it('stays silent when our own teardown disconnects the room', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    // A takeover release nulls roomRef and bumps the connection generation before the SDK can
+    // emit Disconnected, so the CLIENT_INITIATED from our own room.disconnect() never reaches the
+    // handler body — no "Lost connection" error, no drop metric.
+    await act(async () => {
+      await mocks.ownershipTakeoverHandler?.();
+    });
+    mocks.capture.mockClear();
+    act(() => emitRoomEvent('disconnected', 1));
+
+    expect(screen.queryByText('Lost connection to the debate room.')).not.toBeInTheDocument();
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_room_disconnected', expect.anything());
+  });
+
+  it('treats a frozen-tab CLIENT_INITIATED disconnect on a live room as a genuine drop', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    // The SDK's `freeze` listener is not gated by disconnectOnPageLeave, so Chromium freezing a
+    // backgrounded tab disconnects the live room with CLIENT_INITIATED. Our own teardowns never
+    // reach the handler (they null roomRef or bump the generation first), so this must surface as
+    // a drop rather than leaving a dead room behind a "connected" UI.
+    act(() => emitRoomEvent('disconnected', 1));
     expect(await screen.findByText('Lost connection to the debate room.')).toBeInTheDocument();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_room_disconnected',
+      expect.objectContaining({ disconnect_reason: 'CLIENT_INITIATED' })
+    );
   });
 
   it('explains when LiveKit disconnects a duplicate participant identity', async () => {
