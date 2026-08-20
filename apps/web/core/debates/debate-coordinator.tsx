@@ -17,6 +17,7 @@ import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
+import { rememberDebateReturnDestination } from './debate-return-navigation';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -180,6 +181,7 @@ export function DebateCoordinator() {
     const sourceDebatePath = rematch.source_debate_id ? `/debates/${rematch.source_debate_id}` : null;
     if (rematch.status === 'deciding') {
       if (sourceDebatePath && !pathname.includes(sourceDebatePath)) {
+        rememberDebateReturnDestination();
         router.push(`/space/${rematch.source_space_id}${sourceDebatePath}`);
       }
       return;
@@ -188,7 +190,10 @@ export function DebateCoordinator() {
       // The debate room owns recording finalization before entering the browser.
       if (sourceDebatePath && pathname.includes(sourceDebatePath)) return;
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
-      if (pathname !== path) router.push(path);
+      if (pathname !== path) {
+        rememberDebateReturnDestination();
+        router.push(path);
+      }
     }
   }, [activity, pathname, router]);
 

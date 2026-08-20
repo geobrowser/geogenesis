@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { rememberDebateReturnDestination } from './debate-return-navigation';
+
 /**
  * The debate this tab is on its way into.
  *
@@ -47,6 +49,7 @@ function set(debateId: string | null) {
 
 /** Call immediately before pushing into a debate room. */
 export function markEnteringDebate(debateId: string) {
+  rememberDebateReturnDestination();
   set(debateId);
   expiry = setTimeout(() => {
     expiry = null;

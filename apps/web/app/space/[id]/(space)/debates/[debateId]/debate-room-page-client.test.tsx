@@ -6,6 +6,7 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
+import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
@@ -250,6 +251,7 @@ class FakeBroadcastChannel {
 }
 
 beforeEach(() => {
+  clearDebateReturnDestination();
   setHistoryLength(1);
   mocks.back.mockReset();
   mocks.push.mockReset();
@@ -385,6 +387,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
+  clearDebateReturnDestination();
   await Promise.resolve();
   await Promise.resolve();
   vi.useRealTimers();
@@ -451,8 +454,9 @@ describe('DebateRoomPageClient', () => {
   // Forward, never back: the entry behind this room is often this same room (hub → room → rematch
   // → room), and stepping back into a debate that ended under us re-runs the exit from a fresh
   // mount. That was the flicker, and on the opponent's side it took a second Okay to escape.
-  it('sends a recording canceller forward to the debates page instead of back into the room', async () => {
+  it('returns a recording canceller to the page that opened the flow', async () => {
     setHistoryLength(2);
+    rememberDebateReturnDestination('/space/my-space?tab=activity');
     mocks.debate = {
       ...completedDebate(),
       recording_cancelled_at: '2026-07-02T00:01:20.000Z',
@@ -463,7 +467,7 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/my-space?tab=activity'));
     expect(mocks.back).not.toHaveBeenCalled();
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
   });
@@ -2286,6 +2290,7 @@ describe('DebateRoomPageClient', () => {
 
   it('stops media at the deadline and returns to matching after backend cancellation', async () => {
     vi.useFakeTimers();
+    rememberDebateReturnDestination('/space/my-space/claims#recent');
     const connectingDebate: Debate = {
       ...completedDebate(),
       status: 'connecting',
@@ -2311,7 +2316,7 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.clearTimedOutDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(mocks.replace).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(750));
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/questions');
+    expect(mocks.replace).toHaveBeenCalledWith('/space/my-space/claims#recent');
   });
 
   it('keeps the room connected when preflight won the deadline race', async () => {

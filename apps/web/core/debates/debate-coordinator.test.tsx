@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   abortMutateAsync: vi.fn(),
   clearDebateActivity: vi.fn(),
+  rememberDebateReturnDestination: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -103,6 +104,10 @@ vi.mock('./claim-response-indexed-notifier', () => ({
   useClaimResponseIndexedNotifier: vi.fn(),
 }));
 
+vi.mock('./debate-return-navigation', () => ({
+  rememberDebateReturnDestination: mocks.rememberDebateReturnDestination,
+}));
+
 vi.mock('~/core/state/feature-flags', () => ({}));
 
 beforeEach(() => {
@@ -134,6 +139,7 @@ beforeEach(() => {
   mocks.abortMutateAsync.mockReset();
   mocks.abortMutateAsync.mockResolvedValue(undefined);
   mocks.clearDebateActivity.mockReset();
+  mocks.rememberDebateReturnDestination.mockReset();
   Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
   Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
   Object.defineProperty(URL, 'createObjectURL', {
@@ -178,6 +184,7 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    expect(mocks.rememberDebateReturnDestination).toHaveBeenCalled();
   });
 
   it('leaves a secondary tab on its current page when shared activity contains a debate', async () => {
