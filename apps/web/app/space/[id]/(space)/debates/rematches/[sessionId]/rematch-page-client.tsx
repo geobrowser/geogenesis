@@ -1,7 +1,5 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -49,7 +47,7 @@ import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
-import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
+import { entityHomeSpaceId } from '~/core/utils/space/entity-home-space';
 
 import { getChecked } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -186,12 +184,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // and asking geo-chat about claims the picker is going to drop is a batch of round trips spent
   // on rows nobody sees. Held entirely while the allowlist is still resolving, when every id would
   // be such a row.
+  //
+  // Everything the picker does with a claim is scoped to the space it lives in — the response is
+  // published against it, geo-chat keys its claim row and readiness on it, and the "Is factual"
+  // value that decides the response kind is read from it. Getting it wrong means responding in one
+  // space and asking to debate in another, which the server answers with "respond to this claim in
+  // this space before enabling debate readiness".
   const browsedClaimIds = React.useMemo(
     () =>
       allowlistPending
         ? []
         : publishedClaims.entities
-            .filter(claim => isClaimSpaceAllowed(claimHomeSpaceId(claim), spaceAllowlist))
+            .filter(claim => isClaimSpaceAllowed(entityHomeSpaceId(claim), spaceAllowlist))
             .map(claim => claim.id),
     [allowlistPending, publishedClaims.entities, spaceAllowlist]
   );
@@ -211,7 +215,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ...(browsedClaimsQuery.data?.excluded_claim_ids ?? []),
     ]);
     for (const claim of claimEntities) {
-      const homeSpaceId = claimHomeSpaceId(claim);
+      const homeSpaceId = entityHomeSpaceId(claim);
       if (
         claim.name &&
         homeSpaceId &&
@@ -972,40 +976,6 @@ function rematchPositionSummaries(
       participants,
     };
   });
-}
-
-/**
- * The space a claim actually lives in.
- *
- * Everything the picker does with a claim is scoped to one space — the response is published
- * against it, geo-chat keys its claim row and readiness on it, and the "Is factual" value that
- * decides the response kind is read from it. Getting it wrong means responding in one space and
- * asking to debate in another, which the server answers with "respond to this claim in this space
- * before enabling debate readiness".
- *
- * `entity.spaces` can't answer it: it is ordered by a fixed space ranking and counts every space
- * holding *any* value or even an inbound relation, so `spaces[0]` is a space that merely mentions
- * the claim whenever that space outranks the claim's own — a Podcasts claim cited from Root or
- * Crypto resolves to those. Prefer the spaces where the claim is actually named, which is how the
- * entity side panel scopes the same entity.
- */
-function claimHomeSpaceId(entity: {
-  spaces: string[];
-  values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
-}): string | null {
-  const namedSpaceIds = new Set<string>();
-  for (const value of entity.values ?? []) {
-    if (
-      value.isDeleted !== true &&
-      uuidToHex(value.property.id) === uuidToHex(SystemIds.NAME_PROPERTY) &&
-      typeof value.value === 'string' &&
-      value.value.trim().length > 0
-    ) {
-      namedSpaceIds.add(value.spaceId);
-    }
-  }
-
-  return getTopRankedSpaceId([...namedSpaceIds]) ?? getTopRankedSpaceId(entity.spaces) ?? null;
 }
 
 function claimResponseKind(
