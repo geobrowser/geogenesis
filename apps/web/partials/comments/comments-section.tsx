@@ -1098,6 +1098,10 @@ function CommentItem({
                   ...parentThreadLeave,
                 }
               : {})}
+            // Empty, padding-less, and in an `items-center` parent that won't stretch it,
+            // so without an explicit minimum this collapses to zero height and the
+            // blank-space collapse target stops being clickable.
+            style={{ minHeight: density.headerMinHeightPx }}
             className={
               hasReplies
                 ? 'comment-branch-parent-hit min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0'
