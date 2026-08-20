@@ -17,6 +17,7 @@ import {
   getCurrentGeoChatUserId,
   getServerTime,
 } from '~/core/debates/api';
+import { takeDebateFlowOrigin } from '~/core/debates/debate-entry-intent';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
 import {
   CameraIcon,
@@ -434,10 +435,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (debateExitStartedRef.current) return;
       debateExitStartedRef.current = true;
       clearDebateActivity(debateId);
-      // Going back restores whatever opened the room, which is where an ordinary exit belongs.
-      // A debate that ended under us is different: the entry behind us is often this same room
-      // (hub → room → rematch → room), and stepping back into it re-runs the exit from a fresh
-      // mount. That is the flicker, and it is why the removal dialog needed a second Okay.
+      // Prefer the path recorded when the viewer entered the flow. `router.back()`
+      // only steps one entry, so in hub → room → rematch → room it lands inside the
+      // flow rather than where they came from — and re-mounting a room re-runs its
+      // exit, which is the flicker. Going forward to a known origin avoids both.
+      const origin = takeDebateFlowOrigin();
+      if (origin) {
+        router.replace(origin);
+        return;
+      }
+      // No origin recorded (storage unavailable, or entry predates it): fall back to
+      // the previous behaviour rather than stranding the viewer.
       if (!forwardOnly && window.history.length > 1) {
         router.back();
         return;
