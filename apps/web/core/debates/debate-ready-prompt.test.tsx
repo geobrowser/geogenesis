@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from './api';
+import { takeDebateFlowOrigin } from './debate-entry-intent';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
 
 const mocks = vi.hoisted(() => ({
@@ -77,6 +78,8 @@ beforeEach(() => {
   mocks.abortMutateAsync.mockResolvedValue(debate({ status: 'cancelled' }));
   mocks.abortPending = false;
   mocks.clearDebateActivity.mockReset();
+  window.sessionStorage.clear();
+  window.history.replaceState({}, '', '/space/space-1/entity-7');
 });
 afterEach(cleanup);
 
@@ -90,6 +93,16 @@ describe('DebateReadyPrompt', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
 
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+  });
+
+  // GEO-2605. This dialog is app-wide, so joining from it can start anywhere — and that anywhere is
+  // where exiting the debate has to return them. Nothing else records it on this path.
+  it('records where the viewer was so the exit can return them there', () => {
+    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
+
+    expect(takeDebateFlowOrigin()).toBe('/space/space-1/entity-7');
   });
 
   // The room is a server segment with no loading boundary: the router keeps this page on screen
@@ -174,5 +187,13 @@ describe('DebateRejoinBar', () => {
     fireEvent.click(screen.getByRole('button', { name: /Your debate is ready/ }));
 
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+  });
+
+  it('records the origin too, since it floats over whatever page the viewer is on', () => {
+    render(<DebateRejoinBar debate={debate()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Your debate is ready/ }));
+
+    expect(takeDebateFlowOrigin()).toBe('/space/space-1/entity-7');
   });
 });
