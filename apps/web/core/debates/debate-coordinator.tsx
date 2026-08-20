@@ -74,6 +74,13 @@ export function DebateCoordinator() {
   // comes straight back reporting the debate.
   const enteringDebateId = useEnteringDebateId();
   const atDebate = Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
+  // The rematch picker owns the handoff into the debate it just produced: it holds the session
+  // query and replaces into the room the moment that query reports `converted`. Activity is a
+  // separate refetch off the same `debate.rematch_changed` event, so it can land first — and once
+  // the session has cleared from activity, that window put "Your debate is ready" on the
+  // requester's screen for a moment before the picker redirected out from under it. Neither the
+  // prompt nor the rejoin bar has anything to offer on a page that is already on its way there.
+  const atRematchHandoff = pathname.includes('/debates/rematches/');
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
@@ -136,7 +143,8 @@ export function DebateCoordinator() {
   // out. Everything past `ready` falls through to the rejoin bar, which offers the way in without
   // offering a way to destroy it.
   const describable = (debate?.participants?.length ?? 0) >= 2;
-  const promptedDebate = debate && debate.status === 'ready' && describable && !atDebate ? debate : null;
+  const promptedDebate =
+    debate && debate.status === 'ready' && describable && !atDebate && !atRematchHandoff ? debate : null;
 
   // Held until a navigation commits, then released. Arriving at the room is the expected end, and
   // `atDebate` carries on from the pathname there. Going anywhere else abandons the walk — holding
@@ -209,7 +217,9 @@ export function DebateCoordinator() {
       {promptedDebate && currentUserId && !activity?.rematch && (
         <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
-      {debate && !atDebate && !promptedDebate && !activity?.rematch && <DebateRejoinBar debate={debate} />}
+      {debate && !atDebate && !promptedDebate && !atRematchHandoff && !activity?.rematch && (
+        <DebateRejoinBar debate={debate} />
+      )}
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the
           hub's Requests tab, and the rematch routing effect above walks them into the claim picker
           the moment it is accepted. */}

@@ -105,6 +105,19 @@ vi.mock('./claim-response-indexed-notifier', () => ({
 
 vi.mock('~/core/state/feature-flags', () => ({}));
 
+// `pending-personal-space` reads localStorage at module scope (`atomWithStorage` with
+// `getOnInit`), and the storage jsdom hands back here has no `getItem`. That throws while the
+// module graph is still being built, which took the whole suite down at collection — every test
+// in this file, on master and in CI alike. The coordinator reaches it through `SpaceChip`.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+  pendingPersonalSpaceAtom: { toString: () => 'pendingPersonalSpaceAtom' },
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: (spaceId: string | null | undefined) =>
+    typeof spaceId === 'string' && spaceId.startsWith('pending:'),
+  usePendingPersonalSpace: () => ({ isPending: false }),
+}));
+
 beforeEach(() => {
   sessionStorage.clear();
   mocks.push.mockReset();
@@ -248,6 +261,35 @@ describe('DebateCoordinator', () => {
     mocks.activity = activityWithDebate();
     mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
     markEnteringDebate('debate-2');
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
+  });
+
+  // The reported flicker, requester side. They sent the rematch claim request and are sitting in
+  // the picker; the moment the opponent accepts, `debate.rematch_changed` invalidates activity and
+  // the rematch session as two separate refetches. Activity landing first reports the new debate
+  // with the session already gone, and the picker has not yet seen `converted` to redirect — so
+  // "Your debate is ready" appeared for a beat and was then navigated out from under them.
+  it('does not prompt the requester while the rematch picker is handing them off', async () => {
+    mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+    // Nor the fallback in its place, which would be the same flicker wearing a smaller hat.
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  // Scoped to the handoff, not to having ever been in a rematch: someone who walked away from the
+  // picker still has no other way of being told, which is the whole point of the prompt.
+  it('still prompts once the requester has left the rematch picker', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
 
     render(<DebateCoordinator />);
 
