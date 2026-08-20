@@ -1,9 +1,11 @@
 'use client';
 
-import { CancelledError, type QueryClient, type QueryKey } from '@tanstack/react-query';
+import { CancelledError, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { isParticipantPositionsQueryKey } from '~/core/debates/participant-positions';
+import { isRematchClaimsQueryKey } from '~/core/debates/rematch-claims-query-key';
 import { queryClient } from '~/core/query-client';
 import {
   claimResponseTargetKey,
@@ -424,7 +426,11 @@ export class DebateGatewayClient {
     this.queueInvalidation(BROAD_INVALIDATION_KEY, {
       predicate: query => {
         const root = query.queryKey[0];
-        return root === 'debates' || isClaimResponseSummaryQueryKey(query.queryKey);
+        return (
+          root === 'debates' ||
+          isClaimResponseSummaryQueryKey(query.queryKey) ||
+          isParticipantPositionsQueryKey(query.queryKey)
+        );
       },
       refetchType: 'active',
     });
@@ -495,6 +501,10 @@ export class DebateGatewayClient {
           );
         }
 
+        // The rematch picker reads both participants' sides straight from the graph; any response
+        // landing in a space it watches may be one of theirs. One query, so no need to narrow.
+        if (isParticipantPositionsQueryKey(query.queryKey)) return true;
+
         return isClaimResponseSummaryQueryKey(query.queryKey, {
           spaceId,
           targetKeys: changedResponseTargets,
@@ -529,16 +539,39 @@ export class DebateGatewayClient {
   private async flushInvalidations(invalidations: InvalidationFilters[], attempt = 0) {
     const results = await Promise.allSettled(
       invalidations.map(async queryFilters => {
+        const matches = (query: Query) => queryFilters.predicate === undefined || queryFilters.predicate(query);
         // Cancelling stops a stale in-flight response from overwriting the fresh refetch — which
         // only matters once there is data to overwrite. A query still on its first load has none;
         // aborting it restarts a request that was about to land, and on a screen with slow round
         // trips and frequent events that restart repeated until nothing ever landed.
+        //
+        // The rematch picker's positions batches are never cancelled, loaded or not. They are one
+        // request per page of claims on screen, and responses land on them faster than the round
+        // trips complete; restarting every batch on every event starved the list of updates for as
+        // long as the other side kept responding. A batch in flight is left to land and is then
+        // asked again, so the answer on screen is never older than the event that prompted it.
+        const inFlightRematchBatches = this.queryClient.getQueryCache().findAll({
+          ...queryFilters,
+          fetchStatus: 'fetching',
+          predicate: query => isRematchClaimsQueryKey(query.queryKey) && matches(query),
+        });
         await this.queryClient.cancelQueries({
           ...queryFilters,
           predicate: query =>
-            query.state.data !== undefined && (queryFilters.predicate === undefined || queryFilters.predicate(query)),
+            query.state.data !== undefined && !isRematchClaimsQueryKey(query.queryKey) && matches(query),
         });
-        await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true });
+        // `cancelRefetch: false`: a refetch of a query still fetching joins that request instead
+        // of aborting it. Everything this flush meant to cancel has been cancelled above.
+        await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true, cancelRefetch: false });
+        if (inFlightRematchBatches.length > 0) {
+          await this.queryClient.refetchQueries(
+            {
+              type: 'active',
+              predicate: query => inFlightRematchBatches.some(batch => batch.queryHash === query.queryHash),
+            },
+            { throwOnError: true, cancelRefetch: false }
+          );
+        }
       })
     );
 

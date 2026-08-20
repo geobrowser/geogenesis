@@ -10,6 +10,7 @@ import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response
 
 import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatRequestError } from './api';
 import { DebateCoordinator } from './debate-coordinator';
+import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import {
   debateQueryKeys,
   useAcceptDebateRematchRequest,
@@ -28,7 +29,6 @@ import {
   useMarkDebateReady,
   useUpdateDebateAvailability,
 } from './hooks';
-import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
@@ -53,8 +53,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, back: mocks.back }),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,
@@ -377,11 +376,21 @@ describe('useGeoChatAuth', () => {
       });
     });
 
-    await waitFor(() =>
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims'],
-      })
-    );
+    await waitFor(() => expect(invalidateQueries).toHaveBeenCalledWith({ predicate: expect.any(Function) }));
+
+    // Only the batches naming the claim, plus the id-less session list any response can add a
+    // row to. The picker holds a batch per page on screen; refetching all of them for one
+    // response is what left its positions trailing.
+    const predicate = invalidateQueries.mock.calls.at(-1)![0]!.predicate!;
+    const batch = (claimIds: string[]) =>
+      ({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims', claimIds] }) as never;
+    expect(predicate(batch(['claim-1']))).toBe(true);
+    expect(predicate(batch(['claim-0', 'claim-1', 'claim-2']))).toBe(true);
+    expect(predicate(batch([]))).toBe(true);
+    expect(predicate(batch(['claim-2']))).toBe(false);
+    expect(
+      predicate({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-2', 'claims', ['claim-1']] } as never)
+    ).toBe(false);
   });
 
   // A `users/me` sent before logout can resolve after it. Writing that result back would
@@ -465,7 +474,16 @@ describe('useUpdateDebateAvailability', () => {
 
     expect(mocks.updateDebateAvailability).toHaveBeenCalledWith(false, expect.any(Function), 'user-a');
     expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(authoritative);
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates'] });
+    // Everything under `'debates'` bar the rematch picker's positions batches, which availability
+    // says nothing about and which cost a request per page of claims on screen.
+    expect(invalidateQueries).toHaveBeenCalledWith({ predicate: expect.any(Function) });
+    const predicate = invalidateQueries.mock.calls.at(-1)![0]!.predicate!;
+    expect(predicate({ queryKey: ['debates', 'account', 'user-a', 'activity'] } as never)).toBe(true);
+    expect(predicate({ queryKey: ['debates', 'claims', 'space-1', 'all'] } as never)).toBe(true);
+    expect(
+      predicate({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims', ['claim-1']] } as never)
+    ).toBe(false);
+    expect(predicate({ queryKey: ['claim-picker', 'page'] } as never)).toBe(false);
   });
 
   it('rolls the optimistic activity back when the request fails', async () => {

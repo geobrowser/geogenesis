@@ -1,7 +1,14 @@
 'use client';
 
 import { usePrivy } from '@geogenesis/auth';
-import { type UseQueryResult, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryClient,
+  type UseQueryResult,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -60,6 +67,7 @@ import { useDebateAttention } from './debate-attention';
 import { markEnteringDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
+import { isRematchClaimsQueryKey } from './rematch-claims-query-key';
 
 export const debateQueryNetworkOptions = {
   retry: false,
@@ -242,6 +250,49 @@ function claimIdHash(claimId: string) {
   return hash;
 }
 
+/**
+ * Filters for the rematch claim batches that carry `claimId` — plus the id-less session list,
+ * which any response can add a row to. The batches that don't name the claim learned nothing.
+ */
+export function rematchClaimBatchesWithClaim(accountKey: string | null, claimId: string, sessionId?: string) {
+  return {
+    predicate: (query: { queryKey: readonly unknown[] }) => {
+      const { queryKey } = query;
+      if (!isRematchClaimsQueryKey(queryKey) || queryKey[2] !== accountKey) return false;
+      if (sessionId !== undefined && queryKey[4] !== sessionId) return false;
+      const ids = queryKey[6];
+      return !Array.isArray(ids) || ids.length === 0 || ids.includes(claimId);
+    },
+  };
+}
+
+/**
+ * Everything under `'debates'` except the rematch claim batches. The root-wide invalidation a
+ * mutation used to fire refetched every batch the picker had loaded — a request per page on
+ * screen — for a change that touched none of them.
+ */
+export function invalidateDebatesOutsideRematchClaims(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({
+    predicate: query => query.queryKey[0] === 'debates' && !isRematchClaimsQueryKey(query.queryKey),
+  });
+}
+
+/**
+ * Standing ready (or down) on one claim moves that claim's readiness wherever it is listed and
+ * re-sorts who is matchable. Nothing else under `'debates'` changes, so only those families go.
+ */
+function invalidateAfterReadinessChange(queryClient: QueryClient, accountKey: string | null, claimId: string) {
+  for (const queryKey of [
+    ['debates', 'claims'] as const,
+    debateQueryKeys.matchmakingClaimsRoot(accountKey),
+    debateQueryKeys.matches(accountKey),
+    debateQueryKeys.activity(accountKey),
+  ]) {
+    void queryClient.invalidateQueries({ queryKey });
+  }
+  void queryClient.invalidateQueries(rematchClaimBatchesWithClaim(accountKey, claimId));
+}
+
 export function useJoinDebateQueue(spaceId: string) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -249,9 +300,7 @@ export function useJoinDebateQueue(spaceId: string) {
   return useMutation({
     mutationFn: ({ claimId }: { claimId: string }) =>
       joinDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
-    },
+    onSuccess: (_result, { claimId }) => invalidateAfterReadinessChange(queryClient, accountKey, claimId),
   });
 }
 
@@ -262,9 +311,7 @@ export function useLeaveDebateQueue(spaceId: string) {
   return useMutation({
     mutationFn: ({ claimId }: { claimId: string }) =>
       leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
-    },
+    onSuccess: (_result, { claimId }) => invalidateAfterReadinessChange(queryClient, accountKey, claimId),
   });
 }
 
@@ -312,7 +359,7 @@ export function useUpdateDebateAvailability() {
       queryClient.setQueryData(activityKey, activity);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
+      void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
 }
@@ -541,11 +588,14 @@ export const REMATCH_CLAIM_ID_BATCH_SIZE = 100;
  * to a 400 takes every claim's positions with it, not just the ones past the limit.
  */
 export function useDebateRematchClaimsForIds(sessionId: string, claimIds: string[], enabled = true) {
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  // Content-defined chunks for the same reason as `useDebateClaimsBySpaces`: the picker prepends
-  // as it pages and filters, and index-sliced batches would all change key on every insertion.
+  // Content-defined chunks for the same reason as `useDebateClaimsBySpaces`: callers rebuild this
+  // list as they filter, and index-sliced batches would all change key on every insertion.
   const batches = React.useMemo(() => stableClaimIdChunks(claimIds, REMATCH_CLAIM_ID_BATCH_SIZE), [claimIds]);
+  return useDebateRematchClaimBatches(sessionId, batches, enabled);
+}
+
+function useDebateRematchClaimBatches(sessionId: string, batches: string[][], enabled: boolean) {
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   // Stable by contract, as in `useDebateClaimsBySpaces`.
   const combine = React.useCallback(
@@ -572,7 +622,9 @@ export function useDebateRematchClaimsForIds(sessionId: string, claimIds: string
   });
 }
 
-export function useDebateRematchClaims(sessionId: string, claimIds: string[] = [], enabled = true) {
+const NO_CLAIM_IDS: string[] = [];
+
+export function useDebateRematchClaims(sessionId: string, claimIds: string[] = NO_CLAIM_IDS, enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -587,9 +639,10 @@ export function useDebateRematchClaims(sessionId: string, claimIds: string[] = [
           return;
         }
 
-        void queryClient.invalidateQueries({
-          queryKey: ['debates', 'account', accountKey, 'rematch', sessionId, 'claims'],
-        });
+        // Only the batches that name the claim, plus the session's own list. Refetching every
+        // batch the picker holds — one per page on screen — for a single response is what left
+        // the positions trailing on a long list.
+        void queryClient.invalidateQueries(rematchClaimBatchesWithClaim(accountKey, response.entityId, sessionId));
       });
     },
     [accountKey, claimIds, enabled, queryClient, sessionId]
@@ -649,9 +702,13 @@ export function useRejectDebateRematchRequest() {
     onSuccess: result => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, result.session.id) });
-      void queryClient.invalidateQueries({
-        queryKey: ['debates', 'account', accountKey, 'rematch', result.session.id, 'claims'],
-      });
+      // A rejection marks one claim `recently_rejected`; only the batches carrying it need to hear.
+      const rejectedClaimId = result.request?.claim.claim_entity_id;
+      void queryClient.invalidateQueries(
+        rejectedClaimId
+          ? rematchClaimBatchesWithClaim(accountKey, rejectedClaimId, result.session.id)
+          : { queryKey: ['debates', 'account', accountKey, 'rematch', result.session.id, 'claims'] }
+      );
     },
   });
 }
