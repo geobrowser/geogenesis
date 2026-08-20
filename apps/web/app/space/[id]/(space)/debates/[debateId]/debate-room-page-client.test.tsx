@@ -1398,7 +1398,8 @@ describe('DebateRoomPageClient', () => {
       await screen.findByRole('heading', { name: 'This debate is already open in another tab.' })
     ).toBeInTheDocument();
     expect(screen.getByText('Close this tab and continue your debate in the original tab.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Go to debates' })).toHaveAttribute('href', '/space/space-1/debates');
+    fireEvent.click(screen.getByRole('button', { name: 'Go back' }));
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
     expect(screen.queryByRole('button', { name: 'Continue here' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Back to debates' })).not.toBeInTheDocument();
     expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
@@ -1406,6 +1407,23 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Waiting for both speakers to join.')).not.toBeInTheDocument();
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
     expect(mocks.roomConnect).not.toHaveBeenCalled();
+  });
+
+  it('returns a secondary tab ownership conflict to the page that opened the room', async () => {
+    rememberDebateReturnDestination('/space/root-space?tab=activity');
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="opponent-space" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Go back' }));
+
+    expect(mocks.replace).toHaveBeenCalledWith('/space/root-space?tab=activity');
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
   it('does not hand off a stale preflight after the first turn has started locally', async () => {

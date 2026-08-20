@@ -68,7 +68,6 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -447,6 +446,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   /** The exit for a debate whose recording was cancelled — it can never be re-entered. */
   const leaveCancelledDebate = React.useCallback(() => returnFromDebate({ forwardOnly: true }), [returnFromDebate]);
+
+  const leaveConflictingRoom = React.useCallback(() => {
+    const returnDestination = consumeDebateReturnDestination();
+    if (returnDestination) {
+      router.replace(returnDestination);
+      return;
+    }
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.replace(`/space/${spaceId}/debates`);
+  }, [router, spaceId]);
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
@@ -1639,14 +1651,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           <Text as="p" variant="metadata" color="grey-04" className="mt-3">
             Close this tab and continue your debate in the original tab.
           </Text>
-          <Link
-            href={`/space/${spaceId}/debates`}
+          <button
+            type="button"
+            onClick={leaveConflictingRoom}
             className="mt-6 text-ctaPrimary transition-colors hover:text-ctaHover focus-visible:text-ctaHover"
           >
             <Text as="span" variant="textLinkSemibold" color="current">
-              Go to debates
+              Go back
             </Text>
-          </Link>
+          </button>
         </div>
       </div>
     );

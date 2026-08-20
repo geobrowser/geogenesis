@@ -178,13 +178,13 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByText('Live debate updates are paused while reconnecting.')).not.toBeInTheDocument();
   });
 
-  it('routes an available participant into a shared rematch browser', async () => {
+  it('does not route another tab into a shared debate-again browser', async () => {
     mocks.activity = activityWithRematch('browsing');
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
-    expect(mocks.rememberDebateReturnDestination).toHaveBeenCalled();
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(mocks.rememberDebateReturnDestination).not.toHaveBeenCalled();
   });
 
   it('leaves a secondary tab on its current page when shared activity contains a debate', async () => {
@@ -409,7 +409,12 @@ describe('DebateCoordinator', () => {
   it('routes the sender into the claim picker once the challenge is accepted', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';
-    mocks.activity = { ...activityWithRematch('browsing'), challenge: null };
+    const activity = activityWithRematch('browsing');
+    mocks.activity = {
+      ...activity,
+      rematch: { ...activity.rematch!, source_debate_id: null },
+      challenge: null,
+    };
 
     render(<DebateCoordinator />);
 
@@ -467,13 +472,13 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
   });
 
-  it('still routes into a deciding rematch while the debate is intact', async () => {
+  it('leaves an unrelated tab alone while an intact debate-again session is deciding', async () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = activityWithRematch('deciding');
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
   it.each(['complete', 'cancelled'] as const)('does not reopen a %s debate from stale activity', async status => {
