@@ -76,9 +76,18 @@ export function EntityVoteButtons({
   presentation = 'inline',
 }: EntityVoteButtonsProps) {
   const responseBatch = useClaimResponseBatchState();
+  // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
+  // but derives `types` from all of them, so a claim collected into another space — a data block
+  // row, a ranking entry — has its Types relation only in the space it was published to. Asking
+  // for that other space returned an entity with no Types relation at all, so this read it as a
+  // plain entity and drew curation arrows, while `ClaimDebateButton` reads `types` and drew the
+  // Debate toggle beside it. One claim, two controls disagreeing about what it was.
+  //
+  // Space still decides the *kind* of response, just not whether there is one: the checks below
+  // and `hasUnpublishedClaimResponseKindEdit` each re-filter to `spaceId` themselves, so widening
+  // the query leaves them reading exactly what they read before.
   const { entity, isLoading: isLoadingEntity } = useQueryEntity({
     id: entityId,
-    spaceId,
     includeDeleted: true,
     enabled: responseKindOverride === undefined,
   });
