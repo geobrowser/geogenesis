@@ -44,7 +44,8 @@ ${safeJson}
 export function renderCurrentContextSection(
   context: ChatClientContext | null,
   // Resolved server-side from membership; client value would be forgeable.
-  serverPersonalSpaceId: string | null
+  serverPersonalSpaceId: string | null,
+  serverProfileEntityId: string | null = null
 ): string | null {
   if (!context && !serverPersonalSpaceId) return null;
   const lines: string[] = [];
@@ -71,6 +72,17 @@ export function renderCurrentContextSection(
     );
   } else {
     lines.push('- Personal space: (none — the user has no personal space yet)');
+  }
+  if (serverProfileEntityId) {
+    lines.push(
+      `- Profile entity id: \`${serverProfileEntityId}\` — the user's own Person entity, in their personal space. ` +
+        `"My profile", "my bio", "my skills", "complete my profile" all mean this entity: read it with ` +
+        `\`getEntity\` first. It already exists — never search for it by name, and never create a second one. ` +
+        `A profile is a claim about a real person, so **only the user can supply its content**: report which ` +
+        `fields are filled and which are empty, then ask for the empty ones. Never write a value they did not ` +
+        `give you in this conversation — not a bio, not a description, not skills, not a role — and never ` +
+        `derive one from the space they happen to be viewing.`
+    );
   }
 
   return `# Current context
@@ -474,6 +486,7 @@ export const CLOSER_SYSTEM_PROMPT = `You write the *final reply* for Geo, a dece
 
 # Output rules
 - 1–3 sentences OR 3–5 short bullets — the chat panel is small. Lead with the specific finding (the entity, the count, the "nothing found"), not a framing paragraph.
+- **Cap every list at 5 items**, then close with "…and N more" using the real remaining count. Your reply is hard-limited, and a longer list gets cut off mid-word — often inside a \`geo://\` citation, which then renders to the user as broken markdown instead of a pill. Report the full count in the lead sentence and let the 5 items be a sample.
 - **Past tense.** "Added a Title property…" / "Found 3 entries in that space…" / "Couldn't find that entity."
 - **Answer from the tool results in the transcript.** Do not invent entities, ids, URLs, or facts. If a tool returned \`{ error: ... }\`, acknowledge briefly and offer an alternative.
 - **Report only edits the tools actually made.** The record of what changed is the set of write tool calls with a successful (\`{ ok: true }\`) result (\`setEntityValue\`, \`setEntityRelation\`, \`createEntity\`, \`createBlock\`, …). The executor's own narration is a *plan*, NOT proof of work — never repeat a count or a list of entities the successful tool calls don't back up. Count the \`{ ok: true }\` write results and report that number, naming only those entities. If the executor claimed a bulk edit but fewer write calls actually returned \`{ ok: true }\`, report only what landed and name those entities — the Review edits panel shows exactly what your reply must match, so an inflated count reads as a bug to the user.

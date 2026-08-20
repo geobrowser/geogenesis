@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import Textarea from 'react-textarea-autosize';
 
+import { ContextMeter } from './context-meter';
+
 type Props = {
   value: string;
   onChange: (value: string) => void;
@@ -11,9 +13,25 @@ type Props = {
   isBusy?: boolean;
   onStop?: () => void;
   placeholder?: string;
+  /**
+   * How full the conversation is, 0-1. Undefined until it's worth showing —
+   * the meter has nothing useful to say about a chat with room to spare.
+   */
+  contextFraction?: number;
+  /** Undefined while a turn is running, so the ring shows but doesn't act. */
+  onCompact?: () => void;
 };
 
-export function ChatInput({ value, onChange, onSubmit, isBusy, onStop, placeholder = 'Ask anything...' }: Props) {
+export function ChatInput({
+  value,
+  onChange,
+  onSubmit,
+  isBusy,
+  onStop,
+  placeholder = 'Ask anything...',
+  contextFraction,
+  onCompact,
+}: Props) {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const canSend = !isBusy && value.trim().length > 0;
   const showStop = isBusy && Boolean(onStop);
@@ -50,6 +68,7 @@ export function ChatInput({ value, onChange, onSubmit, isBusy, onStop, placehold
         // we never get an inner scrollbar at any panel size.
         className="max-h-[60cqh] flex-1 resize-none bg-transparent text-[16px] leading-4 tracking-[-0.35px] text-text placeholder:text-grey-03 focus:outline-hidden"
       />
+      {contextFraction === undefined ? null : <ContextMeter fraction={contextFraction} onCompact={onCompact} />}
       {showStop ? (
         <button
           type="button"

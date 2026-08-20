@@ -9,7 +9,7 @@ import { type UIMessage, isToolUIPart } from 'ai';
 import * as Effect from 'effect/Effect';
 
 import { DEFAULT_ENTITY_SCHEMA } from '~/core/database/entities';
-import { getEntity, getResults, getSpace, getSpaces } from '~/core/io/queries';
+import { getEntity, getEntityNames, getResults, getSpace, getSpaces } from '~/core/io/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { GeoStore } from '~/core/sync/store';
@@ -360,7 +360,65 @@ function localSearch(query: string, store: GeoStore, scopedSpaceId?: string, sco
   return [...startsWith, ...contains];
 }
 
-async function localEntityToSearchResult(entity: Entity, ctx: ReadCtx): Promise<SearchGraphResult | null> {
+// A search hit before its type names are resolved. The REST search index
+// populates `name` on some types and not others, so the id has to survive the
+// conversion — it's the only thing that can recover a missing name.
+type PendingSearchResult = Omit<SearchGraphResult, 'typeNames'> & {
+  types: { id: string; name: string | null }[];
+};
+
+function toTypeEntries(types: readonly { id: string; name?: string | null }[]) {
+  return types.map(type => ({ id: normalizeEntityId(type.id), name: type.name ?? null }));
+}
+
+/**
+ * Fill in the type names the search index left out.
+ *
+ * `/search` returns a type as `{ id, name }` for some types and a bare `{ id }`
+ * for others — `Ether` comes back as `[{ id: <Token> }, { id: …, name: 'Asset' }]`,
+ * so the one type that answers "is this a token?" is precisely the one with no
+ * name. Dropping the nameless entries (which this path used to do) hands the
+ * agent an entity that reads as mistyped or untyped, and it then reports a real
+ * entity as missing — measured on the Crypto space, 37% of typed hits arrived
+ * with an empty type list.
+ *
+ * So backfill instead, the same way the app's own search does in
+ * `core/sync/orm.ts`: one batched `getEntityNames` for the distinct unknown ids
+ * across the whole page, cached — type names effectively never change, and the
+ * ids repeat heavily within a result set.
+ *
+ * A name we still can't resolve is dropped, exactly as before: a type the user
+ * can't be shown by name is nothing the agent can reason with.
+ */
+async function withResolvedTypeNames(results: PendingSearchResult[], ctx: ReadCtx): Promise<SearchGraphResult[]> {
+  const unresolvedIds = [...new Set(results.flatMap(r => r.types.filter(t => !t.name).map(t => t.id)))].sort();
+
+  const resolved = new Map<string, string>();
+  if (unresolvedIds.length > 0) {
+    try {
+      const names = await ctx.cache.fetchQuery({
+        queryKey: ['chat', 'searchGraph', 'type-names', unresolvedIds],
+        queryFn: ({ signal }) => Effect.runPromise(getEntityNames(unresolvedIds, signal)),
+      });
+      for (const type of names) {
+        if (type.name) resolved.set(normalizeEntityId(type.id), type.name);
+      }
+    } catch (err) {
+      // Degrade to the names the index already gave us. An unresolved type is
+      // worth less than the search itself, so it must never fail the lookup.
+      console.error('[chat/read-dispatcher] searchGraph type name backfill failed', err);
+    }
+  }
+
+  return results.map(({ types, ...rest }) => ({
+    ...rest,
+    typeNames: types
+      .map(type => type.name ?? resolved.get(type.id) ?? null)
+      .filter((name): name is string => typeof name === 'string' && name.length > 0),
+  }));
+}
+
+async function localEntityToSearchResult(entity: Entity, ctx: ReadCtx): Promise<PendingSearchResult | null> {
   const firstSpace = entity.spaces[0];
   if (!firstSpace) return null;
   const spaceName = await resolveSpaceName(firstSpace, ctx);
@@ -369,12 +427,12 @@ async function localEntityToSearchResult(entity: Entity, ctx: ReadCtx): Promise<
     name: entity.name,
     spaceId: normalizeEntityId(firstSpace),
     spaceName,
-    typeNames: entity.types.map(t => t.name).filter((n): n is string => typeof n === 'string' && n.length > 0),
+    types: toTypeEntries(entity.types),
     isDraft: true,
   };
 }
 
-function remoteSearchResultToOutput(entity: SearchResult): SearchGraphResult | null {
+function remoteSearchResultToOutput(entity: SearchResult): PendingSearchResult | null {
   const firstSpace = entity.spaces[0];
   if (!firstSpace) return null;
   return {
@@ -382,7 +440,7 @@ function remoteSearchResultToOutput(entity: SearchResult): SearchGraphResult | n
     name: entity.name,
     spaceId: normalizeEntityId(firstSpace.spaceId),
     spaceName: firstSpace.name ?? null,
-    typeNames: entity.types.map(t => t.name).filter((n): n is string => typeof n === 'string' && n.length > 0),
+    types: toTypeEntries(entity.types),
   };
 }
 
@@ -417,7 +475,7 @@ export async function executeSearchGraph(input: SearchGraphInput, ctx: ReadCtx):
     ]);
 
     const seen = new Set<string>();
-    const merged: SearchGraphResult[] = [];
+    const merged: PendingSearchResult[] = [];
 
     for (const entity of localMatches) {
       const result = await localEntityToSearchResult(entity, ctx);
@@ -439,7 +497,7 @@ export async function executeSearchGraph(input: SearchGraphInput, ctx: ReadCtx):
       }
     }
 
-    return { results: merged };
+    return { results: await withResolvedTypeNames(merged, ctx) };
   } catch (err) {
     console.error('[chat/read-dispatcher] searchGraph failed', err);
     return { error: 'lookup_failed' };

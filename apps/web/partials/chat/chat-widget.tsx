@@ -17,6 +17,7 @@ import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
 import type { InjectType } from '~/core/chat/inject-types';
 import {
   COMPACT_AT_INPUT_TOKENS,
+  OFFER_COMPACT_AT_INPUT_TOKENS,
   CONTEXT_USAGE_DATA_TYPE,
   type ContextUsageData,
   ENTITY_ID_REGEX,
@@ -50,6 +51,9 @@ import { NavUtils } from '~/core/utils/utils';
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
 import { ChatPanel } from './chat-panel';
+import { markLastTurnInterrupted } from './interrupted';
+import { scrubUnsettledToolParts } from './scrub-unsettled-tool-parts';
+import { shouldAutoCompact } from './should-auto-compact';
 
 type AssistantSuggestionSource = 'welcome' | 'follow_up';
 type AssistantPanelAction = 'opened' | 'closed';
@@ -73,6 +77,10 @@ function validId(value: string | undefined): value is string {
   return typeof value === 'string' && ENTITY_ID_REGEX.test(value);
 }
 
+// Stands in for the user turn a summary has to hang off. Phrased as the record
+// of an event rather than a request, because the user didn't make one.
+const COMPACTION_NOTICE = 'Summarized this conversation to keep it going — the full chat is in Previous chats.';
+
 // Walk every assistant message's tool parts in `output-available` state and
 // return their toolCallIds. Used on hydration so the navigate / review-panel
 // effects don't re-fire one-shot side effects from a restored chat.
@@ -89,6 +97,7 @@ function collectResolvedToolCallIds(messages: UIMessage[], toolType: string): st
   }
   return ids;
 }
+
 
 function firstUserMessageText(messages: UIMessage[]): string {
   for (const message of messages) {
@@ -297,6 +306,14 @@ export function ChatWidget() {
   // data part. Drives auto-compaction: we only compact once the context window
   // is genuinely filling up, not at an arbitrary message count.
   const [contextTokens, setContextTokens] = React.useState(0);
+  // The reading that last failed to compact. Auto-compaction re-evaluates the
+  // moment `isCompacting` flips back to false, on inputs that a failure leaves
+  // untouched — so without this a failure re-fires immediately and forever.
+  // Worse, the endpoint is rate-limited, so the loop earns the 429 that keeps it
+  // spinning. Remembering the reading makes a failure cost exactly one attempt;
+  // the next turn reports a new number and compaction is free to try again.
+  // Declared beside the reading it guards so `resetForChatSwap` can clear both.
+  const failedCompactAtTokensRef = React.useRef<number | null>(null);
 
   const { messages, sendMessage, status, error, regenerate, setMessages, stop, addToolResult, clearError } = useChat({
     transport,
@@ -348,6 +365,41 @@ export function ChatWidget() {
   // "we've already routed for this turn".
   const navigatedCreatedEntityForMessageId = React.useRef<string | null>(null);
 
+  /**
+   * Take on a transcript that was written by a turn we are no longer running —
+   * restored from disk, or picked out of history. Both arrive the same way and
+   * need the same three things, so they say it once here.
+   *
+   * Its one-shot side effects are marked as spent, or selecting a chat would
+   * re-navigate and re-open the review panel for work already done. Unsettled
+   * tool parts are dropped, or the dispatchers would re-run a write that was
+   * cut off mid-flight — and a part nothing can resolve keeps the panel
+   * spinning forever. And the turn is marked stopped, because it is: a settled
+   * transcript reads to `isBusy` as "a follow-up request is due", and that
+   * request only ever fires from inside the SDK, never from out here.
+   *
+   * Scrub before the messages are handed over, never after — the dispatchers
+   * read `messages`, so one render with a live write part is enough.
+   */
+  const adoptTranscript = React.useCallback(
+    (chat: PersistedChat) => {
+      for (const id of collectResolvedToolCallIds(chat.messages, 'tool-navigate')) {
+        navigatedToolCallIds.current.add(id);
+      }
+      for (const id of collectResolvedToolCallIds(chat.messages, 'tool-openReviewPanel')) {
+        openedReviewPanelToolCallIds.current.add(id);
+      }
+      navigatedCreatedEntityForMessageId.current =
+        [...chat.messages].reverse().find(m => m.role === 'assistant')?.id ?? null;
+      currentChatIdRef.current = chat.id;
+      stoppedRef.current = true;
+      // Any "interrupted" mark is already in the stored transcript, written by
+      // whichever path cut the turn short. Nothing to re-derive here.
+      setMessages(scrubUnsettledToolParts(chat.messages));
+    },
+    [setMessages]
+  );
+
   // Hydrate the persisted current chat exactly once on mount. Seed the
   // navigate / review-panel dedup sets *before* the message-watching effects
   // run, otherwise a reload would re-route the user or re-open the review
@@ -360,18 +412,7 @@ export function ChatWidget() {
     if (hydratedRef.current) return;
     const persisted = persistedCurrent;
     if (persisted && persisted.messages.length > 0) {
-      for (const id of collectResolvedToolCallIds(persisted.messages, 'tool-navigate')) {
-        navigatedToolCallIds.current.add(id);
-      }
-      for (const id of collectResolvedToolCallIds(persisted.messages, 'tool-openReviewPanel')) {
-        openedReviewPanelToolCallIds.current.add(id);
-      }
-      // Mark the restored turn as already-routed so a reload doesn't re-navigate
-      // to its created entity.
-      const lastAssistantId = [...persisted.messages].reverse().find(m => m.role === 'assistant')?.id ?? null;
-      navigatedCreatedEntityForMessageId.current = lastAssistantId;
-      currentChatIdRef.current = persisted.id;
-      setMessages(persisted.messages);
+      adoptTranscript(persisted);
     }
     hydratedRef.current = true;
   }, []);
@@ -574,15 +615,11 @@ export function ChatWidget() {
     setMessages(prev => {
       if (prev.length === 0) return prev;
       const last = prev[prev.length - 1];
-      if (last.role !== 'assistant') return prev;
-      const cleaned = last.parts.filter(p => {
-        if (!isToolUIPart(p)) return true;
-        return p.state === 'output-available' || p.state === 'output-error';
-      });
-      if (cleaned.length === last.parts.length) return prev;
-      const next = [...prev];
-      next[next.length - 1] = { ...last, parts: cleaned };
-      return next;
+      // Every caller stops a turn that was running — the Stop button only shows
+      // while busy, and the Escape / new-chat / switch-chat paths all gate on
+      // `isBusy` — so reaching here always means the turn was cut short.
+      const scrubbed = last.role === 'assistant' ? scrubUnsettledToolParts(prev) : prev;
+      return markLastTurnInterrupted(scrubbed);
     });
   }, [stop, setMessages]);
 
@@ -604,10 +641,20 @@ export function ChatWidget() {
       currentChatIdRef.current =
         typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `chat-${Date.now()}`;
     }
+    // `status` is 'ready' in the gaps between a turn's resubmits, so this fires
+    // mid-turn — which is what makes a reloaded chat contain the in-flight turn
+    // at all. Whether the snapshot was taken mid-turn is the only reliable
+    // signal that it was cut short: the transcript itself can't say, because the
+    // opener writes visible text at the *start* of every turn, so a half-finished
+    // turn looks exactly like a finished one on disk.
+    //
+    // Marked on the copy going to storage, never on live state — if the turn
+    // goes on to finish, the next write is unmarked and the flag is simply gone.
+    const snapshot = isBusy ? markLastTurnInterrupted(messages) : messages;
     const next: PersistedChat = {
       id: currentChatIdRef.current,
       title: persistedCurrent?.title ?? '',
-      messages,
+      messages: snapshot,
       updatedAt: Date.now(),
     };
     try {
@@ -616,7 +663,7 @@ export function ChatWidget() {
       // QuotaExceededError — auto-compaction normally keeps a single chat
       // well under localStorage's budget. Surrender; in-memory state still works.
     }
-  }, [messages, status]);
+  }, [messages, status, isBusy]);
 
   // Refs read inside async handlers so we don't tear when the component
   // re-renders between archive start and history write.
@@ -630,8 +677,15 @@ export function ChatWidget() {
   // upgrades the title in place when the Haiku request returns. If the chat
   // was popped (e.g., the user switched into it again) before the title
   // resolves, the upgrade is a no-op.
-  const archiveCurrentChat = React.useCallback((): void => {
-    const snapshot = messagesRef.current;
+  const archiveCurrentChat = React.useCallback((options: { interrupted?: boolean } = {}): void => {
+    // `stopAndScrub` runs immediately before this on the interrupted paths, but
+    // its `setMessages` hasn't committed yet — `messagesRef` still holds the
+    // pre-stop array. So scrub and mark here too, against the same snapshot we
+    // are about to write. Scrubbing is identity on a settled chat, and without
+    // it an archived unsettled tool call also breaks title generation
+    // (AI_MissingToolResultsError) as well as losing the mark.
+    const scrubbed = scrubUnsettledToolParts(messagesRef.current);
+    const snapshot = options.interrupted ? markLastTurnInterrupted(scrubbed) : scrubbed;
     if (snapshot.length === 0) return;
     const id = currentChatIdRef.current ?? crypto.randomUUID();
     currentChatIdRef.current = id;
@@ -674,11 +728,20 @@ export function ChatWidget() {
     openedReviewPanelToolCallIds.current.clear();
     navigatedCreatedEntityForMessageId.current = null;
     currentChatIdRef.current = null;
+    // The token reading describes the chat we're leaving, so it must not follow
+    // us into the next one. Carrying a high reading into a fresh chat fires
+    // auto-compaction against an empty transcript, which the endpoint rejects
+    // as an invalid body — the user sees "Invalid request body" the moment they
+    // click New chat. The next turn reports this chat's own number.
+    setContextTokens(0);
+    failedCompactAtTokensRef.current = null;
   }, []);
 
+
   const handleNewChat = React.useCallback(() => {
-    if (isBusy) stopAndScrub();
-    archiveCurrentChat();
+    const wasBusy = isBusy;
+    if (wasBusy) stopAndScrub();
+    archiveCurrentChat({ interrupted: wasBusy });
     resetForChatSwap();
     setPersistedCurrent(null);
     setMessages([]);
@@ -711,6 +774,10 @@ export function ChatWidget() {
   const [isCompacting, setIsCompacting] = React.useState(false);
   const runCompact = React.useCallback(async () => {
     if (isCompacting) return;
+    const attemptedAtTokens = contextTokens;
+    const giveUp = () => {
+      failedCompactAtTokensRef.current = attemptedAtTokens;
+    };
     setIsCompacting(true);
     try {
       const res = await fetch('/api/chat/compact', {
@@ -721,11 +788,13 @@ export function ChatWidget() {
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
         const message = typeof body?.error === 'string' ? body.error : 'Compaction failed.';
+        giveUp();
         reportError(message);
         return;
       }
       const body = (await res.json()) as { summary?: unknown };
       if (typeof body.summary !== 'string' || body.summary.trim().length === 0) {
+        giveUp();
         reportError('Compaction failed.');
         return;
       }
@@ -733,11 +802,14 @@ export function ChatWidget() {
         typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
           : `msg-${Date.now()}-${Math.random()}`;
+      // The model needs a user turn to anchor the summary to, but the user never
+      // asked for one — so say what actually happened instead of putting words
+      // in their mouth, and point at where the full chat went.
       const compacted: UIMessage[] = [
         {
           id: newId(),
           role: 'user',
-          parts: [{ type: 'text', text: 'Summarize our conversation so far so we can continue.' }],
+          parts: [{ type: 'text', text: COMPACTION_NOTICE }],
         },
         {
           id: newId(),
@@ -759,17 +831,18 @@ export function ChatWidget() {
       setInjectJob(null);
       setInjectInline(null);
       conversationIdRef.current = createTrackingId('conversation');
-      // The two-message summary is tiny; drop the stale high reading so the
-      // effect doesn't immediately re-fire before the next turn reports anew.
-      setContextTokens(0);
+      // `resetForChatSwap` already dropped the stale high reading — the
+      // two-message summary is tiny, and the next turn reports anew.
     } catch (err) {
       console.error('[chat] compaction failed', err);
+      giveUp();
       reportError('Compaction failed.');
     } finally {
       setIsCompacting(false);
     }
   }, [
     isCompacting,
+    contextTokens,
     messages,
     setMessages,
     setInput,
@@ -781,63 +854,72 @@ export function ChatWidget() {
     setInjectInline,
   ]);
 
+  // Offer the manual summarize action once the chat is long enough for it to be
+  // worth something, and only while there is nothing running to interrupt.
+  const canCompact =
+    !isBusy && !isCompacting && messages.length > 0 && contextTokens >= OFFER_COMPACT_AT_INPUT_TOKENS;
+
+  // The meter appears on the same reading that makes the action available, but
+  // stays put while a turn runs — a control that vanishes the moment you send a
+  // message is worse than one that's briefly inert. `canCompact` still governs
+  // whether clicking does anything.
+  const showContextMeter = messages.length > 0 && contextTokens >= OFFER_COMPACT_AT_INPUT_TOKENS;
+  const contextFraction = showContextMeter ? contextTokens / COMPACT_AT_INPUT_TOKENS : undefined;
+
   // Fires once per threshold-cross: when the chat is idle AND the last turn's
   // executor input crossed the token threshold AND we're not already
   // compacting, kick off the background summarization. After it lands
   // contextTokens resets to 0, so the effect won't re-fire until the next
   // turn reports a reading back over the threshold.
   React.useEffect(() => {
-    if (status !== 'ready') return;
-    if (isCompacting) return;
-    if (contextTokens < COMPACT_AT_INPUT_TOKENS) return;
-    void runCompact();
-  }, [status, contextTokens, isCompacting, runCompact]);
+    const go = shouldAutoCompact({
+      status,
+      isBusy,
+      isCompacting,
+      messageCount: messages.length,
+      contextTokens,
+      lastFailedAtTokens: failedCompactAtTokensRef.current,
+    });
+    if (go) void runCompact();
+  }, [status, isBusy, contextTokens, isCompacting, messages.length, runCompact]);
 
   const handleSwitchChat = React.useCallback(
     (id: string) => {
       const target = history.find(entry => entry.id === id);
       if (!target) return;
-      if (isBusy) stop();
+      // Scrub on the way out as well as in: the chat being archived may hold a
+      // write we just interrupted, and a pinned part would re-run the next time
+      // someone opens it. Bare `stop()` left those behind.
+      const wasBusy = isBusy;
+      if (wasBusy) stopAndScrub();
       // Archive the chat we're switching away from (prepended via functional
       // update), then pop the selected entry from history in a second
       // functional update so both reads operate on the freshest state.
-      archiveCurrentChat();
+      archiveCurrentChat({ interrupted: wasBusy });
       updateChatHistorySafely(setHistory, prev => prev.filter(entry => entry.id !== id));
       resetForChatSwap();
-      currentChatIdRef.current = target.id;
-      for (const tid of collectResolvedToolCallIds(target.messages, 'tool-navigate')) {
-        navigatedToolCallIds.current.add(tid);
-      }
-      for (const tid of collectResolvedToolCallIds(target.messages, 'tool-openReviewPanel')) {
-        openedReviewPanelToolCallIds.current.add(tid);
-      }
-      // Mark the swapped-in chat's latest turn as already-routed so selecting it
-      // doesn't re-navigate to an entity it created earlier.
-      navigatedCreatedEntityForMessageId.current =
-        [...target.messages].reverse().find(m => m.role === 'assistant')?.id ?? null;
       try {
         setPersistedCurrent(target);
       } catch {
         // ignore
       }
-      setMessages(target.messages);
+      adoptTranscript(target);
       setInput('');
       clearError();
       modeRef.current = 'default';
-      stoppedRef.current = false;
       setInjectJob(null);
       setInjectInline(null);
       conversationIdRef.current = createTrackingId('conversation');
     },
     [
       isBusy,
-      stop,
+      stopAndScrub,
       history,
       archiveCurrentChat,
       resetForChatSwap,
+      adoptTranscript,
       setHistory,
       setPersistedCurrent,
-      setMessages,
       clearError,
       setInjectInline,
     ]
@@ -1108,6 +1190,8 @@ export function ChatWidget() {
           onStop={stopAndScrub}
           onSuggestion={handleSuggestion}
           onNewChat={handleNewChat}
+          onCompact={canCompact ? runCompact : undefined}
+          contextFraction={contextFraction}
           onClose={() => closeAssistant('header_button')}
           suppressWelcome={seed !== null || (status === 'submitted' && messages.length === 0)}
           history={history}

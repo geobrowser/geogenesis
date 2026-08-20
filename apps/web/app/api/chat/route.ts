@@ -35,6 +35,7 @@ import { type CostStage, formatTurnCost } from './cost';
 import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
 import { sanitizeModelMessages } from './sanitize-model-messages';
+import { scopeToolTrafficToCurrentTurn } from './scope-tool-traffic';
 import { buildNavTools } from './tools/nav';
 import { memberReadTools, readTools } from './tools/read';
 import { buildWriteContext, writeTools } from './tools/write';
@@ -453,7 +454,9 @@ export async function POST(req: Request) {
 
   const writeContext = buildWriteContext({ walletAddress: wallet });
 
+  // Both resolve from one cached membership lookup — the second await is free.
   const serverPersonalSpaceId = writeContext.kind === 'member' ? await writeContext.personalSpaceId() : null;
+  const serverProfileEntityId = writeContext.kind === 'member' ? await writeContext.profileEntityId() : null;
 
   const basePrompt =
     chatMode === 'ingestion' && isLoggedIn
@@ -461,7 +464,7 @@ export async function POST(req: Request) {
       : isLoggedIn
         ? DEFAULT_MEMBER_SYSTEM_PROMPT
         : DEFAULT_GUEST_SYSTEM_PROMPT;
-  const contextSection = renderCurrentContextSection(clientContext, serverPersonalSpaceId);
+  const contextSection = renderCurrentContextSection(clientContext, serverPersonalSpaceId, serverProfileEntityId);
   const preloadSection = renderPreloadedEntitySection(preloadedEntity);
   const systemContent = [basePrompt, contextSection, preloadSection].filter(Boolean).join('\n');
 
@@ -609,7 +612,13 @@ export async function POST(req: Request) {
       if (isFirstRequestOfTurn) {
         const openerResult = streamText({
           model: anthropic(OPENER_MODEL),
-          system: OPENER_SYSTEM_PROMPT,
+          // The opener writes the first line the user reads, off the raw
+          // conversation. Without the current context its only clue to "this
+          // space" is whatever was discussed earlier, so it would announce
+          // "Scanning the Crypto space" to someone standing in the AI space —
+          // the executor and closer then answered correctly, leaving the user
+          // with a reply that contradicted its own opening line.
+          system: [OPENER_SYSTEM_PROMPT, contextSection].filter(Boolean).join('\n\n'),
           messages: converted,
           maxOutputTokens: 80,
           experimental_transform: stripThinkingTags(),
@@ -719,17 +728,31 @@ export async function POST(req: Request) {
         // More requests coming in this chain — don't log yet.
         return;
       }
-      if (turnKind === 'skip') {
-        logChainCost();
-        return;
-      }
 
       // Stage C: closer (Haiku). Writes the user-facing summary from the
       // executor's tool calls + results.
+      //
+      // Every turn gets a reply, including a nav-only one. Suppressing the
+      // closer on `skip` assumed navigating is its own feedback, which holds
+      // when the user asked to go somewhere and breaks badly when the executor
+      // chose to navigate in response to something else ("complete my profile"
+      // → navigate → silence). A one-sentence Haiku ack costs a fraction of a
+      // cent and removes the possibility of a turn that answers nothing.
       const closerResult = streamText({
         model: anthropic(CLOSER_MODEL),
-        system: CLOSER_SYSTEM_PROMPT,
-        messages: [...converted, ...execMessages],
+        // Same Current context the executor gets. The closer writes the visible
+        // reply, so it is the model that has to know what "this space" means —
+        // without it, it cannot scope an answer to where the user is standing.
+        system: [
+          CLOSER_SYSTEM_PROMPT,
+          contextSection,
+          turnKind === 'skip'
+            ? "# This turn\nThe only thing that happened was navigation. Say where you took the user, in one sentence, and stop. Do not describe the destination's contents — you haven't read them."
+            : null,
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        messages: scopeToolTrafficToCurrentTurn([...converted, ...execMessages]),
         maxOutputTokens: 400,
         abortSignal: req.signal,
         onError: err => {

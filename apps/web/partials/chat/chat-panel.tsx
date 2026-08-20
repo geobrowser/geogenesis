@@ -37,6 +37,10 @@ type Props = {
   onStop: () => void;
   onSuggestion: (text: string, source: 'welcome' | 'follow_up') => void;
   onNewChat: () => void;
+  /** Actionable only when nothing is running — see the meter beside the input. */
+  onCompact?: () => void;
+  /** How full the chat is, 0-1. Undefined until the meter is worth showing. */
+  contextFraction?: number;
   onClose: () => void;
   // A seeded first message is about to auto-send; don't flash the welcome screen.
   suppressWelcome?: boolean;
@@ -59,6 +63,8 @@ export function ChatPanel({
   onStop,
   onSuggestion,
   onNewChat,
+  onCompact,
+  contextFraction,
   onClose,
   suppressWelcome,
   history,
@@ -267,6 +273,8 @@ export function ChatPanel({
         onStop={onStop}
         isBusy={isBusy || isCompacting}
         placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
+        contextFraction={contextFraction}
+        onCompact={onCompact}
       />
     </motion.div>
   );
