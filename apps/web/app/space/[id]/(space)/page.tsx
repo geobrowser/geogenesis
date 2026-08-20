@@ -36,6 +36,7 @@ import { resolveSpaceSidebar } from './space-sidebar';
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ tabId?: string | string[] }>;
 }
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
@@ -67,7 +68,9 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
 export default async function SpacePage(props0: Props) {
   const params = await props0.params;
+  const searchParams = (await props0.searchParams) ?? {};
   const spaceId = params.id;
+  const tabId = typeof searchParams.tabId === 'string' ? searchParams.tabId : undefined;
 
   if (!IdUtils.isValid(spaceId)) {
     notFound();
@@ -84,15 +87,18 @@ export default async function SpacePage(props0: Props) {
     resolveSpaceSidebar(spaceId),
   ]);
 
-  // The root space shows the explore rail instead of the space overview one, and
-  // streams it so its own fetches don't hold up the page.
-  const sidebar = isRootSpace ? (
-    <React.Suspense fallback={null}>
-      <RootExploreSidePanelContainer />
-    </React.Suspense>
-  ) : (
-    <SpaceOverviewSidePanel spaceId={spaceId} communityCalls={communityCalls} />
-  );
+  let sidebar: React.ReactNode = null;
+  if (!tabId) {
+    if (isRootSpace) {
+      sidebar = (
+        <React.Suspense fallback={null}>
+          <RootExploreSidePanelContainer />
+        </React.Suspense>
+      );
+    } else {
+      sidebar = <SpaceOverviewSidePanel spaceId={spaceId} dailyActivities communityCalls={communityCalls} />;
+    }
+  }
 
   return (
     <EntityPageSidebarLayout sidebar={sidebar}>
