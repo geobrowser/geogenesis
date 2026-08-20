@@ -14,7 +14,7 @@ import { FallbackImage } from '~/design-system/fallback-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { PublishedRecordingPlayer } from '~/partials/community-calls/published-recording-player';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { ExploreCommentsIcon } from './explore-comments-icon';
@@ -49,15 +49,11 @@ function MetaDot() {
   return <span className="mx-[6px] shrink-0 text-[14px] leading-none text-[#2A2B2E]">·</span>;
 }
 
-const EXPLORE_FEED_ACTION_ICON_BOX_CLASS = 'flex h-5 w-5 shrink-0 items-center justify-center overflow-visible';
-
 function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
   return (
-    <Link href={href} className="inline-flex items-center gap-1 transition-colors hover:text-grey-04">
-      <span className={EXPLORE_FEED_ACTION_ICON_BOX_CLASS}>
-        <ExploreCommentsIcon className="text-grey-03" />
-      </span>
-      <span className="min-w-[2ch] text-center tabular-nums">{count}</span>
+    <Link href={href} className="inline-flex items-center gap-1.5 transition-colors hover:text-grey-04">
+      <ExploreCommentsIcon className="text-grey-03" />
+      <span className="tabular-nums">{count}</span>
     </Link>
   );
 }
@@ -219,10 +215,9 @@ function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = fal
   }
 
   const cardActions = (
-    <div className="flex items-center gap-6 text-metadataMedium text-text">
-      <EntityVoteButtons entityId={item.entityId} spaceId={item.spaceId} claimResponderAvatarsPosition="trailing" />
+    <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
       <ExploreFeedCommentLink href={entityHref} count={item.commentCount} />
-    </div>
+    </EntityRowActions>
   );
 
   // Ranking cards use the "Rank" button in place of the up/down vote controls, but they still

@@ -17,9 +17,14 @@ vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
-// EntityVoteButtons reaches into the sync engine; the card only needs it to occupy the vote slot.
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: () => <div data-testid="vote-buttons" />,
+// EntityRowActions carries the vote buttons and the claim debate toggle, both of which reach into
+// the sync engine; the card only needs it to occupy the actions slot.
+vi.mock('~/partials/entity-page/entity-row-actions', () => ({
+  EntityRowActions: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div data-testid="row-actions" className={className}>
+      {children}
+    </div>
+  ),
 }));
 
 vi.mock('./explore-join-space-button', () => ({
@@ -49,6 +54,8 @@ const item: ExploreFeedItem = {
   description: null,
   imageUrl: 'ipfs://image',
   commentCount: 2,
+  recordingUrls: [],
+  debateVideoUrls: [],
   isMemberOrEditor: true,
   hasPendingMembershipRequest: false,
 };
@@ -75,6 +82,13 @@ describe('ExploreFeedCard', () => {
     expect(screen.queryByTestId('debate-card')).toBeNull();
   });
 
+  it('routes card actions through EntityRowActions so claims keep their debate toggle', () => {
+    render(<ExploreFeedCard item={item} />);
+
+    const rowActions = screen.getByTestId('row-actions');
+    expect(rowActions.contains(screen.getByText('2').closest('a'))).toBe(true);
+  });
+
   it('links comments to the entity comments anchor with the comment count', () => {
     render(<ExploreFeedCard item={item} />);
 
@@ -91,8 +105,8 @@ describe('ExploreFeedCard', () => {
     };
     render(<ExploreFeedCard item={rankingItem} />);
 
-    // Rankings use the "Rank" button in the title row instead of up/down votes, so no vote slot...
-    expect(screen.queryByTestId('vote-buttons')).toBeNull();
+    // Rankings use the "Rank" button in the title row instead of up/down votes, so no actions row...
+    expect(screen.queryByTestId('row-actions')).toBeNull();
     // ...but they still get the comment link, threaded through the body's `actions`.
     const commentLink = screen.getByText('2').closest('a');
     expect(commentLink).not.toBeNull();
