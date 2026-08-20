@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FEATURED_TAG_ID, ROOT_SPACE, TAG_PROPERTY_ID } from '~/core/constants';
 
-import { fetchFeaturedSpaces } from './fetch-featured-spaces';
+import { clearFeaturedSpacesCache, fetchFeaturedSpaces, fetchFeaturedSpacesShared } from './fetch-featured-spaces';
 
 const graphqlMock = vi.fn();
 
@@ -233,5 +233,98 @@ describe('fetchFeaturedSpaces', () => {
   it('returns [] when the root space has no topic', async () => {
     graphqlMock.mockImplementation(() => Effect.succeed({ space: { topicId: null } }));
     expect(await fetchFeaturedSpaces()).toEqual([]);
+  });
+});
+
+/**
+ * The traversal is the most expensive thing on the Explore path — five sequential round
+ * trips over ~2,900 topic nodes in production — and `/api/explore/feed` ran it per
+ * request. These cover the sharing, not the traversal, which the suite above owns.
+ */
+describe('fetchFeaturedSpacesShared', () => {
+  const AI_ONLY = () => {
+    graphqlMock.mockImplementation((arg: unknown) => {
+      const q = query(arg);
+      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 't0' } });
+      return Effect.succeed({
+        entities: [
+          {
+            id: 't0',
+            name: 'Root',
+            spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
+            featuredTags: featuredTags(false),
+            subtopics: [{ toEntity: { id: 't1' } }],
+          },
+          {
+            id: 't1',
+            name: 'AI',
+            spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
+            featuredTags: featuredTags(),
+            subtopics: [],
+          },
+        ],
+      });
+    });
+  };
+
+  beforeEach(() => {
+    graphqlMock.mockReset();
+    clearFeaturedSpacesCache();
+    vi.useRealTimers();
+  });
+
+  it('walks the tree once and reuses the answer', async () => {
+    AI_ONLY();
+
+    const first = await fetchFeaturedSpacesShared();
+    const callsAfterFirst = graphqlMock.mock.calls.length;
+    const second = await fetchFeaturedSpacesShared();
+
+    expect(first.map(f => f.spaceId)).toEqual([AI_SPACE]);
+    expect(second).toEqual(first);
+    expect(graphqlMock.mock.calls.length).toBe(callsAfterFirst);
+  });
+
+  // The one that matters in production: `/api/explore/feed` cannot hand its promise to the
+  // next request the way `app/explore/page.tsx` hands one to the sidebar, so simultaneous
+  // Explore loads were each walking the whole topic tree. Callers arriving *before* the
+  // first traversal resolves must join it, not start their own.
+  it('makes concurrent callers join the traversal already running', async () => {
+    AI_ONLY();
+
+    const [a, b, c] = await Promise.all([
+      fetchFeaturedSpacesShared(),
+      fetchFeaturedSpacesShared(),
+      fetchFeaturedSpacesShared(),
+    ]);
+    const rootQueries = graphqlMock.mock.calls.filter(call => query(call[0]).includes('space(id:')).length;
+
+    expect(rootQueries).toBe(1);
+    expect(a).toEqual(b);
+    expect(b).toEqual(c);
+  });
+
+  it('walks again once the list has gone stale', async () => {
+    AI_ONLY();
+
+    await fetchFeaturedSpacesShared();
+    const callsAfterFirst = graphqlMock.mock.calls.length;
+    vi.useFakeTimers();
+    vi.advanceTimersByTime(5 * 60 * 1000);
+    await fetchFeaturedSpacesShared();
+
+    expect(graphqlMock.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+  });
+
+  // A transient GraphQL failure must cost one traversal, not five minutes of an empty
+  // Featured panel. `runQuery` re-throws cancellation on purpose, so the same applies to an
+  // aborted caller: it must not leave its rejection behind for everyone else.
+  it('does not keep a rejection', async () => {
+    graphqlMock.mockImplementation(() => Effect.fail({ _tag: 'AbortError' }));
+
+    await expect(fetchFeaturedSpacesShared()).rejects.toBeDefined();
+
+    AI_ONLY();
+    await expect(fetchFeaturedSpacesShared()).resolves.toEqual([expect.objectContaining({ spaceId: AI_SPACE })]);
   });
 });
