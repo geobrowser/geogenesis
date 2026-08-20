@@ -87,7 +87,7 @@ export function EntityPageInlineDescription({
 
   return (
     <div className="-mt-3 mb-5">
-      <ClampedText text={description} maxLines={MAX_LINES} textClassName="text-body wrap-break-word text-text" />
+      <ClampedText text={description} maxLines={MAX_LINES} variant="body" textClassName="wrap-break-word text-text" />
     </div>
   );
 }

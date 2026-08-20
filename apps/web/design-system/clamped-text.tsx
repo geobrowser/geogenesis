@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { type TypographyName, textStyles } from '~/design-system/theme/typography';
+
 const LINE_CLAMP_CLASS: Record<number, string> = {
   1: 'line-clamp-1',
   2: 'line-clamp-2',
@@ -17,11 +19,12 @@ type ClampedTextProps = {
   text: string;
   as?: 'p' | 'h1' | 'h2' | 'h3';
   maxLines?: number;
+  variant?: TypographyName;
   textClassName?: string;
 };
 
 const TOGGLE_CLASS =
-  'cursor-pointer text-body text-grey-04 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
+  'm-0 inline cursor-pointer border-0 bg-transparent p-0 text-body leading-none text-grey-04 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
 
 const TOGGLE_GUTTER_CLASS = 'pr-11';
 
@@ -48,13 +51,12 @@ function isEllipsisActive(e: HTMLElement, maxLines: number): boolean {
   for (const clampClass of Object.values(LINE_CLAMP_CLASS)) {
     temp.classList.remove(clampClass);
   }
-  temp.classList.remove(TOGGLE_GUTTER_CLASS);
 
   if (maxLines === 1) {
     temp.style.whiteSpace = 'nowrap';
   } else {
     temp.style.whiteSpace = 'normal';
-    temp.style.width = `${display.width}px`;
+    temp.style.width = `${e.clientWidth}px`;
     temp.style.boxSizing = 'border-box';
   }
 
@@ -63,7 +65,7 @@ function isEllipsisActive(e: HTMLElement, maxLines: number): boolean {
   try {
     const full = temp.getBoundingClientRect();
     if (maxLines === 1) {
-      return full.width > display.width + 1;
+      return full.width > e.clientWidth + 1;
     }
     return full.height > display.height + 1;
   } finally {
@@ -71,13 +73,25 @@ function isEllipsisActive(e: HTMLElement, maxLines: number): boolean {
   }
 }
 
+function readLineHeightPx(el: HTMLElement): number | null {
+  const px = parseFloat(getComputedStyle(el).lineHeight);
+  return Number.isFinite(px) ? px : null;
+}
+
 /**
  * Text clamped to `maxLines` with a More/Less toggle, so nothing is permanently
  * hidden from a reader who can't switch the page into edit mode.
  */
-export function ClampedText({ text, as: Tag = 'p', maxLines = 3, textClassName = '' }: ClampedTextProps) {
+export function ClampedText({
+  text,
+  as: Tag = 'p',
+  maxLines = 3,
+  variant = 'body',
+  textClassName = '',
+}: ClampedTextProps) {
   const [expanded, setExpanded] = React.useState(false);
   const [isOverflowing, setIsOverflowing] = React.useState(false);
+  const [lastLinePx, setLastLinePx] = React.useState<number | null>(null);
   const textRef = React.useRef<HTMLElement>(null);
 
   React.useEffect(() => setExpanded(false), [text]);
@@ -86,7 +100,10 @@ export function ClampedText({ text, as: Tag = 'p', maxLines = 3, textClassName =
     const el = textRef.current;
     if (!el || expanded) return;
 
-    const measure = () => setIsOverflowing(isEllipsisActive(el, maxLines));
+    const measure = () => {
+      setIsOverflowing(isEllipsisActive(el, maxLines));
+      setLastLinePx(readLineHeightPx(el));
+    };
     measure();
 
     if (typeof ResizeObserver === 'undefined') return;
@@ -94,18 +111,18 @@ export function ClampedText({ text, as: Tag = 'p', maxLines = 3, textClassName =
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [text, maxLines, expanded]);
+  }, [text, maxLines, expanded, variant]);
 
   const showToggle = isOverflowing;
   const clamp = !expanded;
-
   const reserveToggle = showToggle && clamp;
+  const typeClassName = textStyles[variant];
 
   return (
-    <div className="relative w-full min-w-0">
+    <div className={cx('relative w-full min-w-0', reserveToggle && TOGGLE_GUTTER_CLASS)}>
       <Tag
         ref={textRef as React.Ref<never>}
-        className={cx(textClassName, clamp && LINE_CLAMP_CLASS[maxLines], reserveToggle && TOGGLE_GUTTER_CLASS)}
+        className={cx(typeClassName, textClassName, clamp && LINE_CLAMP_CLASS[maxLines])}
       >
         {text}
         {showToggle && expanded && (
@@ -118,14 +135,18 @@ export function ClampedText({ text, as: Tag = 'p', maxLines = 3, textClassName =
         )}
       </Tag>
       {showToggle && !expanded && (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          aria-expanded={false}
-          className={cx('absolute right-0 bottom-0', TOGGLE_CLASS)}
+        <span
+          className={cx('absolute right-0 bottom-0 text-right', typeClassName)}
+          style={
+            lastLinePx != null
+              ? { height: lastLinePx, lineHeight: `${lastLinePx}px` }
+              : { height: '1lh', lineHeight: '1lh' }
+          }
         >
-          More
-        </button>
+          <button type="button" onClick={() => setExpanded(true)} aria-expanded={false} className={TOGGLE_CLASS}>
+            More
+          </button>
+        </span>
       )}
     </div>
   );

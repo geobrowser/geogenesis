@@ -86,9 +86,10 @@ export function EditableHeading({
             <div className="flex min-w-0 items-center justify-between">
               <ClampedText
                 as="h1"
+                variant="mainPage"
                 text={name ?? fallbackName ?? ZERO_WIDTH_SPACE}
                 maxLines={3}
-                textClassName="w-full text-mainPage wrap-break-word text-text"
+                textClassName="w-full wrap-break-word text-text"
               />
             </div>
             <Spacer height={12} />
