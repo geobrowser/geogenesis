@@ -34,7 +34,7 @@ import { StatusBar } from '~/partials/review/status-bar';
 import { SearchDialog } from '~/partials/search';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
-import { rankingFullscreenActiveAtom } from '~/atoms';
+import { communityFullscreenActiveAtom, rankingFullscreenActiveAtom } from '~/atoms';
 
 const OnboardingDialog = dynamic(
   () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
@@ -93,6 +93,8 @@ export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
   const rankingFullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
+  const communityFullscreenActive = useAtomValue(communityFullscreenActiveAtom);
+  const fullscreenActive = rankingFullscreenActive || communityFullscreenActive;
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
@@ -121,9 +123,9 @@ export function App({ children }: { children: React.ReactNode }) {
         <React.Suspense fallback={null}>
           <PageViewTracker />
         </React.Suspense>
-        <div className="sm:hidden">{!rankingFullscreenActive && <BrowseSidebar />}</div>
+        <div className="sm:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !rankingFullscreenActive} />
+          <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !fullscreenActive} />
           <SearchDialog open={open} onDone={() => setOpen(false)} />
           <div className="min-w-0 flex-1 2xl:px-[2ch]">
             <Main>{children}</Main>

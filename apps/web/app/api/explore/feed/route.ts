@@ -14,12 +14,12 @@ function normId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
 
-const SORTS: ExploreSort[] = ['new', 'top'];
+const SORTS: ExploreSort[] = ['new', 'top', 'best'];
 const TIMES: ExploreTime[] = ['today', 'week', 'month', 'year', 'all'];
 
 function parseSort(raw: string | null): ExploreSort {
   if (raw && (SORTS as string[]).includes(raw)) return raw as ExploreSort;
-  return 'top';
+  return 'best';
 }
 
 function parseTime(raw: string | null): ExploreTime {

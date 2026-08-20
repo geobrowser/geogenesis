@@ -18,11 +18,16 @@ import {
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
   EXPLORE_PAGE_SIZE,
 } from './explore-constants';
+import { exploreBestConnectionDocument } from './explore-best-document';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 
-export type ExploreSort = 'new' | 'top';
+/**
+ * `best` is the Phase A ranked feed (quality + structure + recency, server-side).
+ * `top` ranks by the integer score property; `new` is reverse-chronological.
+ */
+export type ExploreSort = 'new' | 'top' | 'best';
 export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
 
 export type ExploreFeedItem = {
@@ -178,6 +183,12 @@ function decodeExploreEntitiesByProperty(data: {
   return decodeConnection(data.entitiesOrderedByPropertyConnection ?? null);
 }
 
+function decodeExploreBest(data: {
+  entitiesRankedForFeedConnection?: EntitiesConnectionShape;
+}): ExploreEntitiesPageResponse {
+  return decodeConnection(data.entitiesRankedForFeedConnection ?? null);
+}
+
 function buildFeedFilter(args: {
   spaceIds: string[];
   time: ExploreTime;
@@ -262,6 +273,42 @@ async function fetchTopEntitiesPage(args: {
         // (missing-as-zero for the integer Score property), so "Top" surfaces the full
         // set of entities ranked by score rather than only those already scored.
         includeWithoutValue: true,
+      },
+    })
+  );
+}
+
+// "Best" sort: the Phase A ranked feed via `entitiesRankedForFeedConnection`.
+//
+// Unlike the other two this passes no `filter`. Candidate generation inside
+// `entities_ranked_for_feed` already enforces every clause `buildFeedFilter` builds —
+// name presence, system entities, excluded block types — and takes space, type and
+// recency as its own arguments. See explore-best-document for why sending them twice is
+// not merely redundant.
+//
+// `requireName` is therefore not honoured here: an entity with no name is never a
+// candidate, server-side, and cannot be opted back in. Nothing passes
+// `requireName: false` today, and for this feed it would be a request to serve rows that
+// render as a raw uuid.
+async function fetchBestEntitiesPage(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  after: string | null;
+  typeIds?: readonly string[];
+}): Promise<ExploreEntitiesPageResponse> {
+  const t = timeThresholdSec(args.time);
+  return Effect.runPromise(
+    graphql({
+      query: exploreBestConnectionDocument,
+      decoder: decodeExploreBest,
+      variables: {
+        first: args.limit,
+        after: args.after,
+        spaceIds: args.spaceIds,
+        typeIds: args.typeIds?.length ? [...args.typeIds] : undefined,
+        createdAfter: t != null ? String(t) : undefined,
+        spaceIdsForLists: args.spaceIds,
       },
     })
   );
@@ -394,7 +441,15 @@ export async function fetchExploreFeed(args: {
   };
 
   const page =
-    args.sort === 'top'
+    args.sort === 'best'
+      ? await fetchBestEntitiesPage({
+          spaceIds: baseIds,
+          time: args.time,
+          limit: scanChunk,
+          after: args.cursor,
+          typeIds: args.typeIds,
+        })
+      : args.sort === 'top'
       ? await fetchTopEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
