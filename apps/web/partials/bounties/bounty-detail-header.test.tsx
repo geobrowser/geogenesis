@@ -10,6 +10,7 @@ import { BountyDetailHeader } from './bounty-detail-header';
 const mocks = vi.hoisted(() => ({
   detail: { data: undefined as unknown, isLoading: false, isError: false },
   roles: { isEditor: false },
+  isEditing: false,
   lastInfoCardProps: null as null | Record<string, unknown>,
 }));
 
@@ -19,8 +20,8 @@ vi.mock('~/core/bounties/use-bounty-detail', () => ({
 vi.mock('~/core/bounties/use-bounty-roles', () => ({
   useBountyRoles: () => mocks.roles,
 }));
-vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+vi.mock('~/core/hooks/use-user-is-editing', () => ({
+  useUserIsEditing: () => mocks.isEditing,
 }));
 vi.mock('./bounty-interest-card', () => ({
   BountyInterestCard: () => <div data-testid="interest-card" />,
@@ -31,10 +32,14 @@ vi.mock('./bounty-info-card', () => ({
     return <div data-testid="info-card" />;
   },
 }));
+vi.mock('./bounty-info-card-editable', () => ({
+  EditableBountyInfoCard: () => <div data-testid="editable-info-card" />,
+}));
 
 beforeEach(() => {
   mocks.detail = { data: undefined, isLoading: false, isError: false };
   mocks.roles = { isEditor: false };
+  mocks.isEditing = false;
   mocks.lastInfoCardProps = null;
 });
 afterEach(cleanup);
@@ -66,12 +71,14 @@ describe('BountyDetailHeader', () => {
     mocks.roles = { isEditor: true };
     render(<BountyDetailHeader spaceId="s" bountyId="b" />);
     expect(mocks.lastInfoCardProps?.showStatus).toBe(true);
-    expect(screen.getByRole('link', { name: 'Edit bounty' })).toHaveAttribute('href', '/space/s/bounties/b/edit');
   });
 
-  it('hides the edit affordance from non-editors', () => {
+  it('swaps to the in-place editable card in edit mode, hiding the interest card', () => {
     mocks.detail = { data: { bounty: { id: 'b' }, interest: [], submissions: [] }, isLoading: false, isError: false };
+    mocks.isEditing = true;
     render(<BountyDetailHeader spaceId="s" bountyId="b" />);
-    expect(screen.queryByRole('link', { name: 'Edit bounty' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('editable-info-card')).toBeInTheDocument();
+    expect(screen.queryByTestId('info-card')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('interest-card')).not.toBeInTheDocument();
   });
 });

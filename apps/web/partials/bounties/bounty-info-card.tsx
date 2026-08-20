@@ -139,7 +139,7 @@ export function BountyInfoCard({ bounty, showStatus = false, interestedCount }: 
   );
 }
 
-function Field({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
+export function Field({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between gap-4 text-metadata">
       <dt className="flex shrink-0 items-center gap-1 text-grey-04">
@@ -164,6 +164,6 @@ function Field({ label, help, children }: { label: string; help?: string; childr
   );
 }
 
-function Muted({ children }: { children: React.ReactNode }) {
+export function Muted({ children }: { children: React.ReactNode }) {
   return <span className="text-grey-03">{children}</span>;
 }

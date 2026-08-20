@@ -5,10 +5,9 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BOUNTY_STATUS_TODO_ID, HARD_DIFFICULTY_ID } from '~/core/bounties/ontology';
-import type { BoardBounty } from '~/core/bounties/types';
+import { deadlineFromDateInput } from '~/core/bounties/date-input';
 
-import { BountyForm, deadlineFromDateInput, validateBountyForm } from './bounty-form';
+import { BountyForm, validateBountyForm } from './bounty-form';
 
 const mocks = vi.hoisted(() => ({
   reconcile: vi.fn(),
@@ -115,19 +114,19 @@ describe('validateBountyForm', () => {
 describe('BountyForm', () => {
   it('refuses non-editors', () => {
     mocks.access = { isEditor: false, isLoading: false };
-    render(<BountyForm mode="create" spaceId="space-1" />);
+    render(<BountyForm spaceId="space-1" />);
     expect(screen.getByTestId('bounty-form-denied')).toBeInTheDocument();
   });
 
   it('toasts validation errors instead of publishing', () => {
-    render(<BountyForm mode="create" spaceId="space-1" />);
+    render(<BountyForm spaceId="space-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Publish bounty' }));
     expect(mocks.setToast).toHaveBeenCalled();
     expect(mocks.makeProposal).not.toHaveBeenCalled();
   });
 
   it('hides contributor limits for easy bounties', () => {
-    render(<BountyForm mode="create" spaceId="space-1" />);
+    render(<BountyForm spaceId="space-1" />);
     expect(screen.getByText('Max contributors')).toBeInTheDocument();
     fireEvent.change(screen.getAllByLabelText('select')[0], { target: { value: 'easy' } });
     expect(screen.queryByText('Max contributors')).not.toBeInTheDocument();
@@ -135,7 +134,7 @@ describe('BountyForm', () => {
 
   it('publishes a create proposal into the space and navigates to the new bounty', async () => {
     mocks.makeProposal.mockImplementation(async ({ onSuccess }: { onSuccess: () => Promise<void> }) => onSuccess());
-    render(<BountyForm mode="create" spaceId="space-1" />);
+    render(<BountyForm spaceId="space-1" />);
     fireEvent.change(screen.getByPlaceholderText('What needs curating?'), { target: { value: 'Add drugs' } });
     fireEvent.change(screen.getByPlaceholderText('Total for all contributors'), { target: { value: '500' } });
     fireEvent.click(screen.getByRole('button', { name: 'Publish bounty' }));
@@ -149,40 +148,5 @@ describe('BountyForm', () => {
       expect(mocks.push).toHaveBeenCalledWith(expect.stringMatching(/^\/space\/space-1\/[0-9a-f]{32}$/))
     );
     expect(mocks.invalidateQueries).toHaveBeenCalled();
-  });
-
-  it('prefills from an existing bounty and publishes an update proposal', async () => {
-    mocks.makeProposal.mockImplementation(async ({ onSuccess }: { onSuccess: () => Promise<void> }) => onSuccess());
-    const bounty: BoardBounty = {
-      id: 'bounty-1',
-      spaceId: 'space-1',
-      name: 'Existing',
-      description: 'Desc',
-      budget: 300,
-      difficulty: 'Hard',
-      difficultyId: HARD_DIFFICULTY_ID,
-      status: 'To do',
-      statusId: BOUNTY_STATUS_TODO_ID,
-      deadline: '2026-12-31T23:59:59.000Z',
-      maxContributors: 2,
-      submissionsPerPerson: 1,
-      skills: [{ id: 'skill-1', name: 'Pharmacology' }],
-      maintainers: [],
-      allocatedIds: [],
-      interestedCount: 0,
-      updatedAt: null,
-      isFeatured: false,
-      contributors: [],
-    };
-    render(<BountyForm mode="edit" spaceId="space-1" initial={{ bounty, relations: [] }} />);
-    expect(screen.getByDisplayValue('Existing')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('300')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('2026-12-31')).toBeInTheDocument();
-    expect(screen.getByText('Pharmacology')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(mocks.makeProposal).toHaveBeenCalledTimes(1));
-    expect(mocks.makeProposal.mock.calls[0][0].name).toBe('Update bounty: Existing');
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/bounty-1'));
   });
 });

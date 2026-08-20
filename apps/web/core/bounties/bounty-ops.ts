@@ -12,7 +12,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { createEntityId, createValueId } from '~/core/id/create-id';
-import { uuidToHex } from '~/core/id/normalize';
 import type { DataType, Relation, Value } from '~/core/types';
 
 import {
@@ -230,58 +229,4 @@ export function buildCreateBountyOps(
   }
 
   return { entityId, values, relations };
-}
-
-/**
- * Updates an existing Bounty. `existingRelations` are the entity's current
- * relations (from the API); single-valued relations are replaced, multi-valued
- * ones diffed, and anything not touched by the form (Types, Creator, Blocks,
- * Allocated…) is left alone.
- */
-export function buildUpdateBountyOps(
-  entityId: string,
-  fields: BountyFields,
-  existingRelations: readonly Relation[]
-): { values: Value[]; relations: Relation[] } {
-  const entityRef: EntityRef = { id: entityId, name: fields.name };
-  const { spaceId } = fields;
-  const values = buildScalarValues(entityRef, fields);
-  const relations: Relation[] = [];
-
-  const tombstone = (relation: Relation): Relation => ({ ...relation, spaceId, isLocal: true, isDeleted: true });
-  const ofType = (typeId: string) =>
-    existingRelations.filter(r => r.type.id === typeId && uuidToHex(r.fromEntity.id) === uuidToHex(entityId));
-
-  // Single-valued: replace only if the target changed (avoids churn on untouched fields).
-  const replaceSingle = (typeId: string, typeName: string, next: EntityPick | null) => {
-    const current = ofType(typeId);
-    const currentId = current[0]?.toEntity.id ?? null;
-    const unchanged = current.length === 1 && currentId && next && uuidToHex(currentId) === uuidToHex(next.id);
-    if (unchanged) return;
-    relations.push(...current.map(tombstone));
-    if (next) relations.push(buildRelation({ entityRef, spaceId, typeId, typeName, to: next }));
-  };
-  replaceSingle(BOUNTY_TASK_STATUS_PROPERTY_ID, 'Workflow Status', statusPick(fields.status));
-  replaceSingle(
-    BOUNTY_DIFFICULTY_PROPERTY_ID,
-    'Difficulty',
-    fields.difficulty ? difficultyPick(fields.difficulty) : null
-  );
-
-  // Multi-valued: diff by target id.
-  const diffMulti = (typeId: string, typeName: string, next: EntityPick[]) => {
-    const current = ofType(typeId);
-    const nextIds = new Set(next.map(pick => uuidToHex(pick.id)));
-    const currentIds = new Set(current.map(r => uuidToHex(r.toEntity.id)));
-    relations.push(...current.filter(r => !nextIds.has(uuidToHex(r.toEntity.id))).map(tombstone));
-    for (const pick of next) {
-      if (!currentIds.has(uuidToHex(pick.id))) {
-        relations.push(buildRelation({ entityRef, spaceId, typeId, typeName, to: pick }));
-      }
-    }
-  };
-  diffMulti(BOUNTY_SKILLS_PROPERTY_ID, 'Skills', fields.skills);
-  diffMulti(BOUNTY_MAINTAINER_PROPERTY_ID, 'Maintainer', fields.maintainers);
-
-  return { values, relations };
 }

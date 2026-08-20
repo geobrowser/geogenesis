@@ -8,31 +8,23 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import Textarea from 'react-textarea-autosize';
 
-import {
-  type BountyFields,
-  type EntityPick,
-  buildCreateBountyOps,
-  buildUpdateBountyOps,
-} from '~/core/bounties/bounty-ops';
+import { type BountyFields, type EntityPick, buildCreateBountyOps } from '~/core/bounties/bounty-ops';
+import { deadlineFromDateInput } from '~/core/bounties/date-input';
 import {
   DIFFICULTIES,
   type DifficultyKey,
   WORKFLOW_STATUSES,
   type WorkflowStatusKey,
-  difficultyKeyForId,
   isDifficultyKey,
   isWorkflowStatusKey,
   statusKeyForId,
 } from '~/core/bounties/labels';
-import { reconcileDeletedRelations } from '~/core/bounties/reconcile-store';
-import type { BoardBounty } from '~/core/bounties/types';
 import { bountyQueryKeys } from '~/core/bounties/use-bounties';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useToast } from '~/core/hooks/use-toast';
-import type { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Button, SmallButton } from '~/design-system/button';
@@ -43,28 +35,7 @@ import { Text } from '~/design-system/text';
 
 const fieldClass = 'w-full rounded-md border border-grey-02 px-3 py-2 text-metadata';
 
-export type BountyFormInitial = {
-  bounty: BoardBounty;
-  /** The bounty's current relations (from the API), diffed on save. */
-  relations: Relation[];
-};
-
-type Props = { mode: 'create'; spaceId: string } | { mode: 'edit'; spaceId: string; initial: BountyFormInitial };
-
-/** `YYYY-MM-DD` for a date input from an ISO datetime, or ''. */
-function dateInputValue(iso: string | null): string {
-  if (!iso) return '';
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return '';
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
-/** End of the chosen day, UTC, as ISO — deadlines are dates in the form but datetimes on-chain. */
-export function deadlineFromDateInput(value: string): string | null {
-  if (!value) return null;
-  const ms = Date.parse(`${value}T23:59:59.000Z`);
-  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
-}
+type Props = { spaceId: string };
 
 function parseOptionalNumber(raw: string): number | null | 'invalid' {
   const trimmed = raw.trim();
@@ -110,9 +81,7 @@ export function validateBountyForm(input: {
 }
 
 /** Author or edit a Bounty entity in a DAO space (editors only — the route gates on that). */
-export function BountyForm(props: Props) {
-  const { spaceId } = props;
-  const initial = props.mode === 'edit' ? props.initial : null;
+export function BountyForm({ spaceId }: Props) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { makeProposal } = usePublish();
@@ -121,26 +90,20 @@ export function BountyForm(props: Props) {
   const { profile } = useGeoProfile(smartAccount?.account.address);
   const access = useAccessControl(spaceId);
 
-  const [name, setName] = React.useState(initial?.bounty.name ?? '');
-  const [description, setDescription] = React.useState(initial?.bounty.description ?? '');
-  const [budget, setBudget] = React.useState(initial?.bounty.budget != null ? String(initial.bounty.budget) : '');
-  const [difficulty, setDifficulty] = React.useState<DifficultyKey | ''>(
-    difficultyKeyForId(initial?.bounty.difficultyId) ?? ''
-  );
-  const [status, setStatus] = React.useState<WorkflowStatusKey>(statusKeyForId(initial?.bounty.statusId));
-  const [deadline, setDeadline] = React.useState(dateInputValue(initial?.bounty.deadline ?? null));
-  const [maxContributors, setMaxContributors] = React.useState(
-    initial?.bounty.maxContributors != null ? String(initial.bounty.maxContributors) : ''
-  );
-  const [maxSubmissionsPerPerson, setMaxSubmissionsPerPerson] = React.useState(
-    initial?.bounty.submissionsPerPerson != null ? String(initial.bounty.submissionsPerPerson) : ''
-  );
-  const [skills, setSkills] = React.useState<EntityPick[]>(initial?.bounty.skills ?? []);
-  const [maintainers, setMaintainers] = React.useState<EntityPick[]>(initial?.bounty.maintainers ?? []);
+  const [name, setName] = React.useState('');
+  const [description, setDescription] = React.useState('');
+  const [budget, setBudget] = React.useState('');
+  const [difficulty, setDifficulty] = React.useState<DifficultyKey | ''>('');
+  const [status, setStatus] = React.useState<WorkflowStatusKey>(statusKeyForId(null));
+  const [deadline, setDeadline] = React.useState('');
+  const [maxContributors, setMaxContributors] = React.useState('');
+  const [maxSubmissionsPerPerson, setMaxSubmissionsPerPerson] = React.useState('');
+  const [skills, setSkills] = React.useState<EntityPick[]>([]);
+  const [maintainers, setMaintainers] = React.useState<EntityPick[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
 
   const isEasy = difficulty === 'easy';
-  const backHref = initial ? NavUtils.toBounty(spaceId, initial.bounty.id) : NavUtils.toSpaceBounties(spaceId);
+  const backHref = NavUtils.toSpaceBounties(spaceId);
 
   const onSubmit = async () => {
     const validation = validateBountyForm({
@@ -169,23 +132,6 @@ export function BountyForm(props: Props) {
     setSubmitting(true);
     const invalidate = () => queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all });
 
-    if (initial) {
-      const { values, relations } = buildUpdateBountyOps(initial.bounty.id, fields, initial.relations);
-      await makeProposal({
-        values,
-        relations,
-        spaceId,
-        name: `Update bounty: ${fields.name}`,
-        onSuccess: async () => {
-          reconcileDeletedRelations(relations);
-          await invalidate();
-          router.push(NavUtils.toBounty(spaceId, initial.bounty.id));
-        },
-        onError: () => setSubmitting(false),
-      });
-      return;
-    }
-
     const creator: EntityPick | null =
       profile?.id && profile.id !== profile.spaceId && !profile.id.startsWith('0x')
         ? { id: profile.id, name: profile.name }
@@ -210,10 +156,10 @@ export function BountyForm(props: Props) {
     return (
       <div className="mx-auto flex max-w-[820px] flex-col gap-3 px-4 py-8" data-testid="bounty-form-denied">
         <Text as="h1" variant="largeTitle">
-          {initial ? 'Edit bounty' : 'New bounty'}
+          New bounty
         </Text>
         <Text as="p" color="grey-04">
-          Only editors of this space can {initial ? 'edit' : 'create'} bounties.
+          Only editors of this space can create bounties.
         </Text>
         <div>
           <Button variant="secondary" onClick={() => router.push(backHref)}>
@@ -227,7 +173,7 @@ export function BountyForm(props: Props) {
   return (
     <div className="mx-auto flex max-w-[820px] flex-col gap-5 px-4 py-8" data-testid="bounty-form">
       <Text as="h1" variant="largeTitle">
-        {initial ? 'Edit bounty' : 'New bounty'}
+        New bounty
       </Text>
 
       <label className="flex flex-col gap-1">
@@ -239,7 +185,7 @@ export function BountyForm(props: Props) {
           className={`${fieldClass} resize-none text-smallTitle`}
           minRows={1}
           maxRows={3}
-          autoFocus={!initial}
+          autoFocus
         />
       </label>
 
@@ -346,7 +292,7 @@ export function BountyForm(props: Props) {
           Cancel
         </Button>
         <Button variant="primary" disabled={submitting} onClick={onSubmit}>
-          {submitting ? (initial ? 'Saving…' : 'Publishing…') : initial ? 'Save' : 'Publish bounty'}
+          {submitting ? 'Publishing…' : 'Publish bounty'}
         </Button>
       </div>
     </div>

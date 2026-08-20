@@ -17,5 +17,5 @@ export default async function NewBountyPage(props: Props) {
   if (!IdUtils.isValid(params.id)) notFound();
   if (!bountiesEnabledForNetwork || !isBountySpace(params.id)) notFound();
 
-  return <BountyForm mode="create" spaceId={params.id} />;
+  return <BountyForm spaceId={params.id} />;
 }

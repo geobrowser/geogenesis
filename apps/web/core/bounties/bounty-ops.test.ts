@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Relation } from '~/core/types';
 
-import { type BountyFields, buildCreateBountyOps, buildUpdateBountyOps } from './bounty-ops';
+import { type BountyFields, buildCreateBountyOps } from './bounty-ops';
 import {
   BOUNTY_BUDGET_PROPERTY_ID,
   BOUNTY_CREATOR_PROPERTY_ID,
@@ -18,7 +18,6 @@ import {
   BOUNTY_STATUS_IN_PROGRESS_ID,
   BOUNTY_TASK_STATUS_PROPERTY_ID,
   BOUNTY_TYPE_ID,
-  EASY_DIFFICULTY_ID,
   HARD_DIFFICULTY_ID,
 } from './ontology';
 
@@ -93,71 +92,5 @@ describe('buildCreateBountyOps', () => {
     expect(relTargets(relations, BOUNTY_TASK_STATUS_PROPERTY_ID)).toEqual([BOUNTY_STATUS_BACKLOG_ID]);
     expect(relTargets(relations, BOUNTY_DIFFICULTY_PROPERTY_ID)).toEqual([]);
     expect(relTargets(relations, BOUNTY_CREATOR_PROPERTY_ID)).toEqual([]);
-  });
-});
-
-function existing(typeId: string, toId: string, id = `rel-${typeId}-${toId}`): Relation {
-  return {
-    id,
-    entityId: `${id}-entity`,
-    spaceId: 'space-1',
-    renderableType: 'RELATION',
-    fromEntity: { id: 'bounty-1', name: 'Old name' },
-    toEntity: { id: toId, name: null, value: toId },
-    type: { id: typeId, name: null },
-  };
-}
-
-describe('buildUpdateBountyOps', () => {
-  const current: Relation[] = [
-    existing(SystemIds.TYPES_PROPERTY, BOUNTY_TYPE_ID),
-    existing(BOUNTY_TASK_STATUS_PROPERTY_ID, BOUNTY_STATUS_BACKLOG_ID),
-    existing(BOUNTY_DIFFICULTY_PROPERTY_ID, EASY_DIFFICULTY_ID),
-    existing(BOUNTY_SKILLS_PROPERTY_ID, 'skill-1'),
-    existing(BOUNTY_SKILLS_PROPERTY_ID, 'skill-old'),
-    existing(BOUNTY_MAINTAINER_PROPERTY_ID, 'person-1'),
-    existing(BOUNTY_CREATOR_PROPERTY_ID, 'creator-1'),
-  ];
-
-  it('replaces changed single-valued relations and diffs multi-valued ones, leaving the rest alone', () => {
-    const { values, relations } = buildUpdateBountyOps('bounty-1', fields, current);
-
-    // Values are a full upsert of the scalar set.
-    expect(byProperty(values)[SystemIds.NAME_PROPERTY]).toBe('Add top 200 drugs');
-
-    const deleted = relations.filter(r => r.isDeleted).map(r => r.id);
-    // Status backlog→in-progress and difficulty easy→hard: old rows tombstoned, new rows added.
-    expect(deleted).toContain(`rel-${BOUNTY_TASK_STATUS_PROPERTY_ID}-${BOUNTY_STATUS_BACKLOG_ID}`);
-    expect(deleted).toContain(`rel-${BOUNTY_DIFFICULTY_PROPERTY_ID}-${EASY_DIFFICULTY_ID}`);
-    expect(relTargets(relations, BOUNTY_TASK_STATUS_PROPERTY_ID)).toEqual([BOUNTY_STATUS_IN_PROGRESS_ID]);
-    expect(relTargets(relations, BOUNTY_DIFFICULTY_PROPERTY_ID)).toEqual([HARD_DIFFICULTY_ID]);
-    // Skills: skill-1 kept (no new row), skill-old removed.
-    expect(deleted).toContain(`rel-${BOUNTY_SKILLS_PROPERTY_ID}-skill-old`);
-    expect(relTargets(relations, BOUNTY_SKILLS_PROPERTY_ID)).toEqual([]);
-    // Maintainer unchanged → nothing.
-    expect(relations.some(r => r.type.id === BOUNTY_MAINTAINER_PROPERTY_ID)).toBe(false);
-    // Types and Creator never touched.
-    expect(relations.some(r => r.type.id === SystemIds.TYPES_PROPERTY)).toBe(false);
-    expect(relations.some(r => r.type.id === BOUNTY_CREATOR_PROPERTY_ID)).toBe(false);
-  });
-
-  it('is a no-op on relations when nothing changed', () => {
-    const same: BountyFields = {
-      ...fields,
-      status: 'backlog',
-      difficulty: 'easy',
-      skills: [
-        { id: 'skill-1', name: null },
-        { id: 'skill-old', name: null },
-      ],
-    };
-    const { relations } = buildUpdateBountyOps('bounty-1', same, current);
-    expect(relations).toEqual([]);
-  });
-
-  it('clears difficulty by tombstoning without adding a replacement', () => {
-    const { relations } = buildUpdateBountyOps('bounty-1', { ...fields, difficulty: null }, current);
-    expect(relations.filter(r => r.type.id === BOUNTY_DIFFICULTY_PROPERTY_ID).every(r => r.isDeleted)).toBe(true);
-    expect(relTargets(relations, BOUNTY_DIFFICULTY_PROPERTY_ID)).toEqual([]);
   });
 });

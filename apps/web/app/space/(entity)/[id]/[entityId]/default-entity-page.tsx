@@ -19,6 +19,8 @@ interface Props {
   coverSlot?: React.ReactNode;
   /** Rendered after the block content and property sheet, before backlinks. */
   belowBodySlot?: React.ReactNode;
+  /** Hides the collapsible properties sheet (bounty pages render their own facts card). */
+  hideProperties?: boolean;
 }
 
 export default async function DefaultEntityPage({
@@ -30,6 +32,7 @@ export default async function DefaultEntityPage({
   notice = null,
   coverSlot,
   belowBodySlot,
+  hideProperties,
 }: Props) {
   const isEditing = searchParams?.edit === 'true';
   const props = await fetchEntityPageData(params.id, params.entityId);
@@ -66,6 +69,7 @@ export default async function DefaultEntityPage({
             coverSlot={coverSlot}
             notice={notice}
             belowBodySlot={belowBodySlot}
+            hideProperties={hideProperties}
           />
         </RouteEditorProvider>
       </EntityStoreProvider>

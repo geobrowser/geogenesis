@@ -4,13 +4,12 @@ import * as React from 'react';
 
 import { useBountyDetail } from '~/core/bounties/use-bounty-detail';
 import { useBountyRoles } from '~/core/bounties/use-bounty-roles';
-import { NavUtils } from '~/core/utils/utils';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 
-import { SmallButton } from '~/design-system/button';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { BountyInfoCard } from './bounty-info-card';
+import { EditableBountyInfoCard } from './bounty-info-card-editable';
 import { BountyInterestCard } from './bounty-interest-card';
 
 type Props = {
@@ -26,19 +25,24 @@ type Props = {
 export function BountyDetailHeader({ spaceId, bountyId }: Props) {
   const { data, isLoading, isError } = useBountyDetail(spaceId, bountyId);
   const roles = useBountyRoles(data?.bounty, data?.interest ?? []);
+  const isEditing = useUserIsEditing(spaceId);
 
   if (isLoading) return <BountyDetailHeaderSkeleton />;
   if (isError || !data) return null;
 
+  // Edit mode replaces the facts card with in-place editors writing through
+  // the local store; the page's normal review flow publishes them. No
+  // separate edit route or button.
+  if (isEditing) {
+    return (
+      <div className="flex flex-col gap-4" data-testid="bounty-detail-header">
+        <EditableBountyInfoCard bounty={data.bounty} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4" data-testid="bounty-detail-header">
-      {roles.isEditor ? (
-        <div className="flex justify-end">
-          <Link href={NavUtils.toEditBounty(spaceId, bountyId)}>
-            <SmallButton>Edit bounty</SmallButton>
-          </Link>
-        </div>
-      ) : null}
       <BountyInfoCard bounty={data.bounty} showStatus={roles.isEditor} />
       <BountyInterestCard detail={data} roles={roles} />
     </div>

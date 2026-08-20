@@ -27,7 +27,6 @@ export const NavUtils = {
   toBounties: () => '/bounties',
   toSpaceBounties: (spaceId: string) => `/space/${spaceId}/bounties`,
   toNewBounty: (spaceId: string) => `/space/${spaceId}/bounties/new`,
-  toEditBounty: (spaceId: string, bountyId: string) => `/space/${spaceId}/bounties/${bountyId}/edit`,
   // A bounty is a regular entity; its detail page is the entity page.
   toBounty: (spaceId: string, bountyId: string) => `/space/${spaceId}/${bountyId}`,
   toCommunity: (spaceId: string) => `${NavUtils.toSpace(spaceId)}/community`,

@@ -82,6 +82,8 @@ export default async function EntityTemplateStrategy(props: Props) {
         searchParams={searchParams}
         notice={<BountyDetailHeader spaceId={params.id} bountyId={params.entityId} />}
         belowBodySlot={<BountyDetailSections spaceId={params.id} bountyId={params.entityId} />}
+        // The facts card covers the bounty's structured properties, in read and edit mode alike.
+        hideProperties
       />
     );
   }
