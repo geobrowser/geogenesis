@@ -172,10 +172,22 @@ describe('DebateGatewayClient', () => {
 
     expect(invalidateQueries.mock.calls).toEqual(
       expect.arrayContaining([
-        [{ queryKey: ['debates', 'media', 'debate-1'], refetchType: 'active' }, { throwOnError: true }],
-        [{ queryKey: ['debates', 'detail', 'debate-1'], refetchType: 'active' }, { throwOnError: true }],
-        [{ queryKey: ['debates', 'transcript', 'debate-1'], refetchType: 'active' }, { throwOnError: true }],
-        [{ queryKey: ['debates', 'space', 'space-1'], refetchType: 'active' }, { throwOnError: true }],
+        [
+          { queryKey: ['debates', 'media', 'debate-1'], refetchType: 'active' },
+          { throwOnError: true, cancelRefetch: false },
+        ],
+        [
+          { queryKey: ['debates', 'detail', 'debate-1'], refetchType: 'active' },
+          { throwOnError: true, cancelRefetch: false },
+        ],
+        [
+          { queryKey: ['debates', 'transcript', 'debate-1'], refetchType: 'active' },
+          { throwOnError: true, cancelRefetch: false },
+        ],
+        [
+          { queryKey: ['debates', 'space', 'space-1'], refetchType: 'active' },
+          { throwOnError: true, cancelRefetch: false },
+        ],
       ])
     );
     expect(invalidateQueries).toHaveBeenCalledTimes(4);
@@ -324,6 +336,7 @@ describe('DebateGatewayClient', () => {
     queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-9']], {});
     queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', ['claim-2']], {});
     queryClient.setQueryData(['debates', 'account', 'user-a', 'rematch', 'session-1', 'claims', []], {});
+    queryClient.setQueryData(['participant-positions', ['profile-1', 'profile-2']], []);
     const refetchQueries = vi.spyOn(queryClient, 'refetchQueries').mockResolvedValue();
 
     client.start(
@@ -406,6 +419,11 @@ describe('DebateGatewayClient', () => {
           .find({ queryKey: ['claim-response-summaries', 'profile-1', 'space-2', ['claim-2:veracity']] })!
       )
     ).toBe(false);
+    // The rematch picker reads both participants' sides straight from the graph in one query;
+    // any response in a watched space may be one of theirs, so it re-asks.
+    expect(
+      predicate!(queryClient.getQueryCache().find({ queryKey: ['participant-positions', ['profile-1', 'profile-2']] })!)
+    ).toBe(true);
     expect(refetchQueries).not.toHaveBeenCalled();
   });
 
@@ -681,6 +699,27 @@ describe('DebateGatewayClient', () => {
     expect(sockets).toHaveLength(2);
   });
 
+  // The participants' positions come from the knowledge graph; its failing says nothing about the
+  // geo-chat socket, and the query polls on its own.
+  it('keeps a healthy socket open when the graph-side positions refetch fails', async () => {
+    invalidateQueries.mockRejectedValueOnce(
+      Object.assign(new Error('graphql request failed'), { _tag: 'GraphqlRequestError' })
+    );
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets).toHaveLength(1);
+  });
+
   it('keeps a healthy socket open when an invalidated query fails with a deterministic 4xx', async () => {
     invalidateQueries.mockRejectedValueOnce(
       new GeoChatRequestError('at most 50 claim IDs may be requested', 'too_many_claim_ids', 400)
@@ -908,6 +947,108 @@ describe('DebateGatewayClient', () => {
     unsubscribe();
   });
 
+  // The rematch picker holds a positions batch per page of claims on screen, and the other side's
+  // responses arrive faster than those round trips complete. Restarting every batch on every
+  // event meant none of them landed while the responses kept coming. A batch in flight is left to
+  // land, then asked again so the screen never shows an answer older than the event.
+  it('lets an in-flight rematch batch land instead of cancelling it, then asks it again', async () => {
+    const batchKey = ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims', ['claim-2']];
+    queryClient.setQueryData(batchKey, { claims: [], excluded_claim_ids: [] });
+    let settle!: () => void;
+    const inFlight = new QueryObserver(queryClient, {
+      queryKey: batchKey,
+      queryFn: () =>
+        new Promise<unknown>(resolve => {
+          settle = () => resolve({ claims: [{ claim: { claim_entity_id: 'claim-2' } }], excluded_claim_ids: [] });
+        }),
+      retry: false,
+    });
+    const unsubscribe = inFlight.subscribe(() => undefined);
+    void inFlight.refetch();
+    await vi.runAllTicks();
+    const cancelQueries = vi.spyOn(queryClient, 'cancelQueries');
+    const refetchQueries = vi.spyOn(queryClient, 'refetchQueries').mockResolvedValue();
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    refetchQueries.mockClear();
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-claims',
+      event_type: 'debate.claims_changed',
+      payload: { space_id: 'space-1', claim_entity_ids: ['claim-2'] },
+    });
+    await flushInvalidations();
+
+    const cache = queryClient.getQueryCache();
+    const batch = cache.find({ queryKey: batchKey })!;
+    // Not cancelled, even though it holds data.
+    const cancelFilters = cancelQueries.mock.calls.map(([filters]) => filters).find(filters => filters?.predicate);
+    expect(cancelFilters!.predicate!(batch)).toBe(false);
+    expect(batch.state.fetchStatus).toBe('fetching');
+    // The invalidation joins the request in flight rather than restarting it...
+    expect(invalidateQueries).toHaveBeenCalledWith(
+      { predicate: expect.any(Function), refetchType: 'active' },
+      { throwOnError: true, cancelRefetch: false }
+    );
+    // ...and once that has landed the batch is asked again, so the answer postdates the event.
+    const reask = refetchQueries.mock.calls.find(([filters]) => filters?.predicate?.(batch));
+    expect(reask).toBeDefined();
+    expect(reask![1]).toEqual({ throwOnError: true, cancelRefetch: false });
+
+    settle();
+    unsubscribe();
+  });
+
+  // A hook-side refresh can cancel one joined batch mid-flush. That batch's cancellation must not
+  // cost the others in the same flush the re-ask that brings them past the event.
+  it('still asks an in-flight rematch batch again when the joined invalidation was cancelled', async () => {
+    const batchKey = ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims', ['claim-2']];
+    queryClient.setQueryData(batchKey, { claims: [], excluded_claim_ids: [] });
+    let settle!: () => void;
+    const inFlight = new QueryObserver(queryClient, {
+      queryKey: batchKey,
+      queryFn: () =>
+        new Promise<unknown>(resolve => {
+          settle = () => resolve({ claims: [], excluded_claim_ids: [] });
+        }),
+      retry: false,
+    });
+    const unsubscribe = inFlight.subscribe(() => undefined);
+    void inFlight.refetch();
+    await vi.runAllTicks();
+    const refetchQueries = vi.spyOn(queryClient, 'refetchQueries').mockResolvedValue();
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    refetchQueries.mockClear();
+    invalidateQueries.mockRejectedValueOnce(new CancelledError());
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-claims',
+      event_type: 'debate.claims_changed',
+      payload: { space_id: 'space-1', claim_entity_ids: ['claim-2'] },
+    });
+    await flushInvalidations();
+
+    const batch = queryClient.getQueryCache().find({ queryKey: batchKey })!;
+    expect(refetchQueries.mock.calls.some(([filters]) => filters?.predicate?.(batch))).toBe(true);
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+
+    settle();
+    unsubscribe();
+  });
+
   it('rotates the socket thirty seconds before token expiry', async () => {
     session = { ...session, expires_at: '2026-07-20T12:01:00.000Z' };
     client.start(
@@ -1097,12 +1238,12 @@ async function flushInvalidations() {
 }
 
 function expectInvalidated(invalidateQueries: ReturnType<typeof vi.spyOn>, filters: unknown) {
-  expect(invalidateQueries.mock.calls).toContainEqual([filters, { throwOnError: true }]);
+  expect(invalidateQueries.mock.calls).toContainEqual([filters, { throwOnError: true, cancelRefetch: false }]);
 }
 
 function expectBroadInvalidated(invalidateQueries: ReturnType<typeof vi.spyOn>) {
   expect(invalidateQueries).toHaveBeenCalledWith(
     { predicate: expect.any(Function), refetchType: 'active' },
-    { throwOnError: true }
+    { throwOnError: true, cancelRefetch: false }
   );
 }

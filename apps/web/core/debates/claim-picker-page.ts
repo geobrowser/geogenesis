@@ -1,41 +1,32 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { type UseQueryResult, useQueries } from '@tanstack/react-query';
+
+import * as React from 'react';
+
 import { Effect } from 'effect';
 import { parse } from 'graphql';
-
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { graphql } from '~/core/io/graphql-client';
 
 /**
- * A page of published claims for the rematch picker, carrying only what the picker reads.
+ * The rematch picker's projection of a claim, carrying only what the picker reads.
  *
- * The picker used to page through `useQueryEntities`, whose fragment pulls every value, every
- * relation and every related entity's values for each row — a quarter of a megabyte and several
- * seconds per fifty claims, of which the picker read six fields: the name, the description, the
- * spaces its name is set in (to work out its home space), whether it is factual, and its topics.
- * Filtering those lists on the server brings a page down to a few kilobytes.
+ * `useQueryEntities` pulls every value, every relation and every related entity's values for each
+ * row — a quarter of a megabyte and several seconds per fifty claims, of which the picker reads six
+ * fields: the name, the description, the spaces its name is set in (to work out its home space),
+ * whether it is factual, and its topics. Filtering those lists on the server brings a batch down to
+ * a few kilobytes.
  *
  * Shaped as the same structural subset of `Entity` the picker was already reading, so the helpers
  * that resolve a claim's home space, response kind and topics work unchanged on both sources.
  *
  * Hand-written rather than generated so it doesn't require regenerating `gql.ts`.
  */
-const CLAIM_PICKER_PAGE_SOURCE = /* GraphQL */ `
-  query ClaimPickerPage(
-    $claimTypeId: UUID!
-    $propertyIds: [UUID!]!
-    $topicsPropertyId: UUID!
-    $first: Int!
-    $after: Cursor
-    $filter: EntityFilter
-  ) {
-    entitiesConnection(first: $first, after: $after, typeId: $claimTypeId, filter: $filter) {
-      pageInfo {
-        endCursor
-        hasNextPage
-      }
+const CLAIM_PICKER_ENTITIES_SOURCE = /* GraphQL */ `
+  query ClaimPickerEntities($claimTypeId: UUID!, $propertyIds: [UUID!]!, $topicsPropertyId: UUID!, $ids: [UUID!]!) {
+    entitiesConnection(first: 100, typeId: $claimTypeId, filter: { id: { in: $ids } }) {
       nodes {
         id
         name
@@ -58,9 +49,8 @@ const CLAIM_PICKER_PAGE_SOURCE = /* GraphQL */ `
   }
 `;
 
-type ClaimPickerPageQuery = {
+type ClaimPickerEntitiesQuery = {
   entitiesConnection: {
-    pageInfo: { endCursor: string | null; hasNextPage: boolean } | null;
     nodes: Array<{
       id: string;
       name: string | null;
@@ -77,18 +67,16 @@ type ClaimPickerPageQuery = {
   } | null;
 };
 
-type ClaimPickerPageVariables = {
+type ClaimPickerEntitiesVariables = {
   claimTypeId: string;
   propertyIds: string[];
   topicsPropertyId: string;
-  first: number;
-  after?: string;
-  filter: { name: { isNull: false; isNot: ''; includesInsensitive?: string } };
+  ids: string[];
 };
 
-const claimPickerPageDocument = parse(CLAIM_PICKER_PAGE_SOURCE) as TypedDocumentNode<
-  ClaimPickerPageQuery,
-  ClaimPickerPageVariables
+const claimPickerEntitiesDocument = parse(CLAIM_PICKER_ENTITIES_SOURCE) as TypedDocumentNode<
+  ClaimPickerEntitiesQuery,
+  ClaimPickerEntitiesVariables
 >;
 
 /** The subset of `Entity` the rematch picker reads. A full `Entity` satisfies it structurally. */
@@ -101,15 +89,10 @@ export type ClaimPickerEntity = {
   relations: Array<{ isDeleted?: boolean; type: { id: string }; toEntity: { id: string; name: string | null } }>;
 };
 
-export type ClaimPickerPage = {
-  entities: ClaimPickerEntity[];
-  endCursor: string | null;
-  hasNextPage: boolean;
-};
+/** The graph caps `first` on `entitiesConnection`; ids are asked for in lists this long. */
+export const CLAIM_PICKER_IDS_BATCH_SIZE = 100;
 
-export const CLAIM_PICKER_PAGE_SIZE = 50;
-
-function decodeClaimPickerPage(data: ClaimPickerPageQuery): ClaimPickerPage {
+function decodeClaimPickerEntities(data: ClaimPickerEntitiesQuery): ClaimPickerEntity[] {
   const connection = data.entitiesConnection;
   const entities: ClaimPickerEntity[] = [];
   for (const node of connection?.nodes ?? []) {
@@ -133,30 +116,20 @@ function decodeClaimPickerPage(data: ClaimPickerPageQuery): ClaimPickerPage {
       ),
     });
   }
-  return {
-    entities,
-    endCursor: connection?.pageInfo?.endCursor ?? null,
-    hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
-  };
+  return entities;
 }
 
-export function fetchClaimPickerPage(
-  { search, after }: { search: string; after?: string },
-  signal?: AbortSignal
-): Promise<ClaimPickerPage> {
+export function fetchClaimPickerEntities(ids: string[], signal?: AbortSignal): Promise<ClaimPickerEntity[]> {
+  if (ids.length === 0) return Promise.resolve([]);
   return Effect.runPromise(
     graphql({
-      query: claimPickerPageDocument,
-      decoder: decodeClaimPickerPage,
+      query: claimPickerEntitiesDocument,
+      decoder: decodeClaimPickerEntities,
       variables: {
         claimTypeId: CLAIM_TYPE_ID,
         propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
         topicsPropertyId: TOPICS_PROPERTY_ID,
-        first: CLAIM_PICKER_PAGE_SIZE,
-        after,
-        // Same filter the ORM built: nameless claims are excluded (the picker cannot show them) and
-        // the search term is the case-insensitive substring `contains` maps to.
-        filter: { name: { isNull: false, isNot: '', ...(search ? { includesInsensitive: search } : null) } },
+        ids,
       },
       signal,
     })
@@ -165,32 +138,42 @@ export function fetchClaimPickerPage(
 
 /**
  * Deliberately not under `'debates'`: that root is what the gateway reconciles and refetches on
- * every (re)connect and what the debates mutations invalidate. This page comes from the knowledge
- * graph, not geo-chat, so a socket event says nothing about it — and a failing graph refetch under
- * that root would be read as a broken socket and recycle the connection over it.
+ * every (re)connect and what the debates mutations invalidate. These rows come from the knowledge
+ * graph, not geo-chat, so a socket event says nothing about them — and a failing graph refetch
+ * under that root would be read as a broken socket and recycle the connection over it.
  */
-export const claimPickerPageQueryKey = (search: string, after: string | undefined) =>
-  ['claim-picker', 'page', search, after ?? null] as const;
+export const claimPickerEntitiesQueryKey = (ids: string[]) => ['claim-picker', 'entities', ids] as const;
 
 /**
- * One page of the picker's browsed claims. `keepPreviousData` holds the prior page on screen while
- * the next loads, which is what the caller reads as "a fetch is in flight" for its scroll sentinel.
+ * The picker's projection of a known set of claims — the ones the opponent has responded to. Asked
+ * for in id-sorted batches so a claim joining the list re-fetches its batch and nothing else, and
+ * the claim entity itself rarely changes, so a batch stays fresh for a while.
  */
-export function useClaimPickerPage({ search, after }: { search: string; after: string | undefined }) {
-  const query = useQuery({
-    queryKey: claimPickerPageQueryKey(search, after),
-    queryFn: ({ signal }) => fetchClaimPickerPage({ search, after }, signal),
-    placeholderData: keepPreviousData,
-    staleTime: 60_000,
+export function useClaimEntitiesByIds(ids: string[]) {
+  const batches = React.useMemo(() => {
+    const sorted = [...new Set(ids)].sort();
+    const chunks: string[][] = [];
+    for (let index = 0; index < sorted.length; index += CLAIM_PICKER_IDS_BATCH_SIZE) {
+      chunks.push(sorted.slice(index, index + CLAIM_PICKER_IDS_BATCH_SIZE));
+    }
+    return chunks;
+  }, [ids]);
+
+  const combine = React.useCallback(
+    (results: UseQueryResult<ClaimPickerEntity[]>[]) => ({
+      entities: results.flatMap(result => result.data ?? []),
+      isLoading: results.some(result => result.isLoading),
+      error: results.find(result => result.error)?.error ?? null,
+    }),
+    []
+  );
+
+  return useQueries({
+    queries: batches.map(batch => ({
+      queryKey: claimPickerEntitiesQueryKey(batch),
+      queryFn: ({ signal }: { signal?: AbortSignal }) => fetchClaimPickerEntities(batch, signal),
+      staleTime: 5 * 60_000,
+    })),
+    combine,
   });
-
-  return {
-    entities: query.data?.entities ?? EMPTY_ENTITIES,
-    isLoading: query.isLoading,
-    isPlaceholderData: query.isPlaceholderData,
-    endCursor: query.data?.endCursor ?? null,
-    hasNextPage: query.data?.hasNextPage ?? false,
-  };
 }
-
-const EMPTY_ENTITIES: ClaimPickerEntity[] = [];
