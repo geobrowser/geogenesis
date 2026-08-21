@@ -6,6 +6,7 @@ import Textarea from 'react-textarea-autosize';
 
 import { formatRelativeTime } from '~/core/community-calls/format';
 import { formatChatMessageLinks } from '~/core/community-calls/format-chat-links';
+import { participantAvatarUrl } from '~/core/community-calls/participant-avatar';
 import { ChatEntry } from '~/core/community-calls/use-persistent-chat';
 import { useToast } from '~/core/hooks/use-toast';
 
@@ -148,11 +149,7 @@ function ChatRow({ entry, showHeader }: { entry: ChatEntry; showHeader: boolean 
       <div className="w-6 shrink-0">
         {showHeader && (
           <span className="block size-6 overflow-hidden rounded-full">
-            <Avatar
-              value={entry.senderName}
-              avatarUrl={entry.senderAvatarCid ? `ipfs://${entry.senderAvatarCid}` : undefined}
-              size={24}
-            />
+            <Avatar value={entry.senderName} avatarUrl={participantAvatarUrl(entry.senderAvatarCid)} size={24} />
           </span>
         )}
       </div>

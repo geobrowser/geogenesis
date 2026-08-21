@@ -8,6 +8,7 @@ import { Track } from 'livekit-client';
 import type { Participant } from 'livekit-client';
 
 import { muteParticipant, removeParticipant } from '~/core/community-calls/api';
+import { participantAvatarUrl } from '~/core/community-calls/participant-avatar';
 import { parseParticipantMetadata } from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 
@@ -142,7 +143,7 @@ function ParticipantGroup({
                 <span className="size-6 shrink-0 overflow-hidden rounded-full">
                   <Avatar
                     value={participant.name || participant.identity}
-                    avatarUrl={meta.avatarCid ? `ipfs://${meta.avatarCid}` : undefined}
+                    avatarUrl={participantAvatarUrl(meta.avatarCid)}
                     size={24}
                   />
                 </span>
