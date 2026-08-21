@@ -18,6 +18,9 @@ vi.mock('next/navigation', () => ({
 vi.mock('~/core/bounties/config', () => ({
   useBountiesEnabled: () => mocks.enabled,
 }));
+vi.mock('~/partials/bounties/new-bounty-button', () => ({
+  NewBountyButton: () => <div data-testid="new-bounty-button-slot" />,
+}));
 vi.mock('~/partials/bounties', () => ({
   BountyBoard: ({ header }: { header: React.ReactNode }) => <div data-testid="board">{header}</div>,
 }));

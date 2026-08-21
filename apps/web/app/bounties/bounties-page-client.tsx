@@ -9,6 +9,7 @@ import { useBountiesEnabled } from '~/core/bounties/config';
 import { Text } from '~/design-system/text';
 
 import { BountyBoard } from '~/partials/bounties';
+import { NewBountyButton } from '~/partials/bounties/new-bounty-button';
 
 export function BountiesPageClient() {
   const enabled = useBountiesEnabled();
@@ -27,9 +28,12 @@ export function BountiesPageClient() {
         <BountyBoard
           header={
             <header className="flex flex-col gap-2">
-              <Text as="h1" variant="largeTitle">
-                Bounties
-              </Text>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Text as="h1" variant="largeTitle">
+                  Bounties
+                </Text>
+                <NewBountyButton />
+              </div>
               <Text as="p" color="grey-04">
                 Paid curation work from spaces in the curator program. Express interest on a bounty to apply, then
                 submit proposals in its space to earn points.

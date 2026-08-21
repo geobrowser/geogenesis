@@ -16,7 +16,6 @@ import { useBoardBounties } from '~/core/bounties/use-bounties';
 import type { SpaceBounty } from '~/core/community/bounty-types';
 import { useInterestedBountyIds, useInterestedInBounty } from '~/core/community/use-interested-in-bounty';
 import { BOUNTY_DIFFICULTY_LEVELS } from '~/core/constants';
-import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -345,7 +344,6 @@ function BountiesSection({
   cardHeightPx,
   cardWidthPx = CARD_WIDTH_PX,
   isInfinite = false,
-  showNewBounty = false,
 }: {
   spaceId: string;
   section: CommunitySection;
@@ -355,8 +353,6 @@ function BountiesSection({
   cardHeightPx: number;
   cardWidthPx?: number;
   isInfinite?: boolean;
-  /** Editor-only "New bounty" action (the Available section — creation's natural home). */
-  showNewBounty?: boolean;
 }) {
   const { bounties, skills, skillIds, isLoading, isError, refetch } = useSectionBounties(spaceId, section);
   const {
@@ -387,7 +383,6 @@ function BountiesSection({
   const inlineBounties = filtered.slice(0, isInfinite ? visibleCount : INLINE_CARD_LIMIT);
 
   const viewAllDisabled = filtered.length === 0;
-  const { isEditor } = useAccessControl(spaceId);
 
   return (
     <section className="flex flex-col gap-4">
@@ -403,11 +398,6 @@ function BountiesSection({
           >
             View all
           </Link>
-          {showNewBounty && isEditor ? (
-            <Link href={NavUtils.toNewBounty(spaceId)} className={FILTER_PILL_CLASS}>
-              New bounty
-            </Link>
-          ) : null}
         </div>
       </div>
 
@@ -438,7 +428,6 @@ type BountyStatusConfig = {
   cardWidthPx: number;
   emptyMessage: string;
   isInfinite?: boolean;
-  showNewBounty?: boolean;
 };
 
 const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
@@ -463,7 +452,6 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
     cardWidthPx: AVAILABLE_CARD_WIDTH_PX,
     emptyMessage: 'No available bounties yet.',
     isInfinite: true,
-    showNewBounty: true,
   },
 };
 
