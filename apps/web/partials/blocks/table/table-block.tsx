@@ -624,9 +624,19 @@ const ConfiguredTableBlock = ({
     [canEdit, setFilterMode, setTemporaryFilterMode]
   );
 
+  // What the filter popover's drafts would apply, mirrored out so the chips can show an
+  // edit the moment it is made. Deliberately kept out of `activeFilters`: the query, the
+  // page reset and the persisted block all still wait for the popover to be dismissed.
+  const [previewFilterState, setPreviewFilterState] = React.useState<Filter[] | null>(null);
+  const filtersForChips = previewFilterState ?? activeFilters;
+  // While the chips are mirroring the popover's drafts they are a readout, not a second
+  // editing surface. Editing them here could only guess at what the popover means to do
+  // with the same column, and the popover would overwrite the guess on dismiss.
+  const canEditChips = isEditing && previewFilterState === null;
+
   const filterSpaceIds = React.useMemo(
-    () => [...new Set(activeFilters.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value))],
-    [activeFilters]
+    () => [...new Set(filtersForChips.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value))],
+    [filtersForChips]
   );
   const { spacesById } = useSpacesByIds(filterSpaceIds);
 
@@ -691,7 +701,7 @@ const ConfiguredTableBlock = ({
    * Name and Space are treated specially throughout this code path.
    */
   const filtersWithPropertyName = React.useMemo(() => {
-    return activeFilters.map(f => {
+    return filtersForChips.map(f => {
       if (f.columnId === SystemIds.SPACE_FILTER) {
         const selectedSpace = spacesById.get(f.value);
 
@@ -704,7 +714,7 @@ const ConfiguredTableBlock = ({
 
       return f;
     });
-  }, [activeFilters, spacesById]);
+  }, [filtersForChips, spacesById]);
 
   const filterGroups = React.useMemo(() => groupFilters(filtersWithPropertyName), [filtersWithPropertyName]);
 
@@ -1022,7 +1032,7 @@ const ConfiguredTableBlock = ({
             {showFilterAction && (
               <IconButton
                 onClick={toggleFilterHandler}
-                icon={activeFilters.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
+                icon={filtersForChips.length > 0 ? <FilterTableWithFilters /> : <FilterTable />}
                 color="grey-04"
               />
             )}
@@ -1097,6 +1107,7 @@ const ConfiguredTableBlock = ({
                         filterSuggestionSpaceId={spaceId}
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}
+                        onPreviewFilterState={setPreviewFilterState}
                       />
                     </>
                   )}
@@ -1109,13 +1120,13 @@ const ConfiguredTableBlock = ({
                           mode={activeFilterMode}
                           onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
                           onDeleteValue={originalIndex => {
-                            const newFilterState = produce(activeFilters, draft => {
+                            const newFilterState = produce(filtersForChips, draft => {
                               draft.splice(originalIndex, 1);
                             });
                             setActiveFilters(newFilterState);
                           }}
                           onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                            setActiveFilters(filtersForChips.filter(f => f.columnId !== group.columnId));
                           }}
                           isEditing={isEditing}
                         />
@@ -1132,13 +1143,13 @@ const ConfiguredTableBlock = ({
                           mode={activeFilterMode}
                           onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
                           onDeleteValue={originalIndex => {
-                            const newFilterState = produce(activeFilters, draft => {
+                            const newFilterState = produce(filtersForChips, draft => {
                               draft.splice(originalIndex, 1);
                             });
                             setActiveFilters(newFilterState);
                           }}
                           onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                            setActiveFilters(filtersForChips.filter(f => f.columnId !== group.columnId));
                           }}
                           onAddSimilar={anchorEl => {
                             requestAnimationFrame(() => {
@@ -1147,7 +1158,7 @@ const ConfiguredTableBlock = ({
                               });
                             });
                           }}
-                          isEditing={isEditing}
+                          isEditing={canEditChips}
                         />
                       </React.Fragment>
                     ))}
