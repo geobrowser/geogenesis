@@ -21,6 +21,14 @@ function argNames(field: FieldNode): string[] {
   return (field.arguments ?? []).map(a => a.name.value).sort();
 }
 
+/** Fields selected directly on the connection — where `totalCount` would sit, beside `nodes`. */
+function connectionFieldNames(doc: DocumentNode): string[] {
+  return (rootField(doc).selectionSet?.selections ?? [])
+    .filter(s => s.kind === Kind.FIELD)
+    .map(s => (s as FieldNode).name.value)
+    .sort();
+}
+
 function nodeFieldNames(doc: DocumentNode): string[] {
   const nodes = (rootField(doc).selectionSet?.selections ?? []).find(
     s => s.kind === Kind.FIELD && s.name.value === 'nodes'
@@ -47,11 +55,18 @@ describe('debatesBestOrderDocument', () => {
     expect(argNames(rootField(debatesBestOrderDocument))).toEqual(expect.arrayContaining(['spaceIds', 'typeIds']));
   });
 
-  // Same fast-path constraints the explore document documents: `filter` or `totalCount` alongside
-  // `edges` can exceed the statement timeout, and ordering is the ranking function's own.
-  it.each(['filter', 'totalCount', 'orderBy'])('does not send %s', arg => {
+  // Same fast-path constraints the explore document spells out: ordering is the ranking function's
+  // own, and a `filter` argument is redundant with what the function already enforces.
+  it.each(['filter', 'orderBy'])('does not send %s as an argument', arg => {
     expect(argNames(rootField(debatesBestOrderDocument))).not.toContain(arg);
-    expect(nodeFieldNames(debatesBestOrderDocument)).not.toContain(arg);
+  });
+
+  // `totalCount` sits on the connection beside `nodes`, not inside a node — so it has to be
+  // checked there. Alongside `edges` it scans the candidate set twice and can exceed the
+  // statement timeout.
+  it('does not select totalCount on the connection', () => {
+    expect(connectionFieldNames(debatesBestOrderDocument)).toEqual(['nodes', 'pageInfo']);
+    expect(connectionFieldNames(debatesBestOrderDocument)).not.toContain('totalCount');
   });
 
   // A debate feed has no time control, and windowing would strand older debates at the end.
