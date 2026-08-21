@@ -56,6 +56,7 @@ function parseVoteEntity(entity: Entity): DebateVoteRecord | null {
     voterSpaceId,
     winnerSpaceEntityId: winner.toEntity.id,
     winnerName: null,
+    winnerRelationId: winner.id,
   };
 }
 
@@ -118,6 +119,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   const [, setToast] = useToast();
   const reportError = useReportError();
   const [isVoting, setIsVoting] = React.useState(false);
+  const pollGenerationRef = React.useRef(0);
 
   // A Debate entity's id is its geo-chat debate id, so votes hang off it without a lookup.
   const debateEntityId = ID.uuidToHex(debate.id);
@@ -156,7 +158,11 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
   const castVote = React.useCallback(
     async (participant: DebateParticipant) => {
-      if (hasVoted || isVoting) return;
+      if (isVoting) return;
+
+      const previousVote = tally.myVote;
+      if (previousVote && ID.equals(previousVote.winnerSpaceEntityId, participant.profile_space_id)) return;
+      if (previousVote && previousVote.winnerRelationId == null) return;
 
       if (!smartAccount) {
         setToast(<span>Please connect your wallet to vote</span>);
@@ -170,8 +176,9 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       const winnerName = speakerLabel(participant);
       const voterName = profile?.name ?? 'Anonymous';
       const debateName = debate.claim.claim;
-      const voteEntityId = IdUtils.generate();
+      const voteEntityId = previousVote?.id ?? IdUtils.generate();
       const voteName = `${voterName} votes ${winnerName} on ${debateName}`;
+      const previousWinnerRelationId = previousVote?.winnerRelationId ?? null;
 
       const values: Value[] = [
         {
@@ -198,22 +205,38 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         hasBeenPublished: false,
       });
 
-      const relations: Relation[] = [
-        relate(TYPES_PROPERTY_ID, 'Types', VOTE_TYPE_ID, 'Vote'),
-        relate(VOTE_DEBATES_PROPERTY_ID, 'Debates', debateEntityId, debateName),
-        relate(VOTE_WINNER_PROPERTY_ID, 'Vote', participant.profile_space_id, winnerName),
-      ];
+      const newWinnerRelation = relate(VOTE_WINNER_PROPERTY_ID, 'Vote', participant.profile_space_id, winnerName);
 
-      // Flip the pills to percentages while the publish is still in flight. The poll below
-      // reconciles with the indexer afterwards.
+      const relations: Relation[] =
+        previousVote && previousWinnerRelationId
+          ? [
+              {
+                ...relate(VOTE_WINNER_PROPERTY_ID, 'Vote', previousVote.winnerSpaceEntityId, previousVote.winnerName),
+                id: previousWinnerRelationId,
+                isDeleted: true,
+              },
+              newWinnerRelation,
+            ]
+          : [
+              relate(TYPES_PROPERTY_ID, 'Types', VOTE_TYPE_ID, 'Vote'),
+              relate(VOTE_DEBATES_PROPERTY_ID, 'Debates', debateEntityId, debateName),
+              newWinnerRelation,
+            ];
+
+      // Keep the new relation id on the optimistic row so a switch during the indexer lag can
+      // still delete it.
       const optimisticVote: DebateVoteRecord = {
         id: voteEntityId,
         voterSpaceId: personalSpaceId,
         winnerSpaceEntityId: participant.profile_space_id,
         winnerName,
+        winnerRelationId: newWinnerRelation.id,
       };
+
+      const pollGeneration = ++pollGenerationRef.current;
+
       queryClient.setQueryData<DebateVoteRecord[]>(votesQueryKey(debateEntityId), (old = []) => [
-        ...old,
+        ...old.filter(vote => vote.id !== voteEntityId),
         optimisticVote,
       ]);
 
@@ -251,11 +274,11 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         const result = await Effect.runPromise(Effect.either(publish));
 
         if (Either.isLeft(result)) {
-          // The vote never landed, so roll the pills back to "Winner?" instead of leaving
-          // percentages on screen.
-          queryClient.setQueryData<DebateVoteRecord[]>(votesQueryKey(debateEntityId), (old = []) =>
-            old.filter(vote => vote.id !== voteEntityId)
-          );
+          // Publish failed — restore the previous pick, or clear on a failed first vote.
+          queryClient.setQueryData<DebateVoteRecord[]>(votesQueryKey(debateEntityId), (old = []) => {
+            const withoutOptimistic = old.filter(vote => vote.id !== voteEntityId);
+            return previousVote ? [...withoutOptimistic, previousVote] : withoutOptimistic;
+          });
 
           const error = result.left;
           if (error instanceof Error && error.message.includes('User rejected')) return;
@@ -278,21 +301,29 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       const MAX_POLL_ATTEMPTS = 45;
       const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
+      const isVoteIndexed = async () => {
+        if (!previousVote) return await Effect.runPromise(checkEntityExists(voteEntityId));
+        const indexed = tallyDebateVotes(await fetchDebateVotes(debateEntityId), personalSpaceId).myVote;
+        return indexed !== null && ID.equals(indexed.winnerSpaceEntityId, participant.profile_space_id);
+      };
+
       void (async () => {
         await sleep(FIRST_POLL_MS);
         for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+          if (pollGeneration !== pollGenerationRef.current) return;
           try {
-            if (await Effect.runPromise(checkEntityExists(voteEntityId))) break;
+            if (await isVoteIndexed()) break;
           } catch (error) {
             console.error('[useDebateVotes] Poll for indexed vote failed:', error);
           }
           await sleep(POLL_INTERVAL_MS);
         }
+        if (pollGeneration !== pollGenerationRef.current) return;
         await queryClient.invalidateQueries({ queryKey: votesQueryKey(debateEntityId) });
       })();
     },
     [
-      hasVoted,
+      tally.myVote,
       isVoting,
       smartAccount,
       personalSpaceId,
