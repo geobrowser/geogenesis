@@ -6,7 +6,7 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
-import { recordDebateFlowOrigin } from '~/core/debates/debate-entry-intent';
+import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
@@ -252,8 +252,8 @@ class FakeBroadcastChannel {
 }
 
 beforeEach(() => {
+  clearDebateReturnDestination();
   setHistoryLength(1);
-  window.sessionStorage.clear();
   mocks.back.mockReset();
   mocks.push.mockReset();
   mocks.replace.mockReset();
@@ -391,6 +391,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
+  clearDebateReturnDestination();
   await Promise.resolve();
   await Promise.resolve();
   vi.useRealTimers();
@@ -442,19 +443,6 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.enqueueRecording).not.toHaveBeenCalled();
   });
 
-  // GEO-2605. history.length says only how deep we are, not where the flow began: hub -> room ->
-  // rematch -> room leaves another room one entry back, so back() returns into the flow. The path
-  // recorded on entry is the only thing that knows where the viewer actually came from.
-  it('returns to the path the flow started from rather than one history entry back', async () => {
-    setHistoryLength(4);
-    recordDebateFlowOrigin('/space/space-1/entity-7');
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/entity-7'));
-    expect(mocks.back).not.toHaveBeenCalled();
-  });
-
   it('falls back to the debates page when a cancelled room has no prior history', async () => {
     setHistoryLength(1);
     mocks.debate = { ...completedDebate(), status: 'cancelled', completed_at: null };
@@ -470,8 +458,9 @@ describe('DebateRoomPageClient', () => {
   // Forward, never back: the entry behind this room is often this same room (hub → room → rematch
   // → room), and stepping back into a debate that ended under us re-runs the exit from a fresh
   // mount. That was the flicker, and on the opponent's side it took a second Okay to escape.
-  it('sends a recording canceller forward to the debates page instead of back into the room', async () => {
+  it('returns a recording canceller to the page that opened the flow', async () => {
     setHistoryLength(2);
+    rememberDebateReturnDestination('/space/my-space?tab=activity');
     mocks.debate = {
       ...completedDebate(),
       recording_cancelled_at: '2026-07-02T00:01:20.000Z',
@@ -482,7 +471,7 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/my-space?tab=activity'));
     expect(mocks.back).not.toHaveBeenCalled();
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
   });
@@ -1517,7 +1506,8 @@ describe('DebateRoomPageClient', () => {
       await screen.findByRole('heading', { name: 'This debate is already open in another tab.' })
     ).toBeInTheDocument();
     expect(screen.getByText('Close this tab and continue your debate in the original tab.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Go to debates' })).toHaveAttribute('href', '/space/space-1/debates');
+    fireEvent.click(screen.getByRole('button', { name: 'Go back' }));
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
     expect(screen.queryByRole('button', { name: 'Continue here' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Back to debates' })).not.toBeInTheDocument();
     expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
@@ -1525,6 +1515,23 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Waiting for both speakers to join.')).not.toBeInTheDocument();
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
     expect(mocks.roomConnect).not.toHaveBeenCalled();
+  });
+
+  it('returns a secondary tab ownership conflict to the page that opened the room', async () => {
+    rememberDebateReturnDestination('/space/root-space?tab=activity');
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="opponent-space" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Go back' }));
+
+    expect(mocks.replace).toHaveBeenCalledWith('/space/root-space?tab=activity');
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
   it('does not hand off a stale preflight after the first turn has started locally', async () => {
@@ -1594,6 +1601,62 @@ describe('DebateRoomPageClient', () => {
     act(() => emitRoomEvent('trackUnsubscribed', track));
     expect(track.detach).toHaveBeenCalled();
     expect(document.body.contains(remoteVideo)).toBe(false);
+  });
+
+  // GEO-2602, reported as "audio but no video from opponent". Reconnecting cleared the remote
+  // tiles and the code assumed the tracks would come back as fresh TrackSubscribed events. They
+  // do not: LiveKit reconnects by ICE restart and the subscriptions survive it, so nothing
+  // re-fires and nothing re-attaches. The opponent's tile then stays empty for the rest of the
+  // debate.
+  it('puts the opponent back on screen after a reconnect', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    const remoteVideo = document.createElement('video');
+    const track = { kind: 'video', attach: () => remoteVideo, detach: vi.fn(() => [remoteVideo]) };
+
+    act(() => emitRoomEvent('trackSubscribed', track));
+    expect(document.body.contains(remoteVideo)).toBe(true);
+
+    act(() => emitRoomEvent('reconnecting'));
+    expect(document.body.contains(remoteVideo)).toBe(false);
+
+    // No second trackSubscribed — that is the whole point.
+    act(() => emitRoomEvent('reconnected'));
+
+    expect(document.body.contains(remoteVideo)).toBe(true);
+  });
+
+  // Why the report was "audio but no video" rather than "the call went silent": an element removed
+  // from the DOM keeps playing, so stripping the container orphaned a live audio element. The
+  // track has to be detached, not just unparented.
+  it('detaches remote audio on a reconnect rather than orphaning a still-playing element', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    const remoteAudio = document.createElement('audio');
+    const track = { kind: 'audio', attach: () => remoteAudio, detach: vi.fn(() => [remoteAudio]) };
+
+    act(() => emitRoomEvent('trackSubscribed', track));
+    track.detach.mockClear();
+
+    act(() => emitRoomEvent('reconnecting'));
+
+    expect(track.detach).toHaveBeenCalled();
   });
 
   it('surfaces a reconnecting state while LiveKit restarts a dropped call', async () => {
@@ -2411,6 +2474,7 @@ describe('DebateRoomPageClient', () => {
 
   it('stops media at the deadline and returns to matching after backend cancellation', async () => {
     vi.useFakeTimers();
+    rememberDebateReturnDestination('/space/my-space/claims#recent');
     const connectingDebate: Debate = {
       ...completedDebate(),
       status: 'connecting',
@@ -2436,7 +2500,7 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.clearTimedOutDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(mocks.replace).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(750));
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/questions');
+    expect(mocks.replace).toHaveBeenCalledWith('/space/my-space/claims#recent');
   });
 
   it('keeps the room connected when preflight won the deadline race', async () => {

@@ -40,6 +40,7 @@ function apiProposalToDto(proposal: ApiProposalListItem, profile?: Profile): Pro
     endTime: proposal.timing.endTime,
     status: mapProposalStatus(proposal.status),
     canExecute: getApiProposalCanExecute(proposal),
+    votingMode: proposal.votingMode,
     space: {
       id: proposal.spaceId,
       name: null,

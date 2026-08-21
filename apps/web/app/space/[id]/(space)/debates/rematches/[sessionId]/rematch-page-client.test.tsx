@@ -8,6 +8,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
+import {
+  clearDebateReturnDestination,
+  rememberDebateReturnDestination,
+} from '~/core/debates/debate-return-navigation';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 
 import { DebateRematchPageClient } from './rematch-page-client';
@@ -294,6 +298,7 @@ function mutation(mutate = mocks.mutate) {
 }
 
 beforeEach(() => {
+  clearDebateReturnDestination();
   mocks.replace.mockReset();
   mocks.back.mockReset();
   mocks.mutate.mockReset();
@@ -368,6 +373,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  clearDebateReturnDestination();
   vi.restoreAllMocks();
   cleanup();
 });
@@ -431,6 +437,22 @@ describe('DebateRematchPageClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
 
     expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`);
+    expect(mocks.back).not.toHaveBeenCalled();
+  });
+
+  it('returns a debate-again session to the page that opened the flow', () => {
+    rememberDebateReturnDestination('/space/my-space?tab=activity#latest');
+    const endedSession = session({ status: 'ended' });
+    mocks.leaveMutate.mockImplementation(
+      (_input: undefined, options: { onSuccess?: (ended: DebateRematchSession) => void }) => {
+        options.onSuccess?.(endedSession);
+      }
+    );
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+
+    expect(mocks.replace).toHaveBeenCalledWith('/space/my-space?tab=activity#latest');
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
