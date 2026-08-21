@@ -12,7 +12,15 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useEditable } from '~/core/state/editable-store';
 import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
+import {
+  avatarAtom,
+  nameAtom,
+  selectedRoleIdsAtom,
+  selectedTopicIdsAtom,
+  spaceIdAtom,
+  stepAtom,
+  topicIdAtom,
+} from '~/partials/onboarding/dialog';
 
 import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
 
@@ -43,6 +51,8 @@ export function useGeoLogoutCleanup() {
   const setStep = useSetAtom(stepAtom);
   const setDismissedHints = useSetAtom(dismissedHintsAtom);
   const setPending = useSetAtom(pendingPersonalSpaceAtom);
+  const setSelectedRoleIds = useSetAtom(selectedRoleIdsAtom);
+  const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
 
   useLogout({
     onSuccess: async () => {
@@ -59,9 +69,11 @@ export function useGeoLogoutCleanup() {
         setTopicId('');
         setAvatar('');
         setSpaceId('');
-        setStep('enter-profile');
+        setStep('start');
         setDismissedHints([]);
         setPending(null);
+        setSelectedRoleIds([]);
+        setSelectedTopicIds([]);
         // Bulletproof reset — see the doc comment. `/root` is the public home and
         // drops the user out of any onboarding/pending context they logged out of.
         window.location.assign('/root');
