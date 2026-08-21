@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
   revokeObjectURL: vi.fn(),
   downloadClick: vi.fn(),
   entityVoteProps: [] as Array<Record<string, unknown>>,
+  /** Debate entity ids in "Best" order. Empty = the ranking covers nothing, so recency stands. */
+  bestOrderIds: [] as string[],
+  bestOrderLoading: false,
 }));
 
 type ObserverRecord = {
@@ -42,6 +45,18 @@ vi.mock('~/core/debates/hooks', () => ({
   }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate }),
 }));
+
+vi.mock('./use-debates-best-order', async () => {
+  // Keyed exactly as the real hook keys it, so the feed's own lookup is what's under test.
+  const { ID } = await import('~/core/id');
+  return {
+    useDebatesBestOrder: () => ({
+      rankByDebateId: new Map(mocks.bestOrderIds.map((id, index) => [ID.uuidToHex(id), index])),
+      isLoading: mocks.bestOrderLoading,
+      isError: false,
+    }),
+  };
+});
 
 vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotes: () => ({
@@ -101,6 +116,8 @@ beforeEach(() => {
   mocks.entityVoteProps.length = 0;
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
   mocks.processedIds = null;
+  mocks.bestOrderIds = [];
+  mocks.bestOrderLoading = false;
   mocks.mediaLoading = false;
   mocks.mediaError = false;
   mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');
@@ -768,3 +785,75 @@ function completedDebate(id: string, claim: string, completedAt: string): Debate
     recording_cancelled_by: null,
   };
 }
+
+describe('DebatesBrowseFeed ordering', () => {
+  const older = '2026-07-01T00:00:00.000Z';
+  const newer = '2026-07-05T00:00:00.000Z';
+
+  function headings() {
+    return screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent);
+  }
+
+  // What plays after the debate you opened is what the explore page's "Best" sort would have
+  // shown you, rather than simply the most recent thing in the space.
+  it('follows the Best ranking rather than recency', () => {
+    mocks.debates = [
+      completedDebate('debate-old', 'Ranked first', older),
+      completedDebate('debate-new', 'Ranked second', newer),
+    ];
+    mocks.bestOrderIds = ['debate-old', 'debate-new'];
+
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(headings()).toEqual(['Ranked first', 'Ranked second']);
+  });
+
+  it('falls back to recency when the ranking covers nothing', () => {
+    mocks.debates = [completedDebate('debate-old', 'Older', older), completedDebate('debate-new', 'Newer', newer)];
+    mocks.bestOrderIds = [];
+
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(headings()).toEqual(['Newer', 'Older']);
+  });
+
+  // The ranking only covers published, named debates. Anything it misses still plays — after the
+  // ranked ones, in the order the feed used before.
+  it('plays unranked debates after the ranked ones, newest first', () => {
+    mocks.debates = [
+      completedDebate('debate-unranked-old', 'Unranked older', older),
+      completedDebate('debate-ranked', 'Ranked', older),
+      completedDebate('debate-unranked-new', 'Unranked newer', newer),
+    ];
+    mocks.bestOrderIds = ['debate-ranked'];
+
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(headings()).toEqual(['Ranked', 'Unranked newer', 'Unranked older']);
+  });
+
+  // Opening a debate still lands you on it; the ranking decides what follows, not what leads.
+  it('keeps the debate you opened first and ranks the rest behind it', () => {
+    mocks.debates = [
+      completedDebate('debate-top', 'Ranked first', older),
+      completedDebate('debate-mid', 'Ranked second', newer),
+      completedDebate('debate-anchor', 'Opened', older),
+    ];
+    mocks.bestOrderIds = ['debate-top', 'debate-mid', 'debate-anchor'];
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-anchor" />);
+
+    expect(headings()).toEqual(['Opened', 'Ranked first', 'Ranked second']);
+  });
+
+  // Painting in recency order and then resequencing would move the next debate out from under
+  // someone who had already started scrolling.
+  it('waits for the ranking before drawing the feed', () => {
+    mocks.debates = [completedDebate('debate-1', 'Debates are useful', older)];
+    mocks.bestOrderLoading = true;
+
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.queryByRole('heading', { name: 'Debates are useful' })).not.toBeInTheDocument();
+  });
+});
