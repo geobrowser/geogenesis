@@ -44,8 +44,6 @@ export const navbarSpaceOverrideAtom = atom<{ spaceId: string } | null>(null);
 
 export const rankingFullscreenActiveAtom = atom<boolean>(false);
 
-export const communityFullscreenActiveAtom = atom<boolean>(false);
-
 // Set while the full-screen debates feed is on screen. A Debate entity page renders the feed
 // from a route `Main` otherwise treats as an ordinary entity page, so without this it wraps a
 // viewport-filling takeover in `max-w-[1200px] pt-8 pb-16` — which makes the document taller

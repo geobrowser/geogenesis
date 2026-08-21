@@ -21,6 +21,11 @@ export const featureFlagDefinitions = [
     label: 'Debates debug tab per space',
     description: 'Enable per-space debate processing diagnostics.',
   },
+  {
+    id: 'bountiesTab',
+    label: 'Bounties',
+    description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
@@ -34,6 +39,7 @@ export const defaultFeatureFlags: FeatureFlags = {
   debugDebatesPage: false,
   debateDebugging: false,
   debateFormatSelector: false,
+  bountiesTab: true,
 };
 
 export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefined): FeatureFlags {
@@ -41,6 +47,7 @@ export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefin
     debugDebatesPage: flags?.debugDebatesPage ?? defaultFeatureFlags.debugDebatesPage,
     debateDebugging: flags?.debateDebugging ?? defaultFeatureFlags.debateDebugging,
     debateFormatSelector: flags?.debateFormatSelector ?? defaultFeatureFlags.debateFormatSelector,
+    bountiesTab: flags?.bountiesTab ?? defaultFeatureFlags.bountiesTab,
   };
 }
 

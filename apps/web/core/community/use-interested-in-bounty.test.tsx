@@ -10,13 +10,17 @@ import { INTERESTED_IN_RELATION_TYPE_ID } from '~/core/constants';
 
 import { useInterestedBountyIds, useInterestedInBounty } from './use-interested-in-bounty';
 
-const PERSONAL_SPACE_ID = 'personal-space-id';
+const PERSONAL_SPACE_ID = 'aaaa0000000000000000000000000001';
+const PERSON_ENTITY_ID = 'bbbb0000000000000000000000000002';
 
 const mocks = vi.hoisted(() => ({
-  personalSpaceId: 'personal-space-id' as string | null,
+  personalSpaceId: 'aaaa0000000000000000000000000001' as string | null,
   isRegistered: true,
-  setRelation: vi.fn(),
-  deleteRelation: vi.fn(),
+  profile: { id: 'bbbb0000000000000000000000000002', spaceId: 'aaaa0000000000000000000000000001', name: 'Alice' } as {
+    id: string;
+    spaceId: string;
+    name: string | null;
+  } | null,
   publishFails: false,
   makeProposal: vi.fn(),
   relationsByToEntityIds: vi.fn(),
@@ -26,10 +30,12 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isRegistered: mocks.isRegistered }),
 }));
 
-vi.mock('~/core/sync/use-mutate', () => ({
-  useMutate: () => ({
-    storage: { relations: { set: mocks.setRelation, delete: mocks.deleteRelation } },
-  }),
+vi.mock('~/core/hooks/use-smart-account', () => ({
+  useSmartAccount: () => ({ smartAccount: { account: { address: '0xabc' } }, isLoading: false }),
+}));
+
+vi.mock('~/core/hooks/use-geo-profile', () => ({
+  useGeoProfile: () => ({ profile: mocks.profile, isLoading: false, isFetched: true }),
 }));
 
 vi.mock('~/core/hooks/use-publish', () => ({
@@ -56,9 +62,8 @@ const interestArgs = { bountyId: 'bounty-1', bountyName: 'Write docs', bountySpa
 beforeEach(() => {
   mocks.personalSpaceId = PERSONAL_SPACE_ID;
   mocks.isRegistered = true;
+  mocks.profile = { id: PERSON_ENTITY_ID, spaceId: PERSONAL_SPACE_ID, name: 'Alice' };
   mocks.publishFails = false;
-  mocks.setRelation.mockReset();
-  mocks.deleteRelation.mockReset();
   mocks.makeProposal.mockReset();
   mocks.relationsByToEntityIds.mockReset();
   mocks.relationsByToEntityIds.mockReturnValue(Effect.succeed([]));
@@ -69,42 +74,24 @@ afterEach(() => {
 });
 
 describe('useInterestedInBounty', () => {
-  it('writes the relation from the personal space system entity', async () => {
+  // The standardized geogenesis shape: personal-space system entity → bounty,
+  // published into the personal space, with the bounty's space as toSpaceId.
+  it('writes the relation from the personal-space entity into the personal space, with toSpaceId', async () => {
     const { result } = renderHook(() => useInterestedInBounty(), { wrapper });
 
     await act(async () => {
       await result.current.registerInterest(interestArgs);
     });
 
-    const relation = mocks.setRelation.mock.calls[0][0];
+    const args = mocks.makeProposal.mock.calls[0][0];
+    expect(args.spaceId).toBe(PERSONAL_SPACE_ID);
+    expect(args.relations).toHaveLength(1);
+    const relation = args.relations[0];
     expect(relation.fromEntity.id).toBe(PERSONAL_SPACE_ID);
     expect(relation.toEntity.id).toBe('bounty-1');
     expect(relation.spaceId).toBe(PERSONAL_SPACE_ID);
     expect(relation.toSpaceId).toBe('bounty-space');
     expect(relation.type.id).toBe(INTERESTED_IN_RELATION_TYPE_ID);
-  });
-
-  it('keeps the relation when the publish succeeds', async () => {
-    const { result } = renderHook(() => useInterestedInBounty(), { wrapper });
-
-    await act(async () => {
-      await result.current.registerInterest(interestArgs);
-    });
-
-    expect(mocks.setRelation).toHaveBeenCalledTimes(1);
-    expect(mocks.deleteRelation).not.toHaveBeenCalled();
-  });
-
-  it('rolls the relation back when the publish fails', async () => {
-    mocks.publishFails = true;
-    const { result } = renderHook(() => useInterestedInBounty(), { wrapper });
-
-    await act(async () => {
-      await result.current.registerInterest(interestArgs);
-    });
-
-    const written = mocks.setRelation.mock.calls[0][0];
-    expect(mocks.deleteRelation).toHaveBeenCalledWith(written);
   });
 
   it('ignores a second registration for a bounty already submitted', async () => {
@@ -145,7 +132,6 @@ describe('useInterestedInBounty', () => {
       await result.current.registerInterest(interestArgs);
     });
 
-    expect(mocks.setRelation).not.toHaveBeenCalled();
     expect(mocks.makeProposal).not.toHaveBeenCalled();
   });
 });

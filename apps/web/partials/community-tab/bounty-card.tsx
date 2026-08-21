@@ -184,16 +184,27 @@ function BudgetBadge({ budget }: { budget: number | null }) {
   );
 }
 
-export function BountyCard({ bounty }: { bounty: SpaceBounty }) {
+/**
+ * Optional footprint override. Every card defaults to its own Community-tab
+ * size; the bounty board passes one shared size so mixed statuses line up.
+ * Content is clamped/overflow-hidden, so smaller sizes degrade gracefully too.
+ */
+type CardSize = { width?: number; height?: number };
+
+export function BountyCard({ bounty, width, height = COMPLETED_CARD_HEIGHT_PX }: { bounty: SpaceBounty } & CardSize) {
+  // Only when stretched past its native height does the footer sink to the
+  // bottom; at the default size the layout is unchanged.
+  const stretched = height > COMPLETED_CARD_HEIGHT_PX;
+
   return (
-    <BountyCardShell bounty={bounty} height={COMPLETED_CARD_HEIGHT_PX}>
+    <BountyCardShell bounty={bounty} height={height} width={width}>
       <div className="flex shrink-0">
         <BudgetBadge budget={bounty.budget} />
       </div>
 
       <h3 className={`mt-3 line-clamp-2 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
 
-      <div className="mt-3 shrink-0">
+      <div className={`shrink-0 ${stretched ? 'mt-auto pt-3' : 'mt-3'}`}>
         <ContributorRow contributors={bounty.contributors} />
       </div>
     </BountyCardShell>
@@ -281,6 +292,8 @@ export function AvailableBountyCard({
   isInterestLoading,
   canRegisterInterest,
   onRegisterInterest,
+  width = AVAILABLE_CARD_WIDTH_PX,
+  height = AVAILABLE_CARD_HEIGHT_PX,
 }: {
   bounty: SpaceBounty;
   isInterested: boolean;
@@ -288,9 +301,9 @@ export function AvailableBountyCard({
   isInterestLoading: boolean;
   canRegisterInterest: boolean;
   onRegisterInterest: (bounty: SpaceBounty) => void;
-}) {
+} & CardSize) {
   return (
-    <BountyCardShell bounty={bounty} height={AVAILABLE_CARD_HEIGHT_PX} width={AVAILABLE_CARD_WIDTH_PX}>
+    <BountyCardShell bounty={bounty} height={height} width={width}>
       <div className="flex shrink-0 items-center justify-between gap-3">
         <BudgetBadge budget={bounty.budget} />
         <InterestButton
@@ -316,9 +329,13 @@ export function AvailableBountyCard({
   );
 }
 
-export function InProgressBountyCard({ bounty }: { bounty: SpaceBounty }) {
+export function InProgressBountyCard({
+  bounty,
+  width,
+  height = IN_PROGRESS_CARD_HEIGHT_PX,
+}: { bounty: SpaceBounty } & CardSize) {
   return (
-    <BountyCardShell bounty={bounty} height={IN_PROGRESS_CARD_HEIGHT_PX} className="justify-between">
+    <BountyCardShell bounty={bounty} height={height} width={width} className="justify-between">
       <h3 className={`line-clamp-3 min-h-0 min-w-0 ${TITLE_CLASS}`}>{bounty.name}</h3>
 
       <div className="shrink-0">

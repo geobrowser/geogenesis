@@ -44,6 +44,10 @@ export type RouteEntityPageBodyProps = SharedProps & {
   serverRelations: Relation[];
   notice?: React.ReactNode;
   coverSlot?: React.ReactNode;
+  /** Rendered after the block content and property sheet, before backlinks (e.g. bounty submissions/payouts). */
+  belowBodySlot?: React.ReactNode;
+  /** Hides the collapsible properties sheet (e.g. bounty pages render their own facts card instead). */
+  hideProperties?: boolean;
 };
 
 export type SidePanelEntityPageBodyProps = SharedProps & {
@@ -96,10 +100,14 @@ function EditorFooter({
   entityId,
   spaceId,
   variant,
+  belowBodySlot,
+  hideProperties = false,
 }: {
   entityId: string;
   spaceId: string;
   variant: EntityPageBodyProps['variant'];
+  belowBodySlot?: React.ReactNode;
+  hideProperties?: boolean;
 }) {
   return (
     <>
@@ -107,12 +115,18 @@ function EditorFooter({
       {variant === 'route' ? (
         <>
           <Spacer height={24} />
-          <ToggleEntityPage id={entityId} spaceId={spaceId} />
+          {hideProperties ? null : <ToggleEntityPage id={entityId} spaceId={spaceId} />}
           <AutomaticModeToggle />
         </>
       ) : (
         <ToggleEntityPage id={entityId} spaceId={spaceId} />
       )}
+      {belowBodySlot ? (
+        <>
+          <Spacer height={40} />
+          {belowBodySlot}
+        </>
+      ) : null}
       <Spacer height={40} />
       {variant === 'route' ? <RouteBacklinks entityId={entityId} /> : <SidePanelBacklinks entityId={entityId} />}
       <CommentSection entityId={entityId} spaceId={spaceId} />
@@ -178,7 +192,16 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     );
   }
 
-  const { showCover = true, showHeading = true, showHeader = true, serverRelations, notice = null, coverSlot } = props;
+  const {
+    showCover = true,
+    showHeading = true,
+    showHeader = true,
+    serverRelations,
+    notice = null,
+    coverSlot,
+    belowBodySlot,
+    hideProperties,
+  } = props;
   const showSpacer = showCover || showHeading || showHeader;
 
   return (
@@ -198,7 +221,13 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         {tabsSection}
         {notice}
         {(showSpacer || !!notice) && <Spacer height={40} />}
-        <EditorFooter entityId={entityId} spaceId={spaceId} variant="route" />
+        <EditorFooter
+          entityId={entityId}
+          spaceId={spaceId}
+          variant="route"
+          belowBodySlot={belowBodySlot}
+          hideProperties={hideProperties}
+        />
       </EntityPageContentContainer>
     </>
   );

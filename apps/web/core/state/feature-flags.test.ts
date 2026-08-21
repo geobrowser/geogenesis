@@ -14,14 +14,16 @@ describe('feature flags', () => {
     window.localStorage.clear();
   });
 
-  it('defaults local feature flags to disabled', () => {
+  it('defaults dev flags to disabled and the bounties surfaces to enabled', () => {
     expect(defaultFeatureFlags.debugDebatesPage).toBe(false);
     expect(defaultFeatureFlags.debateDebugging).toBe(false);
     expect(defaultFeatureFlags.debateFormatSelector).toBe(false);
+    expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       debugDebatesPage: false,
       debateDebugging: false,
       debateFormatSelector: false,
+      bountiesTab: true,
     });
   });
 
@@ -33,6 +35,7 @@ describe('feature flags', () => {
       debugDebatesPage: false,
       debateDebugging: true,
       debateFormatSelector: false,
+      bountiesTab: true,
     });
   });
 
@@ -53,6 +56,7 @@ describe('feature flags', () => {
         debugDebatesPage: true,
         debateDebugging: true,
         debateFormatSelector: true,
+        bountiesTab: true,
       })
     );
   });

@@ -78,7 +78,7 @@ export function buildSpaceTabs({
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (dynamicTabs.length > 0) {
-      const reservedLabels = new Set(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : []);
+      const reservedLabels = new Set([...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : [])]);
       const visibleDynamicTabs =
         reservedLabels.size > 0 ? dynamicTabs.filter(tab => !reservedLabels.has(tab.label)) : dynamicTabs;
 
@@ -145,7 +145,6 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   // Our Community tab renders for non-person spaces, always as the 2nd tab (after
   // Overview) — and in addition to any custom "Community" tab the space authored.
   const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE);
-
   // System tabs bracket the custom (dynamic) tabs: Overview + our Community lead,
   // Governance + Activity trail.
   const systemTabsBefore: Array<{ label: string; href: string }> = [{ label: 'Overview', href: overviewHref }];
@@ -195,6 +194,7 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
     isDebugDebatesPageEnabled,
   });
 
+  // Overview, then our Community tab, then everything else.
   const tabs = showCommunity
     ? [
         baseTabs[0],

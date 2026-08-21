@@ -1,0 +1,95 @@
+import '@testing-library/jest-dom/vitest';
+import { cleanup, render, screen } from '@testing-library/react';
+
+import * as React from 'react';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  BOUNTY_STATUS_CANCELLED_ID,
+  BOUNTY_STATUS_DONE_ID,
+  BOUNTY_STATUS_IN_PROGRESS_ID,
+  BOUNTY_STATUS_IN_REVIEW_ID,
+  BOUNTY_STATUS_TODO_ID,
+} from '~/core/bounties/ontology';
+import type { BoardBounty } from '~/core/bounties/types';
+
+import { BoardBountyCard, type BoardInterestBindings } from './board-bounty-card';
+
+vi.mock('~/partials/community-tab/bounty-card', () => {
+  type CardProps = { bounty: { name: string }; width?: number; height?: number; isInterested?: boolean };
+  const sized = (testId: string) =>
+    function Card({ bounty, width, height, isInterested }: CardProps) {
+      return (
+        <div data-testid={testId} data-width={width} data-height={height} data-interested={isInterested}>
+          {bounty.name}
+        </div>
+      );
+    };
+  return {
+    AVAILABLE_CARD_WIDTH_PX: 378,
+    AVAILABLE_CARD_HEIGHT_PX: 240,
+    BountyCard: sized('completed-card'),
+    InProgressBountyCard: sized('in-progress-card'),
+    AvailableBountyCard: sized('available-card'),
+  };
+});
+
+afterEach(cleanup);
+
+function bounty(statusId: string | null): BoardBounty {
+  return {
+    id: 'b',
+    spaceId: 's',
+    name: 'Bounty',
+    description: null,
+    budget: null,
+    difficulty: null,
+    difficultyId: null,
+    status: null,
+    statusId,
+    deadline: null,
+    skills: [],
+    maintainers: [],
+    allocatedIds: [],
+    interestedCount: 0,
+    updatedAt: null,
+    isFeatured: false,
+    contributors: [],
+  };
+}
+
+const interest: BoardInterestBindings = {
+  interestedIds: new Set(['b']),
+  isInterestLoading: false,
+  canRegisterInterest: true,
+  pendingBountyId: null,
+  onRegisterInterest: vi.fn(),
+};
+
+describe('BoardBountyCard', () => {
+  it('picks the Community-tab card by workflow status', () => {
+    const cases: Array<[string | null, string]> = [
+      [BOUNTY_STATUS_DONE_ID, 'completed-card'],
+      [BOUNTY_STATUS_CANCELLED_ID, 'completed-card'],
+      [BOUNTY_STATUS_IN_PROGRESS_ID, 'in-progress-card'],
+      [BOUNTY_STATUS_IN_REVIEW_ID, 'in-progress-card'],
+      [BOUNTY_STATUS_TODO_ID, 'available-card'],
+      [null, 'available-card'], // missing status = Backlog
+    ];
+    for (const [statusId, testId] of cases) {
+      const { unmount } = render(<BoardBountyCard bounty={bounty(statusId)} interest={interest} />);
+      const card = screen.getByTestId(testId);
+      expect(card).toBeInTheDocument();
+      // Every card on the board gets the same footprint.
+      expect(card).toHaveAttribute('data-width', '378');
+      expect(card).toHaveAttribute('data-height', '240');
+      unmount();
+    }
+  });
+
+  it('binds the available card to the viewer interest state', () => {
+    render(<BoardBountyCard bounty={bounty(BOUNTY_STATUS_TODO_ID)} interest={interest} />);
+    expect(screen.getByTestId('available-card')).toHaveAttribute('data-interested', 'true');
+  });
+});

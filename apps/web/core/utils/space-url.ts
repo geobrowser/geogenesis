@@ -51,6 +51,7 @@ export const SPACE_ROOT_SEGMENTS = ['pending'] as const;
  */
 export const SPACE_TAB_SEGMENTS = [
   'activity',
+  'bounties',
   'claims',
   'community',
   'debates',
