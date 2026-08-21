@@ -16,6 +16,7 @@ import {
 } from '~/core/io/rest';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
@@ -159,6 +160,8 @@ export async function getActiveProposalsForSpacesWhereEditor(
         name: string | null;
         type: ProposalType;
         createdBy: Profile;
+        /** Indexed submission time; 0 when unavailable. */
+        submittedAt: number;
         startTime: number;
         endTime: number;
         status: ProposalStatus;
@@ -229,6 +232,10 @@ export async function getActiveProposalsForSpacesWhereEditor(
   const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
 
+  // REST carries only voting timing, which is unstamped until the first vote — open
+  // proposals need their submission time from the indexer to have any date at all.
+  const submittedTimes = await fetchProposalSubmittedTimes(paginatedProposals.map(p => p.proposalId));
+
   const proposals = paginatedProposals.map(p => {
     const profile = profilesBySpaceId.get(p.proposedBy) ?? defaultProfile(p.proposedBy, p.proposedBy);
     const actionType = p.actions[0]?.actionType ?? 'UNKNOWN';
@@ -241,6 +248,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
       name: p.name,
       type,
       createdBy: profile,
+      submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
       startTime: p.timing.startTime,
       endTime: p.timing.endTime,
       status,

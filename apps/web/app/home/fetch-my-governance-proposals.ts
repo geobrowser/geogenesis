@@ -8,6 +8,7 @@ import {
   mapProposalStatus,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import type { Profile } from '~/core/types';
 
@@ -37,6 +38,8 @@ export type MyGovernanceProposalRow = {
   type: ProposalType;
   endTime: number;
   startTime: number;
+  /** Indexed submission time; 0 when unavailable. */
+  submittedAt: number;
   status: ProposalStatus;
   canExecute: boolean;
   proposalVotes: { totalCount: number; yesCount: number; noCount: number };
@@ -110,6 +113,9 @@ export async function getMyGovernanceProposals(opts: {
   ]);
 
   const profilesBySpaceId = new Map(uniqueProposedByIds.map((id, i) => [id, profilesForProposals[i]]));
+  // Open proposals have no voting timestamp until the first vote, so their row date
+  // comes from the indexed submission time instead.
+  const submittedTimes = await fetchProposalSubmittedTimes(pageSlice.map(p => p.proposalId));
   const targetProfilesBySpaceId = new Map(uniqueTargetIds.map((id, i) => [id, profilesForTargets[i]]));
 
   const proposals: MyGovernanceProposalRow[] = [];
@@ -129,6 +135,7 @@ export async function getMyGovernanceProposals(opts: {
       displayTitle,
       type,
       startTime: p.timing.startTime,
+      submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
       endTime: p.timing.endTime,
       status: mapProposalStatus(p.status),
       canExecute: getApiProposalCanExecute(p),

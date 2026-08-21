@@ -11,6 +11,7 @@ import { Effect, Either, Schema } from 'effect';
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
 import { Environment } from '~/core/environment';
 import {
   type ApiProposalListItem,
@@ -24,6 +25,10 @@ import {
   restFetch,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph';
+import {
+  fetchProposalSubmittedTimes,
+  getSubmittedTime,
+} from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
@@ -105,6 +110,12 @@ export async function GovernanceProposalsList({
       <div className="flex flex-col">
         {proposals.map(p => {
           const displayProfile = p.targetProfile ?? p.createdBy;
+          const timestampSeconds = proposalTimestampSeconds({
+            status: p.status,
+            endTime: p.endTime,
+            startTime: p.startTime,
+            submittedAt: p.createdAt,
+          });
           const proposalTitle = p.targetProfile
             ? getMembershipProposalDisplayName(p.type, p.targetProfile)
             : getProposalName({
@@ -164,16 +175,16 @@ export async function GovernanceProposalsList({
                         <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
                       </div>
                     )}
-                    {(p.status === 'ACCEPTED' || p.status === 'REJECTED') && (
+                    {timestampSeconds > 0 && (
                       <>
                         <span aria-hidden className="shrink-0 select-none">
                           ·
                         </span>
-                        <GovernanceOutcomeDate geoTimeSeconds={p.startTime} className="shrink-0" />
+                        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
                         <span aria-hidden className="shrink-0 select-none">
                           ·
                         </span>
-                        <GovernanceOutcomeTime geoTimeSeconds={p.startTime} className="shrink-0 tabular-nums" />
+                        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
                       </>
                     )}
                   </div>
@@ -248,6 +259,7 @@ type GovernanceProposal = {
 function apiProposalToGovernanceDto(
   proposal: ApiProposalListItem,
   bucket: ProposalBucket,
+  submittedAt: number,
   maybeProfile?: Profile,
   maybeTargetProfile?: Profile
 ): GovernanceProposal {
@@ -262,7 +274,7 @@ function apiProposalToGovernanceDto(
     id: proposal.proposalId,
     name: proposal.name,
     type: proposalType,
-    createdAt: proposal.timing.startTime,
+    createdAt: submittedAt,
     createdAtBlock: '0',
     startTime: proposal.timing.startTime,
     endTime: proposal.timing.endTime,
@@ -434,9 +446,10 @@ async function fetchGovernanceProposals({
     .filter((id): id is string => !!id);
   const uniqueTargetIds = [...new Set(targetIds)];
 
-  const [profilesForProposals, profilesForTargets] = await Promise.all([
+  const [profilesForProposals, profilesForTargets, submittedTimes] = await Promise.all([
     Effect.runPromise(fetchProfilesBySpaceIds(uniqueProposedByIds)),
     uniqueTargetIds.length > 0 ? Effect.runPromise(fetchProfilesBySpaceIds(uniqueTargetIds)) : [],
+    fetchProposalSubmittedTimes(paginatedProposals.map(p => p.proposalId)),
   ]);
 
   // Create maps for efficient lookup
@@ -447,7 +460,13 @@ async function fetchGovernanceProposals({
     const maybeProfile = profilesBySpaceId.get(p.proposedBy);
     const targetId = findMembershipAction(p.actions)?.targetId;
     const maybeTargetProfile = targetId ? targetProfilesBySpaceId.get(targetId) : undefined;
-    return apiProposalToGovernanceDto(p, getProposalBucket(p.status), maybeProfile, maybeTargetProfile);
+    return apiProposalToGovernanceDto(
+      p,
+      getProposalBucket(p.status),
+      getSubmittedTime(submittedTimes, p.proposalId),
+      maybeProfile,
+      maybeTargetProfile
+    );
   });
 
   return { proposals, hasMore };

@@ -21,6 +21,8 @@ import { Pending } from '~/design-system/pending';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { Execute } from '~/partials/active-proposal/execute';
+import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
+
 import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
@@ -32,6 +34,7 @@ interface Props {
   proposalVersion?: number;
   governanceHomeReturnSearch?: string;
   startTime: number;
+  submittedAt: number;
   endTime: number;
   isProposalEnded: boolean;
   canExecute: boolean;
@@ -61,6 +64,7 @@ export function AcceptOrRejectMember({
   proposalType,
   governanceHomeReturnSearch,
   startTime,
+  submittedAt,
   endTime,
   isProposalEnded,
   canExecute,
@@ -156,14 +160,29 @@ export function AcceptOrRejectMember({
 
   const { hours, minutes } = getProposalTimeRemaining(endTime);
 
+  const timestampSeconds = proposalTimestampSeconds({ status, endTime, startTime, submittedAt });
+  // Open requests show when they were submitted; the countdown answers a different
+  // question, so it stays alongside rather than being replaced.
   const footerLeft =
     status === 'ACCEPTED' || status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <GovernanceOutcomeDate geoTimeSeconds={startTime} className="shrink-0" />
+        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <GovernanceOutcomeTime geoTimeSeconds={startTime} className="shrink-0 tabular-nums" />
+        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
+      </div>
+    ) : timestampSeconds > 0 ? (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
+        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
+          ·
+        </span>
+        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
+          ·
+        </span>
+        <span className="shrink-0 text-grey-04">{`${hours}h ${minutes}m remaining`}</span>
       </div>
     ) : (
       <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
