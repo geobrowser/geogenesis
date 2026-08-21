@@ -11,6 +11,7 @@ import {
   buildBountiesHref,
   groupBounties,
   parseBountyFilters,
+  serializeBountyFilters,
   sortBounties,
 } from '~/core/bounties/filters';
 import type { BoardBounty } from '~/core/bounties/types';
@@ -39,17 +40,31 @@ export function BountyBoard({ header }: Props) {
   const pathname = usePathname() ?? '/bounties';
   const searchParams = useSearchParams();
 
-  const filters = React.useMemo(() => parseBountyFilters(searchParams ?? new URLSearchParams()), [searchParams]);
+  // Filters live in React state — the repo's pattern for typed search (power
+  // tools, table blocks): typing must never depend on a router round trip.
+  // The URL stays a mirror: written shallowly on every change so links stay
+  // shareable, and adopted back into state when it changes from outside
+  // (View all deep links, back/forward).
+  const searchString = searchParams?.toString() ?? '';
+  const [filters, setFiltersState] = React.useState(() => parseBountyFilters(new URLSearchParams(searchString)));
+  const lastWrittenSearch = React.useRef(searchString);
+
+  React.useEffect(() => {
+    if (searchString === lastWrittenSearch.current) return;
+    lastWrittenSearch.current = searchString;
+    setFiltersState(parseBountyFilters(new URLSearchParams(searchString)));
+  }, [searchString]);
+
   const spaceIds = CURRENT_BOUNTY_SPACE_IDS;
   const { data, isLoading, isError, refetch } = useBoardBounties(spaceIds);
 
   const setFilters = React.useCallback(
     (next: BountyFilters) => {
-      // Shallow URL update: router.replace would start an RSC navigation, which
-      // re-suspends the board's Suspense boundary and remounts the tree — the
-      // focused search input loses focus mid-typing. replaceState keeps the URL
-      // as the source of truth (useSearchParams tracks it natively) with no
-      // server round trip and no remount.
+      setFiltersState(next);
+      // Mirror to the URL without a router navigation: router.replace starts an
+      // RSC round trip that re-suspends the Suspense boundary and remounts the
+      // tree, dropping focus from the search input mid-typing.
+      lastWrittenSearch.current = serializeBountyFilters(next).toString();
       window.history.replaceState(window.history.state, '', buildBountiesHref(pathname, next));
     },
     [pathname]

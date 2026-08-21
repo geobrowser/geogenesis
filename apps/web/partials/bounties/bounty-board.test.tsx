@@ -205,6 +205,24 @@ describe('BountyBoard', () => {
     expect(screen.getByRole('menuitemcheckbox', { name: /Medium/ })).toBeDisabled();
   });
 
+  it('filtering updates the visible bounties immediately, without any router round trip', () => {
+    // useSearchParams is static in this test — like the real app, where the
+    // shallow URL mirror never re-renders the tree. The list must still update.
+    mocks.query.data = {
+      bounties: [
+        bounty({ id: 'hard', name: 'Hard one', difficultyId: HARD_DIFFICULTY_ID, difficulty: 'Hard' }),
+        bounty({ id: 'easy', name: 'Easy one', difficultyId: EASY_DIFFICULTY_ID, difficulty: 'Easy' }),
+      ],
+      spaces,
+    };
+    render(<BountyBoard />);
+    expect(screen.getByText('Easy one')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Any difficulty/ }));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Hard/ }));
+    expect(screen.queryByText('Easy one')).not.toBeInTheDocument();
+    expect(screen.getByText('Hard one')).toBeInTheDocument();
+  });
+
   it('space filter is multi-select and writes a comma list; sort and group sit in the view-options cluster', () => {
     mocks.search = 'space=space-a';
     mocks.query.data = {
