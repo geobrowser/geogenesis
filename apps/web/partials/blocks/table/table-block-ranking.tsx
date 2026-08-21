@@ -50,9 +50,9 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   const {
     filterState,
     resolvedFilterState,
-    filterMode,
+    modesByColumn,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     source,
     setSource,
     isFilterOpen,
@@ -192,8 +192,11 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                       <TableBlockFilterGroupPill
                         key={group.columnId}
                         group={group}
-                        mode={filterMode}
-                        onToggleMode={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')}
+                        mode={modesByColumn[group.columnId] ?? 'AND'}
+                        onToggleMode={() => {
+                          const mode = modesByColumn[group.columnId] ?? 'AND';
+                          setGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
+                        }}
                         onDeleteValue={originalIndex => {
                           setFilterState(
                             produce(resolvedFilterState, draft => {
@@ -214,8 +217,11 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                       <TableBlockFilterGroupPill
                         key={group.columnId}
                         group={group}
-                        mode={filterMode}
-                        onToggleMode={() => setFilterMode(filterMode === 'AND' ? 'OR' : 'AND')}
+                        mode={modesByColumn[group.columnId] ?? 'AND'}
+                        onToggleMode={() => {
+                          const mode = modesByColumn[group.columnId] ?? 'AND';
+                          setGroupMode(group.columnId, mode === 'AND' ? 'OR' : 'AND');
+                        }}
                         onDeleteValue={originalIndex => {
                           setFilterState(
                             produce(resolvedFilterState, draft => {

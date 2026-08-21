@@ -1038,7 +1038,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     const { id: fromId, spaceId } = useEntityStoreInstance();
     const fromName = useName(fromId, spaceId);
 
-    const { filterState, setFilterState, filterMode, setFilterMode } = useFilters();
+    const { filterState, setFilterState, modesByColumn, setGroupMode } = useFilters();
     const { source } = useSource({ filterState, setFilterState });
     const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
     const isRelationsMode = source.type === 'RELATIONS';
@@ -1247,8 +1247,8 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
         state={state}
         dispatch={dispatch}
         filterSuggestionSpaceId={filterSuggestionSpaceId}
-        filterMode={filterMode}
-        onFilterModeChange={setFilterMode}
+        filterMode={modesByColumn[state.selectedColumn] ?? 'AND'}
+        onFilterModeChange={mode => setGroupMode(state.selectedColumn, mode)}
         onSelectColumnToFilter={onSelectColumnToFilter}
         isEditing={isEditing}
         onValueDropdownOpenChange={setValueDropdownOpen}

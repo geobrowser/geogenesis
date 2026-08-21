@@ -588,11 +588,11 @@ const ConfiguredTableBlock = ({
     source,
     setSource,
     filterState: activeFilters,
-    filterMode: activeFilterMode,
+    modesByColumn: activeModesByColumn,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
     sortState,
     setSortState,
     filterableProperties,
@@ -616,12 +616,20 @@ const ConfiguredTableBlock = ({
     onConsumedInitialFiltersOpen?.();
   }, [initialFiltersOpen, onConsumedInitialFiltersOpen]);
 
-  const setActiveFilterMode = React.useCallback(
-    (mode: FilterMode) => {
-      if (canEdit) setFilterMode(mode);
-      else setTemporaryFilterMode(mode);
+  const setActiveGroupMode = React.useCallback(
+    (columnId: string, mode: FilterMode) => {
+      if (canEdit) setGroupMode(columnId, mode);
+      else setTemporaryGroupMode(columnId, mode);
     },
-    [canEdit, setFilterMode, setTemporaryFilterMode]
+    [canEdit, setGroupMode, setTemporaryGroupMode]
+  );
+
+  const toggleActiveGroupMode = React.useCallback(
+    (columnId: string) => {
+      const mode = activeModesByColumn[columnId] ?? 'AND';
+      setActiveGroupMode(columnId, mode === 'AND' ? 'OR' : 'AND');
+    },
+    [activeModesByColumn, setActiveGroupMode]
   );
 
   const filterSpaceIds = React.useMemo(
@@ -740,10 +748,10 @@ const ConfiguredTableBlock = ({
         pageSize,
         sourceKey: source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO',
         filters: activeFilters.map(f => ({ c: f.columnId, v: f.value })),
-        filterMode: activeFilterMode,
+        filterModes: Object.entries(activeModesByColumn).sort(([a], [b]) => a.localeCompare(b)),
         sort: sortState ?? null,
       }),
-    [isInfiniteExplore, pageSize, source, activeFilters, activeFilterMode, sortState]
+    [isInfiniteExplore, pageSize, source, activeFilters, activeModesByColumn, sortState]
   );
 
   React.useEffect(() => {
@@ -1106,8 +1114,8 @@ const ConfiguredTableBlock = ({
                       <React.Fragment key={group.columnId}>
                         <TableBlockFilterGroupPill
                           group={group}
-                          mode={activeFilterMode}
-                          onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                          mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                          onToggleMode={() => toggleActiveGroupMode(group.columnId)}
                           onDeleteValue={originalIndex => {
                             const newFilterState = produce(activeFilters, draft => {
                               draft.splice(originalIndex, 1);
@@ -1129,8 +1137,8 @@ const ConfiguredTableBlock = ({
                       <React.Fragment key={group.columnId}>
                         <TableBlockFilterGroupPill
                           group={group}
-                          mode={activeFilterMode}
-                          onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                          mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                          onToggleMode={() => toggleActiveGroupMode(group.columnId)}
                           onDeleteValue={originalIndex => {
                             const newFilterState = produce(activeFilters, draft => {
                               draft.splice(originalIndex, 1);
