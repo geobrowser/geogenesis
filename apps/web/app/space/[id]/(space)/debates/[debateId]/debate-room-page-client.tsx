@@ -252,6 +252,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionGenerationRef = React.useRef(0);
   const localVideoRef = React.useRef<HTMLVideoElement>(null);
   const remoteMediaRef = React.useRef<HTMLDivElement>(null);
+  /**
+   * The remote tracks currently subscribed, so a reconnect can put them back on screen.
+   *
+   * GEO-2602. `Reconnecting` clears the remote tiles, and the code assumed the tracks would
+   * arrive again as fresh `TrackSubscribed` events. They do not: LiveKit reconnects by ICE
+   * restart and the existing subscriptions survive it, so nothing re-fires and nothing
+   * re-attaches. Kept here rather than read back off the SDK because `RoomLike` is deliberately
+   * a narrow surface over the parts of LiveKit this room uses.
+   */
+  const subscribedRemoteTracksRef = React.useRef<Set<RemoteTrackLike>>(new Set());
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
   const roomRef = React.useRef<RoomLike | null>(null);
   const connectingRoomRef = React.useRef<RoomLike | null>(null);
@@ -893,6 +903,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         remoteParticipantRefetchTimerRef.current = null;
       }
       remoteMediaRef.current?.replaceChildren();
+      subscribedRemoteTracksRef.current.clear();
       void synchronizeServerClock(getServerTime)
         .then(clock => {
           if (isCurrent()) setServerClock(clock);
@@ -921,11 +932,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         const room = new livekit.Room(roomOptions) as unknown as RoomLike;
         connectingRoom = room;
         connectingRoomRef.current = room;
-        room.on(livekit.RoomEvent.TrackSubscribed, payload => {
-          // Auto-subscribe can deliver a track during room.connect(), before roomRef is assigned, so
-          // reject only a different room here rather than a not-yet-set one.
-          if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
-          const track = payload as RemoteTrackLike;
+        const attachRemoteTrack = (track: RemoteTrackLike) => {
           const element = track.attach();
           if (element instanceof HTMLMediaElement) {
             element.muted = !remoteAudioEnabledRef.current;
@@ -938,6 +945,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             element.className = 'hidden';
           }
           remoteMediaRef.current?.appendChild(element);
+        };
+        room.on(livekit.RoomEvent.TrackSubscribed, payload => {
+          // Auto-subscribe can deliver a track during room.connect(), before roomRef is assigned, so
+          // reject only a different room here rather than a not-yet-set one.
+          if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
+          const track = payload as RemoteTrackLike;
+          subscribedRemoteTracksRef.current.add(track);
+          attachRemoteTrack(track);
           void refetchDebate();
         });
         // When a remote track drops mid-debate, detach its element instead of leaving a frozen black
@@ -946,6 +961,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         room.on(livekit.RoomEvent.TrackUnsubscribed, payload => {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
           const track = payload as RemoteTrackLike;
+          subscribedRemoteTracksRef.current.delete(track);
           for (const element of track.detach()) element.remove();
           if (track.kind === 'video') setRemoteVideoReady(false);
         });
@@ -963,6 +979,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // re-subscribed tracks.
         room.on(livekit.RoomEvent.Reconnecting, () => {
           if (!isCurrent() || roomRef.current !== room) return;
+          // `detach`, not just `replaceChildren`: an element removed from the DOM keeps playing,
+          // which is why GEO-2602 presented as audio-without-video rather than as silence. The
+          // tracks stay in `subscribedRemoteTracksRef` because they are still subscribed — the
+          // reconnect does not tear the subscription down, and `Reconnected` puts them back.
+          for (const track of subscribedRemoteTracksRef.current) {
+            for (const element of track.detach()) element.remove();
+          }
           remoteMediaRef.current?.replaceChildren();
           setRemoteVideoReady(false);
           setRoomState('reconnecting');
@@ -979,6 +1002,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         });
         room.on(livekit.RoomEvent.Reconnected, () => {
           if (!isCurrent() || roomRef.current !== room) return;
+          // The subscriptions survived the reconnect, so nothing will re-deliver these tracks —
+          // putting them back is this handler's job. Without it the opponent's tile stayed empty
+          // for the rest of the debate while their audio kept playing (GEO-2602).
+          //
+          // Detached first because a reconnect that *did* re-subscribe has already attached a
+          // fresh element, and `attach` is not guaranteed to hand back the same one twice.
+          for (const track of subscribedRemoteTracksRef.current) {
+            for (const stale of track.detach()) stale.remove();
+            attachRemoteTrack(track);
+          }
           setRoomState('connected');
           if (reconnectingStartedAtRef.current !== null) {
             captureDebateRoomResilienceEvent('debate_room_reconnected', {

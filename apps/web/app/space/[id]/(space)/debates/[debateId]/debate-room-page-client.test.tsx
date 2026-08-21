@@ -6,11 +6,8 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
+import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
-import {
-  clearDebateReturnDestination,
-  rememberDebateReturnDestination,
-} from '~/core/debates/debate-return-navigation';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
@@ -1604,6 +1601,62 @@ describe('DebateRoomPageClient', () => {
     act(() => emitRoomEvent('trackUnsubscribed', track));
     expect(track.detach).toHaveBeenCalled();
     expect(document.body.contains(remoteVideo)).toBe(false);
+  });
+
+  // GEO-2602, reported as "audio but no video from opponent". Reconnecting cleared the remote
+  // tiles and the code assumed the tracks would come back as fresh TrackSubscribed events. They
+  // do not: LiveKit reconnects by ICE restart and the subscriptions survive it, so nothing
+  // re-fires and nothing re-attaches. The opponent's tile then stays empty for the rest of the
+  // debate.
+  it('puts the opponent back on screen after a reconnect', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    const remoteVideo = document.createElement('video');
+    const track = { kind: 'video', attach: () => remoteVideo, detach: vi.fn(() => [remoteVideo]) };
+
+    act(() => emitRoomEvent('trackSubscribed', track));
+    expect(document.body.contains(remoteVideo)).toBe(true);
+
+    act(() => emitRoomEvent('reconnecting'));
+    expect(document.body.contains(remoteVideo)).toBe(false);
+
+    // No second trackSubscribed — that is the whole point.
+    act(() => emitRoomEvent('reconnected'));
+
+    expect(document.body.contains(remoteVideo)).toBe(true);
+  });
+
+  // Why the report was "audio but no video" rather than "the call went silent": an element removed
+  // from the DOM keeps playing, so stripping the container orphaned a live audio element. The
+  // track has to be detached, not just unparented.
+  it('detaches remote audio on a reconnect rather than orphaning a still-playing element', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    const remoteAudio = document.createElement('audio');
+    const track = { kind: 'audio', attach: () => remoteAudio, detach: vi.fn(() => [remoteAudio]) };
+
+    act(() => emitRoomEvent('trackSubscribed', track));
+    track.detach.mockClear();
+
+    act(() => emitRoomEvent('reconnecting'));
+
+    expect(track.detach).toHaveBeenCalled();
   });
 
   it('surfaces a reconnecting state while LiveKit restarts a dropped call', async () => {
