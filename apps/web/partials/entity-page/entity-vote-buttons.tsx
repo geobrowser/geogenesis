@@ -9,6 +9,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
@@ -32,7 +33,7 @@ import {
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
-import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
 
@@ -47,6 +48,8 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
+
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 const ENTITY_RESPONSE_OBJECT_TYPE = 0;
 
@@ -68,9 +71,18 @@ export function EntityVoteButtons({
   presentation = 'inline',
 }: EntityVoteButtonsProps) {
   const responseBatch = useClaimResponseBatchState();
+  // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
+  // but derives `types` from all of them, so a claim collected into another space — a data block
+  // row, a ranking entry — has its Types relation only in the space it was published to. Asking
+  // for that other space returned an entity with no Types relation at all, so this read it as a
+  // plain entity and drew curation arrows, while `ClaimDebateButton` reads `types` and drew the
+  // Debate toggle beside it. One claim, two controls disagreeing about what it was.
+  //
+  // Space still decides the *kind* of response, just not whether there is one: the checks below
+  // and `hasUnpublishedClaimResponseKindEdit` each re-filter to `spaceId` themselves, so widening
+  // the query leaves them reading exactly what they read before.
   const { entity, isLoading: isLoadingEntity } = useQueryEntity({
     id: entityId,
-    spaceId,
     includeDeleted: true,
     enabled: responseKindOverride === undefined,
   });
@@ -84,19 +96,58 @@ export function EntityVoteButtons({
     queryResponseKind === 'curation' ? 'default' : queryResponseKind === 'veracity' ? 'chevrons' : 'thumbs';
   const responseCopy = ENTITY_RESPONSE_COPY[queryResponseKind];
 
-  const { submitResponse, optimisticResponse, isResponseIndexingDelayed, isConnected, personalSpaceId } =
-    useEntityResponse({ entityId, spaceId, responseKind });
+  const {
+    submitResponse,
+    submitResponseAsync,
+    optimisticResponse,
+    isResponseIndexingDelayed,
+    isConnected,
+    personalSpaceId,
+  } = useEntityResponse({ entityId, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
-  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
+  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const enqueuePendingAction = useEnqueuePendingAction();
+
+  // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
+  // once the space exists (see pending-actions). Keep the optimistic mark on screen until the
+  // queued write is replayed, then hand off to the mutation's own optimistic state.
+  const voteActionId = `entity-vote:${entityId}:${spaceId}`;
+  const [queuedResponse, setQueuedResponse] = React.useState<ActiveResponseDirection | undefined>(undefined);
+  React.useEffect(() => {
+    if (queuedResponse !== undefined && optimisticResponse !== undefined) setQueuedResponse(undefined);
+  }, [queuedResponse, optimisticResponse]);
+
+  // Direction a signed-out user picked before sign-in opened.
+  const pendingSignInDirectionRef = React.useRef<ActiveResponseDirection | undefined>(undefined);
+
+  function queueVoteWrite(direction: ActiveResponseDirection) {
+    setQueuedResponse(direction);
+    enqueuePendingAction({
+      id: voteActionId,
+      label: 'your vote',
+      requires: 'personalSpace',
+      run: () => submitResponseAsync(direction).then(() => {}),
+    });
+  }
 
   const { login } = useGeoLogin({
-    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
+    onComplete: args => {
+      trackPrivyAuth(args, { auth_flow: 'manual_login' });
+
+      const direction = pendingSignInDirectionRef.current;
+      if (direction !== undefined) {
+        pendingSignInDirectionRef.current = undefined;
+        queueVoteWrite(direction);
+      }
+    },
   });
 
   const [respondersOpen, setRespondersOpen] = React.useState(false);
@@ -127,7 +178,10 @@ export function EntityVoteButtons({
     staleTime: 30_000,
   });
 
-  const activeResponse = optimisticResponse === undefined ? serverResponseDirection : optimisticResponse;
+  // A queued (pre-personal-space) vote overrides the mutation's own optimistic state until it is
+  // replayed and cleared from the queue, at which point the mutation's state takes over.
+  const effectiveOptimistic = queuedResponse !== undefined ? queuedResponse : optimisticResponse;
+  const activeResponse = effectiveOptimistic === undefined ? serverResponseDirection : effectiveOptimistic;
 
   const positiveResponses = BigInt(responseCounts?.positive ?? 0);
   const negativeResponses = BigInt(responseCounts?.negative ?? 0);
@@ -137,6 +191,9 @@ export function EntityVoteButtons({
   const displayScore = netScore + responseScore(activeResponse) - responseScore(serverResponseDirection);
 
   function openPrivySignIn() {
+    // Stay on this page after onboarding instead of bouncing to the explore page.
+    const search = searchParams?.toString();
+    setPostOnboardingRedirect(`${pathname}${search ? `?${search}` : ''}`);
     setName('');
     setTopicId('');
     setAvatar('');
@@ -145,12 +202,20 @@ export function EntityVoteButtons({
     login();
   }
 
-  function handlePositiveResponse() {
+  function queueResponse(direction: ActiveResponseDirection) {
     if (!smartAccount) {
+      pendingSignInDirectionRef.current = direction;
       openPrivySignIn();
       return;
     }
-    if (!isConnected) return;
+    queueVoteWrite(direction);
+  }
+
+  function handlePositiveResponse() {
+    if (!isConnected) {
+      queueResponse('positive');
+      return;
+    }
     if (activeResponse === 'positive') {
       submitResponse('clear', {
         onSuccess: () => {
@@ -173,11 +238,10 @@ export function EntityVoteButtons({
   }
 
   function handleNegativeResponse() {
-    if (!smartAccount) {
-      openPrivySignIn();
+    if (!isConnected) {
+      queueResponse('negative');
       return;
     }
-    if (!isConnected) return;
     if (activeResponse === 'negative') {
       submitResponse('clear', {
         onSuccess: () => {
@@ -213,32 +277,30 @@ export function EntityVoteButtons({
 
   const positiveActive = activeResponse === 'positive';
   const negativeActive = activeResponse === 'negative';
-  const responseDisabled = !!smartAccount && (!isConnected || isAccountSetupPending);
-  const positiveTitle = !smartAccount
-    ? responseCopy.signIn
-    : isAccountSetupPending
-      ? 'Finishing account setup…'
-      : isConnected
-        ? positiveActive
-          ? responseCopy.removePositive
-          : responseCopy.positiveAction
-        : responseCopy.connect;
-  const negativeTitle = !smartAccount
-    ? responseCopy.signIn
-    : isAccountSetupPending
-      ? 'Finishing account setup…'
-      : isConnected
-        ? negativeActive
-          ? responseCopy.removeNegative
-          : responseCopy.negativeAction
-        : responseCopy.connect;
+  // Never block the buttons: when the personal space isn't ready the click queues the vote
+  // instead of writing it, so the user is never stopped from acting while it's being created.
+  const responseDisabled = false;
+  const positiveTitle = !isConnected
+    ? smartAccount
+      ? 'Vote now — saved until your account is ready'
+      : responseCopy.signIn
+    : positiveActive
+      ? responseCopy.removePositive
+      : responseCopy.positiveAction;
+  const negativeTitle = !isConnected
+    ? smartAccount
+      ? 'Vote now — saved until your account is ready'
+      : responseCopy.signIn
+    : negativeActive
+      ? responseCopy.removeNegative
+      : responseCopy.negativeAction;
 
   const totalResponders = (responseCounts?.positive ?? 0) + (responseCounts?.negative ?? 0);
 
   const optimisticPositiveDelta =
-    optimisticResponse !== undefined ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
+    effectiveOptimistic !== undefined ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
   const optimisticNegativeDelta =
-    optimisticResponse !== undefined ? (negativeActive ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0) : 0;
+    effectiveOptimistic !== undefined ? (negativeActive ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0) : 0;
   const effectivePositive = Math.max(0, (responseCounts?.positive ?? 0) + optimisticPositiveDelta);
   const effectiveNegative = Math.max(0, (responseCounts?.negative ?? 0) + optimisticNegativeDelta);
   const effectiveTotal = effectivePositive + effectiveNegative;
@@ -274,7 +336,7 @@ export function EntityVoteButtons({
       responseKind={queryResponseKind}
       totalResponders={effectiveTotal}
       viewerSpaceId={personalSpaceId}
-      optimisticViewerResponse={optimisticResponse}
+      optimisticViewerResponse={effectiveOptimistic}
     />
   ) : null;
 
@@ -327,7 +389,6 @@ export function EntityVoteButtons({
         title={positiveTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          !isClaimVariant && 'translate-y-px',
           claimResponseButtonColor(positiveActive),
           responseDisabled && 'cursor-default opacity-50'
         )}
@@ -366,7 +427,6 @@ export function EntityVoteButtons({
         title={negativeTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          !isClaimVariant && 'translate-y-px',
           claimResponseButtonColor(negativeActive),
           responseDisabled && 'cursor-default opacity-50'
         )}

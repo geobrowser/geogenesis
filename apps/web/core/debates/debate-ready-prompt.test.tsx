@@ -1,15 +1,42 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from './api';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
 
-const mocks = vi.hoisted(() => ({ push: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  abortMutateAsync: vi.fn(),
+  abortPending: false,
+  clearDebateActivity: vi.fn(),
+  markEnteringDebate: vi.fn(),
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push }),
+}));
+
+vi.mock('./hooks', () => ({
+  useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: mocks.abortPending }),
+  useClearDebateActivity: () => mocks.clearDebateActivity,
+}));
+
+vi.mock('./debate-entry-intent', () => ({
+  markEnteringDebate: mocks.markEnteringDebate,
+}));
+
+// useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
+// suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useBrowseSidebarQuerySource: () => ({
+    personalSpaceId: null,
+    walletAddress: undefined,
+    keyInput: null,
+    isLoading: false,
+  }),
+  useCachedBrowseSidebarData: () => null,
 }));
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
@@ -49,18 +76,26 @@ const debate = (overrides: Partial<Debate> = {}): Debate =>
     ...overrides,
   }) as Debate;
 
-beforeEach(() => mocks.push.mockReset());
+beforeEach(() => {
+  mocks.push.mockReset();
+  mocks.abortMutateAsync.mockReset();
+  mocks.abortMutateAsync.mockResolvedValue(debate({ status: 'cancelled' }));
+  mocks.abortPending = false;
+  mocks.clearDebateActivity.mockReset();
+  mocks.markEnteringDebate.mockReset();
+});
 afterEach(cleanup);
 
 describe('DebateReadyPrompt', () => {
   it('walks the viewer into the room without moving them first', () => {
-    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" onNotNow={vi.fn()} />);
+    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" />);
 
     expect(screen.getByText('Your debate is ready')).toBeInTheDocument();
     expect(mocks.push).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
 
+    expect(mocks.markEnteringDebate).toHaveBeenCalledWith('debate-1');
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
   });
 
@@ -68,7 +103,7 @@ describe('DebateReadyPrompt', () => {
   // until it resolves, so an unmarked button reads as broken and each further click stacks another
   // history entry — which is exactly what it did.
   it('shows that it is joining and ignores further clicks', () => {
-    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" onNotNow={vi.fn()} />);
+    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
 
@@ -81,54 +116,71 @@ describe('DebateReadyPrompt', () => {
 
   // Leaving this live matters: if the navigation never lands, it is the only way out of a dialog
   // that covers the page.
-  it('can still be dismissed while joining', () => {
-    const onNotNow = vi.fn();
-    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" onNotNow={onNotNow} />);
+  it('can still be declined while joining', () => {
+    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
 
-    expect(onNotNow).toHaveBeenCalled();
+    expect(mocks.abortMutateAsync).toHaveBeenCalled();
   });
 
   it('says so when the debate is already under way', () => {
-    render(<DebateReadyPrompt debate={debate({ status: 'in_progress' })} currentUserId="user-me" onNotNow={vi.fn()} />);
+    render(<DebateReadyPrompt debate={debate({ status: 'in_progress' })} currentUserId="user-me" />);
 
     expect(screen.getByText('Your debate is under way')).toBeInTheDocument();
   });
 
-  // "Not now" is local, the same as the request popup's: the debate is still there to walk into.
-  it('leaves the debate alone when dismissed', () => {
-    const onNotNow = vi.fn();
-    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" onNotNow={onNotNow} />);
+  // The reported bug: declining only closed the popup, so the opponent sat in the ready screen
+  // waiting for someone who had already decided not to come. Only the server can tell them.
+  it('cancels the debate for both sides when declined', async () => {
+    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
 
-    expect(onNotNow).toHaveBeenCalled();
+    await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledTimes(1));
+    // Locally too, so every Debate control comes back without waiting for the gateway.
+    await waitFor(() => expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1'));
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
+  it('says so while the decline is in flight', () => {
+    mocks.abortPending = true;
+    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" />);
+
+    expect(screen.getByRole('button', { name: 'Declining…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Join debate' })).toBeDisabled();
+  });
+
+  // The debate is still live if the abort never lands, so closing over the failure would strand
+  // both sides again — with nothing on screen to say why.
+  it('keeps the dialog open with the reason when the decline fails', async () => {
+    mocks.abortMutateAsync.mockRejectedValue(new Error('Network unreachable'));
+    render(<DebateReadyPrompt debate={debate()} currentUserId="user-me" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+    expect(await screen.findByText('Network unreachable')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Join debate' })).toBeInTheDocument();
+    expect(mocks.clearDebateActivity).not.toHaveBeenCalled();
+  });
+
   it('stays silent about a debate it cannot name both sides of', () => {
-    render(
-      <DebateReadyPrompt
-        debate={debate({ participants: [participant({})] })}
-        currentUserId="user-me"
-        onNotNow={vi.fn()}
-      />
-    );
+    render(<DebateReadyPrompt debate={debate({ participants: [participant({})] })} currentUserId="user-me" />);
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 
 describe('DebateRejoinBar', () => {
-  // "Not now" used to be a one-way door: nothing else in the app links to an unfinished debate,
-  // while an active one greys out every Debate control.
-  it('keeps a way back into a dismissed debate', () => {
+  // The fallback for a debate the dialog cannot describe: nothing else in the app links to an
+  // unfinished debate, while an active one greys out every Debate control.
+  it('keeps a way into a debate the prompt cannot name', () => {
     render(<DebateRejoinBar debate={debate()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Your debate is ready/ }));
 
+    expect(mocks.markEnteringDebate).toHaveBeenCalledWith('debate-1');
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
   });
 });

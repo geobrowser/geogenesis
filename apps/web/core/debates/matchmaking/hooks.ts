@@ -22,9 +22,15 @@ import {
   unblockDebateUser,
   withdrawDebateRequest,
 } from '../api';
+import { markEnteringDebate } from '../debate-entry-intent';
 import { useDebateGatewayScope } from '../debate-gateway';
 import { debatePath } from '../debate-routes';
-import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import {
+  debateQueryKeys,
+  debateQueryNetworkOptions,
+  invalidateDebatesOutsideRematchClaims,
+  useGeoChatAuth,
+} from '../hooks';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
 
@@ -241,7 +247,7 @@ export function useCreateDebateRequest() {
 
   return useMutation({
     mutationFn: (request: CreateDebateRequestBody) => createDebateRequest(request, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 
@@ -251,7 +257,7 @@ export function useWithdrawDebateRequest() {
 
   return useMutation({
     mutationFn: (requestId: string) => withdrawDebateRequest(requestId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 
@@ -264,7 +270,7 @@ export function useDismissDebateRequest() {
       const body: DismissDebateRequestBody = removeIntent ? { remove_intent: true } : {};
       return dismissDebateRequest(requestId, body, getPrivyIdentityToken, accountKey);
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 
@@ -284,9 +290,14 @@ export function useAcceptDebateRequest() {
     onSuccess: result => {
       if (result.debate) {
         queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
+        // Before the push, and before the invalidation below: the room is a server segment with no
+        // `loading` boundary, so this page stays up while activity comes back reporting a debate
+        // this tab is not yet on the path of. Without the intent the coordinator reads that as
+        // someone who needs telling and reopens this very dialog as the ready prompt.
+        markEnteringDebate(result.debate.id);
         router.push(debatePath(result.debate));
       }
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
+      void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
 }
@@ -297,7 +308,7 @@ export function useBlockDebateUser() {
 
   return useMutation({
     mutationFn: (userId: string) => blockDebateUser(userId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 
@@ -307,6 +318,6 @@ export function useUnblockDebateUser() {
 
   return useMutation({
     mutationFn: (userId: string) => unblockDebateUser(userId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }

@@ -97,20 +97,42 @@ function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: Ab
   });
 }
 
+/**
+ * How many id batches are in flight at once.
+ *
+ * The batches are independent — each asks for a disjoint set of ids — so they were only
+ * sequential by construction, and a caller handing in 300 ids paid six round trips end to
+ * end for work that fits in one wave. `syncMany` never hit it because it pre-batches to
+ * exactly `ENTITY_ID_BATCH_SIZE` before calling in; the callers that pass an unbounded id
+ * list straight through (`core/blocks/data/filters.ts`, `partials/diffs/changed-entity.tsx`,
+ * `core/sync/engine.ts`, the community-calls fetchers) did.
+ *
+ * Bounded rather than unbounded: `EntitiesBatch` pulls every value and relation for each
+ * entity — 0.31 MB for 50 claims, measured — and browsers cap concurrent connections per
+ * host anyway, so firing twenty of those at once trades a queue we control for one we do
+ * not. Six keeps a 300-id call to a single wave.
+ */
+const ENTITY_ID_BATCH_CONCURRENCY = 6;
+
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   if (entityIds.length === 0) return Effect.succeed([]);
   if (entityIds.length <= ENTITY_ID_BATCH_SIZE) return getBatchEntitiesPage(entityIds, spaceId, signal);
 
-  return Effect.gen(function* () {
-    const entities: Entity[] = [];
+  const batches: string[][] = [];
+  for (let start = 0; start < entityIds.length; start += ENTITY_ID_BATCH_SIZE) {
+    batches.push(entityIds.slice(start, start + ENTITY_ID_BATCH_SIZE));
+  }
 
-    for (let start = 0; start < entityIds.length; start += ENTITY_ID_BATCH_SIZE) {
-      const batch = yield* getBatchEntitiesPage(entityIds.slice(start, start + ENTITY_ID_BATCH_SIZE), spaceId, signal);
-      entities.push(...batch);
-    }
-
-    return entities;
-  });
+  // `Effect.all` preserves input order in its results, so the flattened output stays in
+  // batch order exactly as the sequential loop left it. Callers that relied on that — the
+  // diff view renders in the order it asked — keep working.
+  return Effect.map(
+    Effect.all(
+      batches.map(batch => getBatchEntitiesPage(batch, spaceId, signal)),
+      { concurrency: ENTITY_ID_BATCH_CONCURRENCY }
+    ),
+    pages => pages.flat()
+  );
 }
 
 export function getBatchEntitySpaces(entityIds: string[], signal?: AbortController['signal']) {

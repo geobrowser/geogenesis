@@ -25,7 +25,6 @@ type CollectionMetadataProps = {
   verified?: boolean;
   onLinkEntry: onLinkEntryFn;
   children: ReactNode;
-  /** When false, the open-in-side-panel control is hidden (e.g. placeholder rows, Power Tools). */
   showSidePanel?: boolean;
   openedWithMainViewEditing?: boolean;
   /**

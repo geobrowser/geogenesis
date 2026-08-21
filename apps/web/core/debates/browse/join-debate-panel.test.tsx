@@ -17,7 +17,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+    rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
+  },
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => ({ data: { claims: mocks.claims }, isLoading: false, error: null }),
   useDebateActivity: () => ({ data: { available_to_debate: false }, isPending: false }),
   useUpdateDebateAvailability: () => ({ mutate: mocks.availabilityMutate, isPending: false }),

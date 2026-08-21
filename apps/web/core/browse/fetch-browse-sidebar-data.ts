@@ -6,7 +6,7 @@ import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { AbortError } from '~/core/io/subgraph/errors';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
-import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
+import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import {
   fetchPendingEditorshipSpaceIds,
   fetchPendingMembershipSpaceIds,
@@ -172,7 +172,7 @@ type BrowseSidebarSources = {
 type FeaturedSpacesSource = FeaturedSpace[] | PromiseLike<FeaturedSpace[]>;
 
 function resolveFeaturedSpaces(source?: FeaturedSpacesSource): Promise<FeaturedSpace[]> {
-  const promise = source ? Promise.resolve(source) : fetchFeaturedSpaces();
+  const promise = source ? Promise.resolve(source) : fetchFeaturedSpacesShared();
   return promise.catch(error => {
     // Cancellation must keep propagating so query consumers do not replace a
     // cancelled request with a successful-but-empty sidebar response.

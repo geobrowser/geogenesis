@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt } from './api';
 import { DebateCoordinator } from './debate-coordinator';
+import { clearEnteringDebate, markEnteringDebate } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -30,7 +31,12 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   gatewayPaused: false,
   currentUserId: 'user-for' as string | null,
+  // What the token exchange answers with when the stored session hasn't been written yet.
+  resolvedUserId: null as string | null,
   refetch: vi.fn(),
+  abortMutateAsync: vi.fn(),
+  clearDebateActivity: vi.fn(),
+  rememberDebateReturnDestination: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -42,7 +48,11 @@ vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
-  return { ...actual, getCurrentGeoChatUserId: () => mocks.currentUserId };
+  return {
+    ...actual,
+    getCurrentGeoChatUserId: () => mocks.currentUserId,
+    resolveCurrentGeoChatUserId: () => Promise.resolve(mocks.resolvedUserId),
+  };
 });
 
 vi.mock('./hooks', () => ({
@@ -53,6 +63,8 @@ vi.mock('./hooks', () => ({
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallengeMutate, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
+  useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
+  useClearDebateActivity: () => mocks.clearDebateActivity,
 }));
 
 vi.mock('./debate-gateway', () => ({
@@ -72,6 +84,18 @@ vi.mock('./matchmaking/hooks', () => ({
   useClaimReadiness: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
+// useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
+// suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useBrowseSidebarQuerySource: () => ({
+    personalSpaceId: null,
+    walletAddress: undefined,
+    keyInput: null,
+    isLoading: false,
+  }),
+  useCachedBrowseSidebarData: () => null,
+}));
+
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
 }));
@@ -80,9 +104,11 @@ vi.mock('./claim-response-indexed-notifier', () => ({
   useClaimResponseIndexedNotifier: vi.fn(),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-  useDebatesEnabled: () => true,
+vi.mock('./debate-return-navigation', () => ({
+  rememberDebateReturnDestination: mocks.rememberDebateReturnDestination,
 }));
+
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -108,7 +134,12 @@ beforeEach(() => {
   mocks.authenticated = true;
   mocks.gatewayPaused = false;
   mocks.currentUserId = 'user-for';
+  mocks.resolvedUserId = null;
   mocks.refetch.mockReset();
+  mocks.abortMutateAsync.mockReset();
+  mocks.abortMutateAsync.mockResolvedValue(undefined);
+  mocks.clearDebateActivity.mockReset();
+  mocks.rememberDebateReturnDestination.mockReset();
   Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
   Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
   Object.defineProperty(URL, 'createObjectURL', {
@@ -131,6 +162,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   sessionStorage.clear();
+  clearEnteringDebate();
   vi.restoreAllMocks();
 });
 
@@ -146,12 +178,13 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByText('Live debate updates are paused while reconnecting.')).not.toBeInTheDocument();
   });
 
-  it('routes an available participant into a shared rematch browser', async () => {
+  it('does not route another tab into a shared debate-again browser', async () => {
     mocks.activity = activityWithRematch('browsing');
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(mocks.rememberDebateReturnDestination).not.toHaveBeenCalled();
   });
 
   it('leaves a secondary tab on its current page when shared activity contains a debate', async () => {
@@ -181,6 +214,109 @@ describe('DebateCoordinator', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
 
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
+  });
+
+  // Declining is the opposite of the request popup's "Not now" one line below: there is an opponent
+  // in the ready screen waiting on this answer, so it goes to the server instead of being snoozed.
+  it('cancels the debate when the viewer declines it', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+
+    render(<DebateCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Decline' }));
+
+    await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1'));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  // The reported flicker. `useAcceptDebateRequest` pushes into the room and invalidates activity in
+  // the same tick, but the room is a server segment with no loading boundary: the accepting tab
+  // keeps this pathname for seconds while the debate arrives in activity. Reading that as "not
+  // there yet" reopened the dialog they had just accepted from, with the buttons swapped, and then
+  // took it away again when the room landed.
+  it('does not prompt the accepting tab to join the debate it is walking into', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-1');
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+    // Nor the fallback in its place — that would be the same flicker wearing a smaller hat.
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  it('still tells the other tab about the same debate', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-2');
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
+  });
+
+  // Held only until the room lands: leaving it set would suppress the prompt for a debate the
+  // viewer has since walked back out of.
+  it('releases the entry intent once the room is on screen', async () => {
+    mocks.pathname = '/space/space-1/debates/debate-1';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-1');
+
+    const view = render(<DebateCoordinator />);
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+
+    mocks.pathname = '/space/space-1/claims';
+    view.rerender(<DebateCoordinator />);
+
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
+  });
+
+  // Decline cancels the debate on the server, which is the honest answer to one that has not
+  // started and a destructive one to anything past that: `in_progress` is a room the pair is
+  // recording in, `thanking` is a recording that is finished but not yet published. The prompt is
+  // app-wide and covers the page with no other way out, so a second tab would hand that button to
+  // someone mid-debate.
+  it('does not offer to cancel a debate that is already under way', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'in_progress', participants: bothParticipants() };
+
+    const view = render(<DebateCoordinator />);
+
+    // The rejoin bar instead: still a way in, with nothing on it that ends the debate.
+    expect(await screen.findByRole('button', { name: /Your debate is under way/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'thanking', participants: bothParticipants() };
+    view.rerender(<DebateCoordinator />);
+
+    expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+  });
+
+  // Impatient viewers leave. The intent has to end with whichever navigation commits first, or the
+  // debate they walked away from goes unmentioned — no prompt, no rejoin bar — for the rest of the
+  // 30s window.
+  it('releases the entry intent when the viewer navigates somewhere else instead', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithDebate();
+    mocks.activity.debate = { ...mocks.activity.debate!, status: 'ready', participants: bothParticipants() };
+    markEnteringDebate('debate-1');
+
+    const view = render(<DebateCoordinator />);
+    await waitFor(() => expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument());
+
+    mocks.pathname = '/space/space-1/people';
+    view.rerender(<DebateCoordinator />);
+
+    expect(await screen.findByText('Your debate is ready')).toBeInTheDocument();
   });
 
   it('does not offer a debate the viewer is already in', async () => {
@@ -244,12 +380,41 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByText(/Waiting for .* to accept/)).not.toBeInTheDocument();
   });
 
+  // The stored geo-chat session is what names the viewer, and it isn't always written yet. An
+  // absent id used to read as "not the recipient", which left the person the challenge was *for*
+  // with no popup at all — the bug this hook exists to close.
+  it('still prompts the recipient when the viewer id has to be resolved', async () => {
+    mocks.currentUserId = null;
+    mocks.resolvedUserId = 'user-recipient';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Debate request')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
+  it('keeps the sender uninterrupted once their id resolves', async () => {
+    mocks.currentUserId = null;
+    mocks.resolvedUserId = 'user-requester';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+  });
+
   // The sender learns it was accepted the same way every other flow does: activity gains a rematch
   // and the routing effect walks them into the claim picker. No popup is involved either way.
   it('routes the sender into the claim picker once the challenge is accepted', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';
-    mocks.activity = { ...activityWithRematch('browsing'), challenge: null };
+    const activity = activityWithRematch('browsing');
+    mocks.activity = {
+      ...activity,
+      rematch: { ...activity.rematch!, source_debate_id: null },
+      challenge: null,
+    };
 
     render(<DebateCoordinator />);
 
@@ -281,6 +446,75 @@ describe('DebateCoordinator', () => {
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  // GEO-2604. The window this closes: the rematch session has converted, so activity reports the
+  // new `ready` debate and no longer reports a rematch, but the page's own session query has not
+  // caught up and so has not navigated yet. That is exactly the shape the ready prompt exists for —
+  // a ready debate the viewer has not been told about — so it opened over a page that was already
+  // on its way into the room, then vanished when the navigation landed. Preston reported a popup
+  // that "required no interaction" and redirected him anyway.
+  it('does not prompt over the rematch page for a debate that page is about to open', async () => {
+    mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+    // Nor the fallback bar: it would flash in exactly the same window.
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  // Still prompted anywhere else, so suppressing it above cannot swallow a real one.
+  it('still prompts for a ready debate away from the rematch page', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
+  });
+
+  // The loop this stops: the room hides itself and returns whoever opens a debate whose recording
+  // was cancelled, so routing into it from here bounced the viewer back and forth — the screen
+  // flickered, and the opponent's "your debate was removed" dialog reappeared after Okay.
+  it('does not route into a deciding rematch whose debate had its recording cancelled', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithRematch('deciding'),
+      debate: {
+        ...activityWithDebate().debate!,
+        status: 'thanking',
+        participants: bothParticipants(),
+        recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+        recording_cancelled_by: 'user-against',
+      },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    // Nor may it be offered: there is nothing left to join.
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  it('leaves an unrelated tab alone while an intact debate-again session is deciding', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = activityWithRematch('deciding');
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
   it.each(['complete', 'cancelled'] as const)('does not reopen a %s debate from stale activity', async status => {

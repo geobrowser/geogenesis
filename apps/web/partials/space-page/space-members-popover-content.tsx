@@ -22,7 +22,6 @@ interface Props {
   isMember: boolean;
   isEditor: boolean;
   memberRequest: ActiveMemberRequest | null;
-  connectedAddress: string | null;
   initialParticipantsPage?: SpaceParticipantsPage;
 }
 
@@ -32,7 +31,6 @@ export function SpaceMembersContent({
   isMember,
   isEditor,
   memberRequest,
-  connectedAddress,
   initialParticipantsPage,
 }: Props) {
   const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
@@ -67,14 +65,10 @@ export function SpaceMembersContent({
           <>
             {isMember ? (
               <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-                {connectedAddress ? 'Leave space' : 'Sign in to join'}
+                Leave space
               </button>
-            ) : isEditor ? null : connectedAddress ? (
+            ) : isEditor ? null : (
               <SpaceMembersPopoverMemberRequestButton spaceId={spaceId} memberRequest={memberRequest} />
-            ) : (
-              <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-                Sign in to join
-              </button>
             )}
           </>
         )}

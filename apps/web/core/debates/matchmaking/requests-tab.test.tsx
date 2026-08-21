@@ -16,12 +16,14 @@ const mocks = vi.hoisted(() => ({
   block: vi.fn(),
   acceptChallenge: vi.fn(),
   rejectChallenge: vi.fn(),
+  currentUserId: 'user-me' as string | null,
 }));
 
 vi.mock('../hooks', () => ({
   useDebateActivity: () => ({ data: { challenge: mocks.challenge, outbound_request: null } }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallenge, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallenge, isPending: false, error: null }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -37,13 +39,26 @@ vi.mock('./hooks', () => ({
   useBlockDebateUser: () => ({ mutate: mocks.block, isPending: false, error: null }),
 }));
 
+// useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
+// suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useBrowseSidebarQuerySource: () => ({
+    personalSpaceId: null,
+    walletAddress: undefined,
+    keyInput: null,
+    isLoading: false,
+  }),
+  useCachedBrowseSidebarData: () => null,
+}));
+
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
 }));
 
 vi.mock('../api', async importOriginal => ({
   ...(await importOriginal<typeof import('../api')>()),
-  getCurrentGeoChatUserId: () => 'user-me',
+  getCurrentGeoChatUserId: () => mocks.currentUserId,
+  resolveCurrentGeoChatUserId: () => Promise.resolve(mocks.currentUserId),
 }));
 
 const SPACE_A = '019fedae-72b6-7ab2-927a-df044d57c566';
@@ -98,6 +113,7 @@ beforeEach(() => {
   mocks.incoming = [request('request-1', SPACE_A, 'Bitcoin will never go above $250K')];
   mocks.outbound = null;
   mocks.challenge = null;
+  mocks.currentUserId = 'user-me';
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
   mocks.withdraw.mockReset();
@@ -217,6 +233,26 @@ describe('RequestsTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
     expect(mocks.rejectChallenge).toHaveBeenCalledWith('challenge-1');
+  });
+
+  // Guessing the role from an absent id filed the challenge under Sent, which told the person it
+  // was sent *to* that they had sent it, and offered them "Cancel request" instead of accepting.
+  it('waits for the viewer id before deciding which side of a challenge they are on', async () => {
+    mocks.incoming = [];
+    mocks.currentUserId = null;
+    mocks.challenge = challenge('recipient');
+    render(<RequestsTab />);
+
+    expect(screen.queryByRole('heading', { name: 'Sent' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Waiting for a reply')).not.toBeInTheDocument();
+
+    // …and once it resolves, it lands under Received with the accept action.
+    mocks.currentUserId = 'user-me';
+    cleanup();
+    render(<RequestsTab />);
+
+    expect(await screen.findByRole('heading', { name: 'Received' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
   });
 
   it('shows both sides of a request and keeps blocking behind the overflow menu', () => {

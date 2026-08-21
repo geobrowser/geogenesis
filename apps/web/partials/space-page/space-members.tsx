@@ -52,7 +52,6 @@ export async function SpaceMembers({ spaceId }: Props) {
       isMember={isMember}
       isEditor={isEditor}
       memberRequest={memberRequest}
-      connectedAddress={connectedAddress ?? null}
       initialParticipantsPage={membersPage}
     />
   );

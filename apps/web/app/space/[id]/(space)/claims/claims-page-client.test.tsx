@@ -27,7 +27,6 @@ const mocks = vi.hoisted(() => ({
 
 let claims: Entity[] = [];
 let claimsLoading = false;
-let featureEnabled = true;
 let joinPending = false;
 let lastQueryEntitiesOptions: unknown = null;
 let debateClaimsResponse: { claims: unknown[] } = { claims: [] };
@@ -39,7 +38,6 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useDebatesEnabled: () => featureEnabled,
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -49,7 +47,15 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'account-1' }),
+  // Mirrors the real key factory: the readiness machine refetches these families before it
+  // retries a `claim_response_required`.
+  debateQueryKeys: {
+    matchmakingClaimsRoot: (accountKey: string | null) =>
+      ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+    matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+    rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
+  },
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => ({ data: debateClaimsResponse, error: null }),
   useJoinDebateQueue: () => ({
     mutateAsync: mocks.joinMutate,
@@ -117,7 +123,6 @@ vi.mock('~/design-system/select-entity-compact', () => ({
 beforeEach(() => {
   claims = [];
   claimsLoading = false;
-  featureEnabled = true;
   joinPending = false;
   lastQueryEntitiesOptions = null;
   debateClaimsResponse = { claims: [] };

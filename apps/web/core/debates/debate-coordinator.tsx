@@ -4,20 +4,20 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import { useDebatesEnabled } from '~/core/state/feature-flags';
-
 import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { activeDebate } from './activity-state';
-import { type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
+import { type DebateSharePrompt } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
+import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
+import { rememberDebateReturnDestination } from './debate-return-navigation';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -35,28 +35,28 @@ import {
   isAbortError,
   usePreparedSocialVideo,
 } from './social-video-share';
+import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 import { useScrollLock } from './use-scroll-lock';
 
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
-  const isDebatesEnabled = useDebatesEnabled();
   const geoChatAuth = useGeoChatAuth();
   // Presence, not attention: being available to debate has to survive looking at another window.
   const debatePresence = useDebatePresence();
   const gateway = useDebateGateway(
-    isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
     geoChatAuth.accountKey,
     debatePresence
   );
   useClaimResponseIndexedNotifier(
-    isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
     geoChatAuth.accountKey
   );
-  const activityQuery = useDebateActivity(isDebatesEnabled);
-  const currentUserId = getCurrentGeoChatUserId();
+  const activityQuery = useDebateActivity();
+  const currentUserId = useCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
   const debate = activeDebate(activity);
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
@@ -69,7 +69,23 @@ export function DebateCoordinator() {
   const acceptChallenge = useAcceptDebateChallenge();
   const rejectChallenge = useRejectDebateChallenge();
   const challengeError = acceptChallenge.error ?? rejectChallenge.error;
-  const viewingDebate = Boolean(debate && pathname.includes(`/debates/${debate.id}`));
+  // "Already in it" has to cover the walk there as well as the arrival. The room is a server
+  // segment with no `loading` boundary, so the tab that accepted keeps this page — and this
+  // pathname — for the seconds the route takes, while the activity it invalidated on the way out
+  // comes straight back reporting the debate.
+  const enteringDebateId = useEnteringDebateId();
+  const atDebate = Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
+  // The rematch page walks the viewer into its own converted debate, and accepting fires a single
+  // `debate.rematch_changed` that the gateway turns into *two* refetches — the account's activity
+  // and the rematch session — either of which can land first. When activity wins, this coordinator
+  // sees a `ready` debate, no rematch, and nobody at it, which is the exact shape it opens the
+  // ready prompt for, while the page has not yet learned to redirect. So it opened the dialog on
+  // top of a page that was already navigating, and it flashed up and vanished without being touched
+  // (GEO-2604).
+  //
+  // Nothing app-wide belongs over that page: it owns its own routing, and whatever it is about to
+  // do is more current than activity is.
+  const atRematchPage = pathname.includes('/debates/rematches/');
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
@@ -80,7 +96,7 @@ export function DebateCoordinator() {
   // Only fetch the request list once activity says one exists, so idle sessions stay quiet. "Not
   // now" snoozes a request for this session; it stays in the hub's Requests tab either way.
   const hasIncomingRequests = (activity?.incoming_request_count ?? 0) > 0;
-  const requestsQuery = useDebateRequests(isDebatesEnabled && hasIncomingRequests && !activeFlow);
+  const requestsQuery = useDebateRequests(hasIncomingRequests && !activeFlow);
   const [snoozedRequestIds, setSnoozedRequestIds] = React.useState<string[]>([]);
   // Expired requests are dropped here too, so the popup can never prompt for a dead request while
   // waiting on the server's `debate.requests_changed` event.
@@ -112,18 +128,50 @@ export function DebateCoordinator() {
   }, [challenge, snoozedChallengeId]);
 
   // How the person who *sent* the request learns it was accepted (GEO-2514): the debate exists
-  // already, and this is the only thing that tells them. The accepting tab is on the debate page by
-  // the time its activity catches up, so `viewingDebate` keeps the prompt off its screen.
-  const [snoozedDebateId, setSnoozedDebateId] = React.useState<string | null>(null);
+  // already, and this is the only thing that tells them. `atDebate` keeps it off the accepting
+  // tab's screen, which is walking into the room and does not need telling.
+  //
+  // There is no snooze here, unlike the request and challenge popups. Those leave something behind
+  // that the other side is not waiting on; this one is a debate with an opponent already in the
+  // room, so the only two honest answers are to join or to decline — and declining cancels it for
+  // both of them. Dismissing it locally stranded the opponent in the ready screen.
+  //
   // The dialog names both sides, so it needs both. Deciding that here rather than letting the
   // dialog render nothing keeps the rejoin bar as the fallback — otherwise a debate reported
   // without its participants would offer no way in at all.
+  //
+  // Only while it is still `ready`, for the same reason declining cancels: past that point there is
+  // nothing to decline. Aborting an `in_progress` debate ends a room the pair is recording in, and
+  // aborting a `thanking` one throws away a recording that is finished but not yet published. This
+  // coordinator is mounted app-wide, so a second tab opened on any other Geo page would put that
+  // button in front of someone mid-debate, in a dialog that covers the page and has no other way
+  // out. Everything past `ready` falls through to the rejoin bar, which offers the way in without
+  // offering a way to destroy it.
   const describable = (debate?.participants?.length ?? 0) >= 2;
-  const promptedDebate = debate && describable && !viewingDebate && debate.id !== snoozedDebateId ? debate : null;
+  const promptedDebate =
+    debate && debate.status === 'ready' && describable && !atDebate && !atRematchPage ? debate : null;
 
+  // Held until a navigation commits, then released. Arriving at the room is the expected end, and
+  // `atDebate` carries on from the pathname there. Going anywhere else abandons the walk — holding
+  // the intent past that would suppress the prompt and the rejoin bar both, which are the only two
+  // ways into an unfinished debate, for the rest of the window. The timeout in the store is the
+  // backstop for a push that commits nothing at all.
+  const entryPathnameRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (snoozedDebateId && debate?.id !== snoozedDebateId) setSnoozedDebateId(null);
-  }, [debate, snoozedDebateId]);
+    if (!enteringDebateId) {
+      entryPathnameRef.current = null;
+      return;
+    }
+    if (pathname.includes(`/debates/${enteringDebateId}`)) {
+      clearEnteringDebate(enteringDebateId);
+      return;
+    }
+    if (entryPathnameRef.current === null) {
+      entryPathnameRef.current = pathname;
+      return;
+    }
+    if (pathname !== entryPathnameRef.current) clearEnteringDebate(enteringDebateId);
+  }, [enteringDebateId, pathname]);
 
   React.useEffect(() => {
     if (!queriedSharePrompt || retainedSharePrompt || queriedSharePrompt.id === closedSharePromptId) return;
@@ -139,21 +187,20 @@ export function DebateCoordinator() {
     const rematch = activity.rematch;
     if (!rematch) return;
     const sourceDebatePath = rematch.source_debate_id ? `/debates/${rematch.source_debate_id}` : null;
-    if (rematch.status === 'deciding') {
-      if (sourceDebatePath && !pathname.includes(sourceDebatePath)) {
-        router.push(`/space/${rematch.source_space_id}${sourceDebatePath}`);
-      }
-      return;
-    }
+    // A debate-again session is shared across every tab, but only the tab already in the source
+    // room owns its recording and transition into the rematch browser. Routing from this app-wide
+    // coordinator sent every other open tab into that room, where ownership correctly rejected it.
+    // The room handles deciding, recording finalization, browsing, and conversion itself.
+    if (sourceDebatePath) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
-      // The debate room owns recording finalization before entering the browser.
-      if (sourceDebatePath && pathname.includes(sourceDebatePath)) return;
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
-      if (pathname !== path) router.push(path);
+      if (pathname !== path) {
+        rememberDebateReturnDestination();
+        router.push(path);
+      }
     }
   }, [activity, pathname, router]);
 
-  if (!isDebatesEnabled) return null;
   const visibleSharePrompt =
     retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);
 
@@ -169,14 +216,11 @@ export function DebateCoordinator() {
         </div>
       )}
       {promptedDebate && currentUserId && !activity?.rematch && (
-        <DebateReadyPrompt
-          key={promptedDebate.id}
-          debate={promptedDebate}
-          currentUserId={currentUserId}
-          onNotNow={() => setSnoozedDebateId(promptedDebate.id)}
-        />
+        <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
-      {debate && !viewingDebate && !promptedDebate && !activity?.rematch && <DebateRejoinBar debate={debate} />}
+      {debate && !atDebate && !atRematchPage && !promptedDebate && !activity?.rematch && (
+        <DebateRejoinBar debate={debate} />
+      )}
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the
           hub's Requests tab, and the rematch routing effect above walks them into the claim picker
           the moment it is accepted. */}

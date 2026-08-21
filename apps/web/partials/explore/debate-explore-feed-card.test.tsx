@@ -10,7 +10,6 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 
 const mocks = vi.hoisted(() => ({
-  debatesEnabled: true,
   debateQuery: { data: undefined as Debate | undefined, isError: false },
   mediaQuery: { data: undefined as { artifacts: { kind: string }[] } | undefined, isError: false },
 }));
@@ -23,9 +22,7 @@ type ObserverRecord = {
 
 let observers: ObserverRecord[] = [];
 
-vi.mock('~/core/state/feature-flags', () => ({
-  useDebatesEnabled: () => mocks.debatesEnabled,
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebate: () => mocks.debateQuery,
@@ -89,6 +86,8 @@ const item: ExploreFeedItem = {
   description: null,
   imageUrl: null,
   commentCount: 3,
+  recordingUrls: [],
+  debateVideoUrls: [],
   isMemberOrEditor: true,
   hasPendingMembershipRequest: false,
 };
@@ -105,7 +104,6 @@ function watchableDebate(): Debate {
 beforeEach(() => {
   vi.clearAllMocks();
   observers = [];
-  mocks.debatesEnabled = true;
   mocks.debateQuery = { data: undefined, isError: false };
   mocks.mediaQuery = { data: undefined, isError: false };
 
@@ -164,13 +162,6 @@ function renderCard() {
 }
 
 describe('DebateExploreFeedCard', () => {
-  it('renders the fallback when the debates feature is off', () => {
-    mocks.debatesEnabled = false;
-    renderCard();
-    expect(screen.getByTestId('fallback')).toBeDefined();
-    expect(screen.queryByTestId('player')).toBeNull();
-  });
-
   it('shows the card chrome with video placeholders while the debate loads', () => {
     renderCard();
     expect(screen.getByText('Fast fashion should be discouraged with higher taxation')).toBeDefined();
@@ -180,7 +171,7 @@ describe('DebateExploreFeedCard', () => {
   });
 
   it('renders the fallback when the debate is not watchable', () => {
-    mocks.debateQuery = { data: { ...watchableDebate(), status: 'aborted' } as Debate, isError: false };
+    mocks.debateQuery = { data: { ...watchableDebate(), status: 'cancelled' } as Debate, isError: false };
     renderCard();
     expect(screen.getByTestId('fallback')).toBeDefined();
   });
