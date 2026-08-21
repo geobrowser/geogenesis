@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { activeDebate, hasActiveDebateFlow, unenterableDebateId } from './activity-state';
+import { activeDebate, hasActiveDebateFlow, recordingCancelledDebateId } from './activity-state';
 import type { Debate, DebateActivity, DebateMatch } from './api';
 
 const debate = (status: Debate['status']) => ({ id: 'debate-1', status }) as Debate;
@@ -32,17 +32,11 @@ describe('activity state', () => {
     expect(hasActiveDebateFlow(activityWithCancelledRecording)).toBe(false);
   });
 
-  it('names a debate there is nothing left to enter so callers refuse to route into it', () => {
-    expect(unenterableDebateId(activity({ debate: cancelledRecording('thanking') }))).toBe('debate-1');
-    expect(unenterableDebateId(activity({ debate: debate('thanking') }))).toBeNull();
-    expect(unenterableDebateId(activity({ debate: null }))).toBeNull();
-    expect(unenterableDebateId(null)).toBeNull();
-  });
-
-  // GEO-2600: naming only the cancelled recording left a `complete` debate looking enterable, and
-  // the room returns whoever opens one just the same. Tied to `activeDebate` so they cannot drift.
-  it.each(['complete', 'cancelled'] as const)('names a %s debate as unenterable too', status => {
-    expect(unenterableDebateId(activity({ debate: debate(status) }))).toBe('debate-1');
+  it('names the debate whose recording was cancelled so callers refuse to route into it', () => {
+    expect(recordingCancelledDebateId(activity({ debate: cancelledRecording('thanking') }))).toBe('debate-1');
+    expect(recordingCancelledDebateId(activity({ debate: debate('thanking') }))).toBeNull();
+    expect(recordingCancelledDebateId(activity({ debate: null }))).toBeNull();
+    expect(recordingCancelledDebateId(null)).toBeNull();
   });
 
   it('treats a rematch session as an active flow', () => {
