@@ -8,6 +8,7 @@ import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-bl
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
 import { EntityId } from '~/core/io/substream-schema';
+import { SpaceVerifyButton } from '~/core/space/space-verify-button';
 import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
@@ -78,7 +79,10 @@ export default async function Layout(props0: LayoutProps) {
                 spaceId={spaceId}
                 entityId={props.id}
                 actionsComponent={
-                  typeIds.includes(SystemIds.PERSON_TYPE) ? <ProfileDebateButton spaceId={spaceId} /> : null
+                  <>
+                    <SpaceVerifyButton spaceId={spaceId} />
+                    {typeIds.includes(SystemIds.PERSON_TYPE) ? <ProfileDebateButton spaceId={spaceId} /> : null}
+                  </>
                 }
               />
               <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />
