@@ -103,7 +103,7 @@ export function BountyForm({ spaceId }: Props) {
   const [submitting, setSubmitting] = React.useState(false);
 
   const isEasy = difficulty === 'easy';
-  const backHref = NavUtils.toSpaceBounties(spaceId);
+  const backHref = NavUtils.toCommunity(spaceId);
 
   const onSubmit = async () => {
     const validation = validateBountyForm({

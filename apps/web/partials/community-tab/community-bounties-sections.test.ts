@@ -10,7 +10,7 @@ const skillIds = new Map([
 ]);
 
 describe('viewAllHref', () => {
-  it('deep-links into the space bounty board with the section statuses and the Featured scope', () => {
+  it('deep-links into the global bounties page, filtered to the space, with the section statuses and Featured scope', () => {
     expect(
       viewAllHref(
         spaceId,
@@ -19,7 +19,7 @@ describe('viewAllHref', () => {
         skills,
         skillIds
       )
-    ).toBe('/space/space-1/bounties?scope=featured&status=todo');
+    ).toBe('/bounties?space=space-1&scope=featured&status=todo');
     expect(
       viewAllHref(
         spaceId,
@@ -28,7 +28,7 @@ describe('viewAllHref', () => {
         skills,
         skillIds
       )
-    ).toBe('/space/space-1/bounties?status=done');
+    ).toBe('/bounties?space=space-1&status=done');
     expect(
       viewAllHref(
         spaceId,
@@ -37,7 +37,7 @@ describe('viewAllHref', () => {
         skills,
         skillIds
       )
-    ).toBe('/space/space-1/bounties?status=in-progress');
+    ).toBe('/bounties?space=space-1&status=in-progress');
   });
 
   it('carries the selected difficulties and skills (by id); a selection covering everything carries nothing', () => {
@@ -49,7 +49,7 @@ describe('viewAllHref', () => {
         skills,
         skillIds
       )
-    ).toBe('/space/space-1/bounties?status=todo&difficulty=hard&skill=skill-writing');
+    ).toBe('/bounties?space=space-1&status=todo&difficulty=hard&skill=skill-writing');
     expect(
       viewAllHref(
         spaceId,
@@ -58,7 +58,7 @@ describe('viewAllHref', () => {
         skills,
         skillIds
       )
-    ).toBe('/space/space-1/bounties?status=todo&difficulty=easy%2Chard');
+    ).toBe('/bounties?space=space-1&status=todo&difficulty=easy%2Chard');
     expect(
       viewAllHref(
         spaceId,
@@ -67,6 +67,6 @@ describe('viewAllHref', () => {
         skills,
         skillIds
       )
-    ).toBe('/space/space-1/bounties?status=todo');
+    ).toBe('/bounties?space=space-1&status=todo');
   });
 });

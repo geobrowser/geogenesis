@@ -204,20 +204,36 @@ describe('BountyBoard', () => {
     expect(screen.getByRole('menuitemcheckbox', { name: /Medium/ })).toBeDisabled();
   });
 
-  it('pins the space on the space tab: queries only that space and never writes a space param', () => {
-    mocks.pathname = '/space/space-b/bounties';
+  it('space filter is multi-select and writes a comma list; sort and group sit in the view-options cluster', () => {
     mocks.search = 'space=space-a';
     mocks.query.data = {
-      bounties: [bounty({ id: 'x', spaceId: 'space-b', difficultyId: EASY_DIFFICULTY_ID, difficulty: 'Easy' })],
-      spaces: [spaces[1]],
+      bounties: [bounty({ id: 'a' }), bounty({ id: 'b', spaceId: 'space-b', spaceLabel: 'Space B' })],
+      spaces,
     };
-    render(<BountyBoard spaceId="space-b" />);
-    expect(mocks.lastSpaceIds).toEqual(['space-b']);
-    // The space filter menu is hidden when scoped to one space.
-    expect(screen.queryByRole('button', { name: /All spaces/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Any difficulty/ }));
-    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Easy/ }));
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-b/bounties?difficulty=easy', { scroll: false });
+    render(<BountyBoard />);
+    // Only the space-a bounty passes the filter.
+    expect(screen.getByText('a')).toBeInTheDocument();
+    expect(screen.queryByText('b')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Space A/ }));
+    const spaceB = screen.getByRole('menuitemcheckbox', { name: /Space B/ });
+    expect(spaceB).toHaveAttribute('aria-checked', 'false');
+    fireEvent.click(spaceB);
+    expect(mocks.replace).toHaveBeenCalledWith('/bounties?space=space-a%2Cspace-b', { scroll: false });
+
+    // Sorting and grouping are visually separated from the filters.
+    const viewOptions = screen.getByTestId('bounty-view-options');
+    expect(within(viewOptions).getByRole('button', { name: /Recently updated/ })).toBeInTheDocument();
+    expect(within(viewOptions).getByRole('button', { name: /No grouping/ })).toBeInTheDocument();
+    expect(within(screen.getByTestId('bounty-filters')).queryByRole('button', { name: /Recently updated/ })).toBeNull();
+  });
+
+  it('Featured is a checkbox: toggling on writes the scope param, the All row clears it', () => {
+    mocks.query.data = { bounties: [bounty({ id: 'a', isFeatured: true }), bounty({ id: 'b' })], spaces };
+    render(<BountyBoard />);
+    fireEvent.click(screen.getByRole('button', { name: /^All$/ }));
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Featured/ }));
+    expect(mocks.replace).toHaveBeenCalledWith('/bounties?scope=featured', { scroll: false });
   });
 
   it('shows the empty-state copy that matches whether anything loaded at all', () => {

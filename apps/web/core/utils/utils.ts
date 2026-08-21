@@ -25,7 +25,6 @@ export const NavUtils = {
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),
   toBounties: () => '/bounties',
-  toSpaceBounties: (spaceId: string) => `/space/${spaceId}/bounties`,
   toNewBounty: (spaceId: string) => `/space/${spaceId}/bounties/new`,
   // A bounty is a regular entity; its detail page is the entity page.
   toBounty: (spaceId: string, bountyId: string) => `/space/${spaceId}/${bountyId}`,

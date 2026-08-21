@@ -4,7 +4,6 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { useBountiesEnabled } from '~/core/bounties/config';
 import { useEditable } from '~/core/state/editable-store';
 import { useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
 import { useRelations, useValues } from '~/core/sync/use-store';
@@ -36,12 +35,6 @@ type BuildSpaceTabsParams = {
   dynamicTabs: Array<{ label: string; href: string }>;
   typeIds: string[];
   isDebugDebatesPageEnabled: boolean;
-  /**
-   * Show the Bounties tab (the space bounty board). Lives right after
-   * Community: the Community tab's "View all" links land on the board, and
-   * an active Bounties tab is what tells the user where they went.
-   */
-  isBountiesTabEnabled?: boolean;
 };
 
 export function buildSpaceTabs({
@@ -50,7 +43,6 @@ export function buildSpaceTabs({
   dynamicTabs,
   typeIds,
   isDebugDebatesPageEnabled,
-  isBountiesTabEnabled = false,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
@@ -61,13 +53,6 @@ export function buildSpaceTabs({
       priority: 1,
     },
   ];
-
-  const BOUNTIES_TAB: BuiltSpaceTab = {
-    label: 'Bounties',
-    href: `/space/${spaceId}/bounties`,
-    // Sorted with the dynamic tabs; the caller splices it in after Community.
-    priority: 1,
-  };
 
   const DEBUG_DEBATES_TAB: BuiltSpaceTab = {
     label: 'Debug debates',
@@ -90,14 +75,10 @@ export function buildSpaceTabs({
   };
 
   tabs.push(...ALL_SPACES_TABS);
-  if (isBountiesTabEnabled) tabs.push(BOUNTIES_TAB);
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (dynamicTabs.length > 0) {
-      const reservedLabels = new Set([
-        ...(isBountiesTabEnabled ? [BOUNTIES_TAB.label] : []),
-        ...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : []),
-      ]);
+      const reservedLabels = new Set([...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : [])]);
       const visibleDynamicTabs =
         reservedLabels.size > 0 ? dynamicTabs.filter(tab => !reservedLabels.has(tab.label)) : dynamicTabs;
 
@@ -127,7 +108,6 @@ export function buildSpaceTabs({
 export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities, typeIds }: SpaceTabsProps) {
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
-  const bountiesEnabled = useBountiesEnabled();
 
   // Merge local tab relation changes with server data
   const mergedTabRelations = useRelations({
@@ -165,14 +145,10 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
   // Our Community tab renders for non-person spaces, always as the 2nd tab (after
   // Overview) — and in addition to any custom "Community" tab the space authored.
   const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE);
-  // Bounties sit next to Community: the Community tab's bounty sections deep-link here.
-  const showBounties = showCommunity && bountiesEnabled;
-
   // System tabs bracket the custom (dynamic) tabs: Overview + our Community lead,
   // Governance + Activity trail.
   const systemTabsBefore: Array<{ label: string; href: string }> = [{ label: 'Overview', href: overviewHref }];
   if (showCommunity) systemTabsBefore.push({ label: 'Community', href: `/space/${spaceId}/community` });
-  if (showBounties) systemTabsBefore.push({ label: 'Bounties', href: `/space/${spaceId}/bounties` });
 
   const systemTabsAfter: Array<{ label: string; href: string }> = [];
 
@@ -216,18 +192,14 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
     dynamicTabs,
     typeIds,
     isDebugDebatesPageEnabled,
-    isBountiesTabEnabled: showBounties,
   });
 
-  // Overview, then our Community tab, then Bounties (when on), then everything else.
-  const bountiesTab = baseTabs.find(tab => tab.label === 'Bounties' && tab.href === `/space/${spaceId}/bounties`);
-  const rest = baseTabs.slice(1).filter(tab => tab !== bountiesTab);
+  // Overview, then our Community tab, then everything else.
   const tabs = showCommunity
     ? [
         baseTabs[0],
         { label: 'Community', href: `/space/${spaceId}/community`, priority: 1 as const },
-        ...(bountiesTab ? [bountiesTab] : []),
-        ...rest,
+        ...baseTabs.slice(1),
       ]
     : baseTabs;
 

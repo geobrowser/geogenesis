@@ -22,7 +22,7 @@ export type BountyGroupBy = 'none' | 'difficulty' | 'space';
 
 export type BountyFilters = {
   /** Space id, or null for all participating spaces. */
-  spaceId: string | null;
+  spaceIds: readonly string[];
   /** Only bounties tagged Featured (the community tab's "Featured" scope). */
   featuredOnly: boolean;
   /** Statuses shown. Default = the open statuses; an empty set is normalized back to the default. */
@@ -37,7 +37,7 @@ export type BountyFilters = {
 };
 
 export const DEFAULT_BOUNTY_FILTERS: BountyFilters = {
-  spaceId: null,
+  spaceIds: [],
   featuredOnly: false,
   statuses: OPEN_WORKFLOW_STATUS_KEYS,
   difficulties: [],
@@ -79,7 +79,7 @@ export function parseBountyFilters(params: RawParams): BountyFilters {
   }
 
   return {
-    spaceId: space && space !== 'all' ? space : null,
+    spaceIds: space && space !== 'all' ? [...new Set(space.split(',').filter(Boolean))] : [],
     featuredOnly: scope === 'featured',
     statuses,
     difficulties: difficultyRaw ? [...new Set(difficultyRaw.split(',').filter(isDifficultyKey))] : [],
@@ -102,7 +102,7 @@ function sameStatusSet(a: readonly WorkflowStatusKey[], b: readonly WorkflowStat
 
 export function serializeBountyFilters(filters: BountyFilters): URLSearchParams {
   const params = new URLSearchParams();
-  if (filters.spaceId) params.set('space', filters.spaceId);
+  if (filters.spaceIds.length > 0) params.set('space', filters.spaceIds.join(','));
   if (filters.featuredOnly) params.set('scope', 'featured');
   if (!sameStatusSet(filters.statuses, DEFAULT_BOUNTY_FILTERS.statuses)) {
     params.set('status', sameStatusSet(filters.statuses, ALL_STATUS_KEYS) ? 'all' : filters.statuses.join(','));
@@ -127,7 +127,7 @@ export function applyBountyFilters(bounties: readonly BoardBounty[], filters: Bo
   const needle = filters.query.trim().toLowerCase();
 
   return bounties.filter(bounty => {
-    if (filters.spaceId && bounty.spaceId !== filters.spaceId) return false;
+    if (filters.spaceIds.length > 0 && !filters.spaceIds.includes(bounty.spaceId)) return false;
     if (filters.featuredOnly && !bounty.isFeatured) return false;
     if (!statusSet.has(statusKeyForId(bounty.statusId))) return false;
     if (filters.difficulties.length > 0) {
@@ -310,7 +310,7 @@ export function bountyFacetCounts(
       return countFacetOptions(
         bounties,
         (universe.spaces ?? []).map(space => ({ key: space.id, label: space.label })),
-        bounty => applyBountyFilters([bounty], { ...filters, spaceId: null }).length > 0,
+        bounty => applyBountyFilters([bounty], { ...filters, spaceIds: [] }).length > 0,
         (bounty, key) => bounty.spaceId === key
       );
   }

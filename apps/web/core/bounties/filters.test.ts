@@ -48,7 +48,7 @@ describe('parseBountyFilters / serializeBountyFilters', () => {
 
   it('round-trips every field', () => {
     const filters = {
-      spaceId: 'space-b',
+      spaceIds: ['space-b', 'space-c'],
       featuredOnly: true,
       statuses: ['done', 'cancelled'] as const,
       difficulties: ['hard'] as const,
@@ -76,7 +76,7 @@ describe('parseBountyFilters / serializeBountyFilters', () => {
       sort: 'nope',
       groupBy: 'nope',
     });
-    expect(parsed.spaceId).toBeNull();
+    expect(parsed.spaceIds).toEqual([]);
     expect(parsed.statuses).toEqual(['done']);
     expect(parsed.difficulties).toEqual([]);
     expect(parsed.sort).toBe(DEFAULT_BOUNTY_FILTERS.sort);
@@ -104,9 +104,13 @@ describe('applyBountyFilters', () => {
 
   it('filters by space, difficulty, skill, and text query', () => {
     const all = { ...DEFAULT_BOUNTY_FILTERS, statuses: ['backlog', 'in-progress', 'done'] as const };
-    expect(applyBountyFilters([open, backlog, done], { ...all, spaceId: 'space-b' }).map(b => b.id)).toEqual([
+    expect(applyBountyFilters([open, backlog, done], { ...all, spaceIds: ['space-b'] }).map(b => b.id)).toEqual([
       'backlog',
     ]);
+    // Multi-select space is an OR within the facet.
+    expect(
+      applyBountyFilters([open, backlog, done], { ...all, spaceIds: ['space-a', 'space-b'] }).map(b => b.id)
+    ).toEqual(['open', 'backlog', 'done']);
     expect(applyBountyFilters([open, backlog, done], { ...all, difficulties: ['easy'] }).map(b => b.id)).toEqual([
       'open',
     ]);

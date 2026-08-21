@@ -24,8 +24,6 @@ import { BountyBoardSkeleton } from './bounty-board-skeleton';
 import { BountyFilterBar } from './bounty-filter-bar';
 
 type Props = {
-  /** Restrict to one space (the space tab). Omit for the global board across participating spaces. */
-  spaceId?: string;
   /** Rendered above the filter bar (title, actions). */
   header?: React.ReactNode;
 };
@@ -37,26 +35,20 @@ export function collectSkills(bounties: readonly BoardBounty[]): { id: string; n
   return [...byId.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function BountyBoard({ spaceId, header }: Props) {
+export function BountyBoard({ header }: Props) {
   const router = useRouter();
   const pathname = usePathname() ?? '/bounties';
   const searchParams = useSearchParams();
 
-  const filters = React.useMemo(() => {
-    const parsed = parseBountyFilters(searchParams ?? new URLSearchParams());
-    // The space tab pins its space: a stray ?space= param must neither filter nor persist.
-    return spaceId ? { ...parsed, spaceId: null } : parsed;
-  }, [searchParams, spaceId]);
-  const spaceIds = React.useMemo(() => (spaceId ? [spaceId] : CURRENT_BOUNTY_SPACE_IDS), [spaceId]);
+  const filters = React.useMemo(() => parseBountyFilters(searchParams ?? new URLSearchParams()), [searchParams]);
+  const spaceIds = CURRENT_BOUNTY_SPACE_IDS;
   const { data, isLoading, isError, refetch } = useBoardBounties(spaceIds);
 
   const setFilters = React.useCallback(
     (next: BountyFilters) => {
-      // The space tab pins its space; never leak a space param into its URL.
-      const scoped = spaceId ? { ...next, spaceId: null } : next;
-      router.replace(buildBountiesHref(pathname, scoped), { scroll: false });
+      router.replace(buildBountiesHref(pathname, next), { scroll: false });
     },
-    [pathname, router, spaceId]
+    [pathname, router]
   );
 
   const bounties = React.useMemo(() => data?.bounties ?? [], [data?.bounties]);
@@ -90,7 +82,7 @@ export function BountyBoard({ spaceId, header }: Props) {
         filters={filters}
         onChange={setFilters}
         bounties={bounties}
-        spaces={spaceId ? undefined : data?.spaces}
+        spaces={data?.spaces}
         skills={skills}
       />
 
