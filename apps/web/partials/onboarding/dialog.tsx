@@ -296,7 +296,7 @@ const ModalCard = ({ childKey, children, effectiveStep }: ModalCardProps) => {
       animate={{ opacity: 1, bottom: 0 }}
       exit={{ opacity: 0, bottom: -5 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className={`pointer-events-auto relative z-100 mt-40 flex ${effectiveStep === 'completed' ? 'h-[245px]' : 'h-[485px]'} w-full max-w-[360px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white p-6 pt-8 shadow-dropdown`}
+      className={`pointer-events-auto relative z-100 mt-40 flex ${effectiveStep === 'completed' ? 'h-[245px] px-6 py-10' : 'h-[485px] p-6 pt-8'} w-full max-w-[360px] flex-col overflow-hidden rounded-md border border-grey-02 bg-white shadow-dropdown`}
     >
       {children}
     </motion.div>
@@ -788,17 +788,21 @@ function StepComplete() {
 
   return (
     <StepContents childKey="completed">
-      <div className="flex w-full flex-col items-center pt-3">
+      <div className="flex w-full flex-col items-center">
         <img
           className="mb-5 h-[50px] w-[50px] rounded-full"
           src={src ?? '/images/onboarding/no-avatar.png'}
           onError={onError}
           alt=""
         />
-        <Text as="h3" variant="bodySemibold" className="mx-auto text-center text-2xl!">
+        <Text
+          as="h3"
+          variant="bodySemibold"
+          className="mx-auto text-center text-[24px]! leading-[29px]! font-semibold! tracking-[-0.75px]"
+        >
           Creating your space...
         </Text>
-        <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
+        <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-[16px]! leading-[20px]! font-normal!">
           Your space is your area to curate and rank
           <br />
           collections, write posts, complete your
