@@ -14,13 +14,17 @@ import { useSmartAccount } from './use-smart-account';
  */
 const UNREGISTERED_POLL_INTERVAL_MS = 3_000;
 
+export function personalSpaceIdQueryKey(address: string | null | undefined) {
+  return ['personal-space-id', address] as const;
+}
+
 /** Hook to get the user's personal space ID from the GraphQL API. */
 export function usePersonalSpaceId() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
 
   const { data, isLoading, isFetched } = useQuery({
-    queryKey: ['personal-space-id', address],
+    queryKey: personalSpaceIdQueryKey(address),
     queryFn: async () => {
       if (!address) return null;
 

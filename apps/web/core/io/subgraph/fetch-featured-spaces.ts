@@ -147,6 +147,66 @@ async function runQuery<T>(query: string): Promise<T | null> {
 }
 
 /**
+ * How long a resolved Featured list is reused. The set is curated — an editor tags a
+ * topic Featured in the Root space — so it changes on human timescales, while the
+ * traversal that discovers it is the most expensive thing on the Explore path.
+ *
+ * The cost is a real measurement, not a guess: against production the traversal is five
+ * *sequential* round trips that visit 2,941 topic nodes and transfer 274 KB to discover
+ * four featured spaces, and `/api/explore/feed` — which runs it on every request — takes
+ * 4.2-4.5 s end to end while the ranked feed query it exists to serve is ~300 ms of that.
+ */
+const FEATURED_SPACES_TTL_MS = 5 * 60 * 1000;
+
+let shared: Promise<FeaturedSpace[]> | null = null;
+// `null` means "still in flight". Kept distinct from a timestamp of 0 on purpose: while the
+// traversal is unresolved there is nothing to expire, and treating it as infinitely stale
+// sends every concurrent caller off to start a traversal of its own — which is the exact
+// pile-up this function exists to stop.
+let resolvedAt: number | null = null;
+
+/** Exported for tests; no caller should need to reach for this. */
+export function clearFeaturedSpacesCache(): void {
+  shared = null;
+  resolvedAt = null;
+}
+
+/**
+ * {@link fetchFeaturedSpaces} with the traversal shared rather than repeated.
+ *
+ * Two distinct wins, and the second is the one that showed up in production. Within the
+ * TTL a resolved list is reused outright; *before* it resolves, concurrent callers join
+ * the one in-flight traversal instead of each starting their own. `/api/explore/feed`
+ * runs per request with no way to share a promise the way `app/explore/page.tsx` does
+ * with the sidebar, so every simultaneous Explore load was walking the whole topic tree
+ * on its own.
+ *
+ * A rejection is never cached, so a transient GraphQL failure costs one traversal rather
+ * than five minutes of empty Featured panels. That includes the cancellation
+ * `resolveFeaturedSpaces` deliberately re-throws: an aborted caller must not leave an
+ * aborted promise behind for everyone else. Nothing here is per-request, so no signal is
+ * threaded through and one caller going away cannot cancel the traversal for the rest.
+ */
+export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
+  if (shared && (resolvedAt === null || Date.now() - resolvedAt < FEATURED_SPACES_TTL_MS)) return shared;
+
+  const started = fetchFeaturedSpaces();
+  shared = started;
+  resolvedAt = null;
+  // Only start the clock once the answer exists. Timing from the *call* would let a slow
+  // traversal burn its own TTL and expire the moment it landed.
+  started.then(
+    () => {
+      if (shared === started) resolvedAt = Date.now();
+    },
+    () => {
+      if (shared === started) clearFeaturedSpacesCache();
+    }
+  );
+  return started;
+}
+
+/**
  * Builds the explore panel's "Join spaces" list by walking the Root space's
  * subtopic tree top-down and emitting one entry per topic tagged Featured in
  * the Root space that has a claiming space. The Root topic itself is used only

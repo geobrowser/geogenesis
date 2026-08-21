@@ -30,6 +30,7 @@ import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
+import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
@@ -65,11 +66,25 @@ export function DebatesBrowseFeed({
     hasError: mediaError,
   } = useProcessedVideoDebateIds(candidateIds, candidateIds.length > 0);
 
+  // The same ranking the explore page's "Best" sort uses, so what plays after the debate you
+  // opened is what that sort would have put in front of you.
+  const { rankByDebateId, isLoading: bestOrderLoading } = useDebatesBestOrder(spaceId, candidateIds.length > 0);
+
   const debates = React.useMemo(() => {
+    // Held back the way the media lookups hold it back — by having nothing to show yet rather than
+    // by a flag, since the flag below only drives the empty and anchor states. Painting in recency
+    // order first would move the next debate out from under someone already scrolling. A ranking
+    // that fails rather than loads leaves this empty, so the feed falls through to recency.
+    if (bestOrderLoading) return [];
+
     const processed = new Set(processedIds);
+    // Recency is the tiebreak, not the rule: the ranking covers published, named debates, so
+    // anything it hasn't scored still plays — after the ranked ones, newest first, exactly as the
+    // whole feed used to be ordered.
+    const rankOf = (debate: Debate) => rankByDebateId.get(ID.uuidToHex(debate.id)) ?? Number.MAX_SAFE_INTEGER;
     const sorted = candidates
       .filter(debate => processed.has(debate.id))
-      .sort((a, b) => completedTime(b) - completedTime(a));
+      .sort((a, b) => rankOf(a) - rankOf(b) || completedTime(b) - completedTime(a));
     if (!initialDebateId) return sorted;
     // Navigating to a Debate entity lands you on that debate: hoist it to the top so it's the
     // first full-screen video, then let the rest of the space's debates scroll in below it.
@@ -77,7 +92,7 @@ export function DebatesBrowseFeed({
     if (anchorIndex <= 0) return sorted;
     const [anchor] = sorted.splice(anchorIndex, 1);
     return [anchor, ...sorted];
-  }, [candidates, processedIds, initialDebateId]);
+  }, [candidates, processedIds, initialDebateId, rankByDebateId, bestOrderLoading]);
 
   // Topics live on the claim entity (not the debates API), so resolve them once
   // for the space and map claim entity id -> topic names.
@@ -116,7 +131,9 @@ export function DebatesBrowseFeed({
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
-  const isLoading = debatesQuery.isLoading || mediaLoading;
+  // Waiting on the ranking too, so the feed doesn't paint in recency order and then resequence
+  // itself underneath someone who has already started scrolling.
+  const isLoading = debatesQuery.isLoading || mediaLoading || bestOrderLoading;
 
   const anchorPresent = React.useMemo(
     () => initialDebateId == null || debates.some(debate => ID.equals(debate.id, initialDebateId)),

@@ -1,9 +1,14 @@
 'use client';
 
+import * as React from 'react';
+
 import { useIsMembershipPending } from '~/core/hooks/use-pending-memberships';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useRequestToBeMember } from '~/core/hooks/use-request-to-be-member';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { useDeferredJoin } from '~/core/state/pending-join-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Pending } from '~/design-system/pending';
@@ -19,9 +24,12 @@ export function SpaceMembersPopoverMemberRequestButton({
   spaceId,
   memberRequest,
 }: SpaceMembersPopoverMemberRequestButtonProps) {
-  const { requestToBeMember, status } = useRequestToBeMember({ spaceId });
+  const { requestToBeMember, requestToBeMemberAsync, status } = useRequestToBeMember({ spaceId });
   const { smartAccount } = useSmartAccount();
+  const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { open: openSignInPrompt } = useSignInPrompt();
+  const enqueuePendingAction = useEnqueuePendingAction();
+  const [optimisticRequested, setOptimisticRequested] = React.useState(false);
   // Durable + optimistic pending state so a request made anywhere (and surviving
   // refresh) reflects here without waiting on this page's SSR memberRequest.
   const isPending = useIsMembershipPending(spaceId);
@@ -30,9 +38,36 @@ export function SpaceMembersPopoverMemberRequestButton({
   // off the list, so this one can no longer execute and the vote can't be revived.
   const isStuck = Boolean(memberRequest?.isVotingEnded);
 
+  const queueJoinRequest = React.useCallback(() => {
+    setOptimisticRequested(true);
+    enqueuePendingAction({
+      id: `join:${spaceId}`,
+      label: 'your membership request',
+      requires: 'personalSpace',
+      run: () => requestToBeMemberAsync(),
+    });
+  }, [enqueuePendingAction, spaceId, requestToBeMemberAsync]);
+
+  const deferJoin = useDeferredJoin(spaceId, Boolean(smartAccount), queueJoinRequest);
+
+  const canRequestLive = Boolean(smartAccount && isRegistered && personalSpaceId);
+
+  const handleJoin = () => {
+    if (canRequestLive) {
+      requestToBeMember();
+      return;
+    }
+    if (!smartAccount) {
+      deferJoin();
+      openSignInPrompt('join');
+      return;
+    }
+    queueJoinRequest();
+  };
+
   // Open vote, or just submitted (before the indexer catches up) — show the live
   // vote so we never flip back to "Request again". A stuck request never counts.
-  if (status === 'success' || (!isStuck && (memberRequest != null || isPending))) {
+  if (status === 'success' || optimisticRequested || (!isStuck && (memberRequest != null || isPending))) {
     return (
       <span className="text-smallButton text-grey-04">
         <UnderVote />
@@ -45,13 +80,7 @@ export function SpaceMembersPopoverMemberRequestButton({
       <button
         className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text"
         disabled={status !== 'idle'}
-        onClick={() => {
-          if (!smartAccount) {
-            openSignInPrompt('join');
-            return;
-          }
-          requestToBeMember();
-        }}
+        onClick={handleJoin}
         title={isStuck ? "Your previous request can't be completed and needs to be sent again." : undefined}
       >
         <RequestButtonText status={status} isStuck={isStuck} />

@@ -5,6 +5,7 @@ import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
 import * as React from 'react';
 
 import cx from 'classnames';
+import type { RoomConnectOptions, RoomOptions } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
@@ -17,6 +18,7 @@ import {
   getServerTime,
 } from '~/core/debates/api';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
+import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import {
   CameraIcon,
   LeaveIcon,
@@ -29,6 +31,7 @@ import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
   createDebateRoomOwnershipCoordinator,
+  debateRoomTabPriority,
 } from '~/core/debates/debate-room-ownership';
 import {
   useAbortDebate,
@@ -61,11 +64,11 @@ import {
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
+import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -76,6 +79,38 @@ type DebateRoomPageClientProps = {
 type DebateNoiseFilterStatus = 'initializing' | 'enabled' | 'disabled' | 'unsupported' | 'failed';
 
 type DebateRoomConnectionConflictSource = 'web_lock_blocked' | 'ownership_released' | 'livekit_duplicate_identity';
+type LocalTrackPreferences = { audioEnabled: boolean; videoEnabled: boolean };
+type DebateRoomConnectionStage =
+  | 'livekit_token'
+  | 'sdk_import'
+  | 'audio_output'
+  | 'livekit_connect'
+  | 'mark_joined'
+  | 'local_tracks'
+  | 'publish_tracks'
+  | 'noise_filter'
+  | 'local_preview';
+
+/**
+ * Stages that only run once `markJoined` has succeeded. Failing here means the server counts this
+ * participant as present — it will start the debate and stop timing the pair out — while this tab
+ * holds no media, so the connecting-deadline rematch can no longer rescue us. Recovery has to come
+ * from this client re-running `connect`.
+ */
+const debateRoomStagesAfterJoin: ReadonlySet<DebateRoomConnectionStage> = new Set([
+  // `mark_joined` itself is in the set: a client-side timeout can land after the server recorded
+  // the join, and a spurious retry costs one request while a missing one strands the participant.
+  'mark_joined',
+  'local_tracks',
+  'publish_tracks',
+  'noise_filter',
+  'local_preview',
+]);
+
+/** One silent re-attempt after a post-join failure; beyond that a repeating camera error would spin. */
+const maxAutomaticPostJoinRecoveries = 1;
+/** A device that just reported itself busy usually still is a moment later; give it a beat. */
+const postJoinRecoveryDelayMs = 750;
 
 const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
   initializing: 'Loading…',
@@ -92,7 +127,7 @@ type RemoteTrackLike = {
 };
 
 type RoomLike = {
-  connect: (url: string, token: string) => Promise<void>;
+  connect: (url: string, token: string, options?: RoomConnectOptions) => Promise<void>;
   disconnect: () => void;
   localParticipant: {
     publishTrack: (track: unknown) => Promise<unknown>;
@@ -196,6 +231,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     'idle'
   );
   const [roomError, setRoomError] = React.useState<string | null>(null);
+  const [postJoinConnectionFailure, setPostJoinConnectionFailure] = React.useState(false);
   const [connectionConflictSource, setConnectionConflictSource] =
     React.useState<DebateRoomConnectionConflictSource | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
@@ -219,6 +255,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
   const roomRef = React.useRef<RoomLike | null>(null);
   const connectingRoomRef = React.useRef<RoomLike | null>(null);
+  // Marks the start of an in-flight LiveKit reconnect episode so telemetry can report how long
+  // recovery took (Reconnected) or how long we retried before giving up (Disconnected). Episodes
+  // ended by our own teardown (leave, takeover, unmount) close no analytics event, so
+  // debate_room_reconnecting counts can exceed the sum of the two closing events.
+  const reconnectingStartedAtRef = React.useRef<number | null>(null);
+  // One auto-takeover per focus episode: spent when an attempt fires, re-armed only when the tab
+  // genuinely loses attention (or the conflict resolves). Generation numbers can't dedupe here —
+  // connect() bumps the generation as its first statement, so any recorded value is stale
+  // immediately. The in-flight flag additionally keeps overlapping attempts from superseding each
+  // other's connection generation mid-handshake.
+  const autoTakeoverSpentRef = React.useRef(false);
+  const autoTakeoverInFlightRef = React.useRef(false);
   const ownershipRef = React.useRef<DebateRoomOwnershipCoordinator | null>(null);
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
@@ -228,6 +276,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingStartTimerRef = React.useRef<number | null>(null);
   const recordingStopTimerRef = React.useRef<number | null>(null);
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
+  const postJoinRecoveryAttemptsRef = React.useRef(0);
+  const postJoinRecoveryTimerRef = React.useRef<number | null>(null);
+  const connectRef = React.useRef<(options?: { takeover?: boolean }) => Promise<void>>(() => Promise.resolve());
   const connectionFailureHandledRef = React.useRef(false);
   const reportedConflictGenerationRef = React.useRef<number | null>(null);
   const reportedRecoveryGenerationRef = React.useRef<number | null>(null);
@@ -323,10 +374,34 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localSlot,
     audioMuted || pendingTurnYield !== null
   );
+  // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
+  // turn. Reading preferences through a ref keeps that write consistent with the reconciliation
+  // effect below, which can otherwise run first against a still-empty `localTracksRef` and be
+  // silently overwritten with a stale value. The slot is passed in because `connect` learns it from
+  // the join token before `joinResponse` state has necessarily re-rendered.
+  const localTrackPreferencesRef = React.useRef<(slot: ParticipantSlot | null) => LocalTrackPreferences>(() => ({
+    audioEnabled: false,
+    videoEnabled: true,
+  }));
+  localTrackPreferencesRef.current = slot => ({
+    audioEnabled: shouldEnableLocalAudio(
+      debate ? countdown.effectiveStatus : null,
+      countdown.activeSlot,
+      slot,
+      audioMuted || pendingTurnYield !== null
+    ),
+    videoEnabled,
+  });
   const connectionConflict = connectionConflictSource !== null;
   const canTakeOverConnection =
     connectionConflict && (countdown.effectiveStatus === 'connecting' || countdown.effectiveStatus === 'preflight');
   const connectionConflictWithoutTakeover = connectionConflict && !canTakeOverConnection;
+  // A post-join media failure keeps the retry reachable after the debate leaves `connecting` —
+  // that is the one case where nothing on the server side will recover the participant for us.
+  const canRetryConnection =
+    Boolean(debate) &&
+    !['complete', 'cancelled', 'thanking'].includes(debate?.status ?? '') &&
+    (debate?.status === 'connecting' || postJoinConnectionFailure);
   const shouldExitTerminalDebate = Boolean(
     debate &&
     recordingCancelledBy === null &&
@@ -359,6 +434,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (debateExitStartedRef.current) return;
       debateExitStartedRef.current = true;
       clearDebateActivity(debateId);
+      const returnDestination = consumeDebateReturnDestination();
+      if (returnDestination) {
+        router.replace(returnDestination);
+        return;
+      }
       // Going back restores whatever opened the room, which is where an ordinary exit belongs.
       // A debate that ended under us is different: the entry behind us is often this same room
       // (hub → room → rematch → room), and stepping back into it re-runs the exit from a fresh
@@ -374,6 +454,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   /** The exit for a debate whose recording was cancelled — it can never be re-entered. */
   const leaveCancelledDebate = React.useCallback(() => returnFromDebate({ forwardOnly: true }), [returnFromDebate]);
+
+  const leaveConflictingRoom = React.useCallback(() => {
+    const returnDestination = consumeDebateReturnDestination();
+    if (returnDestination) {
+      router.replace(returnDestination);
+      return;
+    }
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.replace(`/space/${spaceId}/debates`);
+  }, [router, spaceId]);
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
@@ -441,13 +534,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const coordinator = createDebateRoomOwnershipCoordinator({
       debateId,
       userId: currentUserId,
-      onTakeoverRequested: () => {
+      onTakeoverRequested: ({ requesterPriority, ownerPriority }) => {
         const status = debateStatusRef.current;
         const preflightStillPending =
           status === 'preflight' &&
           recordingStartedAtRef.current === null &&
           (preflightEndsAtMsRef.current === null || serverNowRef.current() < preflightEndsAtMsRef.current);
-        const canReleaseOwnership = status === 'connecting' || preflightStillPending;
+        // A focused tab may pull the connection from an unfocused one while nothing has been
+        // recorded yet. Once recording starts the owner keeps the room: releasing would tear down
+        // an in-flight MediaRecorder, which cannot finish persisting inside the takeover budget.
+        // The status gate also protects live debates whose recording never managed to start
+        // (recordingStartedAtRef stays null when MediaRecorder is unavailable).
+        const focusHandoff =
+          requesterPriority === 2 &&
+          ownerPriority < 2 &&
+          recordingStartedAtRef.current === null &&
+          (status === 'connecting' || status === 'preflight');
+        const canReleaseOwnership = status === 'connecting' || preflightStillPending || focusHandoff;
         if (!canReleaseOwnership) return false;
 
         const generation = connectionGenerationRef.current + 1;
@@ -746,6 +849,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     async (options: { takeover?: boolean } = {}) => {
       const generation = connectionGenerationRef.current + 1;
       connectionGenerationRef.current = generation;
+      const connectionStartedAt = performance.now();
+      let connectionStage: DebateRoomConnectionStage = 'livekit_token';
       const isCurrent = () => mountedRef.current && connectionGenerationRef.current === generation;
       let connectingRoom: RoomLike | null = null;
       let newlyCreatedTracks: LocalTrackLike[] = [];
@@ -778,9 +883,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
       setConnectionConflictSource(null);
       setRoomError(null);
+      setPostJoinConnectionFailure(false);
       setRoomState('connecting');
       setServerClockSettled(false);
       setRemoteVideoReady(false);
+      reconnectingStartedAtRef.current = null;
       if (remoteParticipantRefetchTimerRef.current !== null) {
         window.clearTimeout(remoteParticipantRefetchTimerRef.current);
         remoteParticipantRefetchTimerRef.current = null;
@@ -800,8 +907,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         if (!isCurrent()) return;
         setJoinResponse(token);
 
+        connectionStage = 'sdk_import';
         const livekit = await import('livekit-client');
         if (!isCurrent()) return;
+        connectionStage = 'audio_output';
         await audioOutputSelectionPromiseRef.current;
         if (!isCurrent()) return;
         // A debate is a live, recorded 1:1 call, so both cameras must stream the whole time.
@@ -857,17 +966,45 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           remoteMediaRef.current?.replaceChildren();
           setRemoteVideoReady(false);
           setRoomState('reconnecting');
+          // A reconnect episode fires Reconnecting once per underlying attempt; report only the
+          // first so elapsed_ms on the closing event spans the whole episode.
+          if (reconnectingStartedAtRef.current === null) {
+            reconnectingStartedAtRef.current = performance.now();
+            captureDebateRoomResilienceEvent('debate_room_reconnecting', {
+              debateId,
+              debateStatus: debateStatusRef.current,
+              roomState: roomStateRef.current,
+            });
+          }
         });
         room.on(livekit.RoomEvent.Reconnected, () => {
           if (!isCurrent() || roomRef.current !== room) return;
           setRoomState('connected');
+          if (reconnectingStartedAtRef.current !== null) {
+            captureDebateRoomResilienceEvent('debate_room_reconnected', {
+              debateId,
+              debateStatus: debateStatusRef.current,
+              roomState: roomStateRef.current,
+              elapsedMs: performance.now() - reconnectingStartedAtRef.current,
+            });
+            reconnectingStartedAtRef.current = null;
+          }
         });
-        // A non-client-initiated Disconnected means auto-reconnect gave up. Our own teardown always
-        // disconnects with CLIENT_INITIATED, so this branch only fires on a genuinely dropped call:
-        // tear the room down and return to idle, where the "Retry connection" affordance lives.
+        // A Disconnected that passes these guards is never our own teardown: every in-app teardown
+        // bumps the connection generation or nulls roomRef synchronously, and the SDK emits
+        // Disconnected only after awaiting its internal disconnect lock (at least a microtask
+        // later). That covers CLIENT_INITIATED too — the SDK registers its `freeze` listener
+        // unconditionally (disconnectOnPageLeave only gates pagehide/beforeunload), so Chromium
+        // freezing a backgrounded tab disconnects the room "client initiated". Treat everything
+        // that lands here as a genuinely dropped call: tear the room down and return to idle,
+        // where the "Retry connection" affordance lives.
         room.on(livekit.RoomEvent.Disconnected, payload => {
           if (!isCurrent() || roomRef.current !== room) return;
-          if (payload === livekit.DisconnectReason.CLIENT_INITIATED) return;
+          const reconnectElapsedMs =
+            reconnectingStartedAtRef.current !== null
+              ? performance.now() - reconnectingStartedAtRef.current
+              : undefined;
+          reconnectingStartedAtRef.current = null;
           const conflictGeneration = connectionGenerationRef.current + 1;
           connectionGenerationRef.current = conflictGeneration;
           // The room is already gone, so null the ref before cleanup: disconnectRoom would otherwise
@@ -898,10 +1035,28 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
               'livekit_duplicate_identity',
               ownershipRef.current?.coordinationMode ?? 'livekit-fallback'
             );
+          } else {
+            // Duplicate identity is already reported as a connection conflict above; everything
+            // else is a genuine drop worth measuring, including how long we retried first.
+            captureDebateRoomResilienceEvent('debate_room_disconnected', {
+              debateId,
+              debateStatus: debateStatusRef.current,
+              roomState: roomStateRef.current,
+              disconnectReason: disconnectReasonName(livekit.DisconnectReason, payload),
+              elapsedMs: reconnectElapsedMs,
+            });
           }
         });
 
-        await room.connect(token.url, token.token);
+        connectionStage = 'livekit_connect';
+        // The SDK's initial-join defaults (1 retry, 15s websocket/peer-connection timeouts) are
+        // marginal on slow mobile links; reconnection after a successful join is governed by the
+        // reconnectPolicy in debateRoomOptions, not by these.
+        await room.connect(token.url, token.token, {
+          maxRetries: 3,
+          websocketTimeout: 20_000,
+          peerConnectionTimeout: 25_000,
+        });
         if (!isCurrent()) {
           room.disconnect();
           if (connectingRoomRef.current === room) connectingRoomRef.current = null;
@@ -909,7 +1064,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
         connectingRoomRef.current = null;
         roomRef.current = room;
+
+        // The server's connecting deadline measures whether both participants reached LiveKit, not
+        // whether camera setup and publication have finished. Report the successful room connection
+        // immediately: a cold getUserMedia call can otherwise consume the entire deadline after the
+        // participant is already present in the room.
+        connectionStage = 'mark_joined';
+        await markJoined.mutateAsync();
+        if (!isCurrent()) {
+          room.disconnect();
+          stopLocalTracks(localTracksRef);
+          localMediaStreamRef.current = null;
+          if (roomRef.current === room) roomRef.current = null;
+          return;
+        }
+
         const hasPreviewTracks = localTracksRef.current.length > 0;
+        connectionStage = 'local_tracks';
         const tracks = hasPreviewTracks
           ? localTracksRef.current
           : ((await livekit.createLocalTracks({
@@ -926,31 +1097,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         localTracksRef.current = tracks;
         setLocalTrackPreferences(
           tracks,
-          {
-            audioEnabled: shouldEnableLocalAudio(
-              countdown.effectiveStatus,
-              countdown.activeSlot,
-              token.participant_slot,
-              audioMuted
-            ),
-            videoEnabled,
-          },
+          localTrackPreferencesRef.current(token.participant_slot),
           sourceMediaStreamTracksRef.current
         );
 
-        // Mark joined now that we're in the room and hold local media, before publishing. publishTrack
-        // awaits WebRTC media negotiation (ICE/TURN), which between two peers behind NAT can take
-        // several seconds; that's long enough to miss the server's connecting deadline and get the
-        // debate cancelled with connection_timeout even though both participants are present.
-        await markJoined.mutateAsync();
-        if (!isCurrent()) {
-          room.disconnect();
-          stopLocalTracks(localTracksRef);
-          localMediaStreamRef.current = null;
-          if (roomRef.current === room) roomRef.current = null;
-          return;
-        }
-
+        connectionStage = 'publish_tracks';
         for (const track of tracks) {
           await publishTrackWithRetry(room, track, isCurrent);
           if (!isCurrent()) {
@@ -965,6 +1116,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // LiveKit supplies the audio context required by audio processors while publishing the
         // microphone. Attach Krisp afterwards, then read mediaStreamTrack so this stream contains
         // the same processed track used by the outbound publication.
+        connectionStage = 'noise_filter';
         await initializeNoiseFilter(tracks, isCurrent);
         if (!isCurrent()) {
           room.disconnect();
@@ -973,6 +1125,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           if (roomRef.current === room) roomRef.current = null;
           return;
         }
+        connectionStage = 'local_preview';
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
         setPreviewStream(stream);
         if (localVideoRef.current) {
@@ -989,6 +1142,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           return;
         }
         setConnectionConflictSource(null);
+        setPostJoinConnectionFailure(false);
+        postJoinRecoveryAttemptsRef.current = 0;
         setRoomState('connected');
       } catch (error) {
         if (connectingRoom && connectingRoomRef.current === connectingRoom) connectingRoomRef.current = null;
@@ -999,19 +1154,49 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         if (isCurrent()) {
+          captureDebateRoomConnectionFailure({
+            debateId,
+            stage: connectionStage,
+            elapsedMs: performance.now() - connectionStartedAt,
+            error,
+          });
           ownershipRef.current?.release();
           setConnectionConflictSource(null);
           setRoomError(error instanceof Error ? error.message : 'Could not join the debate room.');
-          setRoomState(debate?.status === 'connecting' ? 'connecting' : 'idle');
+          // The server already counts us as joined past this point, so it will never cancel the
+          // pair with `connection_timeout` and rematch them. Keep a retry reachable even once the
+          // debate has advanced out of `connecting`, and spend one silent re-attempt first.
+          const failedAfterJoin = debateRoomStagesAfterJoin.has(connectionStage);
+          if (failedAfterJoin) {
+            setPostJoinConnectionFailure(true);
+            if (postJoinRecoveryAttemptsRef.current < maxAutomaticPostJoinRecoveries) {
+              postJoinRecoveryAttemptsRef.current += 1;
+              // Re-run `connect` directly rather than through the auto-connect effect: that effect
+              // only fires from `roomState === 'idle'`, and while the debate is still `connecting`
+              // the state below stays 'connecting'. Clearing `autoConnectAttemptedRef` instead
+              // would also turn every later disconnect into an automatic reconnect.
+              if (postJoinRecoveryTimerRef.current !== null) window.clearTimeout(postJoinRecoveryTimerRef.current);
+              postJoinRecoveryTimerRef.current = window.setTimeout(() => {
+                postJoinRecoveryTimerRef.current = null;
+                // A manual retry or teardown in the meantime moved the generation on; it owns the room now.
+                if (!isCurrent()) return;
+                const status = debateStatusRef.current;
+                if (status === 'complete' || status === 'cancelled' || status === 'thanking') return;
+                void connectRef.current();
+              }, postJoinRecoveryDelayMs);
+            }
+          }
+          // Read the live status: `debate` is captured from the render that built this callback, and
+          // a slow media path is exactly when the debate advances underneath it. Trusting the stale
+          // value leaves `roomState` on 'connecting' while the modal hides its retry button.
+          setRoomState(debateStatusRef.current === 'connecting' ? 'connecting' : 'idle');
         }
       }
     },
+    // Countdown state, mute state and the debate status are read through refs above, so `connect`
+    // no longer changes identity on every countdown tick.
     [
-      audioMuted,
-      countdown.activeSlot,
-      countdown.effectiveStatus,
       debateId,
-      debate?.status,
       initializeNoiseFilter,
       liveKitJoin,
       markJoined,
@@ -1019,9 +1204,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       reportLocalReleaseRecovery,
       refetchDebate,
       setPreviewStream,
-      videoEnabled,
     ]
   );
+
+  connectRef.current = connect;
 
   const retryConnection = React.useCallback(() => {
     void connect();
@@ -1030,6 +1216,55 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const takeOverConnection = React.useCallback(() => {
     void connect({ takeover: true });
   }, [connect]);
+
+  // A blocked tab the user focuses reclaims the debate by itself instead of dead-ending on
+  // "already open in another tab" until they find the Continue button. Limited to same-browser
+  // conflict sources: reclaiming across devices (livekit_duplicate_identity) would evict a call
+  // the user may be actively holding on their phone, so that stays behind the explicit click.
+  React.useEffect(() => {
+    if (
+      roomState !== 'idle' ||
+      (connectionConflictSource !== 'web_lock_blocked' && connectionConflictSource !== 'ownership_released')
+    ) {
+      // The conflict resolved or changed shape; the next episode gets a fresh attempt.
+      autoTakeoverSpentRef.current = false;
+      return;
+    }
+    const attemptTakeover = () => {
+      if (autoTakeoverSpentRef.current || autoTakeoverInFlightRef.current) return;
+      // Mirror the "Continue here" button's status gate: past preflight the owner refuses anyway
+      // — or worse, hands over a live debate whose recording never managed to start.
+      const status = debateStatusRef.current;
+      if (status !== 'connecting' && status !== 'preflight') return;
+      autoTakeoverSpentRef.current = true;
+      autoTakeoverInFlightRef.current = true;
+      void connectRef.current({ takeover: true }).finally(() => {
+        autoTakeoverInFlightRef.current = false;
+      });
+    };
+    const handleAttentionChange = () => {
+      if (debateRoomTabPriority() !== 2) {
+        // Leaving focus re-arms the next attempt; browsers that fire redundant focus or
+        // visibilitychange events while the tab stays focused therefore cannot double-connect.
+        autoTakeoverSpentRef.current = false;
+        return;
+      }
+      attemptTakeover();
+    };
+    window.addEventListener('focus', handleAttentionChange);
+    // A window losing focus to another application fires blur without any visibilitychange.
+    window.addEventListener('blur', handleAttentionChange);
+    document.addEventListener('visibilitychange', handleAttentionChange);
+    // The conflict can land while this tab is already focused (it lost the connect race to a
+    // background tab that navigated earlier); reclaim immediately rather than waiting for a
+    // focus transition that will never come.
+    if (debateRoomTabPriority() === 2) attemptTakeover();
+    return () => {
+      window.removeEventListener('focus', handleAttentionChange);
+      window.removeEventListener('blur', handleAttentionChange);
+      document.removeEventListener('visibilitychange', handleAttentionChange);
+    };
+  }, [connectionConflictSource, roomState]);
 
   const toggleAudioMuted = React.useCallback(() => {
     setAudioMuted(current => !current);
@@ -1257,7 +1492,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const redirectAfterConnectionFailure = React.useCallback(() => {
     if (connectionFailureRedirectTimerRef.current !== null) return;
     connectionFailureRedirectTimerRef.current = window.setTimeout(() => {
-      router.replace(`/space/${spaceId}/questions`);
+      router.replace(consumeDebateReturnDestination() ?? `/space/${spaceId}/questions`);
     }, connectionFailureRedirectDelayMs);
   }, [router, spaceId]);
 
@@ -1315,6 +1550,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         window.clearTimeout(remoteParticipantRefetchTimerRef.current);
         remoteParticipantRefetchTimerRef.current = null;
       }
+      if (postJoinRecoveryTimerRef.current !== null) {
+        window.clearTimeout(postJoinRecoveryTimerRef.current);
+        postJoinRecoveryTimerRef.current = null;
+      }
       clearRecordingTimers();
       void discardLocalRecorder();
       disconnectConnectingRoom(connectingRoomRef);
@@ -1342,6 +1581,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!debate || debate.status !== 'ready' || roomState !== 'idle') return;
+    // Warm the route's largest client-only dependency before the ten/finite-second connecting
+    // window starts. The import is cached by the module loader; media preview remains independent.
+    void import('livekit-client').catch(() => undefined);
     void ensureLocalPreview().catch(() => undefined);
   }, [debate, ensureLocalPreview, roomState]);
 
@@ -1476,14 +1718,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           <Text as="p" variant="metadata" color="grey-04" className="mt-3">
             Close this tab and continue your debate in the original tab.
           </Text>
-          <Link
-            href={`/space/${spaceId}/debates`}
+          <button
+            type="button"
+            onClick={leaveConflictingRoom}
             className="mt-6 text-ctaPrimary transition-colors hover:text-ctaHover focus-visible:text-ctaHover"
           >
             <Text as="span" variant="textLinkSemibold" color="current">
-              Go to debates
+              Go back
             </Text>
-          </Link>
+          </button>
         </div>
       </div>
     );
@@ -1628,6 +1871,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 endTurnPending={pendingTurnYield !== null}
                 onEndTurn={endLocalTurn}
                 onRetryFinalization={retryLiveDebateFinalization}
+                canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
                 onLeave={leave}
                 leaveDisabled={abortDebate.isPending || roomState === 'saving'}
@@ -1665,6 +1909,7 @@ function DebateRecordingModal({
   endTurnPending,
   onEndTurn,
   onRetryFinalization,
+  canRetryConnection,
   onRetryConnection,
   onLeave,
   leaveDisabled,
@@ -1694,6 +1939,7 @@ function DebateRecordingModal({
   endTurnPending: boolean;
   onEndTurn: () => void;
   onRetryFinalization: () => void;
+  canRetryConnection: boolean;
   onRetryConnection: () => void;
   onLeave: () => void;
   leaveDisabled: boolean;
@@ -1921,7 +2167,7 @@ function DebateRecordingModal({
                 Retry save
               </Button>
             )}
-            {debate.status === 'connecting' && (
+            {canRetryConnection && (
               <Button type="button" variant="tertiary" onClick={onRetryConnection} disabled={roomState === 'saving'}>
                 Retry connection
               </Button>
@@ -2390,7 +2636,7 @@ function DebateAgainCard({
 
 function setLocalTrackPreferences(
   tracks: LocalTrackLike[],
-  preferences: { audioEnabled: boolean; videoEnabled: boolean },
+  preferences: LocalTrackPreferences,
   sourceMediaStreamTracks?: WeakMap<LocalTrackLike, MediaStreamTrack>
 ) {
   for (const track of tracks) {
@@ -2459,10 +2705,35 @@ function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex
   return firstParticipantSlot === 1 ? 2 : 1;
 }
 
-function debateRoomOptions(audioOutputSupported: boolean, selectedAudioOutputId: string) {
+function debateRoomOptions(audioOutputSupported: boolean, selectedAudioOutputId: string): RoomOptions {
   return {
     adaptiveStream: false,
     dynacast: false,
+    // The SDK's default policy gives up after ~45 seconds of retries, which drops debaters whose
+    // network blip (wifi handoff, brief cellular gap) would have recovered. Community calls
+    // already retry for 3 minutes; debates deserve at least the same patience.
+    reconnectPolicy: new ExtendedReconnectPolicy(),
+    // The SDK default also disconnects on pagehide/beforeunload, which mobile browsers fire when
+    // the phone locks or the tab is backgrounded. We tear the room down explicitly on unmount and
+    // leave instead. Note this option does NOT gate the SDK's `freeze` listener — a frozen
+    // Chromium tab still disconnects with CLIENT_INITIATED, which the Disconnected handler treats
+    // as a genuine drop.
+    disconnectOnPageLeave: false,
+    publishDefaults: {
+      simulcast: true,
+      // Cap the primary layer at h540's budget. Capture stays at the 720p default so the local
+      // recording keeps its resolution; only the published encode is capped, roughly halving the
+      // ~2.3 Mbps uplink the SDK defaults ask of a 1:1 call rendered in a small tile.
+      videoEncoding: { maxBitrate: 800_000, maxFramerate: 25 },
+      // A talking head reads far better as soft video than as a slideshow: under congestion shed
+      // resolution before framerate. The SDK otherwise computes 'balanced' for sub-1080p cameras.
+      degradationPreference: 'maintain-framerate',
+      videoCodec: 'vp8',
+      // Redundant audio and DTX are already the mono defaults; pin them — they are the audio
+      // armor slow connections rely on, and must not regress silently on an SDK upgrade.
+      red: true,
+      dtx: true,
+    },
     ...(audioOutputSupported ? { audioOutput: { deviceId: selectedAudioOutputId } } : {}),
   };
 }
@@ -2516,6 +2787,71 @@ function captureDebateRoomConnectionEvent(
     });
   } catch {
     // Analytics is best-effort and must never affect room ownership or connection recovery.
+  }
+}
+
+function captureDebateRoomResilienceEvent(
+  eventName: 'debate_room_reconnecting' | 'debate_room_reconnected' | 'debate_room_disconnected',
+  details: {
+    debateId: string;
+    debateStatus: Debate['status'] | null;
+    roomState: string;
+    elapsedMs?: number;
+    disconnectReason?: string;
+  }
+) {
+  try {
+    capture(eventName, {
+      debate_id: details.debateId,
+      debate_status: details.debateStatus ?? 'unknown',
+      room_state: details.roomState,
+      online: typeof navigator === 'undefined' ? null : navigator.onLine,
+      visibility_state: typeof document === 'undefined' ? 'unknown' : document.visibilityState,
+      has_focus: typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus(),
+      ...(details.elapsedMs !== undefined ? { elapsed_ms: Math.max(0, Math.round(details.elapsedMs)) } : {}),
+      ...(details.disconnectReason ? { disconnect_reason: details.disconnectReason } : {}),
+    });
+  } catch {
+    // Analytics is best-effort and must never affect reconnection or room teardown.
+  }
+}
+
+// LiveKit's DisconnectReason is a numeric protobuf enum; resolve the payload back to its name so
+// analytics reads "SERVER_SHUTDOWN" instead of "3". Numeric-enum objects carry reverse mappings
+// (numeric keys), which are skipped. Unknown values fall back to their stringified form.
+function disconnectReasonName(disconnectReasons: Record<string, unknown>, payload: unknown) {
+  if (payload === undefined || payload === null) return 'unknown';
+  for (const [name, value] of Object.entries(disconnectReasons)) {
+    if (value === payload && Number.isNaN(Number(name))) return name;
+  }
+  return String(payload);
+}
+
+function captureDebateRoomConnectionFailure({
+  debateId,
+  stage,
+  elapsedMs,
+  error,
+}: {
+  debateId: string;
+  stage: DebateRoomConnectionStage;
+  elapsedMs: number;
+  error: unknown;
+}) {
+  try {
+    capture('debate_room_connection_failed', {
+      debate_id: debateId,
+      stage,
+      elapsed_ms: Math.max(0, Math.round(elapsedMs)),
+      error_name: error instanceof Error ? error.name : 'UnknownError',
+      error_message: error instanceof Error ? error.message : String(error),
+      online: typeof navigator === 'undefined' ? null : navigator.onLine,
+      visibility_state: typeof document === 'undefined' ? 'unknown' : document.visibilityState,
+      has_focus: typeof document !== 'undefined' && typeof document.hasFocus === 'function' && document.hasFocus(),
+      navigation_type: currentNavigationType(),
+    });
+  } catch {
+    // Diagnostics are best-effort and must never interfere with room cleanup or retry.
   }
 }
 

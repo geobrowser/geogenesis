@@ -1,16 +1,25 @@
 'use client';
 
-import type { QueryClient, QueryKey } from '@tanstack/react-query';
+import { CancelledError, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { isParticipantPositionsQueryKey } from '~/core/debates/participant-positions';
+import { isRematchClaimsQueryKey } from '~/core/debates/rematch-claims-query-key';
 import { queryClient } from '~/core/query-client';
 import {
   claimResponseTargetKey,
   isClaimResponseSummaryQueryKey,
 } from '~/core/responses/claim-response-summary-query-keys';
 
-import { type GeoChatSession, type GetPrivyIdentityToken, getGeoChatApiBaseUrl, getGeoChatSession } from './api';
+import {
+  GeoChatRequestError,
+  type GeoChatSession,
+  type GetPrivyIdentityToken,
+  getGeoChatApiBaseUrl,
+  getGeoChatSession,
+  resetGeoChatSession,
+} from './api';
 
 export type DebateGatewaySession = GeoChatSession;
 
@@ -84,6 +93,9 @@ const MAX_RECENT_EVENT_IDS = 256;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const INVALIDATION_COALESCE_MS = 50;
+const INVALIDATION_RETRY_BASE_MS = 250;
+/** Re-flushes after the first attempt fails transiently, so up to four attempts in all. */
+const MAX_INVALIDATION_RETRIES = 3;
 const BROAD_INVALIDATION_KEY = 'debates:all';
 
 export class DebateGatewayClient {
@@ -120,6 +132,7 @@ export class DebateGatewayClient {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
   private tokenRotationTimer: ReturnType<typeof setTimeout> | null = null;
   private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
+  private invalidationRetryTimers = new Set<ReturnType<typeof setTimeout>>();
   private connectionGeneration = 0;
 
   constructor(options: DebateGatewayClientOptions) {
@@ -413,7 +426,11 @@ export class DebateGatewayClient {
     this.queueInvalidation(BROAD_INVALIDATION_KEY, {
       predicate: query => {
         const root = query.queryKey[0];
-        return root === 'debates' || isClaimResponseSummaryQueryKey(query.queryKey);
+        return (
+          root === 'debates' ||
+          isClaimResponseSummaryQueryKey(query.queryKey) ||
+          isParticipantPositionsQueryKey(query.queryKey)
+        );
       },
       refetchType: 'active',
     });
@@ -469,10 +486,24 @@ export class DebateGatewayClient {
         // The rematch picker lists claims from many spaces and draws both participants' sides, so
         // it has to refresh whenever *anyone's* response lands — its own subscription only covers
         // the viewer's. Without this the opponent's choices appeared only after rejoining.
-        const [, accountSegment, , rematchSegment, , claimsSegment] = query.queryKey;
+        //
+        // Scoped to the batches that hold a changed claim, though. The picker keeps a batch per
+        // hundred ids across every space on screen; refreshing all of them for one response
+        // cancelled every in-flight batch on each event and, with round trips slower than the
+        // event rate, none of them ever landed. The id-less query is the session's own list —
+        // any response can add a row to it — so that one always refreshes.
+        const [, accountSegment, , rematchSegment, , claimsSegment, rematchClaimIds] = query.queryKey;
         if (accountSegment === 'account' && rematchSegment === 'rematch' && claimsSegment === 'claims') {
-          return true;
+          return (
+            !Array.isArray(rematchClaimIds) ||
+            rematchClaimIds.length === 0 ||
+            rematchClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId))
+          );
         }
+
+        // The rematch picker reads both participants' sides straight from the graph; any response
+        // landing in a space it watches may be one of theirs. One query, so no need to narrow.
+        if (isParticipantPositionsQueryKey(query.queryKey)) return true;
 
         return isClaimResponseSummaryQueryKey(query.queryKey, {
           spaceId,
@@ -505,20 +536,107 @@ export class DebateGatewayClient {
     }, INVALIDATION_COALESCE_MS);
   }
 
-  private async flushInvalidations(invalidations: InvalidationFilters[]) {
+  private async flushInvalidations(invalidations: InvalidationFilters[], attempt = 0) {
     const results = await Promise.allSettled(
       invalidations.map(async queryFilters => {
-        await this.queryClient.cancelQueries(queryFilters);
-        await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true });
+        const matches = (query: Query) => queryFilters.predicate === undefined || queryFilters.predicate(query);
+        // Cancelling stops a stale in-flight response from overwriting the fresh refetch — which
+        // only matters once there is data to overwrite. A query still on its first load has none;
+        // aborting it restarts a request that was about to land, and on a screen with slow round
+        // trips and frequent events that restart repeated until nothing ever landed.
+        //
+        // The rematch picker's positions batches are never cancelled, loaded or not. They are one
+        // request per page of claims on screen, and responses land on them faster than the round
+        // trips complete; restarting every batch on every event starved the list of updates for as
+        // long as the other side kept responding. A batch in flight is left to land and is then
+        // asked again, so the answer on screen is never older than the event that prompted it.
+        const inFlightRematchBatches = this.queryClient.getQueryCache().findAll({
+          ...queryFilters,
+          fetchStatus: 'fetching',
+          predicate: query => isRematchClaimsQueryKey(query.queryKey) && matches(query),
+        });
+        await this.queryClient.cancelQueries({
+          ...queryFilters,
+          predicate: query =>
+            query.state.data !== undefined && !isRematchClaimsQueryKey(query.queryKey) && matches(query),
+        });
+        // `cancelRefetch: false`: a refetch of a query still fetching joins that request instead
+        // of aborting it. Everything this flush meant to cancel has been cancelled above.
+        //
+        // The re-ask runs whether or not the invalidation settled cleanly: a hook-side refresh can
+        // cancel one joined batch, and that one batch's `CancelledError` must not cost every other
+        // batch in this flush the refetch that brings it past the event.
+        try {
+          await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true, cancelRefetch: false });
+        } finally {
+          if (inFlightRematchBatches.length > 0) {
+            await this.queryClient.refetchQueries(
+              {
+                type: 'active',
+                predicate: query => inFlightRematchBatches.some(batch => batch.queryHash === query.queryHash),
+              },
+              { throwOnError: true, cancelRefetch: false }
+            );
+          }
+        }
       })
     );
-    if (results.some(result => result.status === 'rejected')) {
+
+    // `stop()` may have run while the refetches were in flight; a stopped client owns no socket to
+    // recycle and no queries to retry.
+    if (!this.enabled) return;
+
+    // `allSettled` preserves order, so a rejection at index i belongs to invalidations[i] — keep the
+    // pairing so only the filters that actually failed transiently get flushed again.
+    const retryable: InvalidationFilters[] = [];
+    const actions: InvalidationRecovery[] = [];
+    results.forEach((result, index) => {
+      if (result.status !== 'rejected') return;
+      const action = invalidationFailureRecovery(result.reason);
+      if (action === 'retry') retryable.push(invalidations[index]);
+      actions.push(action);
+    });
+    const recovery = actions.reduce<InvalidationRecovery>(
+      (worst, action) => (invalidationRecoveryPriority[action] > invalidationRecoveryPriority[worst] ? action : worst),
+      'ignore'
+    );
+
+    if (recovery === 'reauthenticate' || recovery === 'reconnect') {
+      // The socket authenticates with the same session the refetch just used, and
+      // `getGeoChatSession` hands back the stored session until it is close to expiry. Without an
+      // explicit reset the reconnect would re-present the very credentials the server rejected.
+      if (recovery === 'reauthenticate') resetGeoChatSession();
       this.recentEventIds.clear();
       this.recentEventIdOrder.length = 0;
       if (this.socket) this.forceReconnect(this.socket);
       return;
     }
+
+    if (retryable.length > 0 && attempt < MAX_INVALIDATION_RETRIES) {
+      // Rate limits and request timeouts say nothing about the socket, so recycling it is the wrong
+      // repair. The affected queries are configured with `retry: false`, so if this flush gives up
+      // nothing else refetches them — back off and retry the invalidation itself instead.
+      this.scheduleInvalidationRetry(retryable, attempt + 1);
+      return;
+    }
+
     this.reconnectAttempt = 0;
+  }
+
+  private scheduleInvalidationRetry(invalidations: InvalidationFilters[], attempt: number) {
+    // Each failed batch keeps its own backoff. Replacing a pending retry with a newer one would
+    // drop the older batch's filters, and with `retry: false` on these queries nothing else would
+    // ever refetch them. A retry may re-run filters a later flush has since refreshed; that costs
+    // one extra refetch of active queries and is accepted over the alternative of losing one.
+    const timer = setTimeout(
+      () => {
+        this.invalidationRetryTimers.delete(timer);
+        if (!this.enabled) return;
+        void this.flushInvalidations(invalidations, attempt);
+      },
+      INVALIDATION_RETRY_BASE_MS * 2 ** (attempt - 1)
+    );
+    this.invalidationRetryTimers.add(timer);
   }
 
   private sendSubscription(scope: DebateGatewayScope, op: 'SUBSCRIBE' | 'UNSUBSCRIBE') {
@@ -623,6 +741,8 @@ export class DebateGatewayClient {
     this.clearTimer('reconnect');
     if (this.invalidationTimer) clearTimeout(this.invalidationTimer);
     this.invalidationTimer = null;
+    for (const timer of this.invalidationRetryTimers) clearTimeout(timer);
+    this.invalidationRetryTimers.clear();
   }
 
   private clearTimer(timer: 'handshake' | 'heartbeat' | 'reconnect' | 'token') {
@@ -651,6 +771,56 @@ export class DebateGatewayClient {
     this.snapshot = { ...snapshot, capabilities };
     for (const listener of this.listeners) listener();
   }
+}
+
+type InvalidationRecovery = 'ignore' | 'retry' | 'reconnect' | 'reauthenticate';
+
+/** Later entries win when a single flush produces a mix of failures. */
+const invalidationRecoveryPriority: Record<InvalidationRecovery, number> = {
+  ignore: 0,
+  retry: 1,
+  reconnect: 2,
+  reauthenticate: 3,
+};
+
+/**
+ * Deterministic request errors: the same call will fail the same way after any amount of
+ * reconnecting or backing off, so the only sane response is to leave the socket alone.
+ */
+const deterministicInvalidationErrorCodes = new Set(['too_many_claim_ids']);
+
+/**
+ * Refreshing an active query can expose an application error without saying anything about the
+ * gateway socket. Classify by the repair each failure actually needs — recycling a healthy socket
+ * for a deterministic query bug just turns it into an endless "live updates paused" loop, and
+ * recycling it for a 429 does nothing to refetch the query that was rate limited.
+ */
+function invalidationFailureRecovery(error: unknown): InvalidationRecovery {
+  // A refetch this flush started can be cancelled by the next flush's `cancelQueries` before it
+  // lands. That flush owns the refresh from here on; recycling the socket over it would be a
+  // spurious "live updates paused".
+  if (error instanceof CancelledError) return 'ignore';
+  if (error instanceof DOMException && error.name === 'AbortError') return 'ignore';
+  // The participants' positions are read from the knowledge graph, which this socket has nothing
+  // to do with. Its client has already retried; the query polls, so the next tick picks it up.
+  if (isGraphqlRequestError(error)) return 'ignore';
+  if (!(error instanceof GeoChatRequestError)) return 'reconnect';
+  if (error.code && deterministicInvalidationErrorCodes.has(error.code)) return 'ignore';
+  if (error.status === 401 || error.status === 403) return 'reauthenticate';
+  // 408 and 429 are the two 4xx statuses that clear on their own; every other 4xx is a request the
+  // server will keep rejecting.
+  if (error.status === 408 || error.status === 429 || error.status >= 500) return 'retry';
+  if (error.status >= 400 && error.status < 500) return 'ignore';
+  return 'reconnect';
+}
+
+function isGraphqlRequestError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    '_tag' in error &&
+    (error as { _tag?: unknown })._tag === 'GraphqlRequestError'
+  );
 }
 
 const debateGateway = new DebateGatewayClient({
