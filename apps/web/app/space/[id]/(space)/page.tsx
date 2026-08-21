@@ -26,6 +26,7 @@ import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-serve
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
 import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
@@ -35,6 +36,7 @@ import { resolveSpaceSidebar } from './space-sidebar';
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ tabId?: string | string[] }>;
 }
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
@@ -66,7 +68,9 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
 export default async function SpacePage(props0: Props) {
   const params = await props0.params;
+  const searchParams = (await props0.searchParams) ?? {};
   const spaceId = params.id;
+  const tabId = typeof searchParams.tabId === 'string' ? searchParams.tabId : undefined;
 
   if (!IdUtils.isValid(spaceId)) {
     notFound();
@@ -78,10 +82,26 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const [props, { communityCalls }] = await Promise.all([getSpaceFrontPage(space), resolveSpaceSidebar(spaceId)]);
+  const [props, { isRootSpace, communityCalls }] = await Promise.all([
+    getSpaceFrontPage(space),
+    resolveSpaceSidebar(spaceId),
+  ]);
+
+  let sidebar: React.ReactNode = null;
+  if (!tabId) {
+    if (isRootSpace) {
+      sidebar = (
+        <React.Suspense fallback={null}>
+          <RootExploreSidePanelContainer />
+        </React.Suspense>
+      );
+    } else {
+      sidebar = <SpaceOverviewSidePanel spaceId={spaceId} dailyActivities communityCalls={communityCalls} />;
+    }
+  }
 
   return (
-    <EntityPageSidebarLayout sidebar={<SpaceOverviewSidePanel spaceId={spaceId} communityCalls={communityCalls} />}>
+    <EntityPageSidebarLayout sidebar={sidebar}>
       <React.Suspense fallback={<SubtopicGallerySkeleton />}>
         <SubtopicGalleryContainer spaceId={params.id} />
       </React.Suspense>
