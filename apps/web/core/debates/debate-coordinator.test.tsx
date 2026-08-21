@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   abortMutateAsync: vi.fn(),
   clearDebateActivity: vi.fn(),
+  rememberDebateReturnDestination: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -103,6 +104,10 @@ vi.mock('./claim-response-indexed-notifier', () => ({
   useClaimResponseIndexedNotifier: vi.fn(),
 }));
 
+vi.mock('./debate-return-navigation', () => ({
+  rememberDebateReturnDestination: mocks.rememberDebateReturnDestination,
+}));
+
 vi.mock('~/core/state/feature-flags', () => ({}));
 
 beforeEach(() => {
@@ -134,6 +139,7 @@ beforeEach(() => {
   mocks.abortMutateAsync.mockReset();
   mocks.abortMutateAsync.mockResolvedValue(undefined);
   mocks.clearDebateActivity.mockReset();
+  mocks.rememberDebateReturnDestination.mockReset();
   Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
   Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
   Object.defineProperty(URL, 'createObjectURL', {
@@ -172,12 +178,13 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByText('Live debate updates are paused while reconnecting.')).not.toBeInTheDocument();
   });
 
-  it('routes an available participant into a shared rematch browser', async () => {
+  it('does not route another tab into a shared debate-again browser', async () => {
     mocks.activity = activityWithRematch('browsing');
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(mocks.rememberDebateReturnDestination).not.toHaveBeenCalled();
   });
 
   it('leaves a secondary tab on its current page when shared activity contains a debate', async () => {
@@ -402,7 +409,12 @@ describe('DebateCoordinator', () => {
   it('routes the sender into the claim picker once the challenge is accepted', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';
-    mocks.activity = { ...activityWithRematch('browsing'), challenge: null };
+    const activity = activityWithRematch('browsing');
+    mocks.activity = {
+      ...activity,
+      rematch: { ...activity.rematch!, source_debate_id: null },
+      challenge: null,
+    };
 
     render(<DebateCoordinator />);
 
@@ -496,33 +508,13 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
   });
 
-  // GEO-2600. Same loop, wider cause: the room returns whoever opens *any* finished debate, not
-  // only one whose recording was cancelled. `activeDebate` has always known that; this effect only
-  // checked the recording. So a `deciding` rematch over a complete debate pushed into a room that
-  // bounced straight back out, and the push repeated on every activity change — the rematch page
-  // blanking and redrawing on a URL that never moved, which is what Preston recorded.
-  it.each(['complete', 'cancelled'] as const)(
-    'does not route into a deciding rematch whose debate is %s',
-    async status => {
-      mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
-      mocks.activity = {
-        ...activityWithRematch('deciding'),
-        debate: { ...activityWithDebate().debate!, status, participants: bothParticipants() },
-      };
-
-      render(<DebateCoordinator />);
-
-      await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
-    }
-  );
-
-  it('still routes into a deciding rematch while the debate is intact', async () => {
+  it('leaves an unrelated tab alone while an intact debate-again session is deciding', async () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = activityWithRematch('deciding');
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
   it.each(['complete', 'cancelled'] as const)('does not reopen a %s debate from stale activity', async status => {

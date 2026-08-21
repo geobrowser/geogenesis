@@ -2,18 +2,13 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  clearEnteringDebate,
-  markEnteringDebate,
-  recordDebateFlowOrigin,
-  takeDebateFlowOrigin,
-  useEnteringDebateId,
-} from './debate-entry-intent';
+import { clearEnteringDebate, markEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
+import { clearDebateReturnDestination } from './debate-return-navigation';
 
 afterEach(() => {
   cleanup();
   clearEnteringDebate();
-  window.sessionStorage.clear();
+  clearDebateReturnDestination();
   vi.useRealTimers();
 });
 
@@ -72,81 +67,5 @@ describe('debate entry intent', () => {
     act(() => vi.advanceTimersByTime(25_000));
 
     expect(result.current).toBe('debate-2');
-  });
-});
-
-// GEO-2605. `router.back()` steps one history entry, which is the origin only when the flow was a
-// single hop — so the origin is recorded on the way in rather than inferred on the way out.
-describe('debate flow origin', () => {
-  it('returns the path the flow started from', () => {
-    recordDebateFlowOrigin('/space/space-1/entity-7');
-
-    expect(takeDebateFlowOrigin()).toBe('/space/space-1/entity-7');
-  });
-
-  // The whole point: hub -> room -> rematch -> room must still return to the hub, not to the room
-  // one entry back. Every entry calls markEnteringDebate, so the second one must not overwrite.
-  it('keeps the first origin when the flow enters a second room', () => {
-    recordDebateFlowOrigin('/space/space-1/entity-7');
-    recordDebateFlowOrigin('/space/space-1/debates/debate-1');
-    markEnteringDebate('debate-2');
-
-    expect(takeDebateFlowOrigin()).toBe('/space/space-1/entity-7');
-  });
-
-  // A refresh mid-flow re-enters from a debate path. Recording it would make the room its own
-  // origin, which sends the viewer straight back into the flow they were leaving.
-  it('never records a path inside the flow', () => {
-    recordDebateFlowOrigin('/space/space-1/debates');
-
-    expect(takeDebateFlowOrigin()).toBeNull();
-  });
-
-  // Distinguishes the record-side guard from the read-side one: if an in-flow path were stored,
-  // the already-held guard would then block the real origin and the exit would fall back.
-  it('does not let a refresh inside the flow consume the origin slot', () => {
-    recordDebateFlowOrigin('/space/space-1/debates/debate-1');
-    recordDebateFlowOrigin('/space/space-1/entity-7');
-
-    expect(takeDebateFlowOrigin()).toBe('/space/space-1/entity-7');
-  });
-
-  it('does not treat a path merely containing the word as the flow', () => {
-    recordDebateFlowOrigin('/space/space-1/debatesomething');
-
-    expect(takeDebateFlowOrigin()).toBe('/space/space-1/debatesomething');
-  });
-
-  it('forgets the origin once it has been used, so a later exit falls back', () => {
-    recordDebateFlowOrigin('/space/space-1/entity-7');
-
-    expect(takeDebateFlowOrigin()).toBe('/space/space-1/entity-7');
-    expect(takeDebateFlowOrigin()).toBeNull();
-  });
-
-  it('has nothing to return to when the flow was never entered', () => {
-    expect(takeDebateFlowOrigin()).toBeNull();
-  });
-
-  // Private-mode browsers throw on sessionStorage. Losing the origin is acceptable; taking the
-  // room down on the way out is not.
-  it('survives storage that throws', () => {
-    // jsdom's Storage is a proxy whose methods live on the prototype, so spying on the instance
-    // silently writes a storage entry instead of replacing the method. Swap the whole object.
-    const real = window.sessionStorage;
-    const denied = () => {
-      throw new Error('denied');
-    };
-    Object.defineProperty(window, 'sessionStorage', {
-      configurable: true,
-      value: { getItem: denied, setItem: denied, removeItem: denied },
-    });
-
-    try {
-      expect(() => recordDebateFlowOrigin('/space/space-1/entity-7')).not.toThrow();
-      expect(takeDebateFlowOrigin()).toBeNull();
-    } finally {
-      Object.defineProperty(window, 'sessionStorage', { configurable: true, value: real });
-    }
   });
 });
