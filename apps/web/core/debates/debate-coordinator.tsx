@@ -75,12 +75,16 @@ export function DebateCoordinator() {
   // comes straight back reporting the debate.
   const enteringDebateId = useEnteringDebateId();
   const atDebate = Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
-  // The rematch page walks the viewer into its own converted debate. Activity reports that debate
-  // before the session query reports `converted`, so for a beat this coordinator sees a `ready`
-  // debate, no rematch, and nobody at it — the exact shape it opens the ready prompt for. It opened
-  // it on top of a page that was already navigating, so it flashed up and vanished again without
-  // being touched (GEO-2604). Nothing app-wide belongs over that page: it owns its own routing, and
-  // whatever it is about to do is more current than activity is.
+  // The rematch page walks the viewer into its own converted debate, and accepting fires a single
+  // `debate.rematch_changed` that the gateway turns into *two* refetches — the account's activity
+  // and the rematch session — either of which can land first. When activity wins, this coordinator
+  // sees a `ready` debate, no rematch, and nobody at it, which is the exact shape it opens the
+  // ready prompt for, while the page has not yet learned to redirect. So it opened the dialog on
+  // top of a page that was already navigating, and it flashed up and vanished without being touched
+  // (GEO-2604).
+  //
+  // Nothing app-wide belongs over that page: it owns its own routing, and whatever it is about to
+  // do is more current than activity is.
   const atRematchPage = pathname.includes('/debates/rematches/');
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
