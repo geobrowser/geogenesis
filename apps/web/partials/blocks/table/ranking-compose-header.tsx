@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import type { AggregatedRankingSubmitterRef } from '~/core/blocks/ranking/ranking-block-relations';
 import type { RankingPeriodState } from '~/core/blocks/ranking/ranking-period';
 import { RANKING_POINTS_UI_ENABLED } from '~/core/blocks/ranking/ranking-points';
 import type { RankingSubmissionRecord } from '~/core/blocks/ranking/ranking-submission-types';
@@ -27,6 +28,7 @@ type SharedHeaderProps = {
   periodLabel: string | null;
   hasRankedByOthers: boolean;
   submissions: RankingSubmissionRecord[];
+  aggregatedSubmitterRefs: AggregatedRankingSubmitterRef[];
   aggregatedSubmitterSpaceIds: string[];
   aggregatedRankingCount: number;
   onBack: () => void;
@@ -88,6 +90,7 @@ type TitleMetadataProps = Pick<SharedHeaderProps, 'isMobile' | 'displayName'> &
       | 'periodLabel'
       | 'hasRankedByOthers'
       | 'submissions'
+      | 'aggregatedSubmitterRefs'
       | 'aggregatedSubmitterSpaceIds'
       | 'aggregatedRankingCount'
     >
@@ -103,6 +106,7 @@ export function RankingComposeTitleMetadata({
   periodLabel,
   hasRankedByOthers = false,
   submissions = [],
+  aggregatedSubmitterRefs = [],
   aggregatedSubmitterSpaceIds = [],
   aggregatedRankingCount = 0,
 }: TitleMetadataProps) {
@@ -123,6 +127,7 @@ export function RankingComposeTitleMetadata({
           periodLabel={periodLabel ?? null}
           hasRankedByOthers={hasRankedByOthers}
           submissions={submissions}
+          aggregatedSubmitterRefs={aggregatedSubmitterRefs}
           aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
           aggregatedRankingCount={aggregatedRankingCount}
           trailing={
@@ -152,6 +157,7 @@ export function RankingComposeHeader(props: SharedHeaderProps) {
         periodLabel={props.periodLabel}
         hasRankedByOthers={props.hasRankedByOthers}
         submissions={props.submissions}
+        aggregatedSubmitterRefs={props.aggregatedSubmitterRefs}
         aggregatedSubmitterSpaceIds={props.aggregatedSubmitterSpaceIds}
         aggregatedRankingCount={props.aggregatedRankingCount}
       />
