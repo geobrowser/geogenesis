@@ -1,11 +1,11 @@
 'use client';
 
 import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
-import type { RoomConnectOptions, RoomOptions } from 'livekit-client';
 
 import * as React from 'react';
 
 import cx from 'classnames';
+import type { RoomConnectOptions, RoomOptions } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
@@ -17,8 +17,8 @@ import {
   getCurrentGeoChatUserId,
   getServerTime,
 } from '~/core/debates/api';
-import { takeDebateFlowOrigin } from '~/core/debates/debate-entry-intent';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
+import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import {
   CameraIcon,
   LeaveIcon,
@@ -69,7 +69,6 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -253,6 +252,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionGenerationRef = React.useRef(0);
   const localVideoRef = React.useRef<HTMLVideoElement>(null);
   const remoteMediaRef = React.useRef<HTMLDivElement>(null);
+  /**
+   * The remote tracks currently subscribed, so a reconnect can put them back on screen.
+   *
+   * GEO-2602. `Reconnecting` clears the remote tiles, and the code assumed the tracks would
+   * arrive again as fresh `TrackSubscribed` events. They do not: LiveKit reconnects by ICE
+   * restart and the existing subscriptions survive it, so nothing re-fires and nothing
+   * re-attaches. Kept here rather than read back off the SDK because `RoomLike` is deliberately
+   * a narrow surface over the parts of LiveKit this room uses.
+   */
+  const subscribedRemoteTracksRef = React.useRef<Set<RemoteTrackLike>>(new Set());
   const remoteAudioEnabledRef = React.useRef(remoteAudioEnabled);
   const roomRef = React.useRef<RoomLike | null>(null);
   const connectingRoomRef = React.useRef<RoomLike | null>(null);
@@ -435,17 +444,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (debateExitStartedRef.current) return;
       debateExitStartedRef.current = true;
       clearDebateActivity(debateId);
-      // Prefer the path recorded when the viewer entered the flow. `router.back()`
-      // only steps one entry, so in hub → room → rematch → room it lands inside the
-      // flow rather than where they came from — and re-mounting a room re-runs its
-      // exit, which is the flicker. Going forward to a known origin avoids both.
-      const origin = takeDebateFlowOrigin();
-      if (origin) {
-        router.replace(origin);
+      const returnDestination = consumeDebateReturnDestination();
+      if (returnDestination) {
+        router.replace(returnDestination);
         return;
       }
-      // No origin recorded (storage unavailable, or entry predates it): fall back to
-      // the previous behaviour rather than stranding the viewer.
+      // Going back restores whatever opened the room, which is where an ordinary exit belongs.
+      // A debate that ended under us is different: the entry behind us is often this same room
+      // (hub → room → rematch → room), and stepping back into it re-runs the exit from a fresh
+      // mount. That is the flicker, and it is why the removal dialog needed a second Okay.
       if (!forwardOnly && window.history.length > 1) {
         router.back();
         return;
@@ -457,6 +464,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   /** The exit for a debate whose recording was cancelled — it can never be re-entered. */
   const leaveCancelledDebate = React.useCallback(() => returnFromDebate({ forwardOnly: true }), [returnFromDebate]);
+
+  const leaveConflictingRoom = React.useCallback(() => {
+    const returnDestination = consumeDebateReturnDestination();
+    if (returnDestination) {
+      router.replace(returnDestination);
+      return;
+    }
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.replace(`/space/${spaceId}/debates`);
+  }, [router, spaceId]);
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
@@ -883,6 +903,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         remoteParticipantRefetchTimerRef.current = null;
       }
       remoteMediaRef.current?.replaceChildren();
+      subscribedRemoteTracksRef.current.clear();
       void synchronizeServerClock(getServerTime)
         .then(clock => {
           if (isCurrent()) setServerClock(clock);
@@ -911,11 +932,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         const room = new livekit.Room(roomOptions) as unknown as RoomLike;
         connectingRoom = room;
         connectingRoomRef.current = room;
-        room.on(livekit.RoomEvent.TrackSubscribed, payload => {
-          // Auto-subscribe can deliver a track during room.connect(), before roomRef is assigned, so
-          // reject only a different room here rather than a not-yet-set one.
-          if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
-          const track = payload as RemoteTrackLike;
+        const attachRemoteTrack = (track: RemoteTrackLike) => {
           const element = track.attach();
           if (element instanceof HTMLMediaElement) {
             element.muted = !remoteAudioEnabledRef.current;
@@ -928,6 +945,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             element.className = 'hidden';
           }
           remoteMediaRef.current?.appendChild(element);
+        };
+        room.on(livekit.RoomEvent.TrackSubscribed, payload => {
+          // Auto-subscribe can deliver a track during room.connect(), before roomRef is assigned, so
+          // reject only a different room here rather than a not-yet-set one.
+          if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
+          const track = payload as RemoteTrackLike;
+          subscribedRemoteTracksRef.current.add(track);
+          attachRemoteTrack(track);
           void refetchDebate();
         });
         // When a remote track drops mid-debate, detach its element instead of leaving a frozen black
@@ -936,6 +961,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         room.on(livekit.RoomEvent.TrackUnsubscribed, payload => {
           if (!isCurrent() || (roomRef.current && roomRef.current !== room)) return;
           const track = payload as RemoteTrackLike;
+          subscribedRemoteTracksRef.current.delete(track);
           for (const element of track.detach()) element.remove();
           if (track.kind === 'video') setRemoteVideoReady(false);
         });
@@ -953,6 +979,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // re-subscribed tracks.
         room.on(livekit.RoomEvent.Reconnecting, () => {
           if (!isCurrent() || roomRef.current !== room) return;
+          // `detach`, not just `replaceChildren`: an element removed from the DOM keeps playing,
+          // which is why GEO-2602 presented as audio-without-video rather than as silence. The
+          // tracks stay in `subscribedRemoteTracksRef` because they are still subscribed — the
+          // reconnect does not tear the subscription down, and `Reconnected` puts them back.
+          for (const track of subscribedRemoteTracksRef.current) {
+            for (const element of track.detach()) element.remove();
+          }
           remoteMediaRef.current?.replaceChildren();
           setRemoteVideoReady(false);
           setRoomState('reconnecting');
@@ -969,6 +1002,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         });
         room.on(livekit.RoomEvent.Reconnected, () => {
           if (!isCurrent() || roomRef.current !== room) return;
+          // The subscriptions survived the reconnect, so nothing will re-deliver these tracks —
+          // putting them back is this handler's job. Without it the opponent's tile stayed empty
+          // for the rest of the debate while their audio kept playing (GEO-2602).
+          //
+          // Detached first because a reconnect that *did* re-subscribe has already attached a
+          // fresh element, and `attach` is not guaranteed to hand back the same one twice.
+          for (const track of subscribedRemoteTracksRef.current) {
+            for (const stale of track.detach()) stale.remove();
+            attachRemoteTrack(track);
+          }
           setRoomState('connected');
           if (reconnectingStartedAtRef.current !== null) {
             captureDebateRoomResilienceEvent('debate_room_reconnected', {
@@ -991,7 +1034,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         room.on(livekit.RoomEvent.Disconnected, payload => {
           if (!isCurrent() || roomRef.current !== room) return;
           const reconnectElapsedMs =
-            reconnectingStartedAtRef.current !== null ? performance.now() - reconnectingStartedAtRef.current : undefined;
+            reconnectingStartedAtRef.current !== null
+              ? performance.now() - reconnectingStartedAtRef.current
+              : undefined;
           reconnectingStartedAtRef.current = null;
           const conflictGeneration = connectionGenerationRef.current + 1;
           connectionGenerationRef.current = conflictGeneration;
@@ -1480,7 +1525,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const redirectAfterConnectionFailure = React.useCallback(() => {
     if (connectionFailureRedirectTimerRef.current !== null) return;
     connectionFailureRedirectTimerRef.current = window.setTimeout(() => {
-      router.replace(`/space/${spaceId}/questions`);
+      router.replace(consumeDebateReturnDestination() ?? `/space/${spaceId}/questions`);
     }, connectionFailureRedirectDelayMs);
   }, [router, spaceId]);
 
@@ -1706,14 +1751,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           <Text as="p" variant="metadata" color="grey-04" className="mt-3">
             Close this tab and continue your debate in the original tab.
           </Text>
-          <Link
-            href={`/space/${spaceId}/debates`}
+          <button
+            type="button"
+            onClick={leaveConflictingRoom}
             className="mt-6 text-ctaPrimary transition-colors hover:text-ctaHover focus-visible:text-ctaHover"
           >
             <Text as="span" variant="textLinkSemibold" color="current">
-              Go to debates
+              Go back
             </Text>
-          </Link>
+          </button>
         </div>
       </div>
     );

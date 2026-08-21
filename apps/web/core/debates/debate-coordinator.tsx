@@ -9,7 +9,7 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import { activeDebate, unenterableDebateId } from './activity-state';
+import { activeDebate } from './activity-state';
 import { type DebateSharePrompt } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebatePresence } from './debate-attention';
@@ -17,6 +17,7 @@ import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
+import { rememberDebateReturnDestination } from './debate-return-navigation';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -74,12 +75,16 @@ export function DebateCoordinator() {
   // comes straight back reporting the debate.
   const enteringDebateId = useEnteringDebateId();
   const atDebate = Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
-  // The rematch page walks the viewer into its own converted debate. Activity reports that debate
-  // before the session query reports `converted`, so for a beat this coordinator sees a `ready`
-  // debate, no rematch, and nobody at it — the exact shape it opens the ready prompt for. It opened
-  // it on top of a page that was already navigating, so it flashed up and vanished again without
-  // being touched (GEO-2604). Nothing app-wide belongs over that page: it owns its own routing, and
-  // whatever it is about to do is more current than activity is.
+  // The rematch page walks the viewer into its own converted debate, and accepting fires a single
+  // `debate.rematch_changed` that the gateway turns into *two* refetches — the account's activity
+  // and the rematch session — either of which can land first. When activity wins, this coordinator
+  // sees a `ready` debate, no rematch, and nobody at it, which is the exact shape it opens the
+  // ready prompt for, while the page has not yet learned to redirect. So it opened the dialog on
+  // top of a page that was already navigating, and it flashed up and vanished without being touched
+  // (GEO-2604).
+  //
+  // Nothing app-wide belongs over that page: it owns its own routing, and whatever it is about to
+  // do is more current than activity is.
   const atRematchPage = pathname.includes('/debates/rematches/');
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
@@ -181,24 +186,18 @@ export function DebateCoordinator() {
     if (!activity) return;
     const rematch = activity.rematch;
     if (!rematch) return;
-    // A debate that is over cannot be re-entered: the room hides itself and returns whoever opens
-    // it. Pushing into it here turned that into a navigation loop — the screen flickered, and the
-    // opponent's "your debate was removed" dialog came back after Okay. That first showed up as a
-    // cancelled recording, but GEO-2600 was the same loop over a `complete` debate: the push landed
-    // and bounced on every activity change, blanking the rematch page on a URL that never moved.
-    if (rematch.source_debate_id && rematch.source_debate_id === unenterableDebateId(activity)) return;
     const sourceDebatePath = rematch.source_debate_id ? `/debates/${rematch.source_debate_id}` : null;
-    if (rematch.status === 'deciding') {
-      if (sourceDebatePath && !pathname.includes(sourceDebatePath)) {
-        router.push(`/space/${rematch.source_space_id}${sourceDebatePath}`);
-      }
-      return;
-    }
+    // A debate-again session is shared across every tab, but only the tab already in the source
+    // room owns its recording and transition into the rematch browser. Routing from this app-wide
+    // coordinator sent every other open tab into that room, where ownership correctly rejected it.
+    // The room handles deciding, recording finalization, browsing, and conversion itself.
+    if (sourceDebatePath) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
-      // The debate room owns recording finalization before entering the browser.
-      if (sourceDebatePath && pathname.includes(sourceDebatePath)) return;
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
-      if (pathname !== path) router.push(path);
+      if (pathname !== path) {
+        rememberDebateReturnDestination();
+        router.push(path);
+      }
     }
   }, [activity, pathname, router]);
 
