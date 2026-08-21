@@ -1,11 +1,11 @@
 'use client';
 
 import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
-import type { RoomConnectOptions, RoomOptions } from 'livekit-client';
 
 import * as React from 'react';
 
 import cx from 'classnames';
+import type { RoomConnectOptions, RoomOptions } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
@@ -18,6 +18,7 @@ import {
   getServerTime,
 } from '~/core/debates/api';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
+import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import {
   CameraIcon,
   LeaveIcon,
@@ -68,7 +69,6 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -434,6 +434,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (debateExitStartedRef.current) return;
       debateExitStartedRef.current = true;
       clearDebateActivity(debateId);
+      const returnDestination = consumeDebateReturnDestination();
+      if (returnDestination) {
+        router.replace(returnDestination);
+        return;
+      }
       // Going back restores whatever opened the room, which is where an ordinary exit belongs.
       // A debate that ended under us is different: the entry behind us is often this same room
       // (hub → room → rematch → room), and stepping back into it re-runs the exit from a fresh
@@ -449,6 +454,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   /** The exit for a debate whose recording was cancelled — it can never be re-entered. */
   const leaveCancelledDebate = React.useCallback(() => returnFromDebate({ forwardOnly: true }), [returnFromDebate]);
+
+  const leaveConflictingRoom = React.useCallback(() => {
+    const returnDestination = consumeDebateReturnDestination();
+    if (returnDestination) {
+      router.replace(returnDestination);
+      return;
+    }
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.replace(`/space/${spaceId}/debates`);
+  }, [router, spaceId]);
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
@@ -983,7 +1001,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         room.on(livekit.RoomEvent.Disconnected, payload => {
           if (!isCurrent() || roomRef.current !== room) return;
           const reconnectElapsedMs =
-            reconnectingStartedAtRef.current !== null ? performance.now() - reconnectingStartedAtRef.current : undefined;
+            reconnectingStartedAtRef.current !== null
+              ? performance.now() - reconnectingStartedAtRef.current
+              : undefined;
           reconnectingStartedAtRef.current = null;
           const conflictGeneration = connectionGenerationRef.current + 1;
           connectionGenerationRef.current = conflictGeneration;
@@ -1472,7 +1492,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const redirectAfterConnectionFailure = React.useCallback(() => {
     if (connectionFailureRedirectTimerRef.current !== null) return;
     connectionFailureRedirectTimerRef.current = window.setTimeout(() => {
-      router.replace(`/space/${spaceId}/questions`);
+      router.replace(consumeDebateReturnDestination() ?? `/space/${spaceId}/questions`);
     }, connectionFailureRedirectDelayMs);
   }, [router, spaceId]);
 
@@ -1698,14 +1718,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           <Text as="p" variant="metadata" color="grey-04" className="mt-3">
             Close this tab and continue your debate in the original tab.
           </Text>
-          <Link
-            href={`/space/${spaceId}/debates`}
+          <button
+            type="button"
+            onClick={leaveConflictingRoom}
             className="mt-6 text-ctaPrimary transition-colors hover:text-ctaHover focus-visible:text-ctaHover"
           >
             <Text as="span" variant="textLinkSemibold" color="current">
-              Go to debates
+              Go back
             </Text>
-          </Link>
+          </button>
         </div>
       </div>
     );

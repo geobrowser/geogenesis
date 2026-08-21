@@ -9,7 +9,7 @@ import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import { activeDebate, recordingCancelledDebateId } from './activity-state';
+import { activeDebate } from './activity-state';
 import { type DebateSharePrompt } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebatePresence } from './debate-attention';
@@ -17,6 +17,7 @@ import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
+import { rememberDebateReturnDestination } from './debate-return-navigation';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -181,22 +182,18 @@ export function DebateCoordinator() {
     if (!activity) return;
     const rematch = activity.rematch;
     if (!rematch) return;
-    // A debate whose recording was cancelled cannot be re-entered: the room hides itself and
-    // returns whoever opens it. Pushing into it here turned that into a navigation loop — the
-    // screen flickered, and the opponent's "your debate was removed" dialog came back after Okay.
-    if (rematch.source_debate_id && rematch.source_debate_id === recordingCancelledDebateId(activity)) return;
     const sourceDebatePath = rematch.source_debate_id ? `/debates/${rematch.source_debate_id}` : null;
-    if (rematch.status === 'deciding') {
-      if (sourceDebatePath && !pathname.includes(sourceDebatePath)) {
-        router.push(`/space/${rematch.source_space_id}${sourceDebatePath}`);
-      }
-      return;
-    }
+    // A debate-again session is shared across every tab, but only the tab already in the source
+    // room owns its recording and transition into the rematch browser. Routing from this app-wide
+    // coordinator sent every other open tab into that room, where ownership correctly rejected it.
+    // The room handles deciding, recording finalization, browsing, and conversion itself.
+    if (sourceDebatePath) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
-      // The debate room owns recording finalization before entering the browser.
-      if (sourceDebatePath && pathname.includes(sourceDebatePath)) return;
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
-      if (pathname !== path) router.push(path);
+      if (pathname !== path) {
+        rememberDebateReturnDestination();
+        router.push(path);
+      }
     }
   }, [activity, pathname, router]);
 
