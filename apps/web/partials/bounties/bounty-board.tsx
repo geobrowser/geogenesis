@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { CURRENT_BOUNTY_SPACE_IDS } from '~/core/bounties/constants';
 import {
@@ -36,7 +36,6 @@ export function collectSkills(bounties: readonly BoardBounty[]): { id: string; n
 }
 
 export function BountyBoard({ header }: Props) {
-  const router = useRouter();
   const pathname = usePathname() ?? '/bounties';
   const searchParams = useSearchParams();
 
@@ -46,9 +45,14 @@ export function BountyBoard({ header }: Props) {
 
   const setFilters = React.useCallback(
     (next: BountyFilters) => {
-      router.replace(buildBountiesHref(pathname, next), { scroll: false });
+      // Shallow URL update: router.replace would start an RSC navigation, which
+      // re-suspends the board's Suspense boundary and remounts the tree — the
+      // focused search input loses focus mid-typing. replaceState keeps the URL
+      // as the source of truth (useSearchParams tracks it natively) with no
+      // server round trip and no remount.
+      window.history.replaceState(window.history.state, '', buildBountiesHref(pathname, next));
     },
-    [pathname, router]
+    [pathname]
   );
 
   const bounties = React.useMemo(() => data?.bounties ?? [], [data?.bounties]);

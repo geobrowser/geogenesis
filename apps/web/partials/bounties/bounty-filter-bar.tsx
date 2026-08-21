@@ -201,15 +201,16 @@ export function BountyFilterBar({ filters, onChange, bounties, spaces, skills }:
           />
         ) : null}
 
-        {isFiltered ? (
-          <button
-            type="button"
-            onClick={() => onChange({ ...DEFAULT_BOUNTY_FILTERS, sort: filters.sort, groupBy: filters.groupBy })}
-            className={FILTER_PILL_CLASS}
-          >
-            Clear filters
-          </button>
-        ) : null}
+        {/* Always in the layout so the centered bar keeps one width; just invisible when idle. */}
+        <button
+          type="button"
+          onClick={() => onChange({ ...DEFAULT_BOUNTY_FILTERS, sort: filters.sort, groupBy: filters.groupBy })}
+          className={`${FILTER_PILL_CLASS} ${isFiltered ? '' : 'invisible'}`}
+          aria-hidden={!isFiltered}
+          tabIndex={isFiltered ? 0 : -1}
+        >
+          Clear filters
+        </button>
       </div>
 
       {/* Sorting and grouping are view options, not filters — same row, own group behind the divider. */}

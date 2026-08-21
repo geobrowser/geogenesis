@@ -12,7 +12,7 @@ import type { BoardBounty } from '~/core/bounties/types';
 import { BountyBoard, collectSkills } from './bounty-board';
 
 const mocks = vi.hoisted(() => ({
-  replace: vi.fn(),
+  replaceState: vi.fn(),
   pathname: '/bounties',
   search: '',
   query: {
@@ -25,7 +25,6 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace }),
   usePathname: () => mocks.pathname,
   useSearchParams: () => new URLSearchParams(mocks.search),
 }));
@@ -94,7 +93,9 @@ const spaces = [
 ];
 
 beforeEach(() => {
-  mocks.replace.mockReset();
+  mocks.replaceState.mockReset();
+  // Filter writes are shallow history updates, not router navigations.
+  vi.stubGlobal('history', { ...window.history, replaceState: mocks.replaceState, state: null });
   mocks.pathname = '/bounties';
   mocks.search = '';
   mocks.query = { data: undefined, isLoading: false, isError: false, refetch: vi.fn() };
@@ -181,7 +182,7 @@ describe('BountyBoard', () => {
     render(<BountyBoard />);
     fireEvent.click(screen.getByRole('button', { name: /Any difficulty/ }));
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Hard/ }));
-    expect(mocks.replace).toHaveBeenCalledWith('/bounties?difficulty=hard', { scroll: false });
+    expect(mocks.replaceState).toHaveBeenCalledWith(null, '', '/bounties?difficulty=hard');
   });
 
   it('shows result counts next to options, orders by count, and disables zero-count options', () => {
@@ -219,7 +220,7 @@ describe('BountyBoard', () => {
     const spaceB = screen.getByRole('menuitemcheckbox', { name: /Space B/ });
     expect(spaceB).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(spaceB);
-    expect(mocks.replace).toHaveBeenCalledWith('/bounties?space=space-a%2Cspace-b', { scroll: false });
+    expect(mocks.replaceState).toHaveBeenCalledWith(null, '', '/bounties?space=space-a%2Cspace-b');
 
     // Sorting and grouping are visually separated from the filters.
     const viewOptions = screen.getByTestId('bounty-view-options');
@@ -233,7 +234,7 @@ describe('BountyBoard', () => {
     render(<BountyBoard />);
     fireEvent.click(screen.getByRole('button', { name: /^All$/ }));
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Featured/ }));
-    expect(mocks.replace).toHaveBeenCalledWith('/bounties?scope=featured', { scroll: false });
+    expect(mocks.replaceState).toHaveBeenCalledWith(null, '', '/bounties?scope=featured');
   });
 
   it('shows the empty-state copy that matches whether anything loaded at all', () => {
@@ -270,8 +271,10 @@ describe('BountyBoard status filter', () => {
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Done/ }));
     // Menu stays open (multi-select) and the URL now carries the explicit set.
     expect(screen.getByRole('menuitemcheckbox', { name: /Done/ })).toBeInTheDocument();
-    expect(mocks.replace).toHaveBeenCalledWith('/bounties?status=backlog%2Ctodo%2Cin-progress%2Cin-review%2Cdone', {
-      scroll: false,
-    });
+    expect(mocks.replaceState).toHaveBeenCalledWith(
+      null,
+      '',
+      '/bounties?status=backlog%2Ctodo%2Cin-progress%2Cin-review%2Cdone'
+    );
   });
 });
