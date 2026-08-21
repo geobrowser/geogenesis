@@ -20,7 +20,7 @@ import {
 import type { BoardBounty } from '~/core/bounties/types';
 
 import { FILTER_PILL_CLASS, FilterMenu } from '~/design-system/filter-menu';
-import { Input } from '~/design-system/input';
+import { Search } from '~/design-system/icons/search';
 
 const SORT_LABELS: Record<BountySort, string> = {
   'updated-desc': 'Recently updated',
@@ -123,17 +123,20 @@ export function BountyFilterBar({ filters, onChange, bounties, spaces, skills }:
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-testid="bounty-filter-bar">
-      {/* The text search is a filter like the dropdowns, so it lives in the same group. */}
+      {/* The text search is a filter like the dropdowns: same group, same pill geometry. */}
       <div className="flex flex-wrap items-center gap-2" data-testid="bounty-filters">
-        <div className="w-[220px]">
-          <Input
-            withSearchIcon
+        <label
+          className={`${FILTER_PILL_CLASS} w-[220px] cursor-text gap-1.5 focus-within:border-grey-03 hover:bg-white`}
+        >
+          <Search />
+          <input
             value={query}
             onChange={event => setQuery(event.target.value)}
             placeholder="Search bounties"
             aria-label="Search bounties"
+            className="min-w-0 flex-1 bg-transparent text-[16px] leading-[20px] outline-none placeholder:text-grey-03"
           />
-        </div>
+        </label>
         {spaces && spaces.length > 1 ? (
           <FilterMenu
             label={spaceLabel}
