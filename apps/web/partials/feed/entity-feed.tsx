@@ -244,7 +244,7 @@ export function EntityFeed({
               trigger={
                 <button
                   type="button"
-                  aria-label="Sort"
+                  aria-label={`Sort: ${sortLabel}`}
                   className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
                 >
                   <span>{sortLabel}</span>
@@ -278,7 +278,7 @@ export function EntityFeed({
               trigger={
                 <button
                   type="button"
-                  aria-label="Time range"
+                  aria-label={`Time range: ${timeLabel}`}
                   className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
                 >
                   <span>{timeLabel}</span>

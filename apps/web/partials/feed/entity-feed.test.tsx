@@ -87,9 +87,10 @@ async function requestedUrl() {
 
 /**
  * The mocked Menu renders its trigger and its items together, so a word can appear twice. The
- * triggers carry an aria-label, which is what tells them apart from the item holding the same word.
+ * trigger's accessible name is "Time range: <value>", which both tells it apart from the item
+ * holding the same word and keeps the value it is showing.
  */
-const timeTrigger = () => screen.queryByRole('button', { name: 'Time range' });
+const timeTrigger = () => screen.queryByRole('button', { name: /^Time range:/ });
 const pickOption = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }));
 
 // GEO-2610. The range answers "top of when?", so it belongs to Top alone. Best is ranked
@@ -138,6 +139,20 @@ describe('EntityFeed time range visibility', () => {
     pickOption('New');
 
     await waitFor(() => expect(timeTrigger()).toBeNull());
+  });
+
+  // `aria-label` replaces the visible text as the accessible name, so naming the control without
+  // its value would leave a screen reader unable to tell which sort or range is selected —
+  // `MenuItem` marks the active option with a background colour and nothing else.
+  it('announces the value each dropdown is showing, not just what it selects', () => {
+    renderExploreFeed();
+
+    expect(screen.queryByRole('button', { name: 'Sort: Best' })).not.toBeNull();
+
+    pickOption('Top');
+
+    expect(screen.queryByRole('button', { name: 'Sort: Top' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Time range: Last month' })).not.toBeNull();
   });
 
   // The point of the ticket: a hidden range must not quietly filter the feed.
