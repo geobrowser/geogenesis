@@ -122,7 +122,7 @@ export function BountyFilterBar({ filters, onChange, bounties, spaces, skills }:
     !isDefaultStatuses(filters.statuses);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2" data-testid="bounty-filter-bar">
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2" data-testid="bounty-filter-bar">
       {/* The text search is a filter like the dropdowns: same group, same pill geometry. */}
       <div className="flex flex-wrap items-center gap-2" data-testid="bounty-filters">
         <label
