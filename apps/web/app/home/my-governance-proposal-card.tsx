@@ -10,6 +10,8 @@ import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
+
 import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { GovernanceProposalVoteState } from '~/partials/governance/governance-proposal-vote-state';
 import { GovernanceRejectedProposalMenu } from '~/partials/governance/governance-rejected-proposal-menu';
@@ -33,6 +35,7 @@ export type MyGovernanceProposalCardProps = {
   creatorAvatarUrl: string | null | undefined;
   creatorValue: string;
   startTime: number;
+  submittedAt: number;
   endTime: number;
   status: ProposalStatus;
   canExecute: boolean;
@@ -61,6 +64,7 @@ export function MyGovernanceProposalCard({
   creatorAvatarUrl,
   creatorValue,
   startTime,
+  submittedAt,
   endTime,
   status,
   canExecute,
@@ -82,22 +86,37 @@ export function MyGovernanceProposalCard({
   const votingEnded = getIsProposalEnded(status, endTime);
   const { hours, minutes } = getProposalTimeRemaining(endTime);
 
+  const timestampSeconds = proposalTimestampSeconds({ status, endTime, startTime, submittedAt });
+  // While voting is open the timestamp is the submission time, which answers a
+  // different question from the countdown beside it — so both are shown.
+  const openStatusLabel =
+    // v2 contracts don't stamp startTime/endTime until the first vote fires, so a
+    // countdown here would render negative values for freshly proposed items with
+    // zero votes.
+    endTime <= 0 ? 'Voting opens on first vote' : `${hours}h ${minutes}m remaining`;
   const footerDateTime =
     status === 'ACCEPTED' || status === 'REJECTED' || votingEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <GovernanceOutcomeDate geoTimeSeconds={startTime} className="shrink-0" />
+        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <GovernanceOutcomeTime geoTimeSeconds={startTime} className="shrink-0 tabular-nums" />
+        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
       </div>
-    ) : endTime <= 0 ? (
-      // v2 contracts don't stamp startTime/endTime until the first vote fires,
-      // so a countdown here would render negative values for freshly proposed
-      // items with zero votes.
-      <p className="text-metadataMedium">Voting opens on first vote</p>
+    ) : timestampSeconds > 0 ? (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
+        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
+          ·
+        </span>
+        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
+          ·
+        </span>
+        <span className="shrink-0 text-grey-04">{openStatusLabel}</span>
+      </div>
     ) : (
-      <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+      <p className="text-metadataMedium">{openStatusLabel}</p>
     );
 
   const userVoteSubstream: SubstreamVote | undefined =

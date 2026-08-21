@@ -11,6 +11,14 @@ import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { GEO_NETWORK } from '../sdk/geo-network';
 import { MAX_QUEUE_WAIT_MS, enqueueFor, withNonceRetry } from './smart-account-send-queue';
 
+export function smartAccountQueryKey(
+  walletAddress: string | null | undefined,
+  embeddedWalletAddress: string | null | undefined,
+  cookieWalletAddress: string | null | undefined
+) {
+  return ['smart-account', walletAddress, embeddedWalletAddress, cookieWalletAddress] as const;
+}
+
 export function useSmartAccount() {
   const { data: walletClient, isLoading: isLoadingWallet } = useWalletClient();
   const { wallets } = useWallets();
@@ -27,7 +35,7 @@ export function useSmartAccount() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['smart-account', walletClient?.account.address, embeddedWallet?.address, cookies.walletAddress],
+    queryKey: smartAccountQueryKey(walletClient?.account.address, embeddedWallet?.address, cookies.walletAddress),
     queryFn: async () => {
       // ZeroDev EIP-7702 on every Geo chain — the chain identity comes from the
       // env-driven GEO_NETWORK config, so a network flip changes nothing here.

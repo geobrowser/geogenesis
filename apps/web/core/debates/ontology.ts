@@ -16,6 +16,9 @@ export const DEBATE_TYPE_ID = 'fd51f93520634617be397b672b23364c';
 /** Transcript (TYPE) — holds the per-turn text blocks of a debate. */
 export const TRANSCRIPT_TYPE_ID = '97042e6d9c7b4db5930c43d48debda84';
 
+/** Debates page (TYPE) — the "All debates" landing page a Recent debates block links to. */
+export const DEBATES_PAGE_TYPE_ID = 'dec3c8cae071482394f1dc4de11e7fb6';
+
 /** Debate videos (RELATION) → Video. */
 export const DEBATE_VIDEOS_PROPERTY_ID = 'c48dc314fa7148aeb967139160456f1d';
 

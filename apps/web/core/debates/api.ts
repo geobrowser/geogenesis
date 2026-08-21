@@ -305,6 +305,13 @@ export type DebateRematchClaim = {
   shared_preference: boolean;
   recently_rejected: boolean;
   previously_debated: boolean;
+  /**
+   * The viewer's readiness on this claim, the same two fields the per-space `debate-claims` list
+   * carries. Optional while geo-chat rolls the fields out: absent means the backend predates them
+   * and the picker has to ask the per-space endpoint instead.
+   */
+  viewer_debate_ready?: boolean;
+  readiness_disabled_reason?: string | null;
 };
 
 export type DebateRematchClaimsResponse = {
