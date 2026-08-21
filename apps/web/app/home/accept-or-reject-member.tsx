@@ -161,8 +161,13 @@ export function AcceptOrRejectMember({
   const { hours, minutes } = getProposalTimeRemaining(endTime);
 
   const timestampSeconds = proposalTimestampSeconds({ status, endTime, startTime, submittedAt });
-  // Open requests show when they were submitted; the countdown answers a different
+  // Open requests show when they were submitted; the status answers a different
   // question, so it stays alongside rather than being replaced.
+  const openStatusLabel =
+    // v2 contracts don't stamp startTime/endTime until the first vote fires, and
+    // getProposalTimeRemaining clamps at zero — so a countdown here would claim
+    // "0h 0m remaining" on a request whose voting hasn't opened.
+    endTime <= 0 ? 'Voting opens on first vote' : `${hours}h ${minutes}m remaining`;
   const footerLeft =
     status === 'ACCEPTED' || status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
@@ -182,10 +187,10 @@ export function AcceptOrRejectMember({
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <span className="shrink-0 text-grey-04">{`${hours}h ${minutes}m remaining`}</span>
+        <span className="shrink-0 text-grey-04">{openStatusLabel}</span>
       </div>
     ) : (
-      <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+      <p className="text-metadataMedium">{openStatusLabel}</p>
     );
 
   const proposalHref = NavUtils.toProposal(spaceId, proposalId, 'home', governanceHomeReturnSearch);
