@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { EntityCommentsPanel } from './entity-comments-panel';
+import { SIDE_PANEL_WIDTH_CLASS } from '~/partials/side-panel-layout';
 
 vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 3, isLoading: false, error: null, refetch: vi.fn() }),
@@ -48,5 +49,35 @@ describe('EntityCommentsPanel', () => {
     fireEvent.keyDown(window, { key: 'Escape', isComposing: true });
 
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+const DOCKED_WIDTH_CLASS = 'w-[360px]';
+
+function renderPanelForWidth(presentation: 'docked' | 'overlay') {
+  const { container } = render(
+    <EntityCommentsPanel entityId="entity-1" spaceId="space-1" onClose={vi.fn()} presentation={presentation} />
+  );
+  return container.querySelector('aside') as HTMLElement;
+}
+
+describe('EntityCommentsPanel width', () => {
+  it('matches the entity side panel when it is an overlay', () => {
+    // Both are right-edge panels reachable from the same places, so a width difference
+    // reads as a bug. Asserted against the shared constant rather than a pasted value,
+    // so this stays true if that width is ever retuned.
+    const panel = renderPanelForWidth('overlay');
+
+    expect([...panel.classList]).toContain(SIDE_PANEL_WIDTH_CLASS);
+    expect([...panel.classList]).not.toContain(DOCKED_WIDTH_CLASS);
+  });
+
+  it('keeps the narrower column width when docked in the debates feed', () => {
+    // Docked it sits beside JoinDebatePanel and DebateClaimsPanel, which are 360px.
+    // Widening it to the overlay width here would squeeze the debate players.
+    const panel = renderPanelForWidth('docked');
+
+    expect([...panel.classList]).toContain(DOCKED_WIDTH_CLASS);
+    expect([...panel.classList]).not.toContain(SIDE_PANEL_WIDTH_CLASS);
   });
 });
