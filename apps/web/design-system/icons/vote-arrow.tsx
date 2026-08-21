@@ -15,12 +15,14 @@ export function VoteArrow({ color, filled = false, direction = 'up' }: Props) {
   if (filled) {
     return (
       <svg
+        className="block"
         width="12"
         height="11"
         viewBox="0 0 12 11"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         style={{ transform }}
+        aria-hidden
       >
         <path fillRule="evenodd" clipRule="evenodd" d={FILLED_PATH} fill={themeColor} />
       </svg>
@@ -29,12 +31,14 @@ export function VoteArrow({ color, filled = false, direction = 'up' }: Props) {
 
   return (
     <svg
+      className="block"
       width="12"
       height="11"
       viewBox="0 0 12 11"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       style={{ transform }}
+      aria-hidden
     >
       <path
         fillRule="evenodd"

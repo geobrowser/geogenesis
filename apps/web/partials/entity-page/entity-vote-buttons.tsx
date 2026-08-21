@@ -410,7 +410,6 @@ export function EntityVoteButtons({
         title={positiveTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          !isClaimVariant && 'translate-y-px',
           claimResponseButtonColor(positiveActive),
           responseDisabled && 'cursor-default opacity-50'
         )}
@@ -449,7 +448,6 @@ export function EntityVoteButtons({
         title={negativeTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          !isClaimVariant && 'translate-y-px',
           claimResponseButtonColor(negativeActive),
           responseDisabled && 'cursor-default opacity-50'
         )}

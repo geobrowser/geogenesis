@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { EntityId } from '~/core/io/substream-schema';
 import type { Relation, Value } from '~/core/types';
 
-import { pickImage, pickRelationBySpace, pickValueBySpace } from './use-ranking-entry-entities';
+import { pickImage, pickRelationBySpace, pickValueBySpace, pickValueEntryBySpace } from './use-ranking-entry-entities';
 
 // Real space IDs from getSpaceRank: Root=0, Crypto=2, Software=5.
 const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
@@ -32,6 +32,30 @@ function relation(typeId: string, spaceId: string, toValue: string): Relation {
     toEntity: { value: toValue },
   } as Relation;
 }
+
+describe('pickValueEntryBySpace', () => {
+  it('returns the value and the space it was drawn from', () => {
+    const values = [
+      value(SystemIds.NAME_PROPERTY, ROOT_SPACE, 'Root name'),
+      value(SystemIds.NAME_PROPERTY, CRYPTO_SPACE, 'Crypto name'),
+    ];
+    expect(pickValueEntryBySpace(values, SystemIds.NAME_PROPERTY, UNRANKED_SPACE)).toEqual({
+      value: 'Root name',
+      spaceId: ROOT_SPACE,
+    });
+  });
+
+  it('prefers the current-space value when present', () => {
+    const values = [
+      value(SystemIds.NAME_PROPERTY, ROOT_SPACE, 'Root name'),
+      value(SystemIds.NAME_PROPERTY, UNRANKED_SPACE, 'Current name'),
+    ];
+    expect(pickValueEntryBySpace(values, SystemIds.NAME_PROPERTY, UNRANKED_SPACE)).toEqual({
+      value: 'Current name',
+      spaceId: UNRANKED_SPACE,
+    });
+  });
+});
 
 describe('pickValueBySpace', () => {
   it('returns the current-space value when present', () => {
