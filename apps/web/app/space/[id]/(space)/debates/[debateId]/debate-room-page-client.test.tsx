@@ -6,7 +6,6 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
-import { recordDebateFlowOrigin } from '~/core/debates/debate-entry-intent';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
@@ -253,7 +252,6 @@ class FakeBroadcastChannel {
 
 beforeEach(() => {
   setHistoryLength(1);
-  window.sessionStorage.clear();
   mocks.back.mockReset();
   mocks.push.mockReset();
   mocks.replace.mockReset();
@@ -440,19 +438,6 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.back).toHaveBeenCalledOnce();
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.enqueueRecording).not.toHaveBeenCalled();
-  });
-
-  // GEO-2605. history.length says only how deep we are, not where the flow began: hub -> room ->
-  // rematch -> room leaves another room one entry back, so back() returns into the flow. The path
-  // recorded on entry is the only thing that knows where the viewer actually came from.
-  it('returns to the path the flow started from rather than one history entry back', async () => {
-    setHistoryLength(4);
-    recordDebateFlowOrigin('/space/space-1/entity-7');
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/entity-7'));
-    expect(mocks.back).not.toHaveBeenCalled();
   });
 
   it('falls back to the debates page when a cancelled room has no prior history', async () => {

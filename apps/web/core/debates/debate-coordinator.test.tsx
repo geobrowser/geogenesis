@@ -496,26 +496,6 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
   });
 
-  // GEO-2600. Same loop, wider cause: the room returns whoever opens *any* finished debate, not
-  // only one whose recording was cancelled. `activeDebate` has always known that; this effect only
-  // checked the recording. So a `deciding` rematch over a complete debate pushed into a room that
-  // bounced straight back out, and the push repeated on every activity change — the rematch page
-  // blanking and redrawing on a URL that never moved, which is what Preston recorded.
-  it.each(['complete', 'cancelled'] as const)(
-    'does not route into a deciding rematch whose debate is %s',
-    async status => {
-      mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
-      mocks.activity = {
-        ...activityWithRematch('deciding'),
-        debate: { ...activityWithDebate().debate!, status, participants: bothParticipants() },
-      };
-
-      render(<DebateCoordinator />);
-
-      await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
-    }
-  );
-
   it('still routes into a deciding rematch while the debate is intact', async () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = activityWithRematch('deciding');

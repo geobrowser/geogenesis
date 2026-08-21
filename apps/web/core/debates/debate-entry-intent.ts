@@ -45,75 +45,8 @@ function set(debateId: string | null) {
   emit();
 }
 
-/**
- * Where the viewer was before they entered the debate flow.
- *
- * GEO-2605: exiting a debate used `router.back()`, which steps back exactly one
- * history entry. In a single-hop entry that is the origin, but the flow is rarely
- * single-hop — hub -> room -> rematch -> room means the entry behind you is
- * another room, so back() lands inside the flow and the fallback drops you on
- * `/space/{id}/debates`, which is the "weird screen" in the report. The room's own
- * comment already noted the other half of it: stepping back into a room re-runs
- * its exit from a fresh mount, which is the flicker.
- *
- * So record the origin on the way in instead of inferring it on the way out.
- *
- * Captured on `markEnteringDebate`, which every entry into a room already calls,
- * and deliberately *only if nothing is held yet* — a rematch entering a second
- * room must not overwrite the hub the viewer actually came from. Paths already
- * inside the flow are never recorded, so a refresh mid-flow cannot make the room
- * its own origin.
- *
- * `sessionStorage` rather than module state because "errored out of the flow" can
- * mean a reload, and module state does not survive one. Scoped to the tab, so two
- * debates in two tabs keep separate origins.
- *
- * Every exit through the room consumes the origin, so it only goes stale if the
- * viewer leaves the flow some other way (a nav click) and later re-enters from a
- * different page. They then land on the earlier origin instead of the newer one —
- * still a page they were on in this tab, so not worth a route observer to fix.
- */
-const DEBATE_FLOW_ORIGIN_KEY = 'geo.debate-flow-origin';
-
-/** True for any path that is itself part of the debate flow. */
-function isDebateFlowPath(path: string): boolean {
-  return /\/debates(\/|$|\?)/.test(path);
-}
-
-function currentPath(): string | null {
-  if (typeof window === 'undefined') return null;
-  return `${window.location.pathname}${window.location.search}`;
-}
-
-/**
- * Remember where the flow started. No-op if an origin is already held, if the
- * current path is inside the flow, or off the browser.
- */
-export function recordDebateFlowOrigin(path: string | null = currentPath()): void {
-  if (typeof window === 'undefined' || !path || isDebateFlowPath(path)) return;
-  try {
-    if (window.sessionStorage.getItem(DEBATE_FLOW_ORIGIN_KEY)) return;
-    window.sessionStorage.setItem(DEBATE_FLOW_ORIGIN_KEY, path);
-  } catch {
-    // Private-mode or storage-disabled browsers fall back to the old behaviour.
-  }
-}
-
-/** Read and forget the origin. Returns null when there is nothing to return to. */
-export function takeDebateFlowOrigin(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const origin = window.sessionStorage.getItem(DEBATE_FLOW_ORIGIN_KEY);
-    window.sessionStorage.removeItem(DEBATE_FLOW_ORIGIN_KEY);
-    return origin || null;
-  } catch {
-    return null;
-  }
-}
-
 /** Call immediately before pushing into a debate room. */
 export function markEnteringDebate(debateId: string) {
-  recordDebateFlowOrigin();
   set(debateId);
   expiry = setTimeout(() => {
     expiry = null;
