@@ -9,6 +9,15 @@ import { Effect, Either } from 'effect';
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import {
+  type EntityVoteDirectionFilter,
+  type UserVotedEntityIdsCache,
+  addRemovedVotedId,
+  clearRemovedVotedId,
+  removeEntityFromVotedIds,
+  userEntityVotesQueryKey,
+  votedEntityIdsRemovedQueryKey,
+} from '~/core/hooks/use-user-voted-entity-ids';
 import { getUserEntityResponse } from '~/core/io/queries';
 import {
   claimResponseSummariesQueryKeyPrefix,
@@ -337,6 +346,38 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
     [readRegisteredSpace, spaceId, entityId, responseKind, tx, pendingResponseIndex]
   );
 
+  const dropFromVotedList = (direction: EntityVoteDirectionFilter) => {
+    queryClient.setQueryData<UserVotedEntityIdsCache>(userEntityVotesQueryKey(personalSpaceId, direction), current =>
+      removeEntityFromVotedIds(current, entityId)
+    );
+    queryClient.setQueryData<string[]>(votedEntityIdsRemovedQueryKey(personalSpaceId, direction), (current = []) =>
+      addRemovedVotedId(current, entityId)
+    );
+  };
+
+  const restoreToVotedList = (direction: EntityVoteDirectionFilter) => {
+    queryClient.setQueryData<string[]>(votedEntityIdsRemovedQueryKey(personalSpaceId, direction), (current = []) =>
+      clearRemovedVotedId(current, entityId)
+    );
+    queryClient.invalidateQueries({ queryKey: userEntityVotesQueryKey(personalSpaceId, direction) });
+  };
+
+  /**
+   * Keeps the Upvoted/Downvoted tabs in step with the response that just landed:
+   * drop the entity from whichever list it no longer belongs to, restore it to the
+   * one it just joined.
+   * The response counts and the viewer's own response are invalidated by the
+   * indexing reconciliation above rather than here.
+   */
+  const syncVotedLists = (direction: ResponseDirection) => {
+    if (direction !== 'positive') dropFromVotedList('up');
+    if (direction !== 'negative') dropFromVotedList('down');
+
+    if (direction !== 'clear') {
+      restoreToVotedList(direction === 'positive' ? 'up' : 'down');
+    }
+  };
+
   const responseMutation = useMutation({
     mutationFn: executeResponse,
     onMutate: direction => {
@@ -360,6 +401,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       return { previousState, runId, runOrder };
     },
     onSuccess: (submission, direction, context) => {
+      syncVotedLists(direction);
       // Taking a position on a claim (agree/disagree, verify/dispute) says the user wants to
       // take part in the space the claim is published in, so join them to it the same way
       // submitting a ranking does. Curation upvotes are excluded — those apply to every

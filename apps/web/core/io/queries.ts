@@ -19,6 +19,7 @@ import {
   type UserVoteFilter,
   type UuidFilter,
 } from '~/core/gql/graphql';
+import { uuidToHex } from '~/core/id/normalize';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import {
   type ActiveResponseDirection,
@@ -76,6 +77,7 @@ import { restFetch } from './rest';
 import { type SortOrder } from './sort-order';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
+import { UserEntityVotesByTypeDocument } from './user-entity-votes-by-type-document';
 
 // `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
 export const ENTITY_ID_BATCH_SIZE = 50;
@@ -1337,6 +1339,58 @@ export function getEntityResponders(
     signal,
   });
 }
+
+export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
+
+type UserEntityVotesPage = {
+  nodes: Array<{ objectId: string; voteKind: number }>;
+  pageInfo: { hasNextPage: boolean; endCursor?: string | null };
+};
+
+export type UserEntityVoteObjectIdsPage = {
+  objectIds: string[];
+  voteKindByObjectId: Record<string, number>;
+  endCursor: string | null;
+  hasNextPage: boolean;
+};
+
+export function getUserEntityVoteObjectIdsPage(
+  userId: string,
+  voteType: 0 | 1,
+  objectType: 0 | 1 = 0,
+  after?: string | null,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const page: UserEntityVotesPage = yield* graphql({
+      query: UserEntityVotesByTypeDocument,
+      decoder: (data): UserEntityVotesPage =>
+        data.userVotesConnection ?? { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
+      variables: {
+        userId,
+        voteType,
+        objectType,
+        first: USER_ENTITY_VOTES_PAGE_SIZE,
+        after: after ?? null,
+      },
+      signal,
+    });
+
+    const nodes = page.nodes.filter(node => Boolean(node.objectId));
+    const objectIds = nodes.map(node => node.objectId);
+    const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
+    const endCursor = page.pageInfo.endCursor ?? null;
+
+    return {
+      objectIds,
+      voteKindByObjectId,
+      endCursor,
+      // A cursor is required to advance, so treat a missing one as the end.
+      hasNextPage: Boolean(page.pageInfo.hasNextPage && endCursor),
+    } satisfies UserEntityVoteObjectIdsPage;
+  });
+}
+
 const EXCLUDED_BLOCK_TYPES = [
   SystemIds.TEXT_BLOCK,
   SystemIds.IMAGE_BLOCK,
