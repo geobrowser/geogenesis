@@ -44,6 +44,15 @@ describe('debate return navigation', () => {
     expect(consumeDebateReturnDestination()).toBe('/space/second');
   });
 
+  // A protocol-relative href is not an off-site redirect here — `new URL('//evil.com/x', base)`
+  // reconstructs to the bare path `/x`, so without this guard the viewer would be sent to the
+  // wrong *local* page rather than off the origin. Rejecting beats silently rewriting.
+  it('rejects a protocol-relative destination rather than rewriting it to a local path', () => {
+    rememberDebateReturnDestination('//evil.example/space/somewhere');
+
+    expect(consumeDebateReturnDestination()).toBeNull();
+  });
+
   it('rejects external and expired destinations', () => {
     rememberDebateReturnDestination('https://example.com/steal-me');
     expect(consumeDebateReturnDestination()).toBeNull();

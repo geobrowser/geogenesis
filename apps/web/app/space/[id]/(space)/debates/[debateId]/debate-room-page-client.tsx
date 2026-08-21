@@ -31,6 +31,7 @@ import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
   createDebateRoomOwnershipCoordinator,
+  debateRoomTabPriority,
 } from '~/core/debates/debate-room-ownership';
 import {
   useAbortDebate,
@@ -259,6 +260,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // ended by our own teardown (leave, takeover, unmount) close no analytics event, so
   // debate_room_reconnecting counts can exceed the sum of the two closing events.
   const reconnectingStartedAtRef = React.useRef<number | null>(null);
+  // One auto-takeover per focus episode: spent when an attempt fires, re-armed only when the tab
+  // genuinely loses attention (or the conflict resolves). Generation numbers can't dedupe here —
+  // connect() bumps the generation as its first statement, so any recorded value is stale
+  // immediately. The in-flight flag additionally keeps overlapping attempts from superseding each
+  // other's connection generation mid-handshake.
+  const autoTakeoverSpentRef = React.useRef(false);
+  const autoTakeoverInFlightRef = React.useRef(false);
   const ownershipRef = React.useRef<DebateRoomOwnershipCoordinator | null>(null);
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
@@ -526,13 +534,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const coordinator = createDebateRoomOwnershipCoordinator({
       debateId,
       userId: currentUserId,
-      onTakeoverRequested: () => {
+      onTakeoverRequested: ({ requesterPriority, ownerPriority }) => {
         const status = debateStatusRef.current;
         const preflightStillPending =
           status === 'preflight' &&
           recordingStartedAtRef.current === null &&
           (preflightEndsAtMsRef.current === null || serverNowRef.current() < preflightEndsAtMsRef.current);
-        const canReleaseOwnership = status === 'connecting' || preflightStillPending;
+        // A focused tab may pull the connection from an unfocused one while nothing has been
+        // recorded yet. Once recording starts the owner keeps the room: releasing would tear down
+        // an in-flight MediaRecorder, which cannot finish persisting inside the takeover budget.
+        // The status gate also protects live debates whose recording never managed to start
+        // (recordingStartedAtRef stays null when MediaRecorder is unavailable).
+        const focusHandoff =
+          requesterPriority === 2 &&
+          ownerPriority < 2 &&
+          recordingStartedAtRef.current === null &&
+          (status === 'connecting' || status === 'preflight');
+        const canReleaseOwnership = status === 'connecting' || preflightStillPending || focusHandoff;
         if (!canReleaseOwnership) return false;
 
         const generation = connectionGenerationRef.current + 1;
@@ -1198,6 +1216,55 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const takeOverConnection = React.useCallback(() => {
     void connect({ takeover: true });
   }, [connect]);
+
+  // A blocked tab the user focuses reclaims the debate by itself instead of dead-ending on
+  // "already open in another tab" until they find the Continue button. Limited to same-browser
+  // conflict sources: reclaiming across devices (livekit_duplicate_identity) would evict a call
+  // the user may be actively holding on their phone, so that stays behind the explicit click.
+  React.useEffect(() => {
+    if (
+      roomState !== 'idle' ||
+      (connectionConflictSource !== 'web_lock_blocked' && connectionConflictSource !== 'ownership_released')
+    ) {
+      // The conflict resolved or changed shape; the next episode gets a fresh attempt.
+      autoTakeoverSpentRef.current = false;
+      return;
+    }
+    const attemptTakeover = () => {
+      if (autoTakeoverSpentRef.current || autoTakeoverInFlightRef.current) return;
+      // Mirror the "Continue here" button's status gate: past preflight the owner refuses anyway
+      // — or worse, hands over a live debate whose recording never managed to start.
+      const status = debateStatusRef.current;
+      if (status !== 'connecting' && status !== 'preflight') return;
+      autoTakeoverSpentRef.current = true;
+      autoTakeoverInFlightRef.current = true;
+      void connectRef.current({ takeover: true }).finally(() => {
+        autoTakeoverInFlightRef.current = false;
+      });
+    };
+    const handleAttentionChange = () => {
+      if (debateRoomTabPriority() !== 2) {
+        // Leaving focus re-arms the next attempt; browsers that fire redundant focus or
+        // visibilitychange events while the tab stays focused therefore cannot double-connect.
+        autoTakeoverSpentRef.current = false;
+        return;
+      }
+      attemptTakeover();
+    };
+    window.addEventListener('focus', handleAttentionChange);
+    // A window losing focus to another application fires blur without any visibilitychange.
+    window.addEventListener('blur', handleAttentionChange);
+    document.addEventListener('visibilitychange', handleAttentionChange);
+    // The conflict can land while this tab is already focused (it lost the connect race to a
+    // background tab that navigated earlier); reclaim immediately rather than waiting for a
+    // focus transition that will never come.
+    if (debateRoomTabPriority() === 2) attemptTakeover();
+    return () => {
+      window.removeEventListener('focus', handleAttentionChange);
+      window.removeEventListener('blur', handleAttentionChange);
+      document.removeEventListener('visibilitychange', handleAttentionChange);
+    };
+  }, [connectionConflictSource, roomState]);
 
   const toggleAudioMuted = React.useCallback(() => {
     setAudioMuted(current => !current);

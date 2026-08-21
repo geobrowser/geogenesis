@@ -10,6 +10,7 @@ import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response
 
 import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatRequestError } from './api';
 import { DebateCoordinator } from './debate-coordinator';
+import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import {
   debateQueryKeys,
   useAcceptDebateRematchRequest,
@@ -28,7 +29,6 @@ import {
   useMarkDebateReady,
   useUpdateDebateAvailability,
 } from './hooks';
-import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
@@ -53,8 +53,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, back: mocks.back }),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,
@@ -378,10 +377,71 @@ describe('useGeoChatAuth', () => {
     });
 
     await waitFor(() =>
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims'],
-      })
+      expect(invalidateQueries).toHaveBeenCalledWith({ predicate: expect.any(Function) }, { cancelRefetch: false })
     );
+
+    // Only the batches naming the claim, plus the id-less session list any response can add a
+    // row to. The picker holds a batch per page on screen; refetching all of them for one
+    // response is what left its positions trailing.
+    const predicate = invalidateQueries.mock.calls.at(-1)![0]!.predicate!;
+    const batch = (claimIds: string[]) =>
+      ({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims', claimIds] }) as never;
+    expect(predicate(batch(['claim-1']))).toBe(true);
+    expect(predicate(batch(['claim-0', 'claim-1', 'claim-2']))).toBe(true);
+    expect(predicate(batch([]))).toBe(true);
+    expect(predicate(batch(['claim-2']))).toBe(false);
+    expect(
+      predicate({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-2', 'claims', ['claim-1']] } as never)
+    ).toBe(false);
+  });
+
+  // Cancelling a batch that is about to answer throws the request away, and when responses keep
+  // arriving it means none of them ever land — the starvation this family is invalidated around.
+  // The request in flight is left to land, then asked again so the answer postdates the response.
+  it('lets a rematch batch in flight land and asks it again once an indexed response arrives', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    let landFirst!: () => void;
+    mocks.listDebateRematchClaims.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          landFirst = () => resolve({ claims: [], excluded_claim_ids: [] });
+        })
+    );
+
+    renderHook(() => useDebateRematchClaims('rematch-1', ['claim-1']), { wrapper });
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'negative',
+          personalSpaceId: 'profile-1',
+          responseKind: 'veracity',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      });
+    });
+
+    // The request that was already on its way is not restarted out from under itself.
+    const batch = queryClient
+      .getQueryCache()
+      .find({ queryKey: debateQueryKeys.rematchClaims('user-a', 'rematch-1', ['claim-1']) })!;
+    expect(batch.state.fetchStatus).toBe('fetching');
+    expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1);
+
+    act(() => landFirst());
+
+    // ...and once it has landed, it is asked again, so what ends up on screen knows the response.
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(2));
   });
 
   // A `users/me` sent before logout can resolve after it. Writing that result back would
@@ -465,7 +525,16 @@ describe('useUpdateDebateAvailability', () => {
 
     expect(mocks.updateDebateAvailability).toHaveBeenCalledWith(false, expect.any(Function), 'user-a');
     expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(authoritative);
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates'] });
+    // Everything under `'debates'` bar the rematch picker's positions batches, which availability
+    // says nothing about and which cost a request per page of claims on screen.
+    expect(invalidateQueries).toHaveBeenCalledWith({ predicate: expect.any(Function) });
+    const predicate = invalidateQueries.mock.calls.at(-1)![0]!.predicate!;
+    expect(predicate({ queryKey: ['debates', 'account', 'user-a', 'activity'] } as never)).toBe(true);
+    expect(predicate({ queryKey: ['debates', 'claims', 'space-1', 'all'] } as never)).toBe(true);
+    expect(
+      predicate({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims', ['claim-1']] } as never)
+    ).toBe(false);
+    expect(predicate({ queryKey: ['claim-picker', 'page'] } as never)).toBe(false);
   });
 
   it('rolls the optimistic activity back when the request fails', async () => {
