@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   abortMutateAsync: vi.fn(),
   abortPending: false,
   clearDebateActivity: vi.fn(),
+  markEnteringDebate: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -20,6 +21,10 @@ vi.mock('next/navigation', () => ({
 vi.mock('./hooks', () => ({
   useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: mocks.abortPending }),
   useClearDebateActivity: () => mocks.clearDebateActivity,
+}));
+
+vi.mock('./debate-entry-intent', () => ({
+  markEnteringDebate: mocks.markEnteringDebate,
 }));
 
 // useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
@@ -77,6 +82,7 @@ beforeEach(() => {
   mocks.abortMutateAsync.mockResolvedValue(debate({ status: 'cancelled' }));
   mocks.abortPending = false;
   mocks.clearDebateActivity.mockReset();
+  mocks.markEnteringDebate.mockReset();
 });
 afterEach(cleanup);
 
@@ -89,6 +95,7 @@ describe('DebateReadyPrompt', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Join debate' }));
 
+    expect(mocks.markEnteringDebate).toHaveBeenCalledWith('debate-1');
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
   });
 
@@ -173,6 +180,7 @@ describe('DebateRejoinBar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Your debate is ready/ }));
 
+    expect(mocks.markEnteringDebate).toHaveBeenCalledWith('debate-1');
     expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1');
   });
 });

@@ -5,7 +5,7 @@ import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
-import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
+import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import { normId } from '~/core/utils/norm-id';
 
 import { ExplorePage } from '~/partials/explore/explore-page';
@@ -22,7 +22,7 @@ export default async function ExploreRoutePage() {
 
   // Fire every fetch in parallel. Each branch handles its own failure so one
   // degraded indexer call doesn't drop the whole page.
-  const featuredSpacesPromise = fetchFeaturedSpaces().catch(() => [] as FeaturedSpace[]);
+  const featuredSpacesPromise = fetchFeaturedSpacesShared().catch(() => [] as FeaturedSpace[]);
   // Reuse the same in-flight Root-topic traversal for the Browse Featured-spaces
   // section and the Explore Join-spaces panel.
   const browsePromise = fetchBrowseSidebarData(memberSpaceId, featuredSpacesPromise).catch(() =>

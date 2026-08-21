@@ -75,10 +75,11 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
     }
   }, [dispatch, smartAccount, personalSpaceId, isRegistered, isAccountSetupPending, spaceId, space, tx, queryClient]);
 
-  const { mutate, status } = useMutation({ mutationFn: handleRequestToBeMember });
+  const { mutate, mutateAsync, status } = useMutation({ mutationFn: handleRequestToBeMember });
 
   return {
     requestToBeMember: mutate,
+    requestToBeMemberAsync: mutateAsync,
     status,
   };
 }

@@ -7,6 +7,7 @@ import * as React from 'react';
 import type { EntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
 
 import { type DebateResponseKind, type GetPrivyIdentityToken, notifyClaimResponseIndexed } from './api';
+import { refreshRematchClaimBatches, rematchClaimBatchesWithClaim } from './rematch-claims-query-key';
 
 const MAX_NOTIFIED_RUNS = 256;
 type IndexedClaimResponse = NonNullable<ReturnType<typeof claimResponseIndexedEvent>>;
@@ -82,7 +83,17 @@ export function useClaimResponseIndexedNotifier(
           if (isAbortError(error)) return;
           return queryClient.invalidateQueries({ queryKey: ['debates', 'claims', response.spaceId] });
         })
-        .finally(() => notificationControllers.delete(controller));
+        .finally(() => {
+          notificationControllers.delete(controller);
+          if (controller.signal.aborted) return;
+          // GEO-2603. This call is what puts the response in geo-chat's copy, and the rematch
+          // picker gates Request debate on geo-chat agreeing the viewer has taken a side. The
+          // picker refreshes its batches off the same `indexed` event that starts this notification,
+          // so that refetch races the notification and usually loses — leaving the button hidden
+          // until something unrelated happened to refetch. Asking again once the notification has
+          // settled is the only refresh guaranteed to postdate it.
+          void refreshRematchClaimBatches(queryClient, rematchClaimBatchesWithClaim(accountKey, response.entityId));
+        });
     };
 
     const unsubscribe = queryClient.getQueryCache().subscribe(event => {
