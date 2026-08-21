@@ -31,8 +31,11 @@ const SORT_LABELS: Record<BountySort, string> = {
 
 const GROUP_BY_LABELS: Record<BountyGroupBy, string> = {
   none: 'No grouping',
-  difficulty: 'Group by difficulty',
   space: 'Group by space',
+  status: 'Group by status',
+  difficulty: 'Group by difficulty',
+  skill: 'Group by skill',
+  featured: 'Group by featured',
 };
 
 type Props = {

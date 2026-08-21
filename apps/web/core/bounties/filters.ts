@@ -8,6 +8,7 @@ import {
   isDifficultyKey,
   isWorkflowStatusKey,
   statusKeyForId,
+  statusLabelForKey,
 } from './labels';
 import type { BoardBounty } from './types';
 
@@ -18,7 +19,7 @@ import type { BoardBounty } from './types';
  */
 
 export type BountySort = 'payout-desc' | 'payout-asc' | 'deadline-asc' | 'updated-desc';
-export type BountyGroupBy = 'none' | 'difficulty' | 'space';
+export type BountyGroupBy = 'none' | 'space' | 'status' | 'difficulty' | 'skill' | 'featured';
 
 export type BountyFilters = {
   /** Space id, or null for all participating spaces. */
@@ -48,7 +49,7 @@ export const DEFAULT_BOUNTY_FILTERS: BountyFilters = {
 };
 
 const SORTS: readonly BountySort[] = ['payout-desc', 'payout-asc', 'deadline-asc', 'updated-desc'];
-const GROUP_BYS: readonly BountyGroupBy[] = ['none', 'difficulty', 'space'];
+const GROUP_BYS: readonly BountyGroupBy[] = ['none', 'space', 'status', 'difficulty', 'skill', 'featured'];
 
 const ALL_STATUS_KEYS = WORKFLOW_STATUSES.map(s => s.key);
 
@@ -187,6 +188,38 @@ const DIFFICULTY_ORDER: (DifficultyKey | 'unspecified')[] = ['easy', 'medium', '
  * fixed easy→hard order with unspecified last; space groups follow the order
  * of `spaceOrder` (the participating-space list), unknown spaces last.
  */
+/**
+ * The groups a bounty belongs to for a facet — the same dimensions the
+ * filters cover. Single-valued facets give one group; `skill` is
+ * multi-valued, so a bounty with several skills appears under each of them.
+ */
+function groupMemberships(bounty: BoardBounty, groupBy: Exclude<BountyGroupBy, 'none'>) {
+  switch (groupBy) {
+    case 'space':
+      return [{ key: bounty.spaceId, label: bounty.spaceLabel ?? bounty.spaceId }];
+    case 'status': {
+      const key = statusKeyForId(bounty.statusId);
+      return [{ key, label: statusLabelForKey(key) }];
+    }
+    case 'difficulty':
+      return [
+        {
+          key: difficultyKeyForId(bounty.difficultyId) ?? 'unspecified',
+          label: bounty.difficulty ?? 'Unspecified difficulty',
+        },
+      ];
+    case 'skill':
+      return bounty.skills.length > 0
+        ? bounty.skills.map(skill => ({ key: skill.id, label: skill.name }))
+        : [{ key: 'unspecified', label: 'No skills' }];
+    case 'featured':
+      return bounty.isFeatured ? [{ key: 'featured', label: 'Featured' }] : [{ key: 'other', label: 'Not featured' }];
+  }
+}
+
+const STATUS_ORDER: readonly string[] = WORKFLOW_STATUSES.map(status => status.key);
+const FEATURED_ORDER: readonly string[] = ['featured', 'other'];
+
 export function groupBounties(
   bounties: readonly BoardBounty[],
   groupBy: BountyGroupBy,
@@ -196,26 +229,32 @@ export function groupBounties(
 
   const buckets = new Map<string, BountyGroup>();
   for (const bounty of bounties) {
-    let key: string;
-    let label: string;
-    if (groupBy === 'difficulty') {
-      key = difficultyKeyForId(bounty.difficultyId) ?? 'unspecified';
-      label = bounty.difficulty ?? 'Unspecified difficulty';
-    } else {
-      key = bounty.spaceId;
-      label = bounty.spaceLabel ?? bounty.spaceId;
+    for (const { key, label } of groupMemberships(bounty, groupBy)) {
+      const bucket = buckets.get(key) ?? { key, label, bounties: [] };
+      bucket.bounties.push(bounty);
+      buckets.set(key, bucket);
     }
-    const bucket = buckets.get(key) ?? { key, label, bounties: [] };
-    bucket.bounties.push(bounty);
-    buckets.set(key, bucket);
   }
 
-  const order = groupBy === 'difficulty' ? DIFFICULTY_ORDER : spaceOrder;
+  const order: readonly string[] =
+    groupBy === 'difficulty'
+      ? DIFFICULTY_ORDER
+      : groupBy === 'status'
+        ? STATUS_ORDER
+        : groupBy === 'featured'
+          ? FEATURED_ORDER
+          : groupBy === 'space'
+            ? spaceOrder
+            : []; // skill: alphabetical
   const rank = (key: string) => {
-    const index = order.indexOf(key as never);
+    const index = order.indexOf(key);
     return index === -1 ? order.length : index;
   };
-  return [...buckets.values()].sort((a, b) => rank(a.key) - rank(b.key) || a.label.localeCompare(b.label));
+  // "Unspecified" buckets always trail; otherwise the facet's own order, then labels.
+  const isLast = (key: string) => (key === 'unspecified' ? 1 : 0);
+  return [...buckets.values()].sort(
+    (a, b) => isLast(a.key) - isLast(b.key) || rank(a.key) - rank(b.key) || a.label.localeCompare(b.label)
+  );
 }
 
 // -- Community-tab sections ---------------------------------------------------------

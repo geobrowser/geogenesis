@@ -172,6 +172,37 @@ describe('groupBounties', () => {
       'space-a',
     ]);
   });
+
+  it('groups by status in workflow order', () => {
+    const done = bounty({ id: 'done', statusId: BOUNTY_STATUS_DONE_ID });
+    const todo = bounty({ id: 'todo', statusId: BOUNTY_STATUS_TODO_ID });
+    const groups = groupBounties([done, todo], 'status');
+    expect(groups.map(g => g.key)).toEqual(['todo', 'done']);
+    expect(groups.map(g => g.label)).toEqual(['To do', 'Done']);
+  });
+
+  it('groups by skill alphabetically, a bounty under each of its skills, skill-less ones last', () => {
+    const tagged = bounty({
+      id: 'tagged',
+      skills: [
+        { id: 's-z', name: 'Zoology' },
+        { id: 's-a', name: 'Anatomy' },
+      ],
+    });
+    const bare = bounty({ id: 'bare' });
+    const groups = groupBounties([tagged, bare], 'skill');
+    expect(groups.map(g => g.label)).toEqual(['Anatomy', 'Zoology', 'No skills']);
+    // Multi-valued facet: the tagged bounty appears in both of its skill groups.
+    expect(groups[0].bounties.map(b => b.id)).toEqual(['tagged']);
+    expect(groups[1].bounties.map(b => b.id)).toEqual(['tagged']);
+    expect(groups[2].bounties.map(b => b.id)).toEqual(['bare']);
+  });
+
+  it('groups by featured with Featured first', () => {
+    const featured = bounty({ id: 'f', isFeatured: true });
+    const plain = bounty({ id: 'p' });
+    expect(groupBounties([plain, featured], 'featured').map(g => g.label)).toEqual(['Featured', 'Not featured']);
+  });
 });
 
 describe('community section filters', () => {
