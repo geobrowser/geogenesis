@@ -23,18 +23,12 @@ export function activeDebate(activity: ActivityLike | null | undefined): Debate 
 }
 
 /**
- * The reported debate's id when there is nothing left to enter: it finished, or its recording was
- * cancelled. Callers use it to refuse to navigate into a room that hides itself and returns whoever
- * opens it — see `activeDebate` for why such a debate is not "active".
- *
- * Deliberately the exact inverse of `activeDebate` rather than its own list of conditions. GEO-2600
- * was a caller that checked only the cancelled recording and so still routed into a `complete`
- * room, which bounced the viewer straight back out and re-armed the push that sent them.
+ * The reported debate's id if its recording was cancelled. Callers use it to refuse to navigate
+ * into a room that has nothing left to show — see `activeDebate` for why it is not "active".
  */
-export function unenterableDebateId(activity: ActivityLike | null | undefined): string | null {
+export function recordingCancelledDebateId(activity: ActivityLike | null | undefined): string | null {
   const debate = activity?.debate ?? null;
-  if (!debate) return null;
-  return activeDebate(activity) ? null : debate.id;
+  return debate?.recording_cancelled_at ? debate.id : null;
 }
 
 /**

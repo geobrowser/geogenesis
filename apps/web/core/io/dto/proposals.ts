@@ -1,4 +1,5 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import type { ProposalVotingMode } from '~/core/hooks/use-publish';
 import { OmitStrict, Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
@@ -60,6 +61,10 @@ export type Proposal = {
   endTime: number;
   status: ProposalStatus;
   canExecute: boolean;
+  /** Which governance path the author chose when they submitted. Optional because only
+   *  the REST proposal endpoint reports it — the GraphQL sources behind the list views
+   *  have it on `ProposalVersion` rather than `Proposal`, and don't select it. */
+  votingMode?: ProposalVotingMode;
   proposalVotes: {
     totalCount: number;
     nodes: VoteWithProfile[];

@@ -78,6 +78,142 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** The request the feed would make right now, as a URL. */
+async function requestedUrl() {
+  const queryFn = mocks.queryOptions?.queryFn as (args: { pageParam?: string }) => Promise<unknown>;
+  await queryFn({ pageParam: undefined });
+  return mocks.fetch.mock.calls.at(-1)?.[0] as string;
+}
+
+/**
+ * The mocked Menu renders its trigger and its items together, so a word can appear twice. The
+ * trigger's accessible name is "Time range: <value>", which both tells it apart from the item
+ * holding the same word and keeps the value it is showing.
+ */
+const timeTrigger = () => screen.queryByRole('button', { name: /^Time range:/ });
+const pickOption = (label: string) => fireEvent.click(screen.getByRole('button', { name: label }));
+
+// GEO-2610. The range answers "top of when?", so it belongs to Top alone. Best is ranked
+// server-side and New is ordered by recency already; a window over either is a filter the viewer
+// never asked for and — with the dropdown hidden — cannot see they have.
+describe('EntityFeed time range visibility', () => {
+  function renderExploreFeed() {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSpaceOptions={[]}
+        initialTime="month"
+        initialSort="best"
+        showSortFilter
+      />
+    );
+  }
+
+  it('hides the time dropdown for Best', () => {
+    renderExploreFeed();
+
+    expect(timeTrigger()).toBeNull();
+  });
+
+  it('hides it for New too', () => {
+    renderExploreFeed();
+
+    pickOption('New');
+
+    expect(timeTrigger()).toBeNull();
+  });
+
+  it('shows it once Top is picked', () => {
+    renderExploreFeed();
+
+    pickOption('Top');
+
+    expect(timeTrigger()).not.toBeNull();
+  });
+
+  it('hides it again when leaving Top', async () => {
+    renderExploreFeed();
+
+    pickOption('Top');
+    expect(timeTrigger()).not.toBeNull();
+    pickOption('New');
+
+    await waitFor(() => expect(timeTrigger()).toBeNull());
+  });
+
+  // `aria-label` replaces the visible text as the accessible name, so naming the control without
+  // its value would leave a screen reader unable to tell which sort or range is selected —
+  // `MenuItem` marks the active option with a background colour and nothing else.
+  it('announces the value each dropdown is showing, not just what it selects', () => {
+    renderExploreFeed();
+
+    expect(screen.queryByRole('button', { name: 'Sort: Best' })).not.toBeNull();
+
+    pickOption('Top');
+
+    expect(screen.queryByRole('button', { name: 'Sort: Top' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Time range: Last month' })).not.toBeNull();
+  });
+
+  // The point of the ticket: a hidden range must not quietly filter the feed.
+  it('leaves the range out of the request when it is hidden', async () => {
+    renderExploreFeed();
+    await waitFor(() => expect(mocks.queryOptions?.enabled).toBe(true));
+
+    expect(await requestedUrl()).not.toContain('time=');
+  });
+
+  it('sends the range when Top is showing it', async () => {
+    renderExploreFeed();
+    pickOption('Top');
+
+    expect(await requestedUrl()).toContain('time=month');
+  });
+
+  // Resetting to a default would lose a choice the viewer made; the state is simply not consulted
+  // while there is nowhere to show it.
+  it('restores the range the viewer last picked when they return to Top', async () => {
+    renderExploreFeed();
+
+    pickOption('Top');
+    pickOption('Last year');
+    pickOption('New');
+    await waitFor(() => expect(timeTrigger()).toBeNull());
+
+    pickOption('Top');
+
+    expect(timeTrigger()).not.toBeNull();
+    expect(await requestedUrl()).toContain('time=year');
+  });
+
+  // Two Best feeds differing only in a hidden range are the same request; caching them apart would
+  // refetch on a change the viewer never made.
+  it('keys the query on what it actually sends', async () => {
+    renderExploreFeed();
+    await waitFor(() => expect(mocks.queryOptions?.enabled).toBe(true));
+    const bestKey = mocks.queryOptions?.queryKey as unknown[];
+
+    pickOption('Top');
+    pickOption('Last year');
+    pickOption('Best');
+    await waitFor(() => expect(timeTrigger()).toBeNull());
+
+    expect(mocks.queryOptions?.queryKey).toEqual(bestKey);
+  });
+
+  // The activity feed opts out of the range entirely, and its request is unchanged by this: it sent
+  // `time=all` before and sends nothing now, which the route reads the same way.
+  it('sends no range for a feed that opts out of the filter', async () => {
+    render(
+      <EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" initialTime="all" showTimeFilter={false} />
+    );
+    await waitFor(() => expect(mocks.queryOptions?.enabled).toBe(true));
+
+    expect(timeTrigger()).toBeNull();
+    expect(await requestedUrl()).not.toContain('time=');
+  });
+});
+
 describe('EntityFeed Explore type filter', () => {
   it('omits the type parameter and does not persist before the user changes the default selection', async () => {
     render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} showSortFilter showTypeFilter />);
@@ -149,6 +285,8 @@ describe('EntityFeed Explore type filter', () => {
   it('preserves the historical query key for feeds without the Explore type filter', () => {
     render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-id" />);
 
-    expect(mocks.queryOptions?.queryKey).toEqual(['/api/activity/feed', 'new', 'week', 'space-id', null]);
+    // The time slot is empty rather than 'week': this feed sorts by New, which carries no range,
+    // so there is nothing to send and nothing to key on. Same positions otherwise.
+    expect(mocks.queryOptions?.queryKey).toEqual(['/api/activity/feed', 'new', undefined, 'space-id', null]);
   });
 });

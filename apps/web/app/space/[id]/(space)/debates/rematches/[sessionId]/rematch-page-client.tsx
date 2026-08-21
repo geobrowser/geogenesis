@@ -25,6 +25,7 @@ import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
+import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
   useAcceptDebateRematchRequest,
@@ -419,6 +420,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     (endedSession: DebateRematchSession) => {
       if (exitStartedRef.current) return;
       exitStartedRef.current = true;
+
+      const returnDestination = consumeDebateReturnDestination();
+      if (returnDestination) {
+        router.replace(returnDestination);
+        return;
+      }
 
       if (endedSession.source_debate_id === null) {
         if (window.history.length > 1) {
