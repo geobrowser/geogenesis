@@ -15,6 +15,14 @@ const LINE_CLAMP_CLASS: Record<number, string> = {
   6: 'line-clamp-6',
 };
 
+const MAX_SUPPORTED_LINES = 6;
+
+function assertSupportedMaxLines(maxLines: number) {
+  if (!Number.isInteger(maxLines) || maxLines < 1 || maxLines > MAX_SUPPORTED_LINES) {
+    throw new Error(`ClampedText: maxLines must be a whole number from 1 to ${MAX_SUPPORTED_LINES}.`);
+  }
+}
+
 type ClampedTextProps = {
   text: string;
   as?: 'p' | 'h1' | 'h2' | 'h3';
@@ -53,9 +61,11 @@ function isEllipsisActive(e: HTMLElement, maxLines: number): boolean {
   }
 
   if (maxLines === 1) {
-    temp.style.whiteSpace = 'nowrap';
+    temp.style.width = 'auto';
+    temp.style.maxWidth = 'none';
+    temp.style.minWidth = '0';
   } else {
-    temp.style.whiteSpace = 'normal';
+    temp.style.whiteSpace = getComputedStyle(e).whiteSpace;
     temp.style.width = `${e.clientWidth}px`;
     temp.style.boxSizing = 'border-box';
   }
@@ -89,12 +99,15 @@ export function ClampedText({
   variant = 'body',
   textClassName = '',
 }: ClampedTextProps) {
+  assertSupportedMaxLines(maxLines);
+
   const [expanded, setExpanded] = React.useState(false);
   const [isOverflowing, setIsOverflowing] = React.useState(false);
   const [lastLinePx, setLastLinePx] = React.useState<number | null>(null);
   const textRef = React.useRef<HTMLElement>(null);
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => setExpanded(false), [text]);
+  React.useLayoutEffect(() => setExpanded(false), [text]);
 
   React.useLayoutEffect(() => {
     const el = textRef.current;
@@ -108,8 +121,11 @@ export function ClampedText({
 
     if (typeof ResizeObserver === 'undefined') return;
 
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
     const ro = new ResizeObserver(measure);
-    ro.observe(el);
+    ro.observe(wrapper, { box: 'border-box' });
     return () => ro.disconnect();
   }, [text, maxLines, expanded, variant]);
 
@@ -119,7 +135,7 @@ export function ClampedText({
   const typeClassName = textStyles[variant];
 
   return (
-    <div className={cx('relative w-full min-w-0', reserveToggle && TOGGLE_GUTTER_CLASS)}>
+    <div ref={wrapperRef} className={cx('relative box-border w-full min-w-0', reserveToggle && TOGGLE_GUTTER_CLASS)}>
       <Tag
         ref={textRef as React.Ref<never>}
         className={cx(typeClassName, textClassName, clamp && LINE_CLAMP_CLASS[maxLines])}
