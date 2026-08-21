@@ -76,17 +76,18 @@ export const BOUNTY_STATUS_CANCELLED_ID = SystemIds.BOUNTY_STATUS_CANCELLED; // 
 // -- Interest / allocation ----------------------------------------------------
 
 /**
- * Interested In (RELATION Person → Bounty). Authored into the CURATOR'S
- * PERSONAL space (not the bounty's DAO space); existing testnet rows carry no
- * toSpaceId, so writes here must omit it too. Read via cross-space backlinks
- * on the bounty (filter by toEntityId + typeId, no space filter).
+ * Interested In (RELATION personal-space system entity → Bounty). Authored
+ * into the CURATOR'S PERSONAL space with toSpaceId = the bounty's DAO space.
+ * Legacy testnet rows use the person entity and omit toSpaceId; readers stay
+ * dual-shape. Read via cross-space backlinks on the bounty (filter by
+ * toEntityId + typeId, no space filter).
  */
 export const INTERESTED_IN_BOUNTY_PROPERTY_ID = SystemIds.INTERESTED_IN_PROPERTY; // ff7e1b44…
 
 /**
- * Allocated (RELATION Bounty → Person), authored into the bounty's DAO space
- * by an editor. Allocation targets are the curator's personal-space system
- * entity or person entity (see buildBountyAllocationTargets).
+ * Allocated (RELATION Bounty → personal-space system entity), authored into
+ * the bounty's DAO space by an editor. Legacy rows target the person entity;
+ * readers accept both (see buildBountyAllocationTargets).
  */
 export const BOUNTY_ALLOCATED_PROPERTY_ID = SystemIds.ALLOCATE_PROPERTY; // cfeb6422…
 
