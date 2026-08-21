@@ -54,6 +54,13 @@ vi.mock('~/core/debates/hooks', () => ({
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
+// The feed orders itself by the explore "Best" ranking. These tests are about readiness and
+// error states, so the ranking is settled and empty — which leaves the feed on recency, the order
+// they were written against.
+vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
+  useDebatesBestOrder: () => ({ rankByDebateId: new Map(), isLoading: false, isError: false }),
+}));
+
 vi.mock('~/core/hooks/use-space', () => ({
   useSpace: () => ({ space: { entity: { name: 'Fashion', image: null } }, isLoading: false }),
 }));
