@@ -8,6 +8,7 @@ import {
   mapProposalStatus,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import type { Profile } from '~/core/types';
@@ -93,7 +94,15 @@ export async function getMyGovernanceProposals(opts: {
   }
 
   const votingRows = status === 'pending' ? allRows.filter(p => p.status === 'PROPOSED') : allRows;
-  votingRows.sort((a, b) => b.timing.endTime - a.timing.endTime);
+  // Resolved before the sort, since submission time is its last key.
+  const submittedTimes = await fetchProposalSubmittedTimes(votingRows.map(p => p.proposalId));
+  const order = (p: (typeof votingRows)[number]) => ({
+    hasViewerVote: p.userVote !== null,
+    endTime: p.timing.endTime,
+    submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
+  });
+  // These are the viewer's own proposals, so there is no unvoted-first rule to apply.
+  votingRows.sort((a, b) => compareOpenProposals(order(a), order(b), { unvotedFirst: false, endTime: 'desc' }));
   const unique = dedupeByProposalId(votingRows);
   const offset = page * PAGE_SIZE;
   const pageSlice = unique.slice(offset, offset + PAGE_SIZE);
@@ -113,9 +122,6 @@ export async function getMyGovernanceProposals(opts: {
   ]);
 
   const profilesBySpaceId = new Map(uniqueProposedByIds.map((id, i) => [id, profilesForProposals[i]]));
-  // Open proposals have no voting timestamp until the first vote, so their row date
-  // comes from the indexed submission time instead.
-  const submittedTimes = await fetchProposalSubmittedTimes(pageSlice.map(p => p.proposalId));
   const targetProfilesBySpaceId = new Map(uniqueTargetIds.map((id, i) => [id, profilesForTargets[i]]));
 
   const proposals: MyGovernanceProposalRow[] = [];

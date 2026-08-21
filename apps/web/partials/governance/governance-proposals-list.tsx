@@ -12,6 +12,7 @@ import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import { Environment } from '~/core/environment';
 import {
   type ApiProposalListItem,
@@ -54,14 +55,25 @@ const BUCKET_BASE_ORDER: Record<ProposalBucket, number> = {
 
 const PAGE_SIZE = 100;
 
-/** Unvoted proposals first; voted ones sink to the bottom (same as governance home review). */
-function sortOpenProposalsUnvotedFirstByEndTimeAsc(items: readonly ApiProposalListItem[]): ApiProposalListItem[] {
-  return [...items].sort((a, b) => {
-    const aVoted = a.userVote != null;
-    const bVoted = b.userVote != null;
-    if (aVoted !== bVoted) return aVoted ? 1 : -1;
-    return a.timing.endTime - b.timing.endTime;
+/**
+ * Unvoted proposals first; voted ones sink to the bottom (same as governance home review).
+ * Then soonest-closing first, and newest submission first among proposals that close at
+ * the same time.
+ *
+ * That last key is what orders the "Voting period open" group: their voting window is
+ * unstamped until the first vote, so they all carry endTime 0 and used to tie — leaving
+ * them in whatever order the API happened to return.
+ */
+function sortOpenProposalsUnvotedFirstByEndTimeAsc(
+  items: readonly ApiProposalListItem[],
+  submittedTimes: Map<string, number>
+): ApiProposalListItem[] {
+  const order = (p: ApiProposalListItem) => ({
+    hasViewerVote: p.userVote != null,
+    endTime: p.timing.endTime,
+    submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
   });
+  return [...items].sort((a, b) => compareOpenProposals(order(a), order(b), { unvotedFirst: true, endTime: 'asc' }));
 }
 
 function percentageFromCounts(count: number, total: number): number {
@@ -414,10 +426,23 @@ async function fetchGovernanceProposals({
   // drop them from the open buckets. Completed history stays intact.
   const openProposals = await filterGrantedMembershipRequests([...executableProposals, ...activeProposals]);
 
+  // Resolved before sorting, not just for the rendered page: submission time is the
+  // tiebreaker for open proposals, so it has to be known for every candidate rather
+  // than the slice that survives pagination.
+  const submittedTimes = await fetchProposalSubmittedTimes(
+    [...openProposals, ...completedProposals].map(p => p.proposalId)
+  );
+
   // Combine in priority order: executable > active > completed; within open phases, unvoted first.
   let combinedProposals = [
-    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(openProposals.filter(p => p.status === 'EXECUTABLE')),
-    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(openProposals.filter(p => p.status !== 'EXECUTABLE')),
+    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
+      openProposals.filter(p => p.status === 'EXECUTABLE'),
+      submittedTimes
+    ),
+    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
+      openProposals.filter(p => p.status !== 'EXECUTABLE'),
+      submittedTimes
+    ),
     ...completedProposals,
   ];
 
@@ -446,10 +471,9 @@ async function fetchGovernanceProposals({
     .filter((id): id is string => !!id);
   const uniqueTargetIds = [...new Set(targetIds)];
 
-  const [profilesForProposals, profilesForTargets, submittedTimes] = await Promise.all([
+  const [profilesForProposals, profilesForTargets] = await Promise.all([
     Effect.runPromise(fetchProfilesBySpaceIds(uniqueProposedByIds)),
     uniqueTargetIds.length > 0 ? Effect.runPromise(fetchProfilesBySpaceIds(uniqueTargetIds)) : [],
-    fetchProposalSubmittedTimes(paginatedProposals.map(p => p.proposalId)),
   ]);
 
   // Create maps for efficient lookup
