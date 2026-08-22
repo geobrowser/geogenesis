@@ -7,6 +7,7 @@ import { useName } from '~/core/state/entity-page-store/entity-store';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Plus } from '~/design-system/icons/plus';
+import { Skeleton } from '~/design-system/skeleton';
 
 function FilterIcon() {
   return (
@@ -54,6 +55,8 @@ type TableBlockFilterGroupPillProps = {
   onClearGroup: () => void;
   onAddSimilar?: (anchorEl: HTMLElement) => void;
   isEditing: boolean;
+  /** Names are still being looked up, so an unresolved one is a wait rather than an answer. */
+  isResolvingNames?: boolean;
 };
 
 type FilterChipBaseProps = {
@@ -109,10 +112,44 @@ function FilterChipShell({
   );
 }
 
-function FilterRelationChip({ label, valueId, ...rest }: FilterChipBaseProps & { valueId: string }) {
+/**
+ * A relation filter's value is an entity id, and its name has to be resolved before it can be
+ * shown. Rendering the id in the meantime isn't a degraded label — it's noise the reader has to
+ * look past, and it reads as the filter having changed under them.
+ *
+ * Once resolution finishes the id is the honest answer again: an entity can genuinely have no
+ * name, and a placeholder that never resolves is worse than an ugly one that does.
+ */
+function FilterRelationChip({
+  valueName,
+  valueId,
+  isResolvingNames,
+  ...rest
+}: FilterChipBaseProps & { valueName: string | null; valueId: string; isResolvingNames: boolean }) {
   const hydratedName = useName(valueId);
-  const displayLabel = hydratedName ?? label;
-  return <FilterChipShell {...rest} displayLabel={displayLabel} removeLabel={label} />;
+  const name = hydratedName ?? valueName;
+
+  if (name === null && isResolvingNames) {
+    return <FilterChipSkeleton tone={rest.tone} />;
+  }
+
+  const displayLabel = name ?? valueId;
+  return <FilterChipShell {...rest} displayLabel={displayLabel} removeLabel={displayLabel} />;
+}
+
+/** Sized to sit on the chip's baseline so the pill doesn't resize when the name lands. */
+function FilterChipSkeleton({ tone }: { tone: 'white' | 'grey' }) {
+  return (
+    <span
+      aria-hidden
+      className={cx(
+        'inline-flex h-6 items-center rounded-[4px] border border-grey-02 px-1.5',
+        tone === 'white' ? 'bg-white' : 'bg-grey-01'
+      )}
+    >
+      <Skeleton className="h-3 w-16 rounded-[2px]" />
+    </span>
+  );
 }
 
 function FilterTextChip({ label, ...rest }: FilterChipBaseProps) {
@@ -127,6 +164,7 @@ export function TableBlockFilterGroupPill({
   onClearGroup,
   onAddSimilar,
   isEditing,
+  isResolvingNames = false,
 }: TableBlockFilterGroupPillProps) {
   const hasMultipleValues = group.filters.length > 1;
   const columnLabel = group.columnName ?? 'Property';
@@ -173,12 +211,13 @@ export function TableBlockFilterGroupPill({
           const key = `${filter.columnId}-${filter.value}-${originalIndex}`;
 
           if (filter.valueType === 'RELATION') {
-            const label = filter.valueName ?? filter.value ?? '';
             return (
               <FilterRelationChip
                 key={key}
-                label={label}
+                label={filter.valueName ?? filter.value ?? ''}
+                valueName={filter.valueName}
                 valueId={filter.value}
+                isResolvingNames={isResolvingNames}
                 tone="white"
                 disabled={!canDelete}
                 removable={removable}

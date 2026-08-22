@@ -1042,6 +1042,7 @@ export function PowerToolsScreen() {
                     effectiveSetFilterState(effectiveFilterState.filter(f => f.columnId !== group.columnId));
                   }}
                   isEditing={isEditing}
+                  isResolvingNames={data.isFilterResolving}
                 />
               </React.Fragment>
             ))}

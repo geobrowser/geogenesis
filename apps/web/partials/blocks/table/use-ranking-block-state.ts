@@ -135,7 +135,8 @@ export function useRankingBlockState({
 
   const canEdit = useCanUserEdit(spaceId);
 
-  const { filterState, resolvedFilterState, filterMode, setFilterState, setFilterMode } = useFilters(canEdit);
+  const { filterState, resolvedFilterState, isFilterResolving, filterMode, setFilterState, setFilterMode } =
+    useFilters(canEdit);
   const { source, setSource } = useRankingScope({ filterState, setFilterState });
 
   const { startDate, endDate } = useRankingBlockDates({
@@ -852,6 +853,7 @@ export function useRankingBlockState({
     canEdit,
     filterState,
     resolvedFilterState,
+    isFilterResolving,
     filterMode,
     setFilterState,
     setFilterMode,
