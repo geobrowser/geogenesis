@@ -65,7 +65,7 @@ import {
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention } from './debate-attention';
 import { markEnteringDebate } from './debate-entry-intent';
-import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
+import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
 import {
   isRematchClaimsQueryKey,
@@ -303,11 +303,41 @@ export function useLeaveDebateQueue(spaceId: string) {
   });
 }
 
+/** How often activity re-asks while the viewer is looking, with a live gateway behind it. */
+const ACTIVITY_POLL_MS = 30_000;
+/** And while the gateway is paused, when this is the only thing still asking. */
+const ACTIVITY_DEGRADED_POLL_MS = 10_000;
+
+/**
+ * The viewer's own debate state: the debate or rematch they are in, and the counts that gate the
+ * incoming-request popup.
+ *
+ * This is the entry point for anything that arrives unannounced. `DebateCoordinator` only fetches
+ * the request list once `incoming_request_count` says one exists, so a stale answer here is a
+ * request the recipient is never shown — and every other route to freshness is switched off:
+ * `debateQueryNetworkOptions` turns off `refetchOnWindowFocus` and `refetchOnReconnect`, which
+ * leaves the gateway's `debate.requests_changed` as the only thing that ever re-asked.
+ *
+ * That is fine until the socket is not listening, and it has two ways not to be. A dropped
+ * connection backs off for up to thirty seconds before `READY` triggers its reconcile. And an
+ * `ERROR` frame the gateway can't act on pauses live updates deliberately, without scheduling a
+ * reconnect — a scope-level rejection, but it takes the account-level stream down with it, and
+ * nothing recovers it. Either way the popup waited on a remount, which is how a request took
+ * "30-60 seconds" to appear (GEO-2638).
+ *
+ * So: poll while the viewer is looking, faster while the gateway is paused and this is the only
+ * thing still asking, and re-ask on return to the tab. The socket still does the fast path — a
+ * couple of seconds, of which the outbox relay is two — and this only bounds the bad case.
+ */
 export function useDebateActivity(enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const foreground = useDebateAttention();
+  const { paused } = useDebateGatewaySnapshot();
+  const queryEnabled = enabled && authenticated;
+  const wasForeground = React.useRef(foreground);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.activity(accountKey),
     queryFn: async ({ signal }) => {
@@ -320,8 +350,22 @@ export function useDebateActivity(enabled = true) {
       }
       return activity;
     },
-    enabled: enabled && authenticated,
+    enabled: queryEnabled,
+    // Background tabs don't poll: presence keeps the socket's own view current, and a tab nobody is
+    // looking at has no popup to draw.
+    refetchInterval: foreground ? (paused ? ACTIVITY_DEGRADED_POLL_MS : ACTIVITY_POLL_MS) : false,
   });
+
+  // Coming back to the tab is the one moment a viewer expects to be shown what they missed, and the
+  // shared options switch off React Query's own focus refetch for every debate query. Same shape as
+  // `useDebateProfile`, which needs it for the same reason.
+  React.useEffect(() => {
+    const returnedToForeground = foreground && !wasForeground.current;
+    wasForeground.current = foreground;
+    if (returnedToForeground && queryEnabled) void query.refetch();
+  }, [foreground, query.refetch, queryEnabled]);
+
+  return query;
 }
 
 export function useUpdateDebateAvailability() {
