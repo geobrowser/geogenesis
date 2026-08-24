@@ -443,19 +443,25 @@ export function getRelationsByToEntityIds(
     if (toEntityIds.length === 0) return [];
 
     type Row = { id: string; toEntityId: string; spaceId: string; fromEntityId: string };
+    type RelationsPage = { nodes: Row[]; pageInfo: { hasNextPage: boolean; endCursor?: string | null } } | null;
     const rows: Row[] = [];
 
     for (let start = 0; start < toEntityIds.length; start += ENTITY_ID_BATCH_SIZE) {
       const chunk = toEntityIds.slice(start, start + ENTITY_ID_BATCH_SIZE);
-      for (let offset = 0; ; offset += RELATIONS_PAGE_SIZE) {
-        const page = yield* graphql({
+      // Cursor pagination, not offset: the server rejects offsets above 1000,
+      // and well-linked chunks (e.g. submission backlinks) can exceed that.
+      let after: string | null = null;
+      for (;;) {
+        const page: RelationsPage = yield* graphql({
           query: relationsByToEntityIdsQuery,
-          decoder: data => data.relations ?? [],
-          variables: { toEntityIds: chunk, typeId, spaceId, first: RELATIONS_PAGE_SIZE, offset },
+          decoder: data => (data.relationsConnection ?? null) as RelationsPage,
+          variables: { toEntityIds: chunk, typeId, spaceId, first: RELATIONS_PAGE_SIZE, after },
           signal,
         });
-        rows.push(...page);
-        if (page.length < RELATIONS_PAGE_SIZE) break;
+        if (!page) break;
+        rows.push(...page.nodes);
+        if (!page.pageInfo.hasNextPage || !page.pageInfo.endCursor) break;
+        after = page.pageInfo.endCursor;
       }
     }
 
