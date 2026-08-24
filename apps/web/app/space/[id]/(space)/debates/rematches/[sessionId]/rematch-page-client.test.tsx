@@ -76,6 +76,7 @@ const mocks = vi.hoisted(() => ({
   currentUserId: 'user-local' as string | null,
   spaceAllowlist: null as Set<string> | null,
   allowlistLoading: false,
+  spaceTypes: {} as Record<string, 'DAO' | 'PERSONAL'>,
   scrollSentinelIntoView: null as null | (() => void),
   claimReadinessLoading: false,
   claimReadinessError: false,
@@ -282,13 +283,21 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
   useCachedBrowseSidebarData: () => null,
 }));
 
+// `type` is load-bearing, not decoration: the picker refuses to offer a claim whose home space is
+// personal, because a debate there could never be published. `mocks.spaceTypes` overrides it per
+// space; anything unlisted is a DAO space, which is what the rest of these suites assume.
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
-  useSpacesByIds: () => ({
+  useSpacesByIds: (spaceIds: string[] = []) => ({
     spaces: [],
-    spacesById: new Map([
-      [SPACE_1, { entity: { name: 'Crypto', image: null } }],
-      [SPACE_2, { entity: { name: 'Governance space', image: null } }],
-    ]),
+    spacesById: new Map(
+      [
+        // Anything the picker asked about resolves, so the type lookup can answer for it. The two
+        // named spaces come last so their real labels win over the generic fallback.
+        ...spaceIds.map(id => [id, `Space ${id.slice(0, 8)}`] as const),
+        [SPACE_1, 'Crypto'] as const,
+        [SPACE_2, 'Governance space'] as const,
+      ].map(([id, name]) => [id, { type: mocks.spaceTypes[id] ?? 'DAO', entity: { name, image: null } }])
+    ),
     isLoading: false,
   }),
 }));
@@ -339,6 +348,7 @@ beforeEach(() => {
   mocks.currentUserId = 'user-local';
   mocks.spaceAllowlist = null;
   mocks.allowlistLoading = false;
+  mocks.spaceTypes = {};
   // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
   // the callback so a test can say the sentinel scrolled into view.
   mocks.scrollSentinelIntoView = null;
@@ -1050,6 +1060,60 @@ describe('DebateRematchPageClient', () => {
     // The published claim sits in Governance space, which the allowlist leaves out.
     expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
     expect(screen.getByText('Politics')).toBeInTheDocument();
+  });
+
+  // A debate is published into the claim's home space by the acceptor, and editor rights on a
+  // personal space belong to its owner alone — so a claim living in one can never carry a published
+  // debate. Offering it spends a debate on a result that evaporates, which is worse than leaving it
+  // out. Unlike the allowlist this is a property of the claim, so both debaters see the same answer.
+  describe('when a claim’s home space could never receive the published debate', () => {
+    it('leaves it out of the opponent’s tab, and out of the count', async () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+      const tab = screen.getByRole('button', { name: /Salina’s positions/ });
+      expect(within(tab).getByText('0')).toBeInTheDocument();
+    });
+
+    it('leaves it out of the curated tab', async () => {
+      mocks.recommendedSections = [{ id: 'block-1', name: 'Politics', claimIds: [CLAIM_MORE] }];
+      mocks.recommendedEntities = [publishedEntity()];
+      mocks.curatedIds = [CLAIM_MORE];
+      mocks.spaceTypes = { [SPACE_2]: 'PERSONAL' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      // The section would have been the only one, so the tab has nothing left to head.
+      await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+      expect(screen.queryByText('Politics')).toBeNull();
+    });
+
+    it('leaves it out of the All tab', async () => {
+      mocks.spaceTypes = { [SPACE_2]: 'PERSONAL' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      showAllClaims();
+
+      await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+    });
+
+    it('keeps a claim in a DAO space, which the acceptor can publish into', () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = { [SPACE_1]: 'DAO' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    });
+
+    // Same convention as the allowlist: filtering on a half-resolved lookup would list the claim
+    // and then pull it back out from under the viewer.
+    it('keeps a claim whose space type has not resolved yet', () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = {};
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    });
   });
 
   // Listing a pool and trimming it once the allowlist lands means claims appear and then vanish
