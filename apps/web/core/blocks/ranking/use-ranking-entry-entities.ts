@@ -15,6 +15,7 @@ export type RankingEntryDisplay = {
   name: string;
   description: string | null;
   image: string | null;
+  spaceId?: string | null;
 };
 
 export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
@@ -36,14 +37,16 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
         .map(id => {
           const entity = byId.get(id);
           if (!entity) return null;
+          const name = pickValueEntryBySpace(entity.values, SystemIds.NAME_PROPERTY, spaceId);
           return {
             entityId: id,
-            name: pickValueBySpace(entity.values, SystemIds.NAME_PROPERTY, spaceId) ?? 'Untitled',
+            name: name?.value ?? 'Untitled',
             description: pickValueBySpace(entity.values, SystemIds.DESCRIPTION_PROPERTY, spaceId),
             image: pickImage(entity.relations, spaceId),
+            spaceId: name?.spaceId ?? null,
           };
         })
-        .filter((e): e is RankingEntryDisplay => e != null),
+        .filter((e): e is NonNullable<typeof e> => e != null),
     [byId, stableIds, spaceId]
   );
 
@@ -60,9 +63,20 @@ function pickBySpacePrecedence<T extends { spaceId: string }>(items: T[], curren
   return others.sort(compareBySpaceRank(item => item.spaceId))[0];
 }
 
-export function pickValueBySpace(values: Value[], propertyId: string, currentSpaceId: string): string | null {
+export function pickValueEntryBySpace(
+  values: Value[],
+  propertyId: string,
+  currentSpaceId: string
+): { value: string; spaceId: string } | null {
   const candidates = values.filter(v => v.property.id === propertyId && v.value?.trim());
-  return pickBySpacePrecedence(candidates, currentSpaceId)?.value?.trim() ?? null;
+  const picked = pickBySpacePrecedence(candidates, currentSpaceId);
+  const text = picked?.value?.trim();
+  if (!picked || !text) return null;
+  return { value: text, spaceId: picked.spaceId };
+}
+
+export function pickValueBySpace(values: Value[], propertyId: string, currentSpaceId: string): string | null {
+  return pickValueEntryBySpace(values, propertyId, currentSpaceId)?.value ?? null;
 }
 
 /**

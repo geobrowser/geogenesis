@@ -8,6 +8,7 @@ import { Dropdown } from '~/design-system/dropdown';
 import { FastPath } from '~/design-system/icons/fast-path';
 import { Time } from '~/design-system/icons/time';
 
+import { ProposalPathLabel, proposalPathName } from './proposal-path-label';
 import type { VotingSettingsSnapshot } from './voting-settings';
 
 type Props = {
@@ -45,7 +46,7 @@ export function ProposalPathSelector({ votingMode, onChange, votingSettings, isF
       label: (
         <OptionLabel
           icon={<FastPath />}
-          title="Fast path"
+          title={proposalPathName('FAST')}
           description={
             isFastPathRestricted
               ? 'Not available to you yet — this space restricts the fast path for new members'
@@ -61,7 +62,7 @@ export function ProposalPathSelector({ votingMode, onChange, votingSettings, isF
       label: (
         <OptionLabel
           icon={<Time />}
-          title="Review path"
+          title={proposalPathName('SLOW')}
           description={`Goes to a review over ${durationHours} hour${durationHours === 1 ? '' : 's'} and requires a ${passPercent}% pass rate`}
         />
       ),
@@ -73,8 +74,7 @@ export function ProposalPathSelector({ votingMode, onChange, votingSettings, isF
       align="end"
       trigger={
         <span className="flex items-center gap-1.5">
-          {votingMode === 'FAST' ? <FastPath /> : <Time />}
-          {votingMode === 'FAST' ? 'Fast path' : 'Review path'}
+          <ProposalPathLabel votingMode={votingMode} />
         </span>
       }
       options={options}

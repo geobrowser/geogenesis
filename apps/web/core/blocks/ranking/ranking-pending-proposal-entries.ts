@@ -27,6 +27,7 @@ export function entityDiffToRankingEntry(entity: EntityDiff): RankingEntryDispla
     name: entity.name?.trim() || 'Untitled',
     description: description?.trim() || null,
     image: null,
+    spaceId: null,
   };
 }
 

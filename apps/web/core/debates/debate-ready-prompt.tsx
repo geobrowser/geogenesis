@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Text } from '~/design-system/text';
 
 import type { Debate } from './api';
+import { markEnteringDebate } from './debate-entry-intent';
 import { DebateRequestDialog } from './debate-request-dialog';
 import { debatePath } from './debate-routes';
 import { useAbortDebate, useClearDebateActivity } from './hooks';
@@ -35,6 +36,7 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
   const join = () => {
     if (joining) return;
     setJoining(true);
+    markEnteringDebate(debate.id);
     startJoining(() => router.push(debatePath(debate)));
   };
 
@@ -108,6 +110,7 @@ export function DebateRejoinBar({ debate }: { debate: Debate }) {
         disabled={joining}
         onClick={() => {
           setJoining(true);
+          markEnteringDebate(debate.id);
           startJoining(() => router.push(debatePath(debate)));
         }}
         className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full bg-text py-2 pr-2 pl-4 text-white shadow-card transition-opacity hover:opacity-90 disabled:opacity-70"

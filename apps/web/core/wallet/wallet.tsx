@@ -14,6 +14,7 @@ import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/part
 import { trackPrivyAuth } from '../analytics';
 import { Environment } from '../environment';
 import { GEOGENESIS } from './geo-chain';
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
 const isTestEnv = Environment.variables.isTestEnv;
 
@@ -47,6 +48,7 @@ function PrivyConnectButton() {
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
+  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
 
   const resetOnboarding = () => {
     setName('');
@@ -54,6 +56,7 @@ function PrivyConnectButton() {
     setAvatar('');
     setSpaceId('');
     setStep('start');
+    setPostOnboardingRedirect(null);
   };
 
   // Reset is done on the explicit sign-in click below. Doing it here too
