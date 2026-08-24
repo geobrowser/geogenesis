@@ -266,10 +266,30 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [curatedClaimsQuery.data, opponentClaimsQuery.data, savedClaimsQuery.data]
   );
 
+  // A debate is published into the claim's home space by the acceptor, and a personal space grants
+  // editor rights to its owner alone — so a claim living in one can never carry a published debate
+  // (see `isDebatePublishableSpace`). Every list is narrowed by this, unlike the viewer-specific
+  // allowlist above: it is a property of the claim, so both debaters see the same answer, and
+  // offering such a claim spends a debate on a result that quietly evaporates.
+  //
+  // Every space a claim is named in is looked up, not just the one that currently wins the ranking,
+  // because which one wins is the next decision and it needs the types to make it.
+  const candidateSpaceIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const entity of [...opponentEntitiesQuery.entities, ...recommendedEntities]) {
+      for (const spaceId of claimCandidateSpaceIds(entity)) ids.add(spaceId);
+    }
+    for (const page of browsedPages) for (const entry of page.claims) ids.add(entry.claim.space_id);
+    for (const row of savedClaimsQuery.data?.claims ?? []) ids.add(row.claim.space_id);
+    return [...ids];
+  }, [browsedPages, opponentEntitiesQuery.entities, recommendedEntities, savedClaimsQuery.data]);
+  const { spacesById: candidateSpaces } = useSpacesByIds(candidateSpaceIds);
+  const canPublishDebateIn = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
+
   /** A picker row from a graph entity, with geo-chat's session row layered on when it has one. */
   const rowFromEntity = React.useCallback(
     (entity: ClaimPickerEntity): DebateRematchClaim | null => {
-      const homeSpaceId = claimHomeSpaceId(entity);
+      const homeSpaceId = claimHomeSpaceId(entity, canPublishDebateIn);
       if (!entity.name || !homeSpaceId) return null;
       const sessionRow = sessionRowsByClaimId.get(entity.id);
       const responseKind = sessionRow?.response_kind ?? claimResponseKind(entity, homeSpaceId);
@@ -291,7 +311,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         readiness_disabled_reason: sessionRow ? sessionRow.readiness_disabled_reason : null,
       };
     },
-    [recentlyRejectedClaimIds, sessionCarriesReadiness, sessionRowsByClaimId, sidesOf]
+    [canPublishDebateIn, recentlyRejectedClaimIds, sessionCarriesReadiness, sessionRowsByClaimId, sidesOf]
   );
 
   // Topics live on the KG claim entity, so resolve them here to label each card and drive the
@@ -313,27 +333,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     }
     return map;
   }, [browsedPages, opponentEntitiesQuery.entities, recommendedEntities]);
-
-  // A debate is published into the claim's home space by the acceptor, and a personal space grants
-  // editor rights to its owner alone — so a claim living in one can never carry a published debate
-  // (see `isDebatePublishableSpace`). Every list is narrowed by this, unlike the viewer-specific
-  // allowlist above: it is a property of the claim, so both debaters see the same answer, and
-  // offering such a claim spends a debate on a result that quietly evaporates.
-  const candidateSpaceIds = React.useMemo(() => {
-    const ids = new Set<string>();
-    for (const entity of [...opponentEntitiesQuery.entities, ...recommendedEntities]) {
-      const homeSpaceId = claimHomeSpaceId(entity);
-      if (homeSpaceId) ids.add(homeSpaceId);
-    }
-    for (const page of browsedPages) for (const entry of page.claims) ids.add(entry.claim.space_id);
-    for (const row of savedClaimsQuery.data?.claims ?? []) ids.add(row.claim.space_id);
-    return [...ids];
-  }, [browsedPages, opponentEntitiesQuery.entities, recommendedEntities, savedClaimsQuery.data]);
-  const { spacesById: candidateSpaces } = useSpacesByIds(candidateSpaceIds);
-  const canPublishDebateIn = React.useMemo(
-    () => debatePublishableSpacePredicate(candidateSpaces),
-    [candidateSpaces]
-  );
 
   // The opponent's tab: every claim they hold a side on, newest first. Held until the session's
   // exclusions are in, so nothing lists and then vanishes. Not narrowed by the space allowlist —
@@ -1174,11 +1173,39 @@ function rematchPositionSummaries(
  * the claim whenever that space outranks the claim's own — a Podcasts claim cited from Root or
  * Crypto resolves to those. Prefer the spaces where the claim is actually named, which is how the
  * entity side panel scopes the same entity.
+ *
+ * `canPublishIn`, where given, is consulted before the ranking. A claim named in both a personal
+ * space and a public one is a real case — a debater publishes into their own space and a curator
+ * later adds the claim to a shared one — and the space ranking has no opinion on which to pick:
+ * neither is in its table, so the tie falls to array order. Picking the personal space there loses a
+ * claim that is perfectly debatable in the public one, since the home space is exactly what decides
+ * where the debate is published. So: rank among the spaces that could receive it, and fall back to
+ * the plain ranking when none can, which leaves the claim to be filtered out on its merits rather
+ * than resolving to no space at all.
  */
-function claimHomeSpaceId(entity: {
-  spaces: string[];
+function claimHomeSpaceId(
+  entity: {
+    spaces: string[];
+    values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
+  },
+  canPublishIn?: (spaceId: string) => boolean
+): string | null {
+  const named = [...claimNamedSpaceIds(entity)];
+  const publishable = canPublishIn ? (ids: string[]) => ids.filter(canPublishIn) : (ids: string[]) => ids;
+
+  return (
+    getTopRankedSpaceId(publishable(named)) ??
+    getTopRankedSpaceId(named) ??
+    getTopRankedSpaceId(publishable(entity.spaces)) ??
+    getTopRankedSpaceId(entity.spaces) ??
+    null
+  );
+}
+
+/** The spaces a claim is actually named in — where it lives, as opposed to where it is mentioned. */
+function claimNamedSpaceIds(entity: {
   values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
-}): string | null {
+}): Set<string> {
   const namedSpaceIds = new Set<string>();
   for (const value of entity.values ?? []) {
     if (
@@ -1190,8 +1217,19 @@ function claimHomeSpaceId(entity: {
       namedSpaceIds.add(value.spaceId);
     }
   }
+  return namedSpaceIds;
+}
 
-  return getTopRankedSpaceId([...namedSpaceIds]) ?? getTopRankedSpaceId(entity.spaces) ?? null;
+/**
+ * Every space a claim could resolve its home to. The publishability lookup covers all of them, so
+ * {@link claimHomeSpaceId} has the types it needs to choose between them rather than choosing first
+ * and discovering afterwards that the space it picked can never receive the debate.
+ */
+function claimCandidateSpaceIds(entity: {
+  spaces: string[];
+  values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
+}): string[] {
+  return [...new Set([...claimNamedSpaceIds(entity), ...entity.spaces])];
 }
 
 function claimResponseKind(
