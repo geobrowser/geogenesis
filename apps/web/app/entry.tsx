@@ -28,6 +28,7 @@ import { FeatureFlagsDialog } from '~/partials/feature-flags/feature-flags-dialo
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
+import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { StatusBar } from '~/partials/review/status-bar';
 import { SearchDialog } from '~/partials/search';
@@ -134,6 +135,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <ClientOnly>
           <OnboardingDialog />
           <PendingPersonalSpaceRunner />
+          <PendingActionsRunner />
           <CreateSpaceDialog />
           <PendingCreatedSpaceRunner />
           <PendingCreatedSpaceStatus />
