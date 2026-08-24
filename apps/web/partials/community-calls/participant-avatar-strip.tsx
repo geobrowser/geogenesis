@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { getLiveParticipants } from '~/core/community-calls/api';
+import { participantAvatarUrl } from '~/core/community-calls/participant-avatar';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -49,11 +50,7 @@ export function ParticipantAvatarStrip({
           <div className="grid size-11 grid-cols-2 gap-1">
             {overflow.map(p => (
               <span key={p.identity} className="size-5 overflow-hidden rounded-full border border-white">
-                <Avatar
-                  value={p.name || p.identity}
-                  avatarUrl={p.avatarCid ? `ipfs://${p.avatarCid}` : undefined}
-                  size={20}
-                />
+                <Avatar value={p.name || p.identity} avatarUrl={participantAvatarUrl(p.avatarCid)} size={20} />
               </span>
             ))}
           </div>
@@ -68,7 +65,7 @@ function ParticipantAvatar({ name, avatarCid }: { name: string; avatarCid: strin
   return (
     <div className="flex w-[55px] flex-col items-center gap-1.5">
       <span className="size-11 shrink-0 overflow-hidden rounded-full">
-        <Avatar value={name} avatarUrl={avatarCid ? `ipfs://${avatarCid}` : undefined} size={44} />
+        <Avatar value={name} avatarUrl={participantAvatarUrl(avatarCid)} size={44} />
       </span>
       <span className="w-full truncate text-center text-[12px] leading-[16px] text-grey-04">{name}</span>
     </div>
