@@ -121,11 +121,12 @@ describe('loadDebatePublishSource media gating', () => {
   });
 
   // Without this gate, a succeeded job missing final_video publishes a videoless Debate entity.
-  it('treats a succeeded job with no final_video as not yet publishable', async () => {
+  // Terminal rather than a wait: the job that would have produced the video has already finished.
+  it('treats a succeeded job with no final_video as permanently unpublishable', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'preview_image' }] });
 
     await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(DebateNotPublishableError);
-    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/no processed final_video/);
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toMatchObject({ code: 'media_failed' });
   });
 
   // The hevc rendition is a companion to final_video, never a substitute for it.
@@ -138,10 +139,27 @@ describe('loadDebatePublishSource media gating', () => {
     await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(DebateNotPublishableError);
   });
 
-  it.each([['failed'], ['pending'], ['running']])('leaves a %s media job for a later tick', async status => {
+  it.each([['queued'], ['pending'], ['running']])('leaves a %s media job for a later tick', async status => {
     mockGeoChat({ job: { status }, artifacts: [] });
 
-    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/media is not ready/);
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toMatchObject({ code: 'media_not_ready' });
+  });
+
+  // A failed job has already spent its retries in the worker, so no later tick will publish this
+  // debate. Sharing `media_not_ready` with the statuses above is what let a dead debate count as a
+  // healthy backlog on every sweep, forever.
+  it('reports a failed media job as permanent rather than pending', async () => {
+    mockGeoChat({ job: { status: 'failed' }, artifacts: [] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toMatchObject({ code: 'media_failed' });
+  });
+
+  // A debate with no job row at all is the ambiguous case: a lost enqueue looks exactly like one
+  // about to happen, so it stays a wait rather than being reported as permanently dead.
+  it('treats a missing media job as a wait, not a permanent failure', async () => {
+    mockGeoChat({ job: null, artifacts: [] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toMatchObject({ code: 'media_not_ready' });
   });
 
   it('permanently rejects a cancelled debate even when media previously succeeded', async () => {
