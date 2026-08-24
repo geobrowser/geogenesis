@@ -1097,6 +1097,55 @@ describe('DebateRematchPageClient', () => {
       await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
     });
 
+    // A curated page holding some claims in a personal space and some in a public one keeps the
+    // public ones. The filter is per claim, on that claim's own home space — a section drops out
+    // only when every claim in it was unpublishable.
+    it('keeps the publishable claims in a mixed section and drops only the rest', async () => {
+      const PERSONAL_CLAIM = '019fedb8-6ca7-7f94-a077-8cd3be5a0a64';
+      mocks.recommendedSections = [
+        { id: 'block-1', name: 'Politics', claimIds: [PERSONAL_CLAIM, CLAIM_MORE] },
+      ];
+      mocks.recommendedEntities = [
+        { ...publishedEntity(PERSONAL_CLAIM, 'A claim in someone’s own space'), spaces: [SPACE_1] },
+        publishedEntity(),
+      ];
+      mocks.curatedIds = [PERSONAL_CLAIM, CLAIM_MORE];
+      mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+      expect(screen.getByText('Politics')).toBeInTheDocument();
+      expect(screen.queryByText('A claim in someone’s own space')).toBeNull();
+    });
+
+    // A debater publishes a claim into their own space; a curator later adds it to a shared one, so
+    // it is named in both. The space ranking has no opinion between them — neither is in its table,
+    // so the tie falls to array order — and picking the personal one would lose a claim that is
+    // perfectly debatable in the public space, since the home space is what decides where the
+    // debate is published.
+    it('resolves a claim named in both a personal and a public space to the public one', async () => {
+      const BOTH = '019fedb9-7db8-70a5-b188-9de4cf6b1b75';
+      mocks.recommendedSections = [{ id: 'block-1', name: 'Politics', claimIds: [BOTH] }];
+      mocks.recommendedEntities = [
+        {
+          ...publishedEntity(BOTH, 'A claim in two spaces'),
+          // Personal space first, so array order alone would have picked it: neither id is in the
+          // ranking table, so the tie falls through to order.
+          spaces: [SPACE_1, SPACE_2],
+          values: [
+            { property: { id: NAME_PROPERTY }, spaceId: SPACE_1, value: 'A claim in two spaces' },
+            { property: { id: NAME_PROPERTY }, spaceId: SPACE_2, value: 'A claim in two spaces' },
+          ],
+        },
+      ];
+      mocks.curatedIds = [BOTH];
+      mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      // Resolving to the personal space would have filtered it out entirely.
+      expect(await screen.findByText('A claim in two spaces')).toBeInTheDocument();
+    });
+
     it('keeps a claim in a DAO space, which the acceptor can publish into', () => {
       mocks.claims = [sharedClaim()];
       mocks.spaceTypes = { [SPACE_1]: 'DAO' };
