@@ -166,9 +166,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [recommendedSections]
   );
 
-  // Featured spaces plus the ones the viewer belongs to. Applied to the whole pool rather than to
-  // the All tab alone, so every tab, the space menu and the opponent-position count all describe
-  // the same set of claims.
+  // Featured spaces plus the ones the viewer belongs to. It narrows the All tab, which browses the
+  // whole published corpus and would otherwise offer claims from spaces the viewer has nothing to do
+  // with.
+  //
+  // The other two tabs are deliberately outside it. Each is bounded by an explicit source — one
+  // person's own responses, or one page from a curator space this build trusts by id — so neither
+  // can fan out the way browsing can, and the viewer's *own* space membership says nothing about
+  // whether the source is worth showing. Applying it there emptied both tabs in the ordinary case:
+  // a debater's claims live in their personal space, which nobody else is a member of, so the
+  // opponent's positions and a curator's page were dropped wholesale on the other side.
   const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
 
   // While it is still resolving there is no telling an allowed space from one the viewer has
@@ -305,9 +312,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return map;
   }, [browsedPages, opponentEntitiesQuery.entities, recommendedEntities]);
 
-  // The opponent's tab: every claim they hold a side on, newest first. Held until the allowlist
-  // and the session's exclusions are in, so nothing lists and then vanishes.
-  const opponentClaimsSettling = allowlistPending || opponentClaimsQuery.isLoading || opponentEntitiesQuery.isLoading;
+  // The opponent's tab: every claim they hold a side on, newest first. Held until the session's
+  // exclusions are in, so nothing lists and then vanishes. Not narrowed by the space allowlist —
+  // see it above.
+  const opponentClaimsSettling = opponentClaimsQuery.isLoading || opponentEntitiesQuery.isLoading;
   const opponentClaimsNow = React.useMemo(() => {
     if (opponentClaimsSettling) return [];
     const entitiesById = new Map(opponentEntitiesQuery.entities.map(entity => [entity.id, entity]));
@@ -319,9 +327,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       if (row && row.participants.some(side => side.user_id !== currentUserId && side.position !== null))
         rows.push(row);
     }
-    return rows
-      .filter(row => isClaimSpaceAllowed(row.claim.space_id, spaceAllowlist))
-      .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
+    return rows.sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
   }, [
     currentUserId,
     excludedClaimIds,
@@ -329,15 +335,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     opponentClaimsSettling,
     opponentEntitiesQuery.entities,
     rowFromEntity,
-    spaceAllowlist,
   ]);
   // A new response from the opponent adds an id, and the lookups keyed on the id list start over.
   // The list they were drawn from is still right for every claim already on it, so it stays up
   // until the new one lands rather than dropping to nothing in between.
   const opponentClaims = useLastSettled(opponentClaimsNow, opponentClaimsSettling);
 
-  // The curated tab, in the curator's order. Held the same way.
-  const curatedClaimsSettling = allowlistPending || curatedClaimsQuery.isLoading;
+  // The curated tab, in the curator's order. Held the same way, and likewise not narrowed by the
+  // space allowlist.
+  const curatedClaimsSettling = curatedClaimsQuery.isLoading;
   const curatedClaimsNow = React.useMemo(
     () =>
       curatedClaimsSettling
@@ -346,9 +352,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             if (excludedClaimIds.has(claimId)) return [];
             const entity = recommendedEntities.find(candidate => candidate.id === claimId);
             const row = entity ? rowFromEntity(entity) : null;
-            return row && isClaimSpaceAllowed(row.claim.space_id, spaceAllowlist) ? [row] : [];
+            return row ? [row] : [];
           }),
-    [curatedClaimsSettling, excludedClaimIds, recommendedClaimIds, recommendedEntities, rowFromEntity, spaceAllowlist]
+    [curatedClaimsSettling, excludedClaimIds, recommendedClaimIds, recommendedEntities, rowFromEntity]
   );
   const curatedClaims = useLastSettled(curatedClaimsNow, curatedClaimsSettling);
 
@@ -516,11 +522,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     fetchNextPage: browsedClaimsQuery.fetchNextPage,
   });
 
-  // Each tab draws from a different set of queries, so each waits on its own — and on the
-  // allowlist, which narrows all of them.
+  // Each tab draws from a different set of queries, so each waits on its own. The allowlist narrows
+  // the All tab alone now, so only that one waits for it.
   const tabIsLoading =
     sessionQuery.isLoading ||
-    allowlistPending ||
     (tab === 'recommended'
       ? recommendedLoading || curatedClaimsQuery.isLoading
       : tab === 'opponent'
@@ -528,7 +533,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           opponentEntitiesQuery.isLoading ||
           opponentClaimsQuery.isLoading ||
           (landedTabRef.current === null && claims.length === 0 && recommendedLoading)
-        : browsedClaimsQuery.isLoading);
+        : allowlistPending || browsedClaimsQuery.isLoading);
 
   const tabError =
     sessionQuery.error ??
@@ -560,6 +565,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       }))
       .filter(section => section.claims.length > 0);
   }, [recommendedSections, tab, visibleClaims]);
+
+  // `debate.claims_changed` is delivered per space, and it is what turns the opponent's new
+  // response into a refresh of this page rather than something the poll finds up to twenty seconds
+  // later. So hold a scope on every space the picker could see one land in:
+  //
+  // - every space any of the three lists shows, not just the tab in front of the viewer. Keyed on
+  //   the visible tab alone, switching tabs dropped the scopes the other lists depend on.
+  // - both participants' personal spaces, whether or not a claim from them is listed yet. A
+  //   debater's own claims live there, and the tab starts empty precisely in the case this is
+  //   about — the opponent taking their *first* position — so there would be no claim to derive the
+  //   scope from at the moment it matters.
+  const { authenticated: geoChatAuthenticated } = useGeoChatAuth();
+  const scopedSpaceIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const claim of [...opponentClaims, ...curatedClaims, ...browsedClaims]) ids.add(claim.claim.space_id);
+    for (const participant of participants) ids.add(participant.profile_space_id);
+    return [...ids].sort((a, b) => a.localeCompare(b));
+  }, [browsedClaims, curatedClaims, opponentClaims, participants]);
+  useDebateGatewaySpaceScopes(scopedSpaceIds, geoChatAuthenticated && scopedSpaceIds.length > 0);
 
   // Readiness drives the card's Debate toggle. geo-chat now carries it on the rematch claims
   // response itself; the per-space debate-claims endpoint is the fallback for a backend that
@@ -809,15 +833,6 @@ function useClaimReadinessByClaimId({
   /** True while the lookup these rows' readiness comes from is still running or has failed. */
   unresolved: boolean;
 }) {
-  // `debate.claims_changed` is delivered per space, so the picker has to hold a scope on every
-  // space it shows or the opponent's responses only appear after a reconnect.
-  const { authenticated } = useGeoChatAuth();
-  const spaceIds = React.useMemo(
-    () => [...new Set(claims.map(claim => claim.claim.space_id))].sort((a, b) => a.localeCompare(b)),
-    [claims]
-  );
-  useDebateGatewaySpaceScopes(spaceIds, authenticated && spaceIds.length > 0);
-
   // Only the rows that don't carry readiness go to the per-space endpoint. While a source is still
   // loading its rows haven't arrived, so there is nothing to ask about yet — which is what stops a
   // guess from spending the very requests this exists to save.
