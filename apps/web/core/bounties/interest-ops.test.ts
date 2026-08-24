@@ -7,6 +7,7 @@ import {
   buildCancelInterestOps,
   buildExpressInterestOps,
   buildRemoveAllocationOps,
+  groupRelationsBySpace,
 } from './interest-ops';
 import { BOUNTY_ALLOCATED_PROPERTY_ID, INTERESTED_IN_BOUNTY_PROPERTY_ID } from './ontology';
 
@@ -33,19 +34,26 @@ describe('interest ops', () => {
     expect(rel.isDeleted).toBeUndefined();
   });
 
-  it('cancels by tombstoning every own interest row, keeping each row identity', () => {
+  it("cancels by tombstoning every own interest row in the row's OWN space", () => {
     const { relations } = buildCancelInterestOps({
-      personalSpaceId: 'personal-1',
       bounty,
       ownInterestRows: [
         // A new-shape row (from the space entity) and a legacy row (from the person entity).
         { id: 'row-1', fromEntityId: 'personal-1', spaceId: 'personal-1' },
         { id: 'row-2', fromEntityId: 'person-1', spaceId: 'personal-1' },
+        // An earlier geogenesis row authored into the bounty's DAO space — the
+        // tombstone must target that space or the delete op removes nothing.
+        { id: 'row-3', fromEntityId: 'personal-1', spaceId: 'dao-1' },
       ],
     });
-    expect(relations.map(r => r.id)).toEqual(['row-1', 'row-2']);
-    expect(relations.map(r => r.fromEntity.id)).toEqual(['personal-1', 'person-1']);
-    expect(relations.every(r => r.isDeleted && r.isLocal && r.spaceId === 'personal-1')).toBe(true);
+    expect(relations.map(r => r.id)).toEqual(['row-1', 'row-2', 'row-3']);
+    expect(relations.map(r => r.spaceId)).toEqual(['personal-1', 'personal-1', 'dao-1']);
+    expect(relations.every(r => r.isDeleted && r.isLocal)).toBe(true);
+
+    const grouped = groupRelationsBySpace(relations);
+    expect([...grouped.keys()]).toEqual(['personal-1', 'dao-1']);
+    expect(grouped.get('personal-1')!.map(r => r.id)).toEqual(['row-1', 'row-2']);
+    expect(grouped.get('dao-1')!.map(r => r.id)).toEqual(['row-3']);
   });
 });
 

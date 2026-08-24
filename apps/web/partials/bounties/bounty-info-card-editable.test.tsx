@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   BOUNTY_BUDGET_PROPERTY_ID,
+  BOUNTY_DEADLINE_PROPERTY_ID,
   BOUNTY_SKILLS_PROPERTY_ID,
   BOUNTY_STATUS_IN_PROGRESS_ID,
   BOUNTY_STATUS_TODO_ID,
@@ -104,6 +105,30 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('EditableBountyInfoCard', () => {
+  it('renders a skeleton (no editors) until the store has hydrated the entity', () => {
+    mocks.entity = { ...mocks.entity, isLoading: true };
+    render(<EditableBountyInfoCard bounty={bounty} />);
+    expect(screen.queryByLabelText('Bounty budget')).not.toBeInTheDocument();
+    expect(document.querySelector('[aria-busy]')).toBeTruthy();
+  });
+
+  it('tolerates a malformed stored deadline instead of throwing', () => {
+    mocks.entity = {
+      ...mocks.entity,
+      values: [
+        {
+          id: 'v1',
+          entity: { id: 'bounty-1', name: 'Bounty' },
+          property: { id: BOUNTY_DEADLINE_PROPERTY_ID, name: 'Submission Deadline', dataType: 'DATETIME' },
+          spaceId: 'dao-1',
+          value: 'not-a-date',
+        } as Value,
+      ],
+    };
+    render(<EditableBountyInfoCard bounty={bounty} />);
+    expect(screen.getByLabelText('Submission deadline')).toHaveValue('');
+  });
+
   it('commits the budget to the store on blur, and unsets it when cleared', () => {
     render(<EditableBountyInfoCard bounty={bounty} />);
     const input = screen.getByLabelText('Bounty budget');

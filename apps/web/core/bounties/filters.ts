@@ -1,3 +1,5 @@
+import { uuidToHex } from '~/core/id/normalize';
+
 import {
   DIFFICULTIES,
   type DifficultyKey,
@@ -61,6 +63,16 @@ function readParam(params: RawParams, key: string): string | undefined {
   return Array.isArray(raw) ? raw[0] : raw;
 }
 
+/**
+ * The API's ids are dashless hex; a dashed-UUID param (hand-edited or external
+ * link) must still match instead of silently filtering everything out. Tokens
+ * that aren't UUID-shaped pass through untouched.
+ */
+function normalizeIdParam(value: string): string {
+  const compact = uuidToHex(value);
+  return /^[0-9a-fA-F]{32}$/.test(compact) ? compact : value;
+}
+
 export function parseBountyFilters(params: RawParams): BountyFilters {
   const space = readParam(params, 'space')?.trim();
   const scope = readParam(params, 'scope')?.trim();
@@ -80,11 +92,11 @@ export function parseBountyFilters(params: RawParams): BountyFilters {
   }
 
   return {
-    spaceIds: space && space !== 'all' ? [...new Set(space.split(',').filter(Boolean))] : [],
+    spaceIds: space && space !== 'all' ? [...new Set(space.split(',').filter(Boolean).map(normalizeIdParam))] : [],
     featuredOnly: scope === 'featured',
     statuses,
     difficulties: difficultyRaw ? [...new Set(difficultyRaw.split(',').filter(isDifficultyKey))] : [],
-    skillIds: skill ? [...new Set(skill.split(',').filter(Boolean))] : [],
+    skillIds: skill ? [...new Set(skill.split(',').filter(Boolean).map(normalizeIdParam))] : [],
     query,
     sort:
       sortRaw && (SORTS as readonly string[]).includes(sortRaw) ? (sortRaw as BountySort) : DEFAULT_BOUNTY_FILTERS.sort,

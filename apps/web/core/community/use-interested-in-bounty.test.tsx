@@ -147,9 +147,16 @@ describe('useInterestedBountyIds', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
   });
 
-  it('collects the bounty ids the viewer already registered interest in', async () => {
+  it('collects the viewer\'s bounty ids across row shapes, ignoring other curators', async () => {
     mocks.relationsByToEntityIds.mockReturnValue(
-      Effect.succeed([{ toEntityId: 'bounty-1' }, { toEntityId: 'bounty-3' }])
+      Effect.succeed([
+        // Current shape: authored in the viewer's personal space.
+        { toEntityId: 'bounty-1', spaceId: PERSONAL_SPACE_ID, fromEntityId: PERSONAL_SPACE_ID },
+        // Legacy geogenesis shape: the viewer's space entity, written into the bounty's DAO space.
+        { toEntityId: 'bounty-3', spaceId: 'dao-1', fromEntityId: PERSONAL_SPACE_ID },
+        // Someone else's row — must not read as the viewer's interest.
+        { toEntityId: 'bounty-2', spaceId: 'other-space', fromEntityId: 'other-person' },
+      ])
     );
 
     const { result } = renderHook(() => useInterestedBountyIds(['bounty-1', 'bounty-2', 'bounty-3']), { wrapper });
@@ -159,16 +166,12 @@ describe('useInterestedBountyIds', () => {
     expect([...result.current.interestedIds].sort()).toEqual(['bounty-1', 'bounty-3']);
   });
 
-  it('scopes the query to the personal space and the interested-in relation type', async () => {
+  it('queries by relation type without a space scope (legacy rows live outside the personal space)', async () => {
     const { result } = renderHook(() => useInterestedBountyIds(['bounty-1']), { wrapper });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(mocks.relationsByToEntityIds).toHaveBeenCalledWith(
-      ['bounty-1'],
-      INTERESTED_IN_RELATION_TYPE_ID,
-      PERSONAL_SPACE_ID
-    );
+    expect(mocks.relationsByToEntityIds).toHaveBeenCalledWith(['bounty-1'], INTERESTED_IN_RELATION_TYPE_ID);
   });
 
   it('stays idle without a personal space', () => {

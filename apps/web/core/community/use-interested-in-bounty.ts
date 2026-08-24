@@ -11,6 +11,7 @@ import { INTERESTED_IN_BOUNTY_PROPERTY_ID } from '~/core/bounties/ontology';
 import { bountyQueryKeys } from '~/core/bounties/use-bounties';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
+import { uuidToHex } from '~/core/id/normalize';
 import { getRelationsByToEntityIds } from '~/core/io/queries';
 
 const INTERESTED_IN_QUERY_KEY = 'bounty-interested-in';
@@ -19,25 +20,32 @@ export function useInterestedBountyIds(bountyIds: string[]) {
   const { personalSpaceId } = usePersonalSpaceId();
   const key = [...bountyIds].sort().join(',');
 
-  // Scoped to the viewer's personal space but deliberately not to a `fromEntityId`:
-  // interest relations may be authored from the person entity (curator-app and this
-  // app) or from the space's system entity (earlier geogenesis builds), and both should
-  // read as interested. Only the viewer's own space is in scope either way, so the
-  // looser filter can't leak someone else's interest.
+  // Unscoped fetch, filtered client-side to the viewer: interest rows may be
+  // authored from the person entity or the personal-space system entity, in
+  // the viewer's personal space (current + curator-app shapes) or in the
+  // bounty's DAO space (an earlier geogenesis shape). A row is the viewer's
+  // when it lives in their personal space OR points from their space entity —
+  // both checks need only the personal space id.
   const { data, isLoading } = useQuery({
     enabled: Boolean(personalSpaceId) && bountyIds.length > 0,
     queryKey: [INTERESTED_IN_QUERY_KEY, personalSpaceId, key],
     queryFn: () => {
       if (!personalSpaceId) return Promise.resolve([]);
-      return Effect.runPromise(getRelationsByToEntityIds(bountyIds, INTERESTED_IN_BOUNTY_PROPERTY_ID, personalSpaceId));
+      return Effect.runPromise(getRelationsByToEntityIds(bountyIds, INTERESTED_IN_BOUNTY_PROPERTY_ID));
     },
     staleTime: 60_000,
   });
 
-  const interestedIds = React.useMemo(
-    () => new Set((data ?? []).map(relation => relation.toEntityId).filter(Boolean) as string[]),
-    [data]
-  );
+  const interestedIds = React.useMemo(() => {
+    if (!personalSpaceId) return new Set<string>();
+    const me = uuidToHex(personalSpaceId);
+    return new Set(
+      (data ?? [])
+        .filter(relation => uuidToHex(relation.spaceId) === me || uuidToHex(relation.fromEntityId) === me)
+        .map(relation => relation.toEntityId)
+        .filter(Boolean) as string[]
+    );
+  }, [data, personalSpaceId]);
 
   // Until the first fetch settles every bounty looks un-registered, so callers need
   // this to avoid offering a button that would write a duplicate relation.

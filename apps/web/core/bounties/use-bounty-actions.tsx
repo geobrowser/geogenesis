@@ -13,6 +13,7 @@ import {
   buildCancelInterestOps,
   buildExpressInterestOps,
   buildRemoveAllocationOps,
+  groupRelationsBySpace,
 } from './interest-ops';
 import { reconcileDeletedRelations } from './reconcile-store';
 import { bountyQueryKeys } from './use-bounties';
@@ -43,14 +44,26 @@ export function useBountyInterestActions(detail: BountyDetail | null | undefined
   const { makeProposal } = usePublish();
   const queryClient = useQueryClient();
   const [state, setState] = React.useState<ActionState>({ pending: false, error: null });
+  // Bounties already applied to this session. The indexer lags the publish by
+  // a few seconds, so the refetched detail briefly still says "not interested";
+  // without this a second click in that window writes a duplicate relation.
+  const submittedBountyIds = React.useRef<Set<string>>(new Set());
 
   const invalidate = React.useCallback(
     () => queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all }),
     [queryClient]
   );
 
+  // Re-invalidate on a short schedule after a publish; one immediate refetch
+  // usually beats the indexer and misses the new row.
+  const invalidateSoon = React.useCallback(() => {
+    for (const delay of [3_000, 7_000, 12_000]) window.setTimeout(() => void invalidate(), delay);
+  }, [invalidate]);
+
   const expressInterest = React.useCallback(async () => {
     if (!detail || !roles.personalSpaceId) return false;
+    if (submittedBountyIds.current.has(detail.bounty.id)) return false;
+    submittedBountyIds.current.add(detail.bounty.id);
     setState({ pending: true, error: null });
     const { relations } = buildExpressInterestOps({
       personalSpaceId: roles.personalSpaceId,
@@ -63,31 +76,46 @@ export function useBountyInterestActions(detail: BountyDetail | null | undefined
       spaceId: roles.personalSpaceId,
       name: `Interested in bounty: ${detail.bounty.name}`,
     });
-    if (ok) await invalidate();
+    if (ok) {
+      await invalidate();
+      invalidateSoon();
+    } else {
+      // Failed publishes are retryable, so release the guard.
+      submittedBountyIds.current.delete(detail.bounty.id);
+    }
     setState({ pending: false, error: ok ? null : 'Could not record your interest.' });
     return ok;
-  }, [detail, invalidate, makeProposal, roles.personalSpaceId]);
+  }, [detail, invalidate, invalidateSoon, makeProposal, roles.personalSpaceId]);
 
   const cancelInterest = React.useCallback(async () => {
     if (!detail || !roles.personalSpaceId || roles.ownInterestRows.length === 0) return false;
     setState({ pending: true, error: null });
     const { relations } = buildCancelInterestOps({
-      personalSpaceId: roles.personalSpaceId,
       bounty: { id: detail.bounty.id, name: detail.bounty.name },
       ownInterestRows: roles.ownInterestRows,
     });
-    const ok = await publishOnce(makeProposal, {
-      values: [],
-      relations,
-      spaceId: roles.personalSpaceId,
-      name: `Withdraw interest in bounty: ${detail.bounty.name}`,
-    });
-    if (ok) {
-      reconcileDeletedRelations(relations);
+    // A delete only lands in the space it is published to, and legacy rows may
+    // live in the bounty's DAO space — publish one edit per space and count
+    // the whole cancel as succeeded only if every edit went through.
+    let allOk = true;
+    const published: typeof relations = [];
+    for (const [spaceId, spaceRelations] of groupRelationsBySpace(relations)) {
+      const ok = await publishOnce(makeProposal, {
+        values: [],
+        relations: spaceRelations,
+        spaceId,
+        name: `Withdraw interest in bounty: ${detail.bounty.name}`,
+      });
+      if (ok) published.push(...spaceRelations);
+      else allOk = false;
+    }
+    if (published.length > 0) {
+      reconcileDeletedRelations(published);
       await invalidate();
     }
-    setState({ pending: false, error: ok ? null : 'Could not withdraw your interest.' });
-    return ok;
+    if (allOk) submittedBountyIds.current.delete(detail.bounty.id);
+    setState({ pending: false, error: allOk ? null : 'Could not withdraw your interest.' });
+    return allOk;
   }, [detail, invalidate, makeProposal, roles.ownInterestRows, roles.personalSpaceId]);
 
   return { ...state, expressInterest, cancelInterest };

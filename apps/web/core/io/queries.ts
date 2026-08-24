@@ -425,17 +425,41 @@ export function getRelationEntityRelations(entityId: string, spaceId: string, si
   });
 }
 
+const RELATIONS_PAGE_SIZE = 500;
+
+/**
+ * Backlink rows for a set of target entities. The id list is chunked under the
+ * API's per-request cap, and every chunk drains pages — the root `relations`
+ * field truncates at the server's 100-row default otherwise, which silently
+ * drops rows for well-linked entities (verified against the live API).
+ */
 export function getRelationsByToEntityIds(
   toEntityIds: string[],
   typeId?: string,
   spaceId?: string,
   signal?: AbortController['signal']
 ) {
-  return graphql({
-    query: relationsByToEntityIdsQuery,
-    decoder: data => data.relations ?? [],
-    variables: { toEntityIds, typeId, spaceId },
-    signal,
+  return Effect.gen(function* () {
+    if (toEntityIds.length === 0) return [];
+
+    type Row = { id: string; toEntityId: string; spaceId: string; fromEntityId: string };
+    const rows: Row[] = [];
+
+    for (let start = 0; start < toEntityIds.length; start += ENTITY_ID_BATCH_SIZE) {
+      const chunk = toEntityIds.slice(start, start + ENTITY_ID_BATCH_SIZE);
+      for (let offset = 0; ; offset += RELATIONS_PAGE_SIZE) {
+        const page = yield* graphql({
+          query: relationsByToEntityIdsQuery,
+          decoder: data => data.relations ?? [],
+          variables: { toEntityIds: chunk, typeId, spaceId, first: RELATIONS_PAGE_SIZE, offset },
+          signal,
+        });
+        rows.push(...page);
+        if (page.length < RELATIONS_PAGE_SIZE) break;
+      }
+    }
+
+    return rows;
   });
 }
 

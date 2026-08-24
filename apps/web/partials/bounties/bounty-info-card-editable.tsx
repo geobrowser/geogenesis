@@ -4,7 +4,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
-import { deadlineFromDateInput } from '~/core/bounties/date-input';
+import { dateInputValue, deadlineFromDateInput } from '~/core/bounties/date-input';
 import {
   DIFFICULTIES,
   WORKFLOW_STATUSES,
@@ -36,6 +36,7 @@ import { SmallButton } from '~/design-system/button';
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Select } from '~/design-system/select';
 import { SelectEntity } from '~/design-system/select-entity';
+import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { BOUNTY_FIELD_HELP, Field } from './bounty-info-card';
@@ -139,7 +140,27 @@ export function EditableBountyInfoCard({ bounty }: Props) {
     name: r.toEntity.name,
   }));
 
-  const deadlineInput = deadlineIso ? new Date(deadlineIso).toISOString().slice(0, 10) : '';
+  // dateInputValue tolerates malformed stored datetimes (returns '') instead of
+  // throwing like new Date(x).toISOString() would.
+  const deadlineInput = dateInputValue(deadlineIso);
+
+  // The store hydrates the entity asynchronously. Until it has, the inputs
+  // below would render blank (defaultValue applies once, at mount) and a stray
+  // blur on a falsely-blank field would queue an unset for a value the user
+  // never saw — so don't render editors before the data is there.
+  if (entity.isLoading) {
+    return (
+      <section
+        aria-label="Edit bounty details"
+        aria-busy
+        className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-4"
+      >
+        {Array.from({ length: 6 }, (_, i) => (
+          <Skeleton key={i} className="h-6 w-full rounded" />
+        ))}
+      </section>
+    );
+  }
 
   return (
     <section
@@ -151,6 +172,7 @@ export function EditableBountyInfoCard({ bounty }: Props) {
         <dl className="flex flex-col gap-3">
           <Field label="Bounty budget" help={BOUNTY_FIELD_HELP.budget}>
             <input
+              key={budget ?? ''}
               type="number"
               min={0}
               aria-label="Bounty budget"
@@ -175,6 +197,7 @@ export function EditableBountyInfoCard({ bounty }: Props) {
           </Field>
           <Field label="Submission deadline" help={BOUNTY_FIELD_HELP.deadline}>
             <input
+              key={deadlineInput}
               type="date"
               aria-label="Submission deadline"
               defaultValue={deadlineInput}
@@ -206,6 +229,7 @@ export function EditableBountyInfoCard({ bounty }: Props) {
         <dl className="max-md:border-t max-md:pt-3 flex flex-col gap-3 border-grey-02 md:border-l md:pl-8">
           <Field label="Max contributors" help={BOUNTY_FIELD_HELP.maxContributors}>
             <input
+              key={maxContributors ?? ''}
               type="number"
               min={0}
               step={1}
@@ -217,6 +241,7 @@ export function EditableBountyInfoCard({ bounty }: Props) {
           </Field>
           <Field label="Max submissions per person" help={BOUNTY_FIELD_HELP.maxSubmissionsPerPerson}>
             <input
+              key={maxSubmissions ?? ''}
               type="number"
               min={0}
               step={1}

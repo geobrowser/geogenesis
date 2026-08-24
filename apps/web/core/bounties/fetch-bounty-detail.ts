@@ -1,11 +1,11 @@
 import { Effect } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { uuidToHex } from '~/core/id/normalize';
 import { getEntity, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import type { Relation } from '~/core/types';
 
 import { bountySpaceFallbackLabel, spaceRowsById, toBoardBounty } from './fetch-bounties';
+import { distinctInterestedIds } from './interest-identity';
 import {
   BOUNTY_ALLOCATED_PROPERTY_ID,
   BOUNTY_SUBMISSION_PROPERTY_ID,
@@ -37,22 +37,7 @@ function toBacklink(relation: { id: string; fromEntityId: string; spaceId: strin
   return { id: relation.id, fromEntityId: relation.fromEntityId, spaceId: relation.spaceId };
 }
 
-/**
- * The allocation target for an interest row: the curator's personal space id.
- * New rows are authored from the personal-space system entity in the curator's
- * own personal space, so both sides agree; legacy person-entity rows were also
- * written into the curator's personal space, so the row's spaceId is the
- * target. Rows authored into the bounty's own DAO space (an earlier geogenesis
- * shape) already point from the personal-space entity.
- */
-export function interestAllocationTarget(row: BountyBacklink, bountySpaceId: string): string {
-  return uuidToHex(row.spaceId) === uuidToHex(bountySpaceId) ? uuidToHex(row.fromEntityId) : uuidToHex(row.spaceId);
-}
-
-/** Distinct interested curators, deduped across relation shapes by their personal space id. */
-export function distinctInterestedIds(interest: readonly BountyBacklink[], bountySpaceId: string): string[] {
-  return [...new Set(interest.map(row => interestAllocationTarget(row, bountySpaceId)))];
-}
+export { distinctInterestedIds, interestAllocationTarget } from './interest-identity';
 
 export function fetchBountyDetail(spaceId: string, bountyId: string) {
   return Effect.gen(function* () {

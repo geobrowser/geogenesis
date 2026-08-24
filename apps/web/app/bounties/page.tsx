@@ -14,8 +14,7 @@ export const metadata: Metadata = {
 };
 
 export default function BountiesPage() {
-  // Hard gate: on a build where bounties are off (mainnet, or no curator
-  // backend configured) the route does not exist.
+  // Hard gate: on a build where bounties are off (mainnet) the route does not exist.
   if (!bountiesEnabledForNetwork) notFound();
 
   return <BountiesPageClient />;

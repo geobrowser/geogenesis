@@ -106,6 +106,36 @@ describe('useBountyInterestActions', () => {
     expect(mocks.invalidateQueries).toHaveBeenCalled();
   });
 
+  it('publishes cancel tombstones per space, so DAO-space legacy rows actually get deleted', async () => {
+    publishSucceeds();
+    const mixed = {
+      ...roles,
+      ownInterestRows: [
+        { id: 'row-1', fromEntityId: 'personal-1', spaceId: 'personal-1' },
+        { id: 'row-dao', fromEntityId: 'personal-1', spaceId: 'dao-1' },
+      ],
+    };
+    const { result } = renderHook(() => useBountyInterestActions(detail, mixed));
+    await act(async () => {
+      expect(await result.current.cancelInterest()).toBe(true);
+    });
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(2);
+    const targets = mocks.makeProposal.mock.calls.map(call => call[0].spaceId).sort();
+    expect(targets).toEqual(['dao-1', 'personal-1']);
+    expect(mocks.reconcile).toHaveBeenCalled();
+  });
+
+  it('guards against a double apply while the indexer catches up', async () => {
+    publishSucceeds();
+    const { result } = renderHook(() => useBountyInterestActions(detail, { ...roles, isInterested: false }));
+    await act(async () => {
+      expect(await result.current.expressInterest()).toBe(true);
+      // Second click in the indexing window: no second publish.
+      expect(await result.current.expressInterest()).toBe(false);
+    });
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+  });
+
   it('cancels by deleting every own interest row and reports failure without invalidating', async () => {
     publishFails();
     const { result } = renderHook(() => useBountyInterestActions(detail, roles));

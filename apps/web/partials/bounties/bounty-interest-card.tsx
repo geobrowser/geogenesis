@@ -6,6 +6,7 @@ import type { BountyDetail } from '~/core/bounties/fetch-bounty-detail';
 import { isBountyEnded } from '~/core/bounties/payout';
 import { useBountyInterestActions } from '~/core/bounties/use-bounty-actions';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
+import { uuidToHex } from '~/core/id/normalize';
 
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -25,7 +26,9 @@ export function resolveInterestCardState(
   if (!roles.personalSpaceId) return 'no-personal-space';
   if (roles.isInterested) return 'interested';
   const max = detail.bounty.maxContributors;
-  if (max != null && detail.bounty.allocatedIds.length >= max) return 'spots-filled';
+  // Dedupe targets: duplicate allocation rows (or one curator allocated under
+  // both identity shapes) must not fill spots twice.
+  if (max != null && new Set(detail.bounty.allocatedIds.map(uuidToHex)).size >= max) return 'spots-filled';
   return 'can-apply';
 }
 

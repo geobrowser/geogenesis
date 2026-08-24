@@ -149,8 +149,10 @@ export function fetchPayoutItems(bountyId: string, recipientNames?: ReadonlyMap<
     const payoutEntityIds = [...new Set(bountyLinks.map(link => uuidToHex(link.fromEntityId)))];
     if (payoutEntityIds.length === 0) return [] as PayoutItem[];
 
+    // first: 500 clears the server's 100-row default; a single bounty will not
+    // accumulate hundreds of payouts before this reads through a paginated path.
     const query = `query {
-      relations(filter: {
+      relations(first: 500, filter: {
         typeId: { is: "${PAYOUT_RECIPIENT_PROPERTY_ID}" }
         entityId: { in: [${payoutEntityIds.map(id => `"${id}"`).join(', ')}] }
       }) {

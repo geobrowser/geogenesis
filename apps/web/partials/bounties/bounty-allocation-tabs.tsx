@@ -64,6 +64,12 @@ export function BountyAllocationTabs({ detail, roles }: Props) {
       ) : (
         <ul className="flex flex-col divide-y divide-grey-02">
           {rows.map(id => {
+            // Known limitation: a curator allocated under the LEGACY shape (person
+            // entity target) but interested under the current shape (personal-space
+            // entity) won't match here, so Allocate stays clickable and could create
+            // a second allocation under a second identity. Resolving the two shapes
+            // needs a person↔space profile lookup; deliberately not built for a case
+            // this rare — deduped counts keep it from affecting spots math.
             const isAllocated = allocatedSet.has(id);
             const pending = actions.pendingTargetId != null && uuidToHex(actions.pendingTargetId) === id;
             return (

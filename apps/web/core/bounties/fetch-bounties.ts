@@ -8,6 +8,7 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Entity } from '~/core/types';
 
 import { buildBounty } from './bounty-dto';
+import { interestAllocationTarget } from './interest-identity';
 import { difficultyLabelForId, statusKeyForId, statusLabelForKey } from './labels';
 import {
   BOUNTY_ALLOCATED_PROPERTY_ID,
@@ -127,8 +128,17 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-/** Counts backlink relations of `typeId` per target entity, batching ids under the API's per-request cap. */
-export function countBacklinks(entityIds: readonly string[], typeId: string) {
+/**
+ * Counts backlink relations of `typeId` per target entity, batching ids under
+ * the API's per-request cap. `identity` collapses rows to one count per
+ * author — the interested count uses it so duplicate rows (and one curator's
+ * legacy + new identity shapes) count once, matching the detail page.
+ */
+export function countBacklinks(
+  entityIds: readonly string[],
+  typeId: string,
+  identity?: (relation: { fromEntityId: string; spaceId: string; toEntityId: string }) => string
+) {
   return Effect.gen(function* () {
     const counts = new Map<string, number>();
     if (entityIds.length === 0) return counts;
@@ -136,9 +146,15 @@ export function countBacklinks(entityIds: readonly string[], typeId: string) {
       chunk(entityIds, ENTITY_ID_BATCH_SIZE).map(ids => getRelationsByToEntityIds(ids, typeId)),
       { concurrency: 4 }
     );
+    const seen = new Set<string>();
     for (const relations of pages) {
       for (const relation of relations) {
         const key = uuidToHex(relation.toEntityId);
+        if (identity) {
+          const identityKey = `${key}:${identity(relation)}`;
+          if (seen.has(identityKey)) continue;
+          seen.add(identityKey);
+        }
         counts.set(key, (counts.get(key) ?? 0) + 1);
       }
     }
@@ -171,11 +187,17 @@ export function fetchBoardBounties(spaceIds: readonly string[]) {
     const rows = spaceRowsById(spaces, spaceIds);
     const bounties = page.entities.map(entity => toBoardBounty(entity, spaceIds[0]));
     const bountyIds = bounties.map(bounty => bounty.id);
+    const spaceByBountyId = new Map(bounties.map(bounty => [uuidToHex(bounty.id), bounty.spaceId]));
 
     const allocatedTargetIds = [...new Set(bounties.flatMap(bounty => bounty.allocatedIds.map(uuidToHex)))];
     const [interestCounts, submissionCounts, contributorsByTarget] = yield* Effect.all(
       [
-        countBacklinks(bountyIds, INTERESTED_IN_BOUNTY_PROPERTY_ID),
+        countBacklinks(bountyIds, INTERESTED_IN_BOUNTY_PROPERTY_ID, relation =>
+          interestAllocationTarget(
+            relation,
+            relation.toEntityId ? (spaceByBountyId.get(uuidToHex(relation.toEntityId)) ?? '') : ''
+          )
+        ),
         countBacklinks(bountyIds, BOUNTY_SUBMISSION_PROPERTY_ID),
         resolveContributors(allocatedTargetIds),
       ],

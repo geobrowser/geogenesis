@@ -47,17 +47,21 @@ export function buildExpressInterestOps(args: {
   };
 }
 
-/** Tombstones every interest row the curator authored for this bounty (rows in their personal space). */
-export function buildCancelInterestOps(args: {
-  personalSpaceId: string;
-  bounty: EntityPick;
-  ownInterestRows: readonly BountyBacklink[];
-}): { relations: Relation[] } {
+/**
+ * Tombstones every interest row the curator holds for this bounty. Each
+ * tombstone keeps ITS ROW'S OWN space: a delete op only removes a relation in
+ * the space it is published to, and legacy rows may live in the bounty's DAO
+ * space rather than the curator's personal space. Callers publish one edit
+ * per space (see groupRelationsBySpace).
+ */
+export function buildCancelInterestOps(args: { bounty: EntityPick; ownInterestRows: readonly BountyBacklink[] }): {
+  relations: Relation[];
+} {
   return {
     relations: args.ownInterestRows.map(row => ({
       id: row.id,
       entityId: createEntityId(),
-      spaceId: args.personalSpaceId,
+      spaceId: row.spaceId,
       renderableType: 'RELATION' as const,
       fromEntity: { id: row.fromEntityId, name: null },
       toEntity: { id: args.bounty.id, name: args.bounty.name, value: args.bounty.id },
@@ -66,6 +70,15 @@ export function buildCancelInterestOps(args: {
       isDeleted: true,
     })),
   };
+}
+
+/** One publish reaches one space; split mixed-space relation sets accordingly. */
+export function groupRelationsBySpace(relations: readonly Relation[]): Map<string, Relation[]> {
+  const bySpace = new Map<string, Relation[]>();
+  for (const relation of relations) {
+    bySpace.set(relation.spaceId, [...(bySpace.get(relation.spaceId) ?? []), relation]);
+  }
+  return bySpace;
 }
 
 export function buildAllocateOps(args: {
