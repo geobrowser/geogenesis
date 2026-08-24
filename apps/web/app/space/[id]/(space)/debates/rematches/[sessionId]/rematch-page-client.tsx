@@ -39,6 +39,7 @@ import {
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
+import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { useMatchmakingClaims } from '~/core/debates/matchmaking/hooks';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
@@ -54,6 +55,7 @@ import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-use
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
@@ -312,6 +314,27 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return map;
   }, [browsedPages, opponentEntitiesQuery.entities, recommendedEntities]);
 
+  // A debate is published into the claim's home space by the acceptor, and a personal space grants
+  // editor rights to its owner alone — so a claim living in one can never carry a published debate
+  // (see `isDebatePublishableSpace`). Every list is narrowed by this, unlike the viewer-specific
+  // allowlist above: it is a property of the claim, so both debaters see the same answer, and
+  // offering such a claim spends a debate on a result that quietly evaporates.
+  const candidateSpaceIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const entity of [...opponentEntitiesQuery.entities, ...recommendedEntities]) {
+      const homeSpaceId = claimHomeSpaceId(entity);
+      if (homeSpaceId) ids.add(homeSpaceId);
+    }
+    for (const page of browsedPages) for (const entry of page.claims) ids.add(entry.claim.space_id);
+    for (const row of savedClaimsQuery.data?.claims ?? []) ids.add(row.claim.space_id);
+    return [...ids];
+  }, [browsedPages, opponentEntitiesQuery.entities, recommendedEntities, savedClaimsQuery.data]);
+  const { spacesById: candidateSpaces } = useSpacesByIds(candidateSpaceIds);
+  const canPublishDebateIn = React.useMemo(
+    () => debatePublishableSpacePredicate(candidateSpaces),
+    [candidateSpaces]
+  );
+
   // The opponent's tab: every claim they hold a side on, newest first. Held until the session's
   // exclusions are in, so nothing lists and then vanishes. Not narrowed by the space allowlist —
   // see it above.
@@ -327,8 +350,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       if (row && row.participants.some(side => side.user_id !== currentUserId && side.position !== null))
         rows.push(row);
     }
-    return rows.sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
+    return rows
+      .filter(row => canPublishDebateIn(row.claim.space_id))
+      .sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
   }, [
+    canPublishDebateIn,
     currentUserId,
     excludedClaimIds,
     opponentClaimIds,
@@ -352,9 +378,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             if (excludedClaimIds.has(claimId)) return [];
             const entity = recommendedEntities.find(candidate => candidate.id === claimId);
             const row = entity ? rowFromEntity(entity) : null;
-            return row ? [row] : [];
+            return row && canPublishDebateIn(row.claim.space_id) ? [row] : [];
           }),
-    [curatedClaimsSettling, excludedClaimIds, recommendedClaimIds, recommendedEntities, rowFromEntity]
+    [
+      canPublishDebateIn,
+      curatedClaimsSettling,
+      excludedClaimIds,
+      recommendedClaimIds,
+      recommendedEntities,
+      rowFromEntity,
+    ]
   );
   const curatedClaims = useLastSettled(curatedClaimsNow, curatedClaimsSettling);
 
@@ -368,6 +401,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     for (const entry of browsedPages.flatMap(page => page.claims)) {
       const claimId = entry.claim.claim_entity_id;
       if (excludedClaimIds.has(claimId) || !isClaimSpaceAllowed(entry.claim.space_id, spaceAllowlist)) continue;
+      if (!canPublishDebateIn(entry.claim.space_id)) continue;
       const sessionRow = sessionRowsByClaimId.get(claimId);
       rows.set(claimId, {
         claim: entry.claim,
@@ -383,7 +417,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     const savedRows = (savedClaimsQuery.data?.claims ?? [])
       .filter(
         row =>
-          !excludedClaimIds.has(row.claim.claim_entity_id) && isClaimSpaceAllowed(row.claim.space_id, spaceAllowlist)
+          !excludedClaimIds.has(row.claim.claim_entity_id) &&
+          isClaimSpaceAllowed(row.claim.space_id, spaceAllowlist) &&
+          canPublishDebateIn(row.claim.space_id)
       )
       .map(row => ({
         ...row,
@@ -396,6 +432,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }, [
     allowlistPending,
     browsedPages,
+    canPublishDebateIn,
     curatedClaims,
     excludedClaimIds,
     opponentClaims,
