@@ -15,6 +15,7 @@ import {
   type EntityExistsQuery,
   type EntityFilter,
   type EntitySpacesBatchQuery,
+  UserEntityVotesByTypeDocument,
   UserHasEntityVoteDocument,
   type UserVoteFilter,
   type UuidFilter,
@@ -77,7 +78,6 @@ import { restFetch } from './rest';
 import { type SortOrder } from './sort-order';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
-import { UserEntityVotesByTypeDocument } from './user-entity-votes-by-type-document';
 
 // `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
 export const ENTITY_ID_BATCH_SIZE = 50;
@@ -1343,13 +1343,14 @@ export function getEntityResponders(
 export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
 
 type UserEntityVotesPage = {
-  nodes: Array<{ objectId: string; voteKind: number }>;
+  nodes: Array<{ objectId: string; voteKind: number; votedAt: string }>;
   pageInfo: { hasNextPage: boolean; endCursor?: string | null };
 };
 
 export type UserEntityVoteObjectIdsPage = {
   objectIds: string[];
   voteKindByObjectId: Record<string, number>;
+  votedAtByObjectId: Record<string, string>;
   endCursor: string | null;
   hasNextPage: boolean;
 };
@@ -1379,11 +1380,13 @@ export function getUserEntityVoteObjectIdsPage(
     const nodes = page.nodes.filter(node => Boolean(node.objectId));
     const objectIds = nodes.map(node => node.objectId);
     const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
+    const votedAtByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.votedAt]));
     const endCursor = page.pageInfo.endCursor ?? null;
 
     return {
       objectIds,
       voteKindByObjectId,
+      votedAtByObjectId,
       endCursor,
       // A cursor is required to advance, so treat a missing one as the end.
       hasNextPage: Boolean(page.pageInfo.hasNextPage && endCursor),

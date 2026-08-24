@@ -49,7 +49,12 @@ export function clearRemovedVotedId(removed: string[], entityId: string): string
 
 const MAX_CACHED_VOTE_PAGES = 4;
 
-export type VotedIdPage = { param: string | null; objectIds: string[]; voteKindByObjectId: Record<string, number> };
+export type VotedIdPage = {
+  param: string | null;
+  objectIds: string[];
+  voteKindByObjectId: Record<string, number>;
+  votedAtByObjectId: Record<string, string>;
+};
 
 /**
  * Folds the pages currently in the cache into everything fetched so far.
@@ -82,6 +87,15 @@ export function mergeVotedIdPages(previous: VotedIdPage[], incoming: VotedIdPage
   return changed ? merged : previous;
 }
 
+export function sortVotedIdsByVotedAtDesc(objectIds: string[], votedAtByObjectId: Record<string, string>): string[] {
+  return [...objectIds].sort((a, b) => {
+    const aAt = votedAtByObjectId[a] ?? '';
+    const bAt = votedAtByObjectId[b] ?? '';
+    if (aAt === bAt) return a < b ? -1 : a > b ? 1 : 0;
+    return aAt < bAt ? 1 : -1;
+  });
+}
+
 export function removeEntityFromVotedIds(
   cache: UserVotedEntityIdsCache | undefined,
   entityId: string
@@ -111,6 +125,7 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
         return {
           objectIds: [],
           voteKindByObjectId: {},
+          votedAtByObjectId: {},
           endCursor: null,
           hasNextPage: false,
         } satisfies UserEntityVoteObjectIdsPage;
@@ -143,6 +158,7 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
           param: (data.pageParams[index] ?? null) as string | null,
           objectIds: page.objectIds,
           voteKindByObjectId: page.voteKindByObjectId,
+          votedAtByObjectId: page.votedAtByObjectId,
         }))
       )
     );
@@ -157,12 +173,14 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
 
   const suppressed = React.useMemo(() => new Set((removedIds ?? []).map(ID.uuidToHex)), [removedIds]);
 
-  // Kept as per-page slices, not just the flattened list
-  const idPages = React.useMemo(() => {
+  // Per-page slices for entity hydration; `ids` is the same set re-sorted by votedAt.
+  const { idPages, ids } = React.useMemo(() => {
     const seen = new Set<string>();
     const pages: string[][] = [];
+    const votedAtById: Record<string, string> = {};
 
     for (const page of fetchedPages) {
+      Object.assign(votedAtById, page.votedAtByObjectId);
       const pageIds: string[] = [];
 
       for (const id of page.objectIds) {
@@ -176,10 +194,8 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
       pages.push(pageIds);
     }
 
-    return pages;
+    return { idPages: pages, ids: sortVotedIdsByVotedAtDesc(pages.flat(), votedAtById) };
   }, [fetchedPages, suppressed]);
-
-  const ids = React.useMemo(() => idPages.flat(), [idPages]);
 
   const voteKindById = React.useMemo(() => {
     const map = new Map<string, number>();
@@ -196,8 +212,10 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
     idPages,
     voteKindById,
     isLoading: canFetch && query.isLoading,
-    hasNextPage: Boolean(query.hasNextPage),
+    hasNextPage: Boolean(query.hasNextPage) && !query.isError,
     isFetchingNextPage: query.isFetchingNextPage,
+    isError: query.isError,
+    refetch: query.refetch,
     fetchNextPage: query.fetchNextPage,
   };
 }

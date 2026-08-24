@@ -20,7 +20,7 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
   const blockWhere = React.useMemo(() => filterStateToWhere(filterState, filterMode), [filterState, filterMode]);
 
   const enabled = direction !== null;
-  const { ids, idPages, voteKindById, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } =
+  const { ids, idPages, voteKindById, isLoading, hasNextPage, isFetchingNextPage, isError, refetch, fetchNextPage } =
     useUserVotedEntityIds(direction ?? 'up', enabled);
 
   const pageIndex = Math.max(0, idPages.length - 1);
@@ -101,7 +101,9 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
     orderedIds,
     isLoading: isLoading || (accumulatedIds.length === 0 && pageIds.length > 0 && isLoadingEntities),
     hasNextPage,
-    isFetchingNextPage: isFetchingNextPage || (pageIndex > 0 && !hasCurrentPage),
+    isFetchingNextPage: !isError && (isFetchingNextPage || (pageIndex > 0 && !hasCurrentPage)),
+    isError,
+    retry: refetch,
     fetchNextPage: fetchNextVotePage,
   };
 }

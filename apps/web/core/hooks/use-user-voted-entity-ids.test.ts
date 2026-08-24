@@ -7,6 +7,7 @@ import {
   clearRemovedVotedId,
   mergeVotedIdPages,
   removeEntityFromVotedIds,
+  sortVotedIdsByVotedAtDesc,
 } from './use-user-voted-entity-ids';
 
 const ENTITY_ID = '4c81561d-1f95-4131-9cdd-dd20ab831ba2';
@@ -16,6 +17,7 @@ function cache(...pages: string[][]): UserVotedEntityIdsCache {
     pages: pages.map((objectIds, index) => ({
       objectIds,
       voteKindByObjectId: {},
+      votedAtByObjectId: {},
       endCursor: `cursor-${index}`,
       hasNextPage: index < pages.length - 1,
     })),
@@ -64,6 +66,7 @@ const page = (param: string | null, ...objectIds: string[]): VotedIdPage => ({
   param,
   objectIds,
   voteKindByObjectId: {},
+  votedAtByObjectId: {},
 });
 
 describe('mergeVotedIdPages', () => {
@@ -98,6 +101,27 @@ describe('mergeVotedIdPages', () => {
 
   it('starts from empty', () => {
     expect(mergeVotedIdPages([], [page(null, 'a')])).toEqual([page(null, 'a')]);
+  });
+});
+
+describe('sortVotedIdsByVotedAtDesc', () => {
+  it('orders newest votes first among the accumulated ids', () => {
+    expect(
+      sortVotedIdsByVotedAtDesc(['a', 'b', 'c'], {
+        a: '2026-01-01T00:00:00Z',
+        b: '2026-03-01T00:00:00Z',
+        c: '2026-02-01T00:00:00Z',
+      })
+    ).toEqual(['b', 'c', 'a']);
+  });
+
+  it('ties break on id so the order is stable', () => {
+    expect(
+      sortVotedIdsByVotedAtDesc(['b', 'a'], {
+        a: '2026-01-01T00:00:00Z',
+        b: '2026-01-01T00:00:00Z',
+      })
+    ).toEqual(['a', 'b']);
   });
 });
 

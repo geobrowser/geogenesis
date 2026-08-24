@@ -5,7 +5,7 @@ const config: CodegenConfig = {
   // exists but is missing types added in the contracts v2 migration such as
   // SpaceVotingSetting — regenerating against it drops those fields.
   schema: 'https://testnet-api-v2.geobrowser.io/graphql',
-  documents: ['./**/*.tsx'],
+  documents: ['./**/*.tsx', './core/io/user-entity-votes-by-type-document.ts'],
   generates: {
     './core/gql/': {
       preset: 'client',

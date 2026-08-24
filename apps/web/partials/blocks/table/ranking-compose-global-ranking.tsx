@@ -342,6 +342,8 @@ export function RankingComposeGlobalRanking({
     isLoading: isLoadingVoteTab,
     hasNextPage: voteTabHasNextPage,
     isFetchingNextPage: isFetchingVoteTabNextPage,
+    isError: isVoteTabError,
+    retry: retryVoteTab,
     fetchNextPage: fetchVoteTabNextPage,
   } = useVoteTabEntities(voteDirection);
 
@@ -600,8 +602,21 @@ export function RankingComposeGlobalRanking({
 
   const loadMoreFooter = (
     <>
+      {isVoteTab && isVoteTabError ? (
+        <div className="flex items-center gap-2 py-3">
+          <p className="text-metadata text-grey-04">Couldn’t load votes.</p>
+          <button
+            type="button"
+            onClick={() => void retryVoteTab()}
+            className="text-metadata text-text underline hover:no-underline"
+          >
+            Try again
+          </button>
+        </div>
+      ) : canLoadMore && isFetchingMore ? (
+        <p className="py-3 text-metadata text-grey-03">Loading more…</p>
+      ) : null}
       {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingMore ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
     </>
   );
 
@@ -644,8 +659,7 @@ export function RankingComposeGlobalRanking({
 
   const voteTabEmptyState = (
     <>
-      {isFetchingMore || canLoadMore ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
-      {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
+      {loadMoreFooter}
       {pendingDisclosure}
     </>
   );
