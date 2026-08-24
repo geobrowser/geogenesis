@@ -53,6 +53,19 @@ describe('shouldResubmitAfterClientExecution', () => {
     expect(shouldResubmitAfterClientExecution({ messages })).toBe(false);
   });
 
+  it('treats geoQuery as client-executed like the other sub-agent tools', () => {
+    // Omitting it from CLIENT_EXECUTED_TOOL_TYPES is silent and fatal: the
+    // sub-agent answers, nothing resubmits, and the model never sees the result
+    // — the turn just stops. Meanwhile `isBusy` reads false for the whole 30s
+    // call, so the composer unlocks mid-turn.
+    const running = [user, assistant([stepStart, toolPart('call_1', 'tool-geoQuery', 'input-available')])];
+    expect(hasPendingClientToolCall(running)).toBe(true);
+    expect(shouldResubmitAfterClientExecution({ messages: running })).toBe(false);
+
+    const settled = [user, assistant([stepStart, toolPart('call_1', 'tool-geoQuery', 'output-available')])];
+    expect(shouldResubmitAfterClientExecution({ messages: settled })).toBe(true);
+  });
+
   it('only considers the last step', () => {
     const messages = [
       user,

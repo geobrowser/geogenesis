@@ -24,6 +24,7 @@ import {
 } from '~/core/chat/limits';
 import type { NavigateOutput, OpenReviewPanelOutput } from '~/core/chat/nav-types';
 import { type PreloadedEntity, usePreloadedEntity } from '~/core/chat/preload';
+import { useGeoQueryDispatcher } from '~/core/chat/geo-query-dispatcher';
 import { useReadDispatcher } from '~/core/chat/read-dispatcher';
 import { useResearchDispatcher } from '~/core/chat/research-dispatcher';
 import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher';
@@ -531,6 +532,7 @@ export function ChatWidget() {
   useEditDispatcher(messages, addToolResultRef);
   useReadDispatcher(messages, addToolResultRef);
   useResearchDispatcher(messages, addToolResultRef);
+  useGeoQueryDispatcher(messages, addToolResultRef);
   useWebFetchDispatcher(messages, addToolResultRef);
   useSearchImagesDispatcher(messages, addToolResultRef);
 
@@ -1154,12 +1156,18 @@ export function ChatWidget() {
     return () => window.removeEventListener('keydown', onKey);
   }, [closeAssistant, hideAssistantOnRoute, isBusy, isOpen, openAssistant, stopAndScrub]);
 
+  // Stamped at send time so the server can tell which questions were asked from
+  // somewhere else after the user navigates. Metadata survives persistence and
+  // is dropped by `convertToModelMessages`, so this never reaches the model
+  // directly — the route reads it and writes the note itself.
+  const sentFrom = () => ({ spaceId: currentSpaceId });
+
   const handleSend = () => {
     const text = input.trim();
     if (!text || isBusy || isCompacting) return;
     stoppedRef.current = false;
     trackAssistantMessage(text, 'typed');
-    sendMessage({ text });
+    sendMessage({ text, metadata: sentFrom() });
     setInput('');
   };
 
@@ -1167,7 +1175,7 @@ export function ChatWidget() {
     if (isBusy || isCompacting) return;
     stoppedRef.current = false;
     trackAssistantMessage(text, 'option_click', source);
-    sendMessage({ text });
+    sendMessage({ text, metadata: sentFrom() });
   };
 
   if (!portalTarget) {

@@ -9,6 +9,7 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
+  isTextUIPart,
   jsonSchema,
   stepCountIs,
   streamText,
@@ -34,6 +35,8 @@ import {
 import { type CostStage, formatTurnCost } from './cost';
 import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
+import { requestedItemCount } from './requested-item-count';
+import { appendNoteToLastUserMessage, previousSpaceInConversation, renderSpaceSwitchNote } from './space-switch-note';
 import { sanitizeModelMessages } from './sanitize-model-messages';
 import { scopeToolTrafficToCurrentTurn } from './scope-tool-traffic';
 import { buildNavTools } from './tools/nav';
@@ -300,7 +303,28 @@ const CLIENT_READ_TOOL_NAMES = new Set<string>([
   'research',
   'webFetch',
   'searchImages',
+  'geoQuery',
 ]);
+
+// The closer's reply budget. 400 covers the 1-3 sentences / 3-5 bullets its
+// prompt asks for, and the 5-item list cap exists because a `geo://` pill costs
+// roughly TOKENS_PER_LISTED_ITEM — two 32-char hex ids tokenize badly — so a
+// longer list would be truncated mid-citation and render as broken markdown.
+// Room for a longer list is bought per-turn against a count the user actually
+// named, rather than by raising the ceiling on every ordinary turn.
+const CLOSER_BASE_OUTPUT_TOKENS = 400;
+const TOKENS_PER_LISTED_ITEM = 50;
+// Ceiling on a named count, whatever was asked for. Beyond this the reply stops
+// being a list and becomes a data dump: 25 items is already ~1,650 tokens and
+// 12-15s of streaming, and the read tools cap out at 50 rows (`geoQuery`) and
+// 10 (`searchGraph`), so a larger ask cannot be satisfied anyway. Over-asking is
+// reported to the user rather than silently trimmed — see the closer's turn note.
+const MAX_LISTED_ITEMS = 25;
+
+function closerMaxOutputTokens(listedCount: number | null): number {
+  if (listedCount === null) return CLOSER_BASE_OUTPUT_TOKENS;
+  return CLOSER_BASE_OUTPUT_TOKENS + listedCount * TOKENS_PER_LISTED_ITEM;
+}
 
 // Edit/client tools resolve via resubmit, so the assistant turn that triggers
 // 'edit' framing isn't always the one that emitted the call. Walk every
@@ -444,7 +468,17 @@ export async function POST(req: Request) {
   }
 
   const rawConverted = await convertToModelMessages(uiMessages);
-  const { messages: converted, droppedToolCallIds } = sanitizeModelMessages(rawConverted);
+  const { messages: sanitized, droppedToolCallIds } = sanitizeModelMessages(rawConverted);
+
+  // Added after sanitizing so the note can't be mistaken for orphaned tool
+  // traffic, and only when the conversation actually holds another space —
+  // an unmoved conversation is byte-identical to before.
+  const previousSpaceId = previousSpaceInConversation(uiMessages, clientContext?.currentSpaceId ?? null);
+  const converted =
+    previousSpaceId && clientContext?.currentSpaceId
+      ? appendNoteToLastUserMessage(sanitized, renderSpaceSwitchNote(clientContext.currentSpaceId, previousSpaceId))
+      : sanitized;
+
   if (droppedToolCallIds.length > 0) {
     console.warn(
       `[chat:srv] dropped ${droppedToolCallIds.length} tool-call/result blocks from converted history`,
@@ -528,10 +562,28 @@ export async function POST(req: Request) {
     }
   };
   if (debug) {
+    // The space is logged because a wrong-space answer is otherwise invisible
+    // here: identifying which space a turn actually used meant counting
+    // entities in the graph and matching the numbers by hand.
+    const space = clientContext?.currentSpaceId ? `space=${clientContext.currentSpaceId.slice(0, 8)}` : 'space=none';
+    const moved = previousSpaceId ? ` moved-from=${previousSpaceId.slice(0, 8)}` : '';
     console.log(
-      `[chat] turn begin (${isLoggedIn ? 'member' : 'guest'}, ${uiMessages.length} msg${uiMessages.length === 1 ? '' : 's'}${chatMode === 'ingestion' ? ', ingestion' : ''})`
+      `[chat] turn begin (${isLoggedIn ? 'member' : 'guest'}, ${uiMessages.length} msg${uiMessages.length === 1 ? '' : 's'}${chatMode === 'ingestion' ? ', ingestion' : ''}, ${space}${moved})`
     );
   }
+
+  // Read from the user's own words, not from what the tools returned: a list of
+  // 200 rows is still best summarised, but "give me 15" is an instruction the
+  // closer's 5-item cap would otherwise overrule. Survives resubmits because
+  // the triggering user message stays last until the turn ends.
+  const lastUserMessage = [...uiMessages].reverse().find(m => m.role === 'user');
+  const requestedCount = requestedItemCount(
+    (lastUserMessage?.parts ?? [])
+      .filter(isTextUIPart)
+      .map(part => part.text)
+      .join(' ')
+  );
+  const listedCount = requestedCount === null ? null : Math.min(requestedCount, MAX_LISTED_ITEMS);
   if (verbose) {
     const summary = converted.map((m, idx) => {
       let blocks: unknown;
@@ -749,11 +801,18 @@ export async function POST(req: Request) {
           turnKind === 'skip'
             ? "# This turn\nThe only thing that happened was navigation. Say where you took the user, in one sentence, and stop. Do not describe the destination's contents — you haven't read them."
             : null,
+          requestedCount === null || listedCount === null
+            ? null
+            : `# This turn\nThe user asked for ${requestedCount} items, so the 5-item list cap does NOT apply — list up to ${listedCount}, each cited as a \`geo://\` pill, and you have been given the output budget for it.${
+                requestedCount > listedCount
+                  ? ` They asked for more than can be shown, so open with "Showing ${listedCount} of the ${requestedCount} you asked for" (or the same point in your own words) — never present ${listedCount} as though it were all of them.`
+                  : ''
+              } If the tool results contain fewer than that, list every one you have and say plainly how many there are; do not pad the list and do not close with "…and N more" when nothing remains.`,
         ]
           .filter(Boolean)
           .join('\n\n'),
         messages: scopeToolTrafficToCurrentTurn([...converted, ...execMessages]),
-        maxOutputTokens: 400,
+        maxOutputTokens: closerMaxOutputTokens(listedCount),
         abortSignal: req.signal,
         onError: err => {
           if (!isAbortError(err)) console.error('[chat:srv] closer stream error', err);

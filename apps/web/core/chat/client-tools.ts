@@ -17,6 +17,7 @@ export const CLIENT_EXECUTED_TOOL_TYPES = new Set<string>([
   'tool-research',
   'tool-searchImages',
   'tool-webFetch',
+  'tool-geoQuery',
   ...EDIT_TOOL_NAMES.map(name => `tool-${name}`),
 ]);
 

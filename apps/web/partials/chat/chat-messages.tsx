@@ -174,6 +174,7 @@ const TOOL_LABELS: Record<string, string> = {
   'tool-getSpaceTypes': 'Checking space types',
   'tool-research': 'Researching the web',
   'tool-webFetch': 'Reading a page',
+  'tool-geoQuery': 'Querying the graph',
   'tool-navigate': 'Navigating',
   'tool-openReviewPanel': 'Opening the review panel',
   'tool-createEntity': 'Creating an entity',
