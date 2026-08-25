@@ -61,6 +61,7 @@ import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
+import { validateEntityId } from '~/core/utils/utils';
 
 import { getChecked } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -330,9 +331,31 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   // Topics live on the KG claim entity, so resolve them here to label each card and drive the
   // "Any topic" filter. A claim can carry several topics. The browsed rows bring their own.
+  // geo-chat hardcodes `topics: []` on every row it returns, so the All tab's claims arrive
+  // without any. The other two tabs are built from graph entities and get theirs for free; this
+  // is the same lookup for the browsed ones, and without it the topic menu has nothing to
+  // describe them with — it listed the other tabs' topics instead, which is what GEO-2653 was.
+  //
+  // Kept separate from `opponentEntitiesQuery` rather than folded into it: those entities are
+  // what the opponent tab's rows are built from, so browsed ids joining that query would put
+  // browsed claims on the opponent's tab.
+  const browsedClaimEntityIds = React.useMemo(
+    () => [
+      ...new Set(
+        browsedPages.flatMap(page => page.claims.map(entry => entry.claim.claim_entity_id)).filter(validateEntityId)
+      ),
+    ],
+    [browsedPages]
+  );
+  const browsedEntitiesQuery = useClaimEntitiesByIds(browsedClaimEntityIds);
+
   const topicsByClaimId = React.useMemo(() => {
     const map = new Map<string, MatchmakingTopic[]>();
-    for (const entity of [...opponentEntitiesQuery.entities, ...recommendedEntities]) {
+    for (const entity of [
+      ...opponentEntitiesQuery.entities,
+      ...recommendedEntities,
+      ...browsedEntitiesQuery.entities,
+    ]) {
       const topics = entity.relations
         .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
         .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
@@ -346,7 +369,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       }
     }
     return map;
-  }, [browsedPages, opponentEntitiesQuery.entities, recommendedEntities]);
+  }, [browsedEntitiesQuery.entities, browsedPages, opponentEntitiesQuery.entities, recommendedEntities]);
 
   // The opponent's tab: every claim they hold a side on, newest first. Held until the session's
   // exclusions are in, so nothing lists and then vanishes. Not narrowed by the space allowlist —
@@ -635,8 +658,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // the claim rows rather than in a lookup behind them, so once the tab has settled an empty
   // menu is a real answer.
   React.useEffect(() => {
-    setTopicId(current => keepSelectableTopic(current, facetTopics, !tabIsLoading));
-  }, [facetTopics, tabIsLoading]);
+    setTopicId(current => keepSelectableTopic(current, facetTopics, !tabIsLoading && !browsedEntitiesQuery.isLoading));
+  }, [browsedEntitiesQuery.isLoading, facetTopics, tabIsLoading]);
 
   const tabError =
     sessionQuery.error ??

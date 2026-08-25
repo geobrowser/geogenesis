@@ -756,8 +756,10 @@ describe('DebateRematchPageClient', () => {
     // without spending a per-space request to find that out.
     expect(screen.getAllByRole('switch', { name: 'Ready to debate this claim' })).toHaveLength(2);
     expect(mocks.perSpaceReadinessGroups.every(groups => groups.length === 0)).toBe(true);
-    // Hydrated by id — exactly the claims the graph named, nothing paged.
-    expect(mocks.entityIdLookups.at(-1)).toEqual([CLAIM_SHARED, FRESH]);
+    // Hydrated by id — exactly the claims the graph named, nothing paged. Matched among the
+    // hydrations rather than as the last one: the All tab now hydrates its own rows too, for
+    // the topics geo-chat doesn't carry.
+    expect(mocks.entityIdLookups).toContainEqual([CLAIM_SHARED, FRESH]);
     // And the graph was asked about exactly these two people.
     expect(mocks.positionParticipants.at(-1)).toEqual(['profile-local', 'profile-remote']);
   });
@@ -1876,7 +1878,15 @@ function position(profileSpaceId: string, claimId: string, spaceId: string, side
   return { profileSpaceId, claimId, spaceId, responseKind: 'stance', position: side };
 }
 
-/** The published claim as the hub's claims query lists it: in Governance space, tagged twice. */
+/**
+ * The published claim as the hub's claims query lists it: in Governance space.
+ *
+ * `topics` is empty because that is what geo-chat sends — it hardcodes `topics: vec![]` on every
+ * row and ignores `topic_id`. This fixture used to supply them anyway, which is how the All tab
+ * could pass topic tests while showing no topics at all in the real app (GEO-2653): the picker
+ * has to hydrate these rows from the graph to learn their topics, and `publishedEntity` below
+ * is where they now come from.
+ */
 function matchmakingClaim(id = CLAIM_MORE, claim = 'A newly published claim'): MatchmakingClaim {
   return {
     claim: { id, space_id: SPACE_2, claim_entity_id: id, claim, description: null },
@@ -1885,10 +1895,7 @@ function matchmakingClaim(id = CLAIM_MORE, claim = 'A newly published claim'): M
     viewer_debate_ready: false,
     readiness_disabled_reason: null,
     viewer_position: null,
-    topics: [
-      { id: 'topic-gov', name: 'Governance' },
-      { id: 'topic-eth', name: 'Ethics' },
-    ],
+    topics: [],
     positions: [],
     score: 0,
     active_debate: false,
