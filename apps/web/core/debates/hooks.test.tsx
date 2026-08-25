@@ -70,15 +70,12 @@ vi.mock('@geogenesis/auth', () => ({
 // does have debates, so `indexed` is the default.
 vi.mock('./space-debate-support', () => ({
   useSpaceDebateSupport: () => mocks.spaceSupport,
-  useDebateIndexedSpaceIds: (spaceIds: string[]) => ({
-    indexed: mocks.spaceSupport === 'indexed' ? spaceIds : [],
-    isPending: mocks.spaceSupport === 'unknown',
-  }),
 }));
 
 vi.mock('./debate-gateway', () => ({
   useDebateGateway: () => ({ status: 'ready', paused: false }),
   useDebateGatewayScope: vi.fn(),
+  useDebateGatewaySnapshot: () => ({ status: 'ready', paused: false }),
   useDebateGatewaySpaceScopes: vi.fn(),
 }));
 
@@ -160,45 +157,6 @@ describe('useDebateClaimsBySpaces', () => {
     mocks.getIdentityToken.mockResolvedValue(null);
     mocks.listDebateClaims.mockReset();
     setCachedIdentityToken(null);
-  });
-
-  /**
-   * The rematch picker builds its rows from whatever space each claim lives in, so a claim whose
-   * home space is personal arrives here as that space. This hook fans out per space and holds a
-   * gateway scope on each — the second way personal spaces reached geo-chat, and the one the
-   * single-space gate never covered.
-   */
-  it('asks nothing about a space geo-chat does not index', async () => {
-    mocks.spaceSupport = 'not-indexed';
-    mocks.listDebateClaims.mockResolvedValue({ claims: [] });
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-
-    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'personal-1', claimIds: ['claim-1'] }]), {
-      wrapper: ({ children }: { children: ReactNode }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      ),
-    });
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(mocks.listDebateClaims).not.toHaveBeenCalled();
-    expect(vi.mocked(useDebateGatewaySpaceScopes).mock.calls.every(([spaceIds]) => spaceIds.length === 0)).toBe(true);
-    mocks.spaceSupport = 'indexed';
-  });
-
-  it('reports itself loading while it is still learning which spaces are indexed', () => {
-    mocks.spaceSupport = 'unknown';
-    mocks.listDebateClaims.mockResolvedValue({ claims: [] });
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-
-    const { result } = renderHook(() => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: ['claim-1'] }]), {
-      wrapper: ({ children }: { children: ReactNode }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-      ),
-    });
-
-    expect(result.current.isLoading).toBe(true);
-    expect(mocks.listDebateClaims).not.toHaveBeenCalled();
-    mocks.spaceSupport = 'indexed';
   });
 
   it('deduplicates and splits each space into requests of at most fifty ids', async () => {
@@ -1201,6 +1159,10 @@ describe('debate query refresh behavior', () => {
     window.localStorage.clear();
   });
 
+  // The gateway owns freshness for these, so time passing must not cost a request. Account activity
+  // is deliberately not among them any more — it gates the incoming-request popup and polls to
+  // survive a deaf socket (GEO-2638); its cadence is pinned in `hooks-query-network.test.tsx`,
+  // where the two focus gates a real interval depends on can be stated directly.
   it('does not issue periodic debate reads while time advances', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
@@ -1215,20 +1177,10 @@ describe('debate query refresh behavior', () => {
       })
     );
     const fetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          online: true,
-          available_to_debate: true,
-          cooldown_until: null,
-          match: null,
-          debate: null,
-          rematch: null,
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
+      new Response(JSON.stringify({ id: 'debate-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     );
     vi.stubGlobal('fetch', fetch);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -1236,7 +1188,7 @@ describe('debate query refresh behavior', () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    renderHook(() => useDebateActivity(), { wrapper });
+    renderHook(() => useDebate('debate-1', true), { wrapper });
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
 
     await act(async () => vi.advanceTimersByTimeAsync(60_000));

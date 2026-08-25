@@ -45,12 +45,18 @@ export function ClaimReadinessToggle({ claim, readiness, activeDebate }: Props) 
   // `readiness_disabled_reason` explains why readiness is currently off; it never blocks turning
   // it back on. Standing yourself down reports `user_disabled`, which the mapper drops entirely —
   // treating it as a blocker would make standing down a one-way door.
+  //
+  // Having no position of your own is deliberately silent. The switch is disabled until you take
+  // a side, and this used to spell that out, but the response pills sit directly under this in the
+  // card — the card already shows what to do. The branch stays rather than falling through to the
+  // reason mapper, whose default returns the backend's raw reason string: dropping it would swap
+  // one sentence for whatever token geo-chat happens to send for "hasn't responded".
   const explanation = ready
     ? undefined
     : activeDebate
       ? 'This claim is being debated right now.'
       : viewerPosition === null
-        ? 'Respond to this claim to debate it.'
+        ? undefined
         : (readinessReasonMessage(readiness.readiness_disabled_reason) ?? undefined);
 
   const explanationId = React.useId();

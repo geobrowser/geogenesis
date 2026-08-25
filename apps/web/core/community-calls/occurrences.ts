@@ -5,6 +5,7 @@
  */
 import { localToUtcMs, parseSchedule } from '~/core/utils/schedule';
 
+import { OCCURRENCE_MATCH_TOLERANCE_MS } from './constants';
 import { Occurrence } from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -146,4 +147,25 @@ export function bucketOccurrences(occurrences: Occurrence[], now = Date.now()): 
   const upcoming = occurrences.filter(o => o.startMs > now && o !== live).sort((a, b) => a.startMs - b.startMs);
   const past = occurrences.filter(o => o.endMs < now && o !== live).sort((a, b) => b.startMs - a.startMs);
   return { live, upcoming, past };
+}
+
+/**
+ * The occurrence a given `occurrenceStart` refers to, or null.
+ *
+ * Anything acting on the occurrence a user actually joined has to resolve it from the
+ * `occurrenceStart` the server minted their token for, rather than recomputing "what is
+ * live now" — the two disagree for a page that has been open across a boundary, and
+ * acting on the wrong occurrence is how a forced end-of-call cutoff lands in the past.
+ *
+ * Matched within {@link OCCURRENCE_MATCH_TOLERANCE_MS}: the server's instant need not be
+ * byte-identical to the locally expanded one. Expansion is centred on the target rather
+ * than on `now`, so a start far outside the current window still resolves.
+ */
+export function findOccurrenceByStart(schedule: string, occurrenceStart: number): Occurrence | null {
+  if (!schedule) return null;
+  return (
+    getOccurrences(schedule, occurrenceStart).find(
+      occurrence => Math.abs(occurrence.startMs - occurrenceStart) <= OCCURRENCE_MATCH_TOLERANCE_MS
+    ) ?? null
+  );
 }

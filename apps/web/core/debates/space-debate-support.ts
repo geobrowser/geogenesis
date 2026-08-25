@@ -1,8 +1,6 @@
 'use client';
 
-import { useQueries, useQuery } from '@tanstack/react-query';
-
-import * as React from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
@@ -11,18 +9,24 @@ import { getSpace } from '~/core/io/queries';
 /**
  * Whether geo-chat indexes a space, as far as we can tell right now.
  *
- * Three-valued on purpose. geo-chat indexes DAO spaces only: asked about a personal space it
- * answers `space_not_found`, and the gateway rejects the matching SUBSCRIBE, which drops the socket
- * into a degraded state that raises "Live debate updates are paused while reconnecting" and never
- * clears it, because a scope-level rejection schedules no reconnect (`debate-gateway.ts`).
+ * geo-chat indexes DAO spaces only: asked about a personal space it answers `space_not_found`. This
+ * keeps that request off the wire for the single-space callers — an entity page, the claims page,
+ * the browse feed — where the space being rendered is simply the wrong one to ask about.
  *
- * So the gate has to hold while the space type is still resolving — guessing "indexed" fires the
- * request it exists to avoid. But a boolean can only express that hold by answering "not indexed",
- * and a *disabled* react-query reports `isLoading: false` with no data: indistinguishable from a
- * settled empty result. Every consumer then paints its own terminal empty state — "No debates to
- * watch yet", "No claims are available to debate yet", or, on the browse feed, the ordinary entity
- * page in place of the video takeover — and swaps it out a round trip later. `unknown` is what lets
- * callers hold instead, by folding it into the `isLoading` they already hand their consumers.
+ * Not a filter on gateway scopes. A scope-level rejection used to park the socket in the degraded
+ * state behind "Live debate updates are paused while reconnecting" with no reconnect scheduled,
+ * which is what this began as a defence against; `debate-gateway.ts` now recycles the socket
+ * instead (GEO-2650). The rematch picker deliberately holds scopes on both participants' personal
+ * spaces, and narrowing those would cost the opponent's first position.
+ *
+ * Three-valued on purpose. The gate has to hold while the space type is still resolving — guessing
+ * "indexed" fires the request it exists to avoid. But a boolean can only express that hold by
+ * answering "not indexed", and a *disabled* react-query reports `isLoading: false` with no data:
+ * indistinguishable from a settled empty result. Every consumer then paints its own terminal empty
+ * state — "No debates to watch yet", "No claims are available to debate yet", or, on the browse
+ * feed, the ordinary entity page in place of the video takeover — and swaps it out a round trip
+ * later. `unknown` is what lets callers hold instead, by folding it into the `isLoading` they
+ * already hand their consumers.
  */
 export type SpaceDebateSupport = 'indexed' | 'not-indexed' | 'unknown';
 
@@ -60,32 +64,4 @@ function supportFrom(spaceId: string, isPending: boolean, type: string | undefin
 export function useSpaceDebateSupport(spaceId: string): SpaceDebateSupport {
   const { data, isPending } = useQuery(spaceQueryOptions(spaceId));
   return supportFrom(spaceId, isPending, data?.type);
-}
-
-/**
- * The same question for a list of spaces, for callers holding claims from more than one — the
- * rematch picker builds its rows from whatever space each claim lives in, which for a claim whose
- * home space is personal is a space geo-chat has no row for.
- *
- * `isPending` is true while any space is still resolving, so callers can hold the whole list rather
- * than subscribing to the ones that happen to have answered first.
- */
-export function useDebateIndexedSpaceIds(spaceIds: string[]): { indexed: string[]; isPending: boolean } {
-  const unique = React.useMemo(() => [...new Set(spaceIds)].sort((a, b) => a.localeCompare(b)), [spaceIds]);
-
-  // Stable by contract: react-query re-runs `combine` whenever its identity changes, and diffs the
-  // result with `replaceEqualDeep` so callers' memos survive.
-  const combine = React.useCallback(
-    (results: Array<{ data?: { type: string } | null; isPending: boolean }>) => ({
-      indexed: unique.filter(
-        (spaceId, index) => supportFrom(spaceId, results[index]!.isPending, results[index]!.data?.type) === 'indexed'
-      ),
-      isPending: unique.some(
-        (spaceId, index) => supportFrom(spaceId, results[index]!.isPending, results[index]!.data?.type) === 'unknown'
-      ),
-    }),
-    [unique]
-  );
-
-  return useQueries({ queries: unique.map(spaceQueryOptions), combine });
 }

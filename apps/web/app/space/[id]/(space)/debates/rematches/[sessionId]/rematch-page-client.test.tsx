@@ -73,6 +73,8 @@ const mocks = vi.hoisted(() => ({
   currentUserId: 'user-local' as string | null,
   spaceAllowlist: null as Set<string> | null,
   allowlistLoading: false,
+  spaceTypes: {} as Record<string, 'DAO' | 'PERSONAL'>,
+  publishableSpaceIds: null as Set<string> | null,
   scrollSentinelIntoView: null as null | (() => void),
   claimReadinessLoading: false,
   claimReadinessError: false,
@@ -80,8 +82,6 @@ const mocks = vi.hoisted(() => ({
   perSpaceReadinessGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
   /** Every space-scope retention the picker asked the gateway for, in render order. */
   gatewaySpaceScopes: [] as Array<{ spaceIds: string[]; enabled: boolean }>,
-  /** `null` means every space is indexed; a list narrows it to those. */
-  indexedSpaceIds: null as string[] | null,
   markEnteringDebate: vi.fn(),
   claimReadiness: [] as Array<{
     claim_entity_id: string;
@@ -185,21 +185,6 @@ vi.mock('~/core/debates/debate-gateway', () => ({
   },
 }));
 
-/**
- * These rows carry whatever space each claim lives in, so the picker filters them down to the ones
- * geo-chat indexes before subscribing — a claim whose home space is personal would otherwise put a
- * SUBSCRIBE on the socket that the gateway rejects, parking it in the degraded state behind the
- * "Live debate updates are paused while reconnecting" banner. `indexedSpaceIds` is what these tests
- * vary to exercise that; every space is indexed unless a test says otherwise.
- */
-vi.mock('~/core/debates/space-debate-support', () => ({
-  useSpaceDebateSupport: () => 'indexed',
-  useDebateIndexedSpaceIds: (spaceIds: string[]) => ({
-    indexed: mocks.indexedSpaceIds === null ? spaceIds : spaceIds.filter(id => mocks.indexedSpaceIds!.includes(id)),
-    isPending: false,
-  }),
-}));
-
 vi.mock('~/core/debates/debate-entry-intent', () => ({
   markEnteringDebate: (debateId: string) => mocks.markEnteringDebate(debateId),
 }));
@@ -275,6 +260,16 @@ vi.mock('~/core/debates/recommended-claims', () => ({
   }),
 }));
 
+// The acceptor's editor spaces. Null is "unknown", which does not filter — so every case that
+// isn't about this gate behaves as before.
+vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/debates/use-debate-publishable-spaces')>();
+  return {
+    ...actual,
+    useDebatePublishableSpaces: () => ({ publishableSpaceIds: mocks.publishableSpaceIds, isLoading: false }),
+  };
+});
+
 // Null is "the allowlist hasn't resolved", which every case that isn't about it runs under.
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
   useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
@@ -296,13 +291,21 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
   useCachedBrowseSidebarData: () => null,
 }));
 
+// `type` is load-bearing, not decoration: the picker refuses to offer a claim whose home space is
+// personal, because a debate there could never be published. `mocks.spaceTypes` overrides it per
+// space; anything unlisted is a DAO space, which is what the rest of these suites assume.
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
-  useSpacesByIds: () => ({
+  useSpacesByIds: (spaceIds: string[] = []) => ({
     spaces: [],
-    spacesById: new Map([
-      [SPACE_1, { entity: { name: 'Crypto', image: null } }],
-      [SPACE_2, { entity: { name: 'Governance space', image: null } }],
-    ]),
+    spacesById: new Map(
+      [
+        // Anything the picker asked about resolves, so the type lookup can answer for it. The two
+        // named spaces come last so their real labels win over the generic fallback.
+        ...spaceIds.map(id => [id, `Space ${id.slice(0, 8)}`] as const),
+        [SPACE_1, 'Crypto'] as const,
+        [SPACE_2, 'Governance space'] as const,
+      ].map(([id, name]) => [id, { type: mocks.spaceTypes[id] ?? 'DAO', entity: { name, image: null } }])
+    ),
     isLoading: false,
   }),
 }));
@@ -313,7 +316,6 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   clearDebateReturnDestination();
-  mocks.indexedSpaceIds = null;
   mocks.replace.mockReset();
   mocks.back.mockReset();
   mocks.mutate.mockReset();
@@ -354,6 +356,8 @@ beforeEach(() => {
   mocks.currentUserId = 'user-local';
   mocks.spaceAllowlist = null;
   mocks.allowlistLoading = false;
+  mocks.spaceTypes = {};
+  mocks.publishableSpaceIds = null;
   // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
   // the callback so a test can say the sentinel scrolled into view.
   mocks.scrollSentinelIntoView = null;
@@ -471,13 +475,14 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('pins shared preferences above additional published claims and enables opposing requests', () => {
+  // The pin this used to assert is gone (GEO-2647); what matters is that both claims are listed
+  // and a shared preference is still the one you can act on.
+  it("lists the session's own claims alongside published ones and enables opposing requests", () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();
 
-    const shared = screen.getByText('A claim both participants chose');
-    const additional = screen.getByText('A newly published claim');
-    expect(shared.compareDocumentPosition(additional) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
@@ -850,6 +855,47 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 
+  // GEO-2656. The badge counted a list that is empty until three dependent round trips land, so it
+  // opened on `0` — which is not a placeholder but a claim, and a wrong one, on the one tab that is
+  // about the opponent's positions.
+  it('counts nothing until the opponent’s positions are actually known', () => {
+    // First load: in flight with nothing back yet. Both halves matter — the count is only unknown
+    // while the query is running *and* has produced no rows.
+    mocks.positions = [];
+    mocks.positionsLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).not.toHaveTextContent('0');
+  });
+
+  // The count is derived from ids that come *from* positions, so while that query is in flight the
+  // id list is empty and the two claim lookups are disabled rather than loading. Nothing downstream
+  // reports as pending, which is why the badge has to consult the positions query itself.
+  it('shows the count once it is known', () => {
+    mocks.positionsLoading = false;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByLabelText('Counting positions')).toBeNull();
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+  });
+
+  // A new response from the opponent restarts the lookups while `useLastSettled` still holds a list
+  // that is right for every claim already on it. Dropping back to a skeleton would flicker the badge
+  // on precisely the event that should be invisible.
+  it('keeps showing a known count while a refetch is in flight', () => {
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+
+    // Same instance, so `useLastSettled` is holding the list it already drew. A fresh render would
+    // have no settled value to hold and would legitimately show the skeleton.
+    mocks.entityHydrationLoading = true;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByLabelText('Counting positions')).toBeNull();
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+  });
+
   // The opponent's claims arrive in one round trip; the curated lookup is three in sequence. The
   // viewer lands on what is ready, and a curated page arriving afterwards adds its tab rather than
   // moving them onto it — being moved once the lookup settles is worse than a tab appearing.
@@ -1038,29 +1084,180 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
   });
 
-  // Applied to the pool, not to the All tab alone, so the tab a viewer lands on describes the same
-  // set of claims as every other one.
-  it('drops disallowed claims from the opponent tab too', async () => {
+  // Applied to the All tab alone. The opponent's tab is bounded by one person's own responses, and
+  // a debater's claims live in their personal space, which nobody else is a member of — narrowing
+  // it by the viewer's own memberships emptied the tab, and zeroed its count, for everyone but the
+  // debater who published the claims.
+  it('keeps the opponent’s claims from spaces outside the viewer’s allowed set', () => {
     mocks.claims = [sharedClaim()];
     mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
-    // The count follows the same pool, so it can't advertise a position the tab no longer lists.
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     const tab = screen.getByRole('button', { name: /Salina’s positions/ });
-    expect(within(tab).getByText('0')).toBeInTheDocument();
+    expect(within(tab).getByText('1')).toBeInTheDocument();
+  });
+
+  // Same reasoning, and the case that made it visible: a curator's page is trusted by the space it
+  // was published in, so the claims on it are vouched for wherever they live. The other debater
+  // saw the tab with nothing under it.
+  it('keeps curated claims from spaces outside the viewer’s allowed set', async () => {
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Politics', claimIds: [CLAIM_MORE] }];
+    mocks.recommendedEntities = [publishedEntity()];
+    mocks.curatedIds = [CLAIM_MORE];
+    mocks.spaceAllowlist = new Set([SPACE_1.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // The published claim sits in Governance space, which the allowlist leaves out.
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByText('Politics')).toBeInTheDocument();
+  });
+
+  // A debate is published into the claim's home space by the acceptor, and editor rights on a
+  // personal space belong to its owner alone — so a claim living in one can never carry a published
+  // debate. Offering it spends a debate on a result that evaporates, which is worse than leaving it
+  // out. Unlike the allowlist this is a property of the claim, so both debaters see the same answer.
+  describe('when a claim’s home space could never receive the published debate', () => {
+    it('leaves it out of the opponent’s tab, and out of the count', async () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+      const tab = screen.getByRole('button', { name: /Salina’s positions/ });
+      expect(within(tab).getByText('0')).toBeInTheDocument();
+    });
+
+    it('leaves it out of the curated tab', async () => {
+      mocks.recommendedSections = [{ id: 'block-1', name: 'Politics', claimIds: [CLAIM_MORE] }];
+      mocks.recommendedEntities = [publishedEntity()];
+      mocks.curatedIds = [CLAIM_MORE];
+      mocks.spaceTypes = { [SPACE_2]: 'PERSONAL' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      // The section would have been the only one, so the tab has nothing left to head.
+      await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+      expect(screen.queryByText('Politics')).toBeNull();
+    });
+
+    it('leaves it out of the All tab', async () => {
+      mocks.spaceTypes = { [SPACE_2]: 'PERSONAL' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      showAllClaims();
+
+      await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+    });
+
+    // A curated page holding some claims in a personal space and some in a public one keeps the
+    // public ones. The filter is per claim, on that claim's own home space — a section drops out
+    // only when every claim in it was unpublishable.
+    it('keeps the publishable claims in a mixed section and drops only the rest', async () => {
+      const PERSONAL_CLAIM = '019fedb8-6ca7-7f94-a077-8cd3be5a0a64';
+      mocks.recommendedSections = [{ id: 'block-1', name: 'Politics', claimIds: [PERSONAL_CLAIM, CLAIM_MORE] }];
+      mocks.recommendedEntities = [
+        { ...publishedEntity(PERSONAL_CLAIM, 'A claim in someone’s own space'), spaces: [SPACE_1] },
+        publishedEntity(),
+      ];
+      mocks.curatedIds = [PERSONAL_CLAIM, CLAIM_MORE];
+      mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+      expect(screen.getByText('Politics')).toBeInTheDocument();
+      expect(screen.queryByText('A claim in someone’s own space')).toBeNull();
+    });
+
+    // A debater publishes a claim into their own space; a curator later adds it to a shared one, so
+    // it is named in both. The space ranking has no opinion between them — neither is in its table,
+    // so the tie falls to array order — and picking the personal one would lose a claim that is
+    // perfectly debatable in the public space, since the home space is what decides where the
+    // debate is published.
+    it('resolves a claim named in both a personal and a public space to the public one', async () => {
+      const BOTH = '019fedb9-7db8-70a5-b188-9de4cf6b1b75';
+      mocks.recommendedSections = [{ id: 'block-1', name: 'Politics', claimIds: [BOTH] }];
+      mocks.recommendedEntities = [
+        {
+          ...publishedEntity(BOTH, 'A claim in two spaces'),
+          // Personal space first, so array order alone would have picked it: neither id is in the
+          // ranking table, so the tie falls through to order.
+          spaces: [SPACE_1, SPACE_2],
+          values: [
+            { property: { id: NAME_PROPERTY }, spaceId: SPACE_1, value: 'A claim in two spaces' },
+            { property: { id: NAME_PROPERTY }, spaceId: SPACE_2, value: 'A claim in two spaces' },
+          ],
+        },
+      ];
+      mocks.curatedIds = [BOTH];
+      mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      // Resolving to the personal space would have filtered it out entirely.
+      expect(await screen.findByText('A claim in two spaces')).toBeInTheDocument();
+    });
+
+    // Preston's refinement, on top of the space-type test: the authoritative constraint is the
+    // set of spaces the acceptor is an *editor* of, which is the same set the publish sweep works
+    // from. This catches an ordinary public space the acceptor simply does not edit — invisible to
+    // the type test, and a debate there fails on-chain exactly as a personal space does.
+    it('drops a claim from a public space the acceptor does not edit', async () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = { [SPACE_1]: 'DAO' };
+      mocks.publishableSpaceIds = new Set([SPACE_2.replace(/-/g, '')]);
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    });
+
+    it('keeps a claim from a space the acceptor does edit', () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = { [SPACE_1]: 'DAO' };
+      mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    });
+
+    // The two gates fail differently, which is why both are kept. With the editor list unknown,
+    // the type test still rules out the case that actually caused the incident.
+    it('still drops a personal-space claim when the editor list is unknown', async () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
+      mocks.publishableSpaceIds = null;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    });
+
+    it('keeps a claim in a DAO space, which the acceptor can publish into', () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = { [SPACE_1]: 'DAO' };
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    });
+
+    // Same convention as the allowlist: filtering on a half-resolved lookup would list the claim
+    // and then pull it back out from under the viewer.
+    it('keeps a claim whose space type has not resolved yet', () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = {};
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    });
   });
 
   // Listing a pool and trimming it once the allowlist lands means claims appear and then vanish
-  // under the viewer. Every list waits; the count waits with it, so the tab can't advertise a
-  // position it is about to drop.
-  it('holds every list, and the count, while the allowlist is still resolving', async () => {
+  // under the viewer. The All tab, which the allowlist narrows, waits for it. The other two don't
+  // narrow on it any more, so they have nothing to wait for — and the opponent's list arriving in
+  // one round trip is the whole point of not holding it behind a lookup it doesn't use.
+  it('holds the browsed list, but not the opponent’s, while the allowlist is still resolving', async () => {
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.queryByText('A claim both participants chose')).toBeNull();
-    expect(within(screen.getByRole('button', { name: /Salina’s positions/ })).getByText('0')).toBeInTheDocument();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(within(screen.getByRole('button', { name: /Salina’s positions/ })).getByText('1')).toBeInTheDocument();
 
     showAllClaims();
     await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
@@ -1183,34 +1380,21 @@ describe('DebateRematchPageClient', () => {
     // The per-space lookup used to be what retained the gateway's space scopes, and
     // `debate.claims_changed` is delivered per space: skip the lookup without keeping the scopes
     // and the opponent's responses only ever show up after a reconnect.
-    it('still holds a gateway scope on every space it shows', () => {
+    //
+    // Every list's spaces, not the visible tab's — keyed on the tab, switching tabs dropped the
+    // scopes the other lists depend on — plus both participants' personal spaces, which is where a
+    // debater's own claims live and the only way to hear about their *first* position: the tab is
+    // empty then, so there is no claim to derive a scope from.
+    it('holds a gateway scope on every list’s spaces and both debaters’ own', () => {
       mocks.claims = [{ ...sharedClaim(), viewer_debate_ready: true, readiness_disabled_reason: null }];
       mocks.claimReadiness = [];
 
       render(<DebateRematchPageClient sessionId="rematch-1" />);
-      expect(mocks.gatewaySpaceScopes.filter(scope => scope.enabled).at(-1)?.spaceIds).toEqual([SPACE_1]);
+      const scoped = () => mocks.gatewaySpaceScopes.filter(scope => scope.enabled).at(-1)?.spaceIds;
+      expect(scoped()).toEqual([SPACE_1, SPACE_2, 'profile-local', 'profile-remote']);
 
       showAllClaims();
-      expect(mocks.gatewaySpaceScopes.filter(scope => scope.enabled).at(-1)?.spaceIds).toEqual([SPACE_1, SPACE_2]);
-    });
-
-    /**
-     * The rows carry whatever space each claim lives in, and a claim whose home space is personal
-     * is one of the two ways personal spaces reach geo-chat. A SUBSCRIBE for a space it does not
-     * index is rejected at scope level, which parks the socket with no reconnect scheduled — the
-     * "Live debate updates are paused while reconnecting" banner that never clears.
-     */
-    it('leaves a space geo-chat does not index out of its gateway scopes', () => {
-      mocks.claims = [{ ...sharedClaim(), viewer_debate_ready: true, readiness_disabled_reason: null }];
-      mocks.claimReadiness = [];
-      mocks.indexedSpaceIds = [SPACE_1];
-
-      render(<DebateRematchPageClient sessionId="rematch-1" />);
-      showAllClaims();
-
-      const subscribed = mocks.gatewaySpaceScopes.filter(scope => scope.enabled).flatMap(scope => scope.spaceIds);
-      expect(subscribed).not.toContain(SPACE_2);
-      expect(subscribed).toContain(SPACE_1);
+      expect(scoped()).toEqual([SPACE_1, SPACE_2, 'profile-local', 'profile-remote']);
     });
 
     it('shows the toggle off for a claim it reports as not ready', () => {
@@ -1256,6 +1440,30 @@ describe('DebateRematchPageClient', () => {
       { ...sharedClaim(), shared_preference: false, claim: claimSummary(THIRD, 'Ordered claim three') },
       { ...sharedClaim(), shared_preference: false, claim: claimSummary(FIRST, 'Ordered claim one') },
     ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    const names = screen.getAllByText(/^Ordered claim/).map(element => element.textContent);
+    expect(names).toEqual(['Ordered claim one', 'Ordered claim two', 'Ordered claim three']);
+  });
+
+  // GEO-2647. A shared preference used to be pinned to the top of the All tab, which put it ahead
+  // of what the viewer had typed and pushed their search results down. Matched claims stay
+  // legible without the pin — they are the ones offering "Request debate", and the Matches tab
+  // lists them on their own.
+  it('leaves a matched claim where the page returned it rather than pinning it first', () => {
+    const FIRST = '019fedb4-3f74-7c61-8d44-5fa08b1e7a01';
+    const SECOND = '019fedb4-3f74-7c61-8d44-5fa08b1e7a02';
+    const MATCHED = '019fedb4-3f74-7c61-8d44-5fa08b1e7a03';
+    mocks.matchmakingClaims = [
+      matchmakingClaim(FIRST, 'Ordered claim one'),
+      matchmakingClaim(SECOND, 'Ordered claim two'),
+      matchmakingClaim(MATCHED, 'Ordered claim three'),
+    ];
+    mocks.savedClaims = [];
+    // The last of the three is the one both participants have answered.
+    mocks.claims = [{ ...sharedClaim(), shared_preference: true, claim: claimSummary(MATCHED, 'Ordered claim three') }];
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();
