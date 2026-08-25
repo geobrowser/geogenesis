@@ -56,7 +56,18 @@ export const CollectionMetadata = ({
   const hasHoverActions = !hideHoverActions && Boolean(relationId || showSidePanel || isEditing);
   const showHoverActions = isRowHovered;
   const reserveActionSpace = verified || hasHoverActions;
-  const paddingClass = hasHoverActions ? (verified ? 'pr-14 md:pr-6' : 'pr-14 md:pr-0') : verified ? 'pr-6' : '';
+  // Remove took the arrow's place in the row and is the wider control of the two, so the name
+  // needs a little more room than the 56px the row used to reserve. Without it a long name runs
+  // under the button it is about to be deleted by.
+  const hasRemoveAction = hasHoverActions && isEditing && Boolean(relationId);
+  const hoverActionPadding = hasRemoveAction ? 'pr-16' : 'pr-14';
+  const paddingClass = hasHoverActions
+    ? verified
+      ? `${hoverActionPadding} md:pr-6`
+      : `${hoverActionPadding} md:pr-0`
+    : verified
+      ? 'pr-6'
+      : '';
 
   return (
     <div

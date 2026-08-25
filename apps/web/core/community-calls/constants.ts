@@ -120,3 +120,13 @@ export const LIVE_WINDOW_AFTER_MS = 30 * 60 * 1000;
 export function isOccurrenceLive(startMs: number, endMs: number, now = Date.now()): boolean {
   return now >= startMs - LIVE_WINDOW_BEFORE_MS && now <= endMs + LIVE_WINDOW_AFTER_MS;
 }
+
+/**
+ * How often "which occurrence is live" is re-evaluated while a call page is open.
+ *
+ * Answering it once on load leaves a tab that has been open across a boundary reporting
+ * the wrong occurrence — or none at all, which silently blocks the viewer auto-join. Half
+ * a minute is well inside the 15-minute join window on either side, so a tick can't land
+ * a user outside a window they are genuinely in.
+ */
+export const LIVE_OCCURRENCE_TICK_MS = 30 * 1000;

@@ -75,6 +75,7 @@ import {
   userEntityResponseQuery,
 } from './query-fragments';
 import { restFetch } from './rest';
+import { capSearchQuery } from './search-query';
 import { type SortOrder } from './sort-order';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
@@ -1041,7 +1042,12 @@ export type SearchResultsPage = {
 
 export function buildSearchPath(args: ResultsArgs): string {
   const params = new URLSearchParams();
-  params.set('query', args.query);
+  // Every REST search in the app arrives here — the ten-odd `useSearch` surfaces through
+  // `E.findFuzzyPage`, plus chat, community calls and import auto-mapping calling `getResults`
+  // directly — so this is the one place the endpoint's length limit has to be respected. Capping
+  // here rather than at each input also leaves the caller's own state holding what the searcher
+  // actually typed, which is what gets echoed back to them.
+  params.set('query', capSearchQuery(args.query));
   params.set('limit', String(args.limit ?? 10));
   params.set('offset', String(args.offset ?? 0));
 
