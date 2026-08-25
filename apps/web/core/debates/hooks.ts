@@ -63,7 +63,7 @@ import {
   updateDebateAvailability,
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
-import { useDebateAttention } from './debate-attention';
+import { useDebateAttention, useDebatePresence } from './debate-attention';
 import { markEnteringDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
@@ -303,7 +303,7 @@ export function useLeaveDebateQueue(spaceId: string) {
   });
 }
 
-/** How often activity re-asks while the viewer is looking, with a live gateway behind it. */
+/** How often activity re-asks while this tab is on screen, with a live gateway behind it. */
 const ACTIVITY_POLL_MS = 30_000;
 /** And while the gateway is paused, when this is the only thing still asking. */
 const ACTIVITY_DEGRADED_POLL_MS = 10_000;
@@ -325,17 +325,27 @@ const ACTIVITY_DEGRADED_POLL_MS = 10_000;
  * nothing recovers it. Either way the popup waited on a remount, which is how a request took
  * "30-60 seconds" to appear (GEO-2638).
  *
- * So: poll while the viewer is looking, faster while the gateway is paused and this is the only
+ * So: poll while this tab is on screen, faster while the gateway is paused and this is the only
  * thing still asking, and re-ask on return to the tab. The socket still does the fast path — a
  * couple of seconds, of which the outbox relay is two — and this only bounds the bad case.
+ *
+ * The gate is *presence*, not attention. Attention additionally requires `document.hasFocus()`,
+ * and gating the poll on that meant a tab sitting open on screen — but behind the window the
+ * viewer happened to be typing in — did not poll at all, leaving the socket as the only delivery
+ * path for the exact case this poll exists to cover. An incoming request is by definition the
+ * thing that arrives while you are looking at something else, so focus is the wrong question to
+ * ask; that is why geo-chat keys reachability (`is_online`) on presence too. This is what was
+ * still reported as a ~36 second delivery after GEO-2638 (GEO-2650).
  */
 export function useDebateActivity(enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  const foreground = useDebateAttention();
+  const attentive = useDebateAttention();
+  const present = useDebatePresence();
   const { paused } = useDebateGatewaySnapshot();
   const queryEnabled = enabled && authenticated;
-  const wasForeground = React.useRef(foreground);
+  const wasPresent = React.useRef(present);
+  const wasAttentive = React.useRef(attentive);
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
@@ -351,19 +361,21 @@ export function useDebateActivity(enabled = true) {
       return activity;
     },
     enabled: queryEnabled,
-    // Background tabs don't poll: presence keeps the socket's own view current, and a tab nobody is
-    // looking at has no popup to draw.
-    refetchInterval: foreground ? (paused ? ACTIVITY_DEGRADED_POLL_MS : ACTIVITY_POLL_MS) : false,
+    // Hidden tabs still don't poll: they have no popup to draw, and browsers throttle their timers
+    // anyway. On-screen is the bar, whether or not this is the frontmost window.
+    refetchInterval: present ? (paused ? ACTIVITY_DEGRADED_POLL_MS : ACTIVITY_POLL_MS) : false,
   });
 
-  // Coming back to the tab is the one moment a viewer expects to be shown what they missed, and the
-  // shared options switch off React Query's own focus refetch for every debate query. Same shape as
-  // `useDebateProfile`, which needs it for the same reason.
+  // Coming back is the one moment a viewer expects to be shown what they missed, and the shared
+  // options switch off React Query's own focus refetch for every debate query. Both transitions
+  // count: becoming visible restarts the poll but not immediately, and regaining focus is when
+  // someone is most likely to be waiting on a popup.
   React.useEffect(() => {
-    const returnedToForeground = foreground && !wasForeground.current;
-    wasForeground.current = foreground;
-    if (returnedToForeground && queryEnabled) void query.refetch();
-  }, [foreground, query.refetch, queryEnabled]);
+    const returned = (present && !wasPresent.current) || (attentive && !wasAttentive.current);
+    wasPresent.current = present;
+    wasAttentive.current = attentive;
+    if (returned && queryEnabled) void query.refetch();
+  }, [attentive, present, query.refetch, queryEnabled]);
 
   return query;
 }
