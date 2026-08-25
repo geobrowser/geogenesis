@@ -149,6 +149,20 @@ describe('PeopleTab', () => {
     expect(screen.getByText(awaitingText)).toBeInTheDocument();
   });
 
+  // The clock and what you can do about it lead the card, above the pairing they apply to.
+  it('leads with the countdown and the cancel action, before the two people', () => {
+    mocks.challenge = challenge('requester');
+    render(<PeopleTab />);
+
+    const request = card()!;
+    const countdown = within(request).getByText(/Expires in/);
+    const cancel = within(request).getByRole('button', { name: 'Cancel request' });
+    const versus = within(request).getByText('VS');
+
+    expect(countdown.compareDocumentPosition(cancel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(cancel.compareDocumentPosition(versus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   // The same action the Requests tab offers on this challenge, reachable without leaving People.
   it('cancels the request from the card', () => {
     mocks.challenge = challenge('requester');

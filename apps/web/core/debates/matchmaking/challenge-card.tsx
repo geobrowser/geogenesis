@@ -54,44 +54,19 @@ export function DebateChallengeCard({
       {...hubCardMotion}
       className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
     >
-      {isRecipient ? (
-        <Text as="span" variant="footnoteMedium" color="grey-04" className="truncate">
-          Someone wants to debate you
-        </Text>
-      ) : null}
-
-      {/* Claimless, so neither side holds a position to show. */}
-      <RequestParties viewer={viewer} opponent={opponent} showPositions={false} />
-
-      {/* One row: how long is left on the left, what you can do about it on the right. It wraps
-          rather than overflows, since the recipient's two buttons are wider than the panel on the
-          narrowest layouts. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      {/* Top row: how long is left, and where this challenge stands. The state sits where the
+          action for it sits, so the sender's Cancel rides along with "Awaiting response" rather
+          than being stranded from the clock that makes it urgent. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="flex shrink-0 items-center gap-1 text-footnote text-text">
           <Time />
           {countdown.label}
         </span>
 
         {isRecipient ? (
-          <span className="flex shrink-0 items-center gap-2">
-            <HubPillButton
-              onClick={() => rejectChallenge.mutate(challenge.id)}
-              disabled={busy}
-              pending={rejectChallenge.isPending}
-              pendingLabel="Dismissing…"
-            >
-              Dismiss
-            </HubPillButton>
-            <HubPillButton
-              variant="primary"
-              onClick={() => acceptChallenge.mutate(challenge.id)}
-              disabled={busy}
-              pending={acceptChallenge.isPending}
-              pendingLabel="Opening…"
-            >
-              Explore claims
-            </HubPillButton>
-          </span>
+          <Text as="span" variant="footnote" color="grey-04" className="truncate">
+            Someone wants to debate you
+          </Text>
         ) : (
           <span className="flex shrink-0 items-center gap-2 text-footnote text-grey-04">
             <span>Awaiting response</span>
@@ -107,6 +82,33 @@ export function DebateChallengeCard({
           </span>
         )}
       </div>
+
+      {/* Claimless, so neither side holds a position to show. */}
+      <RequestParties viewer={viewer} opponent={opponent} showPositions={false} />
+
+      {/* Kept under the pairing they act on, unlike the sender's inline Cancel — these decide
+          whether a debate happens, so they read after the two people rather than above them. */}
+      {isRecipient ? (
+        <div className="grid grid-cols-2 gap-2">
+          <HubPillButton
+            onClick={() => rejectChallenge.mutate(challenge.id)}
+            disabled={busy}
+            pending={rejectChallenge.isPending}
+            pendingLabel="Dismissing…"
+          >
+            Dismiss
+          </HubPillButton>
+          <HubPillButton
+            variant="primary"
+            onClick={() => acceptChallenge.mutate(challenge.id)}
+            disabled={busy}
+            pending={acceptChallenge.isPending}
+            pendingLabel="Opening…"
+          >
+            Explore claims
+          </HubPillButton>
+        </div>
+      ) : null}
 
       {actionError instanceof Error ? (
         // role="alert" so a failed action is announced, not just drawn under the button.
