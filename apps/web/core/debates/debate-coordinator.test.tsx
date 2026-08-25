@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt } from './api';
 import { DebateCoordinator } from './debate-coordinator';
-import { clearEnteringDebate, markEnteringDebate } from './debate-entry-intent';
+import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -515,6 +515,71 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
     // Nor the fallback bar: it would flash in exactly the same window.
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  // GEO-2604, the other window: accepting is a round trip, the server creates the debate inside it
+  // and emits `debate.state_changed` to the accepting tab, so that tab's own socket event can hand
+  // the coordinator a `ready` debate on some other path while the response it is waiting on is still
+  // in flight. The id-keyed intent cannot help — there is no id until the response arrives.
+  it('does not prompt while this tab is waiting on an accept', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+    const release = markEnteringPendingDebate();
+
+    try {
+      render(<DebateCoordinator />);
+
+      await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+      expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+      // Nor the rejoin bar, which would flash in the same window for the same reason.
+      expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+    } finally {
+      release();
+    }
+  });
+
+  // Released when the mutation settles, so a failed accept cannot leave the viewer with no way in.
+  it('prompts again once the accept has settled', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+    const release = markEnteringPendingDebate();
+    const { rerender } = render(<DebateCoordinator />);
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+
+    release();
+    rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
+  });
+
+  // Counted, not boolean: two accepts can overlap, and the first to settle must not drop the
+  // second's claim and let the prompt through underneath it.
+  it('keeps suppressing while a second overlapping accept is still in flight', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+    const releaseFirst = markEnteringPendingDebate();
+    const releaseSecond = markEnteringPendingDebate();
+    const { rerender } = render(<DebateCoordinator />);
+
+    releaseFirst();
+    rerender(<DebateCoordinator />);
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+
+    releaseSecond();
+    rerender(<DebateCoordinator />);
+    await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
   });
 
   // Still prompted anywhere else, so suppressing it above cannot swallow a real one.
