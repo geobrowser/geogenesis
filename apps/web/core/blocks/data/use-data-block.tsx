@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
@@ -16,6 +17,8 @@ import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './da
 import { filterStateToWhere } from './filter-state-to-where';
 import { Filter, ModesByColumn } from './filters';
 import { Source } from './source';
+import { applyDropdownSelectionsToFilters } from './table-dropdown-selections';
+import { useBlockDropdowns } from './use-block-dropdowns';
 import { useBlockPageSize } from './use-block-page-size';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
@@ -24,6 +27,7 @@ import { usePagination } from './use-pagination';
 import { useRelationsBlock } from './use-relations-block';
 import { useSort } from './use-sort';
 import { useSource } from './use-source';
+import { useTableDropdownSelections } from './use-table-dropdown-selections';
 import { useView } from './use-view';
 
 export { filterStateToWhere } from './filter-state-to-where';
@@ -120,8 +124,33 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const { sortState, setSortState } = useSort(options?.canEdit);
   const pageSize = useBlockPageSize();
 
-  const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
-  const filterModesKey = React.useMemo(() => stableStringify(effectiveModesByColumn), [effectiveModesByColumn]);
+  // Browse-mode personal dropdowns (block `Dropdowns` config + per-user
+  // localStorage selections). They overlay the effective filter state for the
+  // QUERY only: the block's filters, pills, and edit flows never see them.
+  const isEditing = useUserIsEditing(spaceId);
+  const { blocksRelationEntityId, dropdowns: dropdownConfigs, toggleDropdownProperty } = useBlockDropdowns();
+  const {
+    selections: dropdownSelections,
+    updateSelections: updateDropdownSelections,
+    hydrated: dropdownSelectionsHydrated,
+  } = useTableDropdownSelections(blocksRelationEntityId);
+  const dropdownColumnIds = React.useMemo(() => dropdownConfigs.map(d => d.propertyId), [dropdownConfigs]);
+  const applyDropdownOverlay = !isEditing && dropdownSelectionsHydrated && dropdownColumnIds.length > 0;
+  const { filterState: queryFilterState, modesByColumn: queryModesByColumn } = React.useMemo(
+    () =>
+      applyDropdownOverlay
+        ? applyDropdownSelectionsToFilters(
+            effectiveFilterState,
+            effectiveModesByColumn,
+            dropdownSelections,
+            dropdownColumnIds
+          )
+        : { filterState: effectiveFilterState, modesByColumn: effectiveModesByColumn },
+    [applyDropdownOverlay, effectiveFilterState, effectiveModesByColumn, dropdownSelections, dropdownColumnIds]
+  );
+
+  const filterStateKey = React.useMemo(() => stableStringify(queryFilterState), [queryFilterState]);
+  const filterModesKey = React.useMemo(() => stableStringify(queryModesByColumn), [queryModesByColumn]);
   const where = React.useMemo(() => {
     // Rehydrate from the content keys so equivalent arrays/maps retain the
     // same WhereCondition reference even when their input identities change.
@@ -500,6 +529,16 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     temporaryModesByColumn,
     setTemporaryFilters,
     setTemporaryGroupMode,
+
+    // Browse-mode personal dropdowns
+    browseDropdowns: {
+      configs: dropdownConfigs,
+      toggleDropdownProperty,
+      selections: dropdownSelections,
+      updateSelections: updateDropdownSelections,
+      hydrated: dropdownSelectionsHydrated,
+      baseFilterState: effectiveFilterState,
+    },
 
     // From useSort
     sortState,
