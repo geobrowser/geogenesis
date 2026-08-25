@@ -8,6 +8,7 @@ import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
 import type { DebateChallenge } from '../api';
+import { useRejectDebateChallenge } from '../hooks';
 import { hubCardMotion } from './hub-motion';
 import { RequestParties } from './request-parties';
 import { useRequestCountdown } from './use-request-countdown';
@@ -20,9 +21,9 @@ import { useRequestCountdown } from './use-request-countdown';
  * space chip and no claim, because you challenged a person rather than a position. What's left is
  * what a sent request is actually about — who you asked, and how long they have to answer.
  *
- * No Withdraw, unlike the claim version. geo-chat exposes create, accept and reject on a
- * challenge; reject belongs to the recipient, and there is no requester-side cancel to call. The
- * countdown is the honest answer in the meantime — it expires on its own.
+ * Cancelling is the same endpoint the recipient dismisses with — `rejectDebateChallenge` serves
+ * both sides of a challenge — and is worded the way the Requests tab already words it, since it is
+ * the same action on the same object two tabs over.
  */
 export function OutboundChallengeCard({
   challenge,
@@ -31,6 +32,7 @@ export function OutboundChallengeCard({
   challenge: DebateChallenge;
   ref?: React.Ref<HTMLElement>;
 }) {
+  const cancelChallenge = useRejectDebateChallenge();
   const countdown = useRequestCountdown(challenge.expires_at);
 
   return (
@@ -51,9 +53,28 @@ export function OutboundChallengeCard({
       {/* Claimless, so neither side holds a position to show. */}
       <RequestParties viewer={challenge.requester} opponent={challenge.recipient} showPositions={false} />
 
-      <Text as="span" variant="footnote" color="grey-04" className="text-center">
-        Awaiting response
-      </Text>
+      {/* Its own row under the two sides, where the claim card puts it. */}
+      <span className="flex items-center justify-center gap-2 text-footnote text-grey-04">
+        <span>Awaiting response</span>
+        <span aria-hidden>·</span>
+        <button
+          type="button"
+          onClick={() => cancelChallenge.mutate(challenge.id)}
+          disabled={cancelChallenge.isPending}
+          className="shrink-0 text-text underline transition-colors hover:text-grey-04 disabled:opacity-50"
+        >
+          {cancelChallenge.isPending ? 'Cancelling…' : 'Cancel request'}
+        </button>
+      </span>
+
+      {cancelChallenge.error instanceof Error ? (
+        // role="alert" so a failed cancel is announced rather than only drawn under the button.
+        <div role="alert">
+          <Text as="p" variant="footnote" color="red-01">
+            {cancelChallenge.error.message}
+          </Text>
+        </div>
+      ) : null}
     </motion.article>
   );
 }

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   activeDebate: null as unknown,
   currentUserId: 'user-me' as string | null,
   createChallenge: vi.fn(),
+  cancelChallenge: vi.fn(),
+  cancelPending: false,
+  cancelError: null as Error | null,
 }));
 
 vi.mock('../hooks', () => ({
@@ -19,6 +22,11 @@ vi.mock('../hooks', () => ({
     data: { challenge: mocks.challenge, outbound_request: mocks.outboundRequest, debate: mocks.activeDebate },
   }),
   useCreateDebateChallenge: () => ({ mutate: mocks.createChallenge, isPending: false, error: null }),
+  useRejectDebateChallenge: () => ({
+    mutate: mocks.cancelChallenge,
+    isPending: mocks.cancelPending,
+    error: mocks.cancelError,
+  }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -72,6 +80,9 @@ beforeEach(() => {
   mocks.activeDebate = null;
   mocks.currentUserId = 'user-me';
   mocks.createChallenge.mockReset();
+  mocks.cancelChallenge.mockReset();
+  mocks.cancelPending = false;
+  mocks.cancelError = null;
 });
 
 afterEach(cleanup);
@@ -135,6 +146,32 @@ describe('PeopleTab', () => {
 
     expect(card()).not.toBeInTheDocument();
     expect(screen.getByText(awaitingText)).toBeInTheDocument();
+  });
+
+  // The same action the Requests tab offers on this challenge, reachable without leaving People.
+  it('cancels the request from the card', () => {
+    mocks.challenge = challenge('requester');
+    render(<PeopleTab />);
+
+    fireEvent.click(within(card()!).getByRole('button', { name: 'Cancel request' }));
+
+    expect(mocks.cancelChallenge).toHaveBeenCalledWith('challenge-1');
+  });
+
+  it('holds the cancel button while it is in flight', () => {
+    mocks.challenge = challenge('requester');
+    mocks.cancelPending = true;
+    render(<PeopleTab />);
+
+    expect(within(card()!).getByRole('button', { name: 'Cancelling…' })).toBeDisabled();
+  });
+
+  it('announces a failed cancel rather than only drawing it', () => {
+    mocks.challenge = challenge('requester');
+    mocks.cancelError = new Error('Challenge already answered.');
+    render(<PeopleTab />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Challenge already answered.');
   });
 
   it('leaves the other blocked reasons alone', () => {
