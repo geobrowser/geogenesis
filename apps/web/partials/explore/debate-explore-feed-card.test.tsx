@@ -22,8 +22,7 @@ type ObserverRecord = {
 
 let observers: ObserverRecord[] = [];
 
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebate: () => mocks.debateQuery,
@@ -87,6 +86,8 @@ const item: ExploreFeedItem = {
   description: null,
   imageUrl: null,
   commentCount: 3,
+  recordingUrls: [],
+  debateVideoUrls: [],
   isMemberOrEditor: true,
   hasPendingMembershipRequest: false,
 };

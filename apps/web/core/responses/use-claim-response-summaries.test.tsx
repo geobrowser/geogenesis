@@ -63,6 +63,45 @@ describe('useClaimResponseSummaryBatch', () => {
     );
   });
 
+  it('keeps already-loaded positions on screen while a changed claim set reloads', async () => {
+    // GEO-2599. The query key contains the whole target list, so adding a claim —
+    // or any local-store update while typing, since the claims page passes
+    // includeUnpublishedLocal — mints a NEW key. Without placeholderData the hook
+    // reports no data for it and ClaimResponseBatchBoundary, which gates on
+    // isSuccess, blanks every position until the refetch lands.
+    const { wrapper } = createHarness();
+    const loaded = new Map([['claim-1:stance', { responders: [] }]]) as never;
+    mocks.loadCaches.mockResolvedValue(loaded);
+
+    const { result, rerender } = renderHook(
+      ({ targets }: { targets: { entityId: string; responseKind: 'stance' | 'veracity' }[] }) =>
+        useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true }),
+      { wrapper, initialProps: { targets: [{ entityId: 'claim-1', responseKind: 'stance' as const }] } }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBe(loaded);
+
+    let resolveSecond: (value: unknown) => void = () => {};
+    mocks.loadCaches.mockReturnValue(
+      new Promise(resolve => {
+        resolveSecond = resolve;
+      })
+    );
+    rerender({
+      targets: [
+        { entityId: 'claim-1', responseKind: 'stance' as const },
+        { entityId: 'claim-2', responseKind: 'stance' as const },
+      ],
+    });
+
+    await waitFor(() => expect(mocks.loadCaches).toHaveBeenCalledTimes(2));
+    expect(result.current.data).toBe(loaded);
+
+    resolveSecond(new Map());
+    await waitFor(() => expect(result.current.data).not.toBe(loaded));
+  });
+
   it('isolates the batch cache by viewer account and exact space', async () => {
     const { queryClient, wrapper } = createHarness();
     const targets = [{ entityId: 'claim-1', responseKind: 'stance' as const }];

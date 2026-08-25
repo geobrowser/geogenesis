@@ -1,11 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { Effect } from 'effect';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ENTITY_ID_BATCH_SIZE,
   buildSearchPath,
+  getBatchEntities,
   groupRestResults,
   hasDefaultSearchExcludedType,
   shouldIncludeRestSearchResult,
 } from './queries';
+
+const graphqlMock = vi.hoisted(() => vi.fn());
+
+vi.mock('./graphql-client', () => ({
+  graphql: (...args: unknown[]) => graphqlMock(...args),
+}));
 
 describe('buildSearchPath', () => {
   const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
@@ -223,5 +232,100 @@ describe('shouldIncludeRestSearchResult canonical gating', () => {
       types: [{ id: 'b8803a86-65de-412b-bb35-7e0c84adf473' }],
     };
     expect(shouldIncludeRestSearchResult(blockResult, gate)).toBe(false);
+  });
+});
+
+/**
+ * The batches ask for disjoint id sets, so they were only sequential by construction: a
+ * caller handing in 300 ids paid six round trips end to end. `syncMany` pre-batches to
+ * exactly one page and never hit it, but the callers that pass an unbounded id list
+ * through — `core/blocks/data/filters.ts`, `partials/diffs/changed-entity.tsx`,
+ * `core/sync/engine.ts`, the community-calls fetchers — did.
+ */
+describe('getBatchEntities', () => {
+  afterEach(() => graphqlMock.mockReset());
+
+  const idsFor = (count: number) => Array.from({ length: count }, (_, index) => `entity-${index}`);
+
+  /** Resolves only once every batch has been asked for, so a sequential run deadlocks. */
+  const gateOnAllBatches = (expectedBatches: number) => {
+    let started = 0;
+    let release = () => {};
+    const allStarted = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    graphqlMock.mockImplementation((args: { variables: { filter: { id: { in: string[] } } } }) => {
+      const batch = args.variables.filter.id.in;
+      started += 1;
+      if (started === expectedBatches) release();
+      return Effect.promise(async () => {
+        await allStarted;
+        return batch.map(id => ({ id }));
+      });
+    });
+    return () => started;
+  };
+
+  it('asks for every batch concurrently rather than one after the next', async () => {
+    const ids = idsFor(ENTITY_ID_BATCH_SIZE * 3);
+    const started = gateOnAllBatches(3);
+
+    // Sequential code cannot finish this: batch 1 awaits a promise only batch 3 releases.
+    const entities = await Effect.runPromise(getBatchEntities(ids));
+
+    expect(started()).toBe(3);
+    expect(entities).toHaveLength(ids.length);
+  });
+
+  it('keeps the results in the order the ids were given', async () => {
+    const ids = idsFor(ENTITY_ID_BATCH_SIZE * 3);
+    // Later batches answer first, so input order can only survive if it is preserved
+    // deliberately rather than by arrival.
+    graphqlMock.mockImplementation((args: { variables: { filter: { id: { in: string[] } } } }) => {
+      const batch = args.variables.filter.id.in;
+      const delay = batch[0] === ids[0] ? 20 : 0;
+      return Effect.promise(
+        () =>
+          new Promise(resolve => {
+            setTimeout(() => resolve(batch.map(id => ({ id }))), delay);
+          })
+      );
+    });
+
+    const entities = await Effect.runPromise(getBatchEntities(ids));
+
+    expect(entities.map(entity => (entity as { id: string }).id)).toEqual(ids);
+  });
+
+  // The bound is the point, not an implementation detail: `EntitiesBatch` pulls every value
+  // and relation per entity (0.31 MB for 50 claims, measured), so an unbounded fan-out on a
+  // few hundred ids trades a queue we control for the browser's per-host connection limit.
+  it('keeps the number of in-flight requests bounded', async () => {
+    const ids = idsFor(ENTITY_ID_BATCH_SIZE * 20);
+    let inFlight = 0;
+    let peak = 0;
+    graphqlMock.mockImplementation((args: { variables: { filter: { id: { in: string[] } } } }) => {
+      const batch = args.variables.filter.id.in;
+      return Effect.promise(async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        inFlight -= 1;
+        return batch.map(id => ({ id }));
+      });
+    });
+
+    await Effect.runPromise(getBatchEntities(ids));
+
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(6);
+  });
+
+  it('sends a single request when the ids fit one batch', async () => {
+    graphqlMock.mockImplementation(() => Effect.succeed([]));
+
+    await Effect.runPromise(getBatchEntities(idsFor(ENTITY_ID_BATCH_SIZE)));
+
+    expect(graphqlMock).toHaveBeenCalledTimes(1);
   });
 });

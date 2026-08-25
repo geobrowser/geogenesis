@@ -29,6 +29,8 @@ import { geo } from '~/core/sdk/geo-client';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
 
+import { readCachedPersonalSpace, readCachedSmartAccount } from './cached-write-identity';
+
 interface UseEntityResponseArgs {
   entityId: string;
   spaceId: string;
@@ -149,6 +151,14 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
   const queryClient = useQueryClient();
   const responseIndexingRegistry = getResponseIndexingRegistry(queryClient);
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+
+  // While mounted the reactive value is correct; a queued vote replayed after the button remounted
+  const readRegisteredSpace = useCallback((): { personalSpaceId: string | null; isRegistered: boolean } => {
+    if (personalSpaceId && isRegistered) return { personalSpaceId, isRegistered };
+    const account = readCachedSmartAccount(queryClient, null);
+    return readCachedPersonalSpace(queryClient, account?.account.address);
+  }, [personalSpaceId, isRegistered, queryClient]);
+
   const indexingQueryKey = useMemo(
     () => entityResponseIndexingQueryKey(personalSpaceId, entityId, spaceId, responseKind),
     [entityId, personalSpaceId, responseKind, spaceId]
@@ -160,6 +170,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
 
   const pendingResponseIndex = useCallback(
     (direction: ResponseDirection): PendingEntityResponseIndex | null => {
+      const { personalSpaceId, isRegistered } = readRegisteredSpace();
       if (!responseKind || !personalSpaceId || !isRegistered || !validateSpaceId(spaceId)) return null;
 
       return {
@@ -170,7 +181,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         spaceId,
       };
     },
-    [entityId, isRegistered, personalSpaceId, responseKind, spaceId]
+    [entityId, readRegisteredSpace, responseKind, spaceId]
   );
 
   const isCurrentIndexingRun = useCallback(
@@ -284,6 +295,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
         throw new Error('Invalid space ID format. Cannot submit response.');
       }
 
+      const { personalSpaceId, isRegistered } = readRegisteredSpace();
       if (!personalSpaceId || !isRegistered) {
         throw new Error('You need a registered personal space to respond');
       }
@@ -322,7 +334,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       if (!pending) throw new Error('Response indexing context is unavailable.');
       return { pending, transaction: result.right };
     },
-    [personalSpaceId, isRegistered, spaceId, entityId, responseKind, tx, pendingResponseIndex]
+    [readRegisteredSpace, spaceId, entityId, responseKind, tx, pendingResponseIndex]
   );
 
   const responseMutation = useMutation({
@@ -435,6 +447,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
 
   return {
     submitResponse: responseMutation.mutate,
+    submitResponseAsync: responseMutation.mutateAsync,
     optimisticResponse,
     isProcessingResponse:
       responseMutation.isPending || indexingState.status === 'reconciling' || indexingState.status === 'delayed',
