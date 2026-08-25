@@ -22,6 +22,7 @@ import {
   getSpaces,
   hasDefaultSearchExcludedType,
 } from '../io/queries';
+import { capSearchQuery } from '../io/search-query';
 import { OmitStrict } from '../types';
 import { Entity, Relation, SearchResult, SpaceEntity } from '../types';
 import { Entities } from '../utils/entity';
@@ -136,6 +137,23 @@ export function mergeRelations(localRelations: Relation[], remoteRelations: Rela
  * data related to entities at-hoc. There might be instances
  * where we want to query (pull) data rather than sync it.
  */
+/**
+ * The `where` a fuzzy page is cached and requested under: the caller's, with the query capped.
+ *
+ * Keyed on the raw query instead, every keystroke past the cap changes `where` while the request
+ * built from it stays byte-identical — so each one mints a fresh cache entry and refetches an
+ * answer already in hand. Returns the original object when the cap didn't bite, so an ordinary
+ * query keeps its identity and nothing re-renders on a new reference.
+ */
+export function fuzzyPageCacheWhere(where: WhereCondition): WhereCondition {
+  const fuzzy = where.name?.fuzzy ?? '';
+  const capped = capSearchQuery(fuzzy);
+
+  if (fuzzy === capped) return where;
+
+  return { ...where, name: { ...where.name, fuzzy: capped } };
+}
+
 export class E {
   static merge({
     id,
@@ -440,13 +458,26 @@ export class E {
     // an empty query and returns top-N globally ranked entities (optionally
     // constrained by typeIds / spaceId). Callers that want paginated "every
     // entity of this type" results pass '' on purpose.
-    const nameFilter = where.name?.fuzzy ?? '';
+    // Both the cache key and the request below read the query from here, so the thing cached and
+    // the thing fetched cannot disagree about what was asked.
+    const cacheWhere = fuzzyPageCacheWhere(where);
+    const nameFilter = cacheWhere.name?.fuzzy ?? '';
 
     const spaceIdsFilter = where.space?.id?.equals ? where.space.id.equals : undefined;
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
     const page = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', 'page', where, first, skip, additionalSpaceIds, includeNonCanonical],
+      queryKey: [
+        'network',
+        'entities',
+        'fuzzy',
+        'page',
+        cacheWhere,
+        first,
+        skip,
+        additionalSpaceIds,
+        includeNonCanonical,
+      ],
       queryFn: ({ signal: innerSignal }) =>
         Effect.runPromise(
           getResultsPage(

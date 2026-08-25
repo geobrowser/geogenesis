@@ -85,10 +85,39 @@ describe('capSearchQuery', () => {
     });
   });
 
-  // The endpoint trims before it measures, and a trailing space is part of what someone mid-sentence
-  // is typing.
-  it('leaves surrounding whitespace alone', () => {
-    expect(capSearchQuery('  spaced out  ')).toBe('  spaced out  ');
+  // A trailing space is part of what someone mid-sentence is typing, and the endpoint discards it
+  // before measuring, so it costs nothing to keep.
+  it('leaves trailing whitespace alone', () => {
+    expect(capSearchQuery('spaced out  ')).toBe('spaced out  ');
+  });
+
+  // Leading whitespace is different: the endpoint drops it before searching, so letting it consume
+  // the budget spends the whole query on characters that will be thrown away.
+  describe('leading whitespace', () => {
+    it('does not let it push the real query past the cap', () => {
+      const padded = `${' '.repeat(MAX_SEARCH_QUERY_LENGTH)}football`;
+
+      expect(capSearchQuery(padded)).toBe('football');
+    });
+
+    // What the naive version produced: a capped prefix of pure whitespace, which the endpoint reads
+    // as no query at all and answers with generic top results rather than a search.
+    it('never caps down to whitespace alone', () => {
+      const padded = `${' '.repeat(MAX_SEARCH_QUERY_LENGTH)}football`;
+
+      expect(padded.slice(0, MAX_SEARCH_QUERY_LENGTH).trim()).toBe('');
+      expect(capSearchQuery(padded).trim()).not.toBe('');
+    });
+
+    it('drops it on a short query too, which the endpoint would have dropped anyway', () => {
+      expect(capSearchQuery('   football')).toBe('football');
+    });
+
+    it('still caps what is left when the query is long in its own right', () => {
+      const padded = `   ${'a'.repeat(MAX_SEARCH_QUERY_LENGTH + 50)}`;
+
+      expect(capSearchQuery(padded)).toHaveLength(MAX_SEARCH_QUERY_LENGTH);
+    });
   });
 
   it('stays under the limit the endpoint actually enforces', () => {

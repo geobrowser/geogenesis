@@ -25,12 +25,17 @@ export const MAX_SEARCH_QUERY_LENGTH = 100;
  * being fixed. Note this counts code points, so a ZWJ sequence can still be split into the valid
  * emoji it is built from; that renders sensibly, unlike half a surrogate pair.
  *
- * Leading and trailing whitespace is left alone. The endpoint trims before measuring, and someone
- * mid-sentence has a trailing space that is part of what they are typing.
+ * Leading whitespace is dropped first, so it cannot eat the budget. The endpoint discards it before
+ * searching — `"          football"` and `"football"` return the same results — so a hundred spaces
+ * followed by the actual query would otherwise cap to a hundred spaces, which the endpoint reads as
+ * no query at all and answers with generic top results. Trailing whitespace stays: someone
+ * mid-sentence has a trailing space that is part of what they are typing, and it costs nothing.
  */
 export function capSearchQuery(query: string): string {
-  // Fast path: `Array.from` walks the whole string, and nearly every query is far short of the cap.
-  if (query.length <= MAX_SEARCH_QUERY_LENGTH) return query;
+  const trimmed = query.trimStart();
 
-  return Array.from(query).slice(0, MAX_SEARCH_QUERY_LENGTH).join('');
+  // Fast path: `Array.from` walks the whole string, and nearly every query is far short of the cap.
+  if (trimmed.length <= MAX_SEARCH_QUERY_LENGTH) return trimmed;
+
+  return Array.from(trimmed).slice(0, MAX_SEARCH_QUERY_LENGTH).join('');
 }
