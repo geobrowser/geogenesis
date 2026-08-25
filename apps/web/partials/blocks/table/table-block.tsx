@@ -76,6 +76,7 @@ import { DataBlockViewMenu } from './data-block-view-menu';
 import { type QuerySetupTypePick, QuerySetupTypesSelectEntityPopover } from './query-setup-types-select-entity-popover';
 import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import { TableBlockContextMenu } from './table-block-context-menu';
+import { TableBlockDropdowns } from './table-block-dropdowns';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import TableBlockExploreItemsDnd from './table-block-explore-items-dnd';
@@ -600,6 +601,7 @@ const ConfiguredTableBlock = ({
     hideAllShownPropertyColumns,
     orderedShownColumnRelations,
     reorderShownPropertyRelations,
+    browseDropdowns,
   } = useDataBlock({ canEdit });
 
   const { mainMedia, isFramePending } = useBlockMainMedia(shownColumnIds, propertiesSchema, {
@@ -1024,6 +1026,8 @@ const ConfiguredTableBlock = ({
                 toggleProperty={toggleProperty}
                 hideAllShownPropertyColumns={hideAllShownPropertyColumns}
                 reorderShownPropertyRelations={reorderShownPropertyRelations}
+                dropdownPropertyIds={browseDropdowns.configs.map(d => d.propertyId)}
+                toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                 disabled={!canEdit}
               />
             )}
@@ -1059,6 +1063,20 @@ const ConfiguredTableBlock = ({
         </div>
 
         <BlockLinkIngestionPanel />
+
+        {!isEditing && browseDropdowns.configs.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 py-2" onMouseDown={e => e.stopPropagation()}>
+            <TableBlockDropdowns
+              configs={browseDropdowns.configs}
+              properties={mergedBlockProperties}
+              spaceId={spaceId}
+              baseFilterState={browseDropdowns.baseFilterState}
+              selections={browseDropdowns.selections}
+              updateSelections={browseDropdowns.updateSelections}
+              hydrated={browseDropdowns.hydrated}
+            />
+          </div>
+        )}
 
         {isFilterOpen && (
           <AnimatePresence>
