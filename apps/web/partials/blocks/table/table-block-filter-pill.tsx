@@ -117,8 +117,9 @@ function FilterChipShell({
  * shown. Rendering the id in the meantime isn't a degraded label — it's noise the reader has to
  * look past, and it reads as the filter having changed under them.
  *
- * Once resolution finishes the id is the honest answer again: an entity can genuinely have no
- * name, and a placeholder that never resolves is worse than an ugly one that does.
+ * Once resolution finishes and the entity genuinely has no name, the chip falls back to the
+ * SHORT id — the same `id.slice(0, 8)` fallback this feature area already uses (query-setup
+ * popover, create-entity space dropdown). Still identifying, without a 32-character label.
  */
 function FilterRelationChip({
   valueName,
@@ -133,7 +134,7 @@ function FilterRelationChip({
     return <FilterChipSkeleton tone={rest.tone} />;
   }
 
-  const displayLabel = name ?? valueId;
+  const displayLabel = name ?? valueId.slice(0, 8);
   return <FilterChipShell {...rest} displayLabel={displayLabel} removeLabel={displayLabel} />;
 }
 

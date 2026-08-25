@@ -70,12 +70,14 @@ describe('TableBlockFilterGroupPill', () => {
     expect(screen.getByText('Crypto')).toBeInTheDocument();
   });
 
-  // An entity can genuinely have no name. A placeholder that never resolves is worse than an ugly
-  // label that does, so once the lookup is done the id is the honest answer again.
-  it('falls back to the id once the lookup is done and there is still no name', () => {
+  // An entity can genuinely have no name. A placeholder that never resolves is worse than a
+  // degraded label that does — and the degraded label is the SHORT id, the same slice(0, 8)
+  // fallback this feature area uses elsewhere, not the full 32-character one.
+  it('falls back to the short id once the lookup is done and there is still no name', () => {
     renderPill([relationFilter()], false);
 
-    expect(screen.getByText(VALUE_ID)).toBeInTheDocument();
+    expect(screen.getByText(VALUE_ID.slice(0, 8))).toBeInTheDocument();
+    expect(screen.queryByText(VALUE_ID)).not.toBeInTheDocument();
   });
 
   // A text filter's value is what the reader typed, so there is nothing to resolve.
