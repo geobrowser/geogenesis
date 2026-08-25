@@ -290,10 +290,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // differently, and when this list is unknown — no acceptor configured, a failed lookup — the
   // type test still rules out the case that actually bit us, claims living in a personal space.
   const { publishableSpaceIds } = useDebatePublishableSpaces();
-  const spaceTypePublishable = React.useMemo(
-    () => debatePublishableSpacePredicate(candidateSpaces),
-    [candidateSpaces]
-  );
+  const spaceTypePublishable = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
   const canPublishDebateIn = React.useCallback(
     (spaceId: string | null | undefined) =>
       isSpaceDebatePublishable(spaceId, publishableSpaceIds) && spaceTypePublishable(spaceId),
@@ -407,7 +404,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // The All tab: geo-chat's rows, the graph's sides. Held while the allowlist resolves (see above).
   // It is still every claim the picker knows: the session's own rows — what both have answered,
   // the opponent's and the curated lists — join the pages, so a shared preference the index has
-  // not paged to yet is on the All tab, pinned first as it always was.
+  // not paged to yet is on the All tab too.
+  //
+  // Deliberately unsorted (GEO-2647). Shared preferences used to be pinned to the top, which put
+  // them ahead of what the viewer had actually typed and pushed their search results down the
+  // list. They stay legible without it: a matched claim is the one offering "Request debate", and
+  // the Matches tab exists to list them on their own.
   const browsedRows = React.useMemo(() => {
     if (allowlistPending) return [];
     const rows = new Map<string, DebateRematchClaim>();
@@ -441,7 +443,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     for (const row of [...savedRows, ...opponentClaims, ...curatedClaims]) {
       if (!rows.has(row.claim.claim_entity_id)) rows.set(row.claim.claim_entity_id, row);
     }
-    return [...rows.values()].sort((a, b) => Number(b.shared_preference) - Number(a.shared_preference));
+    return [...rows.values()];
   }, [
     allowlistPending,
     browsedPages,

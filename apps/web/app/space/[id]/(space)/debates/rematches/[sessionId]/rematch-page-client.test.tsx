@@ -8,10 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
-import {
-  clearDebateReturnDestination,
-  rememberDebateReturnDestination,
-} from '~/core/debates/debate-return-navigation';
+import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 
 import { DebateRematchPageClient } from './rematch-page-client';
@@ -267,7 +264,10 @@ vi.mock('~/core/debates/recommended-claims', () => ({
 // isn't about this gate behaves as before.
 vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/debates/use-debate-publishable-spaces')>();
-  return { ...actual, useDebatePublishableSpaces: () => ({ publishableSpaceIds: mocks.publishableSpaceIds, isLoading: false }) };
+  return {
+    ...actual,
+    useDebatePublishableSpaces: () => ({ publishableSpaceIds: mocks.publishableSpaceIds, isLoading: false }),
+  };
 });
 
 // Null is "the allowlist hasn't resolved", which every case that isn't about it runs under.
@@ -475,13 +475,14 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('pins shared preferences above additional published claims and enables opposing requests', () => {
+  // The pin this used to assert is gone (GEO-2647); what matters is that both claims are listed
+  // and a shared preference is still the one you can act on.
+  it("lists the session's own claims alongside published ones and enables opposing requests", () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();
 
-    const shared = screen.getByText('A claim both participants chose');
-    const additional = screen.getByText('A newly published claim');
-    expect(shared.compareDocumentPosition(additional) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
@@ -1111,9 +1112,7 @@ describe('DebateRematchPageClient', () => {
     // only when every claim in it was unpublishable.
     it('keeps the publishable claims in a mixed section and drops only the rest', async () => {
       const PERSONAL_CLAIM = '019fedb8-6ca7-7f94-a077-8cd3be5a0a64';
-      mocks.recommendedSections = [
-        { id: 'block-1', name: 'Politics', claimIds: [PERSONAL_CLAIM, CLAIM_MORE] },
-      ];
+      mocks.recommendedSections = [{ id: 'block-1', name: 'Politics', claimIds: [PERSONAL_CLAIM, CLAIM_MORE] }];
       mocks.recommendedEntities = [
         { ...publishedEntity(PERSONAL_CLAIM, 'A claim in someone’s own space'), spaces: [SPACE_1] },
         publishedEntity(),
@@ -1400,6 +1399,30 @@ describe('DebateRematchPageClient', () => {
       { ...sharedClaim(), shared_preference: false, claim: claimSummary(THIRD, 'Ordered claim three') },
       { ...sharedClaim(), shared_preference: false, claim: claimSummary(FIRST, 'Ordered claim one') },
     ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    const names = screen.getAllByText(/^Ordered claim/).map(element => element.textContent);
+    expect(names).toEqual(['Ordered claim one', 'Ordered claim two', 'Ordered claim three']);
+  });
+
+  // GEO-2647. A shared preference used to be pinned to the top of the All tab, which put it ahead
+  // of what the viewer had typed and pushed their search results down. Matched claims stay
+  // legible without the pin — they are the ones offering "Request debate", and the Matches tab
+  // lists them on their own.
+  it('leaves a matched claim where the page returned it rather than pinning it first', () => {
+    const FIRST = '019fedb4-3f74-7c61-8d44-5fa08b1e7a01';
+    const SECOND = '019fedb4-3f74-7c61-8d44-5fa08b1e7a02';
+    const MATCHED = '019fedb4-3f74-7c61-8d44-5fa08b1e7a03';
+    mocks.matchmakingClaims = [
+      matchmakingClaim(FIRST, 'Ordered claim one'),
+      matchmakingClaim(SECOND, 'Ordered claim two'),
+      matchmakingClaim(MATCHED, 'Ordered claim three'),
+    ];
+    mocks.savedClaims = [];
+    // The last of the three is the one both participants have answered.
+    mocks.claims = [{ ...sharedClaim(), shared_preference: true, claim: claimSummary(MATCHED, 'Ordered claim three') }];
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();
