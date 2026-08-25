@@ -31,7 +31,7 @@ import {
   stopRecording,
 } from '~/core/community-calls/api';
 import { LAST_EDITOR_CONFIRM_DELAY_MS } from '~/core/community-calls/constants';
-import { ExtendedReconnectPolicy } from '~/core/community-calls/extended-reconnect-policy';
+import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { formatDuration } from '~/core/community-calls/format';
 import { Recording, parseParticipantMetadata } from '~/core/community-calls/types';
 import { useCallTimeUp } from '~/core/community-calls/use-call-time-up';

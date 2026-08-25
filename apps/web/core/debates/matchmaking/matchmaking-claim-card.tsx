@@ -12,7 +12,7 @@ import {
   useResetEntityResponseIndexingSnapshot,
 } from '~/core/hooks/use-entity-vote';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
@@ -22,6 +22,7 @@ import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import type {
@@ -474,10 +475,24 @@ function PositionRow({
 }
 
 export function SpaceChip({ spaceId }: { spaceId: string }) {
-  const { spacesById } = useSpacesByIds(React.useMemo(() => (validateSpaceId(spaceId) ? [spaceId] : []), [spaceId]));
-  const space = spacesById.get(spaceId);
-  const name = space?.entity?.name ?? 'Space';
-  const image = space?.entity?.image ?? null;
+  // Same resolution as the space filter above the list, so a card and the menu option naming its
+  // space are never one loaded and the other still reading "Space".
+  const { labelsById, isLoading } = useSpaceLabels(
+    React.useMemo(() => (validateSpaceId(spaceId) ? [spaceId] : []), [spaceId])
+  );
+  const label = spaceLabel(labelsById, spaceId);
+  const name = label?.name ?? 'Space';
+  const image = label?.image ?? null;
+
+  // A whole list of cards eyebrowed "Space" reads as though every claim lives somewhere called
+  // Space. A skeleton says the name is coming, and holds the line's height while it does.
+  if (!label && isLoading) {
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <Skeleton className="h-3 w-20" aria-label="Loading space name" />
+      </span>
+    );
+  }
 
   return (
     <span className="flex min-w-0 items-center gap-1.5">

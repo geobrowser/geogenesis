@@ -1,3 +1,5 @@
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+
 export const NEWS_STORY_TYPE_ID = 'e550fe517e904b2c8fffdf13408f5634';
 export const EPISODE_TYPE_ID = '972d201ad78045689e01543f67b26bee';
 export const TWEET_TYPE_ID = 'd6f0506def324d8e9de4976b986e78ec';
@@ -16,6 +18,7 @@ export const EXPLORE_ENTITY_TYPES = [
   { id: '150db6defe2344f0805afa57502e2c32', label: 'Ranking block' },
   { id: '0419ca20118b4cdb84dfdb9ed73b50c2', label: 'Community call event' },
   { id: 'fd51f93520634617be397b672b23364c', label: 'Debate' },
+  { id: CLAIM_TYPE_ID, label: 'Claim' },
 ] as const;
 
 export const EXPLORE_ENTITY_TYPE_IDS = EXPLORE_ENTITY_TYPES.map(type => type.id);

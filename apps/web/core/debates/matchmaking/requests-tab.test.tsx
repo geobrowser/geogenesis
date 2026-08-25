@@ -39,6 +39,18 @@ vi.mock('./hooks', () => ({
   useBlockDebateUser: () => ({ mutate: mocks.block, isPending: false, error: null }),
 }));
 
+// useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
+// suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
+vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
+  useBrowseSidebarQuerySource: () => ({
+    personalSpaceId: null,
+    walletAddress: undefined,
+    keyInput: null,
+    isLoading: false,
+  }),
+  useCachedBrowseSidebarData: () => null,
+}));
+
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
 }));
@@ -216,7 +228,9 @@ describe('RequestsTab', () => {
     render(<RequestsTab />);
 
     expect(screen.getByRole('heading', { name: 'Sent' })).toBeInTheDocument();
-    expect(screen.getByText('Waiting for a reply')).toBeInTheDocument();
+    // The card carries its own state in the footer now, beside the action, rather than a header
+    // that repeated the "Sent" label above it.
+    expect(screen.getByText('Awaiting response')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Explore claims' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));

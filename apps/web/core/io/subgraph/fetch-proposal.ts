@@ -119,6 +119,7 @@ export async function fetchProposal(options: FetchProposalOptions): Promise<Prop
     endTime: apiProposal.timing.endTime,
     status: mapProposalStatus(apiProposal.status),
     canExecute: getApiProposalCanExecute(apiProposal),
+    votingMode: apiProposal.votingMode,
     space: {
       id: apiProposal.spaceId,
       name: null,

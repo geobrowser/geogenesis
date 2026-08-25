@@ -11,6 +11,8 @@ import { Effect, Either, Schema } from 'effect';
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import { Environment } from '~/core/environment';
 import {
   type ApiProposalListItem,
@@ -24,6 +26,10 @@ import {
   restFetch,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph';
+import {
+  fetchProposalSubmittedTimes,
+  getSubmittedTime,
+} from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
@@ -49,14 +55,25 @@ const BUCKET_BASE_ORDER: Record<ProposalBucket, number> = {
 
 const PAGE_SIZE = 100;
 
-/** Unvoted proposals first; voted ones sink to the bottom (same as governance home review). */
-function sortOpenProposalsUnvotedFirstByEndTimeAsc(items: readonly ApiProposalListItem[]): ApiProposalListItem[] {
-  return [...items].sort((a, b) => {
-    const aVoted = a.userVote != null;
-    const bVoted = b.userVote != null;
-    if (aVoted !== bVoted) return aVoted ? 1 : -1;
-    return a.timing.endTime - b.timing.endTime;
+/**
+ * Unvoted proposals first; voted ones sink to the bottom (same as governance home review).
+ * Then soonest-closing first, and newest submission first among proposals that close at
+ * the same time.
+ *
+ * That last key is what orders the "Voting period open" group: their voting window is
+ * unstamped until the first vote, so they all carry endTime 0 and used to tie — leaving
+ * them in whatever order the API happened to return.
+ */
+function sortOpenProposalsUnvotedFirstByEndTimeAsc(
+  items: readonly ApiProposalListItem[],
+  submittedTimes: Map<string, number>
+): ApiProposalListItem[] {
+  const order = (p: ApiProposalListItem) => ({
+    hasViewerVote: p.userVote != null,
+    endTime: p.timing.endTime,
+    submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
   });
+  return [...items].sort((a, b) => compareOpenProposals(order(a), order(b), { unvotedFirst: true, endTime: 'asc' }));
 }
 
 function percentageFromCounts(count: number, total: number): number {
@@ -105,6 +122,12 @@ export async function GovernanceProposalsList({
       <div className="flex flex-col">
         {proposals.map(p => {
           const displayProfile = p.targetProfile ?? p.createdBy;
+          const timestampSeconds = proposalTimestampSeconds({
+            status: p.status,
+            endTime: p.endTime,
+            startTime: p.startTime,
+            submittedAt: p.createdAt,
+          });
           const proposalTitle = p.targetProfile
             ? getMembershipProposalDisplayName(p.type, p.targetProfile)
             : getProposalName({
@@ -164,16 +187,16 @@ export async function GovernanceProposalsList({
                         <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
                       </div>
                     )}
-                    {(p.status === 'ACCEPTED' || p.status === 'REJECTED') && (
+                    {timestampSeconds > 0 && (
                       <>
                         <span aria-hidden className="shrink-0 select-none">
                           ·
                         </span>
-                        <GovernanceOutcomeDate geoTimeSeconds={p.startTime} className="shrink-0" />
+                        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
                         <span aria-hidden className="shrink-0 select-none">
                           ·
                         </span>
-                        <GovernanceOutcomeTime geoTimeSeconds={p.startTime} className="shrink-0 tabular-nums" />
+                        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
                       </>
                     )}
                   </div>
@@ -248,6 +271,7 @@ type GovernanceProposal = {
 function apiProposalToGovernanceDto(
   proposal: ApiProposalListItem,
   bucket: ProposalBucket,
+  submittedAt: number,
   maybeProfile?: Profile,
   maybeTargetProfile?: Profile
 ): GovernanceProposal {
@@ -262,7 +286,7 @@ function apiProposalToGovernanceDto(
     id: proposal.proposalId,
     name: proposal.name,
     type: proposalType,
-    createdAt: proposal.timing.startTime,
+    createdAt: submittedAt,
     createdAtBlock: '0',
     startTime: proposal.timing.startTime,
     endTime: proposal.timing.endTime,
@@ -402,10 +426,23 @@ async function fetchGovernanceProposals({
   // drop them from the open buckets. Completed history stays intact.
   const openProposals = await filterGrantedMembershipRequests([...executableProposals, ...activeProposals]);
 
+  // Resolved before sorting, not just for the rendered page: submission time is the
+  // tiebreaker for open proposals, so it has to be known for every candidate rather
+  // than the slice that survives pagination.
+  const submittedTimes = await fetchProposalSubmittedTimes(
+    [...openProposals, ...completedProposals].map(p => p.proposalId)
+  );
+
   // Combine in priority order: executable > active > completed; within open phases, unvoted first.
   let combinedProposals = [
-    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(openProposals.filter(p => p.status === 'EXECUTABLE')),
-    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(openProposals.filter(p => p.status !== 'EXECUTABLE')),
+    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
+      openProposals.filter(p => p.status === 'EXECUTABLE'),
+      submittedTimes
+    ),
+    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
+      openProposals.filter(p => p.status !== 'EXECUTABLE'),
+      submittedTimes
+    ),
     ...completedProposals,
   ];
 
@@ -447,7 +484,13 @@ async function fetchGovernanceProposals({
     const maybeProfile = profilesBySpaceId.get(p.proposedBy);
     const targetId = findMembershipAction(p.actions)?.targetId;
     const maybeTargetProfile = targetId ? targetProfilesBySpaceId.get(targetId) : undefined;
-    return apiProposalToGovernanceDto(p, getProposalBucket(p.status), maybeProfile, maybeTargetProfile);
+    return apiProposalToGovernanceDto(
+      p,
+      getProposalBucket(p.status),
+      getSubmittedTime(submittedTimes, p.proposalId),
+      maybeProfile,
+      maybeTargetProfile
+    );
   });
 
   return { proposals, hasMore };

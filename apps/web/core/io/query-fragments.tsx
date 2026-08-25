@@ -17,7 +17,11 @@ export const relationToEntityFragment = graphql(/* GraphQL */ `
     types {
       id
     }
-    valuesList {
+    # Bounded like every sibling list in this file. This one rides on each relation of each
+    # entity in a batch, so it is the most multiplied list here and the only one that was
+    # left open — an entity with a heavily-valued neighbour could pull far more than the
+    # three fields below suggest.
+    valuesList(first: 1000) {
       spaceId
       propertyId
       text

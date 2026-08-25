@@ -4,12 +4,9 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useChecklistExpansion } from '~/core/hooks/use-checklist-expansion';
 import { type DailyActivityTask } from '~/core/space/daily-activities';
-import {
-  useDailyUploadActivityComplete,
-  useRankingDailyActivityComplete,
-  useSpaceDailyActivityTasks,
-} from '~/core/space/use-space-daily-activities';
+import { DailyActivityCompletionProbes, useDailyActivityCompletion } from '~/core/space/use-daily-activity-completion';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
@@ -37,21 +34,7 @@ function DailyActivityStepIndicator({ complete }: { complete: boolean }) {
   );
 }
 
-function RankingActivityRow({
-  task,
-  spaceId,
-  onCompleteChange,
-}: {
-  task: Extract<DailyActivityTask, { kind: 'ranking' }>;
-  spaceId: string;
-  onCompleteChange: (id: string, complete: boolean) => void;
-}) {
-  const { complete, isLoading } = useRankingDailyActivityComplete(task.blockId, spaceId);
-
-  React.useEffect(() => {
-    if (!isLoading) onCompleteChange(task.id, complete);
-  }, [complete, isLoading, onCompleteChange, task.id]);
-
+function DailyActivityRow({ task, complete }: { task: DailyActivityTask; complete: boolean }) {
   return (
     <li className="flex gap-3">
       <DailyActivityStepIndicator complete={complete} />
@@ -65,62 +48,14 @@ function RankingActivityRow({
   );
 }
 
-function UploadActivityRow({
-  task,
-  spaceId,
-  onCompleteChange,
-}: {
-  task: Extract<DailyActivityTask, { kind: 'upload' }>;
-  spaceId: string;
-  onCompleteChange: (id: string, complete: boolean) => void;
-}) {
-  const complete = useDailyUploadActivityComplete(spaceId);
-
-  React.useEffect(() => {
-    onCompleteChange(task.id, complete);
-  }, [complete, onCompleteChange, task.id]);
-
-  return (
-    <li className="flex gap-3">
-      <DailyActivityStepIndicator complete={complete} />
-      <div className="min-w-0 flex-1">
-        <p className="text-[16px] leading-[17px] font-medium tracking-[-0.35px] text-text">{task.title}</p>
-        <p className="mt-1 text-[16px] leading-[16px] font-normal tracking-[-0.35px] text-grey-04">
-          {task.description}
-        </p>
-      </div>
-    </li>
-  );
-}
-
-export function SpaceDailyActivitiesSection({ spaceId }: { spaceId: string }) {
-  const { tasks } = useSpaceDailyActivityTasks(spaceId);
-  const [expanded, setExpanded] = React.useState(true);
-  const [completionById, setCompletionById] = React.useState<Record<string, boolean>>({});
-
-  const onCompleteChange = React.useCallback((id: string, complete: boolean) => {
-    setCompletionById(prev => (prev[id] === complete ? prev : { ...prev, [id]: complete }));
-  }, []);
-
-  // Drop stale completion keys when the task list changes (e.g. block removed).
-  React.useEffect(() => {
-    const ids = new Set(tasks.map(t => t.id));
-    setCompletionById(prev => {
-      let changed = false;
-      const next: Record<string, boolean> = {};
-      for (const [id, value] of Object.entries(prev)) {
-        if (ids.has(id)) next[id] = value;
-        else changed = true;
-      }
-      return changed ? next : prev;
-    });
-  }, [tasks]);
+export function SpaceDailyActivitiesSection({ spaceId, tasks }: { spaceId: string; tasks: DailyActivityTask[] }) {
+  const { completionById, onCompleteChange, allComplete, isLoading } = useDailyActivityCompletion(tasks);
+  const { expanded, onToggle } = useChecklistExpansion({ allComplete, isLoading });
 
   if (tasks.length === 0) return null;
 
   const completedCount = tasks.reduce((count, task) => count + (completionById[task.id] ? 1 : 0), 0);
   const progressPercent = Math.round((completedCount / tasks.length) * 100);
-  const isLoading = tasks.some(task => completionById[task.id] === undefined);
 
   return (
     <section className="flex flex-col rounded-lg border border-grey-02 bg-white p-5 shadow-panel">
@@ -130,7 +65,7 @@ export function SpaceDailyActivitiesSection({ spaceId }: { spaceId: string }) {
           type="button"
           aria-expanded={expanded}
           aria-label={expanded ? 'Collapse daily activities' : 'Expand daily activities'}
-          onClick={() => setExpanded(prev => !prev)}
+          onClick={onToggle}
           className="mt-1.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-grey-04 transition-colors hover:text-text"
         >
           <span className={cx('transition-transform', expanded ? 'rotate-180' : 'rotate-0')}>
@@ -158,15 +93,16 @@ export function SpaceDailyActivitiesSection({ spaceId }: { spaceId: string }) {
         </p>
       </div>
 
+      {/* Draws nothing, and deliberately outside the collapse below. These are what watch each
+          task, so folding them away with the list would leave nothing to notice the daily reset —
+          the checklist would stay closed, reading 100%, for the rest of the session. */}
+      <DailyActivityCompletionProbes tasks={tasks} spaceId={spaceId} onCompleteChange={onCompleteChange} />
+
       {expanded ? (
         <ul className="mt-5 flex flex-col gap-5">
-          {tasks.map(task =>
-            task.kind === 'ranking' ? (
-              <RankingActivityRow key={task.id} task={task} spaceId={spaceId} onCompleteChange={onCompleteChange} />
-            ) : (
-              <UploadActivityRow key={task.id} task={task} spaceId={spaceId} onCompleteChange={onCompleteChange} />
-            )
-          )}
+          {tasks.map(task => (
+            <DailyActivityRow key={task.id} task={task} complete={completionById[task.id] ?? false} />
+          ))}
         </ul>
       ) : null}
     </section>

@@ -14,17 +14,24 @@ function normId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
 
-const SORTS: ExploreSort[] = ['new', 'top'];
+const SORTS: ExploreSort[] = ['new', 'top', 'best'];
 const TIMES: ExploreTime[] = ['today', 'week', 'month', 'year', 'all'];
 
 function parseSort(raw: string | null): ExploreSort {
   if (raw && (SORTS as string[]).includes(raw)) return raw as ExploreSort;
-  return 'top';
+  return 'best';
 }
 
+/**
+ * No `time` parameter means no time filter, which is what `'all'` is — `timeThresholdSec` maps it
+ * to null and nothing reaches the query. Feeds whose sort carries no range (Best, New) send
+ * nothing rather than a window the viewer can neither see nor change; defaulting to a week here
+ * would reinstate exactly the filter they omitted. An unrecognised value takes the same route: a
+ * range nobody can name is not one to guess at.
+ */
 function parseTime(raw: string | null): ExploreTime {
   if (raw && (TIMES as string[]).includes(raw)) return raw as ExploreTime;
-  return 'week';
+  return 'all';
 }
 
 export async function GET(request: Request) {

@@ -10,14 +10,17 @@ import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response
 
 import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatRequestError } from './api';
 import { DebateCoordinator } from './debate-coordinator';
+import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import {
   debateQueryKeys,
+  useAcceptDebateRematchRequest,
   useClearDebateActivity,
   useClearTimedOutDebateActivity,
   useConsentToDebateRematch,
   useDebate,
   useDebateActivity,
   useDebateClaims,
+  useDebateClaimsBySpaces,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
   useEndDebateTurn,
@@ -29,6 +32,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
+  acceptDebateRematchRequest: vi.fn(),
   getIdentityToken: vi.fn(),
   identityToken: vi.fn(),
   consentToDebateRematch: vi.fn(),
@@ -49,8 +53,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, back: mocks.back }),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,
@@ -61,12 +64,15 @@ vi.mock('@geogenesis/auth', () => ({
 vi.mock('./debate-gateway', () => ({
   useDebateGateway: () => ({ status: 'ready', paused: false }),
   useDebateGatewayScope: vi.fn(),
+  useDebateGatewaySnapshot: () => ({ status: 'ready', paused: false }),
+  useDebateGatewaySpaceScopes: vi.fn(),
 }));
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
   return {
     ...actual,
+    acceptDebateRematchRequest: mocks.acceptDebateRematchRequest,
     consentToDebateRematch: mocks.consentToDebateRematch,
     endDebateTurn: mocks.endDebateTurn,
     leaveDebateRematch: mocks.leaveDebateRematch,
@@ -81,6 +87,7 @@ vi.mock('./api', async importOriginal => {
 describe('useDebateRematchClaimsForIds', () => {
   beforeEach(() => {
     mocks.authenticated = true;
+    mocks.acceptDebateRematchRequest.mockReset();
     mocks.identityToken.mockReturnValue(null);
     mocks.getIdentityToken.mockResolvedValue(null);
     mocks.listDebateRematchClaims.mockReset();
@@ -107,9 +114,13 @@ describe('useDebateRematchClaimsForIds', () => {
 
     await waitFor(() => expect(result.current.data.claims).toHaveLength(150));
     const batchSizes = mocks.listDebateRematchClaims.mock.calls.map(([, claimIds]) => claimIds.length);
-    expect(batchSizes).toEqual([100, 50]);
+    expect(batchSizes.length).toBeGreaterThan(1);
+    expect(batchSizes.every(size => size <= 100)).toBe(true);
+    expect(batchSizes.reduce((sum, size) => sum + size, 0)).toBe(150);
     // Exclusions from every batch count, deduped.
-    expect(result.current.data.excluded_claim_ids.sort()).toEqual(['excluded-100', 'excluded-50']);
+    expect(result.current.data.excluded_claim_ids.sort()).toEqual(
+      [...new Set(batchSizes.map(size => `excluded-${size}`))].sort()
+    );
   });
 
   it('asks once for a list that fits', async () => {
@@ -124,6 +135,74 @@ describe('useDebateRematchClaimsForIds', () => {
 
     await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1));
     expect(mocks.listDebateRematchClaims.mock.calls[0]![1]).toEqual(['claim-a', 'claim-b']);
+  });
+});
+
+describe('useDebateClaimsBySpaces', () => {
+  beforeEach(() => {
+    mocks.authenticated = true;
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    mocks.listDebateClaims.mockReset();
+    setCachedIdentityToken(null);
+  });
+
+  it('deduplicates and splits each space into requests of at most fifty ids', async () => {
+    const ids = Array.from({ length: 101 }, (_, index) => `claim-${index}`);
+    mocks.listDebateClaims.mockImplementation((_spaceId: string, claimIds: string[]) =>
+      Promise.resolve({ claims: claimIds.map(claim_entity_id => ({ claim_entity_id })) })
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result } = renderHook(
+      () => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds: [...ids, ids[0]!] }]),
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      }
+    );
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(101));
+    const requestedIds = mocks.listDebateClaims.mock.calls.map(([, claimIds]) => claimIds as string[]);
+    expect(requestedIds.every(claimIds => claimIds.length <= 50)).toBe(true);
+    expect(new Set(requestedIds.flat())).toEqual(new Set(ids));
+    expect(requestedIds.flat()).toHaveLength(101);
+    expect(new Set(result.current.claims.map(claim => claim.claim_entity_id))).toEqual(new Set(ids));
+  });
+
+  it('keeps existing batches cached when a claim is inserted ahead of them', async () => {
+    const ids = Array.from({ length: 101 }, (_, index) => `claim-${String(index).padStart(3, '0')}`);
+    mocks.listDebateClaims.mockImplementation((_spaceId: string, claimIds: string[]) =>
+      Promise.resolve({ claims: claimIds.map(claim_entity_id => ({ claim_entity_id })) })
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    const { result, rerender } = renderHook(
+      ({ claimIds }: { claimIds: string[] }) => useDebateClaimsBySpaces([{ spaceId: 'space-1', claimIds }]),
+      {
+        initialProps: { claimIds: ids },
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      }
+    );
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(101));
+    const firstPassBatches = mocks.listDebateClaims.mock.calls.map(([, claimIds]) => (claimIds as string[]).join(','));
+    mocks.listDebateClaims.mockClear();
+
+    // Sorts ahead of every existing id, which under fixed-size slicing would shift every boundary
+    // and re-request all 102 ids.
+    rerender({ claimIds: ['claim-000-a', ...ids] });
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(102));
+    const refetchedIds = mocks.listDebateClaims.mock.calls.flatMap(([, claimIds]) => claimIds as string[]);
+    expect(refetchedIds.length).toBeLessThan(101);
+    const untouchedBatches = firstPassBatches.filter(batch =>
+      mocks.listDebateClaims.mock.calls.every(([, claimIds]) => (claimIds as string[]).join(',') !== batch)
+    );
+    expect(untouchedBatches.length).toBeGreaterThan(0);
   });
 });
 
@@ -299,10 +378,71 @@ describe('useGeoChatAuth', () => {
     });
 
     await waitFor(() =>
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims'],
-      })
+      expect(invalidateQueries).toHaveBeenCalledWith({ predicate: expect.any(Function) }, { cancelRefetch: false })
     );
+
+    // Only the batches naming the claim, plus the id-less session list any response can add a
+    // row to. The picker holds a batch per page on screen; refetching all of them for one
+    // response is what left its positions trailing.
+    const predicate = invalidateQueries.mock.calls.at(-1)![0]!.predicate!;
+    const batch = (claimIds: string[]) =>
+      ({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims', claimIds] }) as never;
+    expect(predicate(batch(['claim-1']))).toBe(true);
+    expect(predicate(batch(['claim-0', 'claim-1', 'claim-2']))).toBe(true);
+    expect(predicate(batch([]))).toBe(true);
+    expect(predicate(batch(['claim-2']))).toBe(false);
+    expect(
+      predicate({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-2', 'claims', ['claim-1']] } as never)
+    ).toBe(false);
+  });
+
+  // Cancelling a batch that is about to answer throws the request away, and when responses keep
+  // arriving it means none of them ever land — the starvation this family is invalidated around.
+  // The request in flight is left to land, then asked again so the answer postdates the response.
+  it('lets a rematch batch in flight land and asks it again once an indexed response arrives', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    let landFirst!: () => void;
+    mocks.listDebateRematchClaims.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          landFirst = () => resolve({ claims: [], excluded_claim_ids: [] });
+        })
+    );
+
+    renderHook(() => useDebateRematchClaims('rematch-1', ['claim-1']), { wrapper });
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'negative',
+          personalSpaceId: 'profile-1',
+          responseKind: 'veracity',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      });
+    });
+
+    // The request that was already on its way is not restarted out from under itself.
+    const batch = queryClient
+      .getQueryCache()
+      .find({ queryKey: debateQueryKeys.rematchClaims('user-a', 'rematch-1', ['claim-1']) })!;
+    expect(batch.state.fetchStatus).toBe('fetching');
+    expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1);
+
+    act(() => landFirst());
+
+    // ...and once it has landed, it is asked again, so what ends up on screen knows the response.
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(2));
   });
 
   // A `users/me` sent before logout can resolve after it. Writing that result back would
@@ -386,7 +526,16 @@ describe('useUpdateDebateAvailability', () => {
 
     expect(mocks.updateDebateAvailability).toHaveBeenCalledWith(false, expect.any(Function), 'user-a');
     expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(authoritative);
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates'] });
+    // Everything under `'debates'` bar the rematch picker's positions batches, which availability
+    // says nothing about and which cost a request per page of claims on screen.
+    expect(invalidateQueries).toHaveBeenCalledWith({ predicate: expect.any(Function) });
+    const predicate = invalidateQueries.mock.calls.at(-1)![0]!.predicate!;
+    expect(predicate({ queryKey: ['debates', 'account', 'user-a', 'activity'] } as never)).toBe(true);
+    expect(predicate({ queryKey: ['debates', 'claims', 'space-1', 'all'] } as never)).toBe(true);
+    expect(
+      predicate({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims', ['claim-1']] } as never)
+    ).toBe(false);
+    expect(predicate({ queryKey: ['claim-picker', 'page'] } as never)).toBe(false);
   });
 
   it('rolls the optimistic activity back when the request fails', async () => {
@@ -447,6 +596,29 @@ describe('useConsentToDebateRematch', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.rematch('user-a', session.id) });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
     expect(queryClient.getQueryData<Debate>(debateQueryKeys.debate('debate-1'))?.rematch_session_id).toBe(session.id);
+  });
+});
+
+describe('useAcceptDebateRematchRequest', () => {
+  it('holds an entry intent while the converted debate route is loading', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { mutations: { retry: false }, queries: { retry: false } } });
+    const session = { ...rematchSession(), status: 'converted' as const, converted_debate_id: 'debate-2' };
+    const debate = { id: 'debate-2' } as Debate;
+    mocks.acceptDebateRematchRequest.mockResolvedValue({ session, debate });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(
+      () => ({ accept: useAcceptDebateRematchRequest(), enteringDebateId: useEnteringDebateId() }),
+      { wrapper }
+    );
+
+    await act(() => result.current.accept.mutateAsync('request-1'));
+
+    await waitFor(() => expect(result.current.enteringDebateId).toBe('debate-2'));
+    expect(queryClient.getQueryData(debateQueryKeys.debate('debate-2'))).toEqual(debate);
+    clearEnteringDebate('debate-2');
   });
 });
 
@@ -889,6 +1061,10 @@ describe('debate query refresh behavior', () => {
     window.localStorage.clear();
   });
 
+  // The gateway owns freshness for these, so time passing must not cost a request. Account activity
+  // is deliberately not among them any more — it gates the incoming-request popup and polls to
+  // survive a deaf socket (GEO-2638); its cadence is pinned in `hooks-query-network.test.tsx`,
+  // where the two focus gates a real interval depends on can be stated directly.
   it('does not issue periodic debate reads while time advances', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
@@ -903,20 +1079,10 @@ describe('debate query refresh behavior', () => {
       })
     );
     const fetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          online: true,
-          available_to_debate: true,
-          cooldown_until: null,
-          match: null,
-          debate: null,
-          rematch: null,
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
+      new Response(JSON.stringify({ id: 'debate-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     );
     vi.stubGlobal('fetch', fetch);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -924,7 +1090,7 @@ describe('debate query refresh behavior', () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    renderHook(() => useDebateActivity(), { wrapper });
+    renderHook(() => useDebate('debate-1', true), { wrapper });
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
 
     await act(async () => vi.advanceTimersByTimeAsync(60_000));

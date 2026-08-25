@@ -59,12 +59,25 @@ export type DebateSource = {
   input: DebatePublishInput;
 };
 
+/**
+ * Why a debate can't be published yet — or, for `media_failed`, ever.
+ *
+ * The distinction between `media_not_ready` and `media_failed` is the whole point of having two
+ * codes: one is a debate the next sweep will pick up, the other is a debate no sweep will ever
+ * publish. Collapsing them is how twelve debates died unnoticed over a month — a permanently dead
+ * job counted as "still processing" on every tick, forever, and looked exactly like a healthy
+ * backlog.
+ */
+export type DebateNotPublishableCode =
+  | 'not_complete'
+  | 'recording_cancelled'
+  | 'cancellation_window_open'
+  | 'media_not_ready'
+  | 'media_failed';
+
 export class DebateNotPublishableError extends Error {
-  code: 'not_complete' | 'recording_cancelled' | 'cancellation_window_open' | 'media_not_ready';
-  constructor(
-    code: 'not_complete' | 'recording_cancelled' | 'cancellation_window_open' | 'media_not_ready',
-    message: string
-  ) {
+  code: DebateNotPublishableCode;
+  constructor(code: DebateNotPublishableCode, message: string) {
     super(message);
     this.name = 'DebateNotPublishableError';
     this.code = code;
@@ -100,7 +113,18 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   assertDebateRecordingPublishable(debate, Date.now());
 
   const media = await geoChatGet<DebateMediaResponse>(`/debates/${debateId}/media`);
+  // A failed job has already spent its retries in the worker; it is not coming back on its own.
+  if (media.job?.status === 'failed') {
+    throw new DebateNotPublishableError(
+      'media_failed',
+      `Debate ${debateId} media job failed permanently and will not be retried.`
+    );
+  }
   if (media.job?.status !== 'succeeded') {
+    // Queued, running, or no job row yet — all of which the next tick may resolve. A missing job is
+    // the weakest of the three: if the enqueue itself was lost there is nothing to wait for, but
+    // that is indistinguishable from "about to be enqueued", so it stays a wait rather than risking
+    // a false report of permanent death.
     throw new DebateNotPublishableError(
       'media_not_ready',
       `Debate ${debateId} media is not ready (job ${media.job?.status ?? 'missing'}).`
@@ -108,8 +132,12 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   }
 
   // A job can succeed without composing a `final_video`; publishing then yields a videoless Debate.
+  // Terminal, not a wait: the job that would have produced it has already finished.
   if (!hasProcessedVideo(media)) {
-    throw new DebateNotPublishableError('media_not_ready', `Debate ${debateId} has no processed final_video artifact.`);
+    throw new DebateNotPublishableError(
+      'media_failed',
+      `Debate ${debateId} media job succeeded without a processed final_video artifact.`
+    );
   }
 
   const videoUrl = await pinArtifactToIpfs(debateId, 'final_video');
