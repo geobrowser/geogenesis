@@ -126,12 +126,14 @@ describe('ClaimReadinessToggle', () => {
   });
 
   // The position is an on-chain response, so readiness cannot be turned on before there is one.
-  // The reason is shown rather than left in a `title`, which never appears on touch.
-  it('cannot be turned on before the viewer has responded, and says why', () => {
-    renderToggle(readiness({ viewer_response: null }));
+  // That is now left to the disabled switch and the response pills beside it, rather than spelled
+  // out in a caption — but it must still not leak the backend's raw disabled reason into the gap.
+  it('cannot be turned on before the viewer has responded, and stays silent about it', () => {
+    renderToggle(readiness({ viewer_response: null, readiness_disabled_reason: 'awaiting_response' }));
 
     expect(toggle()).toBeDisabled();
-    expect(screen.getByText('Respond to this claim to debate it.')).toBeInTheDocument();
+    expect(screen.queryByText('Respond to this claim to debate it.')).not.toBeInTheDocument();
+    expect(screen.queryByText('awaiting_response')).not.toBeInTheDocument();
     fireEvent.click(toggle());
     expect(mocks.joinMutateAsync).not.toHaveBeenCalled();
   });

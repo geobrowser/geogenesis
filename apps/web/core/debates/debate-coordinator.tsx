@@ -12,9 +12,9 @@ import { Text } from '~/design-system/text';
 import { activeDebate } from './activity-state';
 import { type DebateSharePrompt } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
-import { useDebatePresence } from './debate-attention';
+import { useDebateAttention, useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
-import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
+import { clearEnteringDebate, useEnteringDebateId, useEnteringDebatePending } from './debate-entry-intent';
 import { useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
 import { rememberDebateReturnDestination } from './debate-return-navigation';
@@ -44,6 +44,8 @@ export function DebateCoordinator() {
   const geoChatAuth = useGeoChatAuth();
   // Presence, not attention: being available to debate has to survive looking at another window.
   const debatePresence = useDebatePresence();
+  // Exactly one tab: visible *and* focused. See the rematch routing effect below.
+  const hasAttention = useDebateAttention();
   const gateway = useDebateGateway(
     geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
@@ -74,7 +76,13 @@ export function DebateCoordinator() {
   // pathname — for the seconds the route takes, while the activity it invalidated on the way out
   // comes straight back reporting the debate.
   const enteringDebateId = useEnteringDebateId();
-  const atDebate = Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
+  // And the same, one step earlier: an accept in flight has no debate id to key on yet, but this tab
+  // is just as much on its way in, and its own `debate.state_changed` can arrive before the response
+  // does (GEO-2604). Not keyed on `debate` — the point is to cover the window where the id is not
+  // known, so it cannot be matched against one.
+  const enteringPending = useEnteringDebatePending();
+  const atDebate =
+    enteringPending || Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
   // The rematch page walks the viewer into its own converted debate, and accepting fires a single
   // `debate.rematch_changed` that the gateway turns into *two* refetches — the account's activity
   // and the rematch session — either of which can land first. When activity wins, this coordinator
@@ -192,6 +200,19 @@ export function DebateCoordinator() {
     // coordinator sent every other open tab into that room, where ownership correctly rejected it.
     // The room handles deciding, recording finalization, browsing, and conversion itself.
     if (sourceDebatePath) return;
+    // Past that guard there is no room to hand off from — a session with no source debate comes
+    // from the matchmaking hub or a profile challenge, so this coordinator is the only thing that
+    // can route the viewer in, and it must. But it runs in *every* tab, and the guard above only
+    // covers the source-debate branch: a null `source_debate_id` fell through and pushed every
+    // open tab into the picker at once (GEO-2648, and the majority of sessions take this branch).
+    //
+    // Attention rather than presence is what makes it one tab. Presence is per-document
+    // visibility, so several windows report it together; attention additionally requires
+    // `document.hasFocus()`, which is true of at most one tab in the browser — the one the viewer
+    // is actually looking at, which is the only one that should move under them. Unfocused tabs
+    // stay put, and because attention is a subscription this re-runs when one is focused, so
+    // whichever tab they turn to still routes in rather than stranding them.
+    if (!hasAttention) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
       if (pathname !== path) {
@@ -199,7 +220,9 @@ export function DebateCoordinator() {
         router.push(path);
       }
     }
-  }, [activity, pathname, router]);
+    // `hasAttention` is in here on purpose: an unfocused tab returns early above, and this is what
+    // re-runs the effect when the viewer turns to a tab, so it routes in then rather than never.
+  }, [activity, hasAttention, pathname, router]);
 
   const visibleSharePrompt =
     retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);

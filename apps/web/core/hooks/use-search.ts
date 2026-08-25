@@ -10,6 +10,7 @@ import { dedupeSearchResultTypeTags } from '~/core/utils/search-result-types';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { mergeSearchResult } from '../database/result';
+import { capSearchQuery } from '../io/search-query';
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
 import type { SearchResult } from '../types';
@@ -108,6 +109,7 @@ export function useSearch({
   });
 
   const maybeEntityId = debouncedQuery.trim();
+  const cappedQuery = capSearchQuery(debouncedQuery);
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
 
   const searchBlocked =
@@ -127,7 +129,9 @@ export function useSearch({
     enabled: shouldSearch,
     queryKey: [
       'search',
-      debouncedQuery,
+      // The capped query, so typing past the cap stops minting keys for a request that cannot
+      // change. `debouncedQuery` stays the raw text everywhere it describes what was typed.
+      cappedQuery,
       filterTypeKey,
       filterBySpace,
       Boolean(waitForFilterTypes),
@@ -160,7 +164,7 @@ export function useSearch({
           cache,
           where: {
             name: {
-              fuzzy: debouncedQuery,
+              fuzzy: cappedQuery,
             },
             ...(filterByTypes?.length
               ? {

@@ -8,6 +8,7 @@ import { Effect, Either } from 'effect';
 
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { Subgraph } from '~/core/io';
+import { capSearchQuery } from '~/core/io/search-query';
 
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
@@ -24,6 +25,7 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
   const allowEmptyQuery = options?.allowEmptyQuery ?? false;
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query, 200);
+  const cappedQuery = capSearchQuery(debouncedQuery);
 
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -35,7 +37,8 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
     hasNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
-    queryKey: ['spaces-by-name', debouncedQuery, matchLimit],
+    // The capped query, so typing past the cap stops re-running a search that cannot change.
+    queryKey: ['spaces-by-name', cappedQuery, matchLimit],
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
       const fetchResultsEffect = Effect.either(
@@ -46,7 +49,7 @@ export function useSpacesQuery(enabled = true, options?: UseSpacesQueryOptions) 
               cache,
               where: {
                 name: {
-                  fuzzy: debouncedQuery,
+                  fuzzy: cappedQuery,
                 },
                 types: filterByTypes?.map(t => {
                   return {

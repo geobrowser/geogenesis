@@ -17,6 +17,7 @@ import { Input } from '~/design-system/input';
 import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic } from '../api';
 import { isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
+import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useMatchmakingClaims } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
@@ -76,19 +77,35 @@ export function ClaimsTab() {
   // that never fills.
   const allowlistPending = spaceAllowlist === null && allowlistLoading;
 
+  // GEO-2649. Two independent questions, and a claim has to pass both: the allowlist above asks
+  // whether this *viewer* may see the space, and this asks whether a debate there could ever be
+  // published — the acceptor has to be an editor of it, or the debate fails on-chain at the end.
+  // Offering a claim that cannot carry a debate is offering a dead end.
+  //
+  // Same "wait rather than trim under the viewer" rule, for the same reason: `null` means unknown
+  // and deliberately does not filter, so without this the tab would list the unfiltered set and
+  // pull claims out of it a moment later.
+  const { publishableSpaceIds, isLoading: publishableLoading } = useDebatePublishableSpaces();
+  const publishablePending = publishableSpaceIds === null && publishableLoading;
+  const spacesPending = allowlistPending || publishablePending;
+
+  const spaceShowsClaims = React.useCallback(
+    (candidateSpaceId: string) =>
+      isClaimSpaceAllowed(candidateSpaceId, spaceAllowlist) &&
+      isSpaceDebatePublishable(candidateSpaceId, publishableSpaceIds),
+    [publishableSpaceIds, spaceAllowlist]
+  );
+
   const serverClaims = React.useMemo(
-    () =>
-      allowlistPending
-        ? []
-        : pages.flatMap(page => page.claims).filter(entry => isClaimSpaceAllowed(entry.claim.space_id, spaceAllowlist)),
-    [allowlistPending, pages, spaceAllowlist]
+    () => (spacesPending ? [] : pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id))),
+    [pages, spaceShowsClaims, spacesPending]
   );
 
   // The space menu offers only what the list can actually show, so picking an option never lands
   // the viewer on an empty list they can't explain.
   const facetSpaceIds = React.useMemo(
-    () => (allowlistPending ? [] : (facets?.space_ids ?? []).filter(id => isClaimSpaceAllowed(id, spaceAllowlist))),
-    [allowlistPending, facets?.space_ids, spaceAllowlist]
+    () => (spacesPending ? [] : (facets?.space_ids ?? []).filter(spaceShowsClaims)),
+    [facets?.space_ids, spaceShowsClaims, spacesPending]
   );
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
@@ -176,7 +193,7 @@ export function ClaimsTab() {
       />
 
       <HubQueryState
-        isLoading={claimsQuery.isLoading || allowlistPending}
+        isLoading={claimsQuery.isLoading || spacesPending}
         error={claimsQuery.error}
         onRetry={() => void claimsQuery.refetch()}
         isEmpty={visibleClaims.length === 0}
@@ -221,7 +238,7 @@ export function ClaimsTab() {
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-      {claimsQuery.hasNextPage && !allowlistPending ? (
+      {claimsQuery.hasNextPage && !spacesPending ? (
         <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
       ) : null}
     </div>

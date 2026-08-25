@@ -94,6 +94,12 @@ const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const INVALIDATION_COALESCE_MS = 50;
 const INVALIDATION_RETRY_BASE_MS = 250;
+/**
+ * How long an unrecognised `ERROR` frame suppresses another reconnect. One recycle repairs a
+ * transient rejection; a second inside this window means it is reproducing, and spinning on it
+ * would be worse than running degraded.
+ */
+const ERROR_RECONNECT_COOLDOWN_MS = 60_000;
 /** Re-flushes after the first attempt fails transiently, so up to four attempts in all. */
 const MAX_INVALIDATION_RETRIES = 3;
 const BROAD_INVALIDATION_KEY = 'debates:all';
@@ -123,6 +129,7 @@ export class DebateGatewayClient {
   private readyForDebates = false;
   private lastSequence: number | null = null;
   private reconnectAttempt = 0;
+  private lastErrorReconnectAt: number | null = null;
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatsAwaitingAck = 0;
   private debatePresence = true;
@@ -180,6 +187,7 @@ export class DebateGatewayClient {
     this.hasReachedReady = false;
     this.lastSequence = null;
     this.reconnectAttempt = 0;
+    this.lastErrorReconnectAt = null;
     this.clearAllTimers();
     this.disposeSocket();
     this.sentScopes.clear();
@@ -281,8 +289,23 @@ export class DebateGatewayClient {
         } else if (isRateLimited(envelope.payload)) {
           this.forceReconnect(socket, rateLimitRetryDelayMs(envelope.payload));
         } else if (isSubscriptionLimitReached(envelope.payload)) {
+          // A real ceiling, and reconnecting re-sends the same scopes and hits it again. The
+          // account-routed stream keeps working; only the scopes past the limit are lost.
           this.setSnapshot({ status: 'degraded', paused: true });
+        } else if (this.canRecoverFromError()) {
+          // Anything else is not known to be permanent, and parking here was a dead end: nothing in
+          // this branch closes the socket, so heartbeats keep being acked, `heartbeatsAwaitingAck`
+          // never reaches two, and `forceReconnect` is never reached. The connection stayed up in a
+          // state the client had already declared dead, for the rest of the session, with no path
+          // back to `ready` — a scope-level rejection took the account-level stream down with it.
+          // Recycle the socket instead, on the usual backoff (GEO-2650).
+          this.lastErrorReconnectAt = Date.now();
+          this.forceReconnect(socket);
         } else {
+          // Already tried that recently, so the error is reproducing rather than transient and
+          // another reconnect would spin: `reconnectAttempt` resets on a successful invalidation
+          // flush, which a fresh connection performs before the error recurs, so the backoff would
+          // never actually grow. Park, and let the degraded poll carry correctness.
           this.setSnapshot({ status: 'degraded', paused: true });
         }
         break;
@@ -706,6 +729,12 @@ export class DebateGatewayClient {
     if (!this.enabled) return;
     this.setSnapshot({ status: 'degraded', paused: true });
     this.scheduleReconnect(minimumDelayMs);
+  }
+
+  private canRecoverFromError() {
+    return (
+      this.lastErrorReconnectAt === null || Date.now() - this.lastErrorReconnectAt >= ERROR_RECONNECT_COOLDOWN_MS
+    );
   }
 
   private scheduleReconnect(minimumDelayMs = 0) {
