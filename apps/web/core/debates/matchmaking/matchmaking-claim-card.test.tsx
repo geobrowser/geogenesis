@@ -282,7 +282,9 @@ describe('MatchmakingClaimCard', () => {
     expect(mocks.submitResponse).toHaveBeenCalled();
   });
 
-  it('explains why the toggle is unavailable without a response', () => {
+  it('leaves the toggle disabled and uncaptioned without a response', () => {
+    // The card still shows what to do: the response pills render directly beneath this header,
+    // so the disabled switch no longer carries a caption of its own.
     renderCard(
       <MatchmakingClaimCard
         claim={claim}
@@ -292,6 +294,6 @@ describe('MatchmakingClaimCard', () => {
     );
 
     expect(screen.getByRole('switch', { name: toggleName })).toBeDisabled();
-    expect(screen.getByText('Respond to this claim to debate it.')).toBeInTheDocument();
+    expect(screen.queryByText('Respond to this claim to debate it.')).not.toBeInTheDocument();
   });
 });

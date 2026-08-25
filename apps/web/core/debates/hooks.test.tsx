@@ -64,6 +64,7 @@ vi.mock('@geogenesis/auth', () => ({
 vi.mock('./debate-gateway', () => ({
   useDebateGateway: () => ({ status: 'ready', paused: false }),
   useDebateGatewayScope: vi.fn(),
+  useDebateGatewaySnapshot: () => ({ status: 'ready', paused: false }),
   useDebateGatewaySpaceScopes: vi.fn(),
 }));
 
@@ -1060,6 +1061,10 @@ describe('debate query refresh behavior', () => {
     window.localStorage.clear();
   });
 
+  // The gateway owns freshness for these, so time passing must not cost a request. Account activity
+  // is deliberately not among them any more — it gates the incoming-request popup and polls to
+  // survive a deaf socket (GEO-2638); its cadence is pinned in `hooks-query-network.test.tsx`,
+  // where the two focus gates a real interval depends on can be stated directly.
   it('does not issue periodic debate reads while time advances', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
@@ -1074,20 +1079,10 @@ describe('debate query refresh behavior', () => {
       })
     );
     const fetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          online: true,
-          available_to_debate: true,
-          cooldown_until: null,
-          match: null,
-          debate: null,
-          rematch: null,
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
+      new Response(JSON.stringify({ id: 'debate-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     );
     vi.stubGlobal('fetch', fetch);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -1095,7 +1090,7 @@ describe('debate query refresh behavior', () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    renderHook(() => useDebateActivity(), { wrapper });
+    renderHook(() => useDebate('debate-1', true), { wrapper });
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
 
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
