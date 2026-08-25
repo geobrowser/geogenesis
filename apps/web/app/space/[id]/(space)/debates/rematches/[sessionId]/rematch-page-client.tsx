@@ -64,6 +64,7 @@ import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { getChecked } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
+import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -509,6 +510,27 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [opponentClaims, opponentPositionOf]
   );
 
+  /**
+   * GEO-2656. The badge drew `0` from the very first paint, because the count is derived from a
+   * list that is empty until three dependent round trips land — positions, then the claim
+   * entities, then the session's rematch rows.
+   *
+   * Zero is not a neutral placeholder here. It is a specific, confident claim — "this person holds
+   * no positions" — and it is usually wrong, on the one tab whose whole purpose is their
+   * positions. A viewer who reads it and switches away has been told something false.
+   *
+   * `positions.isLoading` has to be part of this. The two claim lookups are keyed on ids that come
+   * *from* positions, so while positions is still in flight the id list is empty, those queries
+   * are disabled rather than loading, and nothing downstream reports as pending.
+   *
+   * Once a settled list exists the number is shown even while a refetch is in flight: a new
+   * response from the opponent restarts the lookups, and `useLastSettled` is still holding a list
+   * that is correct for every claim already on it. Going back to a skeleton there would flicker
+   * the badge on exactly the event that ought to be invisible.
+   */
+  const opponentCountPending =
+    opponentClaims.length === 0 && (positions.isLoading || opponentClaimsSettling);
+
   const hasRecommended = recommendedSections.length > 0;
   // The opponent's claims arrive in one round trip; the curated lookup is three, in sequence. The
   // picker lands on whichever has something to show first and stays there: once a tab has drawn
@@ -735,7 +757,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   tab === 'opponent' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
                 )}
               >
-                {opponentPositionCount}
+                {/* The badge keeps its size either way, so the strip doesn't reflow when the
+                    number lands. See `opponentCountPending`: a skeleton says "still counting",
+                    where `0` said "none" and was usually wrong. */}
+                {opponentCountPending ? (
+                  <Skeleton radius="rounded-full" className="h-3 w-3" aria-label="Counting positions" />
+                ) : (
+                  opponentPositionCount
+                )}
               </span>
             </TabButton>
             <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
