@@ -36,6 +36,7 @@ import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { Property, Relation } from '~/core/types';
 
 import { IconButton } from '~/design-system/button';
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { Eye } from '~/design-system/icons/eye';
 import { EyeHide } from '~/design-system/icons/eye-hide';
 import { OrderDots } from '~/design-system/icons/order-dots';
@@ -74,6 +75,9 @@ type TableBlockPropertiesMenuProps = {
   ) => void;
   hideAllShownPropertyColumns: () => void;
   reorderShownPropertyRelations: (fromIndex: number, toIndex: number) => void;
+  /** Relation properties offered as personal browse-mode dropdowns (block `Dropdowns` config). */
+  dropdownPropertyIds?: string[];
+  toggleDropdownProperty?: (property: { id: string; name: string | null }) => void;
   disabled?: boolean;
 };
 
@@ -154,6 +158,8 @@ export function TableBlockPropertiesMenu({
   toggleProperty,
   hideAllShownPropertyColumns,
   reorderShownPropertyRelations,
+  dropdownPropertyIds = [],
+  toggleDropdownProperty,
   disabled,
 }: TableBlockPropertiesMenuProps) {
   const [open, setOpen] = React.useState(false);
@@ -462,6 +468,39 @@ export function TableBlockPropertiesMenu({
                 </>
               )}
             </div>
+
+            {toggleDropdownProperty && (
+              <>
+                <div className={sectionHeaderClass}>
+                  <span>Browse dropdowns</span>
+                </div>
+                <div className="px-1 pb-2">
+                  {filterableProperties.filter(p => p.dataType === 'RELATION' && labelMatchesQuery(p.name, p.id, q))
+                    .length === 0 ? (
+                    <p className="px-2 py-2 text-footnote text-grey-04">No relation properties.</p>
+                  ) : (
+                    filterableProperties
+                      .filter(p => p.dataType === 'RELATION' && labelMatchesQuery(p.name, p.id, q))
+                      .map(p => {
+                        const enabled = dropdownPropertyIds.some(id => ID.equals(id, p.id));
+                        return (
+                          <button
+                            key={`dropdown:${p.id}`}
+                            type="button"
+                            role="menuitemcheckbox"
+                            aria-checked={enabled}
+                            className={rowClass}
+                            onClick={() => toggleDropdownProperty({ id: p.id, name: p.name })}
+                          >
+                            <CheckboxVisual checked={enabled} />
+                            <span className="min-w-0 flex-1 truncate">{p.name ?? p.id}</span>
+                          </button>
+                        );
+                      })
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </Dropdown.Content>
       </Dropdown.Portal>

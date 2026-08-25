@@ -3,6 +3,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { diffWords } from 'diff';
 import { Effect } from 'effect';
 
+import { DATA_BLOCK_DROPDOWNS_PROPERTY_ID } from '~/core/blocks/data/block-ontology-ids';
 import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
 import type { ApiEntityDiffShape } from '~/core/io/rest';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -136,7 +137,12 @@ export const BLOCK_TYPE_IDS: string[] = [
 ];
 const BLOCK_TYPE_SET = new Set(BLOCK_TYPE_IDS);
 
-const BLOCK_CONFIG_RELATION_IDS: Set<string> = new Set([VIEW_PROPERTY, SHOWN_COLUMNS, PROPERTIES]);
+const BLOCK_CONFIG_RELATION_IDS: Set<string> = new Set([
+  VIEW_PROPERTY,
+  SHOWN_COLUMNS,
+  PROPERTIES,
+  DATA_BLOCK_DROPDOWNS_PROPERTY_ID,
+]);
 
 export function computeTextDiff(before: string, after: string): DiffChunk[] {
   if (before === '' && after !== '') return [{ value: after, added: true }];

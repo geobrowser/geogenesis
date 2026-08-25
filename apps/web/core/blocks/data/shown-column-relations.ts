@@ -3,6 +3,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { ID } from '~/core/id';
 import { Relation } from '~/core/types';
 
+import { DATA_BLOCK_DROPDOWNS_PROPERTY_ID } from './block-ontology-ids';
+
 /** Property id used for column visibility (prefers `toEntity.value` when set). */
 export function columnPropertyIdFromRelation(relation: Relation): string {
   const value = relation.toEntity.value;
@@ -19,7 +21,12 @@ export function isShownColumnRelation(relation: Relation): boolean {
 }
 
 export function isBlockConfigRelationType(typeId: string): boolean {
-  return typeId === SystemIds.PROPERTIES || typeId === SystemIds.SHOWN_COLUMNS || typeId === SystemIds.VIEW_PROPERTY;
+  return (
+    typeId === SystemIds.PROPERTIES ||
+    typeId === SystemIds.SHOWN_COLUMNS ||
+    typeId === SystemIds.VIEW_PROPERTY ||
+    typeId === DATA_BLOCK_DROPDOWNS_PROPERTY_ID
+  );
 }
 
 /** Keep one relation per target property / view. */
