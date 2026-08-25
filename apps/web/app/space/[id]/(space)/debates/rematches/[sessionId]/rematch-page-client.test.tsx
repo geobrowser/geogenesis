@@ -77,6 +77,7 @@ const mocks = vi.hoisted(() => ({
   spaceAllowlist: null as Set<string> | null,
   allowlistLoading: false,
   spaceTypes: {} as Record<string, 'DAO' | 'PERSONAL'>,
+  publishableSpaceIds: null as Set<string> | null,
   scrollSentinelIntoView: null as null | (() => void),
   claimReadinessLoading: false,
   claimReadinessError: false,
@@ -262,6 +263,13 @@ vi.mock('~/core/debates/recommended-claims', () => ({
   }),
 }));
 
+// The acceptor's editor spaces. Null is "unknown", which does not filter — so every case that
+// isn't about this gate behaves as before.
+vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/debates/use-debate-publishable-spaces')>();
+  return { ...actual, useDebatePublishableSpaces: () => ({ publishableSpaceIds: mocks.publishableSpaceIds, isLoading: false }) };
+});
+
 // Null is "the allowlist hasn't resolved", which every case that isn't about it runs under.
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
   useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
@@ -349,6 +357,7 @@ beforeEach(() => {
   mocks.spaceAllowlist = null;
   mocks.allowlistLoading = false;
   mocks.spaceTypes = {};
+  mocks.publishableSpaceIds = null;
   // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
   // the callback so a test can say the sentinel scrolled into view.
   mocks.scrollSentinelIntoView = null;
@@ -1144,6 +1153,39 @@ describe('DebateRematchPageClient', () => {
 
       // Resolving to the personal space would have filtered it out entirely.
       expect(await screen.findByText('A claim in two spaces')).toBeInTheDocument();
+    });
+
+    // Preston's refinement, on top of the space-type test: the authoritative constraint is the
+    // set of spaces the acceptor is an *editor* of, which is the same set the publish sweep works
+    // from. This catches an ordinary public space the acceptor simply does not edit — invisible to
+    // the type test, and a debate there fails on-chain exactly as a personal space does.
+    it('drops a claim from a public space the acceptor does not edit', async () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = { [SPACE_1]: 'DAO' };
+      mocks.publishableSpaceIds = new Set([SPACE_2.replace(/-/g, '')]);
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    });
+
+    it('keeps a claim from a space the acceptor does edit', () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = { [SPACE_1]: 'DAO' };
+      mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    });
+
+    // The two gates fail differently, which is why both are kept. With the editor list unknown,
+    // the type test still rules out the case that actually caused the incident.
+    it('still drops a personal-space claim when the editor list is unknown', async () => {
+      mocks.claims = [sharedClaim()];
+      mocks.spaceTypes = { [SPACE_1]: 'PERSONAL' };
+      mocks.publishableSpaceIds = null;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
     });
 
     it('keeps a claim in a DAO space, which the acceptor can publish into', () => {
