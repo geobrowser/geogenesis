@@ -64,7 +64,7 @@ import {
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebatePresence } from './debate-attention';
-import { markEnteringDebate } from './debate-entry-intent';
+import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
 import {
@@ -724,6 +724,11 @@ export function useAcceptDebateRematchRequest() {
 
   return useMutation({
     mutationFn: (requestId: string) => acceptDebateRematchRequest(requestId, getPrivyIdentityToken, accountKey),
+    // Same window as the hub's accept: the debate is created inside this round trip and announced to
+    // this tab over its own socket, so the id-keyed intent below is taken too late to stop the
+    // coordinator prompting us to join it (GEO-2604).
+    onMutate: () => ({ releaseEntry: markEnteringPendingDebate() }),
+    onSettled: (_result, _error, _variables, context) => context?.releaseEntry(),
     onSuccess: result => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, result.session.id) });
