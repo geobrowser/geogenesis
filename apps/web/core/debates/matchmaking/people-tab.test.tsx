@@ -22,6 +22,7 @@ vi.mock('../hooks', () => ({
     data: { challenge: mocks.challenge, outbound_request: mocks.outboundRequest, debate: mocks.activeDebate },
   }),
   useCreateDebateChallenge: () => ({ mutate: mocks.createChallenge, isPending: false, error: null }),
+  useAcceptDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useRejectDebateChallenge: () => ({
     mutate: mocks.cancelChallenge,
     isPending: mocks.cancelPending,

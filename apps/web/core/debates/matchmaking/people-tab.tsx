@@ -10,10 +10,10 @@ import type { DebatePerson } from '../api';
 import { useCreateDebateChallenge, useDebateActivity } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { DebateChallengeCard } from './challenge-card';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
-import { OutboundChallengeCard } from './outbound-challenge-card';
 
 /**
  * Everyone online and available right now. The Debate button sends the same claimless challenge as
@@ -57,7 +57,7 @@ export function PeopleTab() {
           are waiting on shouldn't scroll away behind the people you can no longer ask. */}
       {outboundChallenge ? (
         <div className="sticky top-0 z-10 border-b border-grey-02 bg-white px-4 py-3">
-          <OutboundChallengeCard challenge={outboundChallenge} />
+          <DebateChallengeCard challenge={outboundChallenge} role="requester" />
         </div>
       ) : null}
 

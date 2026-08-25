@@ -2,23 +2,19 @@
 
 import * as React from 'react';
 
-import { Avatar } from '~/design-system/avatar';
-import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
-import type { DebateChallenge } from '../api';
-import { useAcceptDebateChallenge, useDebateActivity, useRejectDebateChallenge } from '../hooks';
-import { speakerLabel } from '../playback-utils';
+import { useDebateActivity } from '../hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { DebateChallengeCard } from './challenge-card';
 import { SpaceTopicFilters } from './claims-tab';
 import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
-import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { useRequestCountdown, useUnexpiredRequests } from './use-request-countdown';
+import { useUnexpiredRequests } from './use-request-countdown';
 
 type RequestStatusFilter = 'all' | 'sent' | 'received';
 
@@ -124,7 +120,7 @@ export function RequestsTab() {
           {sent || outgoingChallenge ? (
             <RequestSection label="Sent">
               <div className="flex flex-col gap-2">
-                {outgoingChallenge ? <ChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
+                {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
                 <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
               </div>
             </RequestSection>
@@ -133,7 +129,7 @@ export function RequestsTab() {
           {incomingChallenge || received.length > 0 ? (
             <RequestSection label="Received">
               <div className="flex flex-col gap-2">
-                {incomingChallenge ? <ChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
+                {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
                 <HubCardList>
                   {received.map(request => (
                     <IncomingRequestCard key={request.id} request={request} />
@@ -156,92 +152,5 @@ function RequestSection({ label, children }: { label: string; children: React.Re
       </Text>
       {children}
     </section>
-  );
-}
-
-/**
- * A claimless challenge has no claim to take a side on, so accepting opens a session where both
- * people pick one together — which is what "Explore claims" does here, exactly as in the popup.
- * Switching the hub to the Claims tab would leave the challenge unanswered.
- *
- * "Dismiss" for the same reason as `IncomingRequestCard`: this rejects the challenge outright,
- * while the popup's "Not now" only closes the popup and leaves it here.
- */
-function ChallengeCard({ challenge, role }: { challenge: DebateChallenge; role: 'recipient' | 'requester' }) {
-  const acceptChallenge = useAcceptDebateChallenge();
-  const rejectChallenge = useRejectDebateChallenge();
-  const countdown = useRequestCountdown(challenge.expires_at);
-
-  const isRecipient = role === 'recipient';
-  const other = isRecipient ? challenge.requester : challenge.recipient;
-  const busy = acceptChallenge.isPending || rejectChallenge.isPending;
-  // Both roles act from this card and neither could report a failure before: the sender has no
-  // popup left to carry one, and the recipient's Dismiss/Explore claims live here as well as in
-  // theirs. Each `useMutation` call owns its own state, so only the action this card actually
-  // offers can ever set this.
-  const actionError = acceptChallenge.error ?? rejectChallenge.error;
-
-  return (
-    <article className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3">
-      <div className="flex items-center justify-between gap-2">
-        <Text as="span" variant="footnoteMedium" color="grey-04" className="truncate">
-          {isRecipient ? 'Someone wants to debate you' : 'Waiting for a reply'}
-        </Text>
-        <span className="flex shrink-0 items-center gap-1 text-footnote text-text">
-          <Time />
-          {countdown.label}
-        </span>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <span className="h-6 w-6 shrink-0 overflow-hidden rounded-full">
-          <Avatar avatarUrl={other.avatar_cid} value={other.profile_space_id} size={24} />
-        </span>
-        <Text as="span" variant="metadataMedium" className="truncate">
-          {speakerLabel(other)}
-        </Text>
-      </div>
-
-      {isRecipient ? (
-        <div className="grid grid-cols-2 gap-2">
-          <HubPillButton
-            onClick={() => rejectChallenge.mutate(challenge.id)}
-            disabled={busy}
-            pending={rejectChallenge.isPending}
-            pendingLabel="Dismissing…"
-          >
-            Dismiss
-          </HubPillButton>
-          <HubPillButton
-            variant="primary"
-            onClick={() => acceptChallenge.mutate(challenge.id)}
-            disabled={busy}
-            pending={acceptChallenge.isPending}
-            pendingLabel="Opening…"
-          >
-            Explore claims
-          </HubPillButton>
-        </div>
-      ) : (
-        <HubPillButton
-          onClick={() => rejectChallenge.mutate(challenge.id)}
-          disabled={busy}
-          pending={rejectChallenge.isPending}
-          pendingLabel="Cancelling…"
-          className="w-full"
-        >
-          Cancel request
-        </HubPillButton>
-      )}
-
-      {actionError instanceof Error ? (
-        // role="alert" so a failed action is announced, not just drawn under the button.
-        <div role="alert">
-          <Text as="p" variant="footnote" color="red-01">
-            {actionError.message}
-          </Text>
-        </div>
-      ) : null}
-    </article>
   );
 }
