@@ -46,6 +46,7 @@ import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-cla
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { useDebateIndexedSpaceIds } from '~/core/debates/space-debate-support';
 import { useClaimDebateReadiness } from '~/core/debates/use-claim-debate-readiness';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
@@ -809,11 +810,18 @@ function useClaimReadinessByClaimId({
 }) {
   // `debate.claims_changed` is delivered per space, so the picker has to hold a scope on every
   // space it shows or the opponent's responses only appear after a reconnect.
+  //
+  // Narrowed to the spaces geo-chat actually indexes first. These rows carry whatever space each
+  // claim lives in — `rowFromEntity` reads it off the entity — so a claim whose home space is
+  // personal would put a SUBSCRIBE on the socket that the gateway rejects, parking it in the
+  // degraded state that raises "Live debate updates are paused while reconnecting" and never
+  // clears. `useDebateClaimsBySpaces` below applies the same filter to its own requests.
   const { authenticated } = useGeoChatAuth();
-  const spaceIds = React.useMemo(
+  const claimSpaceIds = React.useMemo(
     () => [...new Set(claims.map(claim => claim.claim.space_id))].sort((a, b) => a.localeCompare(b)),
     [claims]
   );
+  const { indexed: spaceIds } = useDebateIndexedSpaceIds(claimSpaceIds);
   useDebateGatewaySpaceScopes(spaceIds, authenticated && spaceIds.length > 0);
 
   // Only the rows that don't carry readiness go to the per-space endpoint. While a source is still

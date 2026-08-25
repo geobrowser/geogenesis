@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   debateClaimsArgs: [] as { spaceId: string; claimIds: string[] | null; enabled: boolean }[],
   entity: null as unknown,
   queryEntityOptions: [] as Record<string, unknown>[],
+  readinessSpaceIds: [] as string[],
   joinMutate: vi.fn(),
   leaveMutate: vi.fn(),
 }));
@@ -77,8 +78,16 @@ vi.mock('./hooks', () => ({
     return mocks.debateClaims();
   },
   useDebateActivity: () => ({ data: null }),
-  useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null }),
-  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutate, isPending: false, error: null }),
+  // The space is a hook argument, not part of the mutate payload — so recording it here is what
+  // pins the space readiness is *written* against, as distinct from the one it is read from.
+  useJoinDebateQueue: (spaceId: string) => {
+    mocks.readinessSpaceIds.push(spaceId);
+    return { mutateAsync: mocks.joinMutate, reset: vi.fn(), isPending: false, error: null };
+  },
+  useLeaveDebateQueue: (spaceId: string) => {
+    mocks.readinessSpaceIds.push(spaceId);
+    return { mutateAsync: mocks.leaveMutate, isPending: false, error: null };
+  },
 }));
 
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
@@ -89,6 +98,7 @@ beforeEach(() => {
   mocks.entity = null;
   mocks.queryEntityOptions.length = 0;
   mocks.debateClaimsArgs.length = 0;
+  mocks.readinessSpaceIds.length = 0;
   mocks.debateClaims.mockReturnValue({ data: { claims: [] } });
   mocks.joinMutate.mockReset();
   mocks.joinMutate.mockReturnValue(new Promise(() => undefined));
@@ -268,6 +278,45 @@ describe('ClaimDebateButton', () => {
     renderButton(PERSONAL_SPACE);
 
     expect(mocks.debateClaimsArgs.at(-1)).toMatchObject({ spaceId: CLAIM_SPACE, claimIds: ['claim-entity-1'] });
+  });
+
+  /**
+   * Reading the claim from its own space is only half of it — readiness is *written* against a
+   * space too, and geo-chat rejects a request whose space doesn't match the one the response was
+   * published in ("respond to this claim in this space before enabling debate readiness"). The two
+   * have to agree, and asserting only on the read leaves them free to diverge.
+   */
+  it('enables readiness in the same space it read the claim from', () => {
+    mocks.entity = claimIn(CLAIM_SPACE);
+    mocks.debateClaims.mockReturnValue({ data: { claims: [debateClaim()] }, isLoading: false });
+
+    renderButton(PERSONAL_SPACE);
+
+    expect(mocks.readinessSpaceIds.at(-1)).toBe(CLAIM_SPACE);
+    expect(mocks.readinessSpaceIds).not.toContain(PERSONAL_SPACE);
+  });
+
+  /**
+   * geo-chat indexes DAO spaces only, so a claim living in a personal space never gets a row and
+   * the lookup settles with nothing. A disabled toggle whose tooltip and screen-reader label say
+   * "Debate readiness is loading" would then say so forever — a wait with no end.
+   */
+  it('shows nothing rather than a permanent loading toggle once the lookup has settled', () => {
+    mocks.entity = claimIn(CLAIM_SPACE);
+    mocks.debateClaims.mockReturnValue({ data: { claims: [] }, isLoading: false });
+
+    renderButton(CLAIM_SPACE);
+
+    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
+  });
+
+  it('still shows the loading toggle while the lookup is running', () => {
+    mocks.entity = claimIn(CLAIM_SPACE);
+    mocks.debateClaims.mockReturnValue({ data: undefined, isLoading: true });
+
+    renderButton(CLAIM_SPACE);
+
+    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
   });
 });
 

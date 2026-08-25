@@ -13,7 +13,6 @@ import {
 import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
-import { useSpace } from '~/core/hooks/use-space';
 
 import {
   type Debate,
@@ -73,6 +72,7 @@ import {
   refreshRematchClaimBatches,
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
+import { type SpaceDebateSupport, useDebateIndexedSpaceIds, useSpaceDebateSupport } from './space-debate-support';
 
 export const debateQueryNetworkOptions = {
   retry: false,
@@ -119,21 +119,14 @@ export function useGeoChatAuth() {
 }
 
 /**
- * geo-chat indexes DAO spaces only. Asked about a personal space it answers `space_not_found`, and
- * the gateway rejects the matching SUBSCRIBE — which drops the socket into a degraded state that
- * raises "Live debate updates are paused while reconnecting" and never clears it, because a
- * scope-level rejection schedules no reconnect (`debate-gateway.ts`).
+ * Holds a query's own result open while the space type is still resolving.
  *
- * Personal spaces reach these hooks two ways: a page in someone's personal space listing claims, and
- * a claim whose own home space is personal being listed from anywhere. Neither has debates, so
- * asking at all is the bug.
- *
- * Holds while the space type is still loading rather than guessing. Guessing "indexed" fires the
- * request we are trying to avoid; guessing "not indexed" hides readiness on a space that works.
+ * The gate can't just disable the query and leave it at that: a disabled react-query reports
+ * `isLoading: false` with no data, so consumers read the wait as a settled empty answer. See
+ * {@link SpaceDebateSupport}.
  */
-function useSpaceHasDebates(spaceId: string): boolean {
-  const { space, isLoading } = useSpace(spaceId);
-  return !isLoading && space?.type === 'DAO';
+function holdWhileSpaceResolves<T extends { isLoading: boolean }>(query: T, support: SpaceDebateSupport): T {
+  return support === 'unknown' ? { ...query, isLoading: true } : query;
 }
 
 // Pass a claim-id array to enrich a known set, or `null` to list every debatable
@@ -141,11 +134,11 @@ function useSpaceHasDebates(spaceId: string): boolean {
 // the space's Claim entities that 504s on large spaces.
 export function useDebateClaims(spaceId: string, claimIds: string[] | null, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  const hasDebates = useSpaceHasDebates(spaceId);
-  const shouldFetch = enabled && hasDebates && (claimIds === null || claimIds.length > 0);
+  const support = useSpaceDebateSupport(spaceId);
+  const shouldFetch = enabled && support === 'indexed' && (claimIds === null || claimIds.length > 0);
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated && shouldFetch);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.claims(spaceId, claimIds),
     queryFn: ({ signal }) =>
@@ -158,6 +151,8 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
       ),
     enabled: shouldFetch,
   });
+
+  return holdWhileSpaceResolves(query, support);
 }
 
 /**
@@ -171,9 +166,16 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
 export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
+  // The same gate `useDebateClaims` applies to its one space, over the list. This hook is handed
+  // whatever space each claim lives in, and a claim whose home space is personal is exactly the
+  // second way personal spaces reach geo-chat — so without this the picker raises the banner on a
+  // space the single-space callers would have refused.
+  const requestedSpaceIds = React.useMemo(() => groups.map(group => group.spaceId), [groups]);
+  const { indexed: spaceIds, isPending: spacesPending } = useDebateIndexedSpaceIds(requestedSpaceIds);
+  const indexedSpaceIds = React.useMemo(() => new Set(spaceIds), [spaceIds]);
+
   // Same subscription `useDebateClaims` makes for its one space: without it the gateway never
   // delivers this space's claim changes, so nothing here would refresh when someone responds.
-  const spaceIds = React.useMemo(() => groups.map(group => group.spaceId), [groups]);
   useDebateGatewaySpaceScopes(spaceIds, authenticated && spaceIds.length > 0);
 
   // Stable by contract: react-query re-runs `combine` whenever its identity changes and diffs the
@@ -186,18 +188,20 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
   const combine = React.useCallback(
     (results: UseQueryResult<DebateClaimsResponse>[]) => ({
       claims: results.flatMap(result => result.data?.claims ?? []),
-      isLoading: results.some(result => result.isLoading),
+      // Still resolving which spaces are indexed reads as loading, not as an answered "no readiness
+      // on this claim" — the same reason the comment above gives for keeping status on the result.
+      isLoading: spacesPending || results.some(result => result.isLoading),
       isError: results.some(result => result.isError),
     }),
-    []
+    [spacesPending]
   );
 
   const batches = React.useMemo(
     () =>
-      groups.flatMap(group =>
-        stableClaimIdChunks(group.claimIds).map(claimIds => ({ spaceId: group.spaceId, claimIds }))
-      ),
-    [groups]
+      groups
+        .filter(group => indexedSpaceIds.has(group.spaceId))
+        .flatMap(group => stableClaimIdChunks(group.claimIds).map(claimIds => ({ spaceId: group.spaceId, claimIds }))),
+    [groups, indexedSpaceIds]
   );
 
   return useQueries({
@@ -413,11 +417,11 @@ export function useSpaceDebates(spaceId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   // The browse feed subscribes the same way `useDebateClaims` does, so it needs the same gate:
   // opening the debate feed on a personal space raised the banner on its own.
-  const hasDebates = useSpaceHasDebates(spaceId);
-  const shouldFetch = enabled && hasDebates;
+  const support = useSpaceDebateSupport(spaceId);
+  const shouldFetch = enabled && support === 'indexed';
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, shouldFetch && authenticated);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.spaceDebates(spaceId),
     queryFn: ({ signal }) =>
@@ -429,6 +433,8 @@ export function useSpaceDebates(spaceId: string, enabled: boolean) {
       ),
     enabled: shouldFetch,
   });
+
+  return holdWhileSpaceResolves(query, support);
 }
 
 export function useDebate(debateId: string, enabled: boolean) {

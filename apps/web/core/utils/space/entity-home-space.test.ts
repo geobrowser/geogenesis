@@ -2,6 +2,8 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { describe, expect, it } from 'vitest';
 
+import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+
 import { entityHomeSpaceId, resolveEntitySpaceId } from './entity-home-space';
 
 /** Ranked 3 in the fixed space ranking; the claims on the curated pages live here. */
@@ -15,9 +17,18 @@ function named(spaceId: string, name = 'AI democracies should share computer chi
   return { property: { id: SystemIds.NAME_PROPERTY }, spaceId, value: name, isDeleted: false };
 }
 
+/** Ranked 8, so it loses to Root — but only if Root's id is recognised by the ranking. */
+const PODCASTS_SPACE = 'b5a31f8182b042437ede0f84ee02f104';
+
 /** Any value that is not a name — enough to place the entity in a space without naming it there. */
 function content(spaceId: string) {
   return { property: { id: '5c9b4c4b1e1c4a6f9d3f6c2a8b7e0d11' }, spaceId, value: 'x', isDeleted: false };
+}
+
+/** The per-space curation score. Hidden, and the one value a space holds without the entity
+ * having any content there — the backend writes it wherever the entity was voted on. */
+function score(spaceId: string) {
+  return { property: { id: SCORE_SYSTEM_PROPERTY }, spaceId, value: '3', isDeleted: false };
 }
 
 describe('entityHomeSpaceId', () => {
@@ -99,10 +110,62 @@ describe('resolveEntitySpaceId', () => {
     expect(resolveEntitySpaceId(entity, AI_SPACE)).toBe(AI_SPACE);
   });
 
+  /**
+   * The curation Score is written per space by the backend when an entity is voted on there, and
+   * `Entities.spaces` excludes it for exactly this reason. Without the same exclusion the fix
+   * defeats itself: a claim that read its responses against the listing space *before* this branch
+   * already carries a Score there, so that space would read as home and the wrong-space tally would
+   * stay wrong for the claims the bug report is about.
+   */
+  it('does not let a hidden score value place the entity in a space', () => {
+    const entity = {
+      spaces: [AI_SPACE, PERSONAL_SPACE],
+      values: [named(AI_SPACE), score(PERSONAL_SPACE)],
+    };
+
+    expect(resolveEntitySpaceId(entity, PERSONAL_SPACE)).toBe(AI_SPACE);
+  });
+
+  /**
+   * `entityHomeSpaceId` only ranks spaces the entity is *named* in, which is narrower than the
+   * residency test above — a claim-picker row whose name decoded to null has none. Answering the
+   * requested space there would hand back the very space just rejected for holding nothing.
+   */
+  it('falls back to a space it does hold content in rather than the rejected one', () => {
+    const entity = { spaces: [], values: [content(AI_SPACE)] };
+
+    expect(resolveEntitySpaceId(entity, PERSONAL_SPACE)).toBe(AI_SPACE);
+  });
+
   // Callers gate their own requests on loading; guessing before `spaces` is known would key them
   // on a space we may be about to leave.
   it('holds the requested space while the entity is unresolved', () => {
     expect(resolveEntitySpaceId(null, PERSONAL_SPACE)).toBe(PERSONAL_SPACE);
     expect(resolveEntitySpaceId({ spaces: [] }, PERSONAL_SPACE)).toBe(PERSONAL_SPACE);
+  });
+});
+
+/**
+ * The ranking is a plain object lookup keyed on undashed lowercase hex, so an id arriving in any
+ * other form scores `UNRANKED` — and REST hands back the same bytes either way
+ * (`core/io/rest/validation.ts`). Unranked is also the rank every personal space shares, so ties
+ * are the common case, not the exotic one.
+ */
+describe('space ranking through entityHomeSpaceId', () => {
+  it('ranks a dashed id the same as its undashed form', () => {
+    const dashedRoot = 'a19c345a-b986-6679-b001-d7d2138d88a1';
+    const entity = { spaces: [], values: [named(PODCASTS_SPACE), named(dashedRoot)] };
+
+    expect(entityHomeSpaceId(entity)).toBe(dashedRoot);
+  });
+
+  // `entity.values` is re-partitioned on every store merge, so an answer that depended on its order
+  // would flip between renders — taking the query keys and gateway scopes derived from it along.
+  it('breaks a tie the same way whichever order the spaces arrive in', () => {
+    const otherPersonal = 'b7c1d2e3f4a5968778695a4b3c2d1e0f';
+    const forwards = entityHomeSpaceId({ spaces: [], values: [named(PERSONAL_SPACE), named(otherPersonal)] });
+    const backwards = entityHomeSpaceId({ spaces: [], values: [named(otherPersonal), named(PERSONAL_SPACE)] });
+
+    expect(forwards).toBe(backwards);
   });
 });

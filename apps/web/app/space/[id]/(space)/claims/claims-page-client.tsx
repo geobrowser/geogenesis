@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
-import { isClaimPublished } from '~/core/claims/publish';
+import { isClaimPublishedInSpace } from '~/core/claims/publish';
 import type { DebateClaim } from '~/core/debates/api';
 import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
 import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
@@ -60,7 +60,14 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
     deferUntilFetched: true,
     includeUnpublishedLocal: true,
   });
-  const publishedClaimIds = React.useMemo(() => claims.filter(isClaimPublished).map(claim => claim.id), [claims]);
+  // Scoped to this space. `useQueryEntities` filters *which* entities come back, not each one's
+  // relations — rows materialize through a bare `store.getEntity(id)` — so the unscoped predicate
+  // reads a draft edit sitting in any other space and reports the claim unpublished here.
+  const isPublishedHere = React.useCallback((claim: Entity) => isClaimPublishedInSpace(claim, spaceId), [spaceId]);
+  const publishedClaimIds = React.useMemo(
+    () => claims.filter(isPublishedHere).map(claim => claim.id),
+    [claims, isPublishedHere]
+  );
   const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, true);
   const debateClaimsByEntityId = React.useMemo(() => {
     const map = new Map<string, DebateClaim>();
@@ -77,13 +84,13 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
     () =>
       new Map(
         claims
-          .filter(isClaimPublished)
+          .filter(isPublishedHere)
           .map(claim => [
             claim.id,
             debateClaimsByEntityId.get(claim.id)?.response_kind ?? claimResponseKind(claim, spaceId),
           ])
       ),
-    [claims, debateClaimsByEntityId, spaceId]
+    [claims, debateClaimsByEntityId, isPublishedHere, spaceId]
   );
   const responseTargets = React.useMemo(
     () => publishedClaimIds.map(entityId => ({ entityId, responseKind: responseKindsByEntityId.get(entityId)! })),
@@ -313,7 +320,7 @@ function ClaimListItem({
   responseKind: 'stance' | 'veracity';
 }) {
   const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
-  const published = isClaimPublished(claim);
+  const published = isClaimPublishedInSpace(claim, spaceId);
   const activeDebate = debateClaim?.active_debate ?? null;
 
   return (

@@ -47,6 +47,7 @@ export function ClaimDebateButton({ entityId, spaceId: requestedSpaceId }: Claim
       entityId={entityId}
       spaceId={spaceId}
       canEnable={canEnable}
+      isLoading={debateClaimsQuery.isLoading}
       compact
     />
   );

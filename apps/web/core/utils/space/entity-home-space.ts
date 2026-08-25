@@ -1,5 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { equals } from '~/core/id/normalize';
 
 import { getTopRankedSpaceId } from './space-ranking';
@@ -11,6 +12,22 @@ type SpaceScopedEntity = {
 
 function isLive(value: { isDeleted?: boolean }): boolean {
   return value.isDeleted !== true;
+}
+
+/**
+ * Hidden properties are the per-space curation Score, which the backend writes onto an entity in
+ * whatever space it was voted in. That makes it the one value a space can hold without the entity
+ * having any content there — and, worse, one this function would produce itself: a claim that read
+ * its responses against the wrong space before this branch already carries a Score there, which
+ * would then make that space read as home and pin the bug in place. `Entities.spaces` routes around
+ * them for the same reason.
+ */
+function placesEntity(value: { isDeleted?: boolean; property: { id: string } }): boolean {
+  if (!isLive(value)) return false;
+  for (const hidden of HIDDEN_PROPERTIES) {
+    if (equals(value.property.id, hidden)) return false;
+  }
+  return true;
 }
 
 /**
@@ -72,13 +89,17 @@ export function entityHomeSpaceId(entity: SpaceScopedEntity): string | null {
 export function resolveEntitySpaceId(entity: SpaceScopedEntity | null | undefined, requestedSpaceId: string): string {
   if (!entity) return requestedSpaceId;
 
-  const liveValueSpaceIds = (entity.values ?? []).filter(isLive).map(value => value.spaceId);
+  const placingSpaceIds = (entity.values ?? []).filter(placesEntity).map(value => value.spaceId);
   // An entity carrying no values at all — a picker row decoded without them — has nothing to place
   // it, so fall back to the coarser list rather than diverting on no evidence.
-  const candidates = liveValueSpaceIds.length > 0 ? liveValueSpaceIds : (entity.spaces ?? []);
+  const candidates = placingSpaceIds.length > 0 ? placingSpaceIds : (entity.spaces ?? []);
 
   if (candidates.length === 0) return requestedSpaceId;
   if (candidates.some(spaceId => equals(spaceId, requestedSpaceId))) return requestedSpaceId;
 
-  return entityHomeSpaceId(entity) ?? requestedSpaceId;
+  // Ranked candidates rather than the requested space as the last resort. `entityHomeSpaceId` only
+  // considers spaces the entity is *named* in, which is the narrower test — a picker row whose name
+  // decoded to null has none, and answering `requestedSpaceId` there would hand back the very space
+  // the line above just rejected.
+  return entityHomeSpaceId(entity) ?? getTopRankedSpaceId(candidates) ?? requestedSpaceId;
 }

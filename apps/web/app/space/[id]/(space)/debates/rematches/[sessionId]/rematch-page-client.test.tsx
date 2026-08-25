@@ -8,10 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
-import {
-  clearDebateReturnDestination,
-  rememberDebateReturnDestination,
-} from '~/core/debates/debate-return-navigation';
+import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 
 import { DebateRematchPageClient } from './rematch-page-client';
@@ -83,6 +80,8 @@ const mocks = vi.hoisted(() => ({
   perSpaceReadinessGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
   /** Every space-scope retention the picker asked the gateway for, in render order. */
   gatewaySpaceScopes: [] as Array<{ spaceIds: string[]; enabled: boolean }>,
+  /** `null` means every space is indexed; a list narrows it to those. */
+  indexedSpaceIds: null as string[] | null,
   markEnteringDebate: vi.fn(),
   claimReadiness: [] as Array<{
     claim_entity_id: string;
@@ -184,6 +183,21 @@ vi.mock('~/core/debates/debate-gateway', () => ({
   useDebateGatewaySpaceScopes: (spaceIds: string[], enabled: boolean) => {
     mocks.gatewaySpaceScopes.push({ spaceIds, enabled });
   },
+}));
+
+/**
+ * These rows carry whatever space each claim lives in, so the picker filters them down to the ones
+ * geo-chat indexes before subscribing — a claim whose home space is personal would otherwise put a
+ * SUBSCRIBE on the socket that the gateway rejects, parking it in the degraded state behind the
+ * "Live debate updates are paused while reconnecting" banner. `indexedSpaceIds` is what these tests
+ * vary to exercise that; every space is indexed unless a test says otherwise.
+ */
+vi.mock('~/core/debates/space-debate-support', () => ({
+  useSpaceDebateSupport: () => 'indexed',
+  useDebateIndexedSpaceIds: (spaceIds: string[]) => ({
+    indexed: mocks.indexedSpaceIds === null ? spaceIds : spaceIds.filter(id => mocks.indexedSpaceIds!.includes(id)),
+    isPending: false,
+  }),
 }));
 
 vi.mock('~/core/debates/debate-entry-intent', () => ({
@@ -299,6 +313,7 @@ function mutation(mutate = mocks.mutate) {
 
 beforeEach(() => {
   clearDebateReturnDestination();
+  mocks.indexedSpaceIds = null;
   mocks.replace.mockReset();
   mocks.back.mockReset();
   mocks.mutate.mockReset();
@@ -1177,6 +1192,25 @@ describe('DebateRematchPageClient', () => {
 
       showAllClaims();
       expect(mocks.gatewaySpaceScopes.filter(scope => scope.enabled).at(-1)?.spaceIds).toEqual([SPACE_1, SPACE_2]);
+    });
+
+    /**
+     * The rows carry whatever space each claim lives in, and a claim whose home space is personal
+     * is one of the two ways personal spaces reach geo-chat. A SUBSCRIBE for a space it does not
+     * index is rejected at scope level, which parks the socket with no reconnect scheduled — the
+     * "Live debate updates are paused while reconnecting" banner that never clears.
+     */
+    it('leaves a space geo-chat does not index out of its gateway scopes', () => {
+      mocks.claims = [{ ...sharedClaim(), viewer_debate_ready: true, readiness_disabled_reason: null }];
+      mocks.claimReadiness = [];
+      mocks.indexedSpaceIds = [SPACE_1];
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      showAllClaims();
+
+      const subscribed = mocks.gatewaySpaceScopes.filter(scope => scope.enabled).flatMap(scope => scope.spaceIds);
+      expect(subscribed).not.toContain(SPACE_2);
+      expect(subscribed).toContain(SPACE_1);
     });
 
     it('shows the toggle off for a claim it reports as not ready', () => {
