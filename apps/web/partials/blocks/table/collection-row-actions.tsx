@@ -13,7 +13,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { GeoImage } from '~/design-system/geo-image';
 import { Menu } from '~/design-system/icons/menu';
 import { RelationSmall } from '~/design-system/icons/relation-small';
-import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
+import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { TopRanked } from '~/design-system/icons/top-ranked';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink } from '~/design-system/prefetch-link';
@@ -95,7 +95,7 @@ export function CollectionRowActions({
 
   return (
     <div className="flex shrink-0 flex-nowrap items-center gap-0.5">
-      {relationId && (
+      {(relationId || isEditing) && (
         <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
           <Popover.Trigger asChild>
             <button
@@ -148,7 +148,7 @@ export function CollectionRowActions({
                 setIsPopoverOpen(false);
               }}
             >
-              {isEditing && (
+              {isEditing && relationId && (
                 <SelectSpaceAsPopover
                   entityId={EntityId(entityId)}
                   spaceId={spaceId}
@@ -176,12 +176,25 @@ export function CollectionRowActions({
                   }
                 />
               )}
-              <PrefetchLink
-                href={`/space/${currentSpaceId}/${relationEntityId}`}
-                className="p-1 group-hover:text-grey-03 hover:text-text!"
-              >
-                <RelationSmall />
-              </PrefetchLink>
+              {relationId && (
+                <PrefetchLink
+                  href={`/space/${currentSpaceId}/${relationEntityId}`}
+                  className="p-1 group-hover:text-grey-03 hover:text-text!"
+                >
+                  <RelationSmall />
+                </PrefetchLink>
+              )}
+              {isEditing && (
+                <PrefetchLink
+                  href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}
+                  entityId={entityId}
+                  spaceId={spaceId ?? currentSpaceId}
+                  aria-label="Navigate to entity"
+                  className="p-1 group-hover:text-grey-03 hover:text-text!"
+                >
+                  <RightArrowLongSmall />
+                </PrefetchLink>
+              )}
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
@@ -193,19 +206,8 @@ export function CollectionRowActions({
           openedWithMainViewEditing={openedWithMainViewEditing}
         />
       )}
-      {isEditing && (
-        <PrefetchLink
-          href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}
-          entityId={entityId}
-          spaceId={spaceId ?? currentSpaceId}
-          aria-label="Navigate to entity"
-          className="inline-flex shrink-0 items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
-        >
-          <RightArrowLongChip />
-        </PrefetchLink>
-      )}
-      {/* Last in the row on purpose: the only destructive action here, kept furthest from the two
-          people reach for by habit. Grey until hovered, then red — the row shouldn't shout at
+      {/* Last in the row on purpose: the only destructive action here, kept furthest from the side
+          panel people open by habit. Grey until hovered, then red — the row shouldn't shout at
           someone who is only reading it. No confirmation: this is an edit like any other, and the
           review bar is where it gets taken back. */}
       {isEditing && relationId && (

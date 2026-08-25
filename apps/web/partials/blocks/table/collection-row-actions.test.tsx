@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -37,7 +37,22 @@ vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null }) }))
 
 vi.mock('~/design-system/geo-image', () => ({ GeoImage: () => null }));
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children }: { children: React.ReactNode }) => <a href="#">{children}</a>,
+  PrefetchLink: ({
+    children,
+    href,
+    entityId: _entityId,
+    spaceId: _spaceId,
+    ...rest
+  }: {
+    children: React.ReactNode;
+    href?: string;
+    entityId?: string;
+    spaceId?: string;
+  }) => (
+    <a href={href ?? '#'} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 vi.mock('~/design-system/select-space-dialog', () => ({
   SelectSpaceAsPopover: ({ trigger }: { trigger: React.ReactNode }) => <>{trigger}</>,
@@ -60,6 +75,18 @@ function renderActions(overrides: Partial<React.ComponentProps<typeof Collection
 }
 
 const removeButton = () => screen.queryByRole('button', { name: 'Remove from collection' });
+const navigateLink = () => screen.queryByRole('link', { name: 'Navigate to entity' });
+const rowMenuTrigger = () => screen.queryByRole('button', { name: 'Show row actions' });
+
+/**
+ * Radix mounts the popover's contents only while it is open, which hovering the trigger does, and
+ * gives that content `role="dialog"`. Returning it lets a test say an action is *in the menu*
+ * rather than merely somewhere on screen — which a link still sitting in the row would satisfy.
+ */
+function openRowMenu() {
+  fireEvent.mouseEnter(rowMenuTrigger()!);
+  return within(screen.getByRole('dialog'));
+}
 
 beforeEach(() => {
   mocks.relations = [{ id: RELATION, entityId: 'relation-entity', toEntity: { id: ENTITY } }];
@@ -105,6 +132,32 @@ describe('CollectionRowActions remove', () => {
     fireEvent.click(removeButton()!);
 
     expect(mocks.deleteRelation).not.toHaveBeenCalled();
+  });
+
+  // Navigate is a rarely-used action that was taking a permanent slot in the row next to the one
+  // people actually came for.
+  it('keeps navigate out of the row', () => {
+    renderActions();
+
+    expect(navigateLink()).not.toBeInTheDocument();
+  });
+
+  it('offers navigate inside the row menu instead', () => {
+    renderActions();
+
+    const menu = openRowMenu();
+
+    expect(menu.getByRole('link', { name: 'Navigate to entity' })).toBeInTheDocument();
+  });
+
+  // A placeholder row is editable before it has a collection-item relation. Navigate was reachable
+  // there before it moved, so the menu has to open without one.
+  it('still reaches navigate on a row with no relation yet', () => {
+    renderActions({ relationId: undefined });
+
+    const menu = openRowMenu();
+
+    expect(menu.getByRole('link', { name: 'Navigate to entity' })).toBeInTheDocument();
   });
 
   // Reading a block is not editing one.

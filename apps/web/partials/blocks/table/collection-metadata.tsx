@@ -56,11 +56,11 @@ export const CollectionMetadata = ({
   const hasHoverActions = !hideHoverActions && Boolean(relationId || showSidePanel || isEditing);
   const showHoverActions = isRowHovered;
   const reserveActionSpace = verified || hasHoverActions;
-  // Remove sits in the row now rather than inside the popover, so the actions are one control
-  // wider while editing and the name needs the room to match. Without it a long name runs under
-  // the button it is about to be deleted by.
+  // Remove took the arrow's place in the row and is the wider control of the two, so the name
+  // needs a little more room than the 56px the row used to reserve. Without it a long name runs
+  // under the button it is about to be deleted by.
   const hasRemoveAction = hasHoverActions && isEditing && Boolean(relationId);
-  const hoverActionPadding = hasRemoveAction ? 'pr-20' : 'pr-14';
+  const hoverActionPadding = hasRemoveAction ? 'pr-16' : 'pr-14';
   const paddingClass = hasHoverActions
     ? verified
       ? `${hoverActionPadding} md:pr-6`
