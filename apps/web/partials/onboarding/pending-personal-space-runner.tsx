@@ -15,7 +15,13 @@ import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { ID } from '~/core/id';
 import { getSpace } from '~/core/io/queries';
+import { store as jotaiStore } from '~/core/state/jotai-store';
 import { pendingPersonalSpaceAtom, pendingPersonalSpaceId } from '~/core/state/pending-personal-space';
+import {
+  removeRequestedMembershipSpace,
+  requestedMembershipSpacesAtom,
+  upsertRequestedMembershipSpace,
+} from '~/core/state/requested-membership';
 import { useReportError } from '~/core/state/status-bar-store';
 import { storage } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -159,32 +165,74 @@ export function PendingPersonalSpaceRunner() {
 
         if (roleIds.length > 0 || topicIds.length > 0) {
           try {
-            const space = await Effect.runPromise(getSpace(spaceId));
-
-            if (space && roleIds.length > 0) {
-              for (const roleId of roleIds) {
-                createGeoRoleRelation(spaceId, space.entity.id, roleId);
+            if (roleIds.length > 0) {
+              try {
+                const space = await Effect.runPromise(getSpace(spaceId));
+                if (space) {
+                  for (const roleId of roleIds) {
+                    createGeoRoleRelation(spaceId, space.entity.id, roleId);
+                  }
+                }
+              } catch (error) {
+                console.error('[PendingPersonalSpace] applying role relations failed', error);
               }
             }
 
-            for (const targetSpaceId of topicIds) {
-              try {
-                const targetSpace = await Effect.runPromise(getSpace(targetSpaceId));
-                if (!targetSpace?.address) continue;
+            // Prefetch targets in parallel, flip Join → pending immediately.
+            const targets = (
+              await Promise.all(
+                topicIds.map(async targetSpaceId => {
+                  try {
+                    const targetSpace = await Effect.runPromise(getSpace(targetSpaceId));
+                    if (!targetSpace?.address) return null;
+                    return {
+                      id: targetSpaceId,
+                      name: targetSpace.entity.name ?? undefined,
+                      image: targetSpace.entity.image,
+                    };
+                  } catch (error) {
+                    console.error('[PendingPersonalSpace] failed to load target space', targetSpaceId, error);
+                    return null;
+                  }
+                })
+              )
+            ).filter((t): t is NonNullable<typeof t> => t !== null);
 
-                await requestSpaceMembership({
-                  spaceId: targetSpaceId,
-                  personalSpaceId: spaceId,
-                  tx,
-                  queryClient,
-                  space: {
-                    name: targetSpace.entity.name ?? undefined,
-                    image: targetSpace.entity.image,
-                  },
-                });
-              } catch (error) {
-                console.error('[PendingPersonalSpace] membership proposal failed for', targetSpaceId, error);
-              }
+            if (targets.length > 0) {
+              const requestedAt = Date.now();
+              jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+                targets.reduce(
+                  (next, target) =>
+                    upsertRequestedMembershipSpace(next, {
+                      id: target.id,
+                      ownerId: spaceId,
+                      requestedAt,
+                      name: target.name,
+                      image: target.image,
+                    }),
+                  prev
+                )
+              );
+              void queryClient.invalidateQueries({ queryKey: ['browse-sidebar-data'] });
+
+              await Promise.all(
+                targets.map(async target => {
+                  try {
+                    await requestSpaceMembership({
+                      spaceId: target.id,
+                      personalSpaceId: spaceId,
+                      tx,
+                      queryClient,
+                      space: { name: target.name, image: target.image },
+                    });
+                  } catch (error) {
+                    console.error('[PendingPersonalSpace] membership proposal failed for', target.id, error);
+                    jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+                      removeRequestedMembershipSpace(prev, target.id, spaceId)
+                    );
+                  }
+                })
+              );
             }
           } catch (error) {
             console.error('[PendingPersonalSpace] applying onboarding selections failed', error);

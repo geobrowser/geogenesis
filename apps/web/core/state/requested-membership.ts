@@ -60,6 +60,17 @@ export function upsertRequestedMembershipSpace(
   return next;
 }
 
+/** Drop a single owner+space optimistic entry. */
+export function removeRequestedMembershipSpace(
+  current: RequestedMembershipSpace[],
+  spaceId: string,
+  ownerId: string
+): RequestedMembershipSpace[] {
+  const key = normId(spaceId);
+  const next = current.filter(s => !(normId(s.id) === key && s.ownerId === ownerId));
+  return next.length === current.length ? current : next;
+}
+
 /** This account's still-active (non-expired) optimistic entries. Empty when signed out. */
 export function activeRequestedSpacesForOwner(
   current: RequestedMembershipSpace[],
