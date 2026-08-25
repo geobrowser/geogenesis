@@ -56,7 +56,18 @@ export const CollectionMetadata = ({
   const hasHoverActions = !hideHoverActions && Boolean(relationId || showSidePanel || isEditing);
   const showHoverActions = isRowHovered;
   const reserveActionSpace = verified || hasHoverActions;
-  const paddingClass = hasHoverActions ? (verified ? 'pr-14 md:pr-6' : 'pr-14 md:pr-0') : verified ? 'pr-6' : '';
+  // Remove sits in the row now rather than inside the popover, so the actions are one control
+  // wider while editing and the name needs the room to match. Without it a long name runs under
+  // the button it is about to be deleted by.
+  const hasRemoveAction = hasHoverActions && isEditing && Boolean(relationId);
+  const hoverActionPadding = hasRemoveAction ? 'pr-20' : 'pr-14';
+  const paddingClass = hasHoverActions
+    ? verified
+      ? `${hoverActionPadding} md:pr-6`
+      : `${hoverActionPadding} md:pr-0`
+    : verified
+      ? 'pr-6'
+      : '';
 
   return (
     <div

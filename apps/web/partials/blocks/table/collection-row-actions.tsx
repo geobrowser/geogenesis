@@ -11,11 +11,11 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
-import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Menu } from '~/design-system/icons/menu';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
 import { TopRanked } from '~/design-system/icons/top-ranked';
+import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 
@@ -65,12 +65,18 @@ export function CollectionRowActions({
     };
   }, []);
 
+  // By the relation's own id, not by what it points at. `blockEntity.relations` holds everything
+  // hanging off the block — its types, its blocks, its filters — so matching on `toEntity.id` would
+  // delete whichever of those happened to reach this entity first. That was survivable while
+  // removal took two deliberate interactions to reach; as a one-click control on every row it is
+  // not. `relationId` is the collection-item relation for this row (use-mapping.ts:127), which is
+  // exactly the one to drop.
   const onDeleteEntry = async () => {
-    if (blockEntity) {
-      const blockRelation = blockEntity.relations.find(r => r.toEntity.id === entityId);
-      if (blockRelation) {
-        storage.relations.delete(blockRelation);
-      }
+    if (!blockEntity || !relationId) return;
+
+    const blockRelation = blockEntity.relations.find(r => r.id === relationId);
+    if (blockRelation) {
+      storage.relations.delete(blockRelation);
     }
   };
 
@@ -176,16 +182,6 @@ export function CollectionRowActions({
               >
                 <RelationSmall />
               </PrefetchLink>
-              {isEditing && (
-                <button
-                  type="button"
-                  onClick={onDeleteEntry}
-                  onMouseDown={e => e.preventDefault()}
-                  className="p-1 group-hover:text-grey-03 hover:text-text!"
-                >
-                  <CheckCloseSmall />
-                </button>
-              )}
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
@@ -207,6 +203,22 @@ export function CollectionRowActions({
         >
           <RightArrowLongChip />
         </PrefetchLink>
+      )}
+      {/* Last in the row on purpose: the only destructive action here, kept furthest from the two
+          people reach for by habit. Grey until hovered, then red — the row shouldn't shout at
+          someone who is only reading it. No confirmation: this is an edit like any other, and the
+          review bar is where it gets taken back. */}
+      {isEditing && relationId && (
+        <button
+          type="button"
+          aria-label="Remove from collection"
+          title="Remove from collection"
+          onClick={onDeleteEntry}
+          onMouseDown={e => e.preventDefault()}
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-03 transition duration-300 ease-in-out hover:text-red-01"
+        >
+          <Trash />
+        </button>
       )}
     </div>
   );
