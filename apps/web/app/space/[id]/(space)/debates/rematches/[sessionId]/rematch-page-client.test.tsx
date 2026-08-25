@@ -90,6 +90,19 @@ const mocks = vi.hoisted(() => ({
   }>,
 }));
 
+// `pending-personal-space` reads localStorage at module scope (`atomWithStorage` with
+// `getOnInit`), and the storage jsdom hands back here has no `getItem`. The throw happens while
+// the module graph is still being built, so it took this whole file down at collection — every
+// test in it, on master and in CI alike. The picker reaches it through the claim card.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+  pendingPersonalSpaceAtom: { toString: () => 'pendingPersonalSpaceAtom' },
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: (spaceId: string | null | undefined) =>
+    typeof spaceId === 'string' && spaceId.startsWith('pending:'),
+  usePendingPersonalSpace: () => ({ isPending: false }),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace, back: mocks.back }),
 }));
@@ -1059,6 +1072,52 @@ describe('DebateRematchPageClient', () => {
     selectFilter('Any topic', 'Ethics');
 
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  // GEO-2653. The space and topic menus were both fed by a ref that only ever accumulated, so a
+  // topic stayed on offer after its claims had been filtered away — and picking it could only
+  // ever produce an empty list. Spaces still accumulate: the space filter runs in the browsed
+  // query, so a menu built from the loaded corpus would strand the viewer in whatever space they
+  // picked. The topic filter runs client-side and has no such problem to solve.
+  it('drops the topics that have no claims in the selected space', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    // Governance and Ethics belong to the published claim, which lives in the Governance space.
+    selectFilter('Any space', 'Crypto');
+    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Ethics/ })).toBeNull();
+  });
+
+  it('keeps every space on offer after narrowing to one', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    selectFilter('Any space', 'Crypto');
+    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+
+    // The way back. Narrowing the space menu to the loaded corpus would leave only Crypto on it.
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+
+    expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument();
+  });
+
+  it('lets go of a selected topic once the space no longer has claims for it', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    selectFilter('Any topic', 'Governance');
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+
+    selectFilter('Any space', 'Crypto');
+
+    // Held, it would filter the list by a chip that is no longer in the menu to unpick.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any topic/ })).toBeInTheDocument());
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 
   it('narrows the list to the selected space', async () => {

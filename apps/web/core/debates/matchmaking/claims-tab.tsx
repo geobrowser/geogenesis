@@ -23,6 +23,7 @@ import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
+import { availableTopics, keepSelectableTopic } from './topic-facets';
 import { useStableListOrder } from './use-stable-list-order';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -122,11 +123,21 @@ export function ClaimsTab() {
     () => [...new Set(claims.map(entry => entry.claim.claim_entity_id).filter(validateEntityId))],
     [claims]
   );
-  const { entities: claimEntities } = useQueryEntities({
+  const {
+    entities: claimEntities,
+    isFetched: claimEntitiesFetched,
+    isPlaceholderData: claimEntitiesArePrevious,
+  } = useQueryEntities({
     where: { id: { in: claimEntityIds } },
     enabled: claimEntityIds.length > 0,
     placeholderData: keepPreviousData,
   });
+
+  // Whether `facetTopics` below is the finished answer for the filters currently applied. The
+  // lookup keeps its previous data while the next one is in flight, so "fetched" alone still
+  // describes the last set of claims — and no claims at all is a resolved answer of its own.
+  const topicsResolved =
+    !claimsQuery.isLoading && (claimEntityIds.length === 0 || (claimEntitiesFetched && !claimEntitiesArePrevious));
 
   const topicsByClaimId = React.useMemo(() => {
     const map = new Map<string, MatchmakingTopic[]>();
@@ -139,15 +150,27 @@ export function ClaimsTab() {
     return map;
   }, [claimEntities]);
 
-  const facetTopics = React.useMemo(() => {
-    const seen = new Map<string, MatchmakingTopic>();
-    for (const topics of topicsByClaimId.values()) {
-      for (const topic of topics) {
-        if (!seen.has(topic.id)) seen.set(topic.id, topic);
-      }
-    }
-    return [...seen.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
-  }, [topicsByClaimId]);
+  // Read off `claims` rather than off every entity the topic lookup has resolved. The two drift
+  // whenever a filter changes: the entity query holds its previous data while the next one is in
+  // flight, so a menu built from it keeps offering topics belonging to claims that are no longer
+  // in the list — and picking one of those lands the viewer on an empty result (GEO-2653).
+  //
+  // No space term is needed here, unlike the rematch picker: `spaceId` goes into the claims query
+  // itself, so `claims` is already only the selected space's.
+  const facetTopics = React.useMemo(
+    () =>
+      availableTopics(
+        claims.map(entry => entry.claim.claim_entity_id),
+        topicsByClaimId
+      ),
+    [claims, topicsByClaimId]
+  );
+
+  // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
+  // no longer in the menu to unpick.
+  React.useEffect(() => {
+    setTopicId(current => keepSelectableTopic(current, facetTopics, topicsResolved));
+  }, [facetTopics, topicsResolved]);
 
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId || filter !== 'all');
 

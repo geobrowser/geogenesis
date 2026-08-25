@@ -46,6 +46,7 @@ import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { availableTopics, keepSelectableTopic } from '~/core/debates/matchmaking/topic-facets';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
@@ -545,13 +546,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const claims = tab === 'opponent' ? opponentClaims : tab === 'recommended' ? curatedClaims : browsedClaims;
 
-  // Every space and topic the lists have shown, not only the current tab's. Space runs in the
-  // browsed query, so the loaded corpus is whatever the current filter allows — a menu listing only
-  // the space you picked would have no way back to another.
-  const seenFacetsRef = React.useRef<{ spaceIds: Set<string>; topics: Map<string, MatchmakingTopic> }>({
-    spaceIds: new Set(),
-    topics: new Map(),
-  });
+  // Every space the lists have shown, not only the current tab's. Space runs in the browsed
+  // query, so the loaded corpus is whatever the current filter allows — a menu listing only the
+  // space you picked would have no way back to another.
+  //
+  // Topics are deliberately not accumulated the same way. They have no such problem to solve:
+  // the topic filter runs here rather than in the query, so narrowing it never costs the viewer
+  // their way back. Remembering them instead kept offering topics from spaces the viewer had
+  // filtered away, and picking one of those could only ever produce an empty list (GEO-2653).
+  const seenFacetsRef = React.useRef<{ spaceIds: Set<string> }>({ spaceIds: new Set() });
 
   const facetSpaceIds = React.useMemo(() => {
     const seen = seenFacetsRef.current.spaceIds;
@@ -560,15 +563,32 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return [...seen];
   }, [browsedClaims, browsedFacets?.space_ids, curatedClaims, opponentClaims, spaceAllowlist]);
 
-  const facetTopics = React.useMemo(() => {
-    const seen = seenFacetsRef.current.topics;
-    for (const claim of [...opponentClaims, ...curatedClaims, ...browsedClaims]) {
-      for (const topic of topicsByClaimId.get(claim.claim.claim_entity_id) ?? []) {
-        if (!seen.has(topic.id)) seen.set(topic.id, topic);
-      }
-    }
-    return [...seen.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
-  }, [browsedClaims, curatedClaims, opponentClaims, topicsByClaimId]);
+  // The claims the topic menu describes: everything the other filters allow, topic aside. The
+  // tab is included — each one is a different corpus, and a topic only the opponent's tab holds
+  // is not an option while looking at the curated one.
+  const topicFacetClaims = React.useMemo(
+    () =>
+      claims.filter(claim => {
+        if (spaceId && claim.claim.space_id !== spaceId) return false;
+        if (
+          tab !== 'all' &&
+          debouncedSearch &&
+          !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())
+        )
+          return false;
+        return true;
+      }),
+    [claims, debouncedSearch, spaceId, tab]
+  );
+
+  const facetTopics = React.useMemo(
+    () =>
+      availableTopics(
+        topicFacetClaims.map(claim => claim.claim.claim_entity_id),
+        topicsByClaimId
+      ),
+    [topicFacetClaims, topicsByClaimId]
+  );
 
   // Search and space reach the browsed query; on the other tabs, and for the topic everywhere
   // (geo-chat doesn't model topics), they are applied here.
@@ -609,6 +629,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           opponentClaimsQuery.isLoading ||
           (landedTabRef.current === null && claims.length === 0 && recommendedLoading)
         : allowlistPending || browsedClaimsQuery.isLoading);
+
+  // A topic the menu no longer offers is unpickable as well as empty — the chip filtering the
+  // list would not be in the menu to clear. Unlike the Claims tab, the topics here arrive with
+  // the claim rows rather than in a lookup behind them, so once the tab has settled an empty
+  // menu is a real answer.
+  React.useEffect(() => {
+    setTopicId(current => keepSelectableTopic(current, facetTopics, !tabIsLoading));
+  }, [facetTopics, tabIsLoading]);
 
   const tabError =
     sessionQuery.error ??

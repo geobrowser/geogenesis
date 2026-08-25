@@ -6,11 +6,14 @@ import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
 
 const mocks = vi.hoisted(() => ({
   claims: [] as MatchmakingClaim[],
+  entities: [] as { id: string; relations: unknown[] }[],
   facetSpaceIds: [] as string[],
   spaceAllowlist: null as Set<string> | null,
   allowlistLoading: false,
@@ -24,6 +27,19 @@ const mocks = vi.hoisted(() => ({
   fetchNextPage: vi.fn(),
   observed: [] as Element[],
   trigger: null as null | (() => void),
+}));
+
+// `pending-personal-space` reads localStorage at module scope (`atomWithStorage` with
+// `getOnInit`), and the storage jsdom hands back here has no `getItem`. The throw happens
+// while the module graph is still being built, so it took this whole file down at collection
+// — every test in it, on master and in CI alike. The tab reaches it through the claim card.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+  pendingPersonalSpaceAtom: { toString: () => 'pendingPersonalSpaceAtom' },
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: (spaceId: string | null | undefined) =>
+    typeof spaceId === 'string' && spaceId.startsWith('pending:'),
+  usePendingPersonalSpace: () => ({ isPending: false }),
 }));
 
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
@@ -43,7 +59,21 @@ vi.mock('./hooks', () => ({
   useMatchmakingClaims: (query: unknown) => {
     mocks.lastQuery = query;
     return {
-      data: { pages: [{ claims: mocks.claims, next_cursor: null, facets: { space_ids: mocks.facetSpaceIds } }] },
+      data: {
+        pages: [
+          {
+            // `space_id` is a query parameter, so the endpoint returns only that space's
+            // claims. Mirrored here: the topic menu is built from what came back.
+            claims: mocks.claims.filter(
+              entry =>
+                !(query as { spaceId?: string | null }).spaceId ||
+                entry.claim.space_id === (query as { spaceId?: string | null }).spaceId
+            ),
+            next_cursor: null,
+            facets: { space_ids: mocks.facetSpaceIds },
+          },
+        ],
+      },
       isLoading: false,
       error: null,
       hasNextPage: mocks.hasNextPage,
@@ -98,7 +128,7 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: () => ({ entities: [] }),
+  useQueryEntities: () => ({ entities: mocks.entities }),
 }));
 
 function render(ui: ReactElement) {
@@ -117,6 +147,17 @@ function sidebarData() {
     memberOf: [],
     documentationImage: null,
     personalSpaceId: null,
+  };
+}
+
+/** A resolved claim entity carrying topic relations, the shape the topic lookup reads. */
+function entityWithTopics(id: string, topics: { id: string; name: string }[]) {
+  return {
+    id,
+    relations: topics.map(topic => ({
+      type: { id: TOPICS_PROPERTY_ID },
+      toEntity: { id: topic.id, name: topic.name },
+    })),
   };
 }
 
@@ -146,6 +187,7 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
 beforeEach(() => {
   mocks.hasNextPage = false;
+  mocks.entities = [];
   mocks.facetSpaceIds = [];
   // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
   // unfiltered list — what every pre-existing case here runs under.
@@ -518,4 +560,58 @@ it('asks the server for the filter the viewer picked', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
 
   expect(mocks.lastQuery).toMatchObject({ filter: 'debate_now' });
+});
+
+// GEO-2653. The menu is built here rather than by geo-chat, which models no topics at all, and
+// it was built from every entity the lookup had resolved rather than from the claims on screen.
+describe('topic menu', () => {
+  const AI = { id: 'topic-ai', name: 'AI' };
+  const HEALTH = { id: 'topic-health', name: 'Health' };
+
+  beforeEach(() => {
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.sidebarData = sidebarData();
+    mocks.claims = [
+      claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID),
+      claim('claim-health', 'Sleep is underrated', false, false, OTHER_SPACE_ID),
+    ];
+    mocks.entities = [entityWithTopics('claim-ai', [AI]), entityWithTopics('claim-health', [HEALTH])];
+  });
+
+  it('offers every topic while no space is picked', () => {
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Health' })).toBeInTheDocument();
+  });
+
+  it('drops the topics that have no claims in the picked space', () => {
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+    // The reported bug: Health stayed on the menu, and picking it showed nothing at all.
+    expect(screen.queryByRole('button', { name: 'Health' })).toBeNull();
+  });
+
+  it('lets go of a selected topic the picked space has no claims for', () => {
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Health' }));
+    expect(screen.getByRole('button', { name: /Health/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+
+    // Left held, it would filter the list from a chip that is no longer in the menu to unpick.
+    expect(screen.getByRole('button', { name: /Any topic/ })).toBeInTheDocument();
+    expect(screen.getByText('Models are getting cheaper')).toBeInTheDocument();
+  });
 });
