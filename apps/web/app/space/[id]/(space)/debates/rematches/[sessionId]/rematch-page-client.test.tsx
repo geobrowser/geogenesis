@@ -855,6 +855,47 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 
+  // GEO-2656. The badge counted a list that is empty until three dependent round trips land, so it
+  // opened on `0` — which is not a placeholder but a claim, and a wrong one, on the one tab that is
+  // about the opponent's positions.
+  it('counts nothing until the opponent’s positions are actually known', () => {
+    // First load: in flight with nothing back yet. Both halves matter — the count is only unknown
+    // while the query is running *and* has produced no rows.
+    mocks.positions = [];
+    mocks.positionsLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).not.toHaveTextContent('0');
+  });
+
+  // The count is derived from ids that come *from* positions, so while that query is in flight the
+  // id list is empty and the two claim lookups are disabled rather than loading. Nothing downstream
+  // reports as pending, which is why the badge has to consult the positions query itself.
+  it('shows the count once it is known', () => {
+    mocks.positionsLoading = false;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByLabelText('Counting positions')).toBeNull();
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+  });
+
+  // A new response from the opponent restarts the lookups while `useLastSettled` still holds a list
+  // that is right for every claim already on it. Dropping back to a skeleton would flicker the badge
+  // on precisely the event that should be invisible.
+  it('keeps showing a known count while a refetch is in flight', () => {
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+
+    // Same instance, so `useLastSettled` is holding the list it already drew. A fresh render would
+    // have no settled value to hold and would legitimately show the skeleton.
+    mocks.entityHydrationLoading = true;
+    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByLabelText('Counting positions')).toBeNull();
+    expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+  });
+
   // The opponent's claims arrive in one round trip; the curated lookup is three in sequence. The
   // viewer lands on what is ready, and a curated page arriving afterwards adds its tab rather than
   // moving them onto it — being moved once the lookup settles is worse than a tab appearing.
