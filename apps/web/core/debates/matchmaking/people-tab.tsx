@@ -14,6 +14,7 @@ import { DebateChallengeCard } from './challenge-card';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
+import { useUnexpiredRequests } from './use-request-countdown';
 
 /**
  * Everyone online and available right now. The Debate button sends the same claimless challenge as
@@ -26,7 +27,15 @@ export function PeopleTab() {
   const currentUserId = useCurrentGeoChatUserId();
   const people = peopleQuery.data?.people ?? [];
 
-  const pendingChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  // A challenge stays `pending` in the activity payload until the server says otherwise, so its own
+  // expiry has to be applied here — the same filter every other request surface derives from, so
+  // none of them disagree about a dead request while waiting for `debate.requests_changed`. Without
+  // it this tab would sit on an "Expired" card with every Debate button still dead underneath it.
+  const liveChallenges = useUnexpiredRequests(
+    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
+  );
+  const pendingChallenge = liveChallenges[0] ?? null;
   // `activity.challenge` is whichever challenge involves the viewer, in either direction. The card
   // is about a request you sent, so it only stands in for the message when you are the one waiting
   // on a reply — being challenged blocks the buttons just the same, but the sentence is what

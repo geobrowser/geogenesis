@@ -55,7 +55,7 @@ function person(userId: string, name: string): DebatePerson {
   } as DebatePerson;
 }
 
-function challenge(role: 'requester' | 'recipient'): DebateChallenge {
+function challenge(role: 'requester' | 'recipient', expiresInMs = 25 * 60_000): DebateChallenge {
   const me = { user_id: 'user-me', profile_space_id: 'profile-me', display_name: 'You', avatar_cid: null };
   const them = { user_id: 'user-them', profile_space_id: 'profile-them', display_name: 'Arturas', avatar_cid: null };
 
@@ -67,7 +67,7 @@ function challenge(role: 'requester' | 'recipient'): DebateChallenge {
     recipient: role === 'requester' ? them : me,
     rematch_session_id: null,
     created_at: '2026-08-05T11:00:00.000Z',
-    expires_at: new Date(Date.now() + 25 * 60_000).toISOString(),
+    expires_at: new Date(Date.now() + expiresInMs).toISOString(),
   };
 }
 
@@ -161,6 +161,32 @@ describe('PeopleTab', () => {
 
     expect(countdown.compareDocumentPosition(cancel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(cancel.compareDocumentPosition(versus) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // The activity payload keeps reporting a challenge as pending until the server says otherwise,
+  // so expiry has to be applied here — the same filter every other request surface uses. Without
+  // it the tab sat on an "Expired" card with every Debate button still dead underneath it.
+  it('drops an expired challenge instead of waiting for the server to say so', () => {
+    mocks.challenge = challenge('requester', -1_000);
+    render(<PeopleTab />);
+
+    expect(card()).not.toBeInTheDocument();
+    expect(screen.queryByText('Expired')).not.toBeInTheDocument();
+  });
+
+  it('re-enables the Debate buttons once the request has expired', () => {
+    mocks.challenge = challenge('requester', -1_000);
+    render(<PeopleTab />);
+
+    expect(screen.getAllByRole('button', { name: 'Debate' })[0]).toBeEnabled();
+  });
+
+  it('drops an expired incoming challenge too, sentence and all', () => {
+    mocks.challenge = challenge('recipient', -1_000);
+    render(<PeopleTab />);
+
+    expect(screen.queryByText(awaitingText)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Debate' })[0]).toBeEnabled();
   });
 
   // The same action the Requests tab offers on this challenge, reachable without leaving People.
