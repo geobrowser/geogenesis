@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   dismissRequestMutate: vi.fn(),
   blockUserMutate: vi.fn(),
   pathname: '/space/space-1/debates',
+  // Whether this tab is the focused one. jsdom reports no focus, so the real store would make
+  // every routing case here look like a background tab.
+  hasAttention: true,
   prompts: [] as DebateSharePrompt[],
   promptsFetching: false,
   mediaMutate: vi.fn(),
@@ -65,6 +68,11 @@ vi.mock('./hooks', () => ({
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
   useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
   useClearDebateActivity: () => mocks.clearDebateActivity,
+}));
+
+vi.mock('./debate-attention', () => ({
+  useDebatePresence: () => true,
+  useDebateAttention: () => mocks.hasAttention,
 }));
 
 vi.mock('./debate-gateway', () => ({
@@ -129,6 +137,7 @@ beforeEach(() => {
   mocks.dismissRequestMutate.mockReset();
   mocks.blockUserMutate.mockReset();
   mocks.pathname = '/space/space-1/debates';
+  mocks.hasAttention = true;
   mocks.prompts = [];
   mocks.promptsFetching = false;
   mocks.authenticated = true;
@@ -402,6 +411,44 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
+  });
+
+  // GEO-2648. This coordinator runs in every open tab, and the source-debate guard only covers
+  // rematches that have one — a session with `source_debate_id: null` fell through and pushed
+  // *every* tab into the picker at once, which is what Dovile saw: all her tabs jumped to the
+  // claim being debated. The majority of sessions take this branch, so it fired routinely.
+  it('does not route a tab the viewer is not looking at', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.hasAttention = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    // Give the effect the same room to fire that the focused-tab case below needs.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  // Focus is what decides, not presence: several windows can be visible at once, so an unfocused
+  // tab must stay put and the focused one must still route in.
+  it('routes the focused tab once it gains attention', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.hasAttention = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    const view = render(<DebateCoordinator />);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    // The viewer turns to this tab. Attention is a subscription, so the effect re-runs.
+    mocks.hasAttention = true;
+    view.rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
   // The sender learns it was accepted the same way every other flow does: activity gains a rematch

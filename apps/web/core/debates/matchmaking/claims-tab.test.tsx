@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   facetSpaceIds: [] as string[],
   spaceAllowlist: null as Set<string> | null,
   allowlistLoading: false,
+  publishableSpaceIds: null as Set<string> | null,
+  publishableLoading: false,
   sidebarData: null as unknown,
   fetchedSpaceIds: [] as string[][],
   spacesLoading: false,
@@ -26,6 +28,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
   useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
+}));
+
+vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => ({
+  // The real predicate: normalization and the null-means-unknown rule are the parts under test.
+  ...(await importOriginal<typeof import('../use-debate-publishable-spaces')>()),
+  useDebatePublishableSpaces: () => ({
+    publishableSpaceIds: mocks.publishableSpaceIds,
+    isLoading: mocks.publishableLoading,
+  }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -140,6 +151,10 @@ beforeEach(() => {
   // unfiltered list — what every pre-existing case here runs under.
   mocks.spaceAllowlist = null;
   mocks.allowlistLoading = false;
+  // Same shape, same reason: settled-with-no-answer does not filter, which is what every
+  // pre-existing case here runs under.
+  mocks.publishableSpaceIds = null;
+  mocks.publishableLoading = false;
   mocks.sidebarData = null;
   mocks.fetchedSpaceIds = [];
   mocks.spacesLoading = false;
@@ -260,6 +275,66 @@ describe('ClaimsTab', () => {
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
     expect(screen.queryByText('Bitcoin will never top $250K')).not.toBeInTheDocument();
+  });
+
+  // GEO-2649. A separate question from the allowlist: the viewer may be perfectly entitled to see
+  // the space, but if the acceptor isn't an editor of it the debate fails on-chain at the very end,
+  // so offering the claim is offering a dead end.
+  it('shows only claims from spaces a debate could be published in', () => {
+    mocks.claims = [
+      claim(MINE, 'Chips are better than fries', true),
+      claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID),
+    ];
+    mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
+    expect(screen.queryByText('Bitcoin will never top $250K')).not.toBeInTheDocument();
+  });
+
+  // Both gates apply, and a claim has to clear both. Allowed to see it, but nothing can be
+  // published there.
+  it('hides an allowed space that no debate can be published in', () => {
+    mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.publishableSpaceIds = new Set([OTHER_SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    expect(screen.queryByText('Chips are better than fries')).toBeNull();
+  });
+
+  it('keeps the space filter to spaces a debate could be published in', () => {
+    mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+
+    // Names resolve through useSpacesByIds, mocked empty here, so each offered space reads "Space".
+    expect(screen.getAllByRole('button', { name: /Space$/ })).toHaveLength(1);
+  });
+
+  // Same trimming-under-the-viewer problem the allowlist has, and the same answer: `null` does not
+  // filter, so without waiting the tab lists everything and then pulls claims back out.
+  it('shows nothing until the publishable lookup settles', () => {
+    mocks.claims = [claim(THEIRS, 'Bitcoin will never top $250K', false, false, OTHER_SPACE_ID)];
+    mocks.publishableSpaceIds = null;
+    mocks.publishableLoading = true;
+    render(<ClaimsTab />);
+
+    expect(screen.queryByText('Bitcoin will never top $250K')).toBeNull();
+  });
+
+  // And the other half of that rule: a lookup that settled without an answer must not empty the
+  // tab. No acceptor is configured locally at all, so this is the everyday path.
+  it('falls through to the unfiltered list when the publishable lookup comes back empty', () => {
+    mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
+    mocks.publishableSpaceIds = null;
+    mocks.publishableLoading = false;
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
 
   // The allowlist is keyed on normalized ids; a claim row carries the hyphen-less form.
