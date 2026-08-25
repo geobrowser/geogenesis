@@ -24,6 +24,7 @@ import { type ClaimPickerEntity, useClaimEntitiesByIds } from '~/core/debates/cl
 import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
+import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import { defaultDebateFormatId } from '~/core/debates/formats';
@@ -39,7 +40,6 @@ import {
   useLeaveDebateRematch,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
-import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { useMatchmakingClaims } from '~/core/debates/matchmaking/hooks';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
@@ -52,6 +52,7 @@ import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { useClaimDebateReadiness } from '~/core/debates/use-claim-debate-readiness';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
+import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
@@ -284,7 +285,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return [...ids];
   }, [browsedPages, opponentEntitiesQuery.entities, recommendedEntities, savedClaimsQuery.data]);
   const { spacesById: candidateSpaces } = useSpacesByIds(candidateSpaceIds);
-  const canPublishDebateIn = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
+  // The acceptor's editor spaces are the authoritative answer, and the same set the publish sweep
+  // works from. The space-type test below it is kept rather than replaced: the two fail
+  // differently, and when this list is unknown — no acceptor configured, a failed lookup — the
+  // type test still rules out the case that actually bit us, claims living in a personal space.
+  const { publishableSpaceIds } = useDebatePublishableSpaces();
+  const spaceTypePublishable = React.useMemo(
+    () => debatePublishableSpacePredicate(candidateSpaces),
+    [candidateSpaces]
+  );
+  const canPublishDebateIn = React.useCallback(
+    (spaceId: string | null | undefined) =>
+      isSpaceDebatePublishable(spaceId, publishableSpaceIds) && spaceTypePublishable(spaceId),
+    [publishableSpaceIds, spaceTypePublishable]
+  );
 
   /** A picker row from a graph entity, with geo-chat's session row layered on when it has one. */
   const rowFromEntity = React.useCallback(
