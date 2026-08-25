@@ -22,7 +22,7 @@ import {
   unblockDebateUser,
   withdrawDebateRequest,
 } from '../api';
-import { markEnteringDebate } from '../debate-entry-intent';
+import { markEnteringDebate, markEnteringPendingDebate } from '../debate-entry-intent';
 import { useDebateGatewayScope } from '../debate-gateway';
 import { debatePath } from '../debate-routes';
 import {
@@ -287,6 +287,12 @@ export function useAcceptDebateRequest() {
   return useMutation({
     mutationFn: ({ requestId, formatId }: { requestId: string; formatId?: string }) =>
       acceptDebateRequest(requestId, getPrivyIdentityToken, accountKey, formatId),
+    // Claimed before the request leaves, released when it settles. The id-keyed intent below cannot
+    // be taken until the response names the debate, and the server emits `debate.state_changed` to
+    // this very tab on the way — so without this the coordinator gets a `ready` debate off our own
+    // socket event, mid-round-trip, and prompts us to join what we are already accepting (GEO-2604).
+    onMutate: () => ({ releaseEntry: markEnteringPendingDebate() }),
+    onSettled: (_result, _error, _variables, context) => context?.releaseEntry(),
     onSuccess: result => {
       if (result.debate) {
         queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
