@@ -12,7 +12,7 @@ import { Text } from '~/design-system/text';
 import { activeDebate } from './activity-state';
 import { type DebateSharePrompt } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
-import { useDebatePresence } from './debate-attention';
+import { useDebateAttention, useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGateway } from './debate-gateway';
@@ -44,6 +44,8 @@ export function DebateCoordinator() {
   const geoChatAuth = useGeoChatAuth();
   // Presence, not attention: being available to debate has to survive looking at another window.
   const debatePresence = useDebatePresence();
+  // Exactly one tab: visible *and* focused. See the rematch routing effect below.
+  const hasAttention = useDebateAttention();
   const gateway = useDebateGateway(
     geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
@@ -192,6 +194,19 @@ export function DebateCoordinator() {
     // coordinator sent every other open tab into that room, where ownership correctly rejected it.
     // The room handles deciding, recording finalization, browsing, and conversion itself.
     if (sourceDebatePath) return;
+    // Past that guard there is no room to hand off from — a session with no source debate comes
+    // from the matchmaking hub or a profile challenge, so this coordinator is the only thing that
+    // can route the viewer in, and it must. But it runs in *every* tab, and the guard above only
+    // covers the source-debate branch: a null `source_debate_id` fell through and pushed every
+    // open tab into the picker at once (GEO-2648, and the majority of sessions take this branch).
+    //
+    // Attention rather than presence is what makes it one tab. Presence is per-document
+    // visibility, so several windows report it together; attention additionally requires
+    // `document.hasFocus()`, which is true of at most one tab in the browser — the one the viewer
+    // is actually looking at, which is the only one that should move under them. Unfocused tabs
+    // stay put, and because attention is a subscription this re-runs when one is focused, so
+    // whichever tab they turn to still routes in rather than stranding them.
+    if (!hasAttention) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
       if (pathname !== path) {
@@ -199,7 +214,9 @@ export function DebateCoordinator() {
         router.push(path);
       }
     }
-  }, [activity, pathname, router]);
+    // `hasAttention` is in here on purpose: an unfocused tab returns early above, and this is what
+    // re-runs the effect when the viewer turns to a tab, so it routes in then rather than never.
+  }, [activity, hasAttention, pathname, router]);
 
   const visibleSharePrompt =
     retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);
