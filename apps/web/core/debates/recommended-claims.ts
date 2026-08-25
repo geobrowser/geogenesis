@@ -4,10 +4,10 @@ import { SystemIds } from '@geoprotocol/geo-sdk';
 
 import * as React from 'react';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
-import type { Entity } from '~/core/types';
+
+import { type ClaimPickerEntity, useClaimEntitiesByIds } from './claim-picker-page';
 
 /** A curated "Recommended claims" page: claims a curator has picked out for a specific pairing. */
 export const RECOMMENDED_CLAIMS_TYPE_ID = '2f8a7be40c5242368bac78511bf0b47f';
@@ -46,7 +46,7 @@ export type RecommendedClaimSection = {
 export function useRecommendedClaimSections(participantSpaceIds: string[]): {
   sections: RecommendedClaimSection[];
   /** The claims themselves, so callers don't fetch what this already resolved. */
-  claimEntities: Entity[];
+  claimEntities: ClaimPickerEntity[];
   /**
    * True until every stage has settled. Empty sections mean "nothing recommended" only once this
    * is false — before then they only mean "still looking", and a caller that can't tell the two
@@ -120,20 +120,17 @@ export function useRecommendedClaimSections(participantSpaceIds: string[]): {
 
   const itemIds = React.useMemo(() => [...new Set(itemIdsByBlock.flatMap(block => block.itemIds))], [itemIdsByBlock]);
 
-  const { entities: items, isLoading: itemsLoading } = useQueryEntities({
-    where: { id: { in: itemIds } },
-    first: 100,
-    enabled: itemIds.length > 0,
-  });
-
-  const claimEntities = React.useMemo(
-    () => items.filter(item => item.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))),
-    [items]
-  );
+  // Batched by the picker's own lookup rather than asked for in one `first`-bounded page. A page is
+  // capped at a hundred ids, and the cap fell across the *whole* set rather than per block: a page
+  // of six collections holding a hundred and forty claims resolved the first hundred in block order
+  // and silently dropped the rest, so the last block came back with no claims at all and its
+  // section was filtered out as empty — a curated group that simply never appeared.
+  const { entities: claimEntities, isLoading: itemsLoading } = useClaimEntitiesByIds(itemIds);
 
   const sections = React.useMemo(() => {
     // A collection can hold anything the curator dropped in it, but this tab feeds a claim picker:
-    // anything that isn't a claim has no side to take and no debate to request.
+    // anything that isn't a claim has no side to take and no debate to request. The lookup asks for
+    // claims specifically, so whatever it doesn't return isn't one.
     const claimIds = new Set(claimEntities.map(claim => claim.id));
 
     return (

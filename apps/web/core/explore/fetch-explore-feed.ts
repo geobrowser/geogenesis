@@ -3,13 +3,16 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
+import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import type { Entity } from '~/core/types';
+import { getRelationVideoUrls } from '~/core/utils/relation-video';
 
 import {
   EXPLORE_AVATAR_PROPERTY_ID,
@@ -18,11 +21,16 @@ import {
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
   EXPLORE_PAGE_SIZE,
 } from './explore-constants';
+import { exploreBestConnectionDocument } from './explore-best-document';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 
-export type ExploreSort = 'new' | 'top';
+/**
+ * `best` is the Phase A ranked feed (quality + structure + recency, server-side).
+ * `top` ranks by the integer score property; `new` is reverse-chronological.
+ */
+export type ExploreSort = 'new' | 'top' | 'best';
 export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
 
 export type ExploreFeedItem = {
@@ -35,6 +43,8 @@ export type ExploreFeedItem = {
   title: string;
   description: string | null;
   imageUrl: string | null;
+  recordingUrls: string[];
+  debateVideoUrls: string[];
   commentCount: number;
   isMemberOrEditor: boolean;
   hasPendingMembershipRequest: boolean;
@@ -178,6 +188,12 @@ function decodeExploreEntitiesByProperty(data: {
   return decodeConnection(data.entitiesOrderedByPropertyConnection ?? null);
 }
 
+function decodeExploreBest(data: {
+  entitiesRankedForFeedConnection?: EntitiesConnectionShape;
+}): ExploreEntitiesPageResponse {
+  return decodeConnection(data.entitiesRankedForFeedConnection ?? null);
+}
+
 function buildFeedFilter(args: {
   spaceIds: string[];
   time: ExploreTime;
@@ -267,6 +283,42 @@ async function fetchTopEntitiesPage(args: {
   );
 }
 
+// "Best" sort: the Phase A ranked feed via `entitiesRankedForFeedConnection`.
+//
+// Unlike the other two this passes no `filter`. Candidate generation inside
+// `entities_ranked_for_feed` already enforces every clause `buildFeedFilter` builds —
+// name presence, system entities, excluded block types — and takes space, type and
+// recency as its own arguments. See explore-best-document for why sending them twice is
+// not merely redundant.
+//
+// `requireName` is therefore not honoured here: an entity with no name is never a
+// candidate, server-side, and cannot be opted back in. Nothing passes
+// `requireName: false` today, and for this feed it would be a request to serve rows that
+// render as a raw uuid.
+async function fetchBestEntitiesPage(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  limit: number;
+  after: string | null;
+  typeIds?: readonly string[];
+}): Promise<ExploreEntitiesPageResponse> {
+  const t = timeThresholdSec(args.time);
+  return Effect.runPromise(
+    graphql({
+      query: exploreBestConnectionDocument,
+      decoder: decodeExploreBest,
+      variables: {
+        first: args.limit,
+        after: args.after,
+        spaceIds: args.spaceIds,
+        typeIds: args.typeIds?.length ? [...args.typeIds] : undefined,
+        createdAfter: t != null ? String(t) : undefined,
+        spaceIdsForLists: args.spaceIds,
+      },
+    })
+  );
+}
+
 function buildItems(
   entities: ExploreEntity[],
   allowedSpaceIds: Set<string>,
@@ -289,8 +341,9 @@ function buildItems(
       textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
 
     const displaySpaceIdNorm = normId(spaceId);
-    const types = e.relations
-      .filter(r => normId(r.type.id) === typesRelationIdNorm && normId(r.spaceId) === displaySpaceIdNorm)
+    const relationsInDisplaySpace = e.relations.filter(r => normId(r.spaceId) === displaySpaceIdNorm);
+    const types = relationsInDisplaySpace
+      .filter(r => normId(r.type.id) === typesRelationIdNorm)
       .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
 
     items.push({
@@ -301,6 +354,8 @@ function buildItems(
       title,
       description,
       imageUrl: imageFromEntity(e, spaceId),
+      recordingUrls: getRecordingUrls(relationsInDisplaySpace),
+      debateVideoUrls: getRelationVideoUrls(relationsInDisplaySpace, DEBATE_VIDEOS_PROPERTY_ID),
       commentCount: e.commentCount,
       isMemberOrEditor: memberOrEditorSpaceIds.has(normId(spaceId)),
     });
@@ -394,7 +449,15 @@ export async function fetchExploreFeed(args: {
   };
 
   const page =
-    args.sort === 'top'
+    args.sort === 'best'
+      ? await fetchBestEntitiesPage({
+          spaceIds: baseIds,
+          time: args.time,
+          limit: scanChunk,
+          after: args.cursor,
+          typeIds: args.typeIds,
+        })
+      : args.sort === 'top'
       ? await fetchTopEntitiesPage({
           spaceIds: baseIds,
           time: args.time,

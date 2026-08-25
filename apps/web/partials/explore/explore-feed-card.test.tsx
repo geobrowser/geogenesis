@@ -1,10 +1,11 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 
 import type React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 
 import { ExploreFeedCard } from './explore-feed-card';
 
@@ -16,6 +17,8 @@ vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
 
+// EntityRowActions carries the vote buttons and the claim debate toggle, both of which reach into
+// the sync engine; the card only needs it to occupy the actions slot.
 vi.mock('~/partials/entity-page/entity-row-actions', () => ({
   EntityRowActions: ({ children, className }: { children: React.ReactNode; className?: string }) => (
     <div data-testid="row-actions" className={className}>
@@ -28,9 +31,10 @@ vi.mock('./explore-join-space-button', () => ({
   ExploreJoinSpaceButton: () => null,
 }));
 
-const openComments = vi.fn();
-vi.mock('~/core/hooks/use-entity-comments-panel', () => ({
-  useEntityCommentsPanel: () => ({ commentsTarget: null, openComments, closeComments: vi.fn() }),
+// The ranking body pulls the sync store; stub it and surface whatever `actions` it is handed so we
+// can assert the card still threads a comment link into rankings.
+vi.mock('./explore-ranking-card-body', () => ({
+  RankingCardBody: ({ actions }: { actions?: React.ReactNode }) => <div data-testid="ranking-body">{actions}</div>,
 }));
 
 vi.mock('./debate-explore-feed-card', () => ({
@@ -50,6 +54,8 @@ const item: ExploreFeedItem = {
   description: null,
   imageUrl: 'ipfs://image',
   commentCount: 2,
+  recordingUrls: [],
+  debateVideoUrls: [],
   isMemberOrEditor: true,
   hasPendingMembershipRequest: false,
 };
@@ -57,15 +63,6 @@ const item: ExploreFeedItem = {
 afterEach(cleanup);
 
 describe('ExploreFeedCard', () => {
-  it('keeps actions 4px below text even when the card has an image', () => {
-    render(<ExploreFeedCard item={item} />);
-
-    const actions = screen.getByTestId('row-actions');
-    expect(actions.className).toContain('mt-1');
-    expect(actions.parentElement?.contains(screen.getByText('A claim'))).toBe(true);
-    expect(actions.parentElement?.parentElement?.contains(screen.getByTestId('image'))).toBe(true);
-  });
-
   it('routes Debate-typed items to the debate card with the generic card as fallback', () => {
     // Hyphenated on purpose: type-id comparison must ignore hyphenation.
     const debateItem: ExploreFeedItem = {
@@ -85,15 +82,36 @@ describe('ExploreFeedCard', () => {
     expect(screen.queryByTestId('debate-card')).toBeNull();
   });
 
-  // Reading a card is not the same as wanting the entity's page: comments open
-  // beside the feed rather than navigating the reader away from it.
-  it('opens the comments panel for the card instead of linking to the entity page', () => {
+  it('routes card actions through EntityRowActions so claims keep their debate toggle', () => {
     render(<ExploreFeedCard item={item} />);
 
-    const commentsButton = screen.getByRole('button', { name: 'Comments (2)' });
-    expect(commentsButton.closest('a')).toBeNull();
+    const rowActions = screen.getByTestId('row-actions');
+    expect(rowActions.contains(screen.getByText('2').closest('a'))).toBe(true);
+  });
 
-    fireEvent.click(commentsButton);
-    expect(openComments).toHaveBeenCalledWith('claim-1', 'space-1');
+  it('links comments to the entity comments anchor with the comment count', () => {
+    render(<ExploreFeedCard item={item} />);
+
+    const commentLink = screen.getByText('2').closest('a');
+    expect(commentLink).not.toBeNull();
+    expect(commentLink?.getAttribute('href')).toContain('#entity-comments');
+  });
+
+  it('gives ranking cards the same actions row as every other card type', () => {
+    const rankingItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: RANKING_BLOCK_TYPE_ID, name: 'Ranking' }],
+      title: 'A ranking',
+    };
+    render(<ExploreFeedCard item={rankingItem} />);
+
+    // The block is voteable in its own right, so it gets the actions row rather than a bare
+    // comment link — threaded through the body's `actions` alongside its own "Rank" CTA.
+    const rowActions = screen.getByTestId('row-actions');
+    const commentLink = screen.getByText('2').closest('a');
+    expect(commentLink).not.toBeNull();
+    expect(commentLink?.getAttribute('href')).toContain('#entity-comments');
+    expect(rowActions.contains(commentLink)).toBe(true);
+    expect(screen.getByTestId('ranking-body').contains(rowActions)).toBe(true);
   });
 });
