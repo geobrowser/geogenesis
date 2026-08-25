@@ -228,7 +228,9 @@ describe('RequestsTab', () => {
     render(<RequestsTab />);
 
     expect(screen.getByRole('heading', { name: 'Sent' })).toBeInTheDocument();
-    expect(screen.getByText('Waiting for a reply')).toBeInTheDocument();
+    // The card carries its own state in the footer now, beside the action, rather than a header
+    // that repeated the "Sent" label above it.
+    expect(screen.getByText('Awaiting response')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Explore claims' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
