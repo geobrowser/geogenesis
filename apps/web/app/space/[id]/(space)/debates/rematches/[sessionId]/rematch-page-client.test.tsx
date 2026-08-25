@@ -1605,6 +1605,27 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
   });
 
+  // GEO-2652. The wait above is real — a publish, an index and a notification — and rendering
+  // nothing while it runs is what Preston reported: no idea what he was waiting on. The button still
+  // waits, because geo-chat would reject an early request; what changes is that the wait is named.
+  it('says what it is waiting for while the position is being confirmed', () => {
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('Confirming your position…');
+    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+  });
+
+  // And nothing is said before the viewer has taken a side — there is nothing being confirmed, so a
+  // spinner would be claiming work that is not happening.
+  it('says nothing while the viewer has taken no side', () => {
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByText('Confirming your position…')).not.toBeInTheDocument();
+  });
+
   it('sends the request once geo-chat agrees with the side on screen', () => {
     mocks.claims = [
       {
