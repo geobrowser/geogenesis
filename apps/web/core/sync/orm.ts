@@ -133,17 +133,18 @@ export function mergeRelations(localRelations: Relation[], remoteRelations: Rela
 }
 
 /**
- * The Entity data model is in charge of querying and merging
- * data related to entities at-hoc. There might be instances
- * where we want to query (pull) data rather than sync it.
- */
-/**
  * The `where` a fuzzy page is cached and requested under: the caller's, with the query capped.
  *
- * Keyed on the raw query instead, every keystroke past the cap changes `where` while the request
- * built from it stays byte-identical — so each one mints a fresh cache entry and refetches an
- * answer already in hand. Returns the original object when the cap didn't bite, so an ordinary
- * query keeps its identity and nothing re-renders on a new reference.
+ * Keyed on the raw query instead, every keystroke past the cap mints a fresh entry for a request
+ * that is byte-identical to the last one. Note this collapses the entries, not the requests: the
+ * app's `QueryClient` is constructed bare, so a page is stale the moment it lands and `fetchQuery`
+ * refetches on a key hit anyway. Not re-running the search at all is the *caller's* outer query
+ * key, which each of the four callers now caps for itself.
+ *
+ * Both the cache key and the request arguments read the query from here, so what is cached and
+ * what is fetched cannot disagree about what was asked. Returns the caller's own object when the
+ * cap didn't bite, so an ordinary query keeps its identity and nothing re-renders on a new
+ * reference.
  */
 export function fuzzyPageCacheWhere(where: WhereCondition): WhereCondition {
   const fuzzy = where.name?.fuzzy ?? '';
@@ -154,6 +155,11 @@ export function fuzzyPageCacheWhere(where: WhereCondition): WhereCondition {
   return { ...where, name: { ...where.name, fuzzy: capped } };
 }
 
+/**
+ * The Entity data model is in charge of querying and merging
+ * data related to entities at-hoc. There might be instances
+ * where we want to query (pull) data rather than sync it.
+ */
 export class E {
   static merge({
     id,
