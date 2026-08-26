@@ -37,8 +37,9 @@ export function DebatesHubButton() {
       type="button"
       data-debates-hub-opener
       // The pending count is the whole point of the button, and an aria-label would otherwise
-      // override the visible number.
-      aria-label={requestCount > 0 ? `Debates, ${requestCount} pending requests` : 'Debates'}
+      // override the visible number. It says "Debate" to match the label below: a control should
+      // answer to the word it shows, so the two move together.
+      aria-label={requestCount > 0 ? `Debate, ${requestCount} pending requests` : 'Debate'}
       aria-expanded={isOpen}
       onClick={() => toggle()}
       className={cx(
@@ -47,15 +48,17 @@ export function DebatesHubButton() {
       )}
     >
       <Megaphone />
-      {/* A megaphone says nothing about debates on its own (GEO-2689). "Debates" rather than
-          "Debate" because that is what the panel it opens is headed, and what this button already
-          calls itself to a screen reader — a control that answers to one name and shows another is
-          worse than an unlabelled icon.
+      {/* A megaphone says nothing about debates on its own (GEO-2689). "Debate" reads as the
+          invitation the button is, where the panel behind it stays headed "Debates" for the things
+          it lists — the `aria-label` above follows this word rather than the panel's, so the button
+          answers to what it shows.
+
+          Set in the browse sidebar's menu type, which is the nearest navigation text on screen.
 
           Dropped on phones, where the navbar has the least room to give and the label is the only
           thing here that can be spared. The `aria-label` carries the name through regardless, so
           nothing is lost for anyone reading it that way. */}
-      <span className="text-metadataMedium leading-none sm:hidden">Debates</span>
+      <span className="text-browseMenu font-normal not-italic sm:hidden">Debate</span>
       {requestCount > 0 ? <span className="text-metadataMedium leading-none">{requestCount}</span> : null}
     </button>
   );

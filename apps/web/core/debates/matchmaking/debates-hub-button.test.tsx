@@ -41,14 +41,14 @@ afterEach(cleanup);
 describe('DebatesHubButton', () => {
   it('shows for a signed-in user', () => {
     renderButton();
-    expect(screen.getByRole('button', { name: 'Debates' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Debate' })).toBeInTheDocument();
   });
 
   it('stays hidden for a signed-out visitor', () => {
     mocks.authenticated = false;
     renderButton();
     // The hub is the only opener for the panel, and every tab behind it needs an identity.
-    expect(screen.queryByRole('button', { name: /Debates/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Debate/ })).not.toBeInTheDocument();
   });
 
   it('stays hidden until Privy has restored the session', () => {
@@ -58,36 +58,40 @@ describe('DebatesHubButton', () => {
     mocks.authenticated = false;
     renderButton();
 
-    expect(screen.queryByRole('button', { name: /Debates/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Debate/ })).not.toBeInTheDocument();
   });
 
   it('keeps announcing the pending request count while signed in', () => {
     mocks.incomingRequestCount = 3;
     renderButton();
 
-    expect(screen.getByRole('button', { name: 'Debates, 3 pending requests' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Debate, 3 pending requests' })).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
   });
 
   /**
-   * GEO-2689. A megaphone on its own does not say "debates", and the button had nothing else to go
-   * on. The word has to agree with what the button already answers to — the panel it opens is
-   * headed "Debates" and so is its own accessible name, and a control that shows one name while
-   * answering to another is worse than one showing none.
+   * GEO-2689. A megaphone on its own does not say "debate", and the button had nothing else to go
+   * on. Whatever the word is, the button has to answer to it: a control that shows one name while
+   * answering to another is worse than one showing none, so these pin the visible label and the
+   * accessible name to each other rather than to a particular spelling.
    */
   describe('label', () => {
     it('says what the button is for', () => {
       renderButton();
 
-      expect(screen.getByText('Debates')).toBeInTheDocument();
+      expect(screen.getByText('Debate')).toBeInTheDocument();
     });
 
     it('shows the same word the button answers to', () => {
       renderButton();
 
-      const button = screen.getByRole('button', { name: 'Debates' });
+      const button = screen.getByRole('button');
+      const visible = button.querySelector('span')?.textContent ?? '';
 
-      expect(button).toHaveTextContent('Debates');
+      // Read back rather than asserted twice over: the point is that the two agree, whichever word
+      // is chosen, so this fails if either is edited without the other.
+      expect(visible).not.toBe('');
+      expect(button).toHaveAccessibleName(visible);
     });
 
     // The count is the reason the accessible name is written by hand, and it has to keep winning
@@ -96,9 +100,17 @@ describe('DebatesHubButton', () => {
       mocks.incomingRequestCount = 2;
       renderButton();
 
-      expect(screen.getByRole('button', { name: 'Debates, 2 pending requests' })).toBeInTheDocument();
-      expect(screen.getByText('Debates')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Debate, 2 pending requests' })).toBeInTheDocument();
+      expect(screen.getByText('Debate')).toBeInTheDocument();
       expect(screen.getByText('2')).toBeInTheDocument();
+    });
+
+    // Set in the browse sidebar's menu type so the two read as the same kind of navigation text,
+    // rather than the navbar's heavier metadata weight.
+    it('is set in the browse menu type', () => {
+      renderButton();
+
+      expect(screen.getByText('Debate')).toHaveClass('text-browseMenu');
     });
 
     // Phones have the least room in the navbar, so the label is dropped there — but only the
@@ -106,8 +118,8 @@ describe('DebatesHubButton', () => {
     it('drops the visible label on phones without dropping the name', () => {
       renderButton();
 
-      expect(screen.getByText('Debates')).toHaveClass('sm:hidden');
-      expect(screen.getByRole('button', { name: 'Debates' })).toBeInTheDocument();
+      expect(screen.getByText('Debate')).toHaveClass('sm:hidden');
+      expect(screen.getByRole('button', { name: 'Debate' })).toBeInTheDocument();
     });
   });
 
