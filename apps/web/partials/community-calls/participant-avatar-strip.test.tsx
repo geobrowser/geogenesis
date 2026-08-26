@@ -2,8 +2,6 @@ import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 
-import { Effect } from 'effect';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ParticipantAvatarStrip } from './participant-avatar-strip';
@@ -85,6 +83,21 @@ describe('ParticipantAvatarStrip avatars', () => {
     renderStrip();
 
     await waitFor(() => expect(mocks.requestedSpaceIds).toHaveBeenCalledWith(['space-42']));
+  });
+
+  it('prefers the graph avatar over the call cid when a participant has both', async () => {
+    // The precedence rule is the whole point of the change, and every other case here
+    // leaves one of the two sources empty — so reversing `avatarFor` would keep them all
+    // green. This is the one that pins the direction.
+    mocks.participants = [participant({ avatarCid: 'cid-from-call' })];
+    mocks.avatarUrlBySpaceId.set('space-1', 'ipfs://graph-avatar');
+
+    const { container } = renderStrip();
+
+    await waitFor(() => expect(images(container)[0]).toHaveAttribute('src'));
+    const src = images(container)[0]?.getAttribute('src') ?? '';
+    expect(src).toContain('graph-avatar');
+    expect(src).not.toContain('cid-from-call');
   });
 
   it('falls back to the call cid when the graph has no avatar for them', async () => {
