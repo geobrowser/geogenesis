@@ -10,7 +10,7 @@ import React from 'react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { BlockDragHandle, makeDropZones, moveTopLevelBlock } from './block-reorder';
+import { BlockDragHandle, getGutterHoveredChildIndex, makeDropZones, moveTopLevelBlock } from './block-reorder';
 
 const editors: Editor[] = [];
 
@@ -61,6 +61,28 @@ describe('moveTopLevelBlock', () => {
     expect(moveTopLevelBlock(editor, 1, 1)).toBe(false);
     expect(moveTopLevelBlock(editor, 1, 2)).toBe(false);
     expect(blockText(editor)).toEqual(['A', 'B', 'C']);
+  });
+});
+
+describe('getGutterHoveredChildIndex', () => {
+  const blocks = [
+    { childIndex: 0, top: 10, bottom: 30, center: 20 },
+    { childIndex: 1, top: 50, bottom: 70, center: 60 },
+  ];
+
+  it('shows the handle when hovering directly left of a block', () => {
+    expect(getGutterHoveredChildIndex(blocks, 60, 20, 100)).toBe(0);
+    expect(getGutterHoveredChildIndex(blocks, 60, 60, 100)).toBe(1);
+  });
+
+  it('keeps the gutter target continuous through the gap between blocks', () => {
+    expect(getGutterHoveredChildIndex(blocks, 60, 39, 100)).toBe(0);
+    expect(getGutterHoveredChildIndex(blocks, 60, 41, 100)).toBe(1);
+  });
+
+  it('ignores pointers outside the left gutter', () => {
+    expect(getGutterHoveredChildIndex(blocks, 51, 20, 100)).toBeNull();
+    expect(getGutterHoveredChildIndex(blocks, 101, 20, 100)).toBeNull();
   });
 });
 

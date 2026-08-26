@@ -33,6 +33,8 @@ type DropZoneLayout = {
   indicatorTop: number;
 };
 
+const GUTTER_HOVER_WIDTH = 48;
+
 type Props = {
   children: React.ReactNode;
   editor: Editor;
@@ -49,6 +51,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     })
   );
   const [blockLayout, setBlockLayout] = React.useState<BlockLayout[]>([]);
+  const blockLayoutRef = React.useRef<BlockLayout[]>([]);
   const [hoveredChildIndex, setHoveredChildIndex] = React.useState<number | null>(null);
   const hoveredChildIndexRef = React.useRef<number | null>(null);
   const [activeChildIndex, setActiveChildIndex] = React.useState<number | null>(null);
@@ -75,6 +78,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       return [{ childIndex, top, bottom, center: top + rect.height / 2 }];
     });
 
+    blockLayoutRef.current = nextLayout;
     setBlockLayout(nextLayout);
   }, [editorWrapperRef]);
 
@@ -100,12 +104,25 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       if (target.closest('[data-block-drag-handle]')) return;
 
       const blockElement = target.closest<HTMLElement>('.ProseMirror > *');
-      if (!blockElement || blockElement.parentElement !== editorElement || !isDraggableBlock(blockElement)) {
+      const hoveredContentIndex =
+        blockElement?.parentElement === editorElement && isDraggableBlock(blockElement)
+          ? Array.from(editorElement.children).indexOf(blockElement)
+          : null;
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const editorRect = editorElement.getBoundingClientRect();
+      const hoveredGutterIndex = getGutterHoveredChildIndex(
+        blockLayoutRef.current,
+        event.clientX - wrapperRect.left,
+        event.clientY - wrapperRect.top,
+        editorRect.left - wrapperRect.left
+      );
+      const childIndex = hoveredContentIndex ?? hoveredGutterIndex;
+
+      if (childIndex === null) {
         updateHoveredChildIndex(null);
         return;
       }
 
-      const childIndex = Array.from(editorElement.children).indexOf(blockElement);
       if (hoveredChildIndexRef.current === childIndex) return;
 
       measureBlocks();
@@ -302,6 +319,27 @@ export function makeDropZones(blocks: BlockLayout[]): DropZoneLayout[] {
       indicatorTop,
     };
   });
+}
+
+/** Finds the block beside a pointer in the editor's left gutter. */
+export function getGutterHoveredChildIndex(
+  blocks: BlockLayout[],
+  pointerX: number,
+  pointerY: number,
+  editorLeft: number
+) {
+  if (pointerX < editorLeft - GUTTER_HOVER_WIDTH || pointerX > editorLeft) return null;
+
+  const hoveredBlock = blocks.find((block, index) => {
+    const previous = blocks[index - 1];
+    const next = blocks[index + 1];
+    const hoverTop = previous ? (previous.bottom + block.top) / 2 : block.top;
+    const hoverBottom = next ? (block.bottom + next.top) / 2 : block.bottom;
+
+    return pointerY >= hoverTop && pointerY <= hoverBottom;
+  });
+
+  return hoveredBlock?.childIndex ?? null;
 }
 
 /** Moves one top-level document node to a boundary in the original document. */
