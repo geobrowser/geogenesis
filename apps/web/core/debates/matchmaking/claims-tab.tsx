@@ -10,7 +10,7 @@ import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { Input } from '~/design-system/input';
 
 import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
-import { eligibleClaimSpaceIds, isClaimSpaceAllowed, keepSelectableSpace } from '../claim-space-allowlist';
+import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
@@ -151,11 +151,25 @@ export function ClaimsTab() {
 
   const { facetsSettled } = claimsQuery;
 
-  // The same for the space itself: it can be picked while the gates are still passing everything,
-  // and left selected it keeps going out on every request while its rows are dropped locally.
+  // The space is let go on the condition that actually means "not yours to pick" — the gates
+  // stopped admitting it — rather than on its absence from the facet.
+  //
+  // Absence means something else here. `space_facets` is narrowed by the *topic* selection, the
+  // mirror of the topic facet being narrowed by the space one: each dimension is counted without
+  // narrowing itself, which is what makes a facet count answer "how many of what I have chosen so
+  // far are in here". So a space drops out of it whenever the current combination is empty — a
+  // topic with nothing in that space, or a search that matches nothing there. That is a reason to
+  // show an empty list, not to revise an input the viewer chose. Clearing on it would discard the
+  // space the moment a topic or a search emptied the pair, silently and without their asking.
+  //
+  // The topic goes the other way for the same reason, not despite it: it is the narrower of the
+  // two, and a topic the space no longer carries is genuinely gone from the menu that offered it.
+  // Held while the lookups are still out: until they land the gates pass everything, so a space
+  // cleared against them would be cleared on nothing.
   React.useEffect(() => {
-    setSpaceId(current => keepSelectableSpace(current, facetSpaceIds, facetsSettled));
-  }, [facetSpaceIds, facetsSettled]);
+    if (spacesPending) return;
+    setSpaceId(current => (current !== null && !spaceShowsClaims(current) ? null : current));
+  }, [spaceShowsClaims, spacesPending]);
 
   // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
   // no longer in the menu to unpick.

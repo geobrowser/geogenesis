@@ -473,16 +473,27 @@ export type MatchmakingFacetCount = {
   count: number;
 };
 
+/**
+ * The two menus, counted over the whole candidate set rather than the page being returned.
+ *
+ * Each dimension is narrowed by *the other* and never by itself — standard faceted counting, and
+ * what makes a count answer "how many of the claims matching everything else I have chosen are in
+ * here". Picking a space therefore doesn't collapse the space menu, and picking a topic doesn't
+ * collapse the topic menu, but each does narrow its counterpart.
+ *
+ * The half that is easy to miss is that this cuts both ways: a space can disappear from
+ * `space_facets` because the selected *topic* has nothing in it. That is "this combination is
+ * empty", not "this space is no longer yours to pick", and the two must not be confused — see the
+ * space effect in `claims-tab.tsx`.
+ */
 export type MatchmakingFacets = {
-  /** Superseded by `space_facets`; geo-chat keeps both populated so clients can move at their own pace. */
+  /** Superseded by `space_facets`, and derived from it — so it inherits the topic narrowing too. */
   space_ids: string[];
   /** Superseded by `topic_facets`. Empty on every response until GEO-2659 made it real. */
   topics: MatchmakingTopic[];
-  /** Count descending. Deliberately *not* narrowed by the space filter: picking a space must not
-   *  collapse the menu it was picked from. */
+  /** Count descending. Narrowed by the topic filter, not by the space filter. */
   space_facets: MatchmakingFacetCount[];
-  /** Count descending, and narrowed by the space filter — "how many of the claims I'm looking at
-   *  carry this topic". This is what makes the topic menu complete regardless of paging. */
+  /** Count descending. Narrowed by the space filter, not by the topic filter. */
   topic_facets: MatchmakingFacetCount[];
 };
 

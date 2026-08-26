@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 
 import type { ReactElement } from 'react';
 
@@ -93,10 +93,18 @@ vi.mock('./hooks', () => ({
     // its menus describe both hang off that.
     const inSpace = mocks.claims.filter(entry => !spaceId || entry.claim.space_id === spaceId);
     const claims = inSpace.filter(entry => !topicId || entry.topics.some(topic => topic.id === topicId));
-    // The topic facet is narrowed by the space filter but *not* by the topic filter — picking a
-    // topic must not collapse the menu it came from. Computed over the whole space-filtered set
-    // rather than the returned page: that is the point of a server-side facet.
+    // Each dimension is counted without narrowing itself, and *is* narrowed by the other — what
+    // `MATCHMAKING_CLAIMS_FACETS_QUERY` does, and what a facet count is for. So the topic facet is
+    // cut by the space filter and the space facet by the topic filter; neither is cut by its own.
+    // Computed over the whole filtered set rather than the returned page, which is the point of a
+    // server-side facet.
     const topicFacets = [...new Map(inSpace.flatMap(entry => entry.topics).map(topic => [topic.id, topic])).values()];
+    const spacesCarryingTopic = new Set(
+      mocks.claims
+        .filter(entry => !topicId || entry.topics.some(topic => topic.id === topicId))
+        .map(entry => entry.claim.space_id)
+    );
+    const spaceFacetIds = topicId ? mocks.facetSpaceIds.filter(id => spacesCarryingTopic.has(id)) : mocks.facetSpaceIds;
     // Facets are computed over the whole filtered set while the page is a slice of it — the
     // shape that matters here, since the menu must not depend on how far the viewer has scrolled.
     const page = mocks.pageSize === null ? claims : claims.slice(0, mocks.pageSize);
@@ -106,9 +114,9 @@ vi.mock('./hooks', () => ({
           claims: page,
           next_cursor: null,
           facets: {
-            space_ids: mocks.facetSpaceIds,
+            space_ids: spaceFacetIds,
             topics: topicFacets,
-            space_facets: mocks.facetSpaceIds.map(id => ({ id, name: null, count: 1 })),
+            space_facets: spaceFacetIds.map(id => ({ id, name: null, count: 1 })),
             topic_facets: topicFacets.map(topic => ({ ...topic, count: 1 })),
           },
         },
@@ -177,7 +185,12 @@ vi.mock('~/core/sync/use-store', () => ({
 
 function render(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  const wrap = (node: ReactElement) => <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>;
+  const view = rtlRender(wrap(ui));
+  // Testing Library's own `rerender` replaces the whole tree with what it is handed, which drops
+  // the provider — so a re-render of the same component crashes on a missing QueryClient rather
+  // than showing what changed. Re-wrapped here so a test can move the world and render again.
+  return { ...view, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
 }
 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
@@ -725,7 +738,7 @@ describe('topic menu', () => {
   // Disabling the query is not the same as having no data: it keeps the previous key's pages,
   // facets included. Narrowing from a populated scope to an empty one therefore left the last
   // scope's topic menu on screen over a list this tab had emptied.
-  it("drops the previous scope's menu when the eligible set narrows to nothing", () => {
+  it("drops the previous scope's menu when the eligible set narrows to nothing", async () => {
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI])];
     const view = render(<ClaimsTab />);
@@ -737,7 +750,8 @@ describe('topic menu', () => {
     mocks.spaceAllowlist = new Set();
     view.rerender(<ClaimsTab />);
 
-    expect(screen.queryByText('Models are getting cheaper')).toBeNull();
+    // The list animates its rows out, so the card outlives the render that dropped it.
+    await waitFor(() => expect(screen.queryByText('Models are getting cheaper')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
     expect(screen.queryByRole('button', { name: 'AI' })).toBeNull();
   });
@@ -781,18 +795,44 @@ describe('topic menu', () => {
     expect(screen.queryByRole('button', { name: 'Health' })).toBeNull();
   });
 
-  it('lets go of a selected topic the picked space has no claims for', () => {
-    render(<ClaimsTab />);
-
-    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Health' }));
-    expect(screen.getByRole('button', { name: /Health/ })).toBeInTheDocument();
+  // Not reachable by picking one and then the other — each menu is narrowed by the other, so a
+  // topic with no claims in the picked space is never on offer to pick. It is reachable by the
+  // corpus moving underneath a selection that was valid when it was made.
+  it('lets go of a selected topic once the space stops having claims for it', () => {
+    const view = render(<ClaimsTab />);
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI' }));
+    expect(screen.getByRole('button', { name: /AI/ })).toBeInTheDocument();
 
-    // Left held, it would filter the list from a chip that is no longer in the menu to unpick.
+    // The one AI claim in Crypto is answered, published elsewhere, or otherwise leaves the
+    // candidate set. Crypto now carries no AI claim, so the topic facet drops it.
+    mocks.claims = [claim('claim-health', 'Sleep is underrated', false, false, OTHER_SPACE_ID, [HEALTH])];
+    view.rerender(<ClaimsTab />);
+
+    // Left held, it would filter the list from a chip no longer in the menu to unpick.
     expect(screen.getByRole('button', { name: /Any topic/ })).toBeInTheDocument();
-    expect(screen.getByText('Models are getting cheaper')).toBeInTheDocument();
+  });
+
+  // The other dimension, which must behave differently. `space_facets` is narrowed by the topic
+  // selection — each dimension is counted without narrowing itself, so it is narrowed by the other
+  // — which means a space can drop out of the facet merely because *this combination* is empty.
+  // That is a reason to show an empty list, not to revise a choice the viewer made. Clearing it
+  // would silently discard the space the moment a topic, or a search, emptied the pair.
+  it('keeps a selected space when the current combination has nothing in it', () => {
+    const view = render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI' }));
+
+    // The AI claim moves out of Crypto, so the AI-narrowed space facet no longer names it.
+    mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, OTHER_SPACE_ID, [AI])];
+    view.rerender(<ClaimsTab />);
+
+    expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument();
   });
 });
