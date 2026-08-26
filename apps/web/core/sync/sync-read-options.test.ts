@@ -1,12 +1,15 @@
 import { QueryClient } from '@tanstack/react-query';
 
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getAllEntities, getBatchEntities } from '../io/queries';
 import type { Entity } from '../types';
 import { SyncEngine } from './engine';
-import { E, SYNC_READ_OPTIONS } from './orm';
+import { E, syncFetchQuery } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues, syncedEntities } from './store';
 import { GeoEventStream } from './stream';
 
@@ -41,10 +44,17 @@ function makeEntity(id: string, name: string): Entity {
  * The sync layer must not inherit it. A sync answered from cache is one that returns pre-write
  * data, and nothing renders differently when that happens.
  *
- * The first version of this file asserted the constant's value and that spreading it into
- * `defaultQueryOptions` won — which is testing the thing that was written rather than the thing
- * that matters. Deleting `...SYNC_READ_OPTIONS` from `orm.ts` or `engine.ts` left every one of
- * those tests green. These drive the real reads instead.
+ * Two earlier versions of this file were vacuous, each in a way that looked covered:
+ *
+ * 1. They asserted the constant's value and that spreading it into `defaultQueryOptions` won —
+ *    the behaviour of the thing written, not of the code using it. Deleting the spread from the
+ *    production files left everything green.
+ * 2. They then drove two real reads, which protected exactly those two. Six other spreads were
+ *    still free to be dropped, and a *new* read added later would inherit the default by saying
+ *    nothing at all.
+ *
+ * The opt-out is now a helper rather than a constant, so it cannot be dropped call site by call
+ * site, and the last test below fails if a raw `fetchQuery` ever reappears in this layer.
  */
 describe('sync reads opt out of the global staleTime', () => {
   let store: GeoStore;
@@ -56,13 +66,22 @@ describe('sync reads opt out of the global staleTime', () => {
     reactiveRelations.set([]);
     syncedEntities.clear();
     store = new GeoStore(mockStream);
-    // A client configured the way the app configures it — this is what the sync layer must ignore.
+    // A client configured the way the app configures it — what the sync layer must ignore.
     cache = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000 } } });
+  });
+
+  it('ignores the client default, and a caller that tries to reintroduce it', async () => {
+    const queryFn = vi.fn(async () => 'fresh');
+    cache.setQueryData(['probe'], 'STALE');
+
+    // `staleTime` is applied last inside the helper, so this override does not take.
+    await syncFetchQuery(cache, { queryKey: ['probe'], queryFn, staleTime: 60_000 } as never);
+
+    expect(queryFn).toHaveBeenCalled();
   });
 
   it('goes to the network for a batched id read even when the cache holds a fresh entry', async () => {
     const ids = ['entity-a', 'entity-b'];
-    // Seed the exact key the batched read uses, with data that must NOT be served.
     cache.setQueryData(['network', 'entities', ids, undefined], [makeEntity('entity-a', 'STALE')]);
 
     vi.mocked(getBatchEntities).mockImplementation((batchIds: string[]) =>
@@ -71,9 +90,7 @@ describe('sync reads opt out of the global staleTime', () => {
 
     const result = await E.syncMany({ store, cache, where: { id: { in: ids } }, first: ids.length });
 
-    // The request happened at all — this is what a 30s window would have skipped.
     expect(getBatchEntities).toHaveBeenCalled();
-    // And the fresh value is what came back, not the seeded one.
     expect(result.merged.map(e => e.name)).toEqual(['FRESH entity-a', 'FRESH entity-b']);
   });
 
@@ -82,8 +99,6 @@ describe('sync reads opt out of the global staleTime', () => {
       Effect.succeed({ entities: [makeEntity('entity-c', 'FRESH')], endCursor: null, hasNextPage: false })
     );
 
-    // Two identical reads back to back. Under an inherited 30s window the second is served from
-    // cache and never calls the network.
     await E.syncMany({ store, cache, where: {}, first: 9 });
     const callsAfterFirst = vi.mocked(getAllEntities).mock.calls.length;
     await E.syncMany({ store, cache, where: {}, first: 9 });
@@ -91,28 +106,9 @@ describe('sync reads opt out of the global staleTime', () => {
     expect(vi.mocked(getAllEntities).mock.calls.length).toBeGreaterThan(callsAfterFirst);
   });
 
-  it('passes staleTime 0 on every sync-layer fetchQuery', async () => {
-    // Covers the reads that are awkward to drive end to end — notably the engine's batch sync,
-    // which sits behind a private queue. Asserting on the options each call actually receives
-    // fails the moment a `...SYNC_READ_OPTIONS` is dropped anywhere.
-    const fetchQuerySpy = vi.spyOn(cache, 'fetchQuery');
-    vi.mocked(getBatchEntities).mockImplementation((batchIds: string[]) =>
-      Effect.succeed(batchIds.map(id => makeEntity(id, id)))
-    );
-
-    await E.syncMany({ store, cache, where: { id: { in: ['entity-a'] } }, first: 1 });
-
-    expect(fetchQuerySpy).toHaveBeenCalled();
-    for (const [options] of fetchQuerySpy.mock.calls) {
-      expect(options.staleTime, `fetchQuery for ${JSON.stringify(options.queryKey)}`).toBe(0);
-    }
-  });
-
-
   it('goes to the network for the engine batch sync even when the cache holds a fresh entry', async () => {
     // The engine's batch sync sits behind a private queue, so it is driven the way production
     // drives it: construct the engine, fire the event it subscribes to, let the batcher flush.
-    // Without this, dropping `...SYNC_READ_OPTIONS` from engine.ts leaves every other test green.
     const engineStream = { on: vi.fn(), emit: vi.fn() } as unknown as GeoEventStream;
     new SyncEngine(engineStream, cache, store);
 
@@ -122,21 +118,35 @@ describe('sync reads opt out of the global staleTime', () => {
     // Guard against a silent pass if the engine stops subscribing.
     expect(hydrate).toBeTypeOf('function');
 
-    // Seed the exact key the batch sync uses, with data that must NOT be served.
     cache.setQueryData(['entities-batch-sync', ['entity-a']], { 'entity-a': makeEntity('entity-a', 'STALE') });
-
     vi.mocked(getBatchEntities).mockImplementation((batchIds: string[]) =>
       Effect.succeed(batchIds.map(id => makeEntity(id, `FRESH ${id}`)))
     );
 
     hydrate({ type: GeoEventStream.HYDRATE, entities: ['entity-a'] });
-    // The batcher waits 100ms before flushing.
     await new Promise(resolve => setTimeout(resolve, 250));
 
     expect(getBatchEntities).toHaveBeenCalled();
   });
 
-  it('exports the options the sync layer spreads', () => {
-    expect(SYNC_READ_OPTIONS.staleTime).toBe(0);
+  it('leaves no read in the sync layer that could inherit the default', () => {
+    // The one that covers the paths the tests above don't reach, and every path added later.
+    // Driving each read individually protects only the reads someone thought to drive; this fails
+    // the moment a raw `fetchQuery` appears anywhere in the layer, including in a new file.
+    const dir = __dirname;
+    const offences: string[] = [];
+
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile() || !/\.tsx?$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name)) continue;
+      const contents = readFileSync(path.join(dir, entry.name), 'utf8');
+      contents.split('\n').forEach((line, index) => {
+        if (!/\.fetchQuery\(/.test(line)) return;
+        // The single raw call inside the helper is the one that is meant to be there.
+        if (/staleTime: 0/.test(line)) return;
+        offences.push(`${entry.name}:${index + 1} — ${line.trim()}`);
+      });
+    }
+
+    expect(offences).toEqual([]);
   });
 });

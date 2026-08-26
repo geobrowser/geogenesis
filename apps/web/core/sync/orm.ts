@@ -1,5 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { QueryClient } from '@tanstack/react-query';
+import { type FetchQueryOptions, QueryClient } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
@@ -34,23 +34,33 @@ import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore, dedupeRelationsByKey, relationKey } from './store';
 
 /**
- * Options for the sync layer's imperative reads.
+ * Every read the sync layer makes goes through here.
  *
  * `staleTime` on the app's `QueryClient` exists for `useQuery` — it decides whether a *mount* or a
  * *focus* refetches. The same setting also governs `fetchQuery`, where it decides something else
  * entirely: whether an imperative "go and get this" issues a request at all. A cached key inside
  * the window returns without touching the network.
  *
- * That is the wrong default here. Every call below is a deliberate read, usually to reconcile
- * local state against the indexer, and one silently answered from cache is a sync that returns
- * pre-write data — wrong in a way nothing renders differently for. So the sync layer opts out and
- * says what it means locally, rather than inheriting a number chosen for a different question.
+ * That is the wrong default here. Every call routed through this helper is a deliberate read,
+ * usually to reconcile local state against the indexer, and one silently answered from cache is a
+ * sync that returns pre-write data — wrong in a way nothing renders differently for.
+ *
+ * A helper rather than a spread-in constant on purpose. Spread at each call site, the opt-out is
+ * eight separate things that can be dropped one at a time, and a *new* read added later inherits
+ * the global default by saying nothing. Here there is one place to get it right, `staleTime` is
+ * applied last so a caller cannot reintroduce the window by accident, and a test can assert no
+ * raw `fetchQuery` remains in this layer.
  *
  * The cost is real and accepted: an entity synced several times during one page load makes several
- * requests. Collapsing those belongs to whatever stops the sync being triggered independently that
- * many times, not to a cache window wide enough to hide a stale read.
+ * requests. Collapsing those belongs to whatever stops the sync being triggered that many times,
+ * not to a cache window wide enough to hide a stale read.
  */
-export const SYNC_READ_OPTIONS = { staleTime: 0 } as const;
+export function syncFetchQuery<TData>(
+  cache: QueryClient,
+  options: Omit<FetchQueryOptions<TData>, 'staleTime'>
+): Promise<TData> {
+  return cache.fetchQuery({ ...options, staleTime: 0 } as FetchQueryOptions<TData>);
+}
 
 export function resolveSearchSpaces(
   spaces: Array<string | SpaceEntity>,
@@ -264,8 +274,7 @@ export class E {
   }): Promise<{ merged: Entity | null; remote: Entity | null }> {
     if (id === '') return { merged: null, remote: null };
 
-    const cachedEntity = await cache.fetchQuery({
-      ...SYNC_READ_OPTIONS,
+    const cachedEntity = await syncFetchQuery(cache, {
       queryKey: ['network', 'entity', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getEntity(id, spaceId, signal)),
     });
@@ -287,8 +296,7 @@ export class E {
   }): Promise<Entity | null> {
     if (id === '') return null;
 
-    const cachedEntity = await cache.fetchQuery({
-      ...SYNC_READ_OPTIONS,
+    const cachedEntity = await syncFetchQuery(cache, {
       queryKey: ['network', 'relation', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getRelation(id, spaceId, signal)),
     });
@@ -369,8 +377,7 @@ export class E {
         await Promise.all(
           Array.from({ length: Math.ceil(entityIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
             const batchIds = entityIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
-            return cache.fetchQuery({
-              ...SYNC_READ_OPTIONS,
+            return syncFetchQuery(cache, {
               queryKey: ['network', 'entities', batchIds, spaceId],
               queryFn: ({ signal }) => Effect.runPromise(getBatchEntities(batchIds, spaceId, signal)),
             });
@@ -495,8 +502,7 @@ export class E {
     const spaceIdsFilter = where.space?.id?.equals ? where.space.id.equals : undefined;
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
-    const page = await cache.fetchQuery({
-      ...SYNC_READ_OPTIONS,
+    const page = await syncFetchQuery(cache, {
       queryKey: [
         'network',
         'entities',
@@ -539,8 +545,7 @@ export class E {
     const mergedIds = [...dedupedRemoteIds, ...localOnlyIds];
     const remoteEntityDetails =
       dedupedRemoteIds.length > 0
-        ? await cache.fetchQuery({
-            ...SYNC_READ_OPTIONS,
+        ? await syncFetchQuery(cache, {
             queryKey: ['network', 'entities', 'fuzzy', 'entity-spaces', dedupedRemoteIds],
             queryFn: ({ signal: innerSignal }) =>
               Effect.runPromise(getBatchEntitySpaces(dedupedRemoteIds, signal ?? innerSignal)),
@@ -565,14 +570,12 @@ export class E {
     const typeIds = [...new Set(entities.flatMap(e => e.types.map(t => t.id)))];
 
     const [spaces, typeNames] = await Promise.all([
-      cache.fetchQuery({
-        ...SYNC_READ_OPTIONS,
+      syncFetchQuery(cache, {
         queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
         queryFn: ({ signal: innerSignal }) => Effect.runPromise(getSpaces({ spaceIds }, signal ?? innerSignal)),
       }),
       typeIds.length > 0
-        ? cache.fetchQuery({
-            ...SYNC_READ_OPTIONS,
+        ? syncFetchQuery(cache, {
             queryKey: ['network', 'entities', 'fuzzy', 'type-names', typeIds],
             queryFn: ({ signal: innerSignal }) => Effect.runPromise(getEntityNames(typeIds, signal ?? innerSignal)),
           })
