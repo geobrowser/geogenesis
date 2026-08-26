@@ -221,6 +221,10 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     >
       {children}
 
+      {enabled && activeChildIndex === null && blockLayout.length > 0 ? (
+        <BlockGutterHoverArea blocks={blockLayout} editorLeft={editorLeft} onClick={() => editor.commands.focus()} />
+      ) : null}
+
       {enabled
         ? blockLayout.map(layout => (
             <BlockDragHandle
@@ -254,6 +258,35 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
         ) : null}
       </DragOverlay>
     </DndContext>
+  );
+}
+
+export function BlockGutterHoverArea({
+  blocks,
+  editorLeft,
+  onClick,
+}: {
+  blocks: BlockLayout[];
+  editorLeft: number;
+  onClick?: React.MouseEventHandler<HTMLDivElement>;
+}) {
+  const firstBlock = blocks[0];
+  const lastBlock = blocks[blocks.length - 1];
+  if (!firstBlock || !lastBlock) return null;
+
+  return (
+    <div
+      data-block-drag-gutter
+      aria-hidden
+      className="pointer-events-auto absolute z-20"
+      onClick={onClick}
+      style={{
+        top: firstBlock.top,
+        left: editorLeft - GUTTER_HOVER_WIDTH,
+        width: GUTTER_HOVER_WIDTH,
+        height: Math.max(1, lastBlock.bottom - firstBlock.top),
+      }}
+    />
   );
 }
 
