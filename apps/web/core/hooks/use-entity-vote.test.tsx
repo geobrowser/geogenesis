@@ -9,6 +9,7 @@ import { userEntityVotesQueryKey, votedEntityIdsPendingQueryKey } from '~/core/h
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 
 import {
+  responseIndexingRetryDelayMs,
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
   useEntityResponseIndexingState,
@@ -697,3 +698,42 @@ function createHarness() {
     ),
   };
 }
+
+/**
+ * GEO-2687. This re-check is on the critical path of a two-person interaction: in the rematch
+ * picker the opponent only learns about a position once this client notices it is indexed and
+ * tells geo-chat, which then emits `debate.claims_changed`. It used to be a flat 10s, which
+ * quantised the opponent's view to 10s steps on top of a write measuring p50 9.9s / p95 48.6s.
+ */
+describe('responseIndexingRetryDelayMs', () => {
+  it('starts fast, so indexing that lands a second later is not charged a full interval', () => {
+    expect(responseIndexingRetryDelayMs(0)).toBe(1_000);
+  });
+
+  it('backs off, so a genuinely slow index does not become a tight poll', () => {
+    expect(responseIndexingRetryDelayMs(1)).toBe(2_000);
+    expect(responseIndexingRetryDelayMs(2)).toBe(4_000);
+    expect(responseIndexingRetryDelayMs(3)).toBe(8_000);
+  });
+
+  it('caps at the old flat interval, so it is never slower than what it replaced', () => {
+    expect(responseIndexingRetryDelayMs(4)).toBe(10_000);
+    expect(responseIndexingRetryDelayMs(50)).toBe(10_000);
+    // 2 ** 50 * 1000 overflows into a number far above the cap; the clamp has to hold there too.
+    expect(Number.isFinite(responseIndexingRetryDelayMs(2000))).toBe(true);
+    expect(responseIndexingRetryDelayMs(2000)).toBe(10_000);
+  });
+
+  it('is monotonic and never below the base', () => {
+    let previous = 0;
+    for (let attempt = 0; attempt <= 12; attempt += 1) {
+      const delay = responseIndexingRetryDelayMs(attempt);
+      expect(delay).toBeGreaterThanOrEqual(Math.max(previous, 1_000));
+      previous = delay;
+    }
+  });
+
+  it('treats a negative attempt as the first one rather than returning a sub-base delay', () => {
+    expect(responseIndexingRetryDelayMs(-1)).toBe(1_000);
+  });
+});
