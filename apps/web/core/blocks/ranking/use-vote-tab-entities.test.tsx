@@ -201,6 +201,47 @@ describe('useVoteTabEntities', () => {
     expect(mocks.fetchNextVotedIdsPage).toHaveBeenCalledTimes(1);
   });
 
+  // The ids already survive a tab switch; the hydrated entries have to as well,
+  // or coming back to a tab re-walks every page — and because the votes query is
+  // cached by then, nothing reports loading while it does.
+  it('keeps hydrated pages when the viewer leaves a tab and comes back', () => {
+    mocks.idPages = [[hex(FIRST), hex(SECOND)], [hex(THIRD)]];
+    const { result, rerender } = renderHook(({ direction }) => useVoteTabEntities(direction), {
+      initialProps: { direction: 'up' as 'up' | 'down' | null },
+    });
+
+    expect(result.current.orderedIds).toEqual([FIRST, SECOND, THIRD]);
+
+    // Global: the hook is disabled and the tab holds nothing.
+    rerender({ direction: null });
+    expect(result.current.orderedIds).toEqual([]);
+
+    const callsBeforeReturn = mocks.queryEntitiesCalls.length;
+    rerender({ direction: 'up' });
+
+    expect(result.current.orderedIds).toEqual([FIRST, SECOND, THIRD]);
+    expect(result.current.isLoading).toBe(false);
+
+    // Nothing re-fetches page 0 — the accumulation was still there.
+    const callsAfterReturn = mocks.queryEntitiesCalls.slice(callsBeforeReturn) as QueryEntitiesArgs[];
+    expect(callsAfterReturn.some(call => call.where.id?.in?.includes(hex(FIRST)))).toBe(false);
+  });
+
+  it('keeps each direction accumulated separately', () => {
+    mocks.idPages = [[hex(FIRST)]];
+    const { result, rerender } = renderHook(({ direction }) => useVoteTabEntities(direction), {
+      initialProps: { direction: 'up' as 'up' | 'down' | null },
+    });
+
+    expect(result.current.orderedIds).toEqual([FIRST]);
+
+    // The other direction is a different list, so its entries must not leak in.
+    mocks.idPages = [[hex(SECOND)]];
+    rerender({ direction: 'down' });
+
+    expect(result.current.orderedIds).toEqual([SECOND]);
+  });
+
   it('retries both the voted ids and the entity hydration', () => {
     mocks.idPages = [[hex(FIRST)]];
     const { result } = renderHook(() => useVoteTabEntities('up'));

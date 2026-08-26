@@ -28,6 +28,19 @@ import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
  * until the tab or filter resets. Rows shared with the global browse list stay
  * live through the caller's own entries map.
  */
+type VoteTabHydration = {
+  entries: RowPage<RankingEntryDisplay>[];
+  /**
+   * The ids each page was hydrated from. Tracking the contents rather than just
+   * the page number is what lets a page whose ids changed under it — a restored
+   * vote landing mid-list, or a page pre-marked empty before the cached ids
+   * arrived — be recognised as stale and fetched again.
+   */
+  signatures: Record<number, string>;
+};
+
+const EMPTY_VOTE_TAB_HYDRATION: VoteTabHydration = { entries: [], signatures: {} };
+
 export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) {
   const { filterState, filterMode, spaceId } = useDataBlock();
   const blockWhere = React.useMemo(() => filterStateToWhere(filterState, filterMode), [filterState, filterMode]);
@@ -36,19 +49,15 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
   const { ids, idPages, voteKindById, isLoading, hasNextPage, isFetchingNextPage, isError, refetch, fetchNextPage } =
     useUserVotedEntityIds(direction ?? 'up', enabled);
 
-  const [entryPages, setEntryPages] = React.useState<RowPage<RankingEntryDisplay>[]>([]);
-  // The ids each page was hydrated from. Tracking the contents rather than just
-  // the page number is what lets a page whose ids changed under it — a restored
-  // vote landing mid-list, or a page pre-marked empty before the cached ids
-  // arrived — be recognised as stale and fetched again.
-  const [hydratedSignatures, setHydratedSignatures] = React.useState<Record<number, string>>({});
+  // Kept per list rather than wiped when the direction changes: a tab switch
+  // would otherwise throw away every hydrated page, and since the votes query is
+  // cached by then nothing reports loading — the tab renders as empty and then
+  // regrows a page per effect flush. The ids survive a switch already
+  // (`fetchedPagesByList`); this is the display half of the same idea.
+  const [hydrationByList, setHydrationByList] = React.useState<Record<string, VoteTabHydration>>({});
 
-  const resetKey = React.useMemo(() => JSON.stringify({ direction, blockWhere }), [direction, blockWhere]);
-
-  React.useEffect(() => {
-    setEntryPages([]);
-    setHydratedSignatures({});
-  }, [resetKey]);
+  const listKey = React.useMemo(() => JSON.stringify({ direction, blockWhere }), [direction, blockWhere]);
+  const { entries: entryPages, signatures: hydratedSignatures } = hydrationByList[listKey] ?? EMPTY_VOTE_TAB_HYDRATION;
 
   // Hydrate the earliest page whose ids aren't the ones we accumulated. Pages
   // usually arrive one at a time, but a cached revisit delivers several at once —
@@ -100,10 +109,17 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
   React.useEffect(() => {
     if (!enabled) return;
     const commit = (entries: RankingEntryDisplay[]) => {
-      setEntryPages(prev => upsertRowPage(prev, pageIndex, entries));
-      setHydratedSignatures(prev =>
-        prev[pageIndex] === pageIdsSignature ? prev : { ...prev, [pageIndex]: pageIdsSignature }
-      );
+      setHydrationByList(prev => {
+        const current = prev[listKey] ?? EMPTY_VOTE_TAB_HYDRATION;
+        const nextEntries = upsertRowPage(current.entries, pageIndex, entries);
+        const nextSignatures =
+          current.signatures[pageIndex] === pageIdsSignature
+            ? current.signatures
+            : { ...current.signatures, [pageIndex]: pageIdsSignature };
+
+        if (nextEntries === current.entries && nextSignatures === current.signatures) return prev;
+        return { ...prev, [listKey]: { entries: nextEntries, signatures: nextSignatures } };
+      });
     };
 
     if (pageIds.length === 0) {
@@ -124,7 +140,7 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
     pageIds.length,
     pageIdsSignature,
     pageEntriesSignature,
-    resetKey,
+    listKey,
   ]);
 
   const hasCurrentPage = React.useMemo(() => entryPages.some(page => page.page === pageIndex), [entryPages, pageIndex]);
