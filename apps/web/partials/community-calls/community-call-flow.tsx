@@ -8,7 +8,14 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { getCommunityCallToken, getViewerToken } from '~/core/community-calls/api';
-import { CALL_SCHEMA, LIVE_OCCURRENCE_TICK_MS, buildRoomName, isOccurrenceLive } from '~/core/community-calls/constants';
+import {
+  CALL_SCHEMA,
+  LIVE_OCCURRENCE_TICK_MS,
+  LIVE_WINDOW_AFTER_MS,
+  LIVE_WINDOW_BEFORE_MS,
+  buildRoomName,
+  isOccurrenceLive,
+} from '~/core/community-calls/constants';
 import { findOccurrenceByStart, getOccurrences } from '~/core/community-calls/occurrences';
 import { CommunityCallToken, ViewerToken } from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
@@ -183,7 +190,12 @@ export function CommunityCallFlow({ spaceId, callId }: { spaceId: string; callId
     return (
       <Notice>
         <p className="text-smallTitle text-text">This call isn’t active right now.</p>
-        <p>You can join from 15 minutes before it starts until 30 minutes after it ends.</p>
+        {/* Read off the constants rather than written out — the window moved once already
+            (GEO-2584) and hardcoded copy silently kept quoting the old one. */}
+        <p>
+          You can join from {LIVE_WINDOW_BEFORE_MS / 60_000} minutes before it starts until{' '}
+          {LIVE_WINDOW_AFTER_MS / 60_000} minutes after it ends.
+        </p>
       </Notice>
     );
   }
