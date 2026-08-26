@@ -336,6 +336,32 @@ export function RankingComposeGlobalRanking({
 
   const [browseTab, setBrowseTab] = React.useState<ComposeBrowseTab>('global');
 
+  const tabsId = React.useId();
+  const browseHeadingId = `${tabsId}-browse-heading`;
+  const browsePanelId = `${tabsId}-browse-panel`;
+  const tabButtonId = React.useCallback((tab: ComposeBrowseTab) => `${tabsId}-tab-${tab}`, [tabsId]);
+  const tabButtonRefs = React.useRef<Partial<Record<ComposeBrowseTab, HTMLButtonElement | null>>>({});
+
+  const onTabKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    const isEdgeKey = event.key === 'Home' || event.key === 'End';
+    if (step === 0 && !isEdgeKey) return;
+
+    event.preventDefault();
+    setBrowseTab(current => {
+      const currentIndex = COMPOSE_BROWSE_TABS.findIndex(tab => tab.id === current);
+      const nextIndex = isEdgeKey
+        ? event.key === 'Home'
+          ? 0
+          : COMPOSE_BROWSE_TABS.length - 1
+        : (currentIndex + step + COMPOSE_BROWSE_TABS.length) % COMPOSE_BROWSE_TABS.length;
+      const next = COMPOSE_BROWSE_TABS[nextIndex].id;
+      // Follow focus, so the arrow key both selects and moves the roving stop.
+      tabButtonRefs.current[next]?.focus();
+      return next;
+    });
+  }, []);
+
   const voteDirection = browseTab === 'upvoted' ? 'up' : browseTab === 'downvoted' ? 'down' : null;
   const {
     orderedIds: voteTabIds,
@@ -359,17 +385,48 @@ export function RankingComposeGlobalRanking({
     return map;
   }, [isVoteTab, rankableEntriesById, voteTabEntries]);
 
+  const resolveDisplayName = React.useCallback(
+    (id: string) => entriesById.get(id)?.name ?? searchResultsById.get(id)?.name ?? '',
+    [entriesById, searchResultsById]
+  );
+
+  // The global tab's search is a server fuzzy query whose results *are* the list,
+  // so there is nothing to reuse for an arbitrary voted-id set: match locally
+  // against the names already hydrated.
+  const matchesSearchQuery = React.useCallback(
+    (id: string) => {
+      const query = searchQuery.trim().toLowerCase();
+      if (!query) return true;
+      return resolveDisplayName(id).trim().toLowerCase().includes(query);
+    },
+    [resolveDisplayName, searchQuery]
+  );
+
   const [tabFilteredRankedIds, tabFilteredUnrankedIds] = React.useMemo(() => {
     if (!isVoteTab) return [filteredRankedIds, filteredUnrankedIds];
 
     const ranked: string[] = [];
     const unranked: string[] = [];
     for (const id of voteTabIds) {
+      // The parent filters the global lists before handing them over; a vote tab
+      // builds its own list, so it has to apply the same search and pending
+      // exclusions itself.
+      if (pendingEntityIds.has(id)) continue;
+      if (isSearchActive && !matchesSearchQuery(id)) continue;
       if (globalRankByEntityId.has(id)) ranked.push(id);
       else unranked.push(id);
     }
     return [ranked, unranked];
-  }, [isVoteTab, voteTabIds, globalRankByEntityId, filteredRankedIds, filteredUnrankedIds]);
+  }, [
+    isVoteTab,
+    voteTabIds,
+    globalRankByEntityId,
+    filteredRankedIds,
+    filteredUnrankedIds,
+    isSearchActive,
+    matchesSearchQuery,
+    pendingEntityIds,
+  ]);
 
   const tabShowRankedUnrankedDivider = tabFilteredRankedIds.length > 0 && tabFilteredUnrankedIds.length > 0;
   const tabHasVisibleRankableEntities = tabFilteredRankedIds.length > 0 || tabFilteredUnrankedIds.length > 0;
@@ -562,17 +619,16 @@ export function RankingComposeGlobalRanking({
   // On a vote tab they must also be in the user's voted set.
   const pendingPickIds = React.useMemo(() => {
     if (revealablePendingIds.length === 0) return [];
-    const query = isSearchActive ? searchQuery.trim().toLowerCase() : '';
     let ids = revealablePendingIds;
-    if (query) {
-      ids = ids.filter(id => (rankableEntriesById.get(id)?.name?.toLowerCase() ?? '').includes(query));
+    if (isSearchActive) {
+      ids = ids.filter(matchesSearchQuery);
     }
     if (isVoteTab) {
       const votedIds = new Set(voteTabIds);
       ids = ids.filter(id => votedIds.has(id));
     }
     return ids;
-  }, [revealablePendingIds, isSearchActive, searchQuery, rankableEntriesById, isVoteTab, voteTabIds]);
+  }, [revealablePendingIds, isSearchActive, matchesSearchQuery, isVoteTab, voteTabIds]);
 
   const hasExactNameMatch = React.useMemo(() => {
     if (!isSearchActive) return false;
@@ -675,15 +731,31 @@ export function RankingComposeGlobalRanking({
         style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
         <div className={cx('w-full min-w-0', isDesktop && 'pb-4')}>
+          <h2 id={browseHeadingId} className="sr-only">
+            Browse entities to rank
+          </h2>
           {/* Typography matches the "My ranking" heading; the active tab is picked out
               by colour rather than an underline. */}
-          <div className={cx('flex w-full min-w-0 items-center gap-6 overflow-x-auto', isDesktop && 'h-8')}>
+          <div
+            role="tablist"
+            aria-labelledby={browseHeadingId}
+            onKeyDown={onTabKeyDown}
+            className={cx('flex w-full min-w-0 items-center gap-6 overflow-x-auto', isDesktop && 'h-8')}
+          >
             {COMPOSE_BROWSE_TABS.map(tab => (
               <button
                 key={tab.id}
                 type="button"
+                role="tab"
+                id={tabButtonId(tab.id)}
+                ref={node => {
+                  tabButtonRefs.current[tab.id] = node;
+                }}
                 onClick={() => setBrowseTab(tab.id)}
                 aria-selected={browseTab === tab.id}
+                aria-controls={browsePanelId}
+                // Roving tabindex: the tablist is one stop, arrows move within it.
+                tabIndex={browseTab === tab.id ? 0 : -1}
                 className={cx(
                   'm-0 shrink-0 whitespace-nowrap transition-colors',
                   isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold',
@@ -711,7 +783,14 @@ export function RankingComposeGlobalRanking({
           </div>
         </div>
       </div>
-      <div className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}>
+      {/* One panel shared by all three tabs, so it is labelled by whichever is
+          active rather than being remounted per tab. */}
+      <div
+        id={browsePanelId}
+        role="tabpanel"
+        aria-labelledby={tabButtonId(browseTab)}
+        className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}
+      >
         <div ref={setListContainerRef} className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}>
           {isSearchActive ? (
             showSearchLoadingPlaceholder ? (
