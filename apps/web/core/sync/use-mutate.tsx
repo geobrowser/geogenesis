@@ -18,7 +18,7 @@ import { DataType, Relation, Value } from '../types';
 import { toHexId } from '../utils/hex-id';
 import { extractValueString } from '../utils/value';
 import { saveVideoKeyframe } from '../utils/video/save-keyframe';
-import { canPublishRelationUpdate, getRelationUpdateUnsetFields } from './relation-update';
+import { canPublishRelationUpdate } from './relation-update';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
@@ -489,11 +489,7 @@ function createMutator(store: GeoStore): Mutator {
         // Once a relation exists remotely, preserve its identity and publish
         // supported field changes through the SDK's updateRelation operation.
         const newRelation = produce(changedRelation, draft => {
-          const isRelationUpdate = canPublishRelationUpdate(base, changedRelation);
-          draft.isRelationUpdate = isRelationUpdate;
-          draft.relationUpdateUnsetFields = isRelationUpdate
-            ? getRelationUpdateUnsetFields(base, changedRelation)
-            : undefined;
+          draft.isRelationUpdate = canPublishRelationUpdate(base, changedRelation);
         });
         store.setRelation(newRelation);
       },

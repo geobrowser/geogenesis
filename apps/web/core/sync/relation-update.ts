@@ -14,16 +14,3 @@ export function canPublishRelationUpdate(base: Relation, changed: Relation) {
 
   return existsRemotely && onlyUpdatesSupportedFields;
 }
-
-/** Tracks optional relation fields that must be explicitly cleared remotely. */
-export function getRelationUpdateUnsetFields(base: Relation, changed: Relation) {
-  const unsetFields = new Set(base.relationUpdateUnsetFields ?? []);
-
-  if (changed.toSpaceId) {
-    unsetFields.delete('toSpace');
-  } else if (base.toSpaceId) {
-    unsetFields.add('toSpace');
-  }
-
-  return Array.from(unsetFields);
-}

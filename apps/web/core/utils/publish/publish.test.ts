@@ -94,7 +94,6 @@ type UpdateRelationOp = Op & {
   type: 'updateRelation';
   id: unknown;
   position?: string;
-  unset: string[];
 };
 
 describe('prepareLocalDataForPublishing', () => {
@@ -150,26 +149,6 @@ describe('prepareLocalDataForPublishing', () => {
       expect(updateOp.type).toBe('updateRelation');
       expect(updateOp.position).toBe('position-after-reorder');
       expect(Array.from(updateOp.id as Uint8Array)).toEqual(Array.from(IdUtils.toBytes(relationId) as Uint8Array));
-    });
-
-    it('should explicitly unset a cleared relation to-space reference', () => {
-      const relationId = IdUtils.generate();
-      const relations = [
-        createMockRelation({
-          id: relationId,
-          isRelationUpdate: true,
-          toSpaceId: undefined,
-          relationUpdateUnsetFields: ['toSpace'],
-        }),
-      ];
-
-      const result = prepareLocalDataForPublishing([], relations, 'test-space');
-
-      expect(result).toHaveLength(1);
-      const updateOp = result[0] as UpdateRelationOp;
-      expect(updateOp.type).toBe('updateRelation');
-      expect(updateOp.unset).toEqual(['toSpace']);
-      expect(updateOp).not.toHaveProperty('toSpace');
     });
 
     it('should create deleteRelation operation for deleted relations', async () => {
