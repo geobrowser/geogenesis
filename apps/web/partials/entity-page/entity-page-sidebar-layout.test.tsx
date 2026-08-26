@@ -20,7 +20,11 @@ describe('EntityPageSidebarLayout', () => {
   it('renders the sidebar aside when one is provided', () => {
     render(<EntityPageSidebarLayout sidebar={<StickySideRail>Rail</StickySideRail>}>Body</EntityPageSidebarLayout>);
 
-    expect(screen.getByRole('complementary').textContent).toBe('Rail');
+    const rail = screen.getByRole('complementary');
+
+    expect([...rail.classList]).toContain('w-[var(--width-side-rail)]');
+    expect([...rail.classList]).toContain('shrink-0');
+    expect(rail.textContent).toBe('Rail');
     expect(
       screen
         .getByText('Body')
