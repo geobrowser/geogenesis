@@ -155,6 +155,12 @@ export function CollectionRowActions({
               onCloseAutoFocus={event => {
                 if (openedByHoverRef.current) event.preventDefault();
               }}
+              // Unless focus did end up in here after all — tabbed in, or moved by something we
+              // rendered. Whatever holds it is about to unmount, so from this point the close owes
+              // focus a home and Radix's restoration is the only one on offer.
+              onFocusCapture={() => {
+                openedByHoverRef.current = false;
+              }}
               onFocusOutside={event => {
                 if (isSpacePopoverOpen) event.preventDefault();
               }}
