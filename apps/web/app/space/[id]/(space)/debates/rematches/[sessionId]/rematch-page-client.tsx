@@ -752,69 +752,76 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // scrollable. Anything wider than the viewport — the tab strip, on a phone — panned the whole
     // screen sideways instead of scrolling itself.
     <div className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
-      <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 py-8 sm:px-8">
-        <header className="mb-4 flex items-center justify-between gap-4">
-          <h1 className="sr-only">Rematch {remoteName}</h1>
-          {/* Scrolls on its own: `min-w-0` lets it be narrower than its tabs, `overflow-x-auto`
-              gives those tabs somewhere to go, and `overscroll-x-contain` stops a swipe that
-              reaches the end from chaining into the browser's back gesture. */}
-          <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-5 overflow-x-auto overscroll-x-contain">
-            {hasRecommended || recommendedLoading ? (
-              <TabButton active={tab === 'recommended'} onClick={() => setTab('recommended')}>
-                Recommended
+      <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 pt-8 pb-8 sm:px-8">
+        {/* Pinned together, tabs included. The list pages forever, so both the tab strip and the
+            controls under it were a full scroll away by the time the viewer wanted either — and
+            pinning the filters alone would have left them floating over a tab strip scrolling
+            past behind them. Bleeds to the layer's edges so the page passes under it rather than
+            beside it, and `-mt-8` lets it sit flush at the top once stuck. */}
+        <div className="sticky top-0 z-20 -mx-5 -mt-8 bg-white px-5 pt-8 pb-3 sm:-mx-8 sm:px-8">
+          <header className="mb-4 flex items-center justify-between gap-4">
+            <h1 className="sr-only">Rematch {remoteName}</h1>
+            {/* Scrolls on its own: `min-w-0` lets it be narrower than its tabs, `overflow-x-auto`
+                gives those tabs somewhere to go, and `overscroll-x-contain` stops a swipe that
+                reaches the end from chaining into the browser's back gesture. */}
+            <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-5 overflow-x-auto overscroll-x-contain">
+              {hasRecommended || recommendedLoading ? (
+                <TabButton active={tab === 'recommended'} onClick={() => setTab('recommended')}>
+                  Recommended
+                </TabButton>
+              ) : null}
+              <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
+                <span className="max-w-[10rem] truncate">{firstNamePossessive(remoteName)} positions</span>
+                <span
+                  className={cx(
+                    'inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
+                    tab === 'opponent' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
+                  )}
+                >
+                  {/* The badge keeps its size either way, so the strip doesn't reflow when the
+                      number lands. See `opponentCountPending`: a skeleton says "still counting",
+                      where `0` said "none" and was usually wrong. */}
+                  {opponentCountPending ? (
+                    <Skeleton radius="rounded-full" className="h-3 w-3" aria-label="Counting positions" />
+                  ) : (
+                    opponentPositionCount
+                  )}
+                </span>
               </TabButton>
-            ) : null}
-            <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
-              <span className="max-w-[10rem] truncate">{firstNamePossessive(remoteName)} positions</span>
-              <span
-                className={cx(
-                  'inline-flex min-h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-metadataMedium tabular-nums',
-                  tab === 'opponent' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
-                )}
-              >
-                {/* The badge keeps its size either way, so the strip doesn't reflow when the
-                    number lands. See `opponentCountPending`: a skeleton says "still counting",
-                    where `0` said "none" and was usually wrong. */}
-                {opponentCountPending ? (
-                  <Skeleton radius="rounded-full" className="h-3 w-3" aria-label="Counting positions" />
-                ) : (
-                  opponentPositionCount
-                )}
-              </span>
-            </TabButton>
-            <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
-              All
-            </TabButton>
-          </div>
-          <button
-            type="button"
-            aria-label="Leave debate"
-            title="Leave debate"
-            onClick={leave}
-            disabled={leaveSession.isPending}
-            className="grid size-9 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
-          >
-            <LeaveIcon />
-          </button>
-        </header>
+              <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
+                All
+              </TabButton>
+            </div>
+            <button
+              type="button"
+              aria-label="Leave debate"
+              title="Leave debate"
+              onClick={leave}
+              disabled={leaveSession.isPending}
+              className="grid size-9 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+            >
+              <LeaveIcon />
+            </button>
+          </header>
 
-        <div className="mb-3 flex flex-col gap-3">
-          <SpaceTopicFilters
-            spaceId={spaceId}
-            onSpaceChange={setSpaceId}
-            topicId={topicId}
-            onTopicChange={setTopicId}
-            facetSpaceIds={facetSpaceIds}
-            facetTopics={facetTopics}
-            className="justify-between"
-          />
-          <Input
-            withSearchIcon
-            value={search}
-            onChange={event => setSearch(event.currentTarget.value)}
-            placeholder="Search claims"
-            aria-label="Search claims"
-          />
+          <div className="flex flex-col gap-3">
+            <SpaceTopicFilters
+              spaceId={spaceId}
+              onSpaceChange={setSpaceId}
+              topicId={topicId}
+              onTopicChange={setTopicId}
+              facetSpaceIds={facetSpaceIds}
+              facetTopics={facetTopics}
+              className="justify-between"
+            />
+            <Input
+              withSearchIcon
+              value={search}
+              onChange={event => setSearch(event.currentTarget.value)}
+              placeholder="Search claims"
+              aria-label="Search claims"
+            />
+          </div>
         </div>
 
         {(createRequest.error instanceof Error || leaveSession.error instanceof Error) && (
