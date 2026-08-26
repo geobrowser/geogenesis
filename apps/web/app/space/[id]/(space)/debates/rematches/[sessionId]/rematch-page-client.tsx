@@ -198,7 +198,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Read here rather than beside `canPublishDebateIn` below, because the scope built underneath
   // it has to reach the query, which runs before either.
-  const { publishableSpaceIds } = useDebatePublishableSpaces();
+  const { publishableSpaceIds, isLoading: publishablePending } = useDebatePublishableSpaces();
 
   // Same scoping as the hub's Claims tab: the facets have to describe the spaces this pairing can
   // actually be shown claims from, or the topic menu offers topics from spaces `browsedRows`
@@ -214,7 +214,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // on its own result. The allowlist depends on nothing here, so asking for those types directly
   // breaks the loop.
   const allowlistSpaceIds = React.useMemo(() => (spaceAllowlist ? [...spaceAllowlist] : []), [spaceAllowlist]);
-  const { spacesById: allowlistSpaces } = useSpacesByIds(allowlistSpaceIds);
+  const { spacesById: allowlistSpaces, isLoading: allowlistSpacesPending } = useSpacesByIds(allowlistSpaceIds);
   const allowlistTypePublishable = React.useMemo(
     () => debatePublishableSpacePredicate(allowlistSpaces),
     [allowlistSpaces]
@@ -244,6 +244,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const browsedCorpusUnusable =
     hasNoEligibleSpaces || (spaceId !== null && !isClaimSpaceAllowed(spaceId, spaceAllowlist));
 
+  // Every lookup the scope is built from. Until they have all landed the scope is `null`, which
+  // geo-chat reads as "no filter" — so asking now buys an answer about the whole corpus, whose
+  // rows are dropped below and whose topic facet is not. See the Claims tab, same shape.
+  const scopePending = allowlistPending || publishablePending || allowlistSpacesPending;
+
   const matchmakingQuery = React.useMemo<MatchmakingClaimsQuery>(
     // `topicId` is sent whichever tab is showing. It only filters *these* rows, which back the
     // All tab, and the server's topic facet is narrowed by spaces rather than by topics — so a
@@ -262,13 +267,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     }),
     [debouncedSearch, eligibleSpaceIds, sessionId, spaceId, topicId]
   );
-  const browsedClaimsQuery = useMatchmakingClaims(matchmakingQuery, !browsedCorpusUnusable);
+  const browsedClaimsQuery = useMatchmakingClaims(matchmakingQuery, !browsedCorpusUnusable && !scopePending);
   // Masked rather than left to `enabled`: the hook keeps previous data across a key change, so a
   // scope narrowing to nothing still hands back the last scope's pages — rows this drops anyway,
   // but facets it would not.
   const browsedPages = React.useMemo(
-    () => (browsedCorpusUnusable ? [] : (browsedClaimsQuery.data?.pages ?? [])),
-    [browsedClaimsQuery.data, browsedCorpusUnusable]
+    () => (browsedCorpusUnusable || scopePending ? [] : (browsedClaimsQuery.data?.pages ?? [])),
+    [browsedClaimsQuery.data, browsedCorpusUnusable, scopePending]
   );
   const browsedFacets = browsedPages[0]?.facets;
 
@@ -544,7 +549,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const browsedClaims = useStableListOrder(
     browsedRows,
     row => `${row.claim.space_id}:${row.claim.claim_entity_id}`,
-    `${debouncedSearch}|${spaceId ?? ''}`
+    // Topic belongs in the key for the same reason space does: it goes out as `topic_id`, so the
+    // server ranks a different list under it, and holding the previous order would arrange the
+    // new one by a ranking the viewer has already moved on from.
+    `${debouncedSearch}|${spaceId ?? ''}|${topicId ?? ''}`
   );
 
   // The opponent is whichever participant isn't the local user; with no local user there is none.
@@ -752,7 +760,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           opponentEntitiesQuery.isLoading ||
           opponentClaimsQuery.isLoading ||
           (landedTabRef.current === null && claims.length === 0 && recommendedLoading)
-        : allowlistPending || browsedClaimsQuery.isLoading);
+        : scopePending || browsedClaimsQuery.isLoading);
 
   // A topic the menu no longer offers is unpickable as well as empty — the chip filtering the
   // list would not be in the menu to clear. Unlike the Claims tab, the topics here arrive with

@@ -61,6 +61,8 @@ const mocks = vi.hoisted(() => ({
   matchmakingClaims: [] as MatchmakingClaim[],
   /** Overrides the single-page default when a test needs paging to accumulate. */
   entityQueryPages: null as MatchmakingClaim[][] | null,
+  // What `keepPreviousData` would still be holding once the query goes disabled.
+  lastEnabledData: undefined as { pages: unknown[] } | undefined,
   entityQueryFetchingNextPage: false,
   /** Both participants' graph positions. */
   positions: [] as ParticipantPosition[],
@@ -254,7 +256,24 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('~/core/debates/matchmaking/hooks', () => ({
   useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
   // The All tab is the hub's Claims query. Its arguments are what the tests below inspect.
-  useMatchmakingClaims: (query: { search: string | null; spaceId: string | null; topicId?: string | null }) => {
+  useMatchmakingClaims: (
+    query: { search: string | null; spaceId: string | null; topicId?: string | null },
+    enabled: boolean
+  ) => {
+    // A disabled query is not a silent one: `placeholderData: keepPreviousData` outlives
+    // `enabled: false`, so it keeps handing back the last key's pages — facets included. Modelled,
+    // because a mock that returns nothing here makes the masking downstream look unnecessary.
+    if (!enabled) {
+      return {
+        data: mocks.lastEnabledData,
+        isLoading: false,
+        error: null,
+        hasNextPage: mocks.entityQueryHasNextPage,
+        isFetchingNextPage: false,
+        isPlaceholderData: mocks.lastEnabledData !== undefined,
+        fetchNextPage: mocks.fetchNextPage,
+      };
+    }
     mocks.entityQueries.push(query);
     // `space_id` and `topic_id` both filter server-side as of GEO-2659, and every page carries
     // facets computed over the whole candidate set rather than the page being returned.
@@ -269,16 +288,18 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
       space_facets: spaceIds.map(id => ({ id, name: null, count: 1 })),
       topic_facets: topicFacets.map(topic => ({ ...topic, count: 1 })),
     };
+    const data = {
+      pages: corpus.map(page => ({
+        claims: page
+          .filter(entry => !query.spaceId || entry.claim.space_id === query.spaceId)
+          .filter(entry => !query.topicId || entry.topics.some(topic => topic.id === query.topicId)),
+        next_cursor: null,
+        facets,
+      })),
+    };
+    mocks.lastEnabledData = data;
     return {
-      data: {
-        pages: corpus.map(page => ({
-          claims: page
-            .filter(entry => !query.spaceId || entry.claim.space_id === query.spaceId)
-            .filter(entry => !query.topicId || entry.topics.some(topic => topic.id === query.topicId)),
-          next_cursor: null,
-          facets,
-        })),
-      },
+      data,
       isLoading: mocks.entityQueryLoading,
       error: null,
       hasNextPage: mocks.entityQueryHasNextPage,
@@ -372,6 +393,7 @@ beforeEach(() => {
   mocks.entityQueries.length = 0;
   mocks.entityIdLookups.length = 0;
   mocks.entityQueryHasNextPage = false;
+  mocks.lastEnabledData = undefined;
   mocks.entityQueryLoading = false;
   mocks.entityHydrationLoading = false;
   mocks.fetchNextPage.mockReset();
@@ -1141,6 +1163,51 @@ describe('DebateRematchPageClient', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
     expect(screen.getByRole('button', { name: /Later/ })).toBeInTheDocument();
+  });
+
+  // The same scope the rows are gated by has to reach the query, and it isn't known until the
+  // allowlist, the acceptor's editor spaces and the space types have all landed. Asked before
+  // then, geo-chat answers about every space it knows: `browsedRows` drops those rows, but a
+  // topic facet has no space on it to drop it by, so the menu kept offering them.
+  it('offers no topics until the scope it is about to apply is known', async () => {
+    mocks.matchmakingClaims = [
+      { ...matchmakingClaim(), topics: [] },
+      {
+        ...matchmakingClaim(CLAIM_SOURCE, 'A claim only the facet knows about'),
+        topics: [{ id: 'topic-later', name: 'Later' }],
+      },
+    ];
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.queryByRole('button', { name: /Later/ })).toBeNull();
+  });
+
+  // The held order is released for a new search or space because those change what the server
+  // ranked. Topic does now too — it goes out as `topic_id` — so without it in the key the rows
+  // that survive the change keep the ranking of the query before it, and the newly ranked list
+  // arrives arranged by an order the viewer already left. The Claims tab resets on it already.
+  it('takes the new ranking when the topic changes, rather than holding the old one', async () => {
+    const FIRST = '019fedc1-1111-7000-8000-000000000001';
+    const SECOND = '019fedc1-2222-7000-8000-000000000002';
+    const gov = [{ id: 'topic-gov', name: 'Governance' }];
+    mocks.matchmakingClaims = [
+      { ...matchmakingClaim(FIRST, 'Ranked first when unfiltered'), topics: gov },
+      { ...matchmakingClaim(SECOND, 'Ranked first once filtered'), topics: gov },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+    await waitFor(() => expect(appearsBefore('Ranked first when unfiltered', 'Ranked first once filtered')).toBe(true));
+
+    // What the server does when the filter it ranks under changes.
+    mocks.matchmakingClaims = [...mocks.matchmakingClaims].reverse();
+    selectFilter('Any topic', 'Governance');
+
+    await waitFor(() => expect(appearsBefore('Ranked first once filtered', 'Ranked first when unfiltered')).toBe(true));
   });
 
   it('asks the server to do the topic filtering on the All tab', async () => {

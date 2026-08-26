@@ -101,28 +101,35 @@ export function ClaimsTab() {
     [debouncedSearch, spaceId, eligibleSpaceIds, topicId, filter]
   );
 
-  const claimsQuery = useMatchmakingClaims(query, !hasNoEligibleSpaces);
+  // Not asked until the scope is known. Until then `spaceIds` is `null`, which geo-chat reads as
+  // "no filter", so the answer is about the whole corpus — and every row of it is dropped below by
+  // `spacesPending`, making the request pure waste on its own terms. What it leaves behind is not
+  // waste: `keepPreviousData` serves those pages back when the scope lands and the key changes,
+  // and while the rows are re-gated on the way out and the spaces are filtered on read, a topic
+  // facet carries no space to gate it by. The menu spent that window offering topics from spaces
+  // the list had already stopped showing.
+  const claimsQuery = useMatchmakingClaims(query, !hasNoEligibleSpaces && !spacesPending);
   // Masked rather than left to `enabled`. The hook keeps previous data across a key change, so a
-  // scope narrowing to nothing still hands back the last scope's pages — and while the rows are
-  // dropped below, the facets on them are not, which is the menu-over-an-empty-list this is meant
-  // to prevent.
+  // scope narrowing — to nothing, or from unknown to known — still hands back the last scope's
+  // pages, and while the rows are re-gated below the facets on them are not. That is the whole
+  // menu-over-an-empty-list this is meant to prevent, so it is the one place the scope is applied:
+  // everything downstream reads these pages and needs no guard of its own.
   const pages = React.useMemo(
-    () => (hasNoEligibleSpaces ? [] : (claimsQuery.data?.pages ?? [])),
-    [claimsQuery.data, hasNoEligibleSpaces]
+    () => (hasNoEligibleSpaces || spacesPending ? [] : (claimsQuery.data?.pages ?? [])),
+    [claimsQuery.data, hasNoEligibleSpaces, spacesPending]
   );
   const facets = pages[0]?.facets;
 
   const serverClaims = React.useMemo(
-    () =>
-      spacesPending ? [] : pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
-    [pages, spaceShowsClaims, spacesPending]
+    () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
+    [pages, spaceShowsClaims]
   );
 
   // The space menu offers only what the list can actually show, so picking an option never lands
   // the viewer on an empty list they can't explain.
   const facetSpaceIds = React.useMemo(
-    () => (spacesPending ? [] : (facets?.space_ids ?? []).filter(spaceShowsClaims)),
-    [facets?.space_ids, spaceShowsClaims, spacesPending]
+    () => (facets?.space_ids ?? []).filter(spaceShowsClaims),
+    [facets?.space_ids, spaceShowsClaims]
   );
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
@@ -162,8 +169,8 @@ export function ClaimsTab() {
   // The same for the space itself: it can be picked while the gates are still passing everything,
   // and left selected it keeps going out on every request while its rows are dropped locally.
   React.useEffect(() => {
-    setSpaceId(current => keepSelectableSpace(current, facetSpaceIds, !spacesPending && facetsSettled));
-  }, [facetSpaceIds, facetsSettled, spacesPending]);
+    setSpaceId(current => keepSelectableSpace(current, facetSpaceIds, facetsSettled));
+  }, [facetSpaceIds, facetsSettled]);
 
   // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
   // no longer in the menu to unpick.

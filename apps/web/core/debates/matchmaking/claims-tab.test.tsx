@@ -701,6 +701,23 @@ describe('topic menu', () => {
     expect(mocks.lastQuery).toMatchObject({ topicId: AI.id });
   });
 
+  // The scope goes out as `spaceIds`, and it isn't known until the allowlist and the publishable
+  // lookup have both landed. Asked before then, the endpoint answers about the whole corpus — rows
+  // the gates then drop, and a topic facet spanning spaces this viewer is never shown. The rows
+  // being discarded is what made it look harmless: `keepPreviousData` hands the same facets back
+  // when the scope settles and the key changes, and nothing gates a topic by space, so the menu
+  // offers options over a list with nothing to put under them.
+  it('does not ask for a corpus wider than the scope it is about to apply', () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.queryByRole('button', { name: 'AI' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Health' })).toBeNull();
+  });
+
   it('lets go of a selected topic the picked space has no claims for', () => {
     render(<ClaimsTab />);
 
