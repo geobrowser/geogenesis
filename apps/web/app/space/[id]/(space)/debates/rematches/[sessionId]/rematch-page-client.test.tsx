@@ -1258,6 +1258,31 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('button', { name: /Pinned only/ })).toBeInTheDocument();
   });
 
+  // The mirror of the allowlist exception: a space can be in the menu without being in the
+  // allowlist, but `browsedRows` still drops the browsed rows from it. Merging the server's facet
+  // for such a space would offer topics carried only by rows that never render.
+  it('does not offer server topics for a selected space outside the allowlist', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
+    mocks.matchmakingClaims = [
+      {
+        ...matchmakingClaim(CLAIM_SOURCE, 'A browsed claim in Crypto'),
+        claim: { ...matchmakingClaim().claim, id: CLAIM_SOURCE, claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 },
+        topics: [{ id: 'topic-server', name: 'Server only' }],
+      },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    // Crypto is in the menu because the opponent's claim lives there, allowlist or not.
+    selectFilter('Any space', 'Crypto');
+    await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    // Its rows are dropped as disallowed, so its topics are not the menu's to offer.
+    expect(screen.queryByRole('button', { name: /Server only/ })).toBeNull();
+  });
+
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();

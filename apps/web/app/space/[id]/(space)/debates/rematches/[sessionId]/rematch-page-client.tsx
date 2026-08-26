@@ -236,6 +236,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // facets are not — every topic on the menu would lead to an empty list.
   const hasNoEligibleSpaces = eligibleSpaceIds !== null && eligibleSpaceIds.length === 0;
 
+  // The same problem reached the other way. A space can be in the menu without being in the
+  // allowlist — the graph-backed tabs aren't narrowed by it, so their rows put their spaces there
+  // — but `browsedRows` still drops every *browsed* row from a disallowed space. Selecting one
+  // therefore leaves the server answering with rows that cannot be shown, and a facet describing
+  // them, while only the pinned rows survive. Nothing it returns is usable, so it isn't asked.
+  const browsedCorpusUnusable =
+    hasNoEligibleSpaces || (spaceId !== null && !isClaimSpaceAllowed(spaceId, spaceAllowlist));
+
   const matchmakingQuery = React.useMemo<MatchmakingClaimsQuery>(
     // `topicId` is sent whichever tab is showing. It only filters *these* rows, which back the
     // All tab, and the server's topic facet is narrowed by spaces rather than by topics — so a
@@ -244,13 +252,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () => ({ search: debouncedSearch || null, spaceId, spaceIds: eligibleSpaceIds, topicId, filter: 'all' }),
     [debouncedSearch, eligibleSpaceIds, spaceId, topicId]
   );
-  const browsedClaimsQuery = useMatchmakingClaims(matchmakingQuery, !hasNoEligibleSpaces);
+  const browsedClaimsQuery = useMatchmakingClaims(matchmakingQuery, !browsedCorpusUnusable);
   // Masked rather than left to `enabled`: the hook keeps previous data across a key change, so a
   // scope narrowing to nothing still hands back the last scope's pages — rows this drops anyway,
   // but facets it would not.
   const browsedPages = React.useMemo(
-    () => (hasNoEligibleSpaces ? [] : (browsedClaimsQuery.data?.pages ?? [])),
-    [browsedClaimsQuery.data, hasNoEligibleSpaces]
+    () => (browsedCorpusUnusable ? [] : (browsedClaimsQuery.data?.pages ?? [])),
+    [browsedClaimsQuery.data, browsedCorpusUnusable]
   );
   const browsedFacets = browsedPages[0]?.facets;
 
@@ -705,7 +713,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // Masked for the same reason the pages are: the retained `hasNextPage` outlives the scope it
     // described, and `fetchNextPage` is a manual call that ignores `enabled` — so a sentinel left
     // in view would page the unscoped corpus the moment it was scrolled to.
-    hasNextPage: !hasNoEligibleSpaces && Boolean(browsedClaimsQuery.hasNextPage),
+    hasNextPage: !browsedCorpusUnusable && Boolean(browsedClaimsQuery.hasNextPage),
     isFetchingNextPage: browsedClaimsQuery.isFetchingNextPage,
     fetchNextPage: browsedClaimsQuery.fetchNextPage,
   });
@@ -990,7 +998,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             tab's sections come from the page whole, and the opponent's tab is the whole of what
             the graph knows about them, in one query. Not while the allowlist is pending either —
             the picker is showing a loading state then. */}
-        {tab === 'all' && !hasNoEligibleSpaces && browsedClaimsQuery.hasNextPage && !allowlistPending ? (
+        {tab === 'all' && !browsedCorpusUnusable && browsedClaimsQuery.hasNextPage && !allowlistPending ? (
           <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         ) : null}
       </main>
