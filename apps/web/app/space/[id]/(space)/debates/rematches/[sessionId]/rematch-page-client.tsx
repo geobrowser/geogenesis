@@ -28,7 +28,7 @@ import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
-import { dedupeFeaturedClaims, useFeaturedClaims } from '~/core/debates/featured-claims';
+import { type FeaturedClaim, dedupeFeaturedClaims, useFeaturedClaims } from '~/core/debates/featured-claims';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
   useAcceptDebateRematchRequest,
@@ -71,6 +71,9 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 const SEARCH_DEBOUNCE_MS = 250;
+
+/** Stable identity so the hydration below doesn't restart whenever Featured isn't the source. */
+const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
 
@@ -236,14 +239,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Collapsed to one row per claim *after* the allowlist, not before. A claim can be tagged in
   // several spaces, and deduplicating first would let a space outside the allowlist stand for a
   // claim featured in one inside it — dropping it from the list entirely.
-  const featuredClaimIds = React.useMemo(
+  //
+  // The tag survives rather than just its id. Its space is the space the claim is featured in, and
+  // the only one here known to have passed the allowlist — the rows below are built against it.
+  //
+  // Gated on `featuredEnabled` too, not only on the fetch: `enabled: false` leaves react-query's
+  // cached rows in place, and the hub shares this key, so a catalog fetched there would otherwise
+  // keep the hydration below mounted and refetching behind Recommended or the opponent's tab.
+  const featuredSelection = React.useMemo(
     () =>
-      allowlistPending
-        ? []
-        : dedupeFeaturedClaims(featuredCatalog.filter(claim => isClaimSpaceAllowed(claim.spaceId, spaceAllowlist))).map(
-            claim => claim.claimEntityId
-          ),
-    [allowlistPending, featuredCatalog, spaceAllowlist]
+      !featuredEnabled || allowlistPending
+        ? NO_FEATURED_CLAIMS
+        : dedupeFeaturedClaims(featuredCatalog.filter(claim => isClaimSpaceAllowed(claim.spaceId, spaceAllowlist))),
+    [allowlistPending, featuredCatalog, featuredEnabled, spaceAllowlist]
+  );
+
+  const featuredClaimIds = React.useMemo(
+    () => featuredSelection.map(claim => claim.claimEntityId),
+    [featuredSelection]
   );
 
   // The same two lookups the curated tab makes: the claim entities the picker's rows are built
@@ -374,10 +387,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [publishableSpaceIds, spaceTypePublishable]
   );
 
-  /** A picker row from a graph entity, with geo-chat's session row layered on when it has one. */
+  /**
+   * A picker row from a graph entity, with geo-chat's session row layered on when it has one.
+   *
+   * `preferredSpaceId` overrides the space ranking where the caller already knows which space the
+   * claim belongs to it in. Featured passes the space its tag was written in: the ranking picks the
+   * highest-ranked space the claim is *named* in, which knows nothing of the viewer's allowlist, so
+   * without this a claim featured in an allowed space could be drawn — and its debate requested — in
+   * a disallowed one that happens to outrank it. Ignored when a debate could never be published
+   * there, since that is the one thing the ranking does already screen for.
+   */
   const rowFromEntity = React.useCallback(
-    (entity: ClaimPickerEntity): DebateRematchClaim | null => {
-      const homeSpaceId = claimHomeSpaceId(entity, canPublishDebateIn);
+    (entity: ClaimPickerEntity, preferredSpaceId?: string): DebateRematchClaim | null => {
+      const preferred = preferredSpaceId && canPublishDebateIn(preferredSpaceId) ? preferredSpaceId : null;
+      const homeSpaceId = preferred ?? claimHomeSpaceId(entity, canPublishDebateIn);
       if (!entity.name || !homeSpaceId) return null;
       const sessionRow = sessionRowsByClaimId.get(entity.id);
       const responseKind = sessionRow?.response_kind ?? claimResponseKind(entity, homeSpaceId);
@@ -495,19 +518,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () =>
       featuredClaimsSettling
         ? []
-        : featuredClaimIds.flatMap(claimId => {
-            if (excludedClaimIds.has(claimId)) return [];
-            const entity = featuredEntitiesQuery.entities.find(candidate => candidate.id === claimId);
-            const row = entity ? rowFromEntity(entity) : null;
-            return row && canPublishDebateIn(row.claim.space_id) ? [row] : [];
+        : featuredSelection.flatMap(featured => {
+            if (excludedClaimIds.has(featured.claimEntityId)) return [];
+            const entity = featuredEntitiesQuery.entities.find(candidate => candidate.id === featured.claimEntityId);
+            const row = entity ? rowFromEntity(entity, featured.spaceId) : null;
+            // Both gates, against the space the row actually carries. `rowFromEntity` takes geo-chat's
+            // session row whole where it has one, and that row names its own space — so checking the
+            // tag's space alone would let a claim through in one the viewer may not be shown.
+            if (!row || !canPublishDebateIn(row.claim.space_id)) return [];
+            return isClaimSpaceAllowed(row.claim.space_id, spaceAllowlist) ? [row] : [];
           }),
     [
       canPublishDebateIn,
       excludedClaimIds,
-      featuredClaimIds,
       featuredClaimsSettling,
       featuredEntitiesQuery.entities,
+      featuredSelection,
       rowFromEntity,
+      spaceAllowlist,
     ]
   );
   const featuredClaims = useLastSettled(featuredClaimsNow, featuredClaimsSettling);

@@ -202,7 +202,10 @@ vi.mock('~/core/debates/featured-claims', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/debates/featured-claims')>()),
   useFeaturedClaims: (enabled: boolean) => {
     mocks.featuredEnabledWith.push(enabled);
-    const claims = enabled ? mocks.featuredClaims : [];
+    // Rows are returned whether or not the query is enabled, as react-query does: `enabled: false`
+    // stops the fetch, it does not clear the cache — and the hub shares this key, so a catalog it
+    // fetched arrives here already warm.
+    const claims = mocks.featuredClaims;
     return {
       claims,
       claimIds: claims.map(claim => claim.claimEntityId),
@@ -853,6 +856,51 @@ describe('DebateRematchPageClient', () => {
       await showOpponentClaims();
 
       expect(mocks.featuredEnabledWith.at(-1)).toBe(false);
+    });
+
+    // The space ranking picks the highest-ranked space a claim is *named* in and knows nothing of
+    // the allowlist, so left to it a claim featured in an allowed space could be drawn — and its
+    // debate requested — in a disallowed one that happens to outrank it.
+    it('draws a tagged claim in the space it was featured in, not the highest-ranked one', async () => {
+      // SPACE_1 (Crypto, rank 2) outranks SPACE_2, and the claim is named in both.
+      mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
+      mocks.featuredClaims = [featuredTag(FEATURED, 'A featured claim', SPACE_2)];
+      mocks.entities = [
+        sharedEntity(),
+        {
+          ...featuredEntity(),
+          spaces: [SPACE_1, SPACE_2],
+          values: [
+            { property: { id: NAME_PROPERTY }, spaceId: SPACE_1, value: 'A featured claim' },
+            { property: { id: NAME_PROPERTY }, spaceId: SPACE_2, value: 'A featured claim' },
+          ],
+        },
+      ];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await settleTabSwap();
+
+      expect(screen.getByText('A featured claim')).toBeInTheDocument();
+      // Named in both, so geo-chat is asked about it in the space the tag was written in.
+      expect(mocks.rematchClaimIds.flat()).toContain(FEATURED);
+      expect(screen.queryByText('No featured claims are available to debate yet.')).toBeNull();
+    });
+
+    // `enabled: false` leaves react-query's cached rows in place, and the hub shares this query key
+    // — so a catalog fetched there arrives pre-populated and would keep the hydration mounted.
+    it('hydrates nothing while Featured is off screen, even with a cached catalog', async () => {
+      curatedPage();
+      mocks.featuredClaims = [featuredTag()];
+      mocks.entities = [sharedEntity(), featuredEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      // Recommended is the default here, so Featured's claim is never asked about.
+      expect(mocks.entityIdLookups.flat()).not.toContain(FEATURED);
+      expect(mocks.rematchClaimIds.flat()).not.toContain(FEATURED);
+
+      await chooseSource('Featured');
+
+      expect(mocks.entityIdLookups.flat()).toContain(FEATURED);
     });
 
     it('says nothing is featured rather than nothing is debatable', async () => {
