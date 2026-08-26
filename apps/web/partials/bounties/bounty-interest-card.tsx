@@ -7,6 +7,7 @@ import { isBountyEnded } from '~/core/bounties/payout';
 import { useBountyInterestActions } from '~/core/bounties/use-bounty-actions';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
 import { uuidToHex } from '~/core/id/normalize';
+import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -40,9 +41,10 @@ type Props = {
 export function BountyInterestCard({ detail, roles }: Props) {
   const state = resolveInterestCardState(detail, roles);
   const actions = useBountyInterestActions(detail, roles);
+  const { open: openSignInPrompt } = useSignInPrompt();
 
   const copy: Record<InterestCardState, { title: string; body: string }> = {
-    'signed-out': { title: 'Want to take on this bounty?', body: 'Sign in to express interest.' },
+    'signed-out': { title: 'Want to take on this bounty?', body: 'Express interest and an editor can allocate you.' },
     'no-personal-space': {
       title: 'Want to take on this bounty?',
       body: 'Finish setting up your personal space, then come back to apply.',
@@ -77,6 +79,12 @@ export function BountyInterestCard({ detail, roles }: Props) {
           onClick={() => void actions.expressInterest()}
         >
           {actions.pending ? 'Saving…' : "I'm interested"}
+        </Button>
+      ) : state === 'signed-out' ? (
+        // Same affordance as upvote/downvote and the board cards: the button is always
+        // there, and a signed-out click opens the sign-in prompt instead of hiding the action.
+        <Button variant="primary" onClick={() => openSignInPrompt('bounty')}>
+          I&apos;m interested
         </Button>
       ) : state === 'interested' ? (
         <Button variant="secondary" disabled={actions.pending} onClick={() => void actions.cancelInterest()}>

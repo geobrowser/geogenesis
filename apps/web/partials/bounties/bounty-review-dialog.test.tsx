@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import * as React from 'react';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GroupedSubmission } from '~/core/bounties/group-submissions';
 import { MEDIUM_DIFFICULTY_ID } from '~/core/bounties/ontology';
@@ -51,6 +51,13 @@ const submission: GroupedSubmission = {
 
 const full = { completeness: 5, accuracy: 4, skill: 4, effort: 5 };
 
+const config = vi.hoisted(() => ({ payoutEnabled: true }));
+vi.mock('~/core/bounties/config', () => ({
+  get PAYOUT_AUTHORING_ENABLED() {
+    return config.payoutEnabled;
+  },
+}));
+
 describe('validateReviewForm', () => {
   it('requires every rating, and a positive whole-point payout when one is entered', () => {
     expect(validateReviewForm({ stars: { ...full, skill: 0 }, pass: true, comment: '', payoutAmount: '10' })).toMatch(
@@ -67,6 +74,10 @@ describe('validateReviewForm', () => {
 });
 
 describe('BountyReviewDialog', () => {
+  beforeEach(() => {
+    config.payoutEnabled = true;
+  });
+
   type OnSubmit = (input: ReviewSubmitInput) => Promise<ReviewOutcome>;
   function setup(
     onSubmit: ReturnType<typeof vi.fn<OnSubmit>> = vi.fn<OnSubmit>(async () => ({ status: 'saved-and-paid' }))
@@ -98,6 +109,17 @@ describe('BountyReviewDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/Rate every/);
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('hides the payout field and explains why while payout authoring is disabled', async () => {
+    config.payoutEnabled = false;
+    const { onSubmit } = setup();
+    rateAll();
+    expect(screen.queryByText('Payout (points)')).not.toBeInTheDocument();
+    expect(screen.getByTestId('payout-authoring-note')).toHaveTextContent(/issued from the curator app/);
+    fireEvent.click(screen.getByRole('button', { name: 'Save review' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ pass: true, payoutAmount: null });
   });
 
   it('saves a passing review without a payout when the amount is left blank', async () => {

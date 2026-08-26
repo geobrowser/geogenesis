@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+const signIn = vi.hoisted(() => ({ open: vi.fn() }));
+vi.mock('~/core/state/sign-in-prompt-store', () => ({ useSignInPrompt: () => ({ open: signIn.open }) }));
+
 vi.mock('~/core/bounties/use-bounty-actions', () => ({
   useBountyInterestActions: () => mocks.actions,
 }));
@@ -107,9 +110,16 @@ describe('BountyInterestCard', () => {
     expect(mocks.actions.cancelInterest).toHaveBeenCalled();
   });
 
-  it('shows no action for allocated / filled / ended / signed-out states', () => {
-    for (const r of [roles({ isAllocated: true }), roles({ isSignedIn: false })]) {
-      const { unmount } = render(<BountyInterestCard detail={detail()} roles={r} />);
+  it('shows the button while signed out and opens the sign-in prompt on click', () => {
+    render(<BountyInterestCard detail={detail()} roles={roles({ isSignedIn: false })} />);
+    fireEvent.click(screen.getByRole('button', { name: "I'm interested" }));
+    expect(signIn.open).toHaveBeenCalledWith('bounty');
+    expect(mocks.actions.expressInterest).not.toHaveBeenCalled();
+  });
+
+  it('shows no action for allocated / filled / ended states', () => {
+    {
+      const { unmount } = render(<BountyInterestCard detail={detail()} roles={roles({ isAllocated: true })} />);
       expect(screen.queryByRole('button')).not.toBeInTheDocument();
       unmount();
     }

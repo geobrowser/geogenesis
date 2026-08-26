@@ -7,6 +7,7 @@ import * as React from 'react';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
 
+import { PAYOUT_AUTHORING_ENABLED } from './config';
 import type { BountyDetail } from './fetch-bounty-detail';
 import type { GroupedSubmission } from './group-submissions';
 import { buildPayoutOps } from './payout-ops';
@@ -86,7 +87,8 @@ export function useReviewPayoutActions(detail: BountyDetail | null | undefined, 
         });
         if (!reviewed) return { status: 'failed', reason: 'Review publish failed' };
 
-        if (!input.pass || input.payoutAmount == null || input.payoutAmount <= 0) {
+        // Payouts stay curator-app's until the ledger derives from the graph (see config).
+        if (!PAYOUT_AUTHORING_ENABLED || !input.pass || input.payoutAmount == null || input.payoutAmount <= 0) {
           await invalidate();
           invalidateSoon();
           setToast(<>Review saved.</>);

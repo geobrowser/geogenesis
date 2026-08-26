@@ -11,11 +11,17 @@ import type { BountyRoles } from './use-bounty-roles';
 import { useReviewPayoutActions } from './use-review-payout-actions';
 
 const mocks = vi.hoisted(() => ({
+  payoutEnabled: true,
   makeProposal: vi.fn(),
   invalidateQueries: vi.fn(() => Promise.resolve()),
   setToast: vi.fn(),
 }));
 
+vi.mock('./config', () => ({
+  get PAYOUT_AUTHORING_ENABLED() {
+    return mocks.payoutEnabled;
+  },
+}));
 vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: mocks.makeProposal }) }));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.setToast] }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: mocks.invalidateQueries }) }));
@@ -74,7 +80,8 @@ const submission: GroupedSubmission = {
 const stars = { completeness: 1, accuracy: 0.8, skill: 0.8, effort: 1 };
 
 beforeEach(() => {
-  for (const fn of Object.values(mocks)) if ('mockReset' in fn) fn.mockReset();
+  mocks.payoutEnabled = true;
+  for (const fn of Object.values(mocks)) if (typeof fn === 'function' && 'mockReset' in fn) fn.mockReset();
   mocks.invalidateQueries.mockResolvedValue(undefined);
   mocks.makeProposal.mockImplementation(async ({ onSuccess }: { onSuccess: () => void }) => onSuccess());
 });
@@ -89,6 +96,18 @@ function proposalCall(index: number) {
 }
 
 describe('useReviewPayoutActions', () => {
+  it('never publishes a payout while payout authoring is disabled, even with an amount', async () => {
+    mocks.payoutEnabled = false;
+    const { result } = renderHook(() => useReviewPayoutActions(detail, roles));
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.submitReview({ submission, stars, pass: true, comment: '', payoutAmount: 200 });
+    });
+    expect(outcome).toEqual({ status: 'saved' });
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+    expect(proposalCall(0).spaceId).toBe('editor-space');
+  });
+
   it('publishes the review into the reviewer space, then the payout into the DAO space', async () => {
     const { result } = renderHook(() => useReviewPayoutActions(detail, roles));
     let outcome: unknown;

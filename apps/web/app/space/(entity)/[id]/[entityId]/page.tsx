@@ -2,8 +2,7 @@ import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
-import { bountiesEnabledForNetwork } from '~/core/bounties/config';
-import { BOUNTY_TYPE_ID } from '~/core/bounties/ontology';
+import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
@@ -75,7 +74,7 @@ export default async function EntityTemplateStrategy(props: Props) {
   // mode all come from the default page) with its structured facts and
   // curator actions layered into the slots. On a build where bounties are off
   // it degrades to the plain entity page.
-  if (bountiesEnabledForNetwork && result?.entity?.types.some(t => t.id === BOUNTY_TYPE_ID)) {
+  if (bountiesEnabledForNetwork && isBountyEntity(result?.entity?.types)) {
     return (
       <DefaultEntityPage
         params={params}

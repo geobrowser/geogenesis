@@ -4,6 +4,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
+import { PAYOUT_AUTHORING_ENABLED } from '~/core/bounties/config';
 import type { BountyReview } from '~/core/bounties/fetch-submissions';
 import type { GroupedSubmission } from '~/core/bounties/group-submissions';
 import { formatPayoutRange, payoutRange } from '~/core/bounties/payout';
@@ -51,7 +52,7 @@ export function validateReviewForm(state: ReviewFormState): string | null {
 
 /** The payout the form will submit: null when blank (save review only). */
 export function payoutFromForm(state: ReviewFormState): number | null {
-  if (!state.pass) return null;
+  if (!PAYOUT_AUTHORING_ENABLED || !state.pass) return null;
   const trimmed = state.payoutAmount.trim();
   return trimmed ? Number(trimmed) : null;
 }
@@ -213,7 +214,14 @@ export function BountyReviewDialog({
                   </div>
                 </div>
 
-                {state.pass ? (
+                {state.pass && !PAYOUT_AUTHORING_ENABLED ? (
+                  <Text variant="footnote" color="grey-04" data-testid="payout-authoring-note">
+                    Payouts are issued from the curator app for now — the points ledger doesn&apos;t read from the graph
+                    yet.
+                  </Text>
+                ) : null}
+
+                {state.pass && PAYOUT_AUTHORING_ENABLED ? (
                   <label className="flex flex-col gap-1">
                     <Text variant="metadataMedium">Payout (points)</Text>
                     <input

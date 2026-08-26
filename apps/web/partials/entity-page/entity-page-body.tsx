@@ -56,6 +56,10 @@ export type SidePanelEntityPageBodyProps = SharedProps & {
   previewImageUrl?: string | null;
   previewName?: string | null;
   previewDescription?: string | null;
+  /** Same slots as the route page, so a bounty reads the same in the panel (see entity-side-panel). */
+  notice?: React.ReactNode;
+  belowBodySlot?: React.ReactNode;
+  hideProperties?: boolean;
 };
 
 export type EntityPageBodyProps = RouteEntityPageBodyProps | SidePanelEntityPageBodyProps;
@@ -118,7 +122,7 @@ function EditorFooter({
           {hideProperties ? null : <ToggleEntityPage id={entityId} spaceId={spaceId} />}
           <AutomaticModeToggle />
         </>
-      ) : (
+      ) : hideProperties ? null : (
         <ToggleEntityPage id={entityId} spaceId={spaceId} />
       )}
       {belowBodySlot ? (
@@ -160,7 +164,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   );
 
   if (props.variant === 'sidePanel') {
-    const { isRelationPage = false, previewName, previewDescription } = props;
+    const { isRelationPage = false, previewName, previewDescription, notice, belowBodySlot, hideProperties } = props;
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
 
     return (
@@ -184,8 +188,20 @@ export function EntityPageBody(props: EntityPageBodyProps) {
             </div>
             <Spacer height={40} />
             {tabsSection}
+            {notice ? (
+              <>
+                <Spacer height={24} />
+                {notice}
+              </>
+            ) : null}
             <Spacer height={40} />
-            <EditorFooter entityId={entityId} spaceId={spaceId} variant="sidePanel" />
+            <EditorFooter
+              entityId={entityId}
+              spaceId={spaceId}
+              variant="sidePanel"
+              belowBodySlot={belowBodySlot}
+              hideProperties={hideProperties}
+            />
           </div>
         </EntityPageContentContainer>
       </div>
@@ -219,6 +235,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
         <TypeSchemaInline entityId={entityId} spaceId={spaceId} />
         <Spacer height={16} />
         {tabsSection}
+        {notice ? <Spacer height={24} /> : null}
         {notice}
         {(showSpacer || !!notice) && <Spacer height={40} />}
         <EditorFooter
