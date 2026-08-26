@@ -1150,6 +1150,23 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ topicId: 'topic-gov' }));
   });
 
+  // Reported after the facet landed: pick a space, pick a topic it lists, get nothing. The space
+  // menu was filtered by the viewer's allowlist but not by whether this pairing can publish a
+  // debate there — and `browsedRows` drops every claim in a space it cannot. The server's topic
+  // facet knows nothing about that, so it offered all of the space's topics over an empty list.
+  it('does not offer a space no debate can be published into', async () => {
+    mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+
+    // SPACE_2 holds the published claim and is on the server's space facet; it is not somewhere
+    // this pairing can debate, so picking it could only ever empty the list.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull();
+  });
+
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();

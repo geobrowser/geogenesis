@@ -562,9 +562,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const facetSpaceIds = React.useMemo(() => {
     const seen = seenFacetsRef.current.spaceIds;
     for (const claim of [...opponentClaims, ...curatedClaims, ...browsedClaims]) seen.add(claim.claim.space_id);
-    for (const id of browsedFacets?.space_ids ?? []) if (isClaimSpaceAllowed(id, spaceAllowlist)) seen.add(id);
+    // Publishability as well as the allowlist. `browsedRows` drops every claim in a space this
+    // pairing cannot publish a debate into, so offering that space listed a filter that could
+    // only ever empty the list — and, once the topic menu came from the server, offered all of
+    // that space's topics along with it while nothing rendered behind any of them.
+    for (const id of browsedFacets?.space_ids ?? []) {
+      if (isClaimSpaceAllowed(id, spaceAllowlist) && canPublishDebateIn(id)) seen.add(id);
+    }
     return [...seen];
-  }, [browsedClaims, browsedFacets?.space_ids, curatedClaims, opponentClaims, spaceAllowlist]);
+  }, [browsedClaims, browsedFacets?.space_ids, canPublishDebateIn, curatedClaims, opponentClaims, spaceAllowlist]);
 
   // The claims the topic menu describes on the graph-backed tabs: everything the other filters
   // allow, topic aside. Narrowing by the current topic too would collapse the menu to the one
