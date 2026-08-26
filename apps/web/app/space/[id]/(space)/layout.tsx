@@ -78,11 +78,9 @@ export default async function Layout(props0: LayoutProps) {
               <EditableSpaceHeading
                 spaceId={spaceId}
                 entityId={props.id}
+                nameAccessoryComponent={<SpaceVerifyButton spaceId={spaceId} />}
                 actionsComponent={
-                  <>
-                    <SpaceVerifyButton spaceId={spaceId} />
-                    {typeIds.includes(SystemIds.PERSON_TYPE) ? <ProfileDebateButton spaceId={spaceId} /> : null}
-                  </>
+                  typeIds.includes(SystemIds.PERSON_TYPE) ? <ProfileDebateButton spaceId={spaceId} /> : null
                 }
               />
               <EntityPageInlineDescription entityId={props.id} spaceId={spaceId} />

@@ -66,16 +66,27 @@ describe('SpaceVerifyButton', () => {
     const [, options] = mocks.setSubspace.mock.calls[0];
     options.onSuccess();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Verified' })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Verified' })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Verify' })).not.toBeInTheDocument();
   });
 
-  it('disables verification when the relationship already exists', async () => {
+  it('shows a verified badge when the relationship already exists', async () => {
     mocks.fetchSpaceVerification.mockResolvedValue(true);
 
     renderButton(<SpaceVerifyButton spaceId={VIEWED_SPACE_ID} />);
 
-    expect(await screen.findByRole('button', { name: 'Verified' })).toBeDisabled();
+    expect(await screen.findByRole('img', { name: 'Verified' })).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
     expect(mocks.setSubspace).not.toHaveBeenCalled();
+  });
+
+  it('renders the verify action with a tick before its label', async () => {
+    renderButton(<SpaceVerifyButton spaceId={VIEWED_SPACE_ID} />);
+
+    const button = await screen.findByRole('button', { name: 'Verify' });
+
+    expect(button.querySelector('svg')).toBeInTheDocument();
+    expect(button).toHaveClass('h-[18px]', 'border-dashed', 'border-grey-03', 'text-grey-04');
   });
 
   it('does not offer to verify the viewer personal space', () => {

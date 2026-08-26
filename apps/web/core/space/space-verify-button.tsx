@@ -7,6 +7,8 @@ import { useSubspace } from '~/core/hooks/use-subspace';
 import { ID } from '~/core/id';
 import { fetchSpaceVerification } from '~/core/io/subgraph/fetch-space-verification';
 
+import { TickSmall } from '~/design-system/icons/tick-small';
+
 const verificationQueryKey = (parentSpaceId: string, childSpaceId: string) => [
   'space-verification',
   parentSpaceId,
@@ -42,14 +44,28 @@ export function SpaceVerifyButton({ spaceId }: { spaceId: string }) {
     );
   };
 
+  if (isVerified) {
+    return (
+      <span
+        role="img"
+        aria-label="Verified"
+        title="Verified"
+        className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-text text-white"
+      >
+        <TickSmall />
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"
       onClick={verify}
-      disabled={verificationQuery.isLoading || isPending || isVerified}
-      className="inline-flex h-7 shrink-0 items-center rounded-full bg-text px-2.5 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+      disabled={verificationQuery.isLoading || isPending}
+      className="inline-flex h-[18px] shrink-0 items-center gap-1 rounded-full border border-dashed border-grey-03 pr-1.5 pl-1 text-[12px] leading-[13px] tracking-[-0.35px] text-grey-04 transition-colors hover:border-grey-04 hover:text-text disabled:cursor-wait disabled:opacity-50"
     >
-      {isPending ? 'Verifying...' : isVerified ? 'Verified' : 'Verify'}
+      <TickSmall />
+      {isPending ? 'Verifying...' : 'Verify'}
     </button>
   );
 }
