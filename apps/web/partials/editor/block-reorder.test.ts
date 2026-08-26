@@ -16,9 +16,9 @@ import {
   createBlockMeasureScheduler,
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
+  getTopLevelBlockElements,
   makeDropZones,
   moveTopLevelBlock,
-  releasePointerDragFocus,
 } from './block-reorder';
 
 const editors: Editor[] = [];
@@ -69,6 +69,7 @@ describe('BlockDragHandle', () => {
 
     const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
     const handle = button.parentElement;
+    vi.spyOn(button, 'matches').mockImplementation(selector => selector === ':focus-visible');
     expect(handle).toHaveStyle({ opacity: '0', pointerEvents: 'none' });
 
     fireEvent.focus(button);
@@ -76,7 +77,7 @@ describe('BlockDragHandle', () => {
     expect(handle).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
   });
 
-  it('releases pointer focus after a drag so the old block slot does not stay highlighted', () => {
+  it('does not reveal a hidden handle for pointer focus', () => {
     render(
       React.createElement(
         DndContext,
@@ -86,20 +87,19 @@ describe('BlockDragHandle', () => {
           top: 12,
           left: -32,
           isDragging: false,
-          visible: true,
+          visible: false,
         })
       )
     );
 
     const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    const handle = button.parentElement;
+    vi.spyOn(button, 'matches').mockReturnValue(false);
+
     button.focus();
-    const pointerDown = new MouseEvent('pointerdown', { bubbles: true });
-    button.dispatchEvent(pointerDown);
+
     expect(button).toHaveFocus();
-
-    releasePointerDragFocus(pointerDown);
-
-    expect(button).not.toHaveFocus();
+    expect(handle).toHaveStyle({ opacity: '0', pointerEvents: 'none' });
   });
 });
 
@@ -146,6 +146,23 @@ describe('createBlockMeasureScheduler', () => {
     measurement.schedule();
     measurement.cancel();
     expect(cancelFrame).toHaveBeenCalledWith(2);
+  });
+});
+
+describe('getTopLevelBlockElements', () => {
+  it('maps document indexes without counting direct gap-cursor widgets', () => {
+    const editor = makeEditor(['A', 'B']);
+    const editorElement = editor.view.dom;
+    const firstBlock = editor.view.nodeDOM(0);
+    const gapCursor = document.createElement('div');
+    gapCursor.className = 'ProseMirror-gapcursor';
+
+    expect(firstBlock).toBeInstanceOf(HTMLElement);
+    firstBlock?.parentNode?.insertBefore(gapCursor, firstBlock.nextSibling);
+
+    expect(Array.from(editorElement.children)).toHaveLength(3);
+    expect(getTopLevelBlockElements(editor, editorElement).map(block => block.childIndex)).toEqual([0, 1]);
+    expect(getTopLevelBlockElements(editor, editorElement).map(block => block.element)).not.toContain(gapCursor);
   });
 });
 

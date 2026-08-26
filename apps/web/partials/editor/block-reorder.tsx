@@ -2,7 +2,6 @@
 
 import {
   DndContext,
-  DragCancelEvent,
   DragEndEvent,
   DragOverEvent,
   DragOverlay,
@@ -83,9 +82,8 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     if (!wrapper || !editorElement) return;
 
     const wrapperRect = wrapper.getBoundingClientRect();
-    const nextLayout = Array.from(editorElement.children).flatMap((element, childIndex) => {
-      if (!(element instanceof HTMLElement) || !isDraggableBlock(element)) return [];
-
+    const nextLayout = getTopLevelBlockElements(editor, editorElement).flatMap(({ childIndex, element }) => {
+      if (!isDraggableBlock(element)) return [];
       const rect = element.getBoundingClientRect();
       const top = rect.top - wrapperRect.top;
       const bottom = rect.bottom - wrapperRect.top;
@@ -123,10 +121,9 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       if (target.closest('[data-block-drag-handle]')) return;
 
       const blockElement = target.closest<HTMLElement>('.ProseMirror > *');
-      const hoveredContentIndex =
-        blockElement?.parentElement === editorElement && isDraggableBlock(blockElement)
-          ? Array.from(editorElement.children).indexOf(blockElement)
-          : null;
+      const hoveredContentIndex = getTopLevelBlockElements(editor, editorElement).find(
+        block => block.element === blockElement && isDraggableBlock(block.element)
+      )?.childIndex;
       const wrapperRect = wrapper.getBoundingClientRect();
       const editorRect = editorElement.getBoundingClientRect();
       const hoveredGutterIndex = getGutterHoveredChildIndex(
@@ -135,7 +132,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
         event.clientY - wrapperRect.top,
         editorRect.left - wrapperRect.left
       );
-      const childIndex = hoveredContentIndex ?? hoveredGutterIndex;
+      const childIndex = hoveredContentIndex ?? hoveredGutterIndex ?? null;
 
       if (childIndex === null) {
         updateHoveredChildIndex(null);
@@ -189,10 +186,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     updateHoveredChildIndex(null);
   };
 
-  const handleDragCancel = (event: DragCancelEvent) => {
-    releasePointerDragFocus(event.activatorEvent);
-    resetDragState();
-  };
+  const handleDragCancel = () => resetDragState();
 
   const handleDragStart = (event: DragStartEvent) => {
     if (!enabled) return;
@@ -224,7 +218,6 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       onReorder();
     }
 
-    releasePointerDragFocus(event.activatorEvent);
     resetDragState();
   };
 
@@ -329,14 +322,20 @@ function getBlockDragHandleKey(editor: Editor, childIndex: number) {
   return typeof blockId === 'string' && blockId.length > 0 ? blockId : `child-${childIndex}`;
 }
 
-/** Pointer activation should not leave a handle visibly focused after drop. */
-export function releasePointerDragFocus(activatorEvent: Event) {
-  if (activatorEvent.type === 'keydown') return;
+/** Maps document children through ProseMirror positions so DOM widgets cannot shift block indexes. */
+export function getTopLevelBlockElements(editor: Editor, editorElement: HTMLElement) {
+  const blocks: Array<{ childIndex: number; element: HTMLElement }> = [];
+  let position = 0;
 
-  const target = activatorEvent.target;
-  if (!(target instanceof Element)) return;
+  for (let childIndex = 0; childIndex < editor.state.doc.childCount; childIndex += 1) {
+    const element = editor.view.nodeDOM(position);
+    if (element instanceof HTMLElement && element.parentElement === editorElement) {
+      blocks.push({ childIndex, element });
+    }
+    position += editor.state.doc.child(childIndex).nodeSize;
+  }
 
-  target.closest<HTMLElement>('[data-block-drag-handle] button')?.blur();
+  return blocks;
 }
 
 export function BlockGutterHoverArea({
@@ -404,7 +403,7 @@ export function BlockDragHandle({
         aria-label={`Drag block ${childIndex + 1} to reorder`}
         title="Drag to reorder"
         className="flex size-6 cursor-grab items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01 active:cursor-grabbing"
-        onFocus={() => setIsFocused(true)}
+        onFocus={event => setIsFocused(event.currentTarget.matches(':focus-visible'))}
         onBlur={() => setIsFocused(false)}
         {...attributes}
         {...listeners}
