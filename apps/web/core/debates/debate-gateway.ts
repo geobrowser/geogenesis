@@ -852,7 +852,15 @@ function isGraphqlRequestError(error: unknown): boolean {
   );
 }
 
-const debateGateway = new DebateGatewayClient({
+/**
+ * The one client every debate surface shares. `useDebateGateway` owns its lifecycle; everything
+ * else retains scopes on it.
+ *
+ * Exported so the scope hooks can be tested against the instance they actually use. Their bug was
+ * command *volume* (GEO-2670), which is only observable by counting what reaches this object — a
+ * separately constructed client would have tested the test's own wiring instead.
+ */
+export const debateGateway = new DebateGatewayClient({
   queryClient,
   getSession: getGeoChatSession,
   getApiBaseUrl: getGeoChatApiBaseUrl,
@@ -899,17 +907,54 @@ export function useDebateGatewayScope(scope: DebateGatewayScope, enabled: boolea
  * surface showing claims from several spaces at once — the rematch picker — has to hold them all
  * or it only hears about some of its own rows.
  */
+/**
+ * Hold a space scope for each id, reconciling rather than rebuilding when the set changes.
+ *
+ * The set arrives in stages — the rematch picker adds spaces as the opponent's claims land, then
+ * the curated ones, then each browsed page — and it used to key one retain/release block on the
+ * whole joined list. Because retention is refcounted and React runs cleanup before the next
+ * effect, adding a single space released all N and re-retained all N: roughly `2N + 1` gateway
+ * commands where one was needed, every time the set grew.
+ *
+ * `gateway_commands_by_session` allows 120 per minute. A picker spanning fifteen spaces across a
+ * few arrival stages passes that on its own, and the server answers `rate_limited`, which the
+ * client turns into a reconnect — and on READY it re-subscribes every scope in one burst, spending
+ * the budget again. That is the reconnecting banner that would not go away in the debate-again
+ * flow (GEO-2670), and it is self-inflicted: the churn was almost entirely
+ * unsubscribe-then-resubscribe for spaces that never left the set.
+ *
+ * Reconciling makes a growing set cost one command per genuinely new space.
+ */
 export function useDebateGatewaySpaceScopes(spaceIds: string[], enabled: boolean) {
   // Joined so the effect keys off the ids themselves rather than a fresh array each render.
   const key = spaceIds.join(',');
+  const heldRef = React.useRef<Map<string, () => void>>(new Map());
 
   React.useEffect(() => {
-    if (!enabled || !key) return;
-    const releases = key.split(',').map(spaceId => debateGateway.retainScope({ scope: 'space', space_id: spaceId }));
-    return () => {
-      for (const release of releases) release();
-    };
+    const held = heldRef.current;
+    const wanted = new Set(enabled && key ? key.split(',') : []);
+
+    // Copied before iterating: releasing mutates the map being walked.
+    for (const [spaceId, release] of [...held]) {
+      if (wanted.has(spaceId)) continue;
+      release();
+      held.delete(spaceId);
+    }
+    for (const spaceId of wanted) {
+      if (held.has(spaceId)) continue;
+      held.set(spaceId, debateGateway.retainScope({ scope: 'space', space_id: spaceId }));
+    }
   }, [enabled, key]);
+
+  // Unmount only, deliberately. Putting this on the effect above is what caused the churn: its
+  // cleanup runs on every key change, not just when the caller goes away.
+  React.useEffect(
+    () => () => {
+      for (const release of heldRef.current.values()) release();
+      heldRef.current.clear();
+    },
+    []
+  );
 }
 
 /** Read-only view of the gateway snapshot. Unlike `useDebateGateway` this never starts a socket. */
