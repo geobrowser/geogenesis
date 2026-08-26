@@ -25,22 +25,26 @@ export const queryClient = new QueryClient({
        * already tolerates and cannot leave the store staler than it already permits. The live
        * surfaces don't lean on staleness either: debate activity and participant positions drive
        * themselves with `refetchInterval`, which runs on its own schedule regardless of this, and
-       * writes invalidate explicitly — 146 `invalidateQueries` calls across the app, 39 of them in
+       * writes invalidate explicitly — 75 `invalidateQueries` calls across the app, 39 of them in
        * `core/debates` alone.
        *
        * Call sites needing something different already say so: 56 set their own `staleTime`, most
        * commonly `60_000`, and an explicit value always wins over this default.
+       *
+       * Note this governs `fetchQuery` as well as `useQuery`, and there it decides something
+       * different in kind: whether an imperative read issues a request at all. That is the wrong
+       * default for a deliberate "go and get this", so the sync layer opts out explicitly — see
+       * `SYNC_READ_OPTIONS` in `core/sync/orm.ts`. Chat's imperative reads keep this default
+       * deliberately: they are existence and type lookups behind a local-store check, plus graph
+       * searches, where answering a repeat from cache is the desired behaviour.
        */
       staleTime: 30_000,
 
-      /**
-       * `refetchOnWindowFocus` is deliberately left at its default of `true`.
-       *
-       * Disabling it removes more requests — a refocus goes to zero outright rather than zero for
-       * 30s — but it also means a tab left open all afternoon never picks up anyone else's votes
-       * on return, which is exactly where a stale number gets noticed. With `staleTime` set, rapid
-       * alt-tabbing is already free; this keeps the refresh a genuine return deserves.
-       */
+      // `refetchOnWindowFocus` is deliberately left at its default of `true`. Disabling it removes
+      // more requests — a refocus goes to zero outright rather than zero for 30s — but it also
+      // means a tab left open all afternoon never picks up anyone else's votes on return, which is
+      // exactly where a stale number gets noticed. With `staleTime` set, rapid alt-tabbing is
+      // already free; this keeps the refresh a genuine return deserves.
 
       /**
        * `core/io/graphql-client.ts` already retries transport failures on an exponential, jittered
