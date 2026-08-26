@@ -44,6 +44,7 @@ import {
 } from '~/core/debates/hooks';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { useMatchmakingClaims } from '~/core/debates/matchmaking/hooks';
+import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState, HubSkeleton } from '~/core/debates/matchmaking/hub-states';
@@ -88,12 +89,20 @@ function useLastSettled<T>(value: T, settling: boolean): T {
   return settling && lastSettledRef.current ? lastSettledRef.current.value : value;
 }
 
+type PickerTab = 'claims' | 'opponent';
+
 /**
- * GEO-2683. `featured` takes Recommended's slot rather than sitting beside it: it is the stand-in
- * for when no curator has put a page together for this pairing, so the two are never both on the
- * strip.
+ * GEO-2683. Where the Claims tab draws its list from. Recommended, Featured and the whole corpus
+ * are three answers to one question — "which claims?" — so they belong in a menu rather than in
+ * three tabs the viewer has to notice appearing and disappearing.
  */
-type PickerTab = 'recommended' | 'featured' | 'opponent' | 'all';
+type ClaimsSource = 'recommended' | 'featured' | 'all';
+
+const CLAIMS_SOURCE_LABELS: Record<ClaimsSource, string> = {
+  recommended: 'Recommended',
+  featured: 'Featured',
+  all: 'All claims',
+};
 
 /**
  * The tab is narrow, so it carries the opponent's first name only: "Jenna Ruiz" -> "Jenna’s".
@@ -119,10 +128,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const [spaceId, setSpaceId] = React.useState<string | null>(null);
   const [topicId, setTopicId] = React.useState<string | null>(null);
-  // Left unset until the viewer picks one: Recommended is the best landing tab when a curator has
-  // put something together for this pairing, and it doesn't exist otherwise. Deciding in state
-  // would fix the default before that lookup settles.
   const [chosenTab, setChosenTab] = React.useState<PickerTab | null>(null);
+  // Left unset until the viewer picks one: Recommended is the best default when a curator has put
+  // something together for this pairing, and it doesn't exist otherwise. Deciding in state would
+  // fix the default before that lookup settles.
+  const [chosenSource, setChosenSource] = React.useState<ClaimsSource | null>(null);
 
   const savedClaimsQuery = useDebateRematchClaims(sessionId);
   const createRequest = useCreateDebateRematchRequest(sessionId);
@@ -196,14 +206,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // allowlist alone: the lists' own lookups run alongside it, so they are ready when it lands.
   const allowlistPending = spaceAllowlist === null && allowlistLoading;
 
-  // GEO-2683. Featured stands in for Recommended when no curator has put a page together for this
-  // pairing, so it is asked for only once that lookup has settled with nothing — there is no point
-  // fetching a list that a curated page would take the slot of.
+  // GEO-2683. Fetched only when Featured is the source on screen — it is one option in a menu, and
+  // the other two answer for themselves.
   //
-  // Narrowed by the viewer's allowlist, unlike Recommended. The reasoning above turns on Recommended
-  // being one page from a space this build trusts by id; Featured is a tag anyone's space can carry,
-  // so it fans out across the corpus the way the All tab does and is bounded the same way.
-  const featuredEnabled = !recommendedLoading && recommendedSections.length === 0;
+  // Narrowed by the viewer's allowlist, unlike Recommended. Recommended is one page from a space
+  // this build trusts by id; Featured is a tag anyone's space can carry, so it fans out across the
+  // corpus the way All claims does and is bounded the same way.
+  const hasRecommended = recommendedSections.length > 0;
+  // Until the curated lookup settles there is no telling "no curator page" from "not yet", and the
+  // default turns on exactly that. The list waits rather than showing Featured and swapping it for
+  // Recommended a moment later.
+  const sourceUndecided = chosenSource === null && recommendedLoading;
+  const source: ClaimsSource = chosenSource ?? (hasRecommended ? 'recommended' : 'featured');
+  const featuredEnabled = source === 'featured' && !sourceUndecided;
   const { claims: featuredCatalog, isLoading: featuredCatalogLoading } = useFeaturedClaims(featuredEnabled);
 
   const featuredClaimIds = React.useMemo(
@@ -624,35 +639,29 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const opponentCountPending = opponentClaims.length === 0 && (positions.isLoading || opponentClaimsSettling);
 
-  const hasRecommended = recommendedSections.length > 0;
-  // Featured takes Recommended's slot when there is no curated page for this pairing.
-  const showsFeatured = !hasRecommended && !recommendedLoading;
-  const hasFeatured = showsFeatured && featuredClaims.length > 0;
-  // The slot is filled whenever Recommended isn't, empty or not — unlike Recommended, which hides
-  // when a curator has nothing for this pairing. Recommended's absence is information ("no one
-  // curated this"); Featured's would just be a tab that comes and goes, and a viewer who has seen
-  // it once should be able to go back and find it. It carries its own empty state instead.
-  //
-  // Landing is the separate question, and it waits for `hasFeatured`: putting the viewer on a tab
-  // that then settles empty is worse than never starting them there.
-  const featuredSlotVisible = showsFeatured;
-  // The opponent's claims arrive in one round trip; the curated lookup is three, in sequence. The
-  // picker lands on whichever has something to show first and stays there: once a tab has drawn
-  // its list the landing is settled, so a curated page arriving afterwards adds its tab to the
-  // strip rather than moving the viewer onto it. Before then Recommended wins as soon as it is
-  // known to exist, since a curator's page for this pairing is the best thing to land on — and an
-  // opponent's tab with nothing on it waits for that lookup rather than settling on an empty state.
-  const landedTabRef = React.useRef<PickerTab | null>(null);
-  const tab: PickerTab =
-    chosenTab ?? landedTabRef.current ?? (hasRecommended ? 'recommended' : hasFeatured ? 'featured' : 'opponent');
+  // Claims is where the picker opens, whatever its source turns out to be. The strip no longer
+  // shifts under the viewer as lookups land: which claims Claims shows is the menu's business now,
+  // and the menu says so in words rather than by growing a tab.
+  const tab: PickerTab = chosenTab ?? 'claims';
   const setTab = setChosenTab;
+
+  // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
+  // a source that appears doesn't reshuffle the ones already in the menu.
+  const sourceOptions = React.useMemo<HubFilterOption<ClaimsSource>[]>(
+    () =>
+      (hasRecommended ? (['recommended', 'featured', 'all'] as const) : (['featured', 'all'] as const)).map(value => ({
+        value,
+        label: CLAIMS_SOURCE_LABELS[value],
+      })),
+    [hasRecommended]
+  );
 
   const claims =
     tab === 'opponent'
       ? opponentClaims
-      : tab === 'recommended'
+      : source === 'recommended'
         ? curatedClaims
-        : tab === 'featured'
+        : source === 'featured'
           ? featuredClaims
           : browsedClaims;
 
@@ -690,61 +699,54 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         if (spaceId && claim.claim.space_id !== spaceId) return false;
         if (topicId && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(t => t.id === topicId))
           return false;
-        if (
-          tab !== 'all' &&
-          debouncedSearch &&
-          !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())
-        )
+        // All claims searches server-side, in the browsed query. Every other list is in memory.
+        const searchesHere = !(tab === 'claims' && source === 'all');
+        if (searchesHere && debouncedSearch && !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase()))
           return false;
         return true;
       }),
-    [claims, debouncedSearch, spaceId, tab, topicId, topicsByClaimId]
+    [claims, debouncedSearch, source, spaceId, tab, topicId, topicsByClaimId]
   );
 
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId);
 
+  // Only All claims is paged; the other two sources come whole.
+  const browsesPages = tab === 'claims' && source === 'all';
+  const hasNextPage = browsesPages && Boolean(browsedClaimsQuery.hasNextPage);
+
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: Boolean(browsedClaimsQuery.hasNextPage),
+    hasNextPage,
     isFetchingNextPage: browsedClaimsQuery.isFetchingNextPage,
     fetchNextPage: browsedClaimsQuery.fetchNextPage,
   });
 
-  // Each tab draws from a different set of queries, so each waits on its own. The allowlist narrows
-  // the All tab alone now, so only that one waits for it.
+  // Each list draws from a different set of queries, so each waits on its own. The allowlist narrows
+  // All claims alone now, so only that one waits for it.
   const tabIsLoading =
     sessionQuery.isLoading ||
-    (tab === 'recommended'
-      ? recommendedLoading || curatedClaimsQuery.isLoading
-      : tab === 'featured'
-        ? featuredClaimsSettling
-        : tab === 'opponent'
-          ? positions.isLoading ||
-            opponentEntitiesQuery.isLoading ||
-            opponentClaimsQuery.isLoading ||
-            (landedTabRef.current === null && claims.length === 0 && recommendedLoading)
-          : allowlistPending || browsedClaimsQuery.isLoading);
+    (tab === 'opponent'
+      ? positions.isLoading || opponentEntitiesQuery.isLoading || opponentClaimsQuery.isLoading
+      : sourceUndecided ||
+        (source === 'recommended'
+          ? recommendedLoading || curatedClaimsQuery.isLoading
+          : source === 'featured'
+            ? featuredClaimsSettling
+            : allowlistPending || browsedClaimsQuery.isLoading));
 
   const tabError =
     sessionQuery.error ??
     (tab === 'opponent'
       ? (positions.error ?? opponentEntitiesQuery.error)
-      : tab === 'all'
+      : source === 'all'
         ? browsedClaimsQuery.error
-        : tab === 'featured'
+        : source === 'featured'
           ? (featuredEntitiesQuery.error ?? featuredClaimsQuery.error)
           : curatedClaimsQuery.error);
 
-  // Settle the landing tab once it has drawn its list (see `landedTabRef`). An empty tab settles
-  // nothing: it is still the default, and Recommended may yet take over.
-  const tabHasRows = claims.length > 0;
-  React.useEffect(() => {
-    if (chosenTab !== null || landedTabRef.current !== null || tabIsLoading || !tabHasRows) return;
-    landedTabRef.current = tab;
-  }, [chosenTab, tab, tabHasRows, tabIsLoading]);
-
-  // The curated tab groups by block rather than listing flat, but narrows on the same filters.
+  // Recommended groups by block rather than listing flat, but narrows on the same filters.
+  const showsSections = tab === 'claims' && source === 'recommended';
   const visibleSections = React.useMemo(() => {
-    if (tab !== 'recommended') return [];
+    if (!showsSections) return [];
     const visibleById = new Map(visibleClaims.map(claim => [claim.claim.claim_entity_id, claim]));
 
     return recommendedSections
@@ -755,7 +757,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           .filter((claim): claim is DebateRematchClaim => claim !== undefined),
       }))
       .filter(section => section.claims.length > 0);
-  }, [recommendedSections, tab, visibleClaims]);
+  }, [recommendedSections, showsSections, visibleClaims]);
 
   // `debate.claims_changed` is delivered per space, and it is what turns the opponent's new
   // response into a refresh of this page rather than something the poll finds up to twenty seconds
@@ -783,11 +785,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const { byClaimId: readinessByClaimId, unresolved: readinessUnresolved } = useClaimReadinessByClaimId({
     claims,
     unresolved:
-      tab === 'all'
-        ? browsedClaimsQuery.isLoading || Boolean(browsedClaimsQuery.error)
-        : tab === 'opponent'
-          ? opponentClaimsQuery.isLoading || Boolean(opponentClaimsQuery.error)
-          : curatedClaimsQuery.isLoading || Boolean(curatedClaimsQuery.error),
+      tab === 'opponent'
+        ? opponentClaimsQuery.isLoading || Boolean(opponentClaimsQuery.error)
+        : source === 'all'
+          ? browsedClaimsQuery.isLoading || Boolean(browsedClaimsQuery.error)
+          : source === 'featured'
+            ? featuredClaimsQuery.isLoading || Boolean(featuredClaimsQuery.error)
+            : curatedClaimsQuery.isLoading || Boolean(curatedClaimsQuery.error),
   });
 
   React.useEffect(() => {
@@ -862,15 +866,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               gives those tabs somewhere to go, and `overscroll-x-contain` stops a swipe that
               reaches the end from chaining into the browser's back gesture. */}
           <div className="no-scrollbar flex min-w-0 flex-1 items-center gap-5 overflow-x-auto overscroll-x-contain">
-            {hasRecommended || recommendedLoading ? (
-              <TabButton active={tab === 'recommended'} onClick={() => setTab('recommended')}>
-                Recommended
-              </TabButton>
-            ) : featuredSlotVisible ? (
-              <TabButton active={tab === 'featured'} onClick={() => setTab('featured')}>
-                Featured
-              </TabButton>
-            ) : null}
+            <TabButton active={tab === 'claims'} onClick={() => setTab('claims')}>
+              Claims
+            </TabButton>
             <TabButton active={tab === 'opponent'} onClick={() => setTab('opponent')}>
               <span className="max-w-[10rem] truncate">{firstNamePossessive(remoteName)} positions</span>
               <span
@@ -888,9 +886,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   opponentPositionCount
                 )}
               </span>
-            </TabButton>
-            <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
-              All
             </TabButton>
           </div>
           <button
@@ -914,6 +909,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             facetSpaceIds={facetSpaceIds}
             facetTopics={facetTopics}
             className="justify-between"
+            // Only on Claims: the opponent's tab is one fixed source — their own responses — and a
+            // menu offering three others there would read as filtering a list it can't reach.
+            leading={
+              tab === 'claims' ? (
+                <HubFilterMenu
+                  label={CLAIMS_SOURCE_LABELS[source]}
+                  options={sourceOptions}
+                  value={source}
+                  onChange={setChosenSource}
+                />
+              ) : null
+            }
           />
           <Input
             withSearchIcon
@@ -943,20 +950,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           // Only what the visible tab actually draws from, and only while it has nothing to show.
           // Holding every tab on the slowest query meant the session's own claims — which arrive in
           // one round trip — sat behind a graph-wide scan they don't come from.
-          isLoading={
-            tabIsLoading && (tab === 'recommended' ? visibleSections.length === 0 : visibleClaims.length === 0)
-          }
+          isLoading={tabIsLoading && (showsSections ? visibleSections.length === 0 : visibleClaims.length === 0)}
           error={tabError}
-          isEmpty={tab === 'recommended' ? visibleSections.length === 0 : visibleClaims.length === 0}
+          isEmpty={showsSections ? visibleSections.length === 0 : visibleClaims.length === 0}
           emptyMessage={
             hasFilters
               ? 'No claims match these filters.'
-              : tab === 'recommended'
-                ? `Nothing recommended for you and ${remoteName} yet.`
-                : tab === 'featured'
-                  ? 'No featured claims are available to debate yet.'
-                  : tab === 'opponent'
-                    ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+              : tab === 'opponent'
+                ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                : source === 'recommended'
+                  ? `Nothing recommended for you and ${remoteName} yet.`
+                  : source === 'featured'
+                    ? 'No featured claims are available to debate yet.'
                     : 'No other eligible claims are available yet.'
           }
           emptyAction={
@@ -972,7 +977,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               : undefined
           }
         >
-          {tab === 'recommended' ? (
+          {showsSections ? (
             // Each data block on the curator's page is its own section, in page order.
             <div className="flex flex-col gap-4">
               {visibleSections.map(section => (
@@ -987,17 +992,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         </HubQueryState>
 
         {/* Outside the empty state deliberately: when a filter empties the list, the next page is
-            the way out, so the sentinel has to stay reachable. Only on the All tab: the curated
-            tab's sections come from the page whole, and the opponent's tab is the whole of what
-            the graph knows about them, in one query. Not while the allowlist is pending either —
-            the picker is showing a loading state then. */}
-        {tab === 'all' && browsedClaimsQuery.hasNextPage && !allowlistPending ? (
+            the way out, so the sentinel has to stay reachable. Only under All claims: Recommended's
+            sections come from the curator's page whole, Featured is one graph query, and the
+            opponent's tab is the whole of what the graph knows about them. Not while the allowlist
+            is pending either — the picker is showing a loading state then. */}
+        {hasNextPage && !allowlistPending ? (
           <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         ) : null}
         {/* The same skeleton the list shows on first load, so the next batch reads as more of
             the same list arriving rather than a different component. Without it the sentinel
             fires silently and the list just sits there until the page lands. */}
-        {tab === 'all' && browsedClaimsQuery.isFetchingNextPage ? (
+        {browsesPages && browsedClaimsQuery.isFetchingNextPage ? (
           <div className="mt-2" data-testid="claims-next-page-skeleton">
             <HubSkeleton rows={2} />
           </div>

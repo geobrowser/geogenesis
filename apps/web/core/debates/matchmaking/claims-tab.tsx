@@ -69,7 +69,10 @@ const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
 export function ClaimsTab() {
   const [search, setSearch] = React.useState('');
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
-  const [filter, setFilter] = React.useState<ClaimsTabFilter>('all');
+  // Featured is where the tab opens. The whole corpus is the wider net but the shallower one — a
+  // curator's pick is a better first thing to put in front of someone than whatever the index
+  // ranked highest, and All claims is one menu away.
+  const [filter, setFilter] = React.useState<ClaimsTabFilter>('featured');
   const [spaceId, setSpaceId] = React.useState<string | null>(null);
   const [topicId, setTopicId] = React.useState<string | null>(null);
 
