@@ -34,7 +34,7 @@ export const queryClient = new QueryClient({
        * Note this governs `fetchQuery` as well as `useQuery`, and there it decides something
        * different in kind: whether an imperative read issues a request at all. That is the wrong
        * default for a deliberate "go and get this", so the sync layer opts out explicitly — see
-       * `SYNC_READ_OPTIONS` in `core/sync/orm.ts`. Chat's imperative reads keep this default
+       * `syncFetchQuery` in `core/sync/orm.ts`. Chat's imperative reads keep this default
        * deliberately: they are existence and type lookups behind a local-store check, plus graph
        * searches, where answering a repeat from cache is the desired behaviour.
        */

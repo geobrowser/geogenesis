@@ -135,18 +135,29 @@ describe('sync reads opt out of the global staleTime', () => {
     // the moment a raw `fetchQuery` appears anywhere in the layer, including in a new file.
     const dir = __dirname;
     const offences: string[] = [];
+    let helperImplementations = 0;
+
+    // Exempted by exact match, not by mentioning `staleTime: 0`. A looser rule lets any raw call
+    // borrow the exemption — `fetchQuery({ staleTime: 0, ...options })` reads as opted out while
+    // the spread is free to overwrite it.
+    const HELPER_IMPLEMENTATION = 'return cache.fetchQuery({ ...options, staleTime: 0 } as FetchQueryOptions<TData>);';
 
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (!entry.isFile() || !/\.tsx?$/.test(entry.name) || /\.test\.tsx?$/.test(entry.name)) continue;
       const contents = readFileSync(path.join(dir, entry.name), 'utf8');
       contents.split('\n').forEach((line, index) => {
         if (!/\.fetchQuery\(/.test(line)) return;
-        // The single raw call inside the helper is the one that is meant to be there.
-        if (/staleTime: 0/.test(line)) return;
+        if (line.trim() === HELPER_IMPLEMENTATION) {
+          helperImplementations++;
+          return;
+        }
         offences.push(`${entry.name}:${index + 1} — ${line.trim()}`);
       });
     }
 
     expect(offences).toEqual([]);
+    // If the helper is ever reworded, the exemption stops matching and this test would quietly
+    // start reporting the helper itself — or, worse, pass while guarding nothing.
+    expect(helperImplementations, 'the exempted helper implementation was not found').toBe(1);
   });
 });

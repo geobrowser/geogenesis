@@ -166,7 +166,7 @@ export function mergeRelations(localRelations: Relation[], remoteRelations: Rela
  *
  * Keyed on the raw query instead, every keystroke past the cap mints a fresh entry for a request
  * that is byte-identical to the last one. Note this collapses the entries, not the requests: these
- * reads carry `SYNC_READ_OPTIONS`, so a key hit still goes to the network. (Before the client had
+ * reads go through `syncFetchQuery`, so a key hit still goes to the network. (Before the client had
  * global defaults, the same was true for a different reason — a bare `QueryClient` left every page
  * stale on arrival.) Not re-running the search at all is the *caller's* outer query key, which each
  * of the four callers now caps for itself.
