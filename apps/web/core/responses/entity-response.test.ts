@@ -16,6 +16,7 @@ import {
   getEntityResponseKind,
   getResponseActionMethod,
   hasUnpublishedClaimResponseKindEdit,
+  resolveEntityResponseKind,
   responseKindToVoteKind,
   userEntityResponseQueryKey,
   waitForIndexedEntityResponse,
@@ -23,6 +24,35 @@ import {
 
 const SPACE_ID = '1234567890abcdef1234567890abcdef';
 const OTHER_SPACE_ID = 'abcdef1234567890abcdef1234567890';
+
+type ResolveEntity = NonNullable<Parameters<typeof resolveEntityResponseKind>[0]>;
+
+function plainEntity(): ResolveEntity {
+  return { relations: [], values: [] };
+}
+
+function claimEntity(factualValue?: string): ResolveEntity {
+  return {
+    relations: [
+      {
+        type: { id: SystemIds.TYPES_PROPERTY },
+        toEntity: { id: CLAIM_TYPE_ID },
+        isDeleted: false,
+      },
+    ],
+    values:
+      factualValue === undefined
+        ? []
+        : [
+            {
+              spaceId: SPACE_ID,
+              property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
+              value: factualValue,
+              isDeleted: false,
+            },
+          ],
+  } as ResolveEntity;
+}
 
 describe('entity response semantics', () => {
   it.each([
@@ -43,6 +73,44 @@ describe('entity response semantics', () => {
     ['malformed', 'stance'],
   ] as const)('uses canonical checked semantics for factual value %s', (factualValue, expected) => {
     expect(getEntityResponseKind({ isClaim: true, isFactual: getChecked(factualValue) === true })).toBe(expected);
+  });
+
+  it('resolves plain entities to curation', () => {
+    expect(resolveEntityResponseKind(plainEntity(), SPACE_ID)).toBe('curation');
+    expect(resolveEntityResponseKind(null, SPACE_ID)).toBe('curation');
+  });
+
+  it.each([
+    ['1', 'veracity'],
+    ['0', 'stance'],
+    [undefined, 'stance'],
+    ['true', 'stance'],
+    ['yes', 'stance'],
+    ['malformed', 'stance'],
+  ] as const)('resolves claim factual value %s with canonical checked semantics', (factualValue, expected) => {
+    expect(resolveEntityResponseKind(claimEntity(factualValue), SPACE_ID)).toBe(expected);
+  });
+
+  it('ignores factual values from other spaces when resolving kind', () => {
+    const entity = {
+      relations: [
+        {
+          type: { id: SystemIds.TYPES_PROPERTY },
+          toEntity: { id: CLAIM_TYPE_ID },
+          isDeleted: false,
+        },
+      ],
+      values: [
+        {
+          spaceId: OTHER_SPACE_ID,
+          property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID },
+          value: '1',
+          isDeleted: false,
+        },
+      ],
+    } as ResolveEntity;
+
+    expect(resolveEntityResponseKind(entity, SPACE_ID)).toBe('stance');
   });
 
   it.each([
