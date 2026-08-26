@@ -6,15 +6,21 @@ type TelemetryUser = {
   id: string;
 };
 
-export function reportError(error: unknown): void {
+/**
+ * Returns the Sentry event id, so a surface that shows the user an error can quote a
+ * reference that leads straight back to it. Undefined when telemetry is off or reporting
+ * itself failed — callers must treat it as best-effort.
+ */
+export function reportError(error: unknown): string | undefined {
   if (!isTelemetryEnabled) {
-    return;
+    return undefined;
   }
 
   try {
-    Sentry.captureException(error);
+    return Sentry.captureException(error);
   } catch (reportingError) {
     console.error('[Telemetry] Failed to capture exception', reportingError);
+    return undefined;
   }
 }
 

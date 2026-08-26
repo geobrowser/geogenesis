@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { reportError } from '~/core/telemetry/logger';
 
 import { Notice } from '~/design-system/notice';
+import { Text } from '~/design-system/text';
 
 type Props = {
   error: Error & { digest?: string };
@@ -50,12 +51,28 @@ function writeState(state: StoredState) {
   } catch {}
 }
 
+/**
+ * Whether this looks like a connection problem rather than a fault.
+ *
+ * `navigator.onLine === false` is the one signal here that means something: the browser is
+ * certain there is no network. `true` only means an interface is up, so it is never taken as
+ * evidence of connectivity — it just leaves the generic wording in place.
+ */
+function looksOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
+}
+
 export function AutoRetryError({ error, reset, preview }: Props) {
   const digest = errorDigest(error);
+  const [eventId, setEventId] = React.useState<string | undefined>(undefined);
+  // Read once per error rather than during render: the value can change under us, and a
+  // render that reads it would disagree with the copy already on screen.
+  const [offline, setOffline] = React.useState(false);
 
   React.useEffect(() => {
     if (preview) return;
-    reportError(error);
+    setOffline(looksOffline());
+    setEventId(reportError(error));
   }, [error, preview]);
 
   React.useEffect(() => {
@@ -93,16 +110,30 @@ export function AutoRetryError({ error, reset, preview }: Props) {
     };
   }, [digest, preview, reset]);
 
+  // "Reconnecting" was shown for *every* error this boundary caught, so a plain bug read to
+  // users — and to whoever they reported it to — as a connection problem, and got chased as
+  // one (GEO-2670). Claim a connection cause only when the browser says there is no network.
+  const reference = eventId ?? (digest === 'preview' ? undefined : digest);
+
   return (
     <Notice
       visual={<LargeSpinner />}
-      title="Reconnecting"
+      title={offline ? 'Reconnecting' : 'Something went wrong'}
       description={
         <>
-          Something interrupted loading this page.
+          {offline ? 'Your device appears to be offline.' : 'This page didn’t load properly.'}
           <br />
           Retrying automatically...
         </>
+      }
+      // The one thing that makes a screenshot of this actionable. Without it a report is
+      // "I saw the reconnecting screen", and the matching Sentry event can't be found.
+      footer={
+        reference ? (
+          <Text as="p" variant="footnote" color="grey-04">
+            Reference: <span className="font-mono">{reference.slice(0, 12)}</span>
+          </Text>
+        ) : null
       }
     />
   );
