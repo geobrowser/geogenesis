@@ -35,7 +35,7 @@ vi.mock('~/partials/entity-page/entity-row-actions', () => ({
 }));
 
 vi.mock('~/partials/blocks/table/data-block-open-side-panel-button', () => ({
-  DataBlockOpenSidePanelButton: () => <button data-testid={HOVER_CONTROL} />,
+  DataBlockOpenSidePanelButton: () => <button data-testid={HOVER_CONTROL} aria-label={HOVER_CONTROL} />,
 }));
 
 vi.mock('~/partials/blocks/table/collection-row-actions', () => ({
@@ -164,6 +164,44 @@ function renderTable(
     />
   );
 }
+
+/**
+ * GEO-2679, the query-block half. Collection rows reach copy through the "..." menu they already
+ * have; query rows have no menu, so the control sits in the row itself rather than growing one.
+ */
+describe('copy entity id on query rows', () => {
+  const copyButton = () => screen.queryByRole('button', { name: 'Copy entity ID' });
+
+  it.each([
+    ['bulleted list', () => renderBulletedItem()],
+    ['table', () => renderTable()],
+  ])('offers copy on a %s query row, with no menu to open', (_view, renderView) => {
+    renderView();
+
+    expect(copyButton()).toBeInTheDocument();
+    expect(screen.queryByTestId(COLLECTION_HOVER_CONTROL)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['bulleted list', () => renderBulletedItem()],
+    ['table', () => renderTable()],
+  ])('puts copy ahead of the side panel button on a %s row', (_view, renderView) => {
+    renderView();
+
+    const controls = [...document.querySelectorAll('button[aria-label], [data-testid]')]
+      .map(el => el.getAttribute('aria-label') ?? el.getAttribute('data-testid'))
+      .filter((label): label is string => label === HOVER_CONTROL || label === 'Copy entity ID');
+
+    expect(controls).toEqual(['Copy entity ID', HOVER_CONTROL]);
+  });
+
+  // Collection rows keep it in the menu, so the row itself should not sprout a second one.
+  it('does not duplicate copy into the row on a collection table row', () => {
+    renderTable({ type: 'COLLECTION' });
+
+    expect(copyButton()).not.toBeInTheDocument();
+  });
+});
 
 describe('TableBlockBulletedListItem control layout', () => {
   it('puts the hover control in the same row as the votes', () => {

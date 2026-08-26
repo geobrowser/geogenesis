@@ -20,7 +20,9 @@ import { PrefetchLink } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { CopyEntityIdButton } from '~/partials/blocks/table/copy-entity-id-button';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
+import { rowOpenerClassName } from '~/partials/blocks/table/row-control-styles';
 
 type CollectionRowActionsProps = {
   isEditing: boolean;
@@ -101,6 +103,15 @@ export function CollectionRowActions({
 
   return (
     <div className="flex shrink-0 flex-nowrap items-center gap-0.5">
+      {/* Side panel first: it is the one people reach for, so it keeps a fixed position rather than
+          shifting left and right depending on whether the row has a menu to show. */}
+      {showSidePanel && (
+        <DataBlockOpenSidePanelButton
+          entityId={entityId}
+          entitySpaceId={spaceId ?? currentSpaceId}
+          openedWithMainViewEditing={openedWithMainViewEditing}
+        />
+      )}
       {(relationId || isEditing) && (
         <Popover.Root
           open={isPopoverOpen}
@@ -130,14 +141,16 @@ export function CollectionRowActions({
                 if (closeTimeoutRef.current) {
                   clearTimeout(closeTimeoutRef.current);
                 }
+                // Long enough to bridge the few pixels between the trigger and the menu, which
+                // overlap, and short enough not to feel like the menu is refusing to leave.
                 closeTimeoutRef.current = setTimeout(() => {
                   setIsPopoverOpen(false);
-                }, 300);
+                }, 120);
               }}
               onMouseDown={e => e.preventDefault()}
-              className="inline-flex shrink-0 items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+              className={rowOpenerClassName}
             >
-              <Menu />
+              <Menu filled={false} size={19} />
             </button>
           </Popover.Trigger>
           <Popover.Portal>
@@ -214,6 +227,9 @@ export function CollectionRowActions({
                   <RelationSmall />
                 </PrefetchLink>
               )}
+              {/* The entity the row's relation points at, not the relation itself. The relation's
+                  own id is a click away through the link beside this one (GEO-2679). */}
+              <CopyEntityIdButton entityId={entityId} />
               {isEditing && (
                 <PrefetchLink
                   href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}
@@ -228,13 +244,6 @@ export function CollectionRowActions({
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
-      )}
-      {showSidePanel && (
-        <DataBlockOpenSidePanelButton
-          entityId={entityId}
-          entitySpaceId={spaceId ?? currentSpaceId}
-          openedWithMainViewEditing={openedWithMainViewEditing}
-        />
       )}
       {/* Last in the row on purpose: the only destructive action here, kept furthest from the side
           panel people open by habit. Grey until hovered, then red — the row shouldn't shout at
