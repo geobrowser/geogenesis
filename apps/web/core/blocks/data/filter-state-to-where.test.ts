@@ -86,17 +86,33 @@ describe('filterStateToWhere', () => {
     });
   });
 
-  it('supports AND or OR independently within the Space property', () => {
+  it('always ORs multiple spaces, regardless of the Space mode', () => {
     const filters = [
       relationFilter(SystemIds.SPACE_FILTER, 'space-1'),
       relationFilter(SystemIds.SPACE_FILTER, 'space-2'),
     ];
+    const expected = { spaces: [{ equals: 'space-1' }, { equals: 'space-2' }] };
 
-    expect(filterStateToWhere(filters)).toEqual({
-      AND: [{ spaces: [{ equals: 'space-1' }] }, { spaces: [{ equals: 'space-2' }] }],
-    });
-    expect(filterStateToWhere(filters, { [SystemIds.SPACE_FILTER]: 'OR' })).toEqual({
-      spaces: [{ equals: 'space-1' }, { equals: 'space-2' }],
-    });
+    // A fresh block has no mode entry for Space; a migrated legacy block has
+    // an explicit OR; an explicit AND must never produce "in A and in B".
+    expect(filterStateToWhere(filters)).toEqual(expected);
+    expect(filterStateToWhere(filters, { [SystemIds.SPACE_FILTER]: 'OR' })).toEqual(expected);
+    expect(filterStateToWhere(filters, { [SystemIds.SPACE_FILTER]: 'AND' })).toEqual(expected);
+  });
+
+  it('keeps multi-space OR while another property stays AND', () => {
+    const filters = [
+      relationFilter(SystemIds.SPACE_FILTER, 'space-1'),
+      relationFilter(SystemIds.SPACE_FILTER, 'space-2'),
+      relationFilter(PROPERTY_A, 'a-1'),
+      relationFilter(PROPERTY_A, 'a-2'),
+    ];
+
+    // The space group stays one OR'd `spaces` array while the AND'd property
+    // group's members are hoisted alongside it as siblings of the outer AND.
+    const where = filterStateToWhere(filters);
+    expect(where.AND).toHaveLength(3);
+    expect(where.AND?.[0]).toEqual({ spaces: [{ equals: 'space-1' }, { equals: 'space-2' }] });
+    expect(where.AND?.slice(1).every(condition => condition.relations?.length === 1)).toBe(true);
   });
 });

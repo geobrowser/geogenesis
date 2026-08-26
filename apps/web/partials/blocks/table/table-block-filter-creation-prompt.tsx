@@ -1452,7 +1452,10 @@ function DynamicFilters({
     const all = enumeratePendingFilterChips(state, options);
     return all.filter(item => ID.equals(item.columnId, state.selectedColumn));
   }, [state, options]);
-  const showFilterModeControl = pendingChipsNeedFilterMode(pendingFilterChips);
+  // Multiple spaces are always OR (see filterStateToWhere), so a mode control
+  // for the Space property would be a switch that does nothing.
+  const showFilterModeControl =
+    state.selectedColumn !== SystemIds.SPACE_FILTER && pendingChipsNeedFilterMode(pendingFilterChips);
 
   const hasValueDropdown = state.selectedColumn === SystemIds.SPACE_FILTER || selectedOption?.valueType === 'RELATION';
 

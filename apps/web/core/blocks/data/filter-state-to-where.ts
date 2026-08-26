@@ -23,7 +23,9 @@ export function filterStateToWhere(filterState: Filter[], modesByColumn: ModesBy
     const mode: FilterMode = modesByColumn[columnId] ?? 'AND';
     if (filters.length === 1) {
       groupConditions.push(buildSingleFilterWhere(filters[0]));
-    } else if (ID.equals(columnId, SystemIds.SPACE_FILTER) && mode === 'OR') {
+    } else if (ID.equals(columnId, SystemIds.SPACE_FILTER)) {
+      // Multiple spaces are always OR, whatever the mode says: an entity lives
+      // in one space, so "in A and in B" is an empty set nobody asks for.
       groupConditions.push(buildSpaceFiltersWhere(filters));
     } else if (mode === 'OR') {
       groupConditions.push(buildOrWhere(filters));
