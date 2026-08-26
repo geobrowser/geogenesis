@@ -22,6 +22,7 @@ import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CopyEntityIdButton } from '~/partials/blocks/table/copy-entity-id-button';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
+import { rowOpenerClassName } from '~/partials/blocks/table/row-control-styles';
 
 type CollectionRowActionsProps = {
   isEditing: boolean;
@@ -140,14 +141,16 @@ export function CollectionRowActions({
                 if (closeTimeoutRef.current) {
                   clearTimeout(closeTimeoutRef.current);
                 }
+                // Long enough to bridge the few pixels between the trigger and the menu, which
+                // overlap, and short enough not to feel like the menu is refusing to leave.
                 closeTimeoutRef.current = setTimeout(() => {
                   setIsPopoverOpen(false);
-                }, 300);
+                }, 120);
               }}
               onMouseDown={e => e.preventDefault()}
-              className="inline-flex shrink-0 items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+              className={rowOpenerClassName}
             >
-              <Menu />
+              <Menu filled={false} size={19} />
             </button>
           </Popover.Trigger>
           <Popover.Portal>
