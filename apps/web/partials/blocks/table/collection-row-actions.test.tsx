@@ -195,7 +195,9 @@ describe('CollectionRowActions remove', () => {
  */
 describe('CollectionRowActions copy entity id', () => {
   const copyButton = () => screen.queryByRole('button', { name: 'Copy entity ID' });
-  const copiedButton = () => screen.queryByRole('button', { name: 'Entity ID copied' });
+  // Where the confirmation actually lives. Renaming the button instead would be announced
+  // inconsistently, and would leave the control describing an event rather than its own action.
+  const confirmation = () => screen.getByRole('status');
 
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -225,7 +227,7 @@ describe('CollectionRowActions copy entity id', () => {
     expect(mocks.writeText).not.toHaveBeenCalledWith(RELATION);
   });
 
-  it('confirms the copy', async () => {
+  it('confirms the copy somewhere a screen reader will read it', async () => {
     renderActions();
     openRowMenu();
 
@@ -233,7 +235,28 @@ describe('CollectionRowActions copy entity id', () => {
       fireEvent.click(copyButton()!);
     });
 
-    expect(copiedButton()).toBeInTheDocument();
+    expect(confirmation()).toHaveTextContent('Entity ID copied');
+  });
+
+  // The region has to be mounted and empty beforehand: a live region that appears already holding
+  // its message is not reliably announced.
+  it('has the status region in place before anything is copied', () => {
+    renderActions();
+    openRowMenu();
+
+    expect(confirmation()).toBeEmptyDOMElement();
+  });
+
+  // The control still does the same thing after doing it once, and should still say so.
+  it('keeps the button describing its action, not the outcome', async () => {
+    renderActions();
+    openRowMenu();
+
+    await act(async () => {
+      fireEvent.click(copyButton()!);
+    });
+
+    expect(copyButton()).toBeInTheDocument();
   });
 
   it('goes back to offering a copy afterwards', async () => {
@@ -247,7 +270,7 @@ describe('CollectionRowActions copy entity id', () => {
       vi.advanceTimersByTime(2000);
     });
 
-    expect(copiedButton()).not.toBeInTheDocument();
+    expect(confirmation()).toBeEmptyDOMElement();
     expect(copyButton()).toBeInTheDocument();
   });
 
@@ -264,7 +287,7 @@ describe('CollectionRowActions copy entity id', () => {
       fireEvent.click(copyButton()!);
     });
 
-    expect(copiedButton()).not.toBeInTheDocument();
+    expect(confirmation()).toBeEmptyDOMElement();
     expect(copyButton()).toBeInTheDocument();
 
     consoleError.mockRestore();

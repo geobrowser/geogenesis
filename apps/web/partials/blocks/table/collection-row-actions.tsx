@@ -94,7 +94,6 @@ export function CollectionRowActions({
       clearTimeout(copiedTimeoutRef.current);
     }
     copiedTimeoutRef.current = setTimeout(() => setHasCopiedId(false), 1500);
-
   };
 
   // By the relation's own id, not by what it points at. `blockEntity.relations` holds everything
@@ -245,14 +244,29 @@ export function CollectionRowActions({
                   away through the link beside this one (GEO-2679). */}
               <button
                 type="button"
-                aria-label={hasCopiedId ? 'Entity ID copied' : 'Copy entity ID'}
-                title={hasCopiedId ? 'Copied' : 'Copy entity ID'}
+                // Stable, tick or no tick. Renaming a focused control mid-interaction is announced
+                // inconsistently, and while it is renamed the button claims to be a thing that
+                // happened rather than the thing it does. The tick below says what happened.
+                aria-label="Copy entity ID"
+                title="Copy entity ID"
                 onClick={onCopyEntityId}
                 onMouseDown={e => e.preventDefault()}
                 className="inline-flex items-center p-1 group-hover:text-grey-03 hover:text-text!"
               >
                 {hasCopiedId ? <TickSmall /> : <CopySmall />}
               </button>
+              {/* A clipboard write leaves nothing behind to look at, so the tick is the whole
+                  confirmation — and a tick is nothing at all if you are not looking. Mounted empty
+                  with the popover so the region is already there when the text arrives, which is
+                  what makes it announce. */}
+
+              {/* A clipboard write leaves nothing behind to look at, so the tick is the whole
+                  confirmation — and a tick is nothing at all if you are not looking. Mounted empty
+                  with the popover so the region is already there when the text arrives, which is
+                  what makes it announce. */}
+              <span role="status" aria-live="polite" className="sr-only">
+                {hasCopiedId ? 'Entity ID copied' : ''}
+              </span>
               {isEditing && (
                 <PrefetchLink
                   href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}
