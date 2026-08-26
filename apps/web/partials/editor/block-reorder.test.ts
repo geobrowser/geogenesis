@@ -135,6 +135,13 @@ describe('getNextKeyboardDropBoundary', () => {
     expect(getNextKeyboardDropBoundary(0, null, -1, boundaries)).toBeNull();
     expect(getNextKeyboardDropBoundary(3, null, 1, boundaries)).toBeNull();
   });
+
+  it('moves by draggable rank when excluded nodes make child indexes non-contiguous', () => {
+    const boundariesWithExcludedNode = [0, 2, 3];
+
+    expect(getNextKeyboardDropBoundary(0, null, 1, boundariesWithExcludedNode)).toBe(3);
+    expect(getNextKeyboardDropBoundary(2, null, -1, boundariesWithExcludedNode)).toBe(0);
+  });
 });
 
 describe('makeDropZones', () => {

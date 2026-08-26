@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Relation } from '../types';
-import { canPublishRelationUpdate } from './relation-update';
+import { canPublishRelationUpdate, getRelationUpdateUnsetFields } from './relation-update';
 
 const existingRelation: Relation = {
   id: 'existing-relation',
@@ -32,5 +32,25 @@ describe('canPublishRelationUpdate', () => {
         toEntity: { id: 'different-block', name: 'Different block', value: 'different-block' },
       })
     ).toBe(false);
+  });
+});
+
+describe('getRelationUpdateUnsetFields', () => {
+  it('explicitly unsets a removed to-space reference', () => {
+    const relationWithSpace = { ...existingRelation, toSpaceId: 'target-space' };
+
+    expect(getRelationUpdateUnsetFields(relationWithSpace, { ...relationWithSpace, toSpaceId: undefined })).toEqual([
+      'toSpace',
+    ]);
+  });
+
+  it('preserves a pending unset until a to-space reference is selected again', () => {
+    const pendingUnset = {
+      ...existingRelation,
+      relationUpdateUnsetFields: ['toSpace'] as Array<'toSpace'>,
+    };
+
+    expect(getRelationUpdateUnsetFields(pendingUnset, pendingUnset)).toEqual(['toSpace']);
+    expect(getRelationUpdateUnsetFields(pendingUnset, { ...pendingUnset, toSpaceId: 'target-space' })).toEqual([]);
   });
 });

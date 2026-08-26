@@ -343,15 +343,17 @@ export function getNextKeyboardDropBoundary(
   direction: -1 | 1,
   boundaries: number[]
 ) {
-  const currentIndex = currentBoundary === null ? sourceIndex : toFinalBlockIndex(sourceIndex, currentBoundary);
-  const targetIndex = currentIndex + direction;
-  const targetBoundary = targetIndex > sourceIndex ? targetIndex + 1 : targetIndex;
+  const sourceRank = boundaries.indexOf(sourceIndex);
+  if (sourceRank === -1) return null;
 
-  return boundaries.includes(targetBoundary) ? targetBoundary : null;
-}
+  const currentBoundaryRank = currentBoundary === null ? sourceRank : boundaries.indexOf(currentBoundary);
+  if (currentBoundaryRank === -1) return null;
 
-function toFinalBlockIndex(sourceIndex: number, dropBoundary: number) {
-  return dropBoundary > sourceIndex ? dropBoundary - 1 : dropBoundary;
+  const currentRank = currentBoundaryRank > sourceRank ? currentBoundaryRank - 1 : currentBoundaryRank;
+  const targetRank = currentRank + direction;
+  const targetBoundaryRank = targetRank > sourceRank ? targetRank + 1 : targetRank;
+
+  return boundaries[targetBoundaryRank] ?? null;
 }
 
 function BlockDropZone({ zone, left, width }: { zone: DropZoneLayout; left: number; width: number }) {
