@@ -238,6 +238,8 @@ export type Value = LocalMetadata & {
 // ==============================================================================
 
 export type Relation = LocalMetadata & {
+  /** Publish this local change with the SDK's updateRelation operation. */
+  isRelationUpdate?: boolean;
   id: string;
   entityId: string;
   type: {

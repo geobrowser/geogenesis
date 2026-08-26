@@ -90,6 +90,12 @@ type DeleteRelationOp = Op & {
   id: unknown;
 };
 
+type UpdateRelationOp = Op & {
+  type: 'updateRelation';
+  id: unknown;
+  position?: string;
+};
+
 describe('prepareLocalDataForPublishing', () => {
   describe('basic functionality', () => {
     it('should create updateEntity operation for valid values', () => {
@@ -121,6 +127,28 @@ describe('prepareLocalDataForPublishing', () => {
       expect(createOp.from).toBeDefined();
       expect(createOp.to).toBeDefined();
       expect(createOp.position).toBe('1');
+    });
+
+    it('should update an existing relation position without deleting or recreating it', () => {
+      const relationId = IdUtils.generate();
+      const relations = [
+        createMockRelation({
+          id: relationId,
+          isRelationUpdate: true,
+          position: 'position-after-reorder',
+        }),
+      ];
+
+      const result = prepareLocalDataForPublishing([], relations, 'test-space');
+
+      expect(result).toHaveLength(1);
+      expect(result.filter(op => op.type === 'deleteRelation')).toHaveLength(0);
+      expect(result.filter(op => op.type === 'createRelation')).toHaveLength(0);
+
+      const updateOp = result[0] as UpdateRelationOp;
+      expect(updateOp.type).toBe('updateRelation');
+      expect(updateOp.position).toBe('position-after-reorder');
+      expect(Array.from(updateOp.id as Uint8Array)).toEqual(Array.from(IdUtils.toBytes(relationId) as Uint8Array));
     });
 
     it('should create deleteRelation operation for deleted relations', async () => {

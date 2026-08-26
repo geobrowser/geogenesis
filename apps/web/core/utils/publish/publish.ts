@@ -3,6 +3,7 @@ import {
   type DecimalMantissa,
   Graph,
   Op,
+  Ops,
   type PropertyValueParam,
   SystemIds,
 } from '@geoprotocol/geo-sdk/lite';
@@ -93,6 +94,13 @@ function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op
     if (r.isDeleted) {
       const { ops: deleteOps } = Graph.deleteRelation({ id: r.id });
       ops.push(...deleteOps);
+    } else if (r.isRelationUpdate) {
+      const { ops: updateOps } = Ops.relations.update({
+        id: r.id,
+        position: r.position,
+        ...(r.toSpaceId && { toSpace: r.toSpaceId }),
+      });
+      ops.push(...updateOps);
     } else {
       const { ops: createOps } = Graph.createRelation({
         fromEntity: r.fromEntity.id,

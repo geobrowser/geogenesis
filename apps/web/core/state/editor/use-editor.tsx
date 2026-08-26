@@ -67,7 +67,70 @@ function makeNewBlockRelation({
 }: MakeNewBlockArgs) {
   const newRelationId = ID.createEntityId();
 
-  const position = nextBlockIds.indexOf(addedBlock.id);
+  const newBlockOrdering = makeBlockPosition({
+    blockId: addedBlock.id,
+    nextBlockIds,
+    blockRelations,
+    newBlocks,
+  });
+
+  const renderableType = ((): RenderableEntityType => {
+    switch (tiptapBlock.type) {
+      case 'paragraph':
+      case 'text':
+      case 'heading':
+      case 'listItem':
+      case 'bulletList':
+      case 'orderedList':
+      case 'codeBlock':
+        return 'TEXT';
+      case 'tableNode':
+      case 'rankingNode':
+        return 'DATA';
+      case 'image':
+        return 'IMAGE';
+      case 'video':
+        return 'VIDEO';
+      default:
+        return 'TEXT';
+    }
+  })();
+
+  return {
+    spaceId,
+    id: newRelationId,
+    position: newBlockOrdering,
+    verified: false,
+    entityId: IdUtils.generate(),
+    renderableType,
+    type: {
+      id: SystemIds.BLOCKS,
+      name: 'Blocks',
+    },
+    toEntity: {
+      id: addedBlock.id,
+      name: null,
+      value: addedBlock.value,
+    },
+    fromEntity: {
+      id: entityPageId,
+      name: null,
+    },
+  } satisfies Relation;
+}
+
+function makeBlockPosition({
+  blockId,
+  nextBlockIds,
+  blockRelations,
+  newBlocks,
+}: {
+  blockId: string;
+  nextBlockIds: string[];
+  blockRelations: RelationWithBlock[];
+  newBlocks: Relation[];
+}) {
+  const position = nextBlockIds.indexOf(blockId);
 
   // @TODO: noUncheckedIndexAccess
   const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
@@ -97,56 +160,7 @@ function makeNewBlockRelation({
     allRelations.find(c => c.toEntity.id === afterBlockIndex)?.position ??
     allRelations[allRelations.findIndex(c => c.position === beforeCollectionItemIndex) + 1]?.position;
 
-  const newBlockOrdering = Position.generateBetween(
-    beforeCollectionItemIndex ?? null,
-    afterCollectionItemIndex ?? null
-  );
-
-  const renderableType = ((): RenderableEntityType => {
-    switch (tiptapBlock.type) {
-      case 'paragraph':
-      case 'text':
-      case 'heading':
-      case 'listItem':
-      case 'bulletList':
-      case 'orderedList':
-      case 'codeBlock':
-        return 'TEXT';
-      case 'tableNode':
-      case 'rankingNode':
-        return 'DATA';
-      case 'image':
-        return 'IMAGE';
-      case 'video':
-        return 'VIDEO';
-      default:
-        return 'TEXT';
-    }
-  })();
-
-  const newRelation: Relation = {
-    spaceId: spaceId,
-    id: newRelationId,
-    position: newBlockOrdering,
-    verified: false,
-    entityId: IdUtils.generate(),
-    renderableType,
-    type: {
-      id: SystemIds.BLOCKS,
-      name: 'Blocks',
-    },
-    toEntity: {
-      id: addedBlock.id,
-      name: null,
-      value: addedBlock.value,
-    },
-    fromEntity: {
-      id: entityPageId,
-      name: null,
-    },
-  };
-
-  return newRelation;
+  return Position.generateBetween(beforeCollectionItemIndex ?? null, afterCollectionItemIndex ?? null);
 }
 
 interface UpsertBlocksRelationsArgs {
@@ -207,22 +221,18 @@ const makeBlocksRelations = async ({
 
   for (const movedBlock of movedBlocks) {
     const relationForMovedBlock = blockRelations.find(r => r.block.id === movedBlock.id);
+    if (!relationForMovedBlock) continue;
 
-    if (relationForMovedBlock) {
-      storage.relations.delete(relationForMovedBlock);
-    }
-
-    const newRelation = makeNewBlockRelation({
-      tiptapBlock: nextBlocks.find(b => b.id === movedBlock.id)!,
-      addedBlock: movedBlock,
+    const position = makeBlockPosition({
+      blockId: movedBlock.id,
       nextBlockIds,
       blockRelations,
-      spaceId,
       newBlocks,
-      entityPageId,
     });
 
-    storage.relations.set(newRelation);
+    storage.relations.update(relationForMovedBlock, draft => {
+      draft.position = position;
+    });
   }
 };
 
