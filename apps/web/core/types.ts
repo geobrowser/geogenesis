@@ -240,6 +240,8 @@ export type Value = LocalMetadata & {
 export type Relation = LocalMetadata & {
   /** Publish this local change with the SDK's updateRelation operation. */
   isRelationUpdate?: boolean;
+  /** Optional relation fields that the pending updateRelation operation clears. */
+  relationUpdateUnsetFields?: Array<'toSpace'>;
   id: string;
   entityId: string;
   type: {

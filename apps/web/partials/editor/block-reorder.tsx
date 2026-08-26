@@ -2,10 +2,13 @@
 
 import {
   DndContext,
+  DragCancelEvent,
   DragEndEvent,
   DragOverEvent,
   DragOverlay,
   DragStartEvent,
+  KeyboardCode,
+  KeyboardSensor,
   PointerSensor,
   closestCenter,
   useDraggable,
@@ -13,11 +16,14 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import type { KeyboardCoordinateGetter } from '@dnd-kit/core';
 import type { Editor } from '@tiptap/react';
 
 import * as React from 'react';
 
 import { OrderDots } from '~/design-system/icons/order-dots';
+
+import { ensureUniqueNodeIds } from './id-extension';
 
 type BlockLayout = {
   childIndex: number;
@@ -48,6 +54,9 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: blockKeyboardCoordinates,
     })
   );
   const [blockLayout, setBlockLayout] = React.useState<BlockLayout[]>([]);
@@ -89,6 +98,9 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     const editorElement = wrapper?.querySelector<HTMLElement>('.ProseMirror');
     if (!wrapper || !editorElement) return;
 
+    // Establish stable handle identities before rendering the controls. This
+    // lets focus follow a block when keyboard reordering changes its child index.
+    ensureUniqueNodeIds(editor);
     measureBlocks();
 
     const resizeObserver = new ResizeObserver(measureBlocks);
@@ -142,7 +154,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       wrapper.removeEventListener('pointermove', handlePointerMove);
       wrapper.removeEventListener('pointerleave', handlePointerLeave);
     };
-  }, [activeChildIndex, editorWrapperRef, enabled, measureBlocks, updateHoveredChildIndex]);
+  }, [activeChildIndex, editor, editorWrapperRef, enabled, measureBlocks, updateHoveredChildIndex]);
 
   React.useEffect(() => {
     if (enabled) return;
@@ -168,12 +180,20 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     updateHoveredChildIndex(null);
   };
 
+  const handleDragCancel = (event: DragCancelEvent) => {
+    releasePointerDragFocus(event.activatorEvent);
+    resetDragState();
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     if (!enabled) return;
 
     const childIndex = event.active.data.current?.childIndex;
     if (typeof childIndex !== 'number') return;
 
+    // Continuation nodes loaded from markdown intentionally start without IDs.
+    // A drag can happen before blur, so assign/dedupe IDs before persisting it.
+    ensureUniqueNodeIds(editor);
     measureBlocks();
     setActiveChildIndex(childIndex);
   };
@@ -195,6 +215,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       onReorder();
     }
 
+    releasePointerDragFocus(event.activatorEvent);
     resetDragState();
   };
 
@@ -205,19 +226,27 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
-      onDragCancel={resetDragState}
+      onDragCancel={handleDragCancel}
       onDragEnd={handleDragEnd}
     >
       {children}
 
-      {enabled && handleLayout && visibleHandleIndex !== null ? (
-        <BlockDragHandle
-          childIndex={visibleHandleIndex}
-          top={handleLayout.top + Math.min(16, (handleLayout.bottom - handleLayout.top) / 2) - 12}
-          left={editorLeft - 32}
-          isDragging={activeChildIndex !== null}
-        />
+      {enabled && activeChildIndex === null && blockLayout.length > 0 ? (
+        <BlockGutterHoverArea blocks={blockLayout} editorLeft={editorLeft} onClick={() => editor.commands.focus()} />
       ) : null}
+
+      {enabled
+        ? blockLayout.map(layout => (
+            <BlockDragHandle
+              key={getBlockDragHandleKey(editor, layout.childIndex)}
+              childIndex={layout.childIndex}
+              top={layout.top + Math.min(16, (layout.bottom - layout.top) / 2) - 12}
+              left={editorLeft - 32}
+              isDragging={activeChildIndex !== null}
+              visible={layout === handleLayout && visibleHandleIndex !== null}
+            />
+          ))
+        : null}
 
       {enabled && activeChildIndex !== null
         ? dropZones.map(zone => <BlockDropZone key={zone.boundary} zone={zone} left={editorLeft} width={editorWidth} />)
@@ -242,17 +271,66 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
   );
 }
 
+function getBlockDragHandleKey(editor: Editor, childIndex: number) {
+  if (childIndex < 0 || childIndex >= editor.state.doc.childCount) return `child-${childIndex}`;
+
+  const blockId = editor.state.doc.child(childIndex).attrs.id;
+  return typeof blockId === 'string' && blockId.length > 0 ? blockId : `child-${childIndex}`;
+}
+
+/** Pointer activation should not leave a handle visibly focused after drop. */
+export function releasePointerDragFocus(activatorEvent: Event) {
+  if (activatorEvent.type === 'keydown') return;
+
+  const target = activatorEvent.target;
+  if (!(target instanceof Element)) return;
+
+  target.closest<HTMLElement>('[data-block-drag-handle] button')?.blur();
+}
+
+export function BlockGutterHoverArea({
+  blocks,
+  editorLeft,
+  onClick,
+}: {
+  blocks: BlockLayout[];
+  editorLeft: number;
+  onClick?: React.MouseEventHandler<HTMLDivElement>;
+}) {
+  const firstBlock = blocks[0];
+  const lastBlock = blocks[blocks.length - 1];
+  if (!firstBlock || !lastBlock) return null;
+
+  return (
+    <div
+      data-block-drag-gutter
+      aria-hidden
+      className="pointer-events-auto absolute z-20"
+      onClick={onClick}
+      style={{
+        top: firstBlock.top,
+        left: editorLeft - GUTTER_HOVER_WIDTH,
+        width: GUTTER_HOVER_WIDTH,
+        height: Math.max(1, lastBlock.bottom - firstBlock.top),
+      }}
+    />
+  );
+}
+
 export function BlockDragHandle({
   childIndex,
   top,
   left,
   isDragging,
+  visible,
 }: {
   childIndex: number;
   top: number;
   left: number;
   isDragging: boolean;
+  visible: boolean;
 }) {
+  const [isFocused, setIsFocused] = React.useState(false);
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `content-block-${childIndex}`,
     data: { childIndex },
@@ -262,14 +340,21 @@ export function BlockDragHandle({
     <div
       data-block-drag-handle
       className="absolute z-30 flex h-6 w-8 items-center"
-      style={{ top, left, opacity: isDragging ? 0 : 1 }}
+      style={{
+        top,
+        left,
+        opacity: isDragging ? 0 : visible || isFocused ? 1 : 0,
+        pointerEvents: visible || isFocused ? 'auto' : 'none',
+      }}
     >
       <button
         ref={setNodeRef}
         type="button"
-        aria-label="Drag to reorder block"
+        aria-label={`Drag block ${childIndex + 1} to reorder`}
         title="Drag to reorder"
         className="flex size-6 cursor-grab items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01 active:cursor-grabbing"
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
         {...attributes}
         {...listeners}
       >
@@ -277,6 +362,58 @@ export function BlockDragHandle({
       </button>
     </div>
   );
+}
+
+export const blockKeyboardCoordinates: KeyboardCoordinateGetter = (event, { context, currentCoordinates }) => {
+  if (event.code !== KeyboardCode.Up && event.code !== KeyboardCode.Down) return;
+
+  const sourceIndex = context.active?.data.current?.childIndex;
+  if (typeof sourceIndex !== 'number') return;
+
+  const dropZones = context.droppableContainers
+    .getEnabled()
+    .flatMap(container => {
+      const boundary = container.data.current?.boundary;
+      return typeof boundary === 'number' ? [{ boundary, container }] : [];
+    })
+    .sort((a, b) => a.boundary - b.boundary);
+  const currentBoundary = context.over?.data.current?.boundary;
+  const targetBoundary = getNextKeyboardDropBoundary(
+    sourceIndex,
+    typeof currentBoundary === 'number' ? currentBoundary : null,
+    event.code === KeyboardCode.Down ? 1 : -1,
+    dropZones.map(zone => zone.boundary)
+  );
+  const target = dropZones.find(zone => zone.boundary === targetBoundary);
+  const targetRect = target ? context.droppableRects.get(target.container.id) : null;
+  if (!targetRect) return;
+
+  event.preventDefault();
+  const collisionHeight = context.collisionRect?.height ?? 0;
+
+  return {
+    x: currentCoordinates.x,
+    y: targetRect.top + (targetRect.height - collisionHeight) / 2,
+  };
+};
+
+export function getNextKeyboardDropBoundary(
+  sourceIndex: number,
+  currentBoundary: number | null,
+  direction: -1 | 1,
+  boundaries: number[]
+) {
+  const sourceRank = boundaries.indexOf(sourceIndex);
+  if (sourceRank === -1) return null;
+
+  const currentBoundaryRank = currentBoundary === null ? sourceRank : boundaries.indexOf(currentBoundary);
+  if (currentBoundaryRank === -1) return null;
+
+  const currentRank = currentBoundaryRank > sourceRank ? currentBoundaryRank - 1 : currentBoundaryRank;
+  const targetRank = currentRank + direction;
+  const targetBoundaryRank = targetRank > sourceRank ? targetRank + 1 : targetRank;
+
+  return boundaries[targetBoundaryRank] ?? null;
 }
 
 function BlockDropZone({ zone, left, width }: { zone: DropZoneLayout; left: number; width: number }) {
