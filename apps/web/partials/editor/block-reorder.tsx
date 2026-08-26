@@ -2,7 +2,6 @@
 
 import {
   DndContext,
-  DragCancelEvent,
   DragEndEvent,
   DragOverEvent,
   DragOverlay,
@@ -98,9 +97,6 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     const editorElement = wrapper?.querySelector<HTMLElement>('.ProseMirror');
     if (!wrapper || !editorElement) return;
 
-    // Establish stable handle identities before rendering the controls. This
-    // lets focus follow a block when keyboard reordering changes its child index.
-    ensureUniqueNodeIds(editor);
     measureBlocks();
 
     const resizeObserver = new ResizeObserver(measureBlocks);
@@ -154,7 +150,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       wrapper.removeEventListener('pointermove', handlePointerMove);
       wrapper.removeEventListener('pointerleave', handlePointerLeave);
     };
-  }, [activeChildIndex, editor, editorWrapperRef, enabled, measureBlocks, updateHoveredChildIndex]);
+  }, [activeChildIndex, editorWrapperRef, enabled, measureBlocks, updateHoveredChildIndex]);
 
   React.useEffect(() => {
     if (enabled) return;
@@ -178,11 +174,6 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     setActiveChildIndex(null);
     setActiveBoundary(null);
     updateHoveredChildIndex(null);
-  };
-
-  const handleDragCancel = (event: DragCancelEvent) => {
-    releasePointerDragFocus(event.activatorEvent);
-    resetDragState();
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -215,7 +206,6 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       onReorder();
     }
 
-    releasePointerDragFocus(event.activatorEvent);
     resetDragState();
   };
 
@@ -226,7 +216,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
-      onDragCancel={handleDragCancel}
+      onDragCancel={resetDragState}
       onDragEnd={handleDragEnd}
     >
       {children}
@@ -238,7 +228,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       {enabled
         ? blockLayout.map(layout => (
             <BlockDragHandle
-              key={getBlockDragHandleKey(editor, layout.childIndex)}
+              key={layout.childIndex}
               childIndex={layout.childIndex}
               top={layout.top + Math.min(16, (layout.bottom - layout.top) / 2) - 12}
               left={editorLeft - 32}
@@ -269,23 +259,6 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       </DragOverlay>
     </DndContext>
   );
-}
-
-function getBlockDragHandleKey(editor: Editor, childIndex: number) {
-  if (childIndex < 0 || childIndex >= editor.state.doc.childCount) return `child-${childIndex}`;
-
-  const blockId = editor.state.doc.child(childIndex).attrs.id;
-  return typeof blockId === 'string' && blockId.length > 0 ? blockId : `child-${childIndex}`;
-}
-
-/** Pointer activation should not leave a handle visibly focused after drop. */
-export function releasePointerDragFocus(activatorEvent: Event) {
-  if (activatorEvent.type === 'keydown') return;
-
-  const target = activatorEvent.target;
-  if (!(target instanceof Element)) return;
-
-  target.closest<HTMLElement>('[data-block-drag-handle] button')?.blur();
 }
 
 export function BlockGutterHoverArea({
