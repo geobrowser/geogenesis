@@ -199,8 +199,21 @@ describe('CollectionRowActions copy entity id', () => {
   // inconsistently, and would leave the control describing an event rather than its own action.
   const confirmation = () => screen.getByRole('status');
 
+  // The region is emptied first and filled on the next commit, so the announcement lands a tick
+  // after the click.
+  async function copyOnce() {
+    await act(async () => {
+      fireEvent.click(copyButton()!);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+  }
+
   beforeEach(() => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // Deliberately not `shouldAdvanceTime`: the announcement is deferred by a 0ms timer, and
+    // auto-advancing would fire it inside the click and hide the empty render this relies on.
+    vi.useFakeTimers();
     mocks.writeText.mockReset();
     mocks.writeText.mockResolvedValue(undefined);
   });
@@ -219,9 +232,7 @@ describe('CollectionRowActions copy entity id', () => {
     renderActions();
     openRowMenu();
 
-    await act(async () => {
-      fireEvent.click(copyButton()!);
-    });
+    await copyOnce();
 
     expect(mocks.writeText).toHaveBeenCalledWith(ENTITY);
     expect(mocks.writeText).not.toHaveBeenCalledWith(RELATION);
@@ -231,9 +242,7 @@ describe('CollectionRowActions copy entity id', () => {
     renderActions();
     openRowMenu();
 
-    await act(async () => {
-      fireEvent.click(copyButton()!);
-    });
+    await copyOnce();
 
     expect(confirmation()).toHaveTextContent('Entity ID copied');
   });
@@ -252,9 +261,7 @@ describe('CollectionRowActions copy entity id', () => {
     renderActions();
     openRowMenu();
 
-    await act(async () => {
-      fireEvent.click(copyButton()!);
-    });
+    await copyOnce();
 
     expect(copyButton()).toBeInTheDocument();
   });
@@ -263,9 +270,7 @@ describe('CollectionRowActions copy entity id', () => {
     renderActions();
     openRowMenu();
 
-    await act(async () => {
-      fireEvent.click(copyButton()!);
-    });
+    await copyOnce();
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
@@ -283,14 +288,42 @@ describe('CollectionRowActions copy entity id', () => {
     renderActions();
     openRowMenu();
 
-    await act(async () => {
-      fireEvent.click(copyButton()!);
-    });
+    await copyOnce();
 
     expect(confirmation()).toBeEmptyDOMElement();
     expect(copyButton()).toBeInTheDocument();
 
     consoleError.mockRestore();
+  });
+
+  /**
+   * A live region announces a change, and two copies in a row produce the same sentence. Without an
+   * empty render between them the text never changes, so the second copy happens in silence — the
+   * one case where the clipboard and the confirmation disagree.
+   */
+  it('announces a second copy made inside the confirmation window', async () => {
+    renderActions();
+    openRowMenu();
+
+    await copyOnce();
+    expect(confirmation()).toHaveTextContent('Entity ID copied');
+
+    // Well inside the 1.5s window, so the first confirmation is still on screen.
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    await act(async () => {
+      fireEvent.click(copyButton()!);
+    });
+
+    // Emptied, which is what makes the repeat count as a change worth announcing.
+    expect(confirmation()).toBeEmptyDOMElement();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(confirmation()).toHaveTextContent('Entity ID copied');
+    expect(mocks.writeText).toHaveBeenCalledTimes(2);
   });
 
   // Copy is about the row's entity, which a row has whether or not it has a relation of its own.

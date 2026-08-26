@@ -63,6 +63,7 @@ export function CollectionRowActions({
   const openedByHoverRef = useRef(false);
   const [hasCopiedId, setHasCopiedId] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const announceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { storage } = useMutate();
   const { blockEntity } = useDataBlock();
   const { space } = useSpace(spaceId ?? '');
@@ -74,6 +75,9 @@ export function CollectionRowActions({
       }
       if (copiedTimeoutRef.current) {
         clearTimeout(copiedTimeoutRef.current);
+      }
+      if (announceTimeoutRef.current) {
+        clearTimeout(announceTimeoutRef.current);
       }
     };
   }, []);
@@ -89,11 +93,22 @@ export function CollectionRowActions({
       return;
     }
 
-    setHasCopiedId(true);
+    // Empty the region, then fill it on the next commit. A live region announces when its text
+    // changes, and for a second copy inside the confirmation window the text is identical — so
+    // without an empty render in between, the words are already there and nothing is announced.
+    // The copy happened; the confirmation is what goes missing.
     if (copiedTimeoutRef.current) {
       clearTimeout(copiedTimeoutRef.current);
     }
-    copiedTimeoutRef.current = setTimeout(() => setHasCopiedId(false), 1500);
+    if (announceTimeoutRef.current) {
+      clearTimeout(announceTimeoutRef.current);
+    }
+
+    setHasCopiedId(false);
+    announceTimeoutRef.current = setTimeout(() => {
+      setHasCopiedId(true);
+      copiedTimeoutRef.current = setTimeout(() => setHasCopiedId(false), 1500);
+    }, 0);
   };
 
   // By the relation's own id, not by what it points at. `blockEntity.relations` holds everything
