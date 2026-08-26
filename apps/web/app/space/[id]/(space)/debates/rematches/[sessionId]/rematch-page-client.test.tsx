@@ -1186,6 +1186,23 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull());
   });
 
+  // The scope sent to geo-chat has to apply the space-type gate too. The allowlist holds the
+  // viewer's own personal space, and the editor-space lookup passes everything while unresolved —
+  // so without it a personal space joins the scope, contributes its topics to the facet, and has
+  // every one of its rows removed again by `canPublishDebateIn`.
+  it('keeps a personal space out of the scope even when the editor lookup is unresolved', async () => {
+    mocks.publishableSpaceIds = null;
+    mocks.spaceTypes = { [SPACE_2]: 'PERSONAL' };
+    mocks.spaceAllowlist = new Set([SPACE_1.replace(/-/g, ''), SPACE_2.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toBeTruthy());
+    const scope = (mocks.entityQueries.at(-1) as { spaceIds?: string[] | null }).spaceIds ?? [];
+    expect(scope).toContain(SPACE_1.replace(/-/g, ''));
+    expect(scope).not.toContain(SPACE_2.replace(/-/g, ''));
+  });
+
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();

@@ -200,18 +200,41 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // type test still rules out the case that actually bit us, claims living in a personal space.
   const { publishableSpaceIds } = useDebatePublishableSpaces();
 
-  // Same scoping as the hub's Claims tab: the facets have to describe the spaces this pairing
-  // can actually be shown claims from, or the topic menu offers topics from spaces `browsedRows`
-  // removes. `canPublishDebateIn` is defined below and closes over its own lookups, so this reads
-  // the two gates directly rather than through it.
+  // Same scoping as the hub's Claims tab: the facets have to describe the spaces this pairing can
+  // actually be shown claims from, or the topic menu offers topics from spaces `browsedRows`
+  // removes.
+  //
+  // It has to apply all three gates `canPublishDebateIn` does, including the space-type one that
+  // rules out personal spaces — the allowlist holds the viewer's own — or a personal space slips
+  // into the scope whenever the editor-space lookup is unresolved, since that gate passes
+  // everything until it lands.
+  //
+  // Typed off its own lookup rather than through `canPublishDebateIn`, which reads `candidateSpaces`
+  // — built from the claims this very query returns. Going through it would make the query depend
+  // on its own result. The allowlist depends on nothing here, so asking for those types directly
+  // breaks the loop.
+  const allowlistSpaceIds = React.useMemo(() => (spaceAllowlist ? [...spaceAllowlist] : []), [spaceAllowlist]);
+  const { spacesById: allowlistSpaces } = useSpacesByIds(allowlistSpaceIds);
+  const allowlistTypePublishable = React.useMemo(
+    () => debatePublishableSpacePredicate(allowlistSpaces),
+    [allowlistSpaces]
+  );
   const eligibleSpaceIds = React.useMemo(
     () =>
       eligibleClaimSpaceIds(
         spaceAllowlist,
-        id => isClaimSpaceAllowed(id, spaceAllowlist) && isSpaceDebatePublishable(id, publishableSpaceIds)
+        id =>
+          isClaimSpaceAllowed(id, spaceAllowlist) &&
+          isSpaceDebatePublishable(id, publishableSpaceIds) &&
+          allowlistTypePublishable(id)
       ),
-    [publishableSpaceIds, spaceAllowlist]
+    [allowlistTypePublishable, publishableSpaceIds, spaceAllowlist]
   );
+
+  // A known-empty scope is not the same as no scope. geo-chat reads "no ids" as "no filter", so
+  // omitting it would fetch the unfiltered corpus, and while the rows are all dropped below the
+  // facets are not — every topic on the menu would lead to an empty list.
+  const hasNoEligibleSpaces = eligibleSpaceIds !== null && eligibleSpaceIds.length === 0;
 
   const matchmakingQuery = React.useMemo<MatchmakingClaimsQuery>(
     // `topicId` is sent whichever tab is showing. It only filters *these* rows, which back the
@@ -221,7 +244,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () => ({ search: debouncedSearch || null, spaceId, spaceIds: eligibleSpaceIds, topicId, filter: 'all' }),
     [debouncedSearch, eligibleSpaceIds, spaceId, topicId]
   );
-  const browsedClaimsQuery = useMatchmakingClaims(matchmakingQuery, true);
+  const browsedClaimsQuery = useMatchmakingClaims(matchmakingQuery, !hasNoEligibleSpaces);
   const browsedPages = React.useMemo(() => browsedClaimsQuery.data?.pages ?? [], [browsedClaimsQuery.data]);
   const browsedFacets = browsedPages[0]?.facets;
 

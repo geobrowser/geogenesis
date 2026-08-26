@@ -91,12 +91,17 @@ export function ClaimsTab() {
     [spaceAllowlist, spaceShowsClaims]
   );
 
+  // A known-empty scope is not the same as no scope. geo-chat reads "no ids" as "no filter", so
+  // omitting it would fetch the unfiltered corpus — and while `serverClaims` drops every row of
+  // it, the facets are not filtered, leaving a menu whose every option leads to an empty list.
+  const hasNoEligibleSpaces = eligibleSpaceIds !== null && eligibleSpaceIds.length === 0;
+
   const query = React.useMemo<MatchmakingClaimsQuery>(
     () => ({ search: debouncedSearch || null, spaceId, spaceIds: eligibleSpaceIds, topicId, filter }),
     [debouncedSearch, spaceId, eligibleSpaceIds, topicId, filter]
   );
 
-  const claimsQuery = useMatchmakingClaims(query, true);
+  const claimsQuery = useMatchmakingClaims(query, !hasNoEligibleSpaces);
   const pages = React.useMemo(() => claimsQuery.data?.pages ?? [], [claimsQuery.data]);
   const facets = pages[0]?.facets;
 

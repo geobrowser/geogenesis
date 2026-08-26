@@ -54,8 +54,21 @@ vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => 
 }));
 
 vi.mock('./hooks', () => ({
-  useMatchmakingClaims: (query: unknown) => {
+  useMatchmakingClaims: (query: unknown, enabled: boolean) => {
     mocks.lastQuery = query;
+    // A disabled query fetches nothing and has no data — including no facets, which is what
+    // makes skipping it different from sending it unscoped.
+    if (!enabled) {
+      return {
+        data: undefined,
+        isLoading: false,
+        error: null,
+        hasNextPage: false,
+        isFetchingNextPage: false,
+        fetchNextPage: mocks.fetchNextPage,
+        refetch: vi.fn(),
+      };
+    }
     const { spaceId, topicId } = query as { spaceId?: string | null; topicId?: string | null };
     // `space_id` and `topic_id` are both query parameters as of GEO-2659, so the endpoint
     // returns only the rows that match. Mirrored here, because what the tab renders and what
@@ -626,6 +639,19 @@ describe('topic menu', () => {
     render(<ClaimsTab />);
 
     expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] });
+  });
+
+  // "No eligible spaces" and "no space filter" are the same request on the wire, so the query
+  // has to be skipped rather than sent unscoped: the rows would all be dropped here, but the
+  // facets would not, leaving a menu whose every option leads to an empty list.
+  it('asks for nothing at all when no space is eligible', () => {
+    mocks.spaceAllowlist = new Set();
+    mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI])];
+    render(<ClaimsTab />);
+
+    expect(screen.queryByText('Models are getting cheaper')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    expect(screen.queryByRole('button', { name: 'AI' })).toBeNull();
   });
 
   it('sends the picked space alone, never alongside the eligible list', () => {
