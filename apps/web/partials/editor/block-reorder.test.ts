@@ -1,6 +1,6 @@
 import { DndContext } from '@dnd-kit/core';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
@@ -8,7 +8,7 @@ import { Editor } from '@tiptap/react';
 
 import React from 'react';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   BlockDragHandle,
@@ -17,6 +17,7 @@ import {
   getNextKeyboardDropBoundary,
   makeDropZones,
   moveTopLevelBlock,
+  observeBlockMutations,
   releasePointerDragFocus,
 } from './block-reorder';
 
@@ -120,6 +121,22 @@ describe('BlockGutterHoverArea', () => {
       width: '48px',
       height: '60px',
     });
+  });
+});
+
+describe('observeBlockMutations', () => {
+  it('detects when a descendant empty block becomes draggable', async () => {
+    const editorElement = document.createElement('div');
+    const block = document.createElement('p');
+    block.className = 'is-empty';
+    editorElement.append(block);
+    const onChange = vi.fn();
+    const observer = observeBlockMutations(editorElement, onChange);
+
+    block.classList.remove('is-empty');
+
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    observer.disconnect();
   });
 });
 

@@ -87,8 +87,9 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       return [{ childIndex, top, bottom, center: top + rect.height / 2 }];
     });
 
+    const layoutChanged = !blockLayoutsEqual(blockLayoutRef.current, nextLayout);
     blockLayoutRef.current = nextLayout;
-    setBlockLayout(nextLayout);
+    if (layoutChanged) setBlockLayout(nextLayout);
   }, [editorWrapperRef]);
 
   React.useLayoutEffect(() => {
@@ -104,9 +105,8 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     measureBlocks();
 
     const resizeObserver = new ResizeObserver(measureBlocks);
-    const mutationObserver = new MutationObserver(measureBlocks);
+    const mutationObserver = observeBlockMutations(editorElement, measureBlocks);
     resizeObserver.observe(editorElement);
-    mutationObserver.observe(editorElement, { childList: true });
 
     const handlePointerMove = (event: PointerEvent) => {
       if (activeChildIndex !== null) return;
@@ -269,6 +269,35 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       </DragOverlay>
     </DndContext>
   );
+}
+
+function blockLayoutsEqual(current: BlockLayout[], next: BlockLayout[]) {
+  return (
+    current.length === next.length &&
+    current.every((block, index) => {
+      const nextBlock = next[index];
+      return (
+        nextBlock !== undefined &&
+        block.childIndex === nextBlock.childIndex &&
+        block.top === nextBlock.top &&
+        block.bottom === nextBlock.bottom &&
+        block.center === nextBlock.center
+      );
+    })
+  );
+}
+
+/** Remeasures when an existing block becomes empty/non-empty without being replaced. */
+export function observeBlockMutations(editorElement: HTMLElement, onChange: MutationCallback) {
+  const observer = new MutationObserver(onChange);
+  observer.observe(editorElement, {
+    attributes: true,
+    attributeFilter: ['class'],
+    childList: true,
+    characterData: true,
+    subtree: true,
+  });
+  return observer;
 }
 
 function getBlockDragHandleKey(editor: Editor, childIndex: number) {
