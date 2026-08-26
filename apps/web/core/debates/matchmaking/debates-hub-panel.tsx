@@ -240,34 +240,42 @@ function DebatesHubSurface({ activeTab, onTabChange, onClose }: SurfaceProps) {
 
       <div className="shrink-0 px-4">
         <div className="relative">
-          <div className="relative flex w-max items-center gap-6 pb-2">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                aria-current={activeTab === tab.id ? 'true' : undefined}
-                onClick={() => changeTab(tab.id)}
-                className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
-              >
-                {tab.label}
-                {tab.id === 'requests' && requestCount > 0 ? (
-                  <Badge>
-                    {requestCount}
-                    <span className="sr-only"> pending requests</span>
-                  </Badge>
-                ) : null}
-                {activeTab === tab.id && (
-                  <motion.div
-                    layoutId="debates-hub-tab-active-border"
-                    layout
-                    initial={false}
-                    transition={{ duration: 0.2 }}
-                    className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-                  />
-                )}
-              </button>
-            ))}
+          {/* The row is `w-max` so the labels never compress, and both panel shells are
+              `overflow-hidden` — so on a narrow phone whichever tab sits last is simply cut off
+              with no way to reach it. Scrolling costs nothing at the widths where everything
+              already fits, and Requests carries the badge, so it is the worst one to lose. */}
+          <div className="no-scrollbar overflow-x-auto">
+            <div className="relative flex w-max items-center gap-6 pb-2">
+              {TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-current={activeTab === tab.id ? 'true' : undefined}
+                  onClick={() => changeTab(tab.id)}
+                  className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
+                >
+                  {tab.label}
+                  {tab.id === 'requests' && requestCount > 0 ? (
+                    <Badge>
+                      {requestCount}
+                      <span className="sr-only"> pending requests</span>
+                    </Badge>
+                  ) : null}
+                  {activeTab === tab.id && (
+                    <motion.div
+                      layoutId="debates-hub-tab-active-border"
+                      layout
+                      initial={false}
+                      transition={{ duration: 0.2 }}
+                      className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
+          {/* Outside the scroll container so the rule spans the visible row rather than the
+              scrollable width. */}
           <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
         </div>
       </div>
