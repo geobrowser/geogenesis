@@ -69,3 +69,22 @@ export function isClaimSpaceAllowed(spaceId: string | null | undefined, allowlis
   if (!spaceId) return false;
   return allowlist.has(normId(spaceId));
 }
+
+/**
+ * The spaces a viewer may see claims from, as a list rather than a membership test.
+ *
+ * Sent to geo-chat so its rows *and* its facets are scoped to the same spaces the client would
+ * otherwise filter down to afterwards. Without it a topic living only in a space this viewer
+ * can't see is still offered, and picking it returns rows the client then removes — a menu
+ * option that can only ever produce an empty list (GEO-2653).
+ *
+ * `null` when the allowlist hasn't resolved: there is no list to send, and the gates deliberately
+ * pass everything until it does.
+ */
+export function eligibleClaimSpaceIds(
+  allowlist: Set<string> | null,
+  spaceShowsClaims: (spaceId: string) => boolean
+): string[] | null {
+  if (allowlist === null) return null;
+  return [...allowlist].filter(spaceShowsClaims);
+}

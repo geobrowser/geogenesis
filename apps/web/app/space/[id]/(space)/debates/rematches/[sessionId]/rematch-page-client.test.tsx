@@ -1167,6 +1167,25 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull();
   });
 
+  // The publishability lookup answers `true` while it is still resolving, so the first render
+  // admits every space the facet names. The menu accumulates, so gating only the writes would
+  // never take those back — it has to re-check what it already holds.
+  it('drops an unpublishable space from the menu once the lookup resolves', async () => {
+    mocks.publishableSpaceIds = null;
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument());
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull());
+  });
+
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();

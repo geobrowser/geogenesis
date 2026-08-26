@@ -443,6 +443,14 @@ export type MatchmakingClaimsFilter = 'all' | 'mine' | 'debate_now';
 export type MatchmakingClaimsQuery = {
   search?: string | null;
   spaceId?: string | null;
+  /**
+   * The spaces this viewer may see claims from at all, sent when they haven't picked one.
+   *
+   * Both this and `spaceId` are OR-ed together server-side rather than one overriding the other,
+   * so only ever send one of them: sending both would widen the query back out to every space in
+   * either list.
+   */
+  spaceIds?: string[] | null;
   topicId?: string | null;
   filter?: MatchmakingClaimsFilter;
   cursor?: string | null;
@@ -1057,6 +1065,10 @@ export async function listMatchmakingClaims(
   // so a cut never lands inside a surrogate pair and hands `URLSearchParams` a lone surrogate.
   if (query.search) params.set('search', capSearchQuery(query.search));
   if (query.spaceId) params.set('space_id', query.spaceId);
+  // Only when no single space is picked — see the note on the type. An empty list is left off
+  // entirely: the server reads "no ids" as "no filter", which is the opposite of what an empty
+  // eligible set means.
+  else if (query.spaceIds?.length) params.set('space_ids', query.spaceIds.join(','));
   if (query.topicId) params.set('topic_id', query.topicId);
   if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
   if (query.cursor) params.set('cursor', query.cursor);

@@ -4,10 +4,11 @@ import type { MatchmakingTopic } from '~/core/debates/api';
  * Which topics the topic menu should offer, and what to do with a selection the menu no
  * longer holds.
  *
- * geo-chat doesn't model topics — it returns `topics: []` and ignores `topic_id` — so both
- * pickers resolve them from the Knowledge Graph over the claims they have loaded. That makes
- * the menu's contents a client-side decision, and the one it was getting wrong: a topic with
- * no claims behind it is an option that can only ever produce an empty list.
+ * Only the rematch picker's graph-backed tabs reach for this now. Its All tab and the hub's
+ * Claims tab both read geo-chat's `topic_facets`, which describes the whole filtered corpus
+ * rather than the pages a client happens to have walked (GEO-2659) — but the opponent and
+ * curated tabs are built from Knowledge Graph entities geo-chat has never seen, so their
+ * menus are still derived from the claims on screen.
  */
 
 /**

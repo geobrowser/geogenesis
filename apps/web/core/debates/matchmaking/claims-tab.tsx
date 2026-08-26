@@ -10,7 +10,7 @@ import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { Input } from '~/design-system/input';
 
 import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
-import { isClaimSpaceAllowed } from '../claim-space-allowlist';
+import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useMatchmakingClaims } from './hooks';
@@ -52,15 +52,6 @@ export function ClaimsTab() {
     return () => clearTimeout(timeout);
   }, [search]);
 
-  const query = React.useMemo<MatchmakingClaimsQuery>(
-    () => ({ search: debouncedSearch || null, spaceId, topicId, filter }),
-    [debouncedSearch, spaceId, topicId, filter]
-  );
-
-  const claimsQuery = useMatchmakingClaims(query, true);
-  const pages = React.useMemo(() => claimsQuery.data?.pages ?? [], [claimsQuery.data]);
-  const facets = pages[0]?.facets;
-
   const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
 
   // Until the allowlist settles there is no telling an allowed space from one the viewer has
@@ -91,6 +82,23 @@ export function ClaimsTab() {
       isSpaceDebatePublishable(candidateSpaceId, publishableSpaceIds),
     [publishableSpaceIds, spaceAllowlist]
   );
+
+  // Scopes the query — and so the facets it returns — to the spaces this viewer can actually be
+  // shown claims from. Without it the topic facet describes every space geo-chat knows, and a
+  // topic living only outside this set is offered over a list the gates below then empty.
+  const eligibleSpaceIds = React.useMemo(
+    () => eligibleClaimSpaceIds(spaceAllowlist, spaceShowsClaims),
+    [spaceAllowlist, spaceShowsClaims]
+  );
+
+  const query = React.useMemo<MatchmakingClaimsQuery>(
+    () => ({ search: debouncedSearch || null, spaceId, spaceIds: eligibleSpaceIds, topicId, filter }),
+    [debouncedSearch, spaceId, eligibleSpaceIds, topicId, filter]
+  );
+
+  const claimsQuery = useMatchmakingClaims(query, true);
+  const pages = React.useMemo(() => claimsQuery.data?.pages ?? [], [claimsQuery.data]);
+  const facets = pages[0]?.facets;
 
   const serverClaims = React.useMemo(
     () =>

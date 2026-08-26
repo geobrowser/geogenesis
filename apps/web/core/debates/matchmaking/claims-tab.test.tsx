@@ -619,6 +619,26 @@ describe('topic menu', () => {
     expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
   });
 
+  // Without this the facet describes every space geo-chat knows, so a topic living only in a
+  // space this viewer can't be shown claims from is offered over a list the client then empties.
+  it('scopes the query to the spaces the viewer can be shown claims from', () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] });
+  });
+
+  it('sends the picked space alone, never alongside the eligible list', () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, ''), OTHER_SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+
+    // geo-chat ORs the two together, so sending both would widen the query straight back out.
+    expect((mocks.lastQuery as { spaceId?: string | null }).spaceId).toBeTruthy();
+  });
+
   it('asks the server to do the topic filtering', () => {
     render(<ClaimsTab />);
 

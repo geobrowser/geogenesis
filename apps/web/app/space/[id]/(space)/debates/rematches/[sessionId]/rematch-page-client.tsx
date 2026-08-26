@@ -21,7 +21,7 @@ import {
   type MatchmakingTopic,
 } from '~/core/debates/api';
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '~/core/debates/claim-picker-page';
-import { isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
+import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
@@ -194,13 +194,32 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // The All tab is the hub's Claims tab: geo-chat's own index of debatable claims, paged and
   // searched server-side, each row carrying the viewer's side and readiness. It takes a single
   // `space_id`, so the viewer's allowlist is a page-local cut, the same as the hub's.
+  // The acceptor's editor spaces are the authoritative answer, and the same set the publish sweep
+  // works from. The space-type test below it is kept rather than replaced: the two fail
+  // differently, and when this list is unknown — no acceptor configured, a failed lookup — the
+  // type test still rules out the case that actually bit us, claims living in a personal space.
+  const { publishableSpaceIds } = useDebatePublishableSpaces();
+
+  // Same scoping as the hub's Claims tab: the facets have to describe the spaces this pairing
+  // can actually be shown claims from, or the topic menu offers topics from spaces `browsedRows`
+  // removes. `canPublishDebateIn` is defined below and closes over its own lookups, so this reads
+  // the two gates directly rather than through it.
+  const eligibleSpaceIds = React.useMemo(
+    () =>
+      eligibleClaimSpaceIds(
+        spaceAllowlist,
+        id => isClaimSpaceAllowed(id, spaceAllowlist) && isSpaceDebatePublishable(id, publishableSpaceIds)
+      ),
+    [publishableSpaceIds, spaceAllowlist]
+  );
+
   const matchmakingQuery = React.useMemo<MatchmakingClaimsQuery>(
     // `topicId` is sent whichever tab is showing. It only filters *these* rows, which back the
     // All tab, and the server's topic facet is narrowed by spaces rather than by topics — so a
     // topic selection can never collapse the menu it came from. The other two tabs are built
     // from graph entities geo-chat has never seen, so their topic filter stays client-side.
-    () => ({ search: debouncedSearch || null, spaceId, topicId, filter: 'all' }),
-    [debouncedSearch, spaceId, topicId]
+    () => ({ search: debouncedSearch || null, spaceId, spaceIds: eligibleSpaceIds, topicId, filter: 'all' }),
+    [debouncedSearch, eligibleSpaceIds, spaceId, topicId]
   );
   const browsedClaimsQuery = useMatchmakingClaims(matchmakingQuery, true);
   const browsedPages = React.useMemo(() => browsedClaimsQuery.data?.pages ?? [], [browsedClaimsQuery.data]);
@@ -292,11 +311,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return [...ids];
   }, [browsedPages, opponentEntitiesQuery.entities, recommendedEntities, savedClaimsQuery.data]);
   const { spacesById: candidateSpaces } = useSpacesByIds(candidateSpaceIds);
-  // The acceptor's editor spaces are the authoritative answer, and the same set the publish sweep
-  // works from. The space-type test below it is kept rather than replaced: the two fail
-  // differently, and when this list is unknown — no acceptor configured, a failed lookup — the
-  // type test still rules out the case that actually bit us, claims living in a personal space.
-  const { publishableSpaceIds } = useDebatePublishableSpaces();
   const spaceTypePublishable = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
   const canPublishDebateIn = React.useCallback(
     (spaceId: string | null | undefined) =>
@@ -562,14 +576,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const facetSpaceIds = React.useMemo(() => {
     const seen = seenFacetsRef.current.spaceIds;
     for (const claim of [...opponentClaims, ...curatedClaims, ...browsedClaims]) seen.add(claim.claim.space_id);
-    // Publishability as well as the allowlist. `browsedRows` drops every claim in a space this
-    // pairing cannot publish a debate into, so offering that space listed a filter that could
-    // only ever empty the list — and, once the topic menu came from the server, offered all of
-    // that space's topics along with it while nothing rendered behind any of them.
-    for (const id of browsedFacets?.space_ids ?? []) {
-      if (isClaimSpaceAllowed(id, spaceAllowlist) && canPublishDebateIn(id)) seen.add(id);
-    }
-    return [...seen];
+    for (const id of browsedFacets?.space_ids ?? []) seen.add(id);
+    // Filtered on the way out, not on the way in. Both gates answer `true` while their lookup is
+    // still resolving — deliberately, so a slow answer doesn't empty the panel — and this set only
+    // ever grows, so gating the writes would admit every space on the first render and never take
+    // one back. `browsedRows` drops every claim in a space this pairing cannot publish into, so an
+    // ineligible space here is a filter that can only empty the list, and its topics come with it.
+    //
+    // Safe to apply to an accumulated set: neither gate narrows with the viewer's selection, which
+    // is the reason the accumulation exists.
+    return [...seen].filter(id => isClaimSpaceAllowed(id, spaceAllowlist) && canPublishDebateIn(id));
   }, [browsedClaims, browsedFacets?.space_ids, canPublishDebateIn, curatedClaims, opponentClaims, spaceAllowlist]);
 
   // The claims the topic menu describes on the graph-backed tabs: everything the other filters
