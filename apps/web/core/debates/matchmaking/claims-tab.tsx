@@ -13,13 +13,12 @@ import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed, keepSelectableSpace } from '../claim-space-allowlist';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
-import { useMatchmakingClaims } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { keepSelectableTopic } from './topic-facets';
-import { useScopeHeldOver } from './use-scope-holdover';
+import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useStableListOrder } from './use-stable-list-order';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -92,38 +91,20 @@ export function ClaimsTab() {
     [spaceAllowlist, spaceShowsClaims]
   );
 
-  // A known-empty scope is not the same as no scope. geo-chat reads "no ids" as "no filter", so
-  // omitting it would fetch the unfiltered corpus — and while `serverClaims` drops every row of
-  // it, the facets are not filtered, leaving a menu whose every option leads to an empty list.
-  const hasNoEligibleSpaces = eligibleSpaceIds !== null && eligibleSpaceIds.length === 0;
-
-  const query = React.useMemo<MatchmakingClaimsQuery>(
-    () => ({ search: debouncedSearch || null, spaceId, spaceIds: eligibleSpaceIds, topicId, filter }),
-    [debouncedSearch, spaceId, eligibleSpaceIds, topicId, filter]
+  const query = React.useMemo<Omit<MatchmakingClaimsQuery, 'spaceIds'>>(
+    () => ({ search: debouncedSearch || null, spaceId, topicId, filter }),
+    [debouncedSearch, spaceId, topicId, filter]
   );
 
-  // Not asked until the scope is known. Until then `spaceIds` is `null`, which geo-chat reads as
-  // "no filter", so the answer is about the whole corpus — and every row of it is dropped below by
-  // `spacesPending`, making the request pure waste on its own terms. What it leaves behind is not
-  // waste: `keepPreviousData` serves those pages back when the scope lands and the key changes,
-  // and while the rows are re-gated on the way out and the spaces are filtered on read, a topic
-  // facet carries no space to gate it by. The menu spent that window offering topics from spaces
-  // the list had already stopped showing.
-  const claimsQuery = useMatchmakingClaims(query, !hasNoEligibleSpaces && !spacesPending);
-  // Masked rather than left to `enabled`. The hook keeps previous data across a key change, so a
-  // scope narrowing — to nothing, or from unknown to known — still hands back the last scope's
-  // pages, and while the rows are re-gated below the facets on them are not. That is the whole
-  // menu-over-an-empty-list this is meant to prevent, so it is the one place the scope is applied:
-  // everything downstream reads these pages and needs no guard of its own.
-  // A settled scope can still change — the allowlist refetches, someone joins a space — and that
-  // moves no loading flag, so `spacesPending` above says nothing about it.
-  const scopeHeldOver = useScopeHeldOver(eligibleSpaceIds?.join(',') ?? null, claimsQuery.isPlaceholderData);
-
-  const pages = React.useMemo(
-    () => (hasNoEligibleSpaces || spacesPending || scopeHeldOver ? [] : (claimsQuery.data?.pages ?? [])),
-    [claimsQuery.data, hasNoEligibleSpaces, scopeHeldOver, spacesPending]
+  const scope = React.useMemo(
+    () => ({ spaceIds: eligibleSpaceIds, pending: spacesPending }),
+    [eligibleSpaceIds, spacesPending]
   );
-  const facets = pages[0]?.facets;
+
+  // Every way the pages can describe a wider corpus than this tab will show is handled in there,
+  // once, for both pickers — see `useScopedMatchmakingClaims`.
+  const claimsQuery = useScopedMatchmakingClaims(query, scope);
+  const { pages, facets } = claimsQuery;
 
   const serverClaims = React.useMemo(
     () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
@@ -161,15 +142,7 @@ export function ClaimsTab() {
     [facets?.topic_facets]
   );
 
-  // Facets ride the first page, so they are absent until it lands and while a filter change is in
-  // flight. That is "not known yet", not "no topics" — see `keepSelectableTopic`.
-  //
-  // Placeholder pages count as in flight. They are the previous filter's answer, held back so the
-  // list doesn't blink, and the rows on screen are theirs too — so the menu is not lying while
-  // they show. But they are not an answer to the filter now being asked about, and a selection
-  // cleared against them would be cleared on the wrong question.
-  const facetsSettled = facets !== undefined && !claimsQuery.isLoading && !claimsQuery.isPlaceholderData;
-  const topicsResolved = facetsSettled;
+  const { facetsSettled } = claimsQuery;
 
   // The same for the space itself: it can be picked while the gates are still passing everything,
   // and left selected it keeps going out on every request while its rows are dropped locally.
@@ -180,13 +153,13 @@ export function ClaimsTab() {
   // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
   // no longer in the menu to unpick.
   React.useEffect(() => {
-    setTopicId(current => keepSelectableTopic(current, facetTopics, topicsResolved));
-  }, [facetTopics, topicsResolved]);
+    setTopicId(current => keepSelectableTopic(current, facetTopics, facetsSettled));
+  }, [facetTopics, facetsSettled]);
 
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId || filter !== 'all');
 
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: !hasNoEligibleSpaces && claimsQuery.hasNextPage,
+    hasNextPage: claimsQuery.hasNextPage,
     isFetchingNextPage: claimsQuery.isFetchingNextPage,
     fetchNextPage: claimsQuery.fetchNextPage,
   });
@@ -267,7 +240,7 @@ export function ClaimsTab() {
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-        {!hasNoEligibleSpaces && claimsQuery.hasNextPage && !spacesPending ? (
+        {claimsQuery.hasNextPage ? (
           <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         ) : null}
       </div>
