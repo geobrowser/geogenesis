@@ -286,11 +286,6 @@ export function graphql(source: "\n  query ClaimResponseSummaries($filter: UserV
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n"): (typeof documents)["\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n"];
-
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n"): (typeof documents)["\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
