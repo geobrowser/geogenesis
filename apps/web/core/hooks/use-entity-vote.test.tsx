@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 
 import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { userEntityVotesQueryKey } from '~/core/hooks/use-user-voted-entity-ids';
+import { userEntityVotesQueryKey, votedEntityIdsPendingQueryKey } from '~/core/hooks/use-user-voted-entity-ids';
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 
 import {
@@ -13,13 +13,23 @@ import {
   useEntityResponseIndexingSnapshot,
   useEntityResponseIndexingState,
 } from './use-entity-vote';
+import { personalSpaceIdQueryKey } from './use-personal-space-id';
 
 const PERSONAL_SPACE_ID = 'd4bee0928fb5405baba3b1513f085835';
 const TARGET_SPACE_ID = '1234567890abcdef1234567890abcdef';
 
-function expectVotedListRefreshOnly(invalidateQueries: MockInstance) {
-  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(PERSONAL_SPACE_ID, 'up') });
-  expect(invalidateQueries).toHaveBeenCalledTimes(1);
+/**
+ * Refetching the voted lists before the indexer has the vote just reloads the
+ * state from before it, so nothing may invalidate them until reconciliation.
+ */
+function expectNoVotedListRefresh(invalidateQueries: MockInstance, personalSpaceId = PERSONAL_SPACE_ID) {
+  expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(personalSpaceId, 'up') });
+  expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(personalSpaceId, 'down') });
+}
+
+function expectVotedListsRefreshed(invalidateQueries: MockInstance, personalSpaceId = PERSONAL_SPACE_ID) {
+  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(personalSpaceId, 'up') });
+  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(personalSpaceId, 'down') });
 }
 
 const mocks = vi.hoisted(() => ({
@@ -47,7 +57,8 @@ vi.mock('~/core/responses/entity-response', async importOriginal => {
   };
 });
 
-vi.mock('~/core/hooks/use-personal-space-id', () => ({
+vi.mock('~/core/hooks/use-personal-space-id', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/hooks/use-personal-space-id')>()),
   usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isRegistered: mocks.personalSpaceId !== null }),
 }));
 
@@ -166,7 +177,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(mocks.fetchResponse).toHaveBeenCalledTimes(30);
     expect(result.current.isProcessingResponse).toBe(true);
     expect(result.current.isResponseIndexingDelayed).toBe(true);
-    expectVotedListRefreshOnly(invalidateQueries);
+    expectNoVotedListRefresh(invalidateQueries);
     expect(
       queryClient.getQueryData<{ runId: string }>(
         entityResponseIndexingQueryKey(PERSONAL_SPACE_ID, 'claim-1', TARGET_SPACE_ID, 'stance')
@@ -190,7 +201,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(cancelQueries).toHaveBeenCalledWith({
       queryKey: ['claim-response-summaries', PERSONAL_SPACE_ID, TARGET_SPACE_ID],
     });
-    expectVotedListRefreshOnly(invalidateQueries);
+    expectVotedListsRefreshed(invalidateQueries);
   });
 
   it('isolates optimistic response state by personal space', async () => {
@@ -228,7 +239,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(mocks.fetchResponse).toHaveBeenCalledOnce();
     expect(result.current.isProcessingResponse).toBe(true);
     expect(result.current.isResponseIndexingDelayed).toBe(false);
-    expectVotedListRefreshOnly(invalidateQueries);
+    expectNoVotedListRefresh(invalidateQueries);
 
     await act(async () => vi.advanceTimersByTimeAsync(2_000));
 
@@ -237,7 +248,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(result.current.isResponseIndexingDelayed).toBe(false);
     expect(result.current.optimisticResponse).toBeUndefined();
     expect(mocks.loadResponseSummaryCaches).toHaveBeenCalledOnce();
-    expectVotedListRefreshOnly(invalidateQueries);
+    expectVotedListsRefreshed(invalidateQueries);
   });
 
   it('keeps reconciliation recoverable when the single-claim summary refresh fails', async () => {
@@ -282,14 +293,13 @@ describe('useEntityResponse indexing reconciliation', () => {
     });
 
     expect(mocks.loadResponseSummaryCaches).not.toHaveBeenCalled();
-    // The three reconcile invalidations, plus the Upvoted-tab refresh a curation
-    // response triggers so the voted lists don't go stale.
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(PERSONAL_SPACE_ID, 'up') });
-    expect(invalidateQueries).toHaveBeenCalledTimes(4);
+    // The three reconcile invalidations, plus one per voted list once indexing confirmed.
+    expectVotedListsRefreshed(invalidateQueries);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
   });
 
-  it('refreshes the voted lists for claim responses too, not just curation', async () => {
-    mocks.fetchResponse.mockReturnValue('negative');
+  it('shows a claim response in its tab optimistically, before indexing confirms it', async () => {
+    mocks.fetchResponse.mockReturnValue(null);
     const { queryClient, wrapper } = createHarness();
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
     const setQueryData = vi.spyOn(queryClient, 'setQueryData');
@@ -301,8 +311,46 @@ describe('useEntityResponse indexing reconciliation', () => {
     act(() => result.current.submitResponse('negative'));
     await act(async () => Promise.resolve());
 
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(PERSONAL_SPACE_ID, 'down') });
+    // Added to Downvoted and dropped from Upvoted right away...
+    expect(setQueryData).toHaveBeenCalledWith(
+      votedEntityIdsPendingQueryKey(PERSONAL_SPACE_ID, 'down'),
+      expect.any(Function)
+    );
     expect(setQueryData).toHaveBeenCalledWith(userEntityVotesQueryKey(PERSONAL_SPACE_ID, 'up'), expect.any(Function));
+    // ...but the server lists are left alone until the vote is actually indexed.
+    expectNoVotedListRefresh(invalidateQueries);
+
+    expect(queryClient.getQueryData(votedEntityIdsPendingQueryKey(PERSONAL_SPACE_ID, 'down'))).toEqual({
+      added: [expect.objectContaining({ entityId: 'claim-1', voteKind: 2 })],
+      removed: [],
+    });
+  });
+
+  // The reactive personal space id is null while a queued vote replays after a
+  // remount; keying the lists off it would write them where nothing reads.
+  it('keys the voted lists off the space the response actually used', async () => {
+    mocks.fetchResponse.mockReturnValue('positive');
+    const { queryClient, wrapper } = createHarness();
+    queryClient.setQueryData(['smart-account', 'test'], { account: { address: '0xwriter' } });
+    queryClient.setQueryData(personalSpaceIdQueryKey('0xwriter'), {
+      personalSpaceId: PERSONAL_SPACE_ID,
+      isRegistered: true,
+    });
+    mocks.personalSpaceId = null;
+    const setQueryData = vi.spyOn(queryClient, 'setQueryData');
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'entity-1', spaceId: TARGET_SPACE_ID, responseKind: 'curation' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+
+    expect(setQueryData).toHaveBeenCalledWith(
+      votedEntityIdsPendingQueryKey(PERSONAL_SPACE_ID, 'up'),
+      expect.any(Function)
+    );
+    expect(setQueryData).not.toHaveBeenCalledWith(votedEntityIdsPendingQueryKey(null, 'up'), expect.any(Function));
   });
 
   it('does not let an older control supersede shared indexing state', async () => {

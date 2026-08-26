@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  EMPTY_PENDING_VOTED_OVERRIDES,
   type UserVotedEntityIdsCache,
   type VotedIdPage,
-  addRemovedVotedId,
-  clearRemovedVotedId,
+  clearPendingVotedEntity,
   mergeVotedIdPages,
   removeEntityFromVotedIds,
+  restorePendingVotedEntry,
   sortVotedIdsByVotedAtDesc,
+  suppressVotedId,
 } from './use-user-voted-entity-ids';
 
 const ENTITY_ID = '4c81561d-1f95-4131-9cdd-dd20ab831ba2';
@@ -125,21 +127,60 @@ describe('sortVotedIdsByVotedAtDesc', () => {
   });
 });
 
-describe('vote suppression list', () => {
-  it('adds an id once, however it is spelled', () => {
-    const withId = addRemovedVotedId([], ENTITY_ID);
+const VOTED_AT = '2026-08-26T00:00:00Z';
+const entry = (entityId: string, voteKind = 0, votedAt = VOTED_AT) => ({ entityId, voteKind, votedAt });
 
-    expect(withId).toEqual([ENTITY_ID]);
-    expect(addRemovedVotedId(withId, ENTITY_ID.replace(/-/g, '').toUpperCase())).toBe(withId);
+describe('pending voted overrides', () => {
+  it('suppresses an id once, however it is spelled', () => {
+    const suppressed = suppressVotedId(EMPTY_PENDING_VOTED_OVERRIDES, ENTITY_ID);
+
+    expect(suppressed.removed).toEqual([ENTITY_ID]);
+    expect(suppressVotedId(suppressed, ENTITY_ID.replace(/-/g, '').toUpperCase())).toBe(suppressed);
   });
 
-  it('clears an id when the entity rejoins the list', () => {
-    expect(clearRemovedVotedId([ENTITY_ID, 'other'], ENTITY_ID)).toEqual(['other']);
+  it('drops a pending add when the same entity leaves the list', () => {
+    const added = restorePendingVotedEntry(EMPTY_PENDING_VOTED_OVERRIDES, entry(ENTITY_ID));
+
+    const suppressed = suppressVotedId(added, ENTITY_ID);
+
+    expect(suppressed.added).toEqual([]);
+    expect(suppressed.removed).toEqual([ENTITY_ID]);
   });
 
-  it('returns the same array when there is nothing to clear', () => {
-    const removed = ['other'];
+  it('clears the suppression when the entity rejoins the list', () => {
+    const suppressed = suppressVotedId(EMPTY_PENDING_VOTED_OVERRIDES, ENTITY_ID);
 
-    expect(clearRemovedVotedId(removed, ENTITY_ID)).toBe(removed);
+    const restored = restorePendingVotedEntry(suppressed, entry(ENTITY_ID, 2));
+
+    expect(restored.removed).toEqual([]);
+    expect(restored.added).toEqual([entry(ENTITY_ID, 2)]);
+  });
+
+  it('keeps only the newest pending vote for an entity, at the front', () => {
+    const overrides = restorePendingVotedEntry(
+      restorePendingVotedEntry(EMPTY_PENDING_VOTED_OVERRIDES, entry(ENTITY_ID, 0, '2026-08-01T00:00:00Z')),
+      entry('other')
+    );
+
+    const restored = restorePendingVotedEntry(overrides, entry(ENTITY_ID, 1));
+
+    expect(restored.added).toEqual([entry(ENTITY_ID, 1), entry('other')]);
+  });
+
+  // Indexing caught up, so the server list owns this entity again.
+  it('clears both halves of the override once the vote is indexed', () => {
+    const overrides = suppressVotedId(
+      restorePendingVotedEntry(EMPTY_PENDING_VOTED_OVERRIDES, entry(ENTITY_ID)),
+      'other'
+    );
+
+    expect(clearPendingVotedEntity(overrides, ENTITY_ID).added).toEqual([]);
+    expect(clearPendingVotedEntity(overrides, 'other').removed).toEqual([]);
+  });
+
+  it('returns the same overrides when there is nothing to clear', () => {
+    const overrides = suppressVotedId(EMPTY_PENDING_VOTED_OVERRIDES, 'other');
+
+    expect(clearPendingVotedEntity(overrides, ENTITY_ID)).toBe(overrides);
   });
 });

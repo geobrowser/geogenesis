@@ -28,23 +28,56 @@ export function userEntityVotesQueryKey(
 
 export type UserVotedEntityIdsCache = InfiniteData<UserEntityVoteObjectIdsPage>;
 
+export const USER_ENTITY_VOTES_PENDING_QUERY_KEY_ROOT = 'user-entity-votes-pending';
+
 /**
- * Ids a vote has taken out of this list, held beside the list itself.
+ * Votes the viewer has cast that the indexer hasn't caught up with yet, held
+ * beside the server list rather than under its key: invalidating the list must
+ * never reach these, or a refetch would wipe every override at once.
  */
-export function votedEntityIdsRemovedQueryKey(
+export function votedEntityIdsPendingQueryKey(
   personalSpaceId: string | null | undefined,
   direction: EntityVoteDirectionFilter
 ) {
-  return [...userEntityVotesQueryKey(personalSpaceId, direction), 'removed'] as const;
+  return [USER_ENTITY_VOTES_PENDING_QUERY_KEY_ROOT, personalSpaceId ?? null, direction] as const;
 }
 
-export function addRemovedVotedId(removed: string[], entityId: string): string[] {
-  return removed.some(id => ID.equals(id, entityId)) ? removed : [...removed, entityId];
+export type PendingVotedEntry = { entityId: string; voteKind: number; votedAt: string };
+
+export type PendingVotedOverrides = {
+  /** Votes to show before the server list has them. */
+  added: PendingVotedEntry[];
+  /** Votes to hide while the server list still has them. */
+  removed: string[];
+};
+
+export const EMPTY_PENDING_VOTED_OVERRIDES: PendingVotedOverrides = { added: [], removed: [] };
+
+/** The entity left this list — hide it until the server agrees. */
+export function suppressVotedId(overrides: PendingVotedOverrides, entityId: string): PendingVotedOverrides {
+  const added = overrides.added.filter(entry => !ID.equals(entry.entityId, entityId));
+  const isSuppressed = overrides.removed.some(id => ID.equals(id, entityId));
+  if (isSuppressed && added.length === overrides.added.length) return overrides;
+  return { added, removed: isSuppressed ? overrides.removed : [...overrides.removed, entityId] };
 }
 
-export function clearRemovedVotedId(removed: string[], entityId: string): string[] {
-  const next = removed.filter(id => !ID.equals(id, entityId));
-  return next.length === removed.length ? removed : next;
+/** The entity joined this list — show it until the server has it. */
+export function restorePendingVotedEntry(
+  overrides: PendingVotedOverrides,
+  entry: PendingVotedEntry
+): PendingVotedOverrides {
+  return {
+    added: [entry, ...overrides.added.filter(existing => !ID.equals(existing.entityId, entry.entityId))],
+    removed: overrides.removed.filter(id => !ID.equals(id, entry.entityId)),
+  };
+}
+
+/** Indexing caught up: the server list is now the source of truth for this entity. */
+export function clearPendingVotedEntity(overrides: PendingVotedOverrides, entityId: string): PendingVotedOverrides {
+  const added = overrides.added.filter(entry => !ID.equals(entry.entityId, entityId));
+  const removed = overrides.removed.filter(id => !ID.equals(id, entityId));
+  if (added.length === overrides.added.length && removed.length === overrides.removed.length) return overrides;
+  return { added, removed };
 }
 
 const MAX_CACHED_VOTE_PAGES = 4;
@@ -169,23 +202,38 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
     });
   }, [query.data, listKey]);
 
-  const { data: removedIds } = useQuery({
-    queryKey: votedEntityIdsRemovedQueryKey(personalSpaceId, direction),
-    queryFn: () => [] as string[],
+  const { data: pendingOverrides } = useQuery({
+    queryKey: votedEntityIdsPendingQueryKey(personalSpaceId, direction),
+    queryFn: () => EMPTY_PENDING_VOTED_OVERRIDES,
     staleTime: Infinity,
     gcTime: Infinity,
   });
 
-  const suppressed = React.useMemo(() => new Set((removedIds ?? []).map(ID.uuidToHex)), [removedIds]);
+  const overrides = pendingOverrides ?? EMPTY_PENDING_VOTED_OVERRIDES;
 
   // Per-page slices for entity hydration; `ids` is the same set re-sorted by votedAt.
-  const { idPages, ids } = React.useMemo(() => {
+  const { idPages, ids, voteKindById } = React.useMemo(() => {
+    const suppressed = new Set(overrides.removed.map(ID.uuidToHex));
     const seen = new Set<string>();
     const pages: string[][] = [];
     const votedAtById: Record<string, string> = {};
+    const voteKinds = new Map<string, number>();
+
+    // Votes still being indexed lead the first page, so they hydrate along with
+    // it and fall away on their own once the server list carries them.
+    const pendingIds: string[] = [];
+    for (const entry of overrides.added) {
+      const hexId = ID.uuidToHex(entry.entityId);
+      if (!hexId || seen.has(hexId) || suppressed.has(hexId)) continue;
+      seen.add(hexId);
+      pendingIds.push(hexId);
+    }
 
     for (const page of fetchedPages) {
       Object.assign(votedAtById, page.votedAtByObjectId);
+      for (const [id, voteKind] of Object.entries(page.voteKindByObjectId)) {
+        voteKinds.set(id, voteKind);
+      }
       const pageIds: string[] = [];
 
       for (const id of page.objectIds) {
@@ -199,18 +247,21 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
       pages.push(pageIds);
     }
 
-    return { idPages: pages, ids: sortVotedIdsByVotedAtDesc(pages.flat(), votedAtById) };
-  }, [fetchedPages, suppressed]);
-
-  const voteKindById = React.useMemo(() => {
-    const map = new Map<string, number>();
-    for (const page of fetchedPages) {
-      for (const [id, voteKind] of Object.entries(page.voteKindByObjectId)) {
-        map.set(id, voteKind);
-      }
+    // The pending vote is the newest one the viewer cast, so its own votedAt and
+    // kind win over whatever the server last said about that entity.
+    for (const entry of overrides.added) {
+      const hexId = ID.uuidToHex(entry.entityId);
+      if (!pendingIds.includes(hexId)) continue;
+      votedAtById[hexId] = entry.votedAt;
+      voteKinds.set(hexId, entry.voteKind);
     }
-    return map;
-  }, [fetchedPages]);
+
+    if (pendingIds.length > 0) {
+      pages[0] = pages.length > 0 ? [...pendingIds, ...pages[0]] : pendingIds;
+    }
+
+    return { idPages: pages, ids: sortVotedIdsByVotedAtDesc(pages.flat(), votedAtById), voteKindById: voteKinds };
+  }, [fetchedPages, overrides]);
 
   return {
     ids,
