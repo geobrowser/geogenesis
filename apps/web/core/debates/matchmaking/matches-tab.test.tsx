@@ -297,4 +297,30 @@ describe('MatchesTab', () => {
 
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
   });
+
+  // GEO-2684. The outbound card was already pinned; the filters joined it rather than becoming a
+  // second sticky, because two would both claim `top-0` and overlap — and the card is conditional,
+  // so the filters could not be offset by a known height either. The shared helper's own test only
+  // proves it has the sticky classes, so this is what would catch the card being lifted back out.
+  it('keeps a sent request and the filters in the same pinned block', () => {
+    mocks.outbound = {
+      id: 'request-1',
+      claim: match().claim,
+      expires_at: '2099-01-01T00:00:00.000Z',
+      requester: party('user-me', 'You', true, 'Agree'),
+      recipient: party('user-them', 'Arturas', false, 'Disagree'),
+    };
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    const pinned = screen.getByText('Awaiting response').closest('.sticky');
+    expect(pinned).not.toBeNull();
+    expect(pinned?.className).toContain('top-0');
+    expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).toBe(pinned);
+  });
+
+  it('still pins the filters with no request outstanding', () => {
+    render(<MatchesTab onTabChange={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).not.toBeNull();
+  });
 });
