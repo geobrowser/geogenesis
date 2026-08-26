@@ -344,4 +344,40 @@ describe('fetchFeaturedRankings', () => {
     expect(result).toHaveLength(1);
     expect(result[0].submitterSpaceIds).toEqual([]);
   });
+  it('bounds how many per-space queries are in flight at once', async () => {
+    // Batching removed the per-ranking fan-out but not the per-space one: rankings can span as
+    // many spaces as there are candidates, and both the block-entity and leaderboard phases issue
+    // one query per space. Unbounded, that puts ~MAX_CANDIDATES heavy queries in flight at once.
+    const SPACES = Array.from({ length: 12 }, (_, i) => `space${String(i).padStart(27, '0')}x`);
+    const BLOCKS = Array.from({ length: 12 }, (_, i) => `block${String(i).padStart(27, '0')}x`);
+
+    let inFlight = 0;
+    let peak = 0;
+
+    getAllEntitiesMock.mockImplementation((opts: { filter?: { id?: { in?: string[] } } }) => {
+      if (opts.filter?.id?.in) return Effect.succeed({ entities: [] });
+      return Effect.succeed({ entities: BLOCKS.map((id, i) => ({ id, spaces: [SPACES[i]] })) });
+    });
+
+    getBatchEntitiesMock.mockImplementation((ids: string[], spaceId?: string) =>
+      Effect.promise(async () => {
+        inFlight++;
+        peak = Math.max(peak, inFlight);
+        await new Promise(resolve => setTimeout(resolve, 5));
+        inFlight--;
+        const index = SPACES.indexOf(spaceId ?? '');
+        return index === -1 ? [] : [{ id: BLOCKS[index], name: 'R', values: [], relations: [], spaces: [spaceId] }];
+      })
+    );
+
+    getRelationsByToEntityIdsMock.mockReturnValue(
+      Effect.succeed(BLOCKS.map((id, i) => ({ id: `rel${i}`, fromEntityId: `parent${i}`, toEntityId: id, spaceId: SPACES[i] })))
+    );
+
+    const result = await fetchFeaturedRankings();
+
+    expect(result).toHaveLength(10); // MAX_FEATURED_RANKINGS
+    expect(peak).toBeLessThanOrEqual(6);
+    expect(peak).toBeGreaterThan(1); // still concurrent, not accidentally serialised
+  });
 });

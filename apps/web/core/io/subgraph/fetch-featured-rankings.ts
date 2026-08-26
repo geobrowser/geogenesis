@@ -21,6 +21,7 @@ import { getAllEntities, getBatchEntities, getRelationsByToEntityIds, getSpaces 
 import { RANKING_BLOCK_TYPE_ID, RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
+import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 import { normId } from '~/core/utils/norm-id';
 
 // A featured ranking is a Ranking Block entity carrying a TAG_PROPERTY relation
@@ -58,6 +59,21 @@ export interface FeaturedRanking {
 // while bounding SSR cost.
 const MAX_CANDIDATES = 25;
 const MAX_FEATURED_RANKINGS = 10;
+
+/**
+ * How many per-space queries are in flight at once.
+ *
+ * Batching replaced a four-query chain per ranking with a handful of per-space queries, which
+ * removed the need to bound *rankings* — but not the need to bound *spaces*. `MAX_CANDIDATES`
+ * rankings can span that many distinct spaces, and both the block-entity and leaderboard phases
+ * issue one query per space, so an unbounded fan-out here would put ~25 of them in flight at once
+ * and then do it again for the leaderboards.
+ *
+ * Matches `ENTITY_ID_BATCH_CONCURRENCY` in `core/io/queries.ts` deliberately: these are the same
+ * kind of query it bounds, for the same stated reason — each pulls every value and relation for
+ * its entities, so firing twenty at once trades a queue we control for one we do not.
+ */
+const SPACE_QUERY_CONCURRENCY = 6;
 
 // Entities that are Ranking Blocks AND tagged Featured.
 const FEATURED_RANKINGS_FILTER: EntityFilter = {
@@ -164,8 +180,10 @@ async function resolveTopEntriesByBlock(
     bySpace.set(request.spaceId, group);
   }
 
-  await Promise.all(
-    [...bySpace.entries()].map(async ([spaceId, group]) => {
+  await mapWithConcurrency(
+    [...bySpace.entries()],
+    SPACE_QUERY_CONCURRENCY,
+    async ([spaceId, group]) => {
       const ids = dedupePreserveOrder(group.flatMap(request => request.entityIds));
       try {
         const { entities } = await Effect.runPromise(
@@ -192,7 +210,7 @@ async function resolveTopEntriesByBlock(
         // seeded with above and still render, exactly as the per-ranking version did.
         console.error(`Unable to resolve featured ranking top entries (space ${spaceId})`, error);
       }
-    })
+    }
   );
 
   return byBlock;
@@ -307,8 +325,10 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
   }
 
   const blockEntities = new Map<string, Entity>();
-  await Promise.all(
-    [...candidatesBySpace.entries()].map(async ([spaceId, group]) => {
+  await mapWithConcurrency(
+    [...candidatesBySpace.entries()],
+    SPACE_QUERY_CONCURRENCY,
+    async ([spaceId, group]) => {
       try {
         const resolvedEntities = await Effect.runPromise(
           getBatchEntities(
@@ -322,7 +342,7 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
         // entity, the rest are unaffected.
         console.error(`Unable to resolve featured ranking blocks (space ${spaceId})`, error);
       }
-    })
+    }
   );
 
   // 3. Keep the live ones. Pure reads of what phase 2 returned, so this costs no requests and
