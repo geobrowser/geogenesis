@@ -27,6 +27,7 @@ import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
 import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
+import { CopyEntityIdButton } from '~/partials/blocks/table/copy-entity-id-button';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
@@ -224,11 +225,16 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
                 openedWithMainViewEditing={openedWithMainViewEditing}
               />
             ) : (
-              <DataBlockOpenSidePanelButton
-                entityId={entityId}
-                entitySpaceId={nameCell?.space ?? space}
-                openedWithMainViewEditing={openedWithMainViewEditing}
-              />
+              <div className="flex items-center gap-0.5">
+                <DataBlockOpenSidePanelButton
+                  entityId={entityId}
+                  entitySpaceId={nameCell?.space ?? space}
+                  openedWithMainViewEditing={openedWithMainViewEditing}
+                />
+                {/* Query rows have no menu to put this behind, so it sits in the row itself
+                    (GEO-2679). */}
+                <CopyEntityIdButton entityId={entityId} />
+              </div>
             )}
           </div>
         </div>
