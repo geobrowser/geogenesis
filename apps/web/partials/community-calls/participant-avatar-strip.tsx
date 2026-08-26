@@ -4,14 +4,14 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { Effect } from 'effect';
-
 import { getLiveParticipants } from '~/core/community-calls/api';
-import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 
 import { Avatar } from '~/design-system/avatar';
 
 const MAX_VISIBLE = 4;
+/** Mini avatars in the 2x2 "+N more" cell. */
+const OVERFLOW_VISIBLE = 4;
 const POLL_MS = 15_000;
 
 /**
@@ -50,28 +50,29 @@ export function ParticipantAvatarStrip({
   // A participant's `identity` is their personal space id — curator-backend mints the
   // token with `getStableProfileIdentity`, which returns `profile.spaceId`. That makes
   // it the same key the curator leaderboard resolves profiles with.
-  const identities = React.useMemo(() => participants.map(p => p.identity), [participants]);
+  //
+  // Only the avatars that actually render are looked up. A busy call can hold far more
+  // members than the eight cells below, and `fetchProfilesBySpaceIds` sends one
+  // unchunked request whose failure path returns defaults for the whole list — so asking
+  // for all of them risks losing every avatar to a call that is merely popular.
+  const renderedIdentities = React.useMemo(
+    () => participants.slice(0, MAX_VISIBLE + OVERFLOW_VISIBLE).map(p => p.identity),
+    [participants]
+  );
 
-  const { data: avatarByIdentity } = useQuery({
-    // Sorted so a reordered participant list (the poll returns join order) doesn't
-    // refetch the same set of profiles.
-    queryKey: ['community-call-participant-profiles', [...identities].sort()],
-    enabled: identities.length > 0,
-    queryFn: async () => {
-      // fetchProfilesBySpaceIds returns one profile per input id, in order, so the two
-      // arrays zip by index — no id-shape normalization needed on either side.
-      const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(identities));
-      return new Map(identities.map((identity, index) => [identity, profiles[index]?.avatarUrl ?? null]));
-    },
-  });
+  // Per-id cache entries rather than one query keyed on the whole set: the participant
+  // list changes whenever someone joins or leaves, and a set-keyed query would drop every
+  // resolved avatar back to a placeholder until the new batch landed — the exact flash
+  // this component exists to avoid. Requests still leave as one coalesced batch.
+  const { profilesBySpaceId } = useProfilesBySpaceIds(renderedIdentities);
 
   if (participants.length === 0) return null;
 
   const avatarFor = (identity: string, avatarCid: string | null) =>
-    avatarByIdentity?.get(identity) ?? (avatarCid ? `ipfs://${avatarCid}` : undefined);
+    profilesBySpaceId.get(identity)?.avatarUrl ?? (avatarCid ? `ipfs://${avatarCid}` : undefined);
 
   const visible = participants.slice(0, MAX_VISIBLE);
-  const overflow = participants.slice(MAX_VISIBLE, MAX_VISIBLE + 4);
+  const overflow = participants.slice(MAX_VISIBLE, MAX_VISIBLE + OVERFLOW_VISIBLE);
   const remaining = participants.length - visible.length;
 
   return (

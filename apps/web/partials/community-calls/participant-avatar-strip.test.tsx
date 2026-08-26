@@ -10,15 +10,25 @@ import { ParticipantAvatarStrip } from './participant-avatar-strip';
 
 const mocks = vi.hoisted(() => ({
   participants: [] as unknown[],
-  profilesBySpaceIds: vi.fn(),
+  /** Records the ids the strip actually asks for, and supplies their avatars. */
+  requestedSpaceIds: vi.fn(),
+  avatarUrlBySpaceId: new Map<string, string | null>(),
 }));
 
 vi.mock('~/core/community-calls/api', () => ({
   getLiveParticipants: () => Promise.resolve({ participants: mocks.participants, isEnded: false }),
 }));
 
-vi.mock('~/core/io/subgraph/fetch-profile', () => ({
-  fetchProfilesBySpaceIds: (spaceIds: string[]) => Effect.succeed(mocks.profilesBySpaceIds(spaceIds)),
+vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({
+  useProfilesBySpaceIds: (spaceIds: string[]) => {
+    mocks.requestedSpaceIds(spaceIds);
+    return {
+      profilesBySpaceId: new Map(
+        spaceIds.map(spaceId => [spaceId, { spaceId, avatarUrl: mocks.avatarUrlBySpaceId.get(spaceId) ?? null }])
+      ),
+      isLoading: false,
+    };
+  },
 }));
 
 function participant(overrides: Record<string, unknown> = {}) {
@@ -50,7 +60,8 @@ function renderStrip() {
 
 afterEach(cleanup);
 beforeEach(() => {
-  mocks.profilesBySpaceIds.mockReset();
+  mocks.requestedSpaceIds.mockReset();
+  mocks.avatarUrlBySpaceId = new Map();
   mocks.participants = [];
 });
 
@@ -60,7 +71,7 @@ describe('ParticipantAvatarStrip avatars', () => {
     // someone whose avatar lives in the knowledge graph arrived with avatarCid: null and
     // rendered a generated avatar while the leaderboard showed their real photo.
     mocks.participants = [participant({ avatarCid: null })];
-    mocks.profilesBySpaceIds.mockReturnValue([{ avatarUrl: 'ipfs://real-avatar' }]);
+    mocks.avatarUrlBySpaceId.set('space-1', 'ipfs://real-avatar');
 
     const { container } = renderStrip();
 
@@ -69,16 +80,16 @@ describe('ParticipantAvatarStrip avatars', () => {
 
   it('resolves profiles by the participant identity, which is their space id', async () => {
     mocks.participants = [participant({ identity: 'space-42' })];
-    mocks.profilesBySpaceIds.mockReturnValue([{ avatarUrl: 'ipfs://a' }]);
+    mocks.avatarUrlBySpaceId.set('space-42', 'ipfs://a');
 
     renderStrip();
 
-    await waitFor(() => expect(mocks.profilesBySpaceIds).toHaveBeenCalledWith(['space-42']));
+    await waitFor(() => expect(mocks.requestedSpaceIds).toHaveBeenCalledWith(['space-42']));
   });
 
   it('falls back to the call cid when the graph has no avatar for them', async () => {
     mocks.participants = [participant({ avatarCid: 'cid-from-call' })];
-    mocks.profilesBySpaceIds.mockReturnValue([{ avatarUrl: null }]);
+    // Present in the graph, but with no avatar of their own.
 
     const { container } = renderStrip();
 
@@ -90,9 +101,7 @@ describe('ParticipantAvatarStrip avatars', () => {
     mocks.participants = Array.from({ length: 6 }, (_, i) =>
       participant({ identity: `space-${i}`, name: `P${i}`, avatarCid: null })
     );
-    mocks.profilesBySpaceIds.mockReturnValue(
-      Array.from({ length: 6 }, (_, i) => ({ avatarUrl: `ipfs://avatar-${i}` }))
-    );
+    for (let i = 0; i < 6; i++) mocks.avatarUrlBySpaceId.set(`space-${i}`, `ipfs://avatar-${i}`);
 
     const { container } = renderStrip();
 
@@ -100,5 +109,22 @@ describe('ParticipantAvatarStrip avatars', () => {
     await waitFor(() => expect(images(container)).toHaveLength(6));
     expect(screen.getByText('+2 more')).toBeInTheDocument();
     expect(images(container).at(-1)).toHaveAttribute('src', expect.stringContaining('avatar-5'));
+  });
+
+  it('only looks up the participants whose avatars are rendered', async () => {
+    // Eight cells render at most (four visible plus the 2x2 overflow). Asking for the
+    // whole room would fetch profiles nothing shows, and `fetchProfilesBySpaceIds` sends
+    // one unchunked request whose failure path returns defaults for every id — so a
+    // merely-popular call could lose all of its avatars.
+    mocks.participants = Array.from({ length: 30 }, (_, i) => participant({ identity: `space-${i}`, name: `P${i}` }));
+
+    renderStrip();
+
+    // The first render precedes the participants query resolving, so wait for the
+    // lookup that follows it rather than the initial empty one.
+    await waitFor(() => {
+      const requested = mocks.requestedSpaceIds.mock.calls.at(-1)?.[0] as string[];
+      expect(requested).toEqual(Array.from({ length: 8 }, (_, i) => `space-${i}`));
+    });
   });
 });
