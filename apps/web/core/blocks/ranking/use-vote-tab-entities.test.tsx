@@ -24,6 +24,8 @@ const ENTITY_IDS = [
 ];
 const [FIRST, SECOND, THIRD] = ENTITY_IDS;
 const SPACE_ID = '44444444-4444-4444-4444-444444444444';
+/** A space other than the one the data block is scoped to. */
+const OTHER_SPACE_ID = '55555555-5555-5555-5555-555555555555';
 const hex = (uuid: string) => ID.uuidToHex(uuid);
 
 const CURATION = 0;
@@ -33,12 +35,16 @@ const VERACITY = 2;
 /** A plain entity: not a claim, so it's answered with an ordinary upvote. */
 const plainEntity = (id: string): TestEntity => ({ id, relations: [], values: [] });
 
-const claimEntity = (id: string, { isFactual }: { isFactual: boolean }): TestEntity => ({
+const claimEntity = (
+  id: string,
+  { isFactual, spaceId = SPACE_ID }: { isFactual: boolean; spaceId?: string }
+): TestEntity => ({
   id,
   relations: [{ type: { id: SystemIds.TYPES_PROPERTY }, toEntity: { id: CLAIM_TYPE_ID }, isDeleted: false }],
-  values: isFactual
-    ? [{ spaceId: SPACE_ID, property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID }, value: '1', isDeleted: false }]
-    : [],
+  values: [
+    { spaceId, property: { id: SystemIds.NAME_PROPERTY }, value: 'A claim', isDeleted: false },
+    ...(isFactual ? [{ spaceId, property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID }, value: '1', isDeleted: false }] : []),
+  ],
 });
 
 const mocks = vi.hoisted(() => ({
@@ -46,6 +52,9 @@ const mocks = vi.hoisted(() => ({
   queryEntitiesCalls: [] as unknown[],
   entitiesById: new Map<string, { id: string }>(),
   voteKindById: new Map<string, number>(),
+  entitiesError: null as Error | null,
+  refetchEntities: vi.fn(),
+  refetchVotedIds: vi.fn(),
 }));
 
 vi.mock('~/core/blocks/data/use-data-block', () => ({
@@ -62,7 +71,7 @@ vi.mock('~/core/hooks/use-user-voted-entity-ids', () => ({
     hasNextPage: true,
     isFetchingNextPage: false,
     isError: false,
-    refetch: vi.fn(),
+    refetch: mocks.refetchVotedIds,
     fetchNextPage: vi.fn(),
   }),
 }));
@@ -72,10 +81,14 @@ vi.mock('~/core/sync/use-store', () => ({
     mocks.queryEntitiesCalls.push(args);
     const requested = args.where.id?.in ?? [];
     return {
-      entities: requested.map(id => mocks.entitiesById.get(id)).filter(Boolean),
+      // A failed sync falls back to the local store, so an error still settles
+      // as fetched with (usually) nothing in hand.
+      entities: mocks.entitiesError ? [] : requested.map(id => mocks.entitiesById.get(id)).filter(Boolean),
       isLoading: false,
       isFetched: requested.length > 0,
       isPlaceholderData: false,
+      error: mocks.entitiesError,
+      refetch: mocks.refetchEntities,
     };
   },
 }));
@@ -85,6 +98,9 @@ beforeEach(() => {
   mocks.queryEntitiesCalls = [];
   mocks.entitiesById = new Map(ENTITY_IDS.map(id => [hex(id), plainEntity(id)]));
   mocks.voteKindById = new Map(ENTITY_IDS.map(id => [hex(id), CURATION]));
+  mocks.entitiesError = null;
+  mocks.refetchEntities = vi.fn();
+  mocks.refetchVotedIds = vi.fn();
 });
 
 const lastCall = () => mocks.queryEntitiesCalls[mocks.queryEntitiesCalls.length - 1] as QueryEntitiesArgs;
@@ -139,6 +155,61 @@ describe('useVoteTabEntities', () => {
     expect(lastCall().deferUntilFetched).toBe(true);
   });
 
+  // Committing an errored page would bank it as hydrated and never retry it,
+  // leaving a silently empty tab with no error affordance.
+  it('surfaces a hydration failure instead of banking an empty page', () => {
+    mocks.idPages = [[hex(FIRST), hex(SECOND)]];
+    mocks.entitiesError = new Error('sync failed');
+    const { result, rerender } = renderHook(() => useVoteTabEntities('up'));
+
+    expect(result.current.isError).toBe(true);
+    expect(result.current.isFetchingNextPage).toBe(false);
+    expect(result.current.orderedIds).toEqual([]);
+
+    // The page stayed a gap, so recovering re-fetches it rather than skipping ahead.
+    mocks.entitiesError = null;
+    rerender();
+
+    expect(result.current.isError).toBe(false);
+    expect(result.current.orderedIds).toEqual([FIRST, SECOND]);
+  });
+
+  it('retries both the voted ids and the entity hydration', () => {
+    mocks.idPages = [[hex(FIRST)]];
+    const { result } = renderHook(() => useVoteTabEntities('up'));
+
+    result.current.retry();
+
+    expect(mocks.refetchVotedIds).toHaveBeenCalled();
+    expect(mocks.refetchEntities).toHaveBeenCalled();
+  });
+
+  // The ids arrive through an effect, so the first render always sees none of
+  // them; a cached revisit then delivers every page in one go.
+  it('hydrates the first page when the cached ids arrive after the first render', () => {
+    const { result, rerender } = renderHook(() => useVoteTabEntities('up'));
+
+    expect(result.current.orderedIds).toEqual([]);
+
+    mocks.idPages = [[hex(FIRST), hex(SECOND)], [hex(THIRD)]];
+    rerender();
+
+    expect(result.current.orderedIds).toEqual([FIRST, SECOND, THIRD]);
+  });
+
+  it('re-hydrates an earlier page whose ids changed under it', () => {
+    mocks.idPages = [[hex(FIRST)], [hex(THIRD)]];
+    const { result, rerender } = renderHook(() => useVoteTabEntities('up'));
+
+    expect(result.current.orderedIds).toEqual([FIRST, THIRD]);
+
+    // A restored vote lands in the first page rather than the last.
+    mocks.idPages = [[hex(FIRST), hex(SECOND)], [hex(THIRD)]];
+    rerender();
+
+    expect(result.current.orderedIds).toEqual([FIRST, SECOND, THIRD]);
+  });
+
   it('runs no hydration query when the tab is closed', () => {
     mocks.idPages = [[hex(FIRST)]];
     const { result } = renderHook(() => useVoteTabEntities(null));
@@ -163,6 +234,19 @@ describe('useVoteTabEntities', () => {
       const { result } = renderHook(() => useVoteTabEntities('up'));
 
       expect(result.current.orderedIds).toEqual([FIRST, SECOND]);
+    });
+
+    // Votes span every space the viewer has voted in, but Is Factual is only
+    // readable in the claim's own space — resolving against the block's space
+    // downgrades a verified claim to a stance and drops it.
+    it('keeps a claim verified in a space other than the block’s', () => {
+      mocks.entitiesById = new Map([[hex(FIRST), claimEntity(FIRST, { isFactual: true, spaceId: OTHER_SPACE_ID })]]);
+      mocks.voteKindById = new Map([[hex(FIRST), VERACITY]]);
+      mocks.idPages = [[hex(FIRST)]];
+
+      const { result } = renderHook(() => useVoteTabEntities('up'));
+
+      expect(result.current.orderedIds).toEqual([FIRST]);
     });
 
     it('drops a claim whose response kind changed since the vote', () => {

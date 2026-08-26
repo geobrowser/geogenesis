@@ -4,7 +4,12 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
+import {
+  type RowPage,
+  flattenRowPages,
+  rowEntityIdsSignature,
+  upsertRowPage,
+} from '~/core/blocks/data/accumulate-row-pages';
 import { filterStateToWhere, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { mappingToRows } from '~/core/blocks/data/use-mapping';
 import { useView } from '~/core/blocks/data/use-view';
@@ -18,10 +23,6 @@ export const MIN_RANKING_FEED_PAGE_SIZE = 10;
 
 export function rankingFeedPageSize(pageSize: number): number {
   return Math.max(MIN_RANKING_FEED_PAGE_SIZE, pageSize);
-}
-
-function rowEntityIdsSignature(rows: { entityId: string }[]): string {
-  return rows.map(row => row.entityId).join('|');
 }
 
 export function useRankingAccumulatedRows() {

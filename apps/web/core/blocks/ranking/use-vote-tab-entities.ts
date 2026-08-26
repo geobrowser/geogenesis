@@ -4,12 +4,21 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
+import {
+  type RowPage,
+  flattenRowPages,
+  rowEntityIdsSignature,
+  upsertRowPage,
+} from '~/core/blocks/data/accumulate-row-pages';
 import { filterStateToWhere, useDataBlock } from '~/core/blocks/data/use-data-block';
 import { type RankingEntryDisplay, toRankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { type EntityVoteDirectionFilter, useUserVotedEntityIds } from '~/core/hooks/use-user-voted-entity-ids';
 import { ID } from '~/core/id';
-import { resolveEntityResponseKind, responseKindToVoteKind } from '~/core/responses/entity-response';
+import {
+  resolveEntityHomeSpaceId,
+  resolveEntityResponseKind,
+  responseKindToVoteKind,
+} from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 
 /**
@@ -31,24 +40,29 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
     useUserVotedEntityIds(direction ?? 'up', enabled);
 
   const [entryPages, setEntryPages] = React.useState<RowPage<RankingEntryDisplay>[]>([]);
+  // The ids each page was hydrated from. Tracking the contents rather than just
+  // the page number is what lets a page whose ids changed under it — a restored
+  // vote landing mid-list, or a page pre-marked empty before the cached ids
+  // arrived — be recognised as stale and fetched again.
+  const [hydratedSignatures, setHydratedSignatures] = React.useState<Record<number, string>>({});
 
   const resetKey = React.useMemo(() => JSON.stringify({ direction, blockWhere }), [direction, blockWhere]);
 
   React.useEffect(() => {
     setEntryPages([]);
+    setHydratedSignatures({});
   }, [resetKey]);
 
-  // Hydrate the earliest page not yet accumulated. Pages usually arrive one at
-  // a time, but a cached revisit delivers several at once — walking forward
-  // from the first gap catches up through the cached entity batches instead of
-  // skipping to the newest page and stranding the ones before it.
+  // Hydrate the earliest page whose ids aren't the ones we accumulated. Pages
+  // usually arrive one at a time, but a cached revisit delivers several at once —
+  // walking forward from the first gap catches up through the cached entity
+  // batches instead of skipping to the newest page and stranding the ones before it.
   const pageIndex = React.useMemo(() => {
-    const hydrated = new Set(entryPages.map(page => page.page));
     for (let index = 0; index < idPages.length; index++) {
-      if (!hydrated.has(index)) return index;
+      if (hydratedSignatures[index] !== idPages[index].join('|')) return index;
     }
     return Math.max(0, idPages.length - 1);
-  }, [entryPages, idPages]);
+  }, [hydratedSignatures, idPages]);
 
   const pageIds = React.useMemo(() => idPages[pageIndex] ?? [], [idPages, pageIndex]);
 
@@ -59,6 +73,8 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
     isLoading: isLoadingEntities,
     isFetched,
     isPlaceholderData,
+    error: entitiesError,
+    refetch: refetchEntities,
   } = useQueryEntities({
     where,
     first: pageIds.length,
@@ -69,26 +85,50 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
 
   const pageEntries = React.useMemo(
     () =>
-      (entities ?? [])
-        .filter(entity => {
-          const votedKind = voteKindById.get(ID.uuidToHex(entity.id));
-          if (votedKind === undefined) return false;
-          return responseKindToVoteKind(resolveEntityResponseKind(entity, spaceId)) === votedKind;
-        })
-        .map(entity => toRankingEntryDisplay(entity, spaceId)),
+      (entities ?? []).flatMap(entity => {
+        const votedKind = voteKindById.get(ID.uuidToHex(entity.id));
+        if (votedKind === undefined) return [];
+        // Votes span every space the viewer has voted in, so the kind has to be
+        // read in the entity's own space — resolving a claim verified elsewhere
+        // against this block's space downgrades it and drops it from the tab.
+        const entitySpaceId = resolveEntityHomeSpaceId(entity, spaceId);
+        if (responseKindToVoteKind(resolveEntityResponseKind(entity, entitySpaceId)) !== votedKind) return [];
+        return [toRankingEntryDisplay(entity, entitySpaceId)];
+      }),
     [entities, voteKindById, spaceId]
   );
-  const pageEntriesSignature = pageEntries.map(entry => entry.entityId).join('|');
+  const pageEntriesSignature = rowEntityIdsSignature(pageEntries);
+  const pageIdsSignature = pageIds.join('|');
 
   React.useEffect(() => {
     if (!enabled) return;
+    const commit = (entries: RankingEntryDisplay[]) => {
+      setEntryPages(prev => upsertRowPage(prev, pageIndex, entries));
+      setHydratedSignatures(prev =>
+        prev[pageIndex] === pageIdsSignature ? prev : { ...prev, [pageIndex]: pageIdsSignature }
+      );
+    };
+
     if (pageIds.length === 0) {
-      setEntryPages(prev => upsertRowPage(prev, pageIndex, []));
+      commit([]);
       return;
     }
+    // A failed fetch settles as isFetched with the local-store fallback, so
+    // committing here would bank an empty page as hydrated and never retry it.
+    if (entitiesError) return;
     if (!isFetched || isPlaceholderData) return;
-    setEntryPages(prev => upsertRowPage(prev, pageIndex, pageEntries));
-  }, [enabled, isFetched, isPlaceholderData, pageIndex, pageIds.length, pageEntriesSignature, resetKey]);
+    commit(pageEntries);
+  }, [
+    enabled,
+    entitiesError,
+    isFetched,
+    isPlaceholderData,
+    pageIndex,
+    pageIds.length,
+    pageIdsSignature,
+    pageEntriesSignature,
+    resetKey,
+  ]);
 
   const hasCurrentPage = React.useMemo(() => entryPages.some(page => page.page === pageIndex), [entryPages, pageIndex]);
 
@@ -114,14 +154,21 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
     void fetchNextPage();
   }, [fetchNextPage, hasCurrentPage, hasNextPage, isFetchingNextPage]);
 
+  const hasError = isError || entitiesError != null;
+
+  const retry = React.useCallback(() => {
+    void refetch();
+    void refetchEntities();
+  }, [refetch, refetchEntities]);
+
   return {
     orderedIds,
     entries,
     isLoading: isLoading || (accumulatedEntries.length === 0 && pageIds.length > 0 && isLoadingEntities),
     hasNextPage,
-    isFetchingNextPage: !isError && (isFetchingNextPage || (pageIndex > 0 && !hasCurrentPage)),
-    isError,
-    retry: refetch,
+    isFetchingNextPage: !hasError && (isFetchingNextPage || (pageIndex > 0 && !hasCurrentPage)),
+    isError: hasError,
+    retry,
     fetchNextPage: fetchNextVotePage,
   };
 }

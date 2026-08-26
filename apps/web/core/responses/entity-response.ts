@@ -25,6 +25,7 @@ const RESPONSE_VOTE_KIND: Record<ResponseKind, ResponseVoteKind> = {
 const CLAIM_TYPE = uuidToHex(CLAIM_TYPE_ID);
 const CLAIM_IS_FACTUAL = uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID);
 const TYPES_PROPERTY = uuidToHex(SystemIds.TYPES_PROPERTY);
+const NAME_PROPERTY = uuidToHex(SystemIds.NAME_PROPERTY);
 
 const RESPONSE_ACTION_METHOD: Record<ResponseKind, Record<ResponseDirection, ResponseActionMethod>> = {
   curation: {
@@ -108,6 +109,23 @@ export function responsePositionLabel(responseKind: 'stance' | 'veracity' | null
 export function getEntityResponseKind({ isClaim, isFactual }: { isClaim: boolean; isFactual: boolean }): ResponseKind {
   if (!isClaim) return 'curation';
   return isFactual ? 'veracity' : 'stance';
+}
+
+/**
+ * The space an entity actually lives in, taken from its Name value the same way
+ * the ranking views' `resolveEntitySpaceId` does. Callers holding entities from
+ * more than one space — a user's votes span all of them — need this rather than
+ * the surrounding block's space, since the response kind is space-scoped.
+ */
+export function resolveEntityHomeSpaceId(
+  entity: Pick<Entity, 'values'> | null | undefined,
+  fallbackSpaceId: string
+): string {
+  const nameValue = entity?.values.find(
+    value => !value.isDeleted && uuidToHex(value.property.id) === NAME_PROPERTY && Boolean(value.spaceId)
+  );
+
+  return nameValue?.spaceId ?? fallbackSpaceId;
 }
 
 export function resolveEntityResponseKind(

@@ -2,7 +2,7 @@ import type { Row } from '~/core/types';
 
 export type RowPage<T extends { entityId: string } = Row> = { page: number; rows: T[] };
 
-function rowEntityIdsSignature(rows: Array<{ entityId: string }>): string {
+export function rowEntityIdsSignature(rows: Array<{ entityId: string }>): string {
   return rows.map(row => row.entityId).join('|');
 }
 
