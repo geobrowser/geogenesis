@@ -305,7 +305,6 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   );
 }
 
-export const EditableEntityProperties = EditableEntityPage;
 function InlinePropertyRow({
   entityId,
   propertyId,
