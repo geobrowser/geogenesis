@@ -12,6 +12,7 @@ import { getScopeFromFilters } from '~/core/blocks/ranking/ranking-scope';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useGlobalSearchSpaceIds } from '~/core/hooks/use-global-search-space-ids';
 import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
+import { capSearchQuery } from '~/core/io/search-query';
 import { E } from '~/core/sync/orm';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { SearchResult } from '~/core/types';
@@ -49,6 +50,7 @@ export function useRankingComposeSearch({
   }, [scope, globalAdditionalSpaceIds]);
 
   const trimmedQuery = debouncedQuery.trim();
+  const cappedQuery = capSearchQuery(trimmedQuery);
   const hasTypedQuery = enabled && query.trim().length > 0;
   const shouldSearch = hasTypedQuery && trimmedQuery.length > 0;
   const isQuerySyncing = query.trim() !== trimmedQuery;
@@ -61,7 +63,8 @@ export function useRankingComposeSearch({
     hasNextPage,
     fetchNextPage,
   } = useInfiniteQuery({
-    queryKey: ['ranking-compose-search', trimmedQuery, filterByTypesKey, scopeSpaceId, additionalSpaceIds],
+    // The capped query, so typing past the cap stops re-running a search that cannot change.
+    queryKey: ['ranking-compose-search', cappedQuery, filterByTypesKey, scopeSpaceId, additionalSpaceIds],
     enabled: shouldSearch,
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
@@ -69,7 +72,7 @@ export function useRankingComposeSearch({
         store,
         cache,
         where: {
-          name: { fuzzy: trimmedQuery },
+          name: { fuzzy: cappedQuery },
           ...(filterByTypes.length ? { types: filterByTypes.map(id => ({ id: { equals: id } })) } : {}),
           ...(scopeSpaceId ? { space: { id: { equals: scopeSpaceId } } } : {}),
         },
