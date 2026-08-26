@@ -191,13 +191,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // allowlist alone: the lists' own lookups run alongside it, so they are ready when it lands.
   const allowlistPending = spaceAllowlist === null && allowlistLoading;
 
-  // The All tab is the hub's Claims tab: geo-chat's own index of debatable claims, paged and
-  // searched server-side, each row carrying the viewer's side and readiness. It takes a single
-  // `space_id`, so the viewer's allowlist is a page-local cut, the same as the hub's.
   // The acceptor's editor spaces are the authoritative answer, and the same set the publish sweep
-  // works from. The space-type test below it is kept rather than replaced: the two fail
+  // works from. The space-type test is kept alongside rather than replaced by it: the two fail
   // differently, and when this list is unknown — no acceptor configured, a failed lookup — the
   // type test still rules out the case that actually bit us, claims living in a personal space.
+  //
+  // Read here rather than beside `canPublishDebateIn` below, because the scope built underneath
+  // it has to reach the query, which runs before either.
   const { publishableSpaceIds } = useDebatePublishableSpaces();
 
   // Same scoping as the hub's Claims tab: the facets have to describe the spaces this pairing can
@@ -610,18 +610,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const claims = tab === 'opponent' ? opponentClaims : tab === 'recommended' ? curatedClaims : browsedClaims;
 
-  // Every space the lists have shown, not only the current tab's. Space runs in the browsed
-  // query, so the loaded corpus is whatever the current filter allows — a menu listing only the
-  // space you picked would have no way back to another.
+  // Every space the lists have shown, not only the current tab's. Space runs in the browsed query,
+  // so the loaded corpus is whatever the current filter allows — a menu listing only the space you
+  // picked would have no way back to another. Topics need no equivalent: their filter is applied
+  // here rather than in the query, so narrowing them never costs the viewer their way back — and
+  // remembering them anyway kept offering topics from spaces the viewer had filtered away, where
+  // picking one could only ever produce an empty list (GEO-2653).
   //
-  // Topics are deliberately not accumulated the same way. They have no such problem to solve:
-  // the topic filter runs here rather than in the query, so narrowing it never costs the viewer
-  // their way back. Remembering them instead kept offering topics from spaces the viewer had
-  // filtered away, and picking one of those could only ever produce an empty list (GEO-2653).
-  // Kept apart because the two are gated differently on the way out. A space reaching the menu
-  // through a *row* has already passed whatever its own tab requires — and the opponent and
-  // curated tabs are deliberately not narrowed by the viewer's allowlist, so re-applying it here
-  // would drop the space of a claim those tabs are still showing.
+  // The two provenances are held apart because they are gated differently below. A space that
+  // reached the menu through a *row* has already passed whatever its own tab requires, and the
+  // opponent and curated tabs are deliberately not narrowed by the viewer's allowlist — so
+  // re-applying it would drop the space of a claim those tabs are still showing.
   const seenFacetsRef = React.useRef<{ rowSpaceIds: Set<string>; facetSpaceIds: Set<string> }>({
     rowSpaceIds: new Set(),
     facetSpaceIds: new Set(),
