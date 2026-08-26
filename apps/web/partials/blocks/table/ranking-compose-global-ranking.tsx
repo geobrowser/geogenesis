@@ -8,7 +8,7 @@ import cx from 'classnames';
 
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
 import { rankingSearchHasExactNameMatch } from '~/core/blocks/ranking/ranking-search-exact-name';
-import { type RankingEntryDisplay, useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
+import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useVoteTabEntities } from '~/core/blocks/ranking/use-vote-tab-entities';
 import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row, SearchResult } from '~/core/types';
@@ -339,6 +339,7 @@ export function RankingComposeGlobalRanking({
   const voteDirection = browseTab === 'upvoted' ? 'up' : browseTab === 'downvoted' ? 'down' : null;
   const {
     orderedIds: voteTabIds,
+    entries: voteTabEntries,
     isLoading: isLoadingVoteTab,
     hasNextPage: voteTabHasNextPage,
     isFetchingNextPage: isFetchingVoteTabNextPage,
@@ -348,8 +349,6 @@ export function RankingComposeGlobalRanking({
   } = useVoteTabEntities(voteDirection);
 
   const isVoteTab = voteDirection !== null;
-
-  const { entries: voteTabEntries } = useRankingEntryEntities(spaceId, isVoteTab ? voteTabIds : []);
 
   const entriesById = React.useMemo(() => {
     if (!isVoteTab) return rankableEntriesById;

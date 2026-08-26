@@ -49,6 +49,8 @@ export function clearRemovedVotedId(removed: string[], entityId: string): string
 
 const MAX_CACHED_VOTE_PAGES = 4;
 
+const EMPTY_VOTED_ID_PAGES: VotedIdPage[] = [];
+
 export type VotedIdPage = {
   param: string | null;
   objectIds: string[];
@@ -139,30 +141,33 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
     maxPages: MAX_CACHED_VOTE_PAGES,
   });
 
-  const [fetchedPages, setFetchedPages] = React.useState<VotedIdPage[]>([]);
+  // Accumulated pages kept per list rather than wiped on direction switch: the
+  // query cache retains only the trailing MAX_CACHED_VOTE_PAGES pages, so a
+  // wiped accumulation could only rebuild from that window and would lose
+  // every page fetched before it.
+  const [fetchedPagesByList, setFetchedPagesByList] = React.useState<Record<string, VotedIdPage[]>>({});
 
   const listKey = `${personalSpaceId ?? ''}:${direction}`;
-
-  React.useEffect(() => {
-    setFetchedPages([]);
-  }, [listKey]);
+  const fetchedPages = fetchedPagesByList[listKey] ?? EMPTY_VOTED_ID_PAGES;
 
   React.useEffect(() => {
     const data = query.data;
     if (!data) return;
 
-    setFetchedPages(previous =>
-      mergeVotedIdPages(
-        previous,
+    setFetchedPagesByList(previous => {
+      const current = previous[listKey] ?? EMPTY_VOTED_ID_PAGES;
+      const merged = mergeVotedIdPages(
+        current,
         data.pages.map((page, index) => ({
           param: (data.pageParams[index] ?? null) as string | null,
           objectIds: page.objectIds,
           voteKindByObjectId: page.voteKindByObjectId,
           votedAtByObjectId: page.votedAtByObjectId,
         }))
-      )
-    );
-  }, [query.data]);
+      );
+      return merged === current ? previous : { ...previous, [listKey]: merged };
+    });
+  }, [query.data, listKey]);
 
   const { data: removedIds } = useQuery({
     queryKey: votedEntityIdsRemovedQueryKey(personalSpaceId, direction),

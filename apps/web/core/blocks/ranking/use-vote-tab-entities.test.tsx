@@ -61,6 +61,8 @@ vi.mock('~/core/hooks/use-user-voted-entity-ids', () => ({
     isLoading: false,
     hasNextPage: true,
     isFetchingNextPage: false,
+    isError: false,
+    refetch: vi.fn(),
     fetchNextPage: vi.fn(),
   }),
 }));
@@ -113,6 +115,23 @@ describe('useVoteTabEntities', () => {
     expect(result.current.orderedIds).toEqual([FIRST, SECOND, THIRD]);
   });
 
+  it('catches up page by page when several pages arrive at once, as on a cached revisit', () => {
+    mocks.idPages = [[hex(FIRST), hex(SECOND)], [hex(THIRD)]];
+    const { result } = renderHook(() => useVoteTabEntities('up'));
+
+    expect(result.current.orderedIds).toEqual([FIRST, SECOND, THIRD]);
+    expect(mocks.queryEntitiesCalls.length).toBeGreaterThanOrEqual(2);
+    expect(lastCall().where.id?.in).toEqual([hex(THIRD)]);
+  });
+
+  it('returns display entries alongside the ids so callers need no second entity query', () => {
+    mocks.idPages = [[hex(FIRST), hex(SECOND)]];
+    const { result } = renderHook(() => useVoteTabEntities('up'));
+
+    expect(result.current.entries.map(entry => entry.entityId)).toEqual([FIRST, SECOND]);
+    expect(result.current.entries.every(entry => entry.name === 'Untitled')).toBe(true);
+  });
+
   it('defers to the fetched page rather than reading through the store', () => {
     mocks.idPages = [[hex(FIRST)]];
     renderHook(() => useVoteTabEntities('up'));
@@ -126,6 +145,7 @@ describe('useVoteTabEntities', () => {
 
     expect(lastCall().enabled).toBe(false);
     expect(result.current.orderedIds).toEqual([]);
+    expect(result.current.entries).toEqual([]);
   });
 
   describe('response kinds', () => {
