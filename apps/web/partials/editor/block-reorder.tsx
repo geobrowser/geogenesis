@@ -1,22 +1,9 @@
 'use client';
 
-import {
-  DndContext,
-  DragCancelEvent,
-  DragEndEvent,
-  DragOverEvent,
-  DragOverlay,
-  DragStartEvent,
-  KeyboardCode,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useDraggable,
-  useDroppable,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import type { KeyboardCoordinateGetter } from '@dnd-kit/core';
+import { move } from '@dnd-kit/helpers';
+import { DragDropProvider } from '@dnd-kit/react';
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/react';
+import { useSortable } from '@dnd-kit/react/sortable';
 import type { Editor } from '@tiptap/react';
 
 import * as React from 'react';
@@ -26,17 +13,19 @@ import { OrderDots } from '~/design-system/icons/order-dots';
 import { ensureUniqueNodeIds } from './id-extension';
 
 type BlockLayout = {
+  id: string;
+  element: HTMLElement;
   childIndex: number;
   top: number;
   bottom: number;
   center: number;
 };
 
-type DropZoneLayout = {
-  boundary: number;
+type BlockPosition = {
+  childIndex: number;
   top: number;
-  height: number;
-  indicatorTop: number;
+  bottom: number;
+  center: number;
 };
 
 const GUTTER_HOVER_WIDTH = 48;
@@ -51,20 +40,11 @@ type Props = {
 
 /** Adds edit-mode drag controls around TipTap's top-level content blocks. */
 export function BlockReorder({ children, editor, editorWrapperRef, enabled, onReorder }: Props) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 4 },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: blockKeyboardCoordinates,
-    })
-  );
   const [blockLayout, setBlockLayout] = React.useState<BlockLayout[]>([]);
   const blockLayoutRef = React.useRef<BlockLayout[]>([]);
   const [hoveredChildIndex, setHoveredChildIndex] = React.useState<number | null>(null);
   const hoveredChildIndexRef = React.useRef<number | null>(null);
-  const [activeChildIndex, setActiveChildIndex] = React.useState<number | null>(null);
-  const [activeBoundary, setActiveBoundary] = React.useState<number | null>(null);
+  const [activeBlockId, setActiveBlockId] = React.useState<string | null>(null);
 
   const updateHoveredChildIndex = React.useCallback((childIndex: number | null) => {
     hoveredChildIndexRef.current = childIndex;
@@ -77,19 +57,21 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     if (!wrapper || !editorElement) return;
 
     const wrapperRect = wrapper.getBoundingClientRect();
-    const nextLayout = Array.from(editorElement.children).flatMap((element, childIndex) => {
-      if (!(element instanceof HTMLElement) || !isDraggableBlock(element)) return [];
+    const nextLayout = getTopLevelBlockElements(editor, editorElement).flatMap(({ childIndex, element }) => {
+      if (!isDraggableBlock(element)) return [];
 
       const rect = element.getBoundingClientRect();
       const top = rect.top - wrapperRect.top;
       const bottom = rect.bottom - wrapperRect.top;
+      const blockId = editor.state.doc.child(childIndex).attrs.id;
+      const id = typeof blockId === 'string' && blockId.length > 0 ? blockId : `child-${childIndex}`;
 
-      return [{ childIndex, top, bottom, center: top + rect.height / 2 }];
+      return [{ id, element, childIndex, top, bottom, center: top + rect.height / 2 }];
     });
 
     blockLayoutRef.current = nextLayout;
     setBlockLayout(nextLayout);
-  }, [editorWrapperRef]);
+  }, [editor, editorWrapperRef]);
 
   React.useLayoutEffect(() => {
     if (!enabled) return;
@@ -107,19 +89,17 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     const mutationObserver = new MutationObserver(measureBlocks);
     resizeObserver.observe(editorElement);
     mutationObserver.observe(editorElement, { childList: true });
+    editor.on('update', measureBlocks);
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (activeChildIndex !== null) return;
+      if (activeBlockId !== null) return;
 
       const target = event.target;
       if (!(target instanceof Element)) return;
       if (target.closest('[data-block-drag-handle]')) return;
 
       const blockElement = target.closest<HTMLElement>('.ProseMirror > *');
-      const hoveredContentIndex =
-        blockElement?.parentElement === editorElement && isDraggableBlock(blockElement)
-          ? Array.from(editorElement.children).indexOf(blockElement)
-          : null;
+      const hoveredContentIndex = blockLayoutRef.current.find(block => block.element === blockElement)?.childIndex;
       const wrapperRect = wrapper.getBoundingClientRect();
       const editorRect = editorElement.getBoundingClientRect();
       const hoveredGutterIndex = getGutterHoveredChildIndex(
@@ -128,7 +108,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
         event.clientY - wrapperRect.top,
         editorRect.left - wrapperRect.left
       );
-      const childIndex = hoveredContentIndex ?? hoveredGutterIndex;
+      const childIndex = hoveredContentIndex ?? hoveredGutterIndex ?? null;
 
       if (childIndex === null) {
         updateHoveredChildIndex(null);
@@ -142,7 +122,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     };
 
     const handlePointerLeave = () => {
-      if (activeChildIndex === null) updateHoveredChildIndex(null);
+      if (activeBlockId === null) updateHoveredChildIndex(null);
     };
 
     wrapper.addEventListener('pointermove', handlePointerMove);
@@ -151,135 +131,94 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     return () => {
       resizeObserver.disconnect();
       mutationObserver.disconnect();
+      editor.off('update', measureBlocks);
       wrapper.removeEventListener('pointermove', handlePointerMove);
       wrapper.removeEventListener('pointerleave', handlePointerLeave);
     };
-  }, [activeChildIndex, editor, editorWrapperRef, enabled, measureBlocks, updateHoveredChildIndex]);
+  }, [activeBlockId, editor, editorWrapperRef, enabled, measureBlocks, updateHoveredChildIndex]);
 
   React.useEffect(() => {
     if (enabled) return;
 
     hoveredChildIndexRef.current = null;
     setHoveredChildIndex(null);
-    setActiveChildIndex(null);
-    setActiveBoundary(null);
+    setActiveBlockId(null);
   }, [enabled]);
 
   const editorRect = editorWrapperRef.current?.querySelector<HTMLElement>('.ProseMirror')?.getBoundingClientRect();
   const wrapperRect = editorWrapperRef.current?.getBoundingClientRect();
   const editorLeft = editorRect && wrapperRect ? editorRect.left - wrapperRect.left : 0;
-  const editorWidth = editorRect?.width ?? 0;
-  const visibleHandleIndex = activeChildIndex ?? hoveredChildIndex;
-  const handleLayout = blockLayout.find(block => block.childIndex === visibleHandleIndex);
-  const dropZones = makeDropZones(blockLayout);
-  const indicatorTop = dropZones.find(zone => zone.boundary === activeBoundary)?.indicatorTop;
+  const handleLayout = blockLayout.find(block => block.childIndex === hoveredChildIndex);
 
   const resetDragState = () => {
-    setActiveChildIndex(null);
-    setActiveBoundary(null);
+    setActiveBlockId(null);
     updateHoveredChildIndex(null);
-  };
-
-  const handleDragCancel = (event: DragCancelEvent) => {
-    releasePointerDragFocus(event.activatorEvent);
-    resetDragState();
   };
 
   const handleDragStart = (event: DragStartEvent) => {
     if (!enabled) return;
 
-    const childIndex = event.active.data.current?.childIndex;
-    if (typeof childIndex !== 'number') return;
+    const sourceId = event.operation.source?.id;
+    if (sourceId === null || sourceId === undefined) return;
 
     // Continuation nodes loaded from markdown intentionally start without IDs.
     // A drag can happen before blur, so assign/dedupe IDs before persisting it.
     ensureUniqueNodeIds(editor);
     measureBlocks();
-    setActiveChildIndex(childIndex);
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const boundary = event.over?.data.current?.boundary;
-    setActiveBoundary(typeof boundary === 'number' ? boundary : null);
+    setActiveBlockId(String(sourceId));
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
-    const sourceIndex = event.active.data.current?.childIndex;
-    const dropBoundary = event.over?.data.current?.boundary;
+    const blocks = blockLayoutRef.current;
+    const sourceId = event.operation.source?.id;
 
-    if (
-      typeof sourceIndex === 'number' &&
-      typeof dropBoundary === 'number' &&
-      moveTopLevelBlock(editor, sourceIndex, dropBoundary)
-    ) {
-      onReorder();
+    if (!event.canceled && sourceId !== null && sourceId !== undefined) {
+      const sourceRank = blocks.findIndex(block => block.id === String(sourceId));
+      const reorderedBlocks = move(blocks, event);
+      const targetRank = reorderedBlocks.findIndex(block => block.id === String(sourceId));
+      const dropBoundary = getSortableDropBoundary(blocks, sourceRank, targetRank);
+      const sourceIndex = blocks[sourceRank]?.childIndex;
+
+      if (
+        typeof sourceIndex === 'number' &&
+        dropBoundary !== null &&
+        moveTopLevelBlock(editor, sourceIndex, dropBoundary)
+      ) {
+        onReorder();
+      }
     }
 
-    releasePointerDragFocus(event.activatorEvent);
+    releasePointerDragFocus(event.operation.activatorEvent);
     resetDragState();
   };
 
   return (
-    <DndContext
-      sensors={sensors}
-      autoScroll
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragCancel={handleDragCancel}
-      onDragEnd={handleDragEnd}
-    >
+    <DragDropProvider onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       {children}
 
-      {enabled && activeChildIndex === null && blockLayout.length > 0 ? (
+      {enabled && activeBlockId === null && blockLayout.length > 0 ? (
         <BlockGutterHoverArea blocks={blockLayout} editorLeft={editorLeft} onClick={() => editor.commands.focus()} />
       ) : null}
 
       {enabled
-        ? blockLayout.map(layout => (
-            <BlockDragHandle
-              key={getBlockDragHandleKey(editor, layout.childIndex)}
-              childIndex={layout.childIndex}
-              top={layout.top + Math.min(16, (layout.bottom - layout.top) / 2) - 12}
+        ? blockLayout.map((layout, index) => (
+            <SortableBlockDragHandle
+              key={layout.id}
+              layout={layout}
+              index={index}
               left={editorLeft - 32}
-              isDragging={activeChildIndex !== null}
-              visible={layout === handleLayout && visibleHandleIndex !== null}
+              isDragging={activeBlockId !== null}
+              visible={layout === handleLayout && hoveredChildIndex !== null}
             />
           ))
         : null}
-
-      {enabled && activeChildIndex !== null
-        ? dropZones.map(zone => <BlockDropZone key={zone.boundary} zone={zone} left={editorLeft} width={editorWidth} />)
-        : null}
-
-      {enabled && activeChildIndex !== null && indicatorTop !== undefined ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute z-30 h-0.5 rounded-full bg-ctaPrimary"
-          style={{ top: indicatorTop, left: editorLeft, width: editorWidth }}
-        />
-      ) : null}
-
-      <DragOverlay dropAnimation={null}>
-        {enabled && activeChildIndex !== null ? (
-          <div className="flex size-6 cursor-grabbing items-center justify-center rounded border border-grey-02 bg-white shadow-lg">
-            <OrderDots />
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+    </DragDropProvider>
   );
 }
 
-function getBlockDragHandleKey(editor: Editor, childIndex: number) {
-  if (childIndex < 0 || childIndex >= editor.state.doc.childCount) return `child-${childIndex}`;
-
-  const blockId = editor.state.doc.child(childIndex).attrs.id;
-  return typeof blockId === 'string' && blockId.length > 0 ? blockId : `child-${childIndex}`;
-}
-
 /** Pointer activation should not leave a handle visibly focused after drop. */
-export function releasePointerDragFocus(activatorEvent: Event) {
+export function releasePointerDragFocus(activatorEvent: Event | null | undefined) {
+  if (!activatorEvent) return;
   if (activatorEvent.type === 'keydown') return;
 
   const target = activatorEvent.target;
@@ -293,7 +232,7 @@ export function BlockGutterHoverArea({
   editorLeft,
   onClick,
 }: {
-  blocks: BlockLayout[];
+  blocks: BlockPosition[];
   editorLeft: number;
   onClick?: React.MouseEventHandler<HTMLDivElement>;
 }) {
@@ -317,24 +256,54 @@ export function BlockGutterHoverArea({
   );
 }
 
+function SortableBlockDragHandle({
+  layout,
+  index,
+  left,
+  isDragging,
+  visible,
+}: {
+  layout: BlockLayout;
+  index: number;
+  left: number;
+  isDragging: boolean;
+  visible: boolean;
+}) {
+  const { handleRef } = useSortable({
+    id: layout.id,
+    index,
+    element: layout.element,
+    transition: { duration: 150, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' },
+  });
+
+  return (
+    <BlockDragHandle
+      childIndex={layout.childIndex}
+      top={layout.top + Math.min(16, (layout.bottom - layout.top) / 2) - 12}
+      left={left}
+      isDragging={isDragging}
+      visible={visible}
+      dragHandleRef={handleRef}
+    />
+  );
+}
+
 export function BlockDragHandle({
   childIndex,
   top,
   left,
   isDragging,
   visible,
+  dragHandleRef,
 }: {
   childIndex: number;
   top: number;
   left: number;
   isDragging: boolean;
   visible: boolean;
+  dragHandleRef?: (element: HTMLButtonElement | null) => void;
 }) {
   const [isFocused, setIsFocused] = React.useState(false);
-  const { attributes, listeners, setNodeRef } = useDraggable({
-    id: `content-block-${childIndex}`,
-    data: { childIndex },
-  });
 
   return (
     <div
@@ -348,87 +317,17 @@ export function BlockDragHandle({
       }}
     >
       <button
-        ref={setNodeRef}
+        ref={dragHandleRef}
         type="button"
         aria-label={`Drag block ${childIndex + 1} to reorder`}
         title="Drag to reorder"
         className="flex size-6 cursor-grab items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01 active:cursor-grabbing"
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
-        {...attributes}
-        {...listeners}
       >
         <OrderDots color="currentColor" />
       </button>
     </div>
-  );
-}
-
-export const blockKeyboardCoordinates: KeyboardCoordinateGetter = (event, { context, currentCoordinates }) => {
-  if (event.code !== KeyboardCode.Up && event.code !== KeyboardCode.Down) return;
-
-  const sourceIndex = context.active?.data.current?.childIndex;
-  if (typeof sourceIndex !== 'number') return;
-
-  const dropZones = context.droppableContainers
-    .getEnabled()
-    .flatMap(container => {
-      const boundary = container.data.current?.boundary;
-      return typeof boundary === 'number' ? [{ boundary, container }] : [];
-    })
-    .sort((a, b) => a.boundary - b.boundary);
-  const currentBoundary = context.over?.data.current?.boundary;
-  const targetBoundary = getNextKeyboardDropBoundary(
-    sourceIndex,
-    typeof currentBoundary === 'number' ? currentBoundary : null,
-    event.code === KeyboardCode.Down ? 1 : -1,
-    dropZones.map(zone => zone.boundary)
-  );
-  const target = dropZones.find(zone => zone.boundary === targetBoundary);
-  const targetRect = target ? context.droppableRects.get(target.container.id) : null;
-  if (!targetRect) return;
-
-  event.preventDefault();
-  const collisionHeight = context.collisionRect?.height ?? 0;
-
-  return {
-    x: currentCoordinates.x,
-    y: targetRect.top + (targetRect.height - collisionHeight) / 2,
-  };
-};
-
-export function getNextKeyboardDropBoundary(
-  sourceIndex: number,
-  currentBoundary: number | null,
-  direction: -1 | 1,
-  boundaries: number[]
-) {
-  const sourceRank = boundaries.indexOf(sourceIndex);
-  if (sourceRank === -1) return null;
-
-  const currentBoundaryRank = currentBoundary === null ? sourceRank : boundaries.indexOf(currentBoundary);
-  if (currentBoundaryRank === -1) return null;
-
-  const currentRank = currentBoundaryRank > sourceRank ? currentBoundaryRank - 1 : currentBoundaryRank;
-  const targetRank = currentRank + direction;
-  const targetBoundaryRank = targetRank > sourceRank ? targetRank + 1 : targetRank;
-
-  return boundaries[targetBoundaryRank] ?? null;
-}
-
-function BlockDropZone({ zone, left, width }: { zone: DropZoneLayout; left: number; width: number }) {
-  const { setNodeRef } = useDroppable({
-    id: `content-block-drop-${zone.boundary}`,
-    data: { boundary: zone.boundary },
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      aria-hidden
-      className="pointer-events-none absolute z-20"
-      style={{ top: zone.top, left, width, height: zone.height }}
-    />
   );
 }
 
@@ -439,28 +338,46 @@ function isDraggableBlock(element: HTMLElement) {
   );
 }
 
-export function makeDropZones(blocks: BlockLayout[]): DropZoneLayout[] {
-  if (blocks.length === 0) return [];
+/** Maps document children through ProseMirror positions so DOM widgets cannot shift block indexes. */
+export function getTopLevelBlockElements(editor: Editor, editorElement: HTMLElement) {
+  const blocks: Array<{ childIndex: number; element: HTMLElement }> = [];
+  let position = 0;
 
-  return Array.from({ length: blocks.length + 1 }, (_, index) => {
-    const previous = blocks[index - 1];
-    const next = blocks[index];
-    const top = previous?.center ?? next.top;
-    const bottom = next?.center ?? previous.bottom;
-    const indicatorTop = previous && next ? (previous.bottom + next.top) / 2 : (next?.top ?? previous.bottom);
+  for (let childIndex = 0; childIndex < editor.state.doc.childCount; childIndex += 1) {
+    const element = editor.view.nodeDOM(position);
+    if (element instanceof HTMLElement && element.parentElement === editorElement) {
+      blocks.push({ childIndex, element });
+    }
+    position += editor.state.doc.child(childIndex).nodeSize;
+  }
 
-    return {
-      boundary: next?.childIndex ?? previous.childIndex + 1,
-      top,
-      height: Math.max(1, bottom - top),
-      indicatorTop,
-    };
-  });
+  return blocks;
+}
+
+export function getSortableDropBoundary(
+  blocks: Array<Pick<BlockLayout, 'childIndex'>>,
+  sourceRank: number,
+  targetRank: number
+) {
+  if (
+    sourceRank < 0 ||
+    sourceRank >= blocks.length ||
+    targetRank < 0 ||
+    targetRank >= blocks.length ||
+    sourceRank === targetRank
+  ) {
+    return null;
+  }
+
+  const targetChildIndex = blocks[targetRank]?.childIndex;
+  if (targetChildIndex === undefined) return null;
+
+  return targetRank > sourceRank ? targetChildIndex + 1 : targetChildIndex;
 }
 
 /** Finds the block beside a pointer in the editor's left gutter. */
 export function getGutterHoveredChildIndex(
-  blocks: BlockLayout[],
+  blocks: BlockPosition[],
   pointerX: number,
   pointerY: number,
   editorLeft: number
