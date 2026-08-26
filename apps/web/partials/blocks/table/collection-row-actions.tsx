@@ -141,6 +141,15 @@ export function CollectionRowActions({
 
   return (
     <div className="flex shrink-0 flex-nowrap items-center gap-0.5">
+      {/* Side panel first: it is the one people reach for, so it keeps a fixed position rather than
+          shifting left and right depending on whether the row has a menu to show. */}
+      {showSidePanel && (
+        <DataBlockOpenSidePanelButton
+          entityId={entityId}
+          entitySpaceId={spaceId ?? currentSpaceId}
+          openedWithMainViewEditing={openedWithMainViewEditing}
+        />
+      )}
       {(relationId || isEditing) && (
         <Popover.Root
           open={isPopoverOpen}
@@ -296,13 +305,6 @@ export function CollectionRowActions({
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
-      )}
-      {showSidePanel && (
-        <DataBlockOpenSidePanelButton
-          entityId={entityId}
-          entitySpaceId={spaceId ?? currentSpaceId}
-          openedWithMainViewEditing={openedWithMainViewEditing}
-        />
       )}
       {/* Last in the row on purpose: the only destructive action here, kept furthest from the side
           panel people open by habit. Grey until hovered, then red — the row shouldn't shout at

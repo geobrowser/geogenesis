@@ -211,7 +211,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
               and the Debate button forwards this to geo-chat, which rejects the claim if it does
               not belong to the space given (GEO-2581). */}
           <EntityRowActions entityId={entityId} spaceId={nameCell?.space ?? space} />
-          <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+          <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 has-data-[state=open]:visible has-data-[state=open]:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
             {source.type === 'COLLECTION' ? (
               <CollectionRowActions
                 isEditing={false}

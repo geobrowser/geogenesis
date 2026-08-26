@@ -234,7 +234,7 @@ export function TableBlockListItem({
 
           {!isPlaceholder && (
             <div className="mt-2 flex items-center justify-end gap-2">
-              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+              <div className="invisible flex items-center opacity-0 transition duration-200 has-data-[state=open]:visible has-data-[state=open]:opacity-100 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
                 {source.type === 'COLLECTION' ? (
                   <CollectionRowActions
                     isEditing={true}
@@ -350,7 +350,7 @@ export function TableBlockListItem({
                 same way. */}
             <EntityRowActions entityId={rowEntityId} spaceId={nameCell?.space ?? currentSpaceId} />
             {!isPlaceholder && (
-              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+              <div className="invisible flex items-center opacity-0 transition duration-200 has-data-[state=open]:visible has-data-[state=open]:opacity-100 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
                 {source.type === 'COLLECTION' ? (
                   <CollectionRowActions
                     isEditing={false}

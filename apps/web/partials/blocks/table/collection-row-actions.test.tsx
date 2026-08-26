@@ -66,7 +66,7 @@ vi.mock('~/design-system/select-space-dialog', () => ({
   SelectSpaceAsPopover: ({ trigger }: { trigger: React.ReactNode }) => <>{trigger}</>,
 }));
 vi.mock('~/partials/blocks/table/data-block-open-side-panel-button', () => ({
-  DataBlockOpenSidePanelButton: () => null,
+  DataBlockOpenSidePanelButton: () => <button type="button" aria-label="Open entity in side panel" />,
 }));
 
 function renderActions(overrides: Partial<React.ComponentProps<typeof CollectionRowActions>> = {}) {
@@ -193,6 +193,29 @@ describe('CollectionRowActions remove', () => {
  * is no way to tell a copy from a misfire. Which also means the tick must not appear when the write
  * fails, or it is worse than no feedback at all.
  */
+/**
+ * The side panel is the control people reach for, so it holds a fixed position instead of sliding
+ * left and right depending on whether the row has a menu to show.
+ */
+describe('CollectionRowActions order', () => {
+  it('puts the side panel before the row menu', () => {
+    renderActions();
+
+    const controls = [...document.querySelectorAll('button[aria-label]')].map(el => el.getAttribute('aria-label'));
+
+    expect(controls.indexOf('Open entity in side panel')).toBeLessThan(controls.indexOf('Show row actions'));
+  });
+
+  // Still the only destructive action, and still furthest from the one opened by habit.
+  it('leaves remove at the end', () => {
+    renderActions();
+
+    const controls = [...document.querySelectorAll('button[aria-label]')].map(el => el.getAttribute('aria-label'));
+
+    expect(controls.indexOf('Remove from collection')).toBe(controls.length - 1);
+  });
+});
+
 describe('CollectionRowActions copy entity id', () => {
   const copyButton = () => screen.queryByRole('button', { name: 'Copy entity ID' });
   // Where the confirmation actually lives. Renaming the button instead would be announced
