@@ -1,5 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -55,6 +55,7 @@ const mocks = vi.hoisted(() => ({
   entitiesError: null as Error | null,
   refetchEntities: vi.fn(),
   refetchVotedIds: vi.fn(),
+  fetchNextVotedIdsPage: vi.fn(),
 }));
 
 vi.mock('~/core/blocks/data/use-data-block', () => ({
@@ -72,7 +73,7 @@ vi.mock('~/core/hooks/use-user-voted-entity-ids', () => ({
     isFetchingNextPage: false,
     isError: false,
     refetch: mocks.refetchVotedIds,
-    fetchNextPage: vi.fn(),
+    fetchNextPage: mocks.fetchNextVotedIdsPage,
   }),
 }));
 
@@ -101,6 +102,7 @@ beforeEach(() => {
   mocks.entitiesError = null;
   mocks.refetchEntities = vi.fn();
   mocks.refetchVotedIds = vi.fn();
+  mocks.fetchNextVotedIdsPage = vi.fn();
 });
 
 const lastCall = () => mocks.queryEntitiesCalls[mocks.queryEntitiesCalls.length - 1] as QueryEntitiesArgs;
@@ -172,6 +174,31 @@ describe('useVoteTabEntities', () => {
 
     expect(result.current.isError).toBe(false);
     expect(result.current.orderedIds).toEqual([FIRST, SECOND]);
+  });
+
+  // The ids query stays healthy when the entity fetch is the one failing, so
+  // nothing else stops the consumer's scroll sentinel from paging through the
+  // viewer's whole vote history while no page can hydrate.
+  it('stops paginating while a hydration failure is unresolved', () => {
+    mocks.idPages = [[hex(FIRST), hex(SECOND)]];
+    mocks.entitiesError = new Error('sync failed');
+    const { result, rerender } = renderHook(() => useVoteTabEntities('up'));
+
+    expect(result.current.hasNextPage).toBe(false);
+
+    act(() => result.current.fetchNextPage());
+
+    expect(mocks.fetchNextVotedIdsPage).not.toHaveBeenCalled();
+
+    // Recovering restores pagination.
+    mocks.entitiesError = null;
+    rerender();
+
+    expect(result.current.hasNextPage).toBe(true);
+
+    act(() => result.current.fetchNextPage());
+
+    expect(mocks.fetchNextVotedIdsPage).toHaveBeenCalledTimes(1);
   });
 
   it('retries both the voted ids and the entity hydration', () => {

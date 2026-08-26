@@ -146,12 +146,16 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
 
   const orderedIds = React.useMemo(() => entries.map(entry => entry.entityId), [entries]);
 
-  const fetchNextVotePage = React.useCallback(() => {
-    if (!hasNextPage || !hasCurrentPage || isFetchingNextPage) return;
-    void fetchNextPage();
-  }, [fetchNextPage, hasCurrentPage, hasNextPage, isFetchingNextPage]);
-
   const hasError = isError || entitiesError != null;
+
+  // A failed hydration must not advance the list. The ids query stays healthy
+  // when it's the entity fetch that failed, so without this guard the consumer's
+  // scroll sentinel walks the viewer's entire vote history back to back — every
+  // page landing, none of them hydrating, and no spinner to show for it.
+  const fetchNextVotePage = React.useCallback(() => {
+    if (hasError || !hasNextPage || !hasCurrentPage || isFetchingNextPage) return;
+    void fetchNextPage();
+  }, [fetchNextPage, hasCurrentPage, hasError, hasNextPage, isFetchingNextPage]);
 
   const retry = React.useCallback(() => {
     void refetch();
@@ -162,7 +166,9 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
     orderedIds,
     entries,
     isLoading: isLoading || (accumulatedEntries.length === 0 && pageIds.length > 0 && isLoadingEntities),
-    hasNextPage,
+    // Retiring the sentinel while the error shows keeps "Try again" as the only
+    // way forward, rather than letting infinite scroll retry it silently.
+    hasNextPage: hasNextPage && !hasError,
     isFetchingNextPage: !hasError && (isFetchingNextPage || (pageIndex > 0 && !hasCurrentPage)),
     isError: hasError,
     retry,
