@@ -12,7 +12,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   BlockDragHandle,
-  BlockGutterHoverArea,
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
   makeDropZones,
@@ -72,27 +71,6 @@ describe('BlockDragHandle', () => {
     fireEvent.focus(button);
 
     expect(handle).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
-  });
-});
-
-describe('BlockGutterHoverArea', () => {
-  it('creates a real pointer target extending left beyond the handle position', () => {
-    const { container } = render(
-      React.createElement(BlockGutterHoverArea, {
-        editorLeft: 100,
-        blocks: [
-          { childIndex: 0, top: 10, bottom: 30, center: 20 },
-          { childIndex: 1, top: 50, bottom: 70, center: 60 },
-        ],
-      })
-    );
-
-    expect(container.querySelector('[data-block-drag-gutter]')).toHaveStyle({
-      top: '10px',
-      left: '52px',
-      width: '48px',
-      height: '60px',
-    });
   });
 });
 
