@@ -1348,16 +1348,13 @@ export function getEntityResponders(
 
 export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
 
-type UserEntityVotesPage = {
-  nodes: Array<{ objectId: string; voteKind: number; votedAt: string }>;
-  pageInfo: { hasNextPage: boolean; endCursor?: string | null };
-};
+type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string };
 
 export type UserEntityVoteObjectIdsPage = {
   objectIds: string[];
   voteKindByObjectId: Record<string, number>;
   votedAtByObjectId: Record<string, string>;
-  endCursor: string | null;
+  nextOffset: number;
   hasNextPage: boolean;
 };
 
@@ -1365,37 +1362,39 @@ export function getUserEntityVoteObjectIdsPage(
   userId: string,
   voteType: 0 | 1,
   objectType: 0 | 1 = 0,
-  after?: string | null,
+  offset = 0,
   signal?: AbortController['signal']
 ) {
   return Effect.gen(function* () {
-    const page: UserEntityVotesPage = yield* graphql({
+    const rows: UserEntityVoteRow[] = yield* graphql({
       query: UserEntityVotesByTypeDocument,
-      decoder: (data): UserEntityVotesPage =>
-        data.userVotesConnection ?? { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
+      decoder: (data): UserEntityVoteRow[] =>
+        (data.userVotes ?? []).filter((row): row is UserEntityVoteRow => row != null),
       variables: {
         userId,
         voteType,
         objectType,
         first: USER_ENTITY_VOTES_PAGE_SIZE,
-        after: after ?? null,
+        offset,
       },
       signal,
     });
 
-    const nodes = page.nodes.filter(node => Boolean(node.objectId));
+    const nodes = rows.filter(node => Boolean(node.objectId));
     const objectIds = nodes.map(node => node.objectId);
     const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
     const votedAtByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.votedAt]));
-    const endCursor = page.pageInfo.endCursor ?? null;
 
     return {
       objectIds,
       voteKindByObjectId,
       votedAtByObjectId,
-      endCursor,
-      // A cursor is required to advance, so treat a missing one as the end.
-      hasNextPage: Boolean(page.pageInfo.hasNextPage && endCursor),
+      // Advance by what the server returned, not by what survived filtering, so a
+      // dropped row can't shift the window and skip the vote that follows it.
+      nextOffset: offset + rows.length,
+      // A short page is the last one. A page that lands exactly on the boundary
+      // costs one extra empty fetch, which is cheaper than a count query.
+      hasNextPage: rows.length === USER_ENTITY_VOTES_PAGE_SIZE,
     } satisfies UserEntityVoteObjectIdsPage;
   });
 }

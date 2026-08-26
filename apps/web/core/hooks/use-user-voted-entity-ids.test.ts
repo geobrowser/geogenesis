@@ -13,6 +13,7 @@ import {
 } from './use-user-voted-entity-ids';
 
 const ENTITY_ID = '4c81561d-1f95-4131-9cdd-dd20ab831ba2';
+const PAGE_SIZE = 50;
 
 function cache(...pages: string[][]): UserVotedEntityIdsCache {
   return {
@@ -20,10 +21,10 @@ function cache(...pages: string[][]): UserVotedEntityIdsCache {
       objectIds,
       voteKindByObjectId: {},
       votedAtByObjectId: {},
-      endCursor: `cursor-${index}`,
+      nextOffset: (index + 1) * PAGE_SIZE,
       hasNextPage: index < pages.length - 1,
     })),
-    pageParams: pages.map((_, index) => (index === 0 ? null : `cursor-${index - 1}`)),
+    pageParams: pages.map((_, index) => index * PAGE_SIZE),
   };
 }
 
@@ -43,12 +44,12 @@ describe('removeEntityFromVotedIds', () => {
     expect(after?.pages[0].objectIds).toEqual([]);
   });
 
-  it('leaves the page cursors and pageParams untouched', () => {
+  it('leaves the page offsets and pageParams untouched', () => {
     const before = cache(['a', ENTITY_ID], ['b']);
 
     const after = removeEntityFromVotedIds(before, ENTITY_ID);
 
-    expect(after?.pages.map(page => page.endCursor)).toEqual(['cursor-0', 'cursor-1']);
+    expect(after?.pages.map(page => page.nextOffset)).toEqual([PAGE_SIZE, PAGE_SIZE * 2]);
     expect(after?.pages.map(page => page.hasNextPage)).toEqual([true, false]);
     expect(after?.pageParams).toEqual(before.pageParams);
   });
@@ -64,7 +65,7 @@ describe('removeEntityFromVotedIds', () => {
   });
 });
 
-const page = (param: string | null, ...objectIds: string[]): VotedIdPage => ({
+const page = (param: number, ...objectIds: string[]): VotedIdPage => ({
   param,
   objectIds,
   voteKindByObjectId: {},
@@ -73,36 +74,45 @@ const page = (param: string | null, ...objectIds: string[]): VotedIdPage => ({
 
 describe('mergeVotedIdPages', () => {
   it('appends pages the accumulation has not seen', () => {
-    const merged = mergeVotedIdPages([page(null, 'a')], [page(null, 'a'), page('cursor-0', 'b')]);
+    const merged = mergeVotedIdPages([page(0, 'a')], [page(0, 'a'), page(50, 'b')]);
 
-    expect(merged).toEqual([page(null, 'a'), page('cursor-0', 'b')]);
+    expect(merged).toEqual([page(0, 'a'), page(50, 'b')]);
   });
 
   // The point of the whole exercise: maxPages evicts the oldest page from the cache, and its ids
   // must not disappear from the list the viewer is looking at.
   it('keeps a page the cache has evicted, in its original position', () => {
-    const accumulated = [page(null, 'a'), page('cursor-0', 'b')];
+    const accumulated = [page(0, 'a'), page(50, 'b')];
 
     // The cache now holds only the second page — the first slid out of the window.
-    const merged = mergeVotedIdPages(accumulated, [page('cursor-0', 'b'), page('cursor-1', 'c')]);
+    const merged = mergeVotedIdPages(accumulated, [page(50, 'b'), page(100, 'c')]);
 
-    expect(merged).toEqual([page(null, 'a'), page('cursor-0', 'b'), page('cursor-1', 'c')]);
+    expect(merged).toEqual([page(0, 'a'), page(50, 'b'), page(100, 'c')]);
   });
 
   it('takes the cached copy of a page it already has', () => {
-    const merged = mergeVotedIdPages([page(null, 'a', 'b')], [page(null, 'a')]);
+    const merged = mergeVotedIdPages([page(0, 'a', 'b')], [page(0, 'a')]);
 
-    expect(merged).toEqual([page(null, 'a')]);
+    expect(merged).toEqual([page(0, 'a')]);
   });
 
   it('returns the same array when nothing moved', () => {
-    const accumulated = [page(null, 'a'), page('cursor-0', 'b')];
+    const accumulated = [page(0, 'a'), page(50, 'b')];
 
-    expect(mergeVotedIdPages(accumulated, [page('cursor-0', 'b')])).toBe(accumulated);
+    expect(mergeVotedIdPages(accumulated, [page(50, 'b')])).toBe(accumulated);
   });
 
   it('starts from empty', () => {
-    expect(mergeVotedIdPages([], [page(null, 'a')])).toEqual([page(null, 'a')]);
+    expect(mergeVotedIdPages([], [page(0, 'a')])).toEqual([page(0, 'a')]);
+  });
+
+  // Offset pagination keys pages by position, and offset 0 is falsy — a page
+  // identity check that tested truthiness would treat the first page as new
+  // every time and append a duplicate.
+  it('recognises the first page by its zero offset rather than appending it twice', () => {
+    const accumulated = [page(0, 'a')];
+
+    expect(mergeVotedIdPages(accumulated, [page(0, 'a')])).toBe(accumulated);
   });
 });
 

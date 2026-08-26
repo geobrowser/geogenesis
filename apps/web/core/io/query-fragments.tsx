@@ -815,24 +815,23 @@ export const userHasEntityVoteQuery = graphql(/* GraphQL */ `
 `);
 
 /**
- * NATURAL server order + client `votedAt` sort: `VOTED_AT_*` + cursor 500s on the live API.
+ * Offset pagination rather than a cursor: `VOTED_AT_*` 500s on `userVotesConnection`,
+ * but works on the `userVotes` list field (as `ParticipantPositions` already relies on).
+ * Server-side ordering is what keeps a freshly cast vote on the first page — sorting
+ * client-side only orders the pages already fetched, so the newest vote would land on
+ * the last page and vanish from the tab the moment its pending override cleared.
  */
 export const userEntityVotesByTypeQuery = graphql(/* GraphQL */ `
-  query UserEntityVotesByType($userId: UUID!, $voteType: Int!, $objectType: Int!, $first: Int!, $after: Cursor) {
-    userVotesConnection(
-      first: $first
-      after: $after
+  query UserEntityVotesByType($userId: UUID!, $voteType: Int!, $objectType: Int!, $first: Int!, $offset: Int!) {
+    userVotes(
       condition: { userId: $userId, voteType: $voteType, objectType: $objectType }
+      first: $first
+      offset: $offset
+      orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]
     ) {
-      nodes {
-        objectId
-        voteKind
-        votedAt
-      }
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
+      objectId
+      voteKind
+      votedAt
     }
   }
 `);

@@ -85,7 +85,7 @@ const MAX_CACHED_VOTE_PAGES = 4;
 const EMPTY_VOTED_ID_PAGES: VotedIdPage[] = [];
 
 export type VotedIdPage = {
-  param: string | null;
+  param: number;
   objectIds: string[];
   voteKindByObjectId: Record<string, number>;
   votedAtByObjectId: Record<string, string>;
@@ -161,14 +161,14 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
           objectIds: [],
           voteKindByObjectId: {},
           votedAtByObjectId: {},
-          endCursor: null,
+          nextOffset: 0,
           hasNextPage: false,
         } satisfies UserEntityVoteObjectIdsPage;
       }
       return Effect.runPromise(getUserEntityVoteObjectIdsPage(personalSpaceId, voteType, 0, pageParam, signal));
     },
-    initialPageParam: null as string | null,
-    getNextPageParam: lastPage => (lastPage.hasNextPage ? lastPage.endCursor : undefined),
+    initialPageParam: 0,
+    getNextPageParam: lastPage => (lastPage.hasNextPage ? lastPage.nextOffset : undefined),
     enabled: canFetch,
     staleTime: 30_000,
     maxPages: MAX_CACHED_VOTE_PAGES,
@@ -192,7 +192,7 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
       const merged = mergeVotedIdPages(
         current,
         data.pages.map((page, index) => ({
-          param: (data.pageParams[index] ?? null) as string | null,
+          param: (data.pageParams[index] ?? 0) as number,
           objectIds: page.objectIds,
           voteKindByObjectId: page.voteKindByObjectId,
           votedAtByObjectId: page.votedAtByObjectId,
