@@ -154,7 +154,7 @@ export function TableBlockBulletedListItem({
         {/* Controls sit beneath the name, beside the vote buttons, rather than level with the
             title — up there they overlaid it and the name had to reserve room it could not spare
             (GEO-2672). List and gallery views already lay the row out this way. */}
-        <div className="mt-1 flex items-center justify-between gap-2">
+        <div className="mt-1 flex items-center gap-4">
           {/* The entity's own space, not the block's — see the note in table-block-list-item. */}
           <EntityRowActions entityId={rowEntityId} spaceId={nameCell?.space ?? currentSpaceId} />
           {!isPlaceholder && (

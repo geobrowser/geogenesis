@@ -53,6 +53,12 @@ export function CollectionRowActions({
   // dismiss handlers while it's active.
   const [isSpacePopoverOpen, setIsSpacePopoverOpen] = useState(false);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether this popover opened because a cursor crossed the trigger, rather than because someone
+  // asked for it. On close Radix hands focus back to the trigger, which is right for a popover you
+  // opened on purpose and wrong for one that opened on the way past: focus lands on a button nobody
+  // focused, every view's `group-focus-within:visible` matches, and the row's controls stay up with
+  // the pointer long gone. Keyboard opens still get their focus back — see `onCloseAutoFocus`.
+  const openedByHoverRef = useRef(false);
   const { storage } = useMutate();
   const { blockEntity } = useDataBlock();
   const { space } = useSpace(spaceId ?? '');
@@ -96,7 +102,15 @@ export function CollectionRowActions({
   return (
     <div className="flex shrink-0 flex-nowrap items-center gap-0.5">
       {(relationId || isEditing) && (
-        <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+        <Popover.Root
+          open={isPopoverOpen}
+          onOpenChange={next => {
+            // Radix routes click and keyboard opens through here; hover sets the state directly
+            // below, so anything arriving on this path was deliberate.
+            if (next) openedByHoverRef.current = false;
+            setIsPopoverOpen(next);
+          }}
+        >
           <Popover.Trigger asChild>
             <button
               type="button"
@@ -106,6 +120,7 @@ export function CollectionRowActions({
                   clearTimeout(closeTimeoutRef.current);
                   closeTimeoutRef.current = null;
                 }
+                openedByHoverRef.current = true;
                 setIsPopoverOpen(true);
               }}
               onMouseLeave={() => {
@@ -130,6 +145,12 @@ export function CollectionRowActions({
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
+              }}
+              // Focus never entered a hover-opened popover, so there is nothing to give back, and
+              // taking the default would strand it on the trigger and hold the row's controls open.
+              // A popover opened by click or keyboard still returns focus the way it should.
+              onCloseAutoFocus={event => {
+                if (openedByHoverRef.current) event.preventDefault();
               }}
               onFocusOutside={event => {
                 if (isSpacePopoverOpen) event.preventDefault();

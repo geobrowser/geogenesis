@@ -343,7 +343,7 @@ export function TableBlockListItem({
               </div>
             );
           })}
-          <div className="mt-1 flex items-center justify-between gap-2">
+          <div className="mt-1 flex items-center gap-4">
             {/* The entity's own space, not the block's — a data block lists rows from many
                 spaces, and both the claim controls and the Debate button are scoped by it
                 (GEO-2581). Every other space-bearing prop in this file already resolves it the
