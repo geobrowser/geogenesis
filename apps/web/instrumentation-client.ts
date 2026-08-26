@@ -61,7 +61,12 @@ if (isTelemetryEnabled) {
     dsn: telemetryDsn,
 
     environment: process.env.NEXT_PUBLIC_APP_ENV || 'development',
-    release: process.env.VERCEL_GIT_COMMIT_SHA,
+    // NEXT_PUBLIC_ prefix is load-bearing: this runs in the browser, and Next only inlines
+    // NEXT_PUBLIC_* variables into the client bundle. This read `VERCEL_GIT_COMMIT_SHA`
+    // directly, which is server-only, so it resolved to `undefined` and every client event was
+    // reported with no release — leaving the uploaded source maps unmatchable and every browser
+    // stack minified. Set in next.config.ts from the same value the source-map upload pins.
+    release: process.env.NEXT_PUBLIC_SENTRY_RELEASE,
 
     // 100% of traces in development, 20% in production
     tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.2,
