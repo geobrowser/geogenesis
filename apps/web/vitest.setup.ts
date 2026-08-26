@@ -16,6 +16,13 @@
  * resulting log flushes while the worker is still up. Tests that want network still stub `fetch`
  * themselves and are unaffected.
  *
+ * Rejecting immediately turned out not to be enough on its own. The graphql client classifies any
+ * status-less failure as a transport error, every transport category is retryable, and so it put
+ * this rejection on the exponential schedule and logged `Exhausted retries` about 1.5s later —
+ * back outside the test's lifetime, and the same teardown crash returned. The error therefore
+ * carries `TEST_UNMOCKED_NETWORK_CODE`, which `classifyTransportFailure` maps to a category that
+ * `isRetryableCategory` excludes. It fails once, immediately, and stays inside the test.
+ *
  * Deliberately *not* silencing those logs: they are how a genuinely unmocked call gets noticed. The
  * error names the URL so the fix is obvious.
  *
@@ -27,15 +34,22 @@
  * global cleanup, a `next/router` mock and two DOM polyfills all at once, which is a separate
  * change with its own blast radius.
  */
+import { TEST_UNMOCKED_NETWORK_CODE } from './core/io/errors/retry-utils';
+
 const refuseNetwork: typeof fetch = async input => {
   const url =
     typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url ?? '<unknown>';
 
-  throw new Error(
+  const error = new Error(
     `Unmocked network request in a test: ${url}\n` +
       'Tests must not reach the network. Stub it for this test, e.g.\n' +
       "  vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));"
   );
+
+  // Read by `classifyTransportFailure` so the graphql client does not retry this.
+  (error as Error & { code: string }).code = TEST_UNMOCKED_NETWORK_CODE;
+
+  throw error;
 };
 
 globalThis.fetch = refuseNetwork;

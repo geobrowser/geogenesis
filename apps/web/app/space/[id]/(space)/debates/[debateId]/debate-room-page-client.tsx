@@ -18,6 +18,7 @@ import {
   getServerTime,
 } from '~/core/debates/api';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
+import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import {
   CameraIcon,
@@ -177,6 +178,15 @@ const connectionFailureRedirectDelayMs = 750;
 const maximumBrowserTimeoutMs = 2_147_483_647;
 
 export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClientProps) {
+  // GEO-2599. The debate-again picker's All tab waits on the claim-space allowlist, which walks the
+  // Root space's topic tree — about thirteen sequential round trips on a cold cache, and the tab is
+  // empty until it lands. Being in the room says the picker is minutes away, so the traversal runs
+  // now, against a viewer who is watching a debate rather than waiting on a list.
+  //
+  // Here rather than in `DebateCoordinator`: that is mounted on every page in the app, and the query
+  // source this needs pulls a smart-account resolver into all of them.
+  usePrefetchClaimSpaceAllowlist(true);
+
   return (
     <DebateMediaSessionBoundary>
       <DebateRoomSurface spaceId={spaceId} debateId={debateId} />

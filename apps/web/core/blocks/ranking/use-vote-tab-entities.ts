@@ -14,12 +14,9 @@ import { filterStateToWhere, useDataBlock } from '~/core/blocks/data/use-data-bl
 import { type RankingEntryDisplay, toRankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { type EntityVoteDirectionFilter, useUserVotedEntityIds } from '~/core/hooks/use-user-voted-entity-ids';
 import { ID } from '~/core/id';
-import {
-  resolveEntityHomeSpaceId,
-  resolveEntityResponseKind,
-  responseKindToVoteKind,
-} from '~/core/responses/entity-response';
+import { resolveEntityResponseKind, responseKindToVoteKind } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 /**
  * Entities for the Upvoted / Downvoted browse tabs.
@@ -91,7 +88,7 @@ export function useVoteTabEntities(direction: EntityVoteDirectionFilter | null) 
         // Votes span every space the viewer has voted in, so the kind has to be
         // read in the entity's own space — resolving a claim verified elsewhere
         // against this block's space downgrades it and drops it from the tab.
-        const entitySpaceId = resolveEntityHomeSpaceId(entity, spaceId);
+        const entitySpaceId = resolveEntitySpaceId(entity, spaceId);
         if (responseKindToVoteKind(resolveEntityResponseKind(entity, entitySpaceId)) !== votedKind) return [];
         return [toRankingEntryDisplay(entity, entitySpaceId)];
       }),
