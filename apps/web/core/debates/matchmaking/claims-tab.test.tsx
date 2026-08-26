@@ -196,6 +196,27 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ClaimsTab', () => {
+  // GEO-2684. The list pages forever, so controls left in the scrolling body meant scrolling back
+  // to the start to change a filter. jsdom has no layout, so what's assertable is that they sit in
+  // a pinned container rather than in the body that scrolls.
+  it('pins search and the filters above the list', () => {
+    // The sentinel only exists while a page is outstanding, and it is the handle for "this part
+    // scrolls".
+    mocks.hasNextPage = true;
+    render(<ClaimsTab />);
+
+    const pinned = screen.getByLabelText('Search claims').closest('.sticky');
+    expect(pinned).not.toBeNull();
+    expect(pinned?.className).toContain('top-0');
+
+    // Both controls ride in the same pinned block. Two stickies would each claim `top-0` and
+    // overlap, which is why the filters aren't pinned separately.
+    expect(screen.getByRole('button', { name: /All claims/ }).closest('.sticky')).toBe(pinned);
+
+    // And the list itself is not inside it, or it would be pinned too and never scroll.
+    expect(screen.getByTestId('claims-scroll-sentinel').closest('.sticky')).toBeNull();
+  });
+
   // Pages arrive by reaching the end of the list, not by pressing anything.
   it('fetches the next page when the end of the list scrolls into view', () => {
     mocks.hasNextPage = true;

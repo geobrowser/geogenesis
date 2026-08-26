@@ -21,7 +21,29 @@ const turbopackOptimizations =
 
 const optimizePackageImports = ['effect', 'viem', 'wagmi', 'date-fns'];
 
+/**
+ * The Sentry release name, resolved once here and used for three things that must agree: the
+ * source-map upload, the server SDK, and the browser SDK.
+ *
+ * Read here rather than at each use site because this file runs on the build server, where
+ * `VERCEL_GIT_COMMIT_SHA` exists. The browser bundle only receives `NEXT_PUBLIC_*` variables, so
+ * `instrumentation-client.ts` reading `VERCEL_GIT_COMMIT_SHA` directly got `undefined` — every
+ * client event was reported with no release, which meant the uploaded source maps had nothing to
+ * match against and every client-side stack stayed minified. Measured before this fix: 5,809 of
+ * the last 7 days' error events had `release: null` (all the browser ones), while server events
+ * carried a sha and resolved fine. That is why the largest client crash groups had sat
+ * unactionable for months.
+ *
+ * Falling back to the local git sha keeps preview and self-hosted builds attributable too.
+ */
+const sentryRelease = process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.SENTRY_RELEASE;
+
 const nextConfig: NextConfig = {
+  // Exposed so the browser SDK reports the same release the source maps are uploaded under.
+  // Next inlines this at build time; a bare `VERCEL_GIT_COMMIT_SHA` would not reach the client.
+  env: {
+    ...(sentryRelease ? { NEXT_PUBLIC_SENTRY_RELEASE: sentryRelease } : {}),
+  },
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
   agentRules: false,
@@ -175,6 +197,11 @@ export default process.env.DISABLE_SENTRY === '1'
       org: ServerEnvironment.sentryBuild?.org,
       project: ServerEnvironment.sentryBuild?.project,
       authToken: ServerEnvironment.sentryBuild?.authToken,
+
+      // Pinned to the same value both SDKs report, so uploaded source maps are guaranteed to be
+      // matched against the release the events actually carry rather than a separately-detected
+      // one. Omitted (letting the plugin detect it) when there is no sha to pin.
+      ...(sentryRelease ? { release: { name: sentryRelease } } : {}),
 
       // Route Sentry requests through the app to avoid ad-blockers
       tunnelRoute: '/monitoring',

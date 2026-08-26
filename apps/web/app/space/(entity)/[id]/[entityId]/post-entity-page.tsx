@@ -12,7 +12,7 @@ import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggl
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { TogglePostEntityPage } from '~/partials/entity-page/toggle-post-entity-page';
+import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { EntityPageHeader } from './entity-page-header';
 import { fetchEntityPageData } from './fetch-entity-page-data';
@@ -71,7 +71,7 @@ export default async function PostEntityPage({
             {(showSpacer || !!notice) && <Spacer height={40} />}
 
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-            <TogglePostEntityPage id={props.id} spaceId={props.spaceId} />
+            <ToggleEntityPage id={props.id} spaceId={props.spaceId} />
             <AutomaticModeToggle />
             <Spacer height={40} />
             <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
