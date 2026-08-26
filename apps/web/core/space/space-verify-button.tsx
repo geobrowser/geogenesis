@@ -19,7 +19,7 @@ const verificationQueryKey = (parentSpaceId: string, childSpaceId: string) => [
 export function SpaceVerifyButton({ spaceId }: { spaceId: string }) {
   const queryClient = useQueryClient();
   const { personalSpaceId, isRegistered, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
-  const { setSubspace, setStatus } = useSubspace({ spaceId: personalSpaceId });
+  const { setSubspace, setStatus, unsetSubspace, unsetStatus } = useSubspace({ spaceId: personalSpaceId });
   const canVerify = Boolean(personalSpaceId && isRegistered && !ID.equals(personalSpaceId, spaceId));
   const verificationQuery = useQuery({
     queryKey: verificationQueryKey(personalSpaceId ?? '', spaceId),
@@ -30,30 +30,43 @@ export function SpaceVerifyButton({ spaceId }: { spaceId: string }) {
   if (isPersonalSpaceLoading || !canVerify || !personalSpaceId) return null;
 
   const isVerified = verificationQuery.data === true;
-  const isPending = setStatus === 'pending';
+  const isPending = setStatus === 'pending' || unsetStatus === 'pending';
+
+  const updateVerification = (verified: boolean) => {
+    queryClient.setQueryData(verificationQueryKey(personalSpaceId, spaceId), verified);
+    void queryClient.invalidateQueries({ queryKey: ['active-subspaces', personalSpaceId] });
+  };
 
   const verify = () => {
     setSubspace(
       { subspaceId: spaceId, relationType: 'verified' },
       {
-        onSuccess: () => {
-          queryClient.setQueryData(verificationQueryKey(personalSpaceId, spaceId), true);
-          void queryClient.invalidateQueries({ queryKey: ['active-subspaces', personalSpaceId] });
-        },
+        onSuccess: () => updateVerification(true),
+      }
+    );
+  };
+
+  const removeVerification = () => {
+    unsetSubspace(
+      { subspaceId: spaceId, relationType: 'verified' },
+      {
+        onSuccess: () => updateVerification(false),
       }
     );
   };
 
   if (isVerified) {
     return (
-      <span
-        role="img"
-        aria-label="Verified"
-        title="Verified"
-        className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-text text-white"
+      <button
+        type="button"
+        onClick={removeVerification}
+        disabled={isPending}
+        aria-label="Remove verification"
+        title="Remove verification"
+        className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-text text-white transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-50"
       >
         <TickSmall />
-      </span>
+      </button>
     );
   }
 

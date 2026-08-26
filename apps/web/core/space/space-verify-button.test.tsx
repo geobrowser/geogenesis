@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   fetchSpaceVerification: vi.fn(),
   personalSpace: vi.fn(),
   setSubspace: vi.fn(),
+  unsetSubspace: vi.fn(),
   subspace: vi.fn(),
 }));
 
@@ -39,9 +40,12 @@ beforeEach(() => {
     isLoading: false,
   });
   mocks.setSubspace.mockReset();
+  mocks.unsetSubspace.mockReset();
   mocks.subspace.mockReset().mockReturnValue({
     setSubspace: mocks.setSubspace,
     setStatus: 'idle',
+    unsetSubspace: mocks.unsetSubspace,
+    unsetStatus: 'idle',
   });
 });
 
@@ -66,18 +70,34 @@ describe('SpaceVerifyButton', () => {
     const [, options] = mocks.setSubspace.mock.calls[0];
     options.onSuccess();
 
-    await waitFor(() => expect(screen.getByRole('img', { name: 'Verified' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Remove verification' })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Verify' })).not.toBeInTheDocument();
   });
 
-  it('shows a verified badge when the relationship already exists', async () => {
+  it('shows a verified action when the relationship already exists', async () => {
     mocks.fetchSpaceVerification.mockResolvedValue(true);
 
     renderButton(<SpaceVerifyButton spaceId={VIEWED_SPACE_ID} />);
 
-    expect(await screen.findByRole('img', { name: 'Verified' })).toBeInTheDocument();
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Remove verification' })).toBeInTheDocument();
     expect(mocks.setSubspace).not.toHaveBeenCalled();
+  });
+
+  it('removes an existing verification and returns to the verify action', async () => {
+    mocks.fetchSpaceVerification.mockResolvedValue(true);
+
+    renderButton(<SpaceVerifyButton spaceId={VIEWED_SPACE_ID} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove verification' }));
+
+    expect(mocks.unsetSubspace).toHaveBeenCalledWith(
+      { subspaceId: VIEWED_SPACE_ID, relationType: 'verified' },
+      expect.objectContaining({ onSuccess: expect.any(Function) })
+    );
+
+    const [, options] = mocks.unsetSubspace.mock.calls[0];
+    options.onSuccess();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Verify' })).toBeInTheDocument());
   });
 
   it('renders the verify action with a tick before its label', async () => {
