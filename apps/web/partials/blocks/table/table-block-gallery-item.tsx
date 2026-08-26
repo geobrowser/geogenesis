@@ -355,7 +355,7 @@ export function TableBlockGalleryItem({
             </div>
           );
         })}
-        <div className="mt-1 flex items-center justify-between gap-2">
+        <div className="mt-1 flex items-center gap-4">
           {/* The entity's own space, not the block's (GEO-2581) — every other space-scoped
               prop in this component already resolves it this way. */}
           <EntityRowActions entityId={rowEntityId} spaceId={nameCell?.space ?? currentSpaceId} />
