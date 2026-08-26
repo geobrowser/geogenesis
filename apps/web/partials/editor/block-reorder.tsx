@@ -544,10 +544,12 @@ export function moveTopLevelBlock(editor: Editor, sourceIndex: number, dropBound
   const boundaryPosition = positionBeforeChild(doc, dropBoundary);
   const insertionPosition =
     boundaryPosition > sourcePosition ? boundaryPosition - sourceNode.nodeSize : boundaryPosition;
+  // DnD already keeps the pointer target in view. Marking this transaction for
+  // scrollIntoView makes ProseMirror scroll the mapped text selection after the
+  // DOM move, which visibly shifts the surrounding blocks on drop.
   const transaction = editor.state.tr
     .delete(sourcePosition, sourcePosition + sourceNode.nodeSize)
-    .insert(insertionPosition, sourceNode)
-    .scrollIntoView();
+    .insert(insertionPosition, sourceNode);
 
   editor.view.dispatch(transaction);
   return true;

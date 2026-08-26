@@ -169,10 +169,12 @@ describe('getTopLevelBlockElements', () => {
 describe('moveTopLevelBlock', () => {
   it('moves a block down to the selected document boundary', () => {
     const editor = makeEditor(['A', 'B', 'C', 'D']);
+    const dispatch = vi.spyOn(editor.view, 'dispatch');
 
     expect(moveTopLevelBlock(editor, 0, 3)).toBe(true);
 
     expect(blockText(editor)).toEqual(['B', 'C', 'A', 'D']);
+    expect(dispatch.mock.calls[0]?.[0].scrolledIntoView).toBe(false);
   });
 
   it('moves a block up to the selected document boundary', () => {
