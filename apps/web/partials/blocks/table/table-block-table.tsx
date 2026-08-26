@@ -27,6 +27,7 @@ import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
 import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
+import { CopyEntityIdButton } from '~/partials/blocks/table/copy-entity-id-button';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
@@ -211,7 +212,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
               and the Debate button forwards this to geo-chat, which rejects the claim if it does
               not belong to the space given (GEO-2581). */}
           <EntityRowActions entityId={entityId} spaceId={nameCell?.space ?? space} />
-          <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+          <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 has-data-[state=open]:visible has-data-[state=open]:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
             {source.type === 'COLLECTION' ? (
               <CollectionRowActions
                 isEditing={false}
@@ -224,11 +225,16 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
                 openedWithMainViewEditing={openedWithMainViewEditing}
               />
             ) : (
-              <DataBlockOpenSidePanelButton
-                entityId={entityId}
-                entitySpaceId={nameCell?.space ?? space}
-                openedWithMainViewEditing={openedWithMainViewEditing}
-              />
+              <div className="flex items-center gap-0.5">
+                {/* Query rows have no menu to put this behind, so it sits in the row itself,
+                    ahead of the side panel and drawn to match it (GEO-2679). */}
+                <CopyEntityIdButton entityId={entityId} variant="row" />
+                <DataBlockOpenSidePanelButton
+                  entityId={entityId}
+                  entitySpaceId={nameCell?.space ?? space}
+                  openedWithMainViewEditing={openedWithMainViewEditing}
+                />
+              </div>
             )}
           </div>
         </div>
