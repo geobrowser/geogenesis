@@ -1,6 +1,6 @@
 // This walks the source tree with `fs` and never touches the DOM.
 // @vitest-environment node
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -81,7 +81,12 @@ function resolveImport(specifier: string, importingFile: string): string | null 
 
   const relative = path.relative(ROOT, absolute);
   for (const candidate of [`${relative}.tsx`, path.join(relative, 'index.tsx')]) {
-    if (SOURCE_DIRS.some(dir => candidate.startsWith(`${dir}${path.sep}`))) return candidate;
+    if (!SOURCE_DIRS.some(dir => candidate.startsWith(`${dir}${path.sep}`))) continue;
+    // Both candidates share a directory prefix, so testing the prefix alone always accepts the
+    // first and makes `index.tsx` unreachable — a silent false negative in a test whose only job is
+    // not to have them. Nothing in the tree resolves that way today; that is not a reason to leave
+    // the branch dead.
+    if (existsSync(path.join(ROOT, candidate))) return candidate;
   }
   return null;
 }
