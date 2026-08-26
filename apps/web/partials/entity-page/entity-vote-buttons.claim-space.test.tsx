@@ -141,6 +141,19 @@ function claimEntity({ isFactualIn, alsoIn }: { isFactualIn?: string; alsoIn?: s
   };
 }
 
+/** A non-claim entity — no Types relation — holding its name in exactly one space. */
+function plainEntity({ livesIn }: { livesIn: string }) {
+  return {
+    id: 'claim-1',
+    name: 'Something else',
+    spaces: [livesIn],
+    relations: [],
+    values: [
+      { property: { id: SystemIds.NAME_PROPERTY }, spaceId: livesIn, value: 'Something else', isDeleted: false },
+    ],
+  };
+}
+
 function renderButtons() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<EntityVoteButtons entityId="claim-1" spaceId={BLOCK_SPACE} />, {
@@ -246,24 +259,30 @@ describe('EntityVoteButtons response space resolution', () => {
   });
 
   /**
-   * Curation is per-space by design: the same entity is upvoted separately in each space that lists
-   * it, and this component draws those arrows too. Re-homing them would hide a reader's existing
-   * vote behind a tally from a space they never visited, then write the next one somewhere else
-   * again — and `ensureSpaceMembership` would propose membership there on their behalf.
+   * Curation re-homes on the same rule as a claim's stance (GEO-2660): a table listing the
+   * top-ranked version of an entity shows that version's votes, so the arrows belong to the space
+   * the row is actually showing rather than the one doing the listing.
    */
-  it('leaves a non-claim entity voting in the space listing it', async () => {
-    mocks.entity = {
-      id: 'entity-1',
-      name: 'Something else',
-      spaces: [CLAIM_SPACE],
-      relations: [],
-      values: [
-        { property: { id: SystemIds.NAME_PROPERTY }, spaceId: CLAIM_SPACE, value: 'Something else', isDeleted: false },
-      ],
-    };
+  it('tallies a non-claim entity in the space it lives in, not the one listing it', async () => {
+    mocks.entity = plainEntity({ livesIn: CLAIM_SPACE });
     renderButtons();
 
-    // The curation controls: a net score, not a percentage.
+    // The curation controls: a net score, not a percentage. Still curation — only the space moved.
+    await screen.findByText('1');
+    expect(mocks.countsSpaceIds).toContain(CLAIM_SPACE);
+    expect(mocks.countsSpaceIds).not.toContain(BLOCK_SPACE);
+    expect(mocks.responseSpaceIds.at(-1)).toBe(CLAIM_SPACE);
+  });
+
+  /**
+   * The other half of that rule, and the reason broadening it is narrow in practice: an entity the
+   * listing space actually holds content in does not move. Every ordinary row and every entity page
+   * is this case, so a reader's existing curation vote stays where they cast it.
+   */
+  it('leaves an ordinary non-claim row voting in the space listing it', async () => {
+    mocks.entity = plainEntity({ livesIn: BLOCK_SPACE });
+    renderButtons();
+
     await screen.findByText('1');
     expect(mocks.countsSpaceIds).toContain(BLOCK_SPACE);
     expect(mocks.countsSpaceIds).not.toContain(CLAIM_SPACE);
