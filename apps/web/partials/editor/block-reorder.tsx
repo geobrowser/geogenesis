@@ -64,11 +64,17 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
   const [hoveredChildIndex, setHoveredChildIndex] = React.useState<number | null>(null);
   const hoveredChildIndexRef = React.useRef<number | null>(null);
   const [activeChildIndex, setActiveChildIndex] = React.useState<number | null>(null);
+  const activeChildIndexRef = React.useRef<number | null>(null);
   const [activeBoundary, setActiveBoundary] = React.useState<number | null>(null);
 
   const updateHoveredChildIndex = React.useCallback((childIndex: number | null) => {
     hoveredChildIndexRef.current = childIndex;
     setHoveredChildIndex(childIndex);
+  }, []);
+
+  const updateActiveChildIndex = React.useCallback((childIndex: number | null) => {
+    activeChildIndexRef.current = childIndex;
+    setActiveChildIndex(childIndex);
   }, []);
 
   const measureBlocks = React.useCallback(() => {
@@ -104,12 +110,13 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     ensureUniqueNodeIds(editor);
     measureBlocks();
 
-    const resizeObserver = new ResizeObserver(measureBlocks);
-    const mutationObserver = observeBlockMutations(editorElement, measureBlocks);
+    const measurement = createBlockMeasureScheduler(measureBlocks);
+    const resizeObserver = new ResizeObserver(measurement.schedule);
     resizeObserver.observe(editorElement);
+    editor.on('transaction', measurement.schedule);
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (activeChildIndex !== null) return;
+      if (activeChildIndexRef.current !== null) return;
 
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -142,7 +149,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     };
 
     const handlePointerLeave = () => {
-      if (activeChildIndex === null) updateHoveredChildIndex(null);
+      if (activeChildIndexRef.current === null) updateHoveredChildIndex(null);
     };
 
     wrapper.addEventListener('pointermove', handlePointerMove);
@@ -150,16 +157,18 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
 
     return () => {
       resizeObserver.disconnect();
-      mutationObserver.disconnect();
+      editor.off('transaction', measurement.schedule);
+      measurement.cancel();
       wrapper.removeEventListener('pointermove', handlePointerMove);
       wrapper.removeEventListener('pointerleave', handlePointerLeave);
     };
-  }, [activeChildIndex, editor, editorWrapperRef, enabled, measureBlocks, updateHoveredChildIndex]);
+  }, [editor, editorWrapperRef, enabled, measureBlocks, updateHoveredChildIndex]);
 
   React.useEffect(() => {
     if (enabled) return;
 
     hoveredChildIndexRef.current = null;
+    activeChildIndexRef.current = null;
     setHoveredChildIndex(null);
     setActiveChildIndex(null);
     setActiveBoundary(null);
@@ -175,7 +184,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
   const indicatorTop = dropZones.find(zone => zone.boundary === activeBoundary)?.indicatorTop;
 
   const resetDragState = () => {
-    setActiveChildIndex(null);
+    updateActiveChildIndex(null);
     setActiveBoundary(null);
     updateHoveredChildIndex(null);
   };
@@ -195,7 +204,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     // A drag can happen before blur, so assign/dedupe IDs before persisting it.
     ensureUniqueNodeIds(editor);
     measureBlocks();
-    setActiveChildIndex(childIndex);
+    updateActiveChildIndex(childIndex);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -287,17 +296,30 @@ function blockLayoutsEqual(current: BlockLayout[], next: BlockLayout[]) {
   );
 }
 
-/** Remeasures when an existing block becomes empty/non-empty without being replaced. */
-export function observeBlockMutations(editorElement: HTMLElement, onChange: MutationCallback) {
-  const observer = new MutationObserver(onChange);
-  observer.observe(editorElement, {
-    attributes: true,
-    attributeFilter: ['class'],
-    childList: true,
-    characterData: true,
-    subtree: true,
-  });
-  return observer;
+/** Coalesces editor transactions into one settled-layout measurement per frame. */
+export function createBlockMeasureScheduler(
+  onMeasure: () => void,
+  requestFrame: (callback: FrameRequestCallback) => number = requestAnimationFrame,
+  cancelFrame: (handle: number) => void = cancelAnimationFrame
+) {
+  let pendingFrame: number | null = null;
+
+  const schedule = () => {
+    if (pendingFrame !== null) return;
+
+    pendingFrame = requestFrame(() => {
+      pendingFrame = null;
+      onMeasure();
+    });
+  };
+
+  const cancel = () => {
+    if (pendingFrame === null) return;
+    cancelFrame(pendingFrame);
+    pendingFrame = null;
+  };
+
+  return { schedule, cancel };
 }
 
 function getBlockDragHandleKey(editor: Editor, childIndex: number) {

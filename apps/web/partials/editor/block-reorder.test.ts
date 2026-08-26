@@ -1,6 +1,6 @@
 import { DndContext } from '@dnd-kit/core';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
@@ -13,11 +13,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BlockDragHandle,
   BlockGutterHoverArea,
+  createBlockMeasureScheduler,
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
   makeDropZones,
   moveTopLevelBlock,
-  observeBlockMutations,
   releasePointerDragFocus,
 } from './block-reorder';
 
@@ -124,19 +124,28 @@ describe('BlockGutterHoverArea', () => {
   });
 });
 
-describe('observeBlockMutations', () => {
-  it('detects when a descendant empty block becomes draggable', async () => {
-    const editorElement = document.createElement('div');
-    const block = document.createElement('p');
-    block.className = 'is-empty';
-    editorElement.append(block);
-    const onChange = vi.fn();
-    const observer = observeBlockMutations(editorElement, onChange);
+describe('createBlockMeasureScheduler', () => {
+  it('measures once after several editor changes in the same frame', () => {
+    const callbacks: FrameRequestCallback[] = [];
+    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
+      callbacks.push(callback);
+      return callbacks.length;
+    });
+    const cancelFrame = vi.fn();
+    const onMeasure = vi.fn();
+    const measurement = createBlockMeasureScheduler(onMeasure, requestFrame, cancelFrame);
 
-    block.classList.remove('is-empty');
+    measurement.schedule();
+    measurement.schedule();
+    expect(requestFrame).toHaveBeenCalledTimes(1);
+    expect(onMeasure).not.toHaveBeenCalled();
 
-    await waitFor(() => expect(onChange).toHaveBeenCalled());
-    observer.disconnect();
+    callbacks[0]?.(0);
+    expect(onMeasure).toHaveBeenCalledTimes(1);
+
+    measurement.schedule();
+    measurement.cancel();
+    expect(cancelFrame).toHaveBeenCalledWith(2);
   });
 });
 
