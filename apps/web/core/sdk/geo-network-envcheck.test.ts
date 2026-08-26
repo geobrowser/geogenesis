@@ -37,5 +37,9 @@ describe('geo-network env resolution (SDK defaults)', () => {
 
     expect(SPACE_REGISTRY_ADDRESS).toBe('0xCF13491802747e759e1BB8E364bc43045398d1DD');
     expect(DAO_SPACE_FACTORY_ADDRESS).toBe('0x323aF429B85c954D4a161b2A6281c26DF45b7128');
-  });
+    // Two dynamic imports of the environment and SDK modules, which is most of the app's
+    // config graph. Measured at ~5.3s against the 5s default, so this was already tipping
+    // over on a loaded machine and reporting a timeout rather than a real regression — the
+    // failure mode looks identical to an SDK bump, which is exactly what it must not do.
+  }, 30_000);
 });
