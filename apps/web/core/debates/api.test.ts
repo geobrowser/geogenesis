@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MAX_SEARCH_QUERY_LENGTH } from '~/core/io/search-query';
+
 import {
   GeoChatRequestError,
   blockDebateUser,
@@ -187,6 +189,31 @@ describe('matchmaking', () => {
       'http://localhost:8080/matchmaking/claims?search=chips&filter=debate_now&limit=20',
       expect.objectContaining({ method: 'GET' })
     );
+  });
+
+  // GEO-2658. `/matchmaking/claims` has no ceiling on `search` — it trims, escapes the LIKE
+  // wildcards and binds — so this is about the same typed string behaving the same way whichever
+  // search box it went into, not about staying inside a limit.
+  it('caps an over-long claim search the way the other search box does', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ search: 'a'.repeat(250) }, vi.fn(), 'user-a');
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('search')).toHaveLength(MAX_SEARCH_QUERY_LENGTH);
+  });
+
+  // The part that is a correctness fix rather than a consistency one: slicing by code unit would
+  // cut a surrogate pair in half, and `URLSearchParams` turns a lone surrogate into a replacement
+  // character — a query the server can never match.
+  it('never cuts an emoji in half on the way out', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ search: '🎉'.repeat(120) }, vi.fn(), 'user-a');
+
+    const sent = new URL((fetch.mock.calls[0]?.[0] as string) ?? '').searchParams.get('search') ?? '';
+    expect(sent).not.toContain('\uFFFD');
+    expect([...sent]).toHaveLength(MAX_SEARCH_QUERY_LENGTH);
   });
 
   it('omits the default "all" filter and unset facets', async () => {

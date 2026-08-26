@@ -1,7 +1,6 @@
 'use client';
 
 import { useGeoLogin } from '@geogenesis/auth';
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 import { useQuery } from '@tanstack/react-query';
 
@@ -13,10 +12,8 @@ import { useSetAtom } from 'jotai';
 import { usePathname, useSearchParams } from 'next/navigation';
 
 import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { uuidToHex } from '~/core/id/normalize';
 import {
   type EntityResponder,
   getEntityResponders,
@@ -31,17 +28,17 @@ import {
   entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
   entityResponseCountsQueryKey,
-  getEntityResponseKind,
   hasUnpublishedClaimResponseKindEdit,
+  resolveEntityResponseKind,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Avatar } from '~/design-system/avatar';
-import { getChecked } from '~/design-system/checkbox';
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
@@ -59,10 +56,6 @@ const ENTITY_RESPONSE_OBJECT_TYPE = 0;
 
 type ResponseVariant = 'default' | 'thumbs' | 'chevrons';
 
-const CLAIM_TYPE = uuidToHex(CLAIM_TYPE_ID);
-const CLAIM_IS_FACTUAL = uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID);
-const TYPES_PROPERTY = uuidToHex(SystemIds.TYPES_PROPERTY);
-
 type EntityVoteButtonsProps = {
   entityId: string;
   spaceId: string;
@@ -73,7 +66,7 @@ type EntityVoteButtonsProps = {
 
 export function EntityVoteButtons({
   entityId,
-  spaceId,
+  spaceId: requestedSpaceId,
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
   presentation = 'inline',
@@ -94,20 +87,24 @@ export function EntityVoteButtons({
     includeDeleted: true,
     enabled: responseKindOverride === undefined,
   });
-  const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
-  const activeValues = entity?.values.filter(value => !value.isDeleted) ?? [];
-  const isClaim =
-    activeRelations.some(
-      relation => uuidToHex(relation.type.id) === TYPES_PROPERTY && uuidToHex(relation.toEntity.id) === CLAIM_TYPE
-    ) ?? false;
-  const isFactualClaim =
-    isClaim &&
-    getChecked(
-      activeValues.find(
-        v => uuidToHex(v.spaceId) === uuidToHex(spaceId) && uuidToHex(v.property.id) === CLAIM_IS_FACTUAL
-      )?.value
-    ) === true;
-  const inferredResponseKind = getEntityResponseKind({ isClaim, isFactual: isFactualClaim });
+  // Which space the response belongs to, which is not always the one the caller renders from. An
+  // entity collected into a curated page without a pinned target space arrives here as the page's
+  // own space, where it holds nothing: the counts came back empty and the percentage read 0%.
+  // Resolving it to the space the entity actually lives in is what puts the tally back.
+  //
+  // Every response kind, not only claims (GEO-2660). A table that lists the top-ranked version of
+  // an entity should show that version's votes, so curation follows the same rule as a claim's
+  // stance: the arrows belong to whichever space the row is actually showing. This does not re-home
+  // curation wholesale — `resolveEntitySpaceId` keeps the requested space whenever the entity holds
+  // live content there, so every ordinary row and every entity page are untouched, and only a row
+  // listing an entity that lives somewhere else diverts.
+  //
+  // What it costs: a curation vote cast against a listing space before this reads as the entity
+  // holding nothing there — nothing but the Score that vote itself wrote, which residency ignores
+  // by design — so that vote is no longer the one displayed. It is still recorded in that space.
+  // Auto-join doesn't widen with it: `useEntityVote` excludes curation from `ensureSpaceMembership`.
+  const spaceId = resolveEntitySpaceId(entity, requestedSpaceId);
+  const inferredResponseKind = resolveEntityResponseKind(entity, spaceId);
   const responseKind = responseKindOverride === undefined ? inferredResponseKind : responseKindOverride;
   const hasUnpublishedResponseKindEdit =
     responseKindOverride === undefined && hasUnpublishedClaimResponseKindEdit(entity, spaceId);
