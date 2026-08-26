@@ -759,9 +759,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // the claim rows rather than in a lookup behind them, so once the tab has settled an empty
   // menu is a real answer.
   React.useEffect(() => {
-    const resolved = tab === 'all' ? browsedFacets !== undefined && !tabIsLoading : !tabIsLoading;
+    // Placeholder facets belong to the previous filter, so they are "not known yet" here for the
+    // same reason an absent one is — see the Claims tab.
+    const browsedFacetsSettled = browsedFacets !== undefined && !tabIsLoading && !browsedClaimsQuery.isPlaceholderData;
+    const resolved = tab === 'all' ? browsedFacetsSettled : !tabIsLoading;
     setTopicId(current => keepSelectableTopic(current, facetTopics, resolved));
-  }, [browsedFacets, facetTopics, tab, tabIsLoading]);
+  }, [browsedClaimsQuery.isPlaceholderData, browsedFacets, facetTopics, tab, tabIsLoading]);
 
   const tabError =
     sessionQuery.error ??

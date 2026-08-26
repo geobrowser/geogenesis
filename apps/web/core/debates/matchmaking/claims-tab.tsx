@@ -151,13 +151,19 @@ export function ClaimsTab() {
 
   // Facets ride the first page, so they are absent until it lands and while a filter change is in
   // flight. That is "not known yet", not "no topics" — see `keepSelectableTopic`.
-  const topicsResolved = facets !== undefined && !claimsQuery.isLoading;
+  //
+  // Placeholder pages count as in flight. They are the previous filter's answer, held back so the
+  // list doesn't blink, and the rows on screen are theirs too — so the menu is not lying while
+  // they show. But they are not an answer to the filter now being asked about, and a selection
+  // cleared against them would be cleared on the wrong question.
+  const facetsSettled = facets !== undefined && !claimsQuery.isLoading && !claimsQuery.isPlaceholderData;
+  const topicsResolved = facetsSettled;
 
   // The same for the space itself: it can be picked while the gates are still passing everything,
   // and left selected it keeps going out on every request while its rows are dropped locally.
   React.useEffect(() => {
-    setSpaceId(current => keepSelectableSpace(current, facetSpaceIds, !spacesPending && facets !== undefined));
-  }, [facetSpaceIds, facets, spacesPending]);
+    setSpaceId(current => keepSelectableSpace(current, facetSpaceIds, !spacesPending && facetsSettled));
+  }, [facetSpaceIds, facetsSettled, spacesPending]);
 
   // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
   // no longer in the menu to unpick.
