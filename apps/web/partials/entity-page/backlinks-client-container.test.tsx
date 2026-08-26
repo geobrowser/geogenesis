@@ -31,8 +31,7 @@ class CatchingBoundary extends Component<{ children: ReactNode }, { caught: bool
   }
 }
 
-function renderInBoundary() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderInBoundary(queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
     <QueryClientProvider client={queryClient}>
       <CatchingBoundary>
@@ -71,6 +70,31 @@ describe('BacklinksClientContainer', () => {
     await waitFor(() => expect(mocks.fetchPayload).toHaveBeenCalled());
     expect(screen.queryByTestId('caught')).toBeNull();
     expect(container.textContent).toBe('');
+  });
+
+  it('keeps already-rendered backlinks when a background refetch fails', async () => {
+    // The counterpart to the test above, and the reason `throwOnError` is a predicate rather than
+    // `true`. Backlinks refetch on tab focus, so a transient failure here is routine — and
+    // `TrackedErrorBoundary` has no reset key, so tripping it would swap real rows for the empty
+    // fallback permanently. Reporting a failure must not cost more than the failure does.
+    mocks.fetchPayload.mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    renderInBoundary(queryClient);
+    await waitFor(() => expect(screen.getByTestId('backlinks').textContent).toBe('2'));
+
+    mocks.fetchPayload.mockRejectedValueOnce(new Error('transient blip'));
+    await queryClient.refetchQueries({ queryKey: ['entity-backlinks', 'entity-1'] }).catch(() => {});
+
+    // Wait for the query to actually reach `error`, not just for the refetch call to return.
+    // Asserting straight after `refetchQueries` passes either way — React has not re-rendered yet,
+    // so the boundary could not have tripped regardless of the setting, and the test proves nothing.
+    await waitFor(() =>
+      expect(queryClient.getQueryState(['entity-backlinks', 'entity-1'])?.status).toBe('error')
+    );
+
+    expect(screen.queryByTestId('caught')).toBeNull();
+    expect(screen.getByTestId('backlinks').textContent).toBe('2');
   });
 
   it('renders backlinks when there are some', async () => {

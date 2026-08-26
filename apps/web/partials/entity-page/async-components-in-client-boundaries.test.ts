@@ -40,6 +40,23 @@ const DEFAULT_ASYNC_COMPONENT = /^export\s+default\s+async\s+(?:function\s*([A-Z
 /** A default import: `import Local from '<specifier>'`, ignoring `import type`. */
 const DEFAULT_IMPORT = /^import\s+(?!type\s)([A-Z]\w*)\s*(?:,\s*\{[^}]*\})?\s+from\s+['"]([^'"]+)['"]/gm;
 
+/** A named import block: `import { A, B as C } from '<specifier>'`, ignoring `import type`. */
+const NAMED_IMPORT_BLOCK =
+  /^import\s+(?!type\s)(?:[A-Za-z_$][\w$]*\s*,\s*)?\{([^}]*)\}\s+from\s+['"]([^'"]+)['"]/gm;
+
+/** `A` or `A as B` inside a named import block, skipping inline `type` specifiers. */
+function parseNamedBindings(block: string): { exported: string; local: string }[] {
+  return block
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(entry => entry.length > 0 && !entry.startsWith('type '))
+    .map(entry => {
+      const [exported, local] = entry.split(/\s+as\s+/).map(part => part.trim());
+      return { exported, local: local ?? exported };
+    })
+    .filter(({ exported, local }) => Boolean(exported) && Boolean(local));
+}
+
 /** Route handlers and metadata exports share the shape but are never rendered as JSX. */
 const NOT_COMPONENTS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -100,21 +117,54 @@ describe('async components are never rendered from a client boundary', () => {
     expect(files.length).toBeGreaterThan(50);
   });
 
-  it('finds no *named* async component rendered inside a "use client" file', () => {
-    const asyncComponents = new Set<string>();
-    for (const contents of contentsByFile.values()) {
-      for (const match of contents.matchAll(NAMED_ASYNC_COMPONENT)) {
-        const name = match[1] ?? match[2];
-        if (name && !NOT_COMPONENTS.has(name)) asyncComponents.add(name);
-      }
+  /** Named async components, kept per declaring file so aliased imports can be resolved back. */
+  const namedAsyncByFile = new Map<string, Set<string>>();
+  const allNamedAsync = new Set<string>();
+  for (const [file, contents] of contentsByFile) {
+    for (const match of contents.matchAll(NAMED_ASYNC_COMPONENT)) {
+      const name = match[1] ?? match[2];
+      if (!name || NOT_COMPONENTS.has(name)) continue;
+      if (!namedAsyncByFile.has(file)) namedAsyncByFile.set(file, new Set());
+      namedAsyncByFile.get(file)!.add(name);
+      allNamedAsync.add(name);
     }
-    expect(asyncComponents.size).toBeGreaterThan(0);
+  }
+
+  it('finds no *named* async component rendered inside a "use client" file', () => {
+    expect(allNamedAsync.size).toBeGreaterThan(0);
 
     const offences: string[] = [];
     for (const [file, contents] of contentsByFile) {
       if (!isClientFile(contents)) continue;
-      for (const name of asyncComponents) {
+      for (const name of allNamedAsync) {
         if (new RegExp(`<${name}[\\s/>]`).test(contents)) offences.push(`<${name}> rendered in ${file}`);
+      }
+    }
+
+    expect(offences).toEqual([]);
+  });
+
+  it('finds no *aliased* named async component rendered inside a "use client" file', () => {
+    // `import { BacklinksServerContainer as Renamed }` defeats the by-name check above, and there
+    // are 65 aliased named imports in this tree, so this is a live shape rather than a contrived
+    // one. Resolved the same way as default exports: specifier back to the declaring file, then
+    // match the *local* binding in JSX.
+    const offences: string[] = [];
+    for (const [file, contents] of contentsByFile) {
+      if (!isClientFile(contents)) continue;
+
+      for (const match of contents.matchAll(NAMED_IMPORT_BLOCK)) {
+        const [, block, specifier] = match;
+        const target = resolveImport(specifier, file);
+        const declared = target ? namedAsyncByFile.get(target) : undefined;
+        if (!declared) continue;
+
+        for (const { exported, local } of parseNamedBindings(block)) {
+          if (exported === local || !declared.has(exported)) continue;
+          if (new RegExp(`<${local}[\\s/>]`).test(contents)) {
+            offences.push(`<${local}> (alias of ${exported} from ${target}) rendered in ${file}`);
+          }
+        }
       }
     }
 
