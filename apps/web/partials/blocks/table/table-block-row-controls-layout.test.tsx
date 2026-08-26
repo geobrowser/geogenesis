@@ -185,14 +185,14 @@ describe('copy entity id on query rows', () => {
   it.each([
     ['bulleted list', () => renderBulletedItem()],
     ['table', () => renderTable()],
-  ])('puts copy beside the side panel button on a %s row', (_view, renderView) => {
+  ])('puts copy ahead of the side panel button on a %s row', (_view, renderView) => {
     renderView();
 
     const controls = [...document.querySelectorAll('button[aria-label], [data-testid]')]
       .map(el => el.getAttribute('aria-label') ?? el.getAttribute('data-testid'))
       .filter((label): label is string => label === HOVER_CONTROL || label === 'Copy entity ID');
 
-    expect(controls).toEqual([HOVER_CONTROL, 'Copy entity ID']);
+    expect(controls).toEqual(['Copy entity ID', HOVER_CONTROL]);
   });
 
   // Collection rows keep it in the menu, so the row itself should not sprout a second one.

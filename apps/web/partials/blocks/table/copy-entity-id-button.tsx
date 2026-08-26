@@ -5,10 +5,17 @@ import { useEffect, useRef, useState } from 'react';
 import { CopySmall } from '~/design-system/icons/copy-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 
+import { rowOpenerClassName } from '~/partials/blocks/table/row-control-styles';
+
 type Props = {
   /** The entity the row stands for — for a collection row, the one its relation points at. */
   entityId: string;
-  className?: string;
+  /**
+   * Where it is being drawn. `menu` sits among the 12px glyphs inside the row menu; `row` sits in
+   * the row itself, where it has to match the side-panel button it stands next to rather than
+   * merely sit near it.
+   */
+  variant?: 'menu' | 'row';
 };
 
 /**
@@ -18,7 +25,11 @@ type Props = {
  * to open, so they render this directly beside the side-panel button — same control, one fewer
  * click, and nothing worth adding a menu for.
  */
-export function CopyEntityIdButton({ entityId, className = 'inline-flex items-center p-1' }: Props) {
+export function CopyEntityIdButton({ entityId, variant = 'menu' }: Props) {
+  const isRowControl = variant === 'row';
+  const className = isRowControl ? rowOpenerClassName : 'inline-flex items-center p-1';
+  // `SidePanel` is drawn at 19; the menu glyphs at 12.
+  const iconSize = isRowControl ? 19 : 12;
   const [hasCopiedId, setHasCopiedId] = useState(false);
   const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const announceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,7 +87,7 @@ export function CopyEntityIdButton({ entityId, className = 'inline-flex items-ce
         onMouseDown={e => e.preventDefault()}
         className={className}
       >
-        {hasCopiedId ? <TickSmall /> : <CopySmall />}
+        {hasCopiedId ? <TickSmall size={iconSize} /> : <CopySmall size={iconSize} />}
       </button>
       {/* A clipboard write leaves nothing behind to look at, so the tick is the whole confirmation
           — and a tick is nothing at all if you are not looking. Mounted empty so the region is

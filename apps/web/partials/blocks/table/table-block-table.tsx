@@ -226,14 +226,14 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
               />
             ) : (
               <div className="flex items-center gap-0.5">
+                {/* Query rows have no menu to put this behind, so it sits in the row itself,
+                    ahead of the side panel and drawn to match it (GEO-2679). */}
+                <CopyEntityIdButton entityId={entityId} variant="row" />
                 <DataBlockOpenSidePanelButton
                   entityId={entityId}
                   entitySpaceId={nameCell?.space ?? space}
                   openedWithMainViewEditing={openedWithMainViewEditing}
                 />
-                {/* Query rows have no menu to put this behind, so it sits in the row itself
-                    (GEO-2679). */}
-                <CopyEntityIdButton entityId={entityId} />
               </div>
             )}
           </div>

@@ -257,14 +257,14 @@ export function TableBlockGalleryItem({
                   />
                 ) : (
                   <div className="flex items-center gap-0.5">
+                    {/* Query rows have no menu to put this behind, so it sits in the row itself,
+                        ahead of the side panel and drawn to match it (GEO-2679). */}
+                    <CopyEntityIdButton entityId={rowEntityId} variant="row" />
                     <DataBlockOpenSidePanelButton
                       entityId={rowEntityId}
                       entitySpaceId={nameCell?.space ?? currentSpaceId}
                       openedWithMainViewEditing={isEditing}
                     />
-                    {/* Query rows have no menu to put this behind, so it sits in the row itself
-                        (GEO-2679). */}
-                    <CopyEntityIdButton entityId={rowEntityId} />
                   </div>
                 )}
               </div>
@@ -380,14 +380,14 @@ export function TableBlockGalleryItem({
                 />
               ) : (
                 <div className="flex items-center gap-0.5">
+                  {/* Query rows have no menu to put this behind, so it sits in the row itself,
+                      ahead of the side panel and drawn to match it (GEO-2679). */}
+                  <CopyEntityIdButton entityId={rowEntityId} variant="row" />
                   <DataBlockOpenSidePanelButton
                     entityId={rowEntityId}
                     entitySpaceId={nameCell?.space ?? currentSpaceId}
                     openedWithMainViewEditing={isEditing}
                   />
-                  {/* Query rows have no menu to put this behind, so it sits in the row itself
-                      (GEO-2679). */}
-                  <CopyEntityIdButton entityId={rowEntityId} />
                 </div>
               )}
             </div>
