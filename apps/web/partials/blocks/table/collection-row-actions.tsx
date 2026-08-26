@@ -11,9 +11,11 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
+import { CopySmall } from '~/design-system/icons/copy-small';
 import { Menu } from '~/design-system/icons/menu';
 import { RelationSmall } from '~/design-system/icons/relation-small';
 import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { TickSmall } from '~/design-system/icons/tick-small';
 import { TopRanked } from '~/design-system/icons/top-ranked';
 import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink } from '~/design-system/prefetch-link';
@@ -59,6 +61,8 @@ export function CollectionRowActions({
   // focused, every view's `group-focus-within:visible` matches, and the row's controls stay up with
   // the pointer long gone. Keyboard opens still get their focus back — see `onCloseAutoFocus`.
   const openedByHoverRef = useRef(false);
+  const [hasCopiedId, setHasCopiedId] = useState(false);
+  const copiedTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { storage } = useMutate();
   const { blockEntity } = useDataBlock();
   const { space } = useSpace(spaceId ?? '');
@@ -68,8 +72,30 @@ export function CollectionRowActions({
       if (closeTimeoutRef.current) {
         clearTimeout(closeTimeoutRef.current);
       }
+      if (copiedTimeoutRef.current) {
+        clearTimeout(copiedTimeoutRef.current);
+      }
     };
   }, []);
+
+  const onCopyEntityId = async () => {
+    // Clipboard writes reject on insecure origins, on denied permissions, and when the document
+    // isn't focused. None of that is worth breaking a row over, and leaving the icon alone is the
+    // honest response — a tick would claim a copy that never happened.
+    try {
+      await navigator.clipboard.writeText(entityId);
+    } catch (error) {
+      console.error('Failed to copy entity ID', entityId, error);
+      return;
+    }
+
+    setHasCopiedId(true);
+    if (copiedTimeoutRef.current) {
+      clearTimeout(copiedTimeoutRef.current);
+    }
+    copiedTimeoutRef.current = setTimeout(() => setHasCopiedId(false), 1500);
+
+  };
 
   // By the relation's own id, not by what it points at. `blockEntity.relations` holds everything
   // hanging off the block — its types, its blocks, its filters — so matching on `toEntity.id` would
@@ -214,6 +240,19 @@ export function CollectionRowActions({
                   <RelationSmall />
                 </PrefetchLink>
               )}
+              {/* The entity the row's relation points at, not the relation itself — the id you want
+                  when writing a query or quoting a row in a ticket. The relation's own id is a click
+                  away through the link beside this one (GEO-2679). */}
+              <button
+                type="button"
+                aria-label={hasCopiedId ? 'Entity ID copied' : 'Copy entity ID'}
+                title={hasCopiedId ? 'Copied' : 'Copy entity ID'}
+                onClick={onCopyEntityId}
+                onMouseDown={e => e.preventDefault()}
+                className="inline-flex items-center p-1 group-hover:text-grey-03 hover:text-text!"
+              >
+                {hasCopiedId ? <TickSmall /> : <CopySmall />}
+              </button>
               {isEditing && (
                 <PrefetchLink
                   href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -23,7 +23,15 @@ type FakeRelation = { id: string; entityId: string; toEntity: { id: string } };
 const mocks = vi.hoisted(() => ({
   relations: [] as FakeRelation[],
   deleteRelation: vi.fn(),
+  writeText: vi.fn(),
 }));
+
+// jsdom ships no clipboard, and the component treats a rejection as "say nothing happened", so the
+// stub has to be able to reject as well as resolve.
+Object.defineProperty(navigator, 'clipboard', {
+  configurable: true,
+  value: { writeText: mocks.writeText },
+});
 
 vi.mock('~/core/blocks/data/use-data-block', () => ({
   useDataBlock: () => ({ blockEntity: { relations: mocks.relations } }),
@@ -173,5 +181,99 @@ describe('CollectionRowActions remove', () => {
     renderActions({ relationId: undefined });
 
     expect(removeButton()).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GEO-2679. The id people actually want off a collection row is the entity the row's relation
+ * points at — the thing you paste into a query or a ticket. The relation's own id is the other one,
+ * and it stays where it was, one link away.
+ *
+ * Feedback matters more than usual here: a clipboard write is invisible, so without the tick there
+ * is no way to tell a copy from a misfire. Which also means the tick must not appear when the write
+ * fails, or it is worse than no feedback at all.
+ */
+describe('CollectionRowActions copy entity id', () => {
+  const copyButton = () => screen.queryByRole('button', { name: 'Copy entity ID' });
+  const copiedButton = () => screen.queryByRole('button', { name: 'Entity ID copied' });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mocks.writeText.mockReset();
+    mocks.writeText.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('offers copy inside the row menu', () => {
+    renderActions();
+
+    expect(openRowMenu().getByRole('button', { name: 'Copy entity ID' })).toBeInTheDocument();
+  });
+
+  it('copies the entity the row points at, not the relation', async () => {
+    renderActions();
+    openRowMenu();
+
+    await act(async () => {
+      fireEvent.click(copyButton()!);
+    });
+
+    expect(mocks.writeText).toHaveBeenCalledWith(ENTITY);
+    expect(mocks.writeText).not.toHaveBeenCalledWith(RELATION);
+  });
+
+  it('confirms the copy', async () => {
+    renderActions();
+    openRowMenu();
+
+    await act(async () => {
+      fireEvent.click(copyButton()!);
+    });
+
+    expect(copiedButton()).toBeInTheDocument();
+  });
+
+  it('goes back to offering a copy afterwards', async () => {
+    renderActions();
+    openRowMenu();
+
+    await act(async () => {
+      fireEvent.click(copyButton()!);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(copiedButton()).not.toBeInTheDocument();
+    expect(copyButton()).toBeInTheDocument();
+  });
+
+  // Insecure origins, denied permissions and an unfocused document all reject. Claiming a copy that
+  // did not happen is the one outcome worse than the button doing nothing visible.
+  it('does not claim success when the clipboard write fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.writeText.mockRejectedValue(new Error('denied'));
+
+    renderActions();
+    openRowMenu();
+
+    await act(async () => {
+      fireEvent.click(copyButton()!);
+    });
+
+    expect(copiedButton()).not.toBeInTheDocument();
+    expect(copyButton()).toBeInTheDocument();
+
+    consoleError.mockRestore();
+  });
+
+  // Copy is about the row's entity, which a row has whether or not it has a relation of its own.
+  it('offers copy on a row with no relation yet', () => {
+    renderActions({ relationId: undefined });
+
+    expect(openRowMenu().getByRole('button', { name: 'Copy entity ID' })).toBeInTheDocument();
   });
 });
