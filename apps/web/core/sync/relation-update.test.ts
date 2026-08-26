@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { Relation } from '../types';
-import { canPublishRelationUpdate, getRelationUpdateUnsetFields } from './relation-update';
+import { getRelationUpdateUnsetFields, isExistingRelationWithUnchangedIdentity } from './relation-update';
 
 const existingRelation: Relation = {
   id: 'existing-relation',
@@ -14,20 +14,28 @@ const existingRelation: Relation = {
   spaceId: 'space',
 };
 
-describe('canPublishRelationUpdate', () => {
-  it('updates an existing relation when only its position changes', () => {
-    expect(canPublishRelationUpdate(existingRelation, { ...existingRelation, position: 'a1' })).toBe(true);
+describe('isExistingRelationWithUnchangedIdentity', () => {
+  it('preserves an existing relation when its identity fields are unchanged', () => {
+    expect(isExistingRelationWithUnchangedIdentity(existingRelation, { ...existingRelation, position: 'a1' })).toBe(
+      true
+    );
+  });
+
+  it('does not imply that non-identity fields are publishable', () => {
+    expect(isExistingRelationWithUnchangedIdentity(existingRelation, { ...existingRelation, verified: true })).toBe(
+      true
+    );
   });
 
   it('keeps an unpublished local relation as a create', () => {
     const localRelation = { ...existingRelation, isLocal: true, hasBeenPublished: false };
 
-    expect(canPublishRelationUpdate(localRelation, { ...localRelation, position: 'a1' })).toBe(false);
+    expect(isExistingRelationWithUnchangedIdentity(localRelation, { ...localRelation, position: 'a1' })).toBe(false);
   });
 
   it('does not use updateRelation for endpoint changes the SDK cannot update', () => {
     expect(
-      canPublishRelationUpdate(existingRelation, {
+      isExistingRelationWithUnchangedIdentity(existingRelation, {
         ...existingRelation,
         toEntity: { id: 'different-block', name: 'Different block', value: 'different-block' },
       })

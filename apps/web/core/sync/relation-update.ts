@@ -1,10 +1,10 @@
 import { Relation } from '../types';
 
-/** Whether a changed relation can be published with the SDK's updateRelation operation. */
-export function canPublishRelationUpdate(base: Relation, changed: Relation) {
+/** Whether a remote relation can retain its identity after a local change. */
+export function isExistingRelationWithUnchangedIdentity(base: Relation, changed: Relation) {
   const existsRemotely = base.isLocal !== true || base.hasBeenPublished === true || base.isRelationUpdate === true;
 
-  const onlyUpdatesSupportedFields =
+  const identityIsUnchanged =
     base.id === changed.id &&
     base.entityId === changed.entityId &&
     base.type.id === changed.type.id &&
@@ -12,7 +12,7 @@ export function canPublishRelationUpdate(base: Relation, changed: Relation) {
     base.toEntity.id === changed.toEntity.id &&
     base.spaceId === changed.spaceId;
 
-  return existsRemotely && onlyUpdatesSupportedFields;
+  return existsRemotely && identityIsUnchanged;
 }
 
 /** Tracks optional relation fields that must be explicitly cleared remotely. */

@@ -35,6 +35,7 @@ import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
 import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
+import { makeBlockPosition } from './make-block-position';
 import { markdownToEditorJson } from './markdown-adapter';
 import {
   PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
@@ -119,50 +120,6 @@ function makeNewBlockRelation({
   } satisfies Relation;
 }
 
-function makeBlockPosition({
-  blockId,
-  nextBlockIds,
-  blockRelations,
-  newBlocks,
-}: {
-  blockId: string;
-  nextBlockIds: string[];
-  blockRelations: RelationWithBlock[];
-  newBlocks: Relation[];
-}) {
-  const position = nextBlockIds.indexOf(blockId);
-
-  // @TODO: noUncheckedIndexAccess
-  const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
-  const afterBlockIndex = nextBlockIds[position + 1] as string | undefined;
-
-  // Create a unified array with consistent structure for both blockRelations and newBlocks
-  const allRelations = [
-    ...blockRelations.map(r => ({
-      toEntity: { id: r.block.id },
-      // @TODO(migration): default position
-      position: r.position ?? 'a0',
-    })),
-    ...newBlocks.map(b => ({
-      toEntity: { id: b.toEntity.id },
-      // @TODO(migration): default position
-      position: b.position ?? 'a0',
-    })),
-  ].sort((a, b) => (a.position < b.position ? -1 : 1));
-
-  // Check both the existing blocks and any that are created as part of this update
-  // tick. This is necessary as right now we don't update the Geo state until the
-  // user blurs the editor. See the comment earlier in this function.
-  const beforeCollectionItemIndex = allRelations.find(c => c.toEntity.id === beforeBlockIndex)?.position;
-
-  // When the afterCollectionItemIndex is undefined, we need to use the next block of beforeBlockIndex
-  const afterCollectionItemIndex =
-    allRelations.find(c => c.toEntity.id === afterBlockIndex)?.position ??
-    allRelations[allRelations.findIndex(c => c.position === beforeCollectionItemIndex) + 1]?.position;
-
-  return Position.generateBetween(beforeCollectionItemIndex ?? null, afterCollectionItemIndex ?? null);
-}
-
 interface UpsertBlocksRelationsArgs {
   nextBlocks: { id: string; type: Content['type'] }[];
   addedBlocks: { id: string; value: string }[];
@@ -175,7 +132,7 @@ interface UpsertBlocksRelationsArgs {
 
 // Helper function to create or update the block IDs on an entity
 // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
-const makeBlocksRelations = async ({
+const makeBlocksRelations = ({
   nextBlocks,
   blockRelations,
   spaceId,

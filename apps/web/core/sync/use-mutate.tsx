@@ -18,7 +18,7 @@ import { DataType, Relation, Value } from '../types';
 import { toHexId } from '../utils/hex-id';
 import { extractValueString } from '../utils/value';
 import { saveVideoKeyframe } from '../utils/video/save-keyframe';
-import { canPublishRelationUpdate, getRelationUpdateUnsetFields } from './relation-update';
+import { getRelationUpdateUnsetFields, isExistingRelationWithUnchangedIdentity } from './relation-update';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
@@ -486,10 +486,10 @@ function createMutator(store: GeoStore): Mutator {
         const changedRelation = produce(base, recipe);
 
         // Relations created in the current local edit still need createRelation.
-        // Once a relation exists remotely, preserve its identity and publish
-        // supported field changes through the SDK's updateRelation operation.
+        // Once a relation exists remotely and its identity is unchanged, retain
+        // that identity. The publish layer serializes its SDK-updateable fields.
         const newRelation = produce(changedRelation, draft => {
-          const isRelationUpdate = canPublishRelationUpdate(base, changedRelation);
+          const isRelationUpdate = isExistingRelationWithUnchangedIdentity(base, changedRelation);
           draft.isRelationUpdate = isRelationUpdate;
           draft.relationUpdateUnsetFields = isRelationUpdate
             ? getRelationUpdateUnsetFields(base, changedRelation)
