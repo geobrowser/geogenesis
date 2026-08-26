@@ -9,6 +9,18 @@ import { Effect, Either } from 'effect';
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import {
+  EMPTY_PENDING_VOTED_OVERRIDES,
+  type EntityVoteDirectionFilter,
+  type PendingVotedOverrides,
+  type UserVotedEntityIdsCache,
+  clearPendingVotedEntity,
+  removeEntityFromVotedIds,
+  restorePendingVotedEntry,
+  suppressVotedId,
+  userEntityVotesQueryKey,
+  votedEntityIdsPendingQueryKey,
+} from '~/core/hooks/use-user-voted-entity-ids';
 import { getUserEntityResponse } from '~/core/io/queries';
 import {
   claimResponseSummariesQueryKeyPrefix,
@@ -22,6 +34,7 @@ import {
   entityResponseCountsQueryKey,
   entityResponseIndexingQueryKey,
   getResponseActionMethod,
+  responseKindToVoteKind,
   userEntityResponseQueryKey,
   waitForIndexedEntityResponse,
 } from '~/core/responses/entity-response';
@@ -275,6 +288,30 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       }
       if (!isCurrentIndexingRun(runId)) return;
 
+      // The vote is indexed, so the server lists can finally see it. Refetch them
+      // before dropping the optimistic override, or the row would blink out of the
+      // tab in the gap between the two.
+      try {
+        await Promise.all(
+          (['up', 'down'] as const).map(listDirection =>
+            queryClient.invalidateQueries({
+              queryKey: userEntityVotesQueryKey(pending.personalSpaceId, listDirection),
+            })
+          )
+        );
+        for (const listDirection of ['up', 'down'] as const) {
+          queryClient.setQueryData<PendingVotedOverrides>(
+            votedEntityIdsPendingQueryKey(pending.personalSpaceId, listDirection),
+            (current = EMPTY_PENDING_VOTED_OVERRIDES) => clearPendingVotedEntity(current, pending.entityId)
+          );
+        }
+      } catch {
+        // The response itself is indexed, so this run is still a success — keep the
+        // override until a later refetch of the list picks the vote up and dedupes it.
+      }
+
+      if (!isCurrentIndexingRun(runId)) return;
+
       queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
         status: 'indexed',
         pending,
@@ -337,6 +374,52 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
     [readRegisteredSpace, spaceId, entityId, responseKind, tx, pendingResponseIndex]
   );
 
+  const dropFromVotedList = (listPersonalSpaceId: string, direction: EntityVoteDirectionFilter) => {
+    queryClient.setQueryData<UserVotedEntityIdsCache>(
+      userEntityVotesQueryKey(listPersonalSpaceId, direction),
+      current => removeEntityFromVotedIds(current, entityId)
+    );
+    queryClient.setQueryData<PendingVotedOverrides>(
+      votedEntityIdsPendingQueryKey(listPersonalSpaceId, direction),
+      (current = EMPTY_PENDING_VOTED_OVERRIDES) => suppressVotedId(current, entityId)
+    );
+  };
+
+  const restoreToVotedList = (listPersonalSpaceId: string, direction: EntityVoteDirectionFilter, voteKind: number) => {
+    // Optimistic: the indexer hasn't recorded this vote yet, so refetching the
+    // list here would only bring back the state from before it. The override
+    // carries the tab until reconciliation confirms indexing and clears it.
+    queryClient.setQueryData<PendingVotedOverrides>(
+      votedEntityIdsPendingQueryKey(listPersonalSpaceId, direction),
+      (current = EMPTY_PENDING_VOTED_OVERRIDES) =>
+        restorePendingVotedEntry(current, { entityId, voteKind, votedAt: new Date().toISOString() })
+    );
+  };
+
+  /**
+   * Keeps the Upvoted/Downvoted tabs in step with the response that just landed:
+   * drop the entity from whichever list it no longer belongs to, restore it to the
+   * one it just joined.
+   * The response counts and the viewer's own response are invalidated by the
+   * indexing reconciliation above rather than here.
+   */
+  const syncVotedLists = (direction: ResponseDirection, pending: PendingEntityResponseIndex) => {
+    // The reactive personalSpaceId can still be null when a queued vote replays
+    // after a remount, so key the lists off the space the response actually used.
+    const listPersonalSpaceId = pending.personalSpaceId;
+
+    if (direction !== 'positive') dropFromVotedList(listPersonalSpaceId, 'up');
+    if (direction !== 'negative') dropFromVotedList(listPersonalSpaceId, 'down');
+
+    if (direction !== 'clear') {
+      restoreToVotedList(
+        listPersonalSpaceId,
+        direction === 'positive' ? 'up' : 'down',
+        responseKindToVoteKind(pending.responseKind)
+      );
+    }
+  };
+
   const responseMutation = useMutation({
     mutationFn: executeResponse,
     onMutate: direction => {
@@ -360,6 +443,7 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
       return { previousState, runId, runOrder };
     },
     onSuccess: (submission, direction, context) => {
+      syncVotedLists(direction, submission.pending);
       // Taking a position on a claim (agree/disagree, verify/dispute) says the user wants to
       // take part in the space the claim is published in, so join them to it the same way
       // submitting a ranking does. Curation upvotes are excluded — those apply to every
