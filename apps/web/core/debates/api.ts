@@ -1,5 +1,7 @@
 'use client';
 
+import { capSearchQuery } from '~/core/io/search-query';
+
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
@@ -1027,7 +1029,14 @@ export async function listMatchmakingClaims(
   signal?: AbortSignal
 ) {
   const params = new URLSearchParams();
-  if (query.search) params.set('search', query.search);
+  // GEO-2658. Capped for consistency, not to stay inside a limit: `/matchmaking/claims` has no
+  // ceiling on `search` — it trims, escapes the LIKE wildcards and binds, so an over-long query is
+  // answered rather than rejected. This is the only search box in debates, and the same typed
+  // string shouldn't behave differently depending on which box it went into.
+  //
+  // `capSearchQuery` also does the work that matters more than the length: it slices by code point,
+  // so a cut never lands inside a surrogate pair and hands `URLSearchParams` a lone surrogate.
+  if (query.search) params.set('search', capSearchQuery(query.search));
   if (query.spaceId) params.set('space_id', query.spaceId);
   if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
   if (query.cursor) params.set('cursor', query.cursor);

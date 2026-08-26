@@ -54,7 +54,7 @@ import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
-import { useEntityResponse } from '~/core/hooks/use-entity-vote';
+import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { uuidToHex } from '~/core/id/normalize';
@@ -64,6 +64,7 @@ import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { getChecked } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
+import { Spinner } from '~/design-system/spinner';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
@@ -1007,10 +1008,33 @@ function RematchClaimCard({
   // before requesting a rematch". Comparing rather than null-checking also covers switching sides,
   // where geo-chat still holds the side you just moved off — equally invalid to act on.
   const responseSettled = serverLocalPosition === localPosition;
-  // The side you picked still highlights immediately off the optimistic answer; only the request
-  // waits. It stays hidden rather than sitting there disabled — a button you cannot press yet reads
-  // as broken, and the wait is short.
   const canRequest = opposing && responseSettled;
+  /**
+   * GEO-2652. The side you picked highlights immediately off the optimistic answer, but the request
+   * has to wait for geo-chat's copy, which trails by a publish, an index and a notification. That
+   * is not a moment — it is an on-chain write and an indexer.
+   *
+   * This used to render nothing at all, on the reasoning that a button you cannot press yet reads
+   * as broken and the wait is short. The first half holds; the second does not. So say what is
+   * happening instead of showing an empty space where the button will be: Preston's report is
+   * precisely that the viewer has no idea what they are waiting on.
+   *
+   * Not made optimistic, which the ticket would prefer, because it cannot be done from here.
+   * geo-chat validates the request against its *own* copy of the position and rejects it with
+   * `claim_response_required` — so a request sent early does not race ahead, it fails. Accepting one
+   * before the response is indexed is a backend decision about whether a debate may be created on a
+   * position that does not exist on-chain yet.
+   */
+  const responseIndexing = useEntityResponseIndexingSnapshot({
+    entityId: claim.claim.claim_entity_id,
+    spaceId: claim.claim.space_id,
+    responseKind,
+  });
+  const awaitingResponse = opposing && !responseSettled;
+  // `delayed` is the machine's own signal that this is taking longer than it should. Worth saying
+  // out loud rather than leaving the viewer with a spinner that never changes.
+  const awaitingLabel =
+    responseIndexing.status === 'delayed' ? 'Still confirming your position…' : 'Confirming your position…';
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
 
@@ -1072,7 +1096,14 @@ function RematchClaimCard({
       // unknown — a settled lookup that simply has no row for it really does mean "not ready".
       hideReadinessToggle={claimReadiness === null && readinessUnresolved}
       footer={
-        canRequest || requesting ? (
+        awaitingResponse && !requesting ? (
+          <div className="mt-3 flex items-center gap-2" role="status" aria-live="polite">
+            <Spinner />
+            <Text as="span" variant="footnote" color="grey-04">
+              {awaitingLabel}
+            </Text>
+          </div>
+        ) : canRequest || requesting ? (
           <div className="mt-3">
             <HubPillButton
               onClick={onRequest}
