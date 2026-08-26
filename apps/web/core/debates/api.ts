@@ -436,19 +436,38 @@ export type MatchmakingClaim = MatchmakingReadiness & {
 
 export type MatchmakingClaimsFilter = 'all' | 'mine' | 'debate_now';
 
-/** No topic facet: topics are Knowledge Graph data geo-chat doesn't model, so the Claims tab
- * resolves and filters them itself over the loaded pages. */
+/** Topics are Knowledge Graph data, which geo-chat replicates as of GEO-2659 — so `topicId`
+ * filters server-side and the response carries a topic facet. Before that the server returned
+ * `topics: []` and ignored the parameter, and both pickers resolved and filtered topics
+ * themselves over whatever pages they had loaded. */
 export type MatchmakingClaimsQuery = {
   search?: string | null;
   spaceId?: string | null;
+  topicId?: string | null;
   filter?: MatchmakingClaimsFilter;
   cursor?: string | null;
   limit?: number;
 };
 
+/** One dropdown option and how many claims the current filters leave behind it. */
+export type MatchmakingFacetCount = {
+  id: string;
+  /** Topics carry a replicated name; spaces don't — the client resolves those from the sidebar. */
+  name: string | null;
+  count: number;
+};
+
 export type MatchmakingFacets = {
+  /** Superseded by `space_facets`; geo-chat keeps both populated so clients can move at their own pace. */
   space_ids: string[];
+  /** Superseded by `topic_facets`. Empty on every response until GEO-2659 made it real. */
   topics: MatchmakingTopic[];
+  /** Count descending. Deliberately *not* narrowed by the space filter: picking a space must not
+   *  collapse the menu it was picked from. */
+  space_facets: MatchmakingFacetCount[];
+  /** Count descending, and narrowed by the space filter — "how many of the claims I'm looking at
+   *  carry this topic". This is what makes the topic menu complete regardless of paging. */
+  topic_facets: MatchmakingFacetCount[];
 };
 
 export type MatchmakingClaimsResponse = {
@@ -1038,6 +1057,7 @@ export async function listMatchmakingClaims(
   // so a cut never lands inside a surrogate pair and hands `URLSearchParams` a lone surrogate.
   if (query.search) params.set('search', capSearchQuery(query.search));
   if (query.spaceId) params.set('space_id', query.spaceId);
+  if (query.topicId) params.set('topic_id', query.topicId);
   if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
   if (query.cursor) params.set('cursor', query.cursor);
   if (query.limit) params.set('limit', String(query.limit));

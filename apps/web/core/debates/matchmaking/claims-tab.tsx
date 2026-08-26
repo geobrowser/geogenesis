@@ -1,20 +1,15 @@
 'use client';
 
-import { keepPreviousData } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { useQueryEntities } from '~/core/sync/use-store';
-import { validateEntityId } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
 
-import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery, MatchmakingTopic } from '../api';
+import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
 import { isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
@@ -23,7 +18,7 @@ import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
-import { availableTopics, keepSelectableTopic } from './topic-facets';
+import { keepSelectableTopic } from './topic-facets';
 import { useStableListOrder } from './use-stable-list-order';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -58,8 +53,8 @@ export function ClaimsTab() {
   }, [search]);
 
   const query = React.useMemo<MatchmakingClaimsQuery>(
-    () => ({ search: debouncedSearch || null, spaceId, filter }),
-    [debouncedSearch, spaceId, filter]
+    () => ({ search: debouncedSearch || null, spaceId, topicId, filter }),
+    [debouncedSearch, spaceId, topicId, filter]
   );
 
   const claimsQuery = useMatchmakingClaims(query, true);
@@ -98,7 +93,8 @@ export function ClaimsTab() {
   );
 
   const serverClaims = React.useMemo(
-    () => (spacesPending ? [] : pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id))),
+    () =>
+      spacesPending ? [] : pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
     [pages, spaceShowsClaims, spacesPending]
   );
 
@@ -114,57 +110,28 @@ export function ClaimsTab() {
   const claims = useStableListOrder(
     serverClaims,
     entry => `${entry.claim.space_id}:${entry.claim.claim_entity_id}`,
-    `${debouncedSearch}|${spaceId ?? ''}|${filter}`
+    `${debouncedSearch}|${spaceId ?? ''}|${topicId ?? ''}|${filter}`
   );
 
-  // Only real entity ids can be looked up in the KG; the graph 400s the whole batch on a single
-  // malformed id, so drop any that aren't valid.
-  const claimEntityIds = React.useMemo(
-    () => [...new Set(claims.map(entry => entry.claim.claim_entity_id).filter(validateEntityId))],
-    [claims]
-  );
-  const {
-    entities: claimEntities,
-    isFetched: claimEntitiesFetched,
-    isPlaceholderData: claimEntitiesArePrevious,
-  } = useQueryEntities({
-    where: { id: { in: claimEntityIds } },
-    enabled: claimEntityIds.length > 0,
-    placeholderData: keepPreviousData,
-  });
-
-  // Whether `facetTopics` below is the finished answer for the filters currently applied. The
-  // lookup keeps its previous data while the next one is in flight, so "fetched" alone still
-  // describes the last set of claims — and no claims at all is a resolved answer of its own.
-  const topicsResolved =
-    !claimsQuery.isLoading && (claimEntityIds.length === 0 || (claimEntitiesFetched && !claimEntitiesArePrevious));
-
-  const topicsByClaimId = React.useMemo(() => {
-    const map = new Map<string, MatchmakingTopic[]>();
-    for (const entity of claimEntities) {
-      const topics = entity.relations
-        .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
-        .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
-      if (topics.length > 0) map.set(entity.id, topics);
-    }
-    return map;
-  }, [claimEntities]);
-
-  // Read off `claims` rather than off every entity the topic lookup has resolved. The two drift
-  // whenever a filter changes: the entity query holds its previous data while the next one is in
-  // flight, so a menu built from it keeps offering topics belonging to claims that are no longer
-  // in the list — and picking one of those lands the viewer on an empty result (GEO-2653).
+  // The topic menu, straight from the server. It describes every claim the current filters
+  // allow, not the pages loaded so far — which is what the client-side version could never do:
+  // it read topics off the loaded claims, so the menu grew as the viewer scrolled and a space
+  // whose first page happened to carry none looked like a space with no topics (GEO-2653).
   //
-  // No space term is needed here, unlike the rematch picker: `spaceId` goes into the claims query
-  // itself, so `claims` is already only the selected space's.
+  // Already narrowed by the space filter, and already ordered — by count, descending. Kept in
+  // name order here so this change is about which options exist rather than how they are
+  // arranged; the count order and the counts themselves belong to GEO-2654.
   const facetTopics = React.useMemo(
     () =>
-      availableTopics(
-        claims.map(entry => entry.claim.claim_entity_id),
-        topicsByClaimId
-      ),
-    [claims, topicsByClaimId]
+      [...(facets?.topic_facets ?? [])]
+        .map(facet => ({ id: facet.id, name: facet.name }))
+        .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')),
+    [facets?.topic_facets]
   );
+
+  // Facets ride the first page, so they are absent until it lands and while a filter change is in
+  // flight. That is "not known yet", not "no topics" — see `keepSelectableTopic`.
+  const topicsResolved = facets !== undefined && !claimsQuery.isLoading;
 
   // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
   // no longer in the menu to unpick.
@@ -179,14 +146,6 @@ export function ClaimsTab() {
     isFetchingNextPage: claimsQuery.isFetchingNextPage,
     fetchNextPage: claimsQuery.fetchNextPage,
   });
-
-  const visibleClaims = React.useMemo(
-    () =>
-      topicId
-        ? claims.filter(entry => topicsByClaimId.get(entry.claim.claim_entity_id)?.some(topic => topic.id === topicId))
-        : claims,
-    [claims, topicsByClaimId, topicId]
-  );
 
   return (
     <div className="flex flex-col gap-3 px-4 py-3">
@@ -219,7 +178,7 @@ export function ClaimsTab() {
         isLoading={claimsQuery.isLoading || spacesPending}
         error={claimsQuery.error}
         onRetry={() => void claimsQuery.refetch()}
-        isEmpty={visibleClaims.length === 0}
+        isEmpty={claims.length === 0}
         emptyMessage={hasFilters ? 'No claims match these filters.' : 'No debatable claims yet.'}
         emptyAction={
           hasFilters
@@ -239,7 +198,7 @@ export function ClaimsTab() {
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
         <HubCardList>
-          {visibleClaims.map(entry => (
+          {claims.map(entry => (
             <MatchmakingClaimCard
               key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
               claim={entry.claim}

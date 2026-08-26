@@ -6,15 +6,13 @@ import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
 
 const mocks = vi.hoisted(() => ({
   claims: [] as MatchmakingClaim[],
-  entities: [] as { id: string; relations: unknown[] }[],
   facetSpaceIds: [] as string[],
+  pageSize: null as number | null,
   spaceAllowlist: null as Set<string> | null,
   allowlistLoading: false,
   publishableSpaceIds: null as Set<string> | null,
@@ -30,9 +28,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // `pending-personal-space` reads localStorage at module scope (`atomWithStorage` with
-// `getOnInit`), and the storage jsdom hands back here has no `getItem`. The throw happens
-// while the module graph is still being built, so it took this whole file down at collection
-// — every test in it, on master and in CI alike. The tab reaches it through the claim card.
+// `getOnInit`), and the storage jsdom hands back here has no `getItem`. The throw happens while
+// the module graph is still being built, so it takes this whole file down at collection — every
+// test in it, on master and in CI alike. Reached through the claim card.
 vi.mock('~/core/state/pending-personal-space', () => ({
   PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
   pendingPersonalSpaceAtom: { toString: () => 'pendingPersonalSpaceAtom' },
@@ -58,25 +56,37 @@ vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => 
 vi.mock('./hooks', () => ({
   useMatchmakingClaims: (query: unknown) => {
     mocks.lastQuery = query;
+    const { spaceId, topicId } = query as { spaceId?: string | null; topicId?: string | null };
+    // `space_id` and `topic_id` are both query parameters as of GEO-2659, so the endpoint
+    // returns only the rows that match. Mirrored here, because what the tab renders and what
+    // its menus describe both hang off that.
+    const inSpace = mocks.claims.filter(entry => !spaceId || entry.claim.space_id === spaceId);
+    const claims = inSpace.filter(entry => !topicId || entry.topics.some(topic => topic.id === topicId));
+    // The topic facet is narrowed by the space filter but *not* by the topic filter — picking a
+    // topic must not collapse the menu it came from. Computed over the whole space-filtered set
+    // rather than the returned page: that is the point of a server-side facet.
+    const topicFacets = [...new Map(inSpace.flatMap(entry => entry.topics).map(topic => [topic.id, topic])).values()];
+    // Facets are computed over the whole filtered set while the page is a slice of it — the
+    // shape that matters here, since the menu must not depend on how far the viewer has scrolled.
+    const page = mocks.pageSize === null ? claims : claims.slice(0, mocks.pageSize);
     return {
       data: {
         pages: [
           {
-            // `space_id` is a query parameter, so the endpoint returns only that space's
-            // claims. Mirrored here: the topic menu is built from what came back.
-            claims: mocks.claims.filter(
-              entry =>
-                !(query as { spaceId?: string | null }).spaceId ||
-                entry.claim.space_id === (query as { spaceId?: string | null }).spaceId
-            ),
+            claims: page,
             next_cursor: null,
-            facets: { space_ids: mocks.facetSpaceIds },
+            facets: {
+              space_ids: mocks.facetSpaceIds,
+              topics: topicFacets,
+              space_facets: mocks.facetSpaceIds.map(id => ({ id, name: null, count: 1 })),
+              topic_facets: topicFacets.map(topic => ({ ...topic, count: 1 })),
+            },
           },
         ],
       },
       isLoading: false,
       error: null,
-      hasNextPage: mocks.hasNextPage,
+      hasNextPage: mocks.hasNextPage || page.length < claims.length,
       isFetchingNextPage: false,
       fetchNextPage: mocks.fetchNextPage,
       refetch: vi.fn(),
@@ -128,7 +138,7 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: () => ({ entities: mocks.entities }),
+  useQueryEntities: () => ({ entities: [] }),
 }));
 
 function render(ui: ReactElement) {
@@ -150,27 +160,17 @@ function sidebarData() {
   };
 }
 
-/** A resolved claim entity carrying topic relations, the shape the topic lookup reads. */
-function entityWithTopics(id: string, topics: { id: string; name: string }[]) {
-  return {
-    id,
-    relations: topics.map(topic => ({
-      type: { id: TOPICS_PROPERTY_ID },
-      toEntity: { id: topic.id, name: topic.name },
-    })),
-  };
-}
-
 function claim(
   entityId: string,
   text: string,
   viewerResponded: boolean,
   debateReady = false,
-  spaceId = SPACE_ID
+  spaceId = SPACE_ID,
+  topics: { id: string; name: string }[] = []
 ): MatchmakingClaim {
   return {
     claim: { id: `row-${entityId}`, space_id: spaceId, claim_entity_id: entityId, claim: text, description: null },
-    topics: [],
+    topics,
     response_kind: 'stance',
     viewer_position: viewerResponded ? true : null,
     viewer_response: viewerResponded ? { position: true, position_label: 'Agree' } : null,
@@ -187,8 +187,8 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
 beforeEach(() => {
   mocks.hasNextPage = false;
-  mocks.entities = [];
   mocks.facetSpaceIds = [];
+  mocks.pageSize = null;
   // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
   // unfiltered list — what every pre-existing case here runs under.
   mocks.spaceAllowlist = null;
@@ -562,8 +562,10 @@ it('asks the server for the filter the viewer picked', () => {
   expect(mocks.lastQuery).toMatchObject({ filter: 'debate_now' });
 });
 
-// GEO-2653. The menu is built here rather than by geo-chat, which models no topics at all, and
-// it was built from every entity the lookup had resolved rather than from the claims on screen.
+// GEO-2653. The menu is the server's topic facet, which describes every claim the current
+// filters allow rather than the pages this client has walked — the client-side version grew as
+// the viewer scrolled, so a space whose first page carried no topics looked like a space with
+// none at all.
 describe('topic menu', () => {
   const AI = { id: 'topic-ai', name: 'AI' };
   const HEALTH = { id: 'topic-health', name: 'Health' };
@@ -572,10 +574,9 @@ describe('topic menu', () => {
     mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
     mocks.sidebarData = sidebarData();
     mocks.claims = [
-      claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID),
-      claim('claim-health', 'Sleep is underrated', false, false, OTHER_SPACE_ID),
+      claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI]),
+      claim('claim-health', 'Sleep is underrated', false, false, OTHER_SPACE_ID, [HEALTH]),
     ];
-    mocks.entities = [entityWithTopics('claim-ai', [AI]), entityWithTopics('claim-health', [HEALTH])];
   });
 
   it('offers every topic while no space is picked', () => {
@@ -598,6 +599,35 @@ describe('topic menu', () => {
     expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
     // The reported bug: Health stayed on the menu, and picking it showed nothing at all.
     expect(screen.queryByRole('button', { name: 'Health' })).toBeNull();
+  });
+
+  // The report that reopened this: filter to a space, and topics appeared only as you scrolled,
+  // because the menu was built from the claims paged in so far.
+  it('offers a topic no claim on the loaded page carries', () => {
+    mocks.claims = [
+      claim('claim-plain', 'A claim with no topics', false, false, SPACE_ID),
+      claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI]),
+    ];
+    mocks.pageSize = 1;
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('A claim with no topics')).toBeInTheDocument();
+    expect(screen.queryByText('Models are getting cheaper')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+  });
+
+  it('asks the server to do the topic filtering', () => {
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI' }));
+
+    // Filtering here would only ever narrow the pages already loaded, which is the same bug in
+    // the list that the menu had.
+    expect(mocks.lastQuery).toMatchObject({ topicId: AI.id });
   });
 
   it('lets go of a selected topic the picked space has no claims for', () => {

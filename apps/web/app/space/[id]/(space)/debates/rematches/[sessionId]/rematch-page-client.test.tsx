@@ -92,8 +92,8 @@ const mocks = vi.hoisted(() => ({
 
 // `pending-personal-space` reads localStorage at module scope (`atomWithStorage` with
 // `getOnInit`), and the storage jsdom hands back here has no `getItem`. The throw happens while
-// the module graph is still being built, so it took this whole file down at collection — every
-// test in it, on master and in CI alike. The picker reaches it through the claim card.
+// the module graph is still being built, so it takes this whole file down at collection — every
+// test in it, on master and in CI alike. Reached through the claim card.
 vi.mock('~/core/state/pending-personal-space', () => ({
   PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
   pendingPersonalSpaceAtom: { toString: () => 'pendingPersonalSpaceAtom' },
@@ -251,10 +251,33 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('~/core/debates/matchmaking/hooks', () => ({
   useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
   // The All tab is the hub's Claims query. Its arguments are what the tests below inspect.
-  useMatchmakingClaims: (query: { search: string | null; spaceId: string | null }) => {
+  useMatchmakingClaims: (query: { search: string | null; spaceId: string | null; topicId?: string | null }) => {
     mocks.entityQueries.push(query);
+    // `space_id` and `topic_id` both filter server-side as of GEO-2659, and the response carries
+    // facets computed over the whole filtered set rather than the returned page.
+    const inSpace = mocks.matchmakingClaims.filter(entry => !query.spaceId || entry.claim.space_id === query.spaceId);
+    const claims = inSpace.filter(entry => !query.topicId || entry.topics.some(topic => topic.id === query.topicId));
+    const topicFacets = [...new Map(inSpace.flatMap(entry => entry.topics).map(topic => [topic.id, topic])).values()];
     return {
-      data: { pages: [{ claims: mocks.matchmakingClaims, next_cursor: null, facets: undefined }] },
+      data: {
+        pages: [
+          {
+            claims,
+            next_cursor: null,
+            // Narrowed by space, never by topic: picking a topic must not collapse its own menu.
+            facets: {
+              space_ids: [...new Set(mocks.matchmakingClaims.map(entry => entry.claim.space_id))],
+              topics: topicFacets,
+              space_facets: [...new Set(mocks.matchmakingClaims.map(entry => entry.claim.space_id))].map(id => ({
+                id,
+                name: null,
+                count: 1,
+              })),
+              topic_facets: topicFacets.map(topic => ({ ...topic, count: 1 })),
+            },
+          },
+        ],
+      },
       isLoading: mocks.entityQueryLoading,
       error: null,
       hasNextPage: mocks.entityQueryHasNextPage,
@@ -1095,6 +1118,38 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: /Ethics/ })).toBeNull();
   });
 
+  // The report that reopened GEO-2653: the menu was built from the claims paged in so far, so a
+  // space whose first page carried no topics looked like a space with none. The facet describes
+  // the whole filtered set, so a topic shows up without the viewer scrolling to reach its claim.
+  it('offers a topic from a claim no page has returned yet', async () => {
+    mocks.matchmakingClaims = [
+      { ...matchmakingClaim(), topics: [] },
+      {
+        ...matchmakingClaim(CLAIM_SOURCE, 'A claim only the facet knows about'),
+        topics: [{ id: 'topic-later', name: 'Later' }],
+      },
+    ];
+    // The server returns the second row only once the topic is picked; the facet names it either
+    // way, which is the difference this is here to hold.
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+    await waitFor(() => expect(screen.getByText('A newly published claim')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: /Later/ })).toBeInTheDocument();
+  });
+
+  it('asks the server to do the topic filtering on the All tab', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    selectFilter('Any topic', 'Governance');
+
+    // Filtering only here would narrow the pages already loaded and nothing beyond them.
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ topicId: 'topic-gov' }));
+  });
+
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();
@@ -1879,13 +1934,11 @@ function position(profileSpaceId: string, claimId: string, spaceId: string, side
 }
 
 /**
- * The published claim as the hub's claims query lists it: in Governance space.
+ * The published claim as the hub's claims query lists it: in Governance space, tagged twice.
  *
- * `topics` is empty because that is what geo-chat sends — it hardcodes `topics: vec![]` on every
- * row and ignores `topic_id`. This fixture used to supply them anyway, which is how the All tab
- * could pass topic tests while showing no topics at all in the real app (GEO-2653): the picker
- * has to hydrate these rows from the graph to learn their topics, and `publishedEntity` below
- * is where they now come from.
+ * geo-chat replicates topics from the Knowledge Graph as of GEO-2659, so its rows carry them
+ * again. They were briefly empty here to match a server that sent `topics: vec![]` on every row,
+ * which is what forced the picker to hydrate these rows from the graph itself.
  */
 function matchmakingClaim(id = CLAIM_MORE, claim = 'A newly published claim'): MatchmakingClaim {
   return {
@@ -1895,7 +1948,10 @@ function matchmakingClaim(id = CLAIM_MORE, claim = 'A newly published claim'): M
     viewer_debate_ready: false,
     readiness_disabled_reason: null,
     viewer_position: null,
-    topics: [],
+    topics: [
+      { id: 'topic-gov', name: 'Governance' },
+      { id: 'topic-eth', name: 'Ethics' },
+    ],
     positions: [],
     score: 0,
     active_debate: false,

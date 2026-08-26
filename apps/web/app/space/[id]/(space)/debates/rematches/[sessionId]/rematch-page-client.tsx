@@ -61,13 +61,12 @@ import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
-import { validateEntityId } from '~/core/utils/utils';
 
 import { getChecked } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
-import { Spinner } from '~/design-system/spinner';
 import { Skeleton } from '~/design-system/skeleton';
+import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -196,8 +195,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // searched server-side, each row carrying the viewer's side and readiness. It takes a single
   // `space_id`, so the viewer's allowlist is a page-local cut, the same as the hub's.
   const matchmakingQuery = React.useMemo<MatchmakingClaimsQuery>(
-    () => ({ search: debouncedSearch || null, spaceId, filter: 'all' }),
-    [debouncedSearch, spaceId]
+    // `topicId` is sent whichever tab is showing. It only filters *these* rows, which back the
+    // All tab, and the server's topic facet is narrowed by spaces rather than by topics — so a
+    // topic selection can never collapse the menu it came from. The other two tabs are built
+    // from graph entities geo-chat has never seen, so their topic filter stays client-side.
+    () => ({ search: debouncedSearch || null, spaceId, topicId, filter: 'all' }),
+    [debouncedSearch, spaceId, topicId]
   );
   const browsedClaimsQuery = useMatchmakingClaims(matchmakingQuery, true);
   const browsedPages = React.useMemo(() => browsedClaimsQuery.data?.pages ?? [], [browsedClaimsQuery.data]);
@@ -331,31 +334,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   // Topics live on the KG claim entity, so resolve them here to label each card and drive the
   // "Any topic" filter. A claim can carry several topics. The browsed rows bring their own.
-  // geo-chat hardcodes `topics: []` on every row it returns, so the All tab's claims arrive
-  // without any. The other two tabs are built from graph entities and get theirs for free; this
-  // is the same lookup for the browsed ones, and without it the topic menu has nothing to
-  // describe them with — it listed the other tabs' topics instead, which is what GEO-2653 was.
-  //
-  // Kept separate from `opponentEntitiesQuery` rather than folded into it: those entities are
-  // what the opponent tab's rows are built from, so browsed ids joining that query would put
-  // browsed claims on the opponent's tab.
-  const browsedClaimEntityIds = React.useMemo(
-    () => [
-      ...new Set(
-        browsedPages.flatMap(page => page.claims.map(entry => entry.claim.claim_entity_id)).filter(validateEntityId)
-      ),
-    ],
-    [browsedPages]
-  );
-  const browsedEntitiesQuery = useClaimEntitiesByIds(browsedClaimEntityIds);
-
   const topicsByClaimId = React.useMemo(() => {
     const map = new Map<string, MatchmakingTopic[]>();
-    for (const entity of [
-      ...opponentEntitiesQuery.entities,
-      ...recommendedEntities,
-      ...browsedEntitiesQuery.entities,
-    ]) {
+    for (const entity of [...opponentEntitiesQuery.entities, ...recommendedEntities]) {
       const topics = entity.relations
         .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
         .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
@@ -369,7 +350,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       }
     }
     return map;
-  }, [browsedEntitiesQuery.entities, browsedPages, opponentEntitiesQuery.entities, recommendedEntities]);
+  }, [browsedPages, opponentEntitiesQuery.entities, recommendedEntities]);
 
   // The opponent's tab: every claim they hold a side on, newest first. Held until the session's
   // exclusions are in, so nothing lists and then vanishes. Not narrowed by the space allowlist —
@@ -553,8 +534,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * that is correct for every claim already on it. Going back to a skeleton there would flicker
    * the badge on exactly the event that ought to be invisible.
    */
-  const opponentCountPending =
-    opponentClaims.length === 0 && (positions.isLoading || opponentClaimsSettling);
+  const opponentCountPending = opponentClaims.length === 0 && (positions.isLoading || opponentClaimsSettling);
 
   const hasRecommended = recommendedSections.length > 0;
   // The opponent's claims arrive in one round trip; the curated lookup is three, in sequence. The
@@ -586,32 +566,36 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return [...seen];
   }, [browsedClaims, browsedFacets?.space_ids, curatedClaims, opponentClaims, spaceAllowlist]);
 
-  // The claims the topic menu describes: everything the other filters allow, topic aside. The
-  // tab is included — each one is a different corpus, and a topic only the opponent's tab holds
-  // is not an option while looking at the curated one.
+  // The claims the topic menu describes on the graph-backed tabs: everything the other filters
+  // allow, topic aside. Narrowing by the current topic too would collapse the menu to the one
+  // option already chosen. The tab matters — each is a different corpus, and a topic only the
+  // opponent's tab holds is not an option while looking at the curated one.
   const topicFacetClaims = React.useMemo(
     () =>
       claims.filter(claim => {
         if (spaceId && claim.claim.space_id !== spaceId) return false;
-        if (
-          tab !== 'all' &&
-          debouncedSearch &&
-          !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())
-        )
-          return false;
+        if (debouncedSearch && !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
         return true;
       }),
-    [claims, debouncedSearch, spaceId, tab]
+    [claims, debouncedSearch, spaceId]
   );
 
-  const facetTopics = React.useMemo(
-    () =>
-      availableTopics(
+  // The All tab takes its menu from the server, which knows the whole filtered corpus rather
+  // than the pages this client has walked — the difference GEO-2653 was about. The other two
+  // tabs are built from graph entities geo-chat has never heard of, so they still derive theirs.
+  //
+  // The server orders by count; kept in name order to match the other tabs and to leave the
+  // count ordering, with the counts themselves, to GEO-2654.
+  const facetTopics = React.useMemo(() => {
+    if (tab !== 'all')
+      return availableTopics(
         topicFacetClaims.map(claim => claim.claim.claim_entity_id),
         topicsByClaimId
-      ),
-    [topicFacetClaims, topicsByClaimId]
-  );
+      );
+    return [...(browsedFacets?.topic_facets ?? [])]
+      .map(facet => ({ id: facet.id, name: facet.name }))
+      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+  }, [browsedFacets?.topic_facets, tab, topicFacetClaims, topicsByClaimId]);
 
   // Search and space reach the browsed query; on the other tabs, and for the topic everywhere
   // (geo-chat doesn't model topics), they are applied here.
@@ -619,6 +603,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () =>
       claims.filter(claim => {
         if (spaceId && claim.claim.space_id !== spaceId) return false;
+        // Kept even on the All tab, where the query has already applied it. That tab is the
+        // browsed rows *plus* this session's claims pinned in front of them, and the pinned ones
+        // never went through the query — without this they survive a topic filter they don't
+        // match. A no-op for the rows the server did filter, which match by construction.
         if (topicId && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(t => t.id === topicId))
           return false;
         if (
@@ -658,8 +646,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // the claim rows rather than in a lookup behind them, so once the tab has settled an empty
   // menu is a real answer.
   React.useEffect(() => {
-    setTopicId(current => keepSelectableTopic(current, facetTopics, !tabIsLoading && !browsedEntitiesQuery.isLoading));
-  }, [browsedEntitiesQuery.isLoading, facetTopics, tabIsLoading]);
+    const resolved = tab === 'all' ? browsedFacets !== undefined && !tabIsLoading : !tabIsLoading;
+    setTopicId(current => keepSelectableTopic(current, facetTopics, resolved));
+  }, [browsedFacets, facetTopics, tab, tabIsLoading]);
 
   const tabError =
     sessionQuery.error ??
