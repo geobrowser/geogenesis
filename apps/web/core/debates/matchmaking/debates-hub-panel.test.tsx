@@ -112,6 +112,14 @@ describe('DebatesHubPanel', () => {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
 
+    // Order, not just presence: the labels alone stayed green through a reorder.
+    const order = ['Claims', 'People', 'Matches', 'Requests'];
+    const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
+    for (const [index, tab] of rendered.slice(0, -1).entries()) {
+      const next = rendered[index + 1];
+      expect(Boolean(tab.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    }
+
     fireEvent.click(screen.getByRole('button', { name: /^People/ }));
 
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.

@@ -31,11 +31,15 @@ import type { DebatesHubTab } from '~/atoms';
 const MOBILE_SHEET_TOP_OFFSET_PX = 120;
 const PANEL_SCROLL_SELECTOR = '[data-debates-hub-scroll]';
 
+// Reading order, widest to narrowest: everything you could debate, then who is around, then the
+// two lists that only exist once matchmaking has produced something. The panel's landing tab is
+// not tied to this order — it is `DEFAULT_TAB` in use-debates-hub, and stays Requests so the
+// megaphone's pending badge opens onto the thing it is counting.
 const TABS: { id: DebatesHubTab; label: string }[] = [
-  { id: 'requests', label: 'Requests' },
-  { id: 'matches', label: 'Matches' },
   { id: 'claims', label: 'Claims' },
   { id: 'people', label: 'People' },
+  { id: 'matches', label: 'Matches' },
+  { id: 'requests', label: 'Requests' },
 ];
 
 function isInteractiveDragTarget(target: EventTarget | null): boolean {
