@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   claims: [] as MatchmakingClaim[],
   facetSpaceIds: [] as string[],
   pageSize: null as number | null,
+  lastEnabledData: undefined as unknown,
   spaceAllowlist: null as Set<string> | null,
   allowlistLoading: false,
   publishableSpaceIds: null as Set<string> | null,
@@ -56,14 +57,15 @@ vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => 
 vi.mock('./hooks', () => ({
   useMatchmakingClaims: (query: unknown, enabled: boolean) => {
     mocks.lastQuery = query;
-    // A disabled query fetches nothing and has no data — including no facets, which is what
-    // makes skipping it different from sending it unscoped.
+    // `placeholderData: keepPreviousData` outlives `enabled: false`, so a disabled query still
+    // hands back the last key's pages — facets included. Modelled, because a mock that returns
+    // nothing here makes masking look unnecessary.
     if (!enabled) {
       return {
-        data: undefined,
+        data: mocks.lastEnabledData,
         isLoading: false,
         error: null,
-        hasNextPage: false,
+        hasNextPage: true,
         isFetchingNextPage: false,
         fetchNextPage: mocks.fetchNextPage,
         refetch: vi.fn(),
@@ -82,21 +84,23 @@ vi.mock('./hooks', () => ({
     // Facets are computed over the whole filtered set while the page is a slice of it — the
     // shape that matters here, since the menu must not depend on how far the viewer has scrolled.
     const page = mocks.pageSize === null ? claims : claims.slice(0, mocks.pageSize);
-    return {
-      data: {
-        pages: [
-          {
-            claims: page,
-            next_cursor: null,
-            facets: {
-              space_ids: mocks.facetSpaceIds,
-              topics: topicFacets,
-              space_facets: mocks.facetSpaceIds.map(id => ({ id, name: null, count: 1 })),
-              topic_facets: topicFacets.map(topic => ({ ...topic, count: 1 })),
-            },
+    const data = {
+      pages: [
+        {
+          claims: page,
+          next_cursor: null,
+          facets: {
+            space_ids: mocks.facetSpaceIds,
+            topics: topicFacets,
+            space_facets: mocks.facetSpaceIds.map(id => ({ id, name: null, count: 1 })),
+            topic_facets: topicFacets.map(topic => ({ ...topic, count: 1 })),
           },
-        ],
-      },
+        },
+      ],
+    };
+    mocks.lastEnabledData = data;
+    return {
+      data,
       isLoading: false,
       error: null,
       hasNextPage: mocks.hasNextPage || page.length < claims.length,
@@ -202,6 +206,7 @@ beforeEach(() => {
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
   mocks.pageSize = null;
+  mocks.lastEnabledData = undefined;
   // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
   // unfiltered list — what every pre-existing case here runs under.
   mocks.spaceAllowlist = null;
@@ -648,6 +653,26 @@ describe('topic menu', () => {
     mocks.spaceAllowlist = new Set();
     mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI])];
     render(<ClaimsTab />);
+
+    expect(screen.queryByText('Models are getting cheaper')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    expect(screen.queryByRole('button', { name: 'AI' })).toBeNull();
+  });
+
+  // Disabling the query is not the same as having no data: it keeps the previous key's pages,
+  // facets included. Narrowing from a populated scope to an empty one therefore left the last
+  // scope's topic menu on screen over a list this tab had emptied.
+  it("drops the previous scope's menu when the eligible set narrows to nothing", () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI])];
+    const view = render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    mocks.spaceAllowlist = new Set();
+    view.rerender(<ClaimsTab />);
 
     expect(screen.queryByText('Models are getting cheaper')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));

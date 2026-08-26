@@ -88,3 +88,24 @@ export function eligibleClaimSpaceIds(
   if (allowlist === null) return null;
   return [...allowlist].filter(spaceShowsClaims);
 }
+
+/**
+ * The space that should stay selected once the menu has settled around it.
+ *
+ * Both eligibility gates pass everything while their lookups are unresolved, so a space can be
+ * picked out of the menu in that window and then rejected once the answers land. Left selected it
+ * keeps going out as `space_id` on every request — with its topic facet — while every row it
+ * returns is dropped again locally.
+ *
+ * `isResolved` is passed rather than inferred from an empty list, for the same reason
+ * `keepSelectableTopic` takes it: "the menu hasn't arrived" and "the menu excludes this" look
+ * identical from here, and clearing on the first would throw away a selection about to be valid.
+ */
+export function keepSelectableSpace(
+  spaceId: string | null,
+  availableSpaceIds: string[],
+  isResolved: boolean
+): string | null {
+  if (spaceId === null || !isResolved) return spaceId;
+  return availableSpaceIds.some(id => normId(id) === normId(spaceId)) ? spaceId : null;
+}

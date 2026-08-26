@@ -1203,6 +1203,37 @@ describe('DebateRematchPageClient', () => {
     expect(scope).not.toContain(SPACE_2.replace(/-/g, ''));
   });
 
+  // The opponent and curated tabs are deliberately not narrowed by the viewer's allowlist, so a
+  // claim of theirs in a space the viewer has never joined stays on screen. Its space has to stay
+  // in the menu with it, or the row is visible and unfilterable.
+  it('keeps a graph-tab space in the menu even when the allowlist excludes it', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // The shared claim sits in Crypto, which the allowlist above leaves out.
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+  });
+
+  // A space can be picked while the gates are still passing everything. Once they reject it the
+  // menu drops it, and leaving it selected keeps it going out on every request.
+  it('lets go of a picked space the settled gates reject', async () => {
+    mocks.publishableSpaceIds = null;
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    selectFilter('Any space', 'Governance');
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+
+    mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+  });
+
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();

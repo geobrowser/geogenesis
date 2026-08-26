@@ -10,7 +10,7 @@ import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { Input } from '~/design-system/input';
 
 import type { MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
-import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
+import { eligibleClaimSpaceIds, isClaimSpaceAllowed, keepSelectableSpace } from '../claim-space-allowlist';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useMatchmakingClaims } from './hooks';
@@ -102,7 +102,14 @@ export function ClaimsTab() {
   );
 
   const claimsQuery = useMatchmakingClaims(query, !hasNoEligibleSpaces);
-  const pages = React.useMemo(() => claimsQuery.data?.pages ?? [], [claimsQuery.data]);
+  // Masked rather than left to `enabled`. The hook keeps previous data across a key change, so a
+  // scope narrowing to nothing still hands back the last scope's pages — and while the rows are
+  // dropped below, the facets on them are not, which is the menu-over-an-empty-list this is meant
+  // to prevent.
+  const pages = React.useMemo(
+    () => (hasNoEligibleSpaces ? [] : (claimsQuery.data?.pages ?? [])),
+    [claimsQuery.data, hasNoEligibleSpaces]
+  );
   const facets = pages[0]?.facets;
 
   const serverClaims = React.useMemo(
@@ -146,6 +153,12 @@ export function ClaimsTab() {
   // flight. That is "not known yet", not "no topics" — see `keepSelectableTopic`.
   const topicsResolved = facets !== undefined && !claimsQuery.isLoading;
 
+  // The same for the space itself: it can be picked while the gates are still passing everything,
+  // and left selected it keeps going out on every request while its rows are dropped locally.
+  React.useEffect(() => {
+    setSpaceId(current => keepSelectableSpace(current, facetSpaceIds, !spacesPending && facets !== undefined));
+  }, [facetSpaceIds, facets, spacesPending]);
+
   // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
   // no longer in the menu to unpick.
   React.useEffect(() => {
@@ -155,7 +168,7 @@ export function ClaimsTab() {
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId || filter !== 'all');
 
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: claimsQuery.hasNextPage,
+    hasNextPage: !hasNoEligibleSpaces && claimsQuery.hasNextPage,
     isFetchingNextPage: claimsQuery.isFetchingNextPage,
     fetchNextPage: claimsQuery.fetchNextPage,
   });

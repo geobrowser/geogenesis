@@ -21,7 +21,7 @@ import {
   type MatchmakingTopic,
 } from '~/core/debates/api';
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '~/core/debates/claim-picker-page';
-import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
+import { eligibleClaimSpaceIds, isClaimSpaceAllowed, keepSelectableSpace } from '~/core/debates/claim-space-allowlist';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
@@ -245,7 +245,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [debouncedSearch, eligibleSpaceIds, spaceId, topicId]
   );
   const browsedClaimsQuery = useMatchmakingClaims(matchmakingQuery, !hasNoEligibleSpaces);
-  const browsedPages = React.useMemo(() => browsedClaimsQuery.data?.pages ?? [], [browsedClaimsQuery.data]);
+  // Masked rather than left to `enabled`: the hook keeps previous data across a key change, so a
+  // scope narrowing to nothing still hands back the last scope's pages — rows this drops anyway,
+  // but facets it would not.
+  const browsedPages = React.useMemo(
+    () => (hasNoEligibleSpaces ? [] : (browsedClaimsQuery.data?.pages ?? [])),
+    [browsedClaimsQuery.data, hasNoEligibleSpaces]
+  );
   const browsedFacets = browsedPages[0]?.facets;
 
   // What geo-chat knows about this session's claims — readiness, the shared-preference and
@@ -594,22 +600,41 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // the topic filter runs here rather than in the query, so narrowing it never costs the viewer
   // their way back. Remembering them instead kept offering topics from spaces the viewer had
   // filtered away, and picking one of those could only ever produce an empty list (GEO-2653).
-  const seenFacetsRef = React.useRef<{ spaceIds: Set<string> }>({ spaceIds: new Set() });
+  // Kept apart because the two are gated differently on the way out. A space reaching the menu
+  // through a *row* has already passed whatever its own tab requires — and the opponent and
+  // curated tabs are deliberately not narrowed by the viewer's allowlist, so re-applying it here
+  // would drop the space of a claim those tabs are still showing.
+  const seenFacetsRef = React.useRef<{ rowSpaceIds: Set<string>; facetSpaceIds: Set<string> }>({
+    rowSpaceIds: new Set(),
+    facetSpaceIds: new Set(),
+  });
 
   const facetSpaceIds = React.useMemo(() => {
-    const seen = seenFacetsRef.current.spaceIds;
-    for (const claim of [...opponentClaims, ...curatedClaims, ...browsedClaims]) seen.add(claim.claim.space_id);
-    for (const id of browsedFacets?.space_ids ?? []) seen.add(id);
+    const { rowSpaceIds, facetSpaceIds: fromFacet } = seenFacetsRef.current;
+    for (const claim of [...opponentClaims, ...curatedClaims, ...browsedClaims]) rowSpaceIds.add(claim.claim.space_id);
+    for (const id of browsedFacets?.space_ids ?? []) fromFacet.add(id);
+
     // Filtered on the way out, not on the way in. Both gates answer `true` while their lookup is
-    // still resolving — deliberately, so a slow answer doesn't empty the panel — and this set only
-    // ever grows, so gating the writes would admit every space on the first render and never take
-    // one back. `browsedRows` drops every claim in a space this pairing cannot publish into, so an
-    // ineligible space here is a filter that can only empty the list, and its topics come with it.
+    // still resolving — deliberately, so a slow answer doesn't empty the panel — and these sets
+    // only ever grow, so gating the writes would admit every space on the first render and never
+    // take one back.
     //
-    // Safe to apply to an accumulated set: neither gate narrows with the viewer's selection, which
-    // is the reason the accumulation exists.
-    return [...seen].filter(id => isClaimSpaceAllowed(id, spaceAllowlist) && canPublishDebateIn(id));
+    // Safe against an accumulated set: neither gate narrows with the viewer's selection, which is
+    // the reason the accumulation exists.
+    const menu = new Set<string>();
+    // A row's space is already through its own tab's gates; publishability is re-checked because
+    // it can resolve after the row landed, and the allowlist is not because the graph-backed tabs
+    // are not narrowed by it.
+    for (const id of rowSpaceIds) if (canPublishDebateIn(id)) menu.add(id);
+    for (const id of fromFacet) if (isClaimSpaceAllowed(id, spaceAllowlist) && canPublishDebateIn(id)) menu.add(id);
+    return [...menu];
   }, [browsedClaims, browsedFacets?.space_ids, canPublishDebateIn, curatedClaims, opponentClaims, spaceAllowlist]);
+
+  // A space picked while the gates were still passing everything has to be let go once they
+  // reject it, or it keeps going out as `space_id` on every request while its rows are dropped.
+  React.useEffect(() => {
+    setSpaceId(current => keepSelectableSpace(current, facetSpaceIds, !allowlistPending));
+  }, [allowlistPending, facetSpaceIds]);
 
   // The claims the topic menu describes on the graph-backed tabs: everything the other filters
   // allow, topic aside. Narrowing by the current topic too would collapse the menu to the one
