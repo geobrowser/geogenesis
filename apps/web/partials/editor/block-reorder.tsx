@@ -20,6 +20,8 @@ import type { Editor } from '@tiptap/react';
 
 import * as React from 'react';
 
+import { MotionConfig } from 'framer-motion';
+
 import { OrderDots } from '~/design-system/icons/order-dots';
 
 import { ensureUniqueNodeIds } from './id-extension';
@@ -65,6 +67,8 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
   const [activeChildIndex, setActiveChildIndex] = React.useState<number | null>(null);
   const activeChildIndexRef = React.useRef<number | null>(null);
   const [activeBoundary, setActiveBoundary] = React.useState<number | null>(null);
+  const [suppressLayoutMotion, setSuppressLayoutMotion] = React.useState(false);
+  const motionRestoreFramesRef = React.useRef<number[]>([]);
 
   const updateHoveredChildIndex = React.useCallback((childIndex: number | null) => {
     hoveredChildIndexRef.current = childIndex;
@@ -75,6 +79,28 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     activeChildIndexRef.current = childIndex;
     setActiveChildIndex(childIndex);
   }, []);
+
+  const cancelLayoutMotionRestore = React.useCallback(() => {
+    for (const frame of motionRestoreFramesRef.current) cancelAnimationFrame(frame);
+    motionRestoreFramesRef.current = [];
+  }, []);
+
+  const beginLayoutMotionSuppression = React.useCallback(() => {
+    cancelLayoutMotionRestore();
+    setSuppressLayoutMotion(true);
+  }, [cancelLayoutMotionRestore]);
+
+  const restoreLayoutMotionAfterDrop = React.useCallback(() => {
+    cancelLayoutMotionRestore();
+    const firstFrame = requestAnimationFrame(() => {
+      const secondFrame = requestAnimationFrame(() => {
+        motionRestoreFramesRef.current = [];
+        setSuppressLayoutMotion(false);
+      });
+      motionRestoreFramesRef.current = [secondFrame];
+    });
+    motionRestoreFramesRef.current = [firstFrame];
+  }, [cancelLayoutMotionRestore]);
 
   const measureBlocks = React.useCallback(() => {
     const wrapper = editorWrapperRef.current;
@@ -94,7 +120,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     const layoutChanged = !blockLayoutsEqual(blockLayoutRef.current, nextLayout);
     blockLayoutRef.current = nextLayout;
     if (layoutChanged) setBlockLayout(nextLayout);
-  }, [editorWrapperRef]);
+  }, [editor, editorWrapperRef]);
 
   React.useLayoutEffect(() => {
     if (!enabled) return;
@@ -110,6 +136,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
 
     const measurement = createBlockMeasureScheduler(measureBlocks);
     const resizeObserver = new ResizeObserver(measurement.schedule);
+    const restoreScrollAnchoring = disableScrollAnchoring(editorElement);
     resizeObserver.observe(editorElement);
     editor.on('transaction', measurement.schedule);
 
@@ -156,6 +183,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       resizeObserver.disconnect();
       editor.off('transaction', measurement.schedule);
       measurement.cancel();
+      restoreScrollAnchoring();
       wrapper.removeEventListener('pointermove', handlePointerMove);
       wrapper.removeEventListener('pointerleave', handlePointerLeave);
     };
@@ -164,12 +192,16 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
   React.useEffect(() => {
     if (enabled) return;
 
+    cancelLayoutMotionRestore();
     hoveredChildIndexRef.current = null;
     activeChildIndexRef.current = null;
     setHoveredChildIndex(null);
     setActiveChildIndex(null);
     setActiveBoundary(null);
-  }, [enabled]);
+    setSuppressLayoutMotion(false);
+  }, [cancelLayoutMotionRestore, enabled]);
+
+  React.useEffect(() => cancelLayoutMotionRestore, [cancelLayoutMotionRestore]);
 
   const editorRect = editorWrapperRef.current?.querySelector<HTMLElement>('.ProseMirror')?.getBoundingClientRect();
   const wrapperRect = editorWrapperRef.current?.getBoundingClientRect();
@@ -184,6 +216,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     updateActiveChildIndex(null);
     setActiveBoundary(null);
     updateHoveredChildIndex(null);
+    restoreLayoutMotionAfterDrop();
   };
 
   const handleDragCancel = () => resetDragState();
@@ -194,6 +227,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     const childIndex = event.active.data.current?.childIndex;
     if (typeof childIndex !== 'number') return;
 
+    beginLayoutMotionSuppression();
     // Continuation nodes loaded from markdown intentionally start without IDs.
     // A drag can happen before blur, so assign/dedupe IDs before persisting it.
     ensureUniqueNodeIds(editor);
@@ -222,54 +256,58 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
   };
 
   return (
-    <DndContext
-      sensors={sensors}
-      autoScroll
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragCancel={handleDragCancel}
-      onDragEnd={handleDragEnd}
-    >
-      {children}
+    <MotionConfig reducedMotion={suppressLayoutMotion ? 'always' : 'user'}>
+      <DndContext
+        sensors={sensors}
+        autoScroll
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragCancel={handleDragCancel}
+        onDragEnd={handleDragEnd}
+      >
+        {children}
 
-      {enabled && activeChildIndex === null && blockLayout.length > 0 ? (
-        <BlockGutterHoverArea blocks={blockLayout} editorLeft={editorLeft} onClick={() => editor.commands.focus()} />
-      ) : null}
-
-      {enabled
-        ? blockLayout.map(layout => (
-            <BlockDragHandle
-              key={getBlockDragHandleKey(editor, layout.childIndex)}
-              childIndex={layout.childIndex}
-              top={layout.top + Math.min(16, (layout.bottom - layout.top) / 2) - 12}
-              left={editorLeft - 32}
-              isDragging={activeChildIndex !== null}
-              visible={layout === handleLayout && visibleHandleIndex !== null}
-            />
-          ))
-        : null}
-
-      {enabled && activeChildIndex !== null
-        ? dropZones.map(zone => <BlockDropZone key={zone.boundary} zone={zone} left={editorLeft} width={editorWidth} />)
-        : null}
-
-      {enabled && activeChildIndex !== null && indicatorTop !== undefined ? (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute z-30 h-0.5 rounded-full bg-ctaPrimary"
-          style={{ top: indicatorTop, left: editorLeft, width: editorWidth }}
-        />
-      ) : null}
-
-      <DragOverlay dropAnimation={null}>
-        {enabled && activeChildIndex !== null ? (
-          <div className="flex size-6 cursor-grabbing items-center justify-center rounded border border-grey-02 bg-white shadow-lg">
-            <OrderDots />
-          </div>
+        {enabled && activeChildIndex === null && blockLayout.length > 0 ? (
+          <BlockGutterHoverArea blocks={blockLayout} editorLeft={editorLeft} onClick={() => editor.commands.focus()} />
         ) : null}
-      </DragOverlay>
-    </DndContext>
+
+        {enabled
+          ? blockLayout.map(layout => (
+              <BlockDragHandle
+                key={getBlockDragHandleKey(editor, layout.childIndex)}
+                childIndex={layout.childIndex}
+                top={layout.top + Math.min(16, (layout.bottom - layout.top) / 2) - 12}
+                left={editorLeft - 32}
+                isDragging={activeChildIndex !== null}
+                visible={layout === handleLayout && visibleHandleIndex !== null}
+              />
+            ))
+          : null}
+
+        {enabled && activeChildIndex !== null
+          ? dropZones.map(zone => (
+              <BlockDropZone key={zone.boundary} zone={zone} left={editorLeft} width={editorWidth} />
+            ))
+          : null}
+
+        {enabled && activeChildIndex !== null && indicatorTop !== undefined ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute z-30 h-0.5 rounded-full bg-ctaPrimary"
+            style={{ top: indicatorTop, left: editorLeft, width: editorWidth }}
+          />
+        ) : null}
+
+        <DragOverlay dropAnimation={null}>
+          {enabled && activeChildIndex !== null ? (
+            <div className="flex size-6 cursor-grabbing items-center justify-center rounded border border-grey-02 bg-white shadow-lg">
+              <OrderDots />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+    </MotionConfig>
   );
 }
 
@@ -336,6 +374,16 @@ export function getTopLevelBlockElements(editor: Editor, editorElement: HTMLElem
   }
 
   return blocks;
+}
+
+/** Prevents the browser from choosing a moved editor block as its scroll anchor. */
+export function disableScrollAnchoring(editorElement: HTMLElement) {
+  const previousOverflowAnchor = editorElement.style.overflowAnchor;
+  editorElement.style.overflowAnchor = 'none';
+
+  return () => {
+    editorElement.style.overflowAnchor = previousOverflowAnchor;
+  };
 }
 
 export function BlockGutterHoverArea({

@@ -14,6 +14,7 @@ import {
   BlockDragHandle,
   BlockGutterHoverArea,
   createBlockMeasureScheduler,
+  disableScrollAnchoring,
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
   getTopLevelBlockElements,
@@ -163,6 +164,19 @@ describe('getTopLevelBlockElements', () => {
     expect(Array.from(editorElement.children)).toHaveLength(3);
     expect(getTopLevelBlockElements(editor, editorElement).map(block => block.childIndex)).toEqual([0, 1]);
     expect(getTopLevelBlockElements(editor, editorElement).map(block => block.element)).not.toContain(gapCursor);
+  });
+});
+
+describe('disableScrollAnchoring', () => {
+  it('disables native anchoring while mounted and restores the previous value', () => {
+    const editorElement = document.createElement('div');
+    editorElement.style.overflowAnchor = 'auto';
+
+    const restore = disableScrollAnchoring(editorElement);
+    expect(editorElement.style.overflowAnchor).toBe('none');
+
+    restore();
+    expect(editorElement.style.overflowAnchor).toBe('auto');
   });
 });
 
