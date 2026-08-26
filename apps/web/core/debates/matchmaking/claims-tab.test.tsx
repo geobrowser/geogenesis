@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   allowlistLoading: false,
   publishableSpaceIds: null as Set<string> | null,
   publishableLoading: false,
+  scopeHeldOver: false,
   sidebarData: null as unknown,
   fetchedSpaceIds: [] as string[][],
   spacesLoading: false,
@@ -71,6 +72,21 @@ vi.mock('./hooks', () => ({
         refetch: vi.fn(),
       };
     }
+    // A scope change is a key change like any other, so `keepPreviousData` answers it with the
+    // previous scope's pages while the new request is in flight. Modelled, because that hold is
+    // the whole of what the mask downstream is for.
+    if (mocks.scopeHeldOver) {
+      return {
+        data: mocks.lastEnabledData,
+        isLoading: false,
+        error: null,
+        hasNextPage: mocks.hasNextPage,
+        isFetchingNextPage: false,
+        isPlaceholderData: true,
+        fetchNextPage: mocks.fetchNextPage,
+        refetch: vi.fn(),
+      };
+    }
     const { spaceId, topicId } = query as { spaceId?: string | null; topicId?: string | null };
     // `space_id` and `topic_id` are both query parameters as of GEO-2659, so the endpoint
     // returns only the rows that match. Mirrored here, because what the tab renders and what
@@ -105,6 +121,7 @@ vi.mock('./hooks', () => ({
       error: null,
       hasNextPage: mocks.hasNextPage || page.length < claims.length,
       isFetchingNextPage: false,
+      isPlaceholderData: false,
       fetchNextPage: mocks.fetchNextPage,
       refetch: vi.fn(),
     };
@@ -207,6 +224,7 @@ beforeEach(() => {
   mocks.facetSpaceIds = [];
   mocks.pageSize = null;
   mocks.lastEnabledData = undefined;
+  mocks.scopeHeldOver = false;
   // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
   // unfiltered list — what every pre-existing case here runs under.
   mocks.spaceAllowlist = null;

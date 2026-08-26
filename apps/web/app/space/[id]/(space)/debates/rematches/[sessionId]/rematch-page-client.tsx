@@ -47,6 +47,7 @@ import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState, HubSkeleton } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { availableTopics, keepSelectableTopic } from '~/core/debates/matchmaking/topic-facets';
+import { useScopeHeldOver } from '~/core/debates/matchmaking/use-scope-holdover';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
@@ -214,7 +215,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // on its own result. The allowlist depends on nothing here, so asking for those types directly
   // breaks the loop.
   const allowlistSpaceIds = React.useMemo(() => (spaceAllowlist ? [...spaceAllowlist] : []), [spaceAllowlist]);
-  const { spacesById: allowlistSpaces, isLoading: allowlistSpacesPending } = useSpacesByIds(allowlistSpaceIds);
+  const {
+    spacesById: allowlistSpaces,
+    isLoading: allowlistSpacesPending,
+    isPlaceholderData: allowlistSpacesHeldOver,
+  } = useSpacesByIds(allowlistSpaceIds);
   const allowlistTypePublishable = React.useMemo(
     () => debatePublishableSpacePredicate(allowlistSpaces),
     [allowlistSpaces]
@@ -247,7 +252,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Every lookup the scope is built from. Until they have all landed the scope is `null`, which
   // geo-chat reads as "no filter" — so asking now buys an answer about the whole corpus, whose
   // rows are dropped below and whose topic facet is not. See the Claims tab, same shape.
-  const scopePending = allowlistPending || publishablePending || allowlistSpacesPending;
+  //
+  // The held-over map counts as pending. `useSpacesByIds` keeps the previous id set's answers
+  // rather than blanking every space image on screen, and says in its own contract that a caller
+  // asking about a *missing* id has to check for it. This is such a caller: an id added to the
+  // allowlist is absent from the held map, and an absent type reads as publishable — so the space
+  // this gate exists to keep out is exactly the one that slips through the window.
+  const scopePending = allowlistPending || publishablePending || allowlistSpacesPending || allowlistSpacesHeldOver;
 
   const matchmakingQuery = React.useMemo<MatchmakingClaimsQuery>(
     // `topicId` is sent whichever tab is showing. It only filters *these* rows, which back the
@@ -271,9 +282,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Masked rather than left to `enabled`: the hook keeps previous data across a key change, so a
   // scope narrowing to nothing still hands back the last scope's pages — rows this drops anyway,
   // but facets it would not.
+  // A settled scope can still change under the viewer — the allowlist refetches, a space is joined
+  // — and none of the flags in `scopePending` move when it does.
+  const scopeHeldOver = useScopeHeldOver(eligibleSpaceIds?.join(',') ?? null, browsedClaimsQuery.isPlaceholderData);
+
   const browsedPages = React.useMemo(
-    () => (browsedCorpusUnusable || scopePending ? [] : (browsedClaimsQuery.data?.pages ?? [])),
-    [browsedClaimsQuery.data, browsedCorpusUnusable, scopePending]
+    () => (browsedCorpusUnusable || scopePending || scopeHeldOver ? [] : (browsedClaimsQuery.data?.pages ?? [])),
+    [browsedClaimsQuery.data, browsedCorpusUnusable, scopeHeldOver, scopePending]
   );
   const browsedFacets = browsedPages[0]?.facets;
 
@@ -683,10 +698,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () =>
       claims.filter(claim => {
         if (spaceId && claim.claim.space_id !== spaceId) return false;
-        if (debouncedSearch && !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
+        // Cut on the same terms `visibleClaims` is, or the menu stops describing the list. On the
+        // All tab the search runs server-side over the browsed rows, and the pinned ones are
+        // merged in whether they match it or not — so cutting them here left a row on screen with
+        // its topics missing from the menu, which is the merge below undone.
+        if (
+          tab !== 'all' &&
+          debouncedSearch &&
+          !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())
+        )
+          return false;
         return true;
       }),
-    [claims, debouncedSearch, spaceId]
+    [claims, debouncedSearch, spaceId, tab]
   );
 
   // The All tab takes its menu from the server, which knows the whole filtered corpus rather

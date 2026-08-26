@@ -63,6 +63,8 @@ const mocks = vi.hoisted(() => ({
   entityQueryPages: null as MatchmakingClaim[][] | null,
   // What `keepPreviousData` would still be holding once the query goes disabled.
   lastEnabledData: undefined as { pages: unknown[] } | undefined,
+  spacesHeldOver: false,
+  scopeHeldOver: false,
   entityQueryFetchingNextPage: false,
   /** Both participants' graph positions. */
   positions: [] as ParticipantPosition[],
@@ -274,6 +276,19 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
         fetchNextPage: mocks.fetchNextPage,
       };
     }
+    // A scope change is a key change like any other, so `keepPreviousData` answers it with the
+    // previous scope's pages while the new request is in flight.
+    if (mocks.scopeHeldOver) {
+      return {
+        data: mocks.lastEnabledData,
+        isLoading: false,
+        error: null,
+        hasNextPage: mocks.entityQueryHasNextPage,
+        isFetchingNextPage: false,
+        isPlaceholderData: true,
+        fetchNextPage: mocks.fetchNextPage,
+      };
+    }
     mocks.entityQueries.push(query);
     // `space_id` and `topic_id` both filter server-side as of GEO-2659, and every page carries
     // facets computed over the whole candidate set rather than the page being returned.
@@ -365,6 +380,10 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
       ].map(([id, name]) => [id, { type: mocks.spaceTypes[id] ?? 'DAO', entity: { name, image: null } }])
     ),
     isLoading: false,
+    // The real hook holds the previous id set's map rather than blanking it, and flags that it is
+    // doing so. A held map answers nothing about ids it was never asked for, which is the whole
+    // reason the picker has to wait it out.
+    isPlaceholderData: mocks.spacesHeldOver,
   }),
 }));
 
@@ -394,6 +413,8 @@ beforeEach(() => {
   mocks.entityIdLookups.length = 0;
   mocks.entityQueryHasNextPage = false;
   mocks.lastEnabledData = undefined;
+  mocks.spacesHeldOver = false;
+  mocks.scopeHeldOver = false;
   mocks.entityQueryLoading = false;
   mocks.entityHydrationLoading = false;
   mocks.fetchNextPage.mockReset();
@@ -1208,6 +1229,84 @@ describe('DebateRematchPageClient', () => {
     selectFilter('Any topic', 'Governance');
 
     await waitFor(() => expect(appearsBefore('Ranked first once filtered', 'Ranked first when unfiltered')).toBe(true));
+  });
+
+  // `useSpacesByIds` keeps the previous id set's map instead of blanking every space image on
+  // screen, and says so through `isPlaceholderData`. The picker reads it for ids that may not be
+  // in it — one just added to the allowlist — and a missing type reads as publishable, so the
+  // personal space this gate exists to exclude is exactly what the held map lets through.
+  it('waits out a held-over space map rather than trusting what it does not contain', async () => {
+    mocks.matchmakingClaims = [
+      { ...matchmakingClaim(), topics: [] },
+      {
+        ...matchmakingClaim(CLAIM_SOURCE, 'A claim only the facet knows about'),
+        topics: [{ id: 'topic-later', name: 'Later' }],
+      },
+    ];
+    mocks.spacesHeldOver = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.queryByRole('button', { name: /Later/ })).toBeNull();
+  });
+
+  // The All tab's search runs server-side over the browsed rows; the pinned ones are merged in
+  // whether they match it or not. Cutting them out of the facet left them on screen with their
+  // topics missing from the menu — the pinned-row merge undone by the filter beside it.
+  it('keeps the topics of a pinned row the search does not match', async () => {
+    mocks.entities = [
+      sharedEntity(),
+      {
+        ...sharedEntity(),
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-pinned', name: 'Pinned only' }, isDeleted: false },
+        ],
+      },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    // Matches the browsed row's text, not the pinned claim both participants chose.
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'newly' } });
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ search: 'newly' }));
+
+    // The pinned row is still on screen — the search never reached it — so it is still a row the
+    // viewer can be filtering to.
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: /Pinned only/ })).toBeInTheDocument();
+  });
+
+  // The scope can also change after it has settled — the viewer joins a space and the allowlist
+  // refetches — and no loading flag turns over when it does. The only sign is that the pages in
+  // hand were fetched under the scope before it, and their topic facet still names spaces that
+  // are now outside it.
+  it('drops the pages fetched under a scope the viewer has since left', async () => {
+    mocks.matchmakingClaims = [
+      { ...matchmakingClaim(), topics: [] },
+      {
+        ...matchmakingClaim(CLAIM_SOURCE, 'A claim only the facet knows about'),
+        topics: [{ id: 'topic-later', name: 'Later' }],
+      },
+    ];
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+    await waitFor(() => expect(screen.getByText('A newly published claim')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    expect(screen.getByRole('button', { name: /Later/ })).toBeInTheDocument();
+
+    // The scope narrows from "no filter" to one space; the previous one's pages are what React
+    // Query has to answer with meanwhile. The menu is left open, so this is the option list
+    // changing under the viewer's cursor.
+    mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
+    mocks.scopeHeldOver = true;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Later/ })).toBeNull());
   });
 
   it('asks the server to do the topic filtering on the All tab', async () => {

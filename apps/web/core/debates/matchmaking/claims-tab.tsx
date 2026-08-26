@@ -19,6 +19,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { keepSelectableTopic } from './topic-facets';
+import { useScopeHeldOver } from './use-scope-holdover';
 import { useStableListOrder } from './use-stable-list-order';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -114,9 +115,13 @@ export function ClaimsTab() {
   // pages, and while the rows are re-gated below the facets on them are not. That is the whole
   // menu-over-an-empty-list this is meant to prevent, so it is the one place the scope is applied:
   // everything downstream reads these pages and needs no guard of its own.
+  // A settled scope can still change — the allowlist refetches, someone joins a space — and that
+  // moves no loading flag, so `spacesPending` above says nothing about it.
+  const scopeHeldOver = useScopeHeldOver(eligibleSpaceIds?.join(',') ?? null, claimsQuery.isPlaceholderData);
+
   const pages = React.useMemo(
-    () => (hasNoEligibleSpaces || spacesPending ? [] : (claimsQuery.data?.pages ?? [])),
-    [claimsQuery.data, hasNoEligibleSpaces, spacesPending]
+    () => (hasNoEligibleSpaces || spacesPending || scopeHeldOver ? [] : (claimsQuery.data?.pages ?? [])),
+    [claimsQuery.data, hasNoEligibleSpaces, scopeHeldOver, spacesPending]
   );
   const facets = pages[0]?.facets;
 
