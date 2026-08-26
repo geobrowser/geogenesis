@@ -1151,6 +1151,99 @@ describe('DebateGatewayClient', () => {
   // heartbeats kept being acked, the two-missed-ack path to `forceReconnect` was never reached, and
   // there was no route back to `ready` for the rest of the session — one scope-level rejection took
   // the account-level stream, and with it the incoming-request popup, down with it.
+  // GEO-2670. Every pause used to be the same `{ degraded, paused }`, so spending the command
+  // budget looked exactly like a dropped socket — and tracing it meant reading the subscription
+  // code rather than a log line. The reason is what makes a pause actionable.
+  it('says why live updates are paused', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    expect(client.getSnapshot()).toMatchObject({ paused: false, pauseReason: null });
+
+    // Our fault, not the network's: we sent more commands than the session allows.
+    sockets[0]!.receive('ERROR', { code: 'rate_limited', message: 'retry after 5 seconds' });
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'rate_limited' });
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    expect(client.getSnapshot()).toMatchObject({ paused: false, pauseReason: null });
+
+    // A ceiling we are sitting against, which a reconnect would hit again.
+    sockets[1]!.receive('ERROR', {
+      code: 'subscription_limit_reached',
+      message: 'too many subscriptions',
+    });
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'subscription_limit' });
+  });
+
+  // A dropped socket is ordinary transport trouble, and has to stay distinguishable from the two
+  // above — that distinction is the whole point.
+  it('reports a dropped socket as disconnected rather than as a client fault', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    sockets[0]!.serverClose();
+
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'disconnected' });
+  });
+
+  // A server that never advertises the debate capability is not going to start: nothing recovers
+  // this without a deploy, so it must not read as a transient pause.
+  it('reports a missing debate capability as unsupported', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', { capabilities: [], subscriptions: [] });
+
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'unsupported' });
+  });
+
+  // The trap in `setSnapshot`: it skips notifying when status and paused are unchanged. These two
+  // pauses are both `degraded/paused` with no ready in between, so the reason is the *only*
+  // difference — which is exactly the case that would be written and never delivered.
+  //
+  // An earlier version of this test put a reconnect between them. That reset `paused` to false, so
+  // the status comparison already differed and the guard was never exercised: the test passed with
+  // the guard deleted.
+  it('notifies listeners when only the pause reason changes', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    // Parks without reconnecting, so the socket stays open and `paused` stays true throughout.
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_limit_reached',
+      message: 'too many subscriptions',
+    });
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'subscription_limit' });
+
+    const seen: (string | null)[] = [];
+    const unsubscribe = client.subscribe(() => seen.push(client.getSnapshot().pauseReason));
+
+    // Same status, same `paused`, different reason.
+    sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', message: 'not authorized' });
+
+    unsubscribe();
+    expect(seen).toEqual(['disconnected']);
+  });
+
   it('recycles the socket when a subscription is rejected, rather than parking on it', async () => {
     client.start(
       vi.fn(async () => 'privy-token'),

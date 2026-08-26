@@ -2,7 +2,7 @@
 
 import { hashKey, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 import { Effect, Either } from 'effect';
 
@@ -21,6 +21,7 @@ import {
   userEntityVotesQueryKey,
   votedEntityIdsPendingQueryKey,
 } from '~/core/hooks/use-user-voted-entity-ids';
+import { withRetryAfterJitter } from '~/core/io/errors/retry-utils';
 import { getUserEntityResponse } from '~/core/io/queries';
 import {
   claimResponseSummariesQueryKeyPrefix,
@@ -65,6 +66,34 @@ export type EntityResponseIndexingState =
   | { status: 'indexed'; pending: PendingEntityResponseIndex; runId: string };
 
 const IDLE_INDEXING_STATE: EntityResponseIndexingState = { status: 'idle', pending: null, runId: null };
+
+/**
+ * How long to wait before re-checking whether a submitted response has been indexed.
+ *
+ * This sits on the critical path of a *two-person* interaction, which is why it is a backoff and
+ * not a flat interval. In the rematch picker, the opponent only learns about a position once this
+ * client notices it is indexed and tells geo-chat (`useClaimResponseIndexedNotifier`), which then
+ * emits `debate.claims_changed`. A flat 10s re-check therefore quantised the opponent's view to
+ * 10s steps *on top of* the write, which measures p50 9.9s / p95 48.6s (`web.write.entity_response`
+ * in Sentry, 200 samples over 7 days) — together landing on the 20-30s in GEO-2687.
+ *
+ * Starting at 1s catches the common case where indexing completes a second or two after the first
+ * check, which the flat interval charged a full 10s for. The cap keeps a genuinely slow index from
+ * turning into a tight poll, and the jitter stops two participants' clients — which submit at
+ * nearly the same moment — from lining their retries up on the same instants.
+ */
+const RESPONSE_INDEXING_RETRY_BASE_MS = 1_000;
+const RESPONSE_INDEXING_RETRY_MAX_MS = 10_000;
+
+/**
+ * The un-jittered delay before re-check number `attempt` (0-based). Exported and kept pure so the
+ * shape of the backoff can be asserted directly, rather than inferred from fake-timer choreography.
+ */
+export function responseIndexingRetryDelayMs(attempt: number): number {
+  const exponential = RESPONSE_INDEXING_RETRY_BASE_MS * 2 ** Math.max(0, attempt);
+  return Math.min(exponential, RESPONSE_INDEXING_RETRY_MAX_MS);
+}
+
 let responseIndexingRunSequence = 0;
 type ResponseSubmissionRun = {
   pending: PendingEntityResponseIndex | null;
@@ -518,11 +547,30 @@ export function useEntityResponse({ entityId, spaceId, responseKind }: UseEntity
     void reconcileResponseIndexing(current.pending, runId);
   }, [indexingQueryKey, queryClient, reconcileResponseIndexing]);
 
+  // Counted per run so a new response starts its backoff from the beginning rather than inheriting
+  // the tail of the previous one. A ref rather than state: this must survive the
+  // delayed -> reconciling -> delayed cycling that re-runs the effect below, without itself
+  // causing a render.
+  const retryAttemptRef = useRef<{ runId: string | null; attempts: number }>({ runId: null, attempts: 0 });
+
   useEffect(() => {
     if (indexingState.status !== 'delayed') return;
-    const retryTimer = window.setTimeout(retryResponseIndexing, 10_000);
+
+    const { runId } = indexingState;
+    if (retryAttemptRef.current.runId !== runId) {
+      retryAttemptRef.current = { runId, attempts: 0 };
+    }
+    const attempt = retryAttemptRef.current.attempts;
+    retryAttemptRef.current.attempts = attempt + 1;
+
+    const retryTimer = window.setTimeout(
+      retryResponseIndexing,
+      withRetryAfterJitter(responseIndexingRetryDelayMs(attempt))
+    );
     return () => window.clearTimeout(retryTimer);
-  }, [indexingState.status, retryResponseIndexing]);
+    // `runId` is a dependency so a second response submitted while the first is still delayed
+    // reschedules against its own attempt count instead of the previous run's.
+  }, [indexingState.status, indexingState.runId, retryResponseIndexing]);
 
   const optimisticResponse =
     (indexingState.status !== 'reconciling' && indexingState.status !== 'delayed') || !indexingState.pending

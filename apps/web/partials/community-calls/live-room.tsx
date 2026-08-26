@@ -31,7 +31,6 @@ import {
   stopRecording,
 } from '~/core/community-calls/api';
 import { LAST_EDITOR_CONFIRM_DELAY_MS } from '~/core/community-calls/constants';
-import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { formatDuration } from '~/core/community-calls/format';
 import { Recording, parseParticipantMetadata } from '~/core/community-calls/types';
 import { useCallTimeUp } from '~/core/community-calls/use-call-time-up';
@@ -40,6 +39,7 @@ import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call
 import { ChatEntry, usePersistentChat } from '~/core/community-calls/use-persistent-chat';
 import { useReconnectionState } from '~/core/community-calls/use-reconnection-state';
 import { useRecordingMetadataSync } from '~/core/community-calls/use-recording-metadata-sync';
+import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 
 import { Avatar } from '~/design-system/avatar';
@@ -220,10 +220,23 @@ function RoomBody({
   const [leaveDialogOpen, setLeaveDialogOpen] = React.useState(false);
   const [endCallBusy, setEndCallBusy] = React.useState(false);
 
+  // Identifies this call on every drop episode reported to telemetry. Memoized so a new
+  // object each render can't churn the hook's room subscriptions.
+  const callTelemetry = React.useMemo(
+    () => ({
+      spaceId,
+      callId,
+      roomName,
+      occurrenceStart,
+      role: isViewer ? ('viewer' as const) : ('participant' as const),
+    }),
+    [spaceId, callId, roomName, occurrenceStart, isViewer]
+  );
+
   // Distinguishes an intentional Leave (CLIENT_INITIATED) — navigate away directly —
   // from a drop that should show the reconnection overlay instead of silently
   // kicking the user out. See use-reconnection-state.ts.
-  const reconnection = useReconnectionState(room, () => router.push(backHref));
+  const reconnection = useReconnectionState(room, () => router.push(backHref), callTelemetry);
   const [rejoinBusy, setRejoinBusy] = React.useState(false);
   const [rejoinError, setRejoinError] = React.useState<string | null>(null);
 
@@ -305,10 +318,13 @@ function RoomBody({
   };
 
   // Forced-timeout path: fires once when the CallEndTimer banner counts down to
-  // zero, converging on the same disconnect + navigate-away cleanup as the manual
-  // leave dialog. No recording-stop confirmation on this path — the call ends
-  // regardless of whether a recording is still running.
-  const handleTimeUp = useCallTimeUp(onLeave);
+  // zero, converging on the same disconnect as the manual leave dialog but flagging
+  // itself first so the overlay can say why. No recording-stop confirmation on this
+  // path — the call ends regardless of whether a recording is still running.
+  const handleTimeUp = useCallTimeUp(() => {
+    reconnection.markEndedByCutoff();
+    onLeave();
+  });
 
   const onStopRecordingAndLeave = async () => {
     if (endCallBusy) return;
