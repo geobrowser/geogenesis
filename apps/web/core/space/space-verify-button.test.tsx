@@ -100,6 +100,33 @@ describe('SpaceVerifyButton', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Verify' })).toBeInTheDocument());
   });
 
+  it('shows unverifying beside the check while removal is pending', async () => {
+    mocks.fetchSpaceVerification.mockResolvedValue(true);
+    mocks.subspace.mockReturnValue({
+      setSubspace: mocks.setSubspace,
+      setStatus: 'idle',
+      unsetSubspace: mocks.unsetSubspace,
+      unsetStatus: 'pending',
+    });
+
+    renderButton(<SpaceVerifyButton spaceId={VIEWED_SPACE_ID} />);
+
+    const button = await screen.findByRole('button', { name: 'Unverifying...' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveTextContent('Unverifying...');
+    expect(button.querySelector('svg')).toBeInTheDocument();
+  });
+
+  it('keeps verify disabled when the relationship lookup fails', async () => {
+    mocks.fetchSpaceVerification.mockRejectedValue(new Error('Lookup failed'));
+
+    renderButton(<SpaceVerifyButton spaceId={VIEWED_SPACE_ID} />);
+
+    const button = await screen.findByRole('button', { name: 'Verify' });
+    await waitFor(() => expect(button).toHaveAttribute('title', 'Unable to check verification status'));
+    expect(button).toBeDisabled();
+  });
+
   it('renders the verify action with a tick before its label', async () => {
     renderButton(<SpaceVerifyButton spaceId={VIEWED_SPACE_ID} />);
 

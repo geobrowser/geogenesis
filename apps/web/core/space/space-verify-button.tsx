@@ -30,7 +30,8 @@ export function SpaceVerifyButton({ spaceId }: { spaceId: string }) {
   if (isPersonalSpaceLoading || !canVerify || !personalSpaceId) return null;
 
   const isVerified = verificationQuery.data === true;
-  const isPending = setStatus === 'pending' || unsetStatus === 'pending';
+  const isVerifying = setStatus === 'pending';
+  const isUnverifying = unsetStatus === 'pending';
 
   const updateVerification = (verified: boolean) => {
     queryClient.setQueryData(verificationQueryKey(personalSpaceId, spaceId), verified);
@@ -60,12 +61,13 @@ export function SpaceVerifyButton({ spaceId }: { spaceId: string }) {
       <button
         type="button"
         onClick={removeVerification}
-        disabled={isPending}
-        aria-label="Remove verification"
-        title="Remove verification"
-        className="inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-text text-white transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-50"
+        disabled={isUnverifying}
+        aria-label={isUnverifying ? 'Unverifying...' : 'Remove verification'}
+        title={isUnverifying ? undefined : 'Remove verification'}
+        className={`inline-flex h-5 shrink-0 items-center justify-center rounded-full bg-text text-white transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-50 ${isUnverifying ? 'gap-1 px-1.5 text-[12px] leading-[13px]' : 'w-5'}`}
       >
         <TickSmall />
+        {isUnverifying ? 'Unverifying...' : null}
       </button>
     );
   }
@@ -74,11 +76,12 @@ export function SpaceVerifyButton({ spaceId }: { spaceId: string }) {
     <button
       type="button"
       onClick={verify}
-      disabled={verificationQuery.isLoading || isPending}
+      disabled={verificationQuery.isLoading || verificationQuery.isError || isVerifying}
+      title={verificationQuery.isError ? 'Unable to check verification status' : undefined}
       className="inline-flex h-[18px] shrink-0 items-center gap-1 rounded-full border border-dashed border-grey-03 pr-1.5 pl-1 text-[12px] leading-[13px] tracking-[-0.35px] text-grey-04 transition-colors hover:border-grey-04 hover:text-text disabled:cursor-wait disabled:opacity-50"
     >
       <TickSmall />
-      {isPending ? 'Verifying...' : 'Verify'}
+      {isVerifying ? 'Verifying...' : 'Verify'}
     </button>
   );
 }
