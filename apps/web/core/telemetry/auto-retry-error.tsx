@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { motion } from 'framer-motion';
 
-import { reportError } from '~/core/telemetry/logger';
+import { reportCaughtError } from '~/core/telemetry/logger';
 
 import { Notice } from '~/design-system/notice';
 import { Text } from '~/design-system/text';
@@ -72,7 +72,7 @@ export function AutoRetryError({ error, reset, preview }: Props) {
   React.useEffect(() => {
     if (preview) return;
     setOffline(looksOffline());
-    setEventId(reportError(error));
+    setEventId(reportCaughtError(error, 'app-root'));
   }, [error, preview]);
 
   React.useEffect(() => {
@@ -113,7 +113,12 @@ export function AutoRetryError({ error, reset, preview }: Props) {
   // "Reconnecting" was shown for *every* error this boundary caught, so a plain bug read to
   // users — and to whoever they reported it to — as a connection problem, and got chased as
   // one (GEO-2670). Claim a connection cause only when the browser says there is no network.
-  const reference = eventId ?? (digest === 'preview' ? undefined : digest);
+  // The digest wins over the Sentry event id when present. React strips a Server Components
+  // error's message in production and gives the client only this digest, while the real error
+  // is logged server-side under the same one — so it is the join key between what the user saw
+  // and what actually broke. Searching `digest:<value>` in Sentry finds both sides; a client
+  // event id finds only the stripped half.
+  const reference = error.digest ?? eventId ?? (digest === 'preview' ? undefined : digest);
 
   return (
     <Notice
