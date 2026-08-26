@@ -49,6 +49,8 @@ const mocks = vi.hoisted(() => ({
   entityQueries: [] as Array<{ search: string | null; spaceId: string | null }>,
   /** Every id list the opponent's claims were hydrated with, in render order. */
   entityIdLookups: [] as string[][],
+  featuredClaims: [] as Array<{ claimEntityId: string; spaceId: string; name: string; description: string | null }>,
+  featuredCatalogLoading: false,
   entityQueryHasNextPage: false,
   /** The hub's claims query (the All tab) is still in flight. */
   entityQueryLoading: false,
@@ -190,6 +192,22 @@ vi.mock('~/core/debates/debate-gateway', () => ({
 
 vi.mock('~/core/debates/debate-entry-intent', () => ({
   markEnteringDebate: (debateId: string) => mocks.markEnteringDebate(debateId),
+}));
+
+// GEO-2683. Featured stands in for Recommended when no curator page exists, which is what most of
+// these suites run under — so without this every case here would reach the graph for the tag.
+vi.mock('~/core/debates/featured-claims', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/debates/featured-claims')>()),
+  useFeaturedClaims: (enabled: boolean) => {
+    const claims = enabled ? mocks.featuredClaims : [];
+    return {
+      claims,
+      claimIds: claims.map(claim => claim.claimEntityId),
+      isLoading: enabled && mocks.featuredCatalogLoading,
+      error: null,
+      refetch: vi.fn(),
+    };
+  },
 }));
 
 // The opponent's claims are hydrated from the graph by id, through the picker's narrow projection.
@@ -343,6 +361,8 @@ beforeEach(() => {
   mocks.openSidePanel.mockReset();
   mocks.entityQueries.length = 0;
   mocks.entityIdLookups.length = 0;
+  mocks.featuredClaims = [];
+  mocks.featuredCatalogLoading = false;
   mocks.entityQueryHasNextPage = false;
   mocks.entityQueryLoading = false;
   mocks.entityHydrationLoading = false;
@@ -700,6 +720,86 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('button', { name: /Salina’s positions/ })).toBeInTheDocument();
   });
 
+  // GEO-2683. Featured stands in for Recommended, so it takes that slot rather than adding a fourth
+  // tab: it exists precisely when a curated page for this pairing does not.
+  describe('Featured, in place of Recommended', () => {
+    const FEATURED = '019fedb8-6ca7-7f94-8a77-8cd3be5faa64';
+
+    function featuredEntity(id = FEATURED, name = 'A featured claim') {
+      return { ...publishedEntity(id, name), spaces: [SPACE_2] };
+    }
+
+    function featuredTag(id = FEATURED, name = 'A featured claim', spaceId = SPACE_2) {
+      return { claimEntityId: id, spaceId, name, description: null };
+    }
+
+    it('takes Recommended’s slot when nothing is curated for this pairing', () => {
+      mocks.featuredClaims = [featuredTag()];
+      mocks.entities = [sharedEntity(), featuredEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByRole('button', { name: 'Featured' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Recommended' })).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Featured' }));
+      expect(screen.getByText('A featured claim')).toBeInTheDocument();
+    });
+
+    // A curator's page for this exact pairing beats a tag anyone's space can carry, and the two
+    // share one slot — so Featured is not offered as a second-best alongside it.
+    it('stays out of the way when a curator has a page for this pairing', () => {
+      mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] }];
+      mocks.recommendedEntities = [sharedEntity()];
+      mocks.featuredClaims = [featuredTag()];
+      mocks.entities = [sharedEntity(), featuredEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByRole('button', { name: 'Recommended' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Featured' })).toBeNull();
+    });
+
+    // Unlike Recommended, Featured is a tag any space can carry, so it fans out across the corpus
+    // the way the All tab does — and is bounded the same way.
+    it('drops tagged claims from spaces outside the viewer’s allowed set', async () => {
+      mocks.spaceAllowlist = new Set([SPACE_1.replace(/-/g, '')]);
+      mocks.featuredClaims = [featuredTag()];
+      mocks.entities = [sharedEntity(), featuredEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Featured' }));
+
+      // Awaited because the tab's content swaps with a transition rather than on the same tick.
+      await waitFor(() =>
+        expect(screen.getByText('No featured claims are available to debate yet.')).toBeInTheDocument()
+      );
+      expect(screen.queryByText('A featured claim')).toBeNull();
+    });
+
+    // The viewer is not put on the tab until it has something, on the rule Recommended already
+    // follows. Landing on a tab that then settles empty is worse than never starting there.
+    it('keeps the viewer off the slot while the tag lookup runs', () => {
+      mocks.featuredCatalogLoading = true;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(screen.getByRole('button', { name: 'Featured' })).toBeInTheDocument();
+      // Still the opponent's tab, which is where a picker with no curated page opens.
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    });
+
+    it('says nothing is featured rather than nothing is debatable', async () => {
+      mocks.featuredClaims = [featuredTag()];
+      // Tagged, but the graph has no entity for it — so the tab exists with nothing on it.
+      mocks.entities = [sharedEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Featured' }));
+
+      await waitFor(() =>
+        expect(screen.getByText('No featured claims are available to debate yet.')).toBeInTheDocument()
+      );
+    });
+  });
+
   it('opens on Recommended when a curator has, grouping each block into its own section', () => {
     mocks.recommendedSections = [
       { id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] },
@@ -755,7 +855,9 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getAllByRole('switch', { name: 'Ready to debate this claim' })).toHaveLength(2);
     expect(mocks.perSpaceReadinessGroups.every(groups => groups.length === 0)).toBe(true);
     // Hydrated by id — exactly the claims the graph named, nothing paged.
-    expect(mocks.entityIdLookups.at(-1)).toEqual([CLAIM_SHARED, FRESH]);
+    // Empty lookups skipped: the Featured slot hydrates through the same hook and asks for nothing
+    // when no claim is tagged, which would otherwise be the last call recorded.
+    expect(mocks.entityIdLookups.filter(ids => ids.length > 0).at(-1)).toEqual([CLAIM_SHARED, FRESH]);
     // And the graph was asked about exactly these two people.
     expect(mocks.positionParticipants.at(-1)).toEqual(['profile-local', 'profile-remote']);
   });

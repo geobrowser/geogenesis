@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 
 import type { ReactElement } from 'react';
 
@@ -11,6 +11,10 @@ import { ClaimsTab } from './claims-tab';
 
 const mocks = vi.hoisted(() => ({
   claims: [] as MatchmakingClaim[],
+  featuredClaims: [] as Array<{ claimEntityId: string; spaceId: string; name: string; description: string | null }>,
+  featuredLoading: false,
+  featuredEnabledWith: [] as boolean[],
+  debateClaimGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
   facetSpaceIds: [] as string[],
   spaceAllowlist: null as Set<string> | null,
   allowlistLoading: false,
@@ -20,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   fetchedSpaceIds: [] as string[][],
   spacesLoading: false,
   lastQuery: null as unknown,
+  lastEnabled: true,
   hasNextPage: false,
   fetchNextPage: vi.fn(),
   observed: [] as Element[],
@@ -40,8 +45,9 @@ vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => 
 }));
 
 vi.mock('./hooks', () => ({
-  useMatchmakingClaims: (query: unknown) => {
+  useMatchmakingClaims: (query: unknown, enabled: boolean) => {
     mocks.lastQuery = query;
+    mocks.lastEnabled = enabled;
     return {
       data: { pages: [{ claims: mocks.claims, next_cursor: null, facets: { space_ids: mocks.facetSpaceIds } }] },
       isLoading: false,
@@ -68,6 +74,26 @@ vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
   useLeaveDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
+  // Featured rows are hydrated by the per-space debate-claims lookup. Records what it was asked
+  // for so the suites can assert the tab only asks about spaces it may show.
+  useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
+    mocks.debateClaimGroups.push(groups);
+    return { claims: [], isLoading: false, isError: false };
+  },
+}));
+
+vi.mock('../featured-claims', async importOriginal => ({
+  ...(await importOriginal<typeof import('../featured-claims')>()),
+  useFeaturedClaims: (enabled: boolean) => {
+    mocks.featuredEnabledWith.push(enabled);
+    return {
+      claims: enabled ? mocks.featuredClaims : [],
+      claimIds: enabled ? mocks.featuredClaims.map(claim => claim.claimEntityId) : [],
+      isLoading: enabled && mocks.featuredLoading,
+      error: null,
+      refetch: vi.fn(),
+    };
+  },
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -147,6 +173,10 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 beforeEach(() => {
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
+  mocks.featuredClaims = [];
+  mocks.featuredLoading = false;
+  mocks.featuredEnabledWith = [];
+  mocks.debateClaimGroups = [];
   // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
   // unfiltered list — what every pre-existing case here runs under.
   mocks.spaceAllowlist = null;
@@ -518,4 +548,154 @@ it('asks the server for the filter the viewer picked', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
 
   expect(mocks.lastQuery).toMatchObject({ filter: 'debate_now' });
+});
+
+const FEATURED_A = '019fedb4-3f74-7c61-8d44-5fa0810e7742';
+const FEATURED_B = '019fedb5-4085-7d72-9e55-60b1921f8853';
+
+function featuredClaim(entityId: string, name: string, spaceId = SPACE_ID) {
+  return { claimEntityId: entityId, spaceId, name, description: null };
+}
+
+/** Picks an option out of the position dropdown, which opens on its current label. */
+function chooseFilter(current: string, next: string) {
+  fireEvent.click(screen.getByRole('button', { name: current }));
+  fireEvent.click(screen.getByRole('button', { name: next }));
+}
+
+// GEO-2683. Featured is the one option in this menu geo-chat knows nothing about: the tag lives in
+// the knowledge graph, so picking it swaps the list's source rather than changing a query param.
+describe('ClaimsTab -- Featured', () => {
+  it('lists the tagged claims instead of the index page', async () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+
+    chooseFilter('All claims', 'Featured');
+
+    expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    // The paged list is what Featured replaces, not something it filters. Awaited because the
+    // replaced cards animate out rather than leaving the DOM on the same tick.
+    await waitFor(() => expect(screen.queryByText('Chips are better than fries')).toBeNull());
+  });
+
+  // Featured claims are a few hundred in a corpus of hundreds of thousands, so the index is no help
+  // here and asking it for a page while Featured is showing is a request for nothing.
+  it('stops asking the index for pages while Featured is showing', () => {
+    render(<ClaimsTab />);
+    expect(mocks.lastEnabled).toBe(true);
+
+    chooseFilter('All claims', 'Featured');
+
+    expect(mocks.lastEnabled).toBe(false);
+    // Still 'all', so switching back lands on the pages already cached rather than paging again.
+    expect(mocks.lastQuery).toMatchObject({ filter: 'all' });
+  });
+
+  // The same two gates the paged list runs under: the viewer's allowlist, and whether a debate in
+  // that space could ever be published.
+  it('drops tagged claims from spaces the viewer may not be shown', () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown', OTHER_SPACE_ID),
+    ];
+    render(<ClaimsTab />);
+
+    chooseFilter('All claims', 'Featured');
+
+    expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(screen.queryByText('Cities should ban cars downtown')).toBeNull();
+  });
+
+  it('drops tagged claims from spaces a debate could never be published in', () => {
+    mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown', OTHER_SPACE_ID),
+    ];
+    render(<ClaimsTab />);
+
+    chooseFilter('All claims', 'Featured');
+
+    expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(screen.queryByText('Cities should ban cars downtown')).toBeNull();
+  });
+
+  // The sides and readiness on the cards are geo-chat's, asked for by id per space. A claim the tab
+  // has already ruled out shouldn't cost a request -- or a gateway scope on that space.
+  it('asks geo-chat only about the tagged claims it may show', () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown', OTHER_SPACE_ID),
+    ];
+    render(<ClaimsTab />);
+
+    chooseFilter('All claims', 'Featured');
+
+    expect(mocks.debateClaimGroups.at(-1)).toEqual([{ spaceId: SPACE_ID, claimIds: [FEATURED_A] }]);
+  });
+
+  // Search runs over the loaded list here -- there is no server query for it to go into -- and the
+  // set geo-chat is asked about deliberately doesn't narrow with it, so typing filters a list that
+  // is already loaded instead of restarting a fan-out on every keystroke.
+  it('searches the loaded list without re-asking geo-chat', async () => {
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    render(<ClaimsTab />);
+
+    chooseFilter('All claims', 'Featured');
+    const askedBefore = mocks.debateClaimGroups.at(-1);
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nuclear' } });
+
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+    expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(mocks.debateClaimGroups.at(-1)).toEqual(askedBefore);
+  });
+
+  // Featured is one graph query, not a paged list. `keepPreviousData` leaves the paged query's
+  // pages in place while Featured is showing, so a sentinel gated on those would page the corpus
+  // underneath a list that never grows.
+  it('places no scroll sentinel on Featured', () => {
+    mocks.hasNextPage = true;
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+
+    chooseFilter('All claims', 'Featured');
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+  });
+
+  // Featured chooses which list is on screen rather than narrowing one, so an empty tab reads as
+  // "nothing is featured" — not as filters hiding claims that are there.
+  it('says nothing is featured rather than nothing is debatable', async () => {
+    render(<ClaimsTab />);
+
+    chooseFilter('All claims', 'Featured');
+
+    await waitFor(() => expect(screen.getByText('No claims have been featured yet.')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull();
+  });
+
+  // And once one is applied, clearing it leaves the viewer on Featured rather than dropping them
+  // back onto the paged list they didn't ask for.
+  it('keeps the viewer on Featured when they clear a filter', async () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+
+    chooseFilter('All claims', 'Featured');
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nothing matches this' } });
+
+    await waitFor(() => expect(screen.getByText('No featured claims match these filters.')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+
+    await waitFor(() => expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument());
+    expect(mocks.lastEnabled).toBe(false);
+  });
 });
