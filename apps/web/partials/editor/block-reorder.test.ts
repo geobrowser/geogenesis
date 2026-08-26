@@ -1,16 +1,41 @@
+import { DndContext } from '@dnd-kit/core';
+import '@testing-library/jest-dom/vitest';
+import { cleanup, render, screen } from '@testing-library/react';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { Editor } from '@tiptap/react';
 
+import React from 'react';
+
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { makeDropZones, moveTopLevelBlock } from './block-reorder';
+import { BlockDragHandle, makeDropZones, moveTopLevelBlock } from './block-reorder';
 
 const editors: Editor[] = [];
 
 afterEach(() => {
+  cleanup();
   for (const editor of editors.splice(0)) editor.destroy();
+});
+
+describe('BlockDragHandle', () => {
+  it('bridges the gap between the visible handle and the hovered block', () => {
+    render(
+      React.createElement(
+        DndContext,
+        null,
+        React.createElement(BlockDragHandle, { childIndex: 0, top: 12, left: -32, isDragging: false })
+      )
+    );
+
+    const button = screen.getByRole('button', { name: 'Drag to reorder block' });
+    const hoverBridge = button.parentElement;
+
+    expect(button).toHaveClass('size-6');
+    expect(hoverBridge).toHaveAttribute('data-block-drag-handle');
+    expect(hoverBridge).toHaveClass('w-8');
+  });
 });
 
 describe('moveTopLevelBlock', () => {

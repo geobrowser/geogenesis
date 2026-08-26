@@ -225,7 +225,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
   );
 }
 
-function BlockDragHandle({
+export function BlockDragHandle({
   childIndex,
   top,
   left,
@@ -242,19 +242,23 @@ function BlockDragHandle({
   });
 
   return (
-    <button
-      ref={setNodeRef}
-      type="button"
+    <div
       data-block-drag-handle
-      aria-label="Drag to reorder block"
-      title="Drag to reorder"
-      className="absolute z-30 flex size-6 cursor-grab items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01 active:cursor-grabbing"
+      className="absolute z-30 flex h-6 w-8 items-center"
       style={{ top, left, opacity: isDragging ? 0 : 1 }}
-      {...attributes}
-      {...listeners}
     >
-      <OrderDots color="currentColor" />
-    </button>
+      <button
+        ref={setNodeRef}
+        type="button"
+        aria-label="Drag to reorder block"
+        title="Drag to reorder"
+        className="flex size-6 cursor-grab items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01 active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        <OrderDots color="currentColor" />
+      </button>
+    </div>
   );
 }
 
