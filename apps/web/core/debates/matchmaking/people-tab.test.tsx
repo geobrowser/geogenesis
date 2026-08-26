@@ -89,6 +89,46 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('PeopleTab', () => {
+  // Filtered client-side: the endpoint has no search parameter and returns everyone available in
+  // one unpaginated list, so there is nothing to page back for.
+  it('narrows the list to people matching the search', () => {
+    render(<PeopleTab />);
+
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+    expect(screen.getByText('Vytautas')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'artur' } });
+
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+    expect(screen.queryByText('Vytautas')).not.toBeInTheDocument();
+  });
+
+  it('says so when a search matches nobody, and offers a way back', async () => {
+    // Distinct from the "nobody is available" state: one is a filter the viewer can undo, the
+    // other is the room being empty.
+    render(<PeopleTab />);
+
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'nobody-by-this-name' } });
+
+    // The empty state cross-fades in through HubSwap, so it arrives after the list leaves.
+    expect(await screen.findByText('Nobody available matches that search.')).toBeInTheDocument();
+    expect(screen.queryByText('Nobody is available to debate right now.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    expect(await screen.findByText('Arturas')).toBeInTheDocument();
+  });
+
+  it('pins search alongside a sent request rather than in a second sticky', () => {
+    // Two stickies would both claim top-0 and overlap; the card is conditional, so search could
+    // not be offset by a known height either.
+    mocks.challenge = challenge('requester');
+    render(<PeopleTab />);
+
+    const pinned = screen.getByLabelText('Search people').closest('.sticky');
+    expect(pinned).not.toBeNull();
+    expect(card()?.closest('.sticky')).toBe(pinned);
+  });
+
   it('shows no request card when nothing is outstanding', () => {
     render(<PeopleTab />);
 

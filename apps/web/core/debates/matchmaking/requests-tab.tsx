@@ -7,7 +7,7 @@ import { Text } from '~/design-system/text';
 import { useDebateActivity } from '../hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
-import { SpaceTopicFilters } from './claims-tab';
+import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
@@ -81,22 +81,25 @@ export function RequestsTab() {
   const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge;
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3">
-      <SpaceTopicFilters
-        spaceId={spaceId}
-        onSpaceChange={setSpaceId}
-        facetSpaceIds={facetSpaceIds}
-        leading={
-          <HubFilterMenu
-            label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
-            options={STATUS_OPTIONS}
-            value={status}
-            onChange={setStatus}
-          />
-        }
-      />
+    <div className="flex flex-col">
+      <HubStickyControls>
+        <SpaceTopicFilters
+          spaceId={spaceId}
+          onSpaceChange={setSpaceId}
+          facetSpaceIds={facetSpaceIds}
+          leading={
+            <HubFilterMenu
+              label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
+              options={STATUS_OPTIONS}
+              value={status}
+              onChange={setStatus}
+            />
+          }
+        />
+      </HubStickyControls>
 
-      <HubQueryState
+      <div className="flex flex-col gap-3 px-4 py-3">
+        <HubQueryState
         isLoading={requestsQuery.isLoading}
         error={requestsQuery.error}
         onRetry={() => void requestsQuery.refetch()}
@@ -139,7 +142,8 @@ export function RequestsTab() {
             </RequestSection>
           ) : null}
         </div>
-      </HubQueryState>
+        </HubQueryState>
+      </div>
     </div>
   );
 }
