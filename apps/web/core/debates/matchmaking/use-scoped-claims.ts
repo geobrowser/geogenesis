@@ -84,10 +84,17 @@ export function useScopedMatchmakingClaims(
   const pages = React.useMemo(() => (masked ? [] : (claimsQuery.data?.pages ?? [])), [claimsQuery.data, masked]);
   const facets = pages[0]?.facets;
 
+  // An unusable scope is an answer, not a silence. The query is deliberately never made, so the
+  // facets never arrive — and read as "not known yet" that would leave a selected space or topic
+  // held forever, filtering a list that has nothing in it and unpickable from a menu that is
+  // empty. Knowing there is nothing to show is knowing the menu.
+  const facetsSettled =
+    !scope.pending && (unusable || (facets !== undefined && !claimsQuery.isLoading && !claimsQuery.isPlaceholderData));
+
   return {
     pages,
     facets,
-    facetsSettled: facets !== undefined && !claimsQuery.isLoading && !claimsQuery.isPlaceholderData,
+    facetsSettled,
     unusable,
     hasNextPage: !masked && Boolean(claimsQuery.hasNextPage),
     isLoading: claimsQuery.isLoading,

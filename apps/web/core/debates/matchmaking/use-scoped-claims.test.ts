@@ -103,6 +103,20 @@ describe('useScopedMatchmakingClaims', () => {
     expect(mocks.enabled).toBe(false);
   });
 
+  // A scope that can show nothing is a finished answer about the menu: empty. Read as "not known
+  // yet" instead, a selection made before the scope narrowed would be held forever, filtering an
+  // empty list from a chip the empty menu can't unpick.
+  it('calls an unusable scope settled, so a stranded selection can be let go', () => {
+    expect(scoped({ spaceIds: [], pending: false }).result.current.facetsSettled).toBe(true);
+    expect(scoped({ spaceIds: ['space-1'], pending: false }, true).result.current.facetsSettled).toBe(true);
+  });
+
+  // But only once it is known to be unusable — a scope still resolving says nothing either way.
+  it('calls nothing settled while the scope is still resolving', () => {
+    expect(scoped({ spaceIds: [], pending: true }).result.current.facetsSettled).toBe(false);
+    expect(scoped({ spaceIds: null, pending: true }).result.current.facetsSettled).toBe(false);
+  });
+
   // The difference between "no topics" and "not known yet", which is what stops a viewer's
   // selection being cleared on a slow load.
   it('calls the facets settled only once they answer the scope in force', () => {

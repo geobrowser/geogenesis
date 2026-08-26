@@ -213,7 +213,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // — built from the claims this very query returns. Going through it would make the query depend
   // on its own result. The allowlist depends on nothing here, so asking for those types directly
   // breaks the loop.
-  const allowlistSpaceIds = React.useMemo(() => (spaceAllowlist ? [...spaceAllowlist] : []), [spaceAllowlist]);
+  // Same fallback as the Claims tab: an allowlist that settled without an answer stops narrowing
+  // by *it*, not by everything. The publishable set answers a different question and still bounds
+  // which spaces can be shown, so the scope — and the type lookup that trims it further — run over
+  // whichever of the two is known.
+  const candidateScopeIds = spaceAllowlist ?? publishableSpaceIds;
+  const allowlistSpaceIds = React.useMemo(() => (candidateScopeIds ? [...candidateScopeIds] : []), [candidateScopeIds]);
   const {
     spacesById: allowlistSpaces,
     isLoading: allowlistSpacesPending,
@@ -226,13 +231,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const eligibleSpaceIds = React.useMemo(
     () =>
       eligibleClaimSpaceIds(
-        spaceAllowlist,
+        candidateScopeIds,
         id =>
           isClaimSpaceAllowed(id, spaceAllowlist) &&
           isSpaceDebatePublishable(id, publishableSpaceIds) &&
           allowlistTypePublishable(id)
       ),
-    [allowlistTypePublishable, publishableSpaceIds, spaceAllowlist]
+    [allowlistTypePublishable, candidateScopeIds, publishableSpaceIds, spaceAllowlist]
   );
 
   // The empty-scope case belongs to the shared hook below. This is the same problem reached the

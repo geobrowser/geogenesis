@@ -38,14 +38,14 @@ export function availableTopics(
  * otherwise leave the viewer on an empty list, filtered by a chip that is no longer in the
  * menu to unpick.
  *
- * `isResolved` says whether `available` is the finished answer for the current filters. It is
- * passed rather than inferred from emptiness because the two callers differ: the rematch
- * picker builds its topics from the same entities its claim rows come from, so an empty menu
- * genuinely means "these claims carry no topics", while the Claims tab resolves topics in a
- * second Knowledge Graph lookup that lags the claims — and an empty menu there is usually just
- * "not back yet". Treating unresolved as "nothing matches" would throw away a selection that is
- * about to be valid again; treating "genuinely none" as unresolved would strand the viewer on
- * an empty list, which is the bug this is here to fix.
+ * `isResolved` says whether `available` is the finished answer for the current filters, and is
+ * passed rather than inferred from emptiness because an empty menu means two different things.
+ * Where the topics come from the same rows the list is drawn from, empty genuinely means "these
+ * claims carry no topics". Where they ride a server facet, empty is usually "the request for
+ * these filters hasn't come back", since the facets arrive with page one and are absent until it
+ * lands. Treating unresolved as "nothing matches" would throw away a selection that is about to
+ * be valid again; treating "genuinely none" as unresolved would strand the viewer on an empty
+ * list, filtered by a chip the menu no longer offers to unpick — the bug this is here to fix.
  */
 export function keepSelectableTopic(
   topicId: string | null,

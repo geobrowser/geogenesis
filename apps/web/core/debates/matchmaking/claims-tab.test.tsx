@@ -685,6 +685,30 @@ describe('topic menu', () => {
     expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] });
   });
 
+  // The allowlist settling without an answer stops it narrowing, deliberately — a list that is too
+  // wide beats a panel that never fills. That is a reason to stop narrowing by the allowlist, not
+  // to stop narrowing: the publishable set is a different question, and the rows are still cut by
+  // it. Left unscoped, the facets would name every space geo-chat knows while the list showed only
+  // the publishable ones.
+  it('falls back to the publishable spaces when the allowlist settles with nothing', () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = false;
+    mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] });
+  });
+
+  // Both unknown is the only case with nothing left to narrow by.
+  it('asks unscoped only when neither lookup has an answer', () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = false;
+    mocks.publishableSpaceIds = null;
+    render(<ClaimsTab />);
+
+    expect(mocks.lastQuery).toMatchObject({ spaceIds: null });
+  });
+
   // "No eligible spaces" and "no space filter" are the same request on the wire, so the query
   // has to be skipped rather than sent unscoped: the rows would all be dropped here, but the
   // facets would not, leaving a menu whose every option leads to an empty list.

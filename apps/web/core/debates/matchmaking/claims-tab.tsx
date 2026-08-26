@@ -86,9 +86,16 @@ export function ClaimsTab() {
   // Scopes the query — and so the facets it returns — to the spaces this viewer can actually be
   // shown claims from. Without it the topic facet describes every space geo-chat knows, and a
   // topic living only outside this set is offered over a list the gates below then empty.
+  //
+  // The allowlist can settle without an answer, which deliberately does not filter — a list that
+  // is too wide beats a panel that never fills. That is a reason to stop narrowing by *it*, not a
+  // reason to stop narrowing: the publishable set is a different question, and when it has an
+  // answer it still bounds which spaces can be shown. Falling through to it keeps the facets over
+  // the same spaces the rows are drawn from, rather than over everything geo-chat knows.
+  const candidateSpaceIds = spaceAllowlist ?? publishableSpaceIds;
   const eligibleSpaceIds = React.useMemo(
-    () => eligibleClaimSpaceIds(spaceAllowlist, spaceShowsClaims),
-    [spaceAllowlist, spaceShowsClaims]
+    () => eligibleClaimSpaceIds(candidateSpaceIds, spaceShowsClaims),
+    [candidateSpaceIds, spaceShowsClaims]
   );
 
   const query = React.useMemo<Omit<MatchmakingClaimsQuery, 'spaceIds'>>(

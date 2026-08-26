@@ -21,12 +21,15 @@ import * as React from 'react';
  * Pass a key that identifies the scope, and the query's own `isPlaceholderData`.
  */
 export function useScopeHeldOver(scopeKey: string | null, isPlaceholderData: boolean): boolean {
-  const fetchedUnder = React.useRef(scopeKey);
+  const [fetchedUnder, setFetchedUnder] = React.useState(scopeKey);
 
-  // Written during render, and safe for the same reason `useStableListOrder`'s is: the result is a
-  // fixed point. Settled data means the scope in force is the one it was fetched under, so a
-  // discarded or double-invoked render recomputes the same answer.
-  if (!isPlaceholderData) fetchedUnder.current = scopeKey;
+  // React's sanctioned "adjust state during render" escape hatch rather than a ref written in the
+  // same place. A ref would survive a render that never commits: a speculative pass for scope B
+  // could record B, be thrown away, and leave the committed tree for scope A masking its own
+  // pages. State set during render is discarded with the render that set it, so an abandoned pass
+  // leaves nothing behind. React re-runs this component immediately with the new value, before
+  // anything commits, so it costs no extra frame.
+  if (!isPlaceholderData && fetchedUnder !== scopeKey) setFetchedUnder(scopeKey);
 
-  return fetchedUnder.current !== scopeKey;
+  return fetchedUnder !== scopeKey;
 }
