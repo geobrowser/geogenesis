@@ -113,9 +113,24 @@ export function parseRoomName(roomName: string): { spaceId: string; callId: stri
 // reschedule.
 export const OCCURRENCE_MATCH_TOLERANCE_MS = 15 * 60 * 1000;
 
-/** A call is joinable from 15min before start until 30min after end. */
+/** A call is joinable from 15min before start until the call-end countdown begins. */
 export const LIVE_WINDOW_BEFORE_MS = 15 * 60 * 1000;
-export const LIVE_WINDOW_AFTER_MS = 30 * 60 * 1000;
+
+/**
+ * Derived from {@link CALL_END_TIMER_DELAY_MINUTES}, deliberately, rather than written as
+ * its own literal.
+ *
+ * It used to be an independent `30 * 60 * 1000`, which happened to equal
+ * {@link LIVE_MEETING_GRACE_MINUTES} — so the join window closed at the *exact instant* of
+ * the hard cutoff. Two consequences, both GEO-2584: joining in the last five minutes bought
+ * a session that `CallEndTimer` ended almost immediately (at the boundary, on its very first
+ * tick, since `update()` runs on mount), and because admission was still permitted right up
+ * to that instant, rejoining looped — reported as "got kicked out twice".
+ *
+ * Closing admission when the countdown *starts* keeps the two ordered by construction:
+ * anyone let in always sees the banner count down before being disconnected.
+ */
+export const LIVE_WINDOW_AFTER_MS = CALL_END_TIMER_DELAY_MINUTES * 60 * 1000;
 
 export function isOccurrenceLive(startMs: number, endMs: number, now = Date.now()): boolean {
   return now >= startMs - LIVE_WINDOW_BEFORE_MS && now <= endMs + LIVE_WINDOW_AFTER_MS;

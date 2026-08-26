@@ -31,7 +31,6 @@ import {
   stopRecording,
 } from '~/core/community-calls/api';
 import { LAST_EDITOR_CONFIRM_DELAY_MS } from '~/core/community-calls/constants';
-import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { formatDuration } from '~/core/community-calls/format';
 import { Recording, parseParticipantMetadata } from '~/core/community-calls/types';
 import { useCallTimeUp } from '~/core/community-calls/use-call-time-up';
@@ -40,6 +39,7 @@ import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call
 import { ChatEntry, usePersistentChat } from '~/core/community-calls/use-persistent-chat';
 import { useReconnectionState } from '~/core/community-calls/use-reconnection-state';
 import { useRecordingMetadataSync } from '~/core/community-calls/use-recording-metadata-sync';
+import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 
 import { Avatar } from '~/design-system/avatar';
@@ -220,10 +220,22 @@ function RoomBody({
   const [leaveDialogOpen, setLeaveDialogOpen] = React.useState(false);
   const [endCallBusy, setEndCallBusy] = React.useState(false);
 
+  // The forced end-of-call cutoff disconnects the room itself, so it reaches
+  // `useReconnectionState` as CLIENT_INITIATED — identical to pressing Leave, and therefore
+  // silently navigating away. Record that it was the cutoff before disconnecting, so the
+  // user is told the call ended rather than just finding themselves back on the calls page
+  // (GEO-2584). The ref is what the disconnect handler reads: `room.disconnect()` can emit
+  // before React has re-rendered with the new state.
+  const [endedByCutoff, setEndedByCutoff] = React.useState(false);
+  const endedByCutoffRef = React.useRef(false);
+
   // Distinguishes an intentional Leave (CLIENT_INITIATED) — navigate away directly —
   // from a drop that should show the reconnection overlay instead of silently
   // kicking the user out. See use-reconnection-state.ts.
-  const reconnection = useReconnectionState(room, () => router.push(backHref));
+  const reconnection = useReconnectionState(room, () => {
+    if (endedByCutoffRef.current) return;
+    router.push(backHref);
+  });
   const [rejoinBusy, setRejoinBusy] = React.useState(false);
   const [rejoinError, setRejoinError] = React.useState<string | null>(null);
 
@@ -305,10 +317,14 @@ function RoomBody({
   };
 
   // Forced-timeout path: fires once when the CallEndTimer banner counts down to
-  // zero, converging on the same disconnect + navigate-away cleanup as the manual
-  // leave dialog. No recording-stop confirmation on this path — the call ends
-  // regardless of whether a recording is still running.
-  const handleTimeUp = useCallTimeUp(onLeave);
+  // zero, converging on the same disconnect as the manual leave dialog but flagging
+  // itself first so the overlay can say why. No recording-stop confirmation on this
+  // path — the call ends regardless of whether a recording is still running.
+  const handleTimeUp = useCallTimeUp(() => {
+    endedByCutoffRef.current = true;
+    setEndedByCutoff(true);
+    onLeave();
+  });
 
   const onStopRecordingAndLeave = async () => {
     if (endCallBusy) return;
@@ -511,7 +527,7 @@ function RoomBody({
       />
 
       <ReconnectionOverlay
-        status={reconnection.status}
+        status={endedByCutoff ? 'ended' : reconnection.status}
         disconnectReason={reconnection.disconnectReason}
         onRejoin={handleRejoin}
         onLeave={() => router.push(backHref)}
