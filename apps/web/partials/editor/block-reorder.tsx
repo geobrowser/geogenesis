@@ -2,7 +2,6 @@
 
 import {
   DndContext,
-  DragCancelEvent,
   DragEndEvent,
   DragOverEvent,
   DragOverlay,
@@ -180,11 +179,6 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     updateHoveredChildIndex(null);
   };
 
-  const handleDragCancel = (event: DragCancelEvent) => {
-    releasePointerDragFocus(event.activatorEvent);
-    resetDragState();
-  };
-
   const handleDragStart = (event: DragStartEvent) => {
     if (!enabled) return;
 
@@ -215,7 +209,6 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       onReorder();
     }
 
-    releasePointerDragFocus(event.activatorEvent);
     resetDragState();
   };
 
@@ -226,7 +219,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
-      onDragCancel={handleDragCancel}
+      onDragCancel={resetDragState}
       onDragEnd={handleDragEnd}
     >
       {children}
@@ -276,16 +269,6 @@ function getBlockDragHandleKey(editor: Editor, childIndex: number) {
 
   const blockId = editor.state.doc.child(childIndex).attrs.id;
   return typeof blockId === 'string' && blockId.length > 0 ? blockId : `child-${childIndex}`;
-}
-
-/** Pointer activation should not leave a handle visibly focused after drop. */
-export function releasePointerDragFocus(activatorEvent: Event) {
-  if (activatorEvent.type === 'keydown') return;
-
-  const target = activatorEvent.target;
-  if (!(target instanceof Element)) return;
-
-  target.closest<HTMLElement>('[data-block-drag-handle] button')?.blur();
 }
 
 export function BlockGutterHoverArea({
@@ -357,6 +340,12 @@ export function BlockDragHandle({
         onBlur={() => setIsFocused(false)}
         {...attributes}
         {...listeners}
+        onPointerDown={event => {
+          // Pointer activation should not move browser focus away from the
+          // editor. Keyboard users can still focus and operate the handle.
+          event.preventDefault();
+          listeners?.onPointerDown?.(event);
+        }}
       >
         <OrderDots color="currentColor" />
       </button>

@@ -17,7 +17,6 @@ import {
   getNextKeyboardDropBoundary,
   makeDropZones,
   moveTopLevelBlock,
-  releasePointerDragFocus,
 } from './block-reorder';
 
 const editors: Editor[] = [];
@@ -75,7 +74,7 @@ describe('BlockDragHandle', () => {
     expect(handle).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
   });
 
-  it('releases pointer focus after a drag so the old block slot does not stay highlighted', () => {
+  it('prevents pointer activation from moving browser focus to the drag handle', () => {
     render(
       React.createElement(
         DndContext,
@@ -91,13 +90,10 @@ describe('BlockDragHandle', () => {
     );
 
     const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
-    button.focus();
-    const pointerDown = new MouseEvent('pointerdown', { bubbles: true });
+    const pointerDown = new MouseEvent('pointerdown', { bubbles: true, cancelable: true });
     button.dispatchEvent(pointerDown);
-    expect(button).toHaveFocus();
 
-    releasePointerDragFocus(pointerDown);
-
+    expect(pointerDown.defaultPrevented).toBe(true);
     expect(button).not.toHaveFocus();
   });
 });
