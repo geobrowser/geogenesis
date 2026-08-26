@@ -6,6 +6,8 @@ import type { ReactElement } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_IS_FACTUAL_PROPERTY_ID } from '~/core/claims/ontology';
+
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
 
@@ -15,6 +17,15 @@ const mocks = vi.hoisted(() => ({
   featuredLoading: false,
   featuredEnabledWith: [] as boolean[],
   debateClaimGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
+  claimEntityLookups: [] as string[][],
+  claimEntities: [] as Array<{
+    id: string;
+    name: string | null;
+    description: string | null;
+    spaces: string[];
+    values: Array<{ property: { id: string }; spaceId: string; value: string }>;
+    relations: Array<{ type: { id: string }; toEntity: { id: string; name: string | null } }>;
+  }>,
   facetSpaceIds: [] as string[],
   spaceAllowlist: null as Set<string> | null,
   allowlistLoading: false,
@@ -127,6 +138,15 @@ vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [] }),
 }));
 
+// The tab reads topics and the "Is factual" value through the picker's narrow projection. Recorded
+// so a case can say which ids it asked for; `entities` lets one supply the values back.
+vi.mock('../claim-picker-page', () => ({
+  useClaimEntitiesByIds: (ids: string[]) => {
+    mocks.claimEntityLookups.push(ids);
+    return { entities: mocks.claimEntities.filter(entity => ids.includes(entity.id)), isLoading: false, error: null };
+  },
+}));
+
 function render(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
@@ -195,6 +215,8 @@ beforeEach(() => {
   mocks.featuredLoading = false;
   mocks.featuredEnabledWith = [];
   mocks.debateClaimGroups = [];
+  mocks.claimEntityLookups = [];
+  mocks.claimEntities = [];
   // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
   // unfiltered list — what every pre-existing case here runs under.
   mocks.spaceAllowlist = null;
@@ -597,7 +619,7 @@ describe('ClaimsTab', () => {
     render(<ClaimsTab />);
     await showAllClaims();
 
-    expect(mocks.fetchedSpaceIds.flat()).toEqual([OTHER_SPACE_ID]);
+    expect([...new Set(mocks.fetchedSpaceIds.flat())]).toEqual([OTHER_SPACE_ID]);
   });
 });
 
@@ -669,6 +691,35 @@ describe('ClaimsTab -- Featured', () => {
     expect(mocks.lastEnabled).toBe(true);
   });
 
+  // The lookup this replaced was `useQueryEntities`, which defaults to nine rows and slices to them
+  // — so every claim after the ninth drew as a stance claim with no topics, whatever its own "Is
+  // factual" value said. The slicing was inside that hook, so a mocked hook can't reproduce it;
+  // what this pins is the half that lives here: the whole id set is asked for, and the response
+  // kind is read off the answer rather than defaulted.
+  it('asks for every claim it lists and reads each one’s response kind', () => {
+    const ids = Array.from(
+      { length: 12 },
+      (_, index) => `019fedb6-0000-7000-8000-00000000${String(index).padStart(4, '0')}`
+    );
+    mocks.featuredClaims = ids.map((id, index) => featuredClaim(id, `Claim number ${index}`));
+    // The last one is factual, so its sides are Verify/Dispute rather than Agree/Disagree.
+    mocks.claimEntities = [
+      {
+        id: ids.at(-1)!,
+        name: 'Claim number 11',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [{ property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID }, spaceId: SPACE_ID, value: '1' }],
+        relations: [],
+      },
+    ];
+    render(<ClaimsTab />);
+
+    // Asked for all twelve, not a nine-row slice.
+    expect(mocks.claimEntityLookups.at(-1)).toHaveLength(12);
+    expect(screen.getByRole('button', { name: /Verify/ })).toBeInTheDocument();
+  });
+
   // The same two gates the paged list runs under: the viewer's allowlist, and whether a debate in
   // that space could ever be published.
   it('drops tagged claims from spaces the viewer may not be shown', () => {
@@ -693,6 +744,22 @@ describe('ClaimsTab -- Featured', () => {
 
     expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
     expect(screen.queryByText('Cities should ban cars downtown')).toBeNull();
+  });
+
+  // A claim can be tagged in several spaces. Collapsing to one row before the gates would let a
+  // space the viewer can't be shown stand for the claim and drop it, though it is featured in one
+  // they can.
+  it('keeps a claim tagged in both a shown and a hidden space', () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy', OTHER_SPACE_ID),
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+    ];
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    // And on the tag the viewer may actually be shown, so geo-chat is asked in that space.
+    expect(mocks.debateClaimGroups.at(-1)).toEqual([{ spaceId: SPACE_ID, claimIds: [FEATURED_A] }]);
   });
 
   // The sides and readiness on the cards are geo-chat's, asked for by id per space. A claim the tab

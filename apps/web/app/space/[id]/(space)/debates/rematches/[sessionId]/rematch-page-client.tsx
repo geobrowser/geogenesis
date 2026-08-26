@@ -28,7 +28,7 @@ import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
-import { useFeaturedClaims } from '~/core/debates/featured-claims';
+import { dedupeFeaturedClaims, useFeaturedClaims } from '~/core/debates/featured-claims';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
   useAcceptDebateRematchRequest,
@@ -134,6 +134,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // fix the default before that lookup settles.
   const [chosenSource, setChosenSource] = React.useState<ClaimsSource | null>(null);
 
+  // Claims is where the picker opens, whatever its source turns out to be. The strip no longer
+  // shifts under the viewer as lookups land: which claims Claims shows is the menu's business now,
+  // and the menu says so in words rather than by growing a tab.
+  const tab: PickerTab = chosenTab ?? 'claims';
+  const setTab = setChosenTab;
+
   const savedClaimsQuery = useDebateRematchClaims(sessionId);
   const createRequest = useCreateDebateRematchRequest(sessionId);
   const leaveSession = useLeaveDebateRematch(sessionId);
@@ -218,16 +224,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Recommended a moment later.
   const sourceUndecided = chosenSource === null && recommendedLoading;
   const source: ClaimsSource = chosenSource ?? (hasRecommended ? 'recommended' : 'featured');
-  const featuredEnabled = source === 'featured' && !sourceUndecided;
-  const { claims: featuredCatalog, isLoading: featuredCatalogLoading } = useFeaturedClaims(featuredEnabled);
+  // Gated on the tab too: a remembered Featured source shouldn't keep a graph query alive behind the
+  // opponent's positions, which draw from somewhere else entirely.
+  const featuredEnabled = tab === 'claims' && source === 'featured' && !sourceUndecided;
+  const {
+    claims: featuredCatalog,
+    isLoading: featuredCatalogLoading,
+    error: featuredCatalogError,
+  } = useFeaturedClaims(featuredEnabled);
 
+  // Collapsed to one row per claim *after* the allowlist, not before. A claim can be tagged in
+  // several spaces, and deduplicating first would let a space outside the allowlist stand for a
+  // claim featured in one inside it — dropping it from the list entirely.
   const featuredClaimIds = React.useMemo(
     () =>
       allowlistPending
         ? []
-        : featuredCatalog
-            .filter(claim => isClaimSpaceAllowed(claim.spaceId, spaceAllowlist))
-            .map(claim => claim.claimEntityId),
+        : dedupeFeaturedClaims(featuredCatalog.filter(claim => isClaimSpaceAllowed(claim.spaceId, spaceAllowlist))).map(
+            claim => claim.claimEntityId
+          ),
     [allowlistPending, featuredCatalog, spaceAllowlist]
   );
 
@@ -475,7 +490,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // index has not paged to yet and belong in a list of everything; Featured is a few hundred claims
   // the index already knows, so folding them in would pin them above what the viewer searched for.
   const featuredClaimsSettling =
-    featuredCatalogLoading || featuredEntitiesQuery.isLoading || featuredClaimsQuery.isLoading;
+    allowlistPending || featuredCatalogLoading || featuredEntitiesQuery.isLoading || featuredClaimsQuery.isLoading;
   const featuredClaimsNow = React.useMemo(
     () =>
       featuredClaimsSettling
@@ -639,12 +654,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const opponentCountPending = opponentClaims.length === 0 && (positions.isLoading || opponentClaimsSettling);
 
-  // Claims is where the picker opens, whatever its source turns out to be. The strip no longer
-  // shifts under the viewer as lookups land: which claims Claims shows is the menu's business now,
-  // and the menu says so in words rather than by growing a tab.
-  const tab: PickerTab = chosenTab ?? 'claims';
-  const setTab = setChosenTab;
-
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu.
   const sourceOptions = React.useMemo<HubFilterOption<ClaimsSource>[]>(
@@ -740,7 +749,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       : source === 'all'
         ? browsedClaimsQuery.error
         : source === 'featured'
-          ? (featuredEntitiesQuery.error ?? featuredClaimsQuery.error)
+          ? (featuredCatalogError ?? featuredEntitiesQuery.error ?? featuredClaimsQuery.error)
           : curatedClaimsQuery.error);
 
   // Recommended groups by block rather than listing flat, but narrows on the same filters.

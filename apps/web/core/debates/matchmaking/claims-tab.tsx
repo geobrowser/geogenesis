@@ -1,7 +1,5 @@
 'use client';
 
-import { keepPreviousData } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -12,7 +10,6 @@ import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sent
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { responsePositionLabel } from '~/core/responses/entity-response';
-import { useQueryEntities } from '~/core/sync/use-store';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
@@ -25,8 +22,14 @@ import type {
   MatchmakingClaimsQuery,
   MatchmakingTopic,
 } from '../api';
+import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { isClaimSpaceAllowed } from '../claim-space-allowlist';
-import { type FeaturedClaim, featuredClaimIdsBySpace, useFeaturedClaims } from '../featured-claims';
+import {
+  type FeaturedClaim,
+  dedupeFeaturedClaims,
+  featuredClaimIdsBySpace,
+  useFeaturedClaims,
+} from '../featured-claims';
 import { useDebateClaimsBySpaces } from '../hooks';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
@@ -146,11 +149,14 @@ export function ClaimsTab() {
     refetch: refetchFeatured,
   } = useFeaturedClaims(featured);
 
+  // Collapsed to one row per claim *after* the space gates, not before. A claim can be tagged in
+  // several spaces, and deduplicating first would let a space the viewer can't be shown stand for a
+  // claim that is featured in one they can — dropping it from the list entirely.
   const featuredAllowed = React.useMemo(
     () =>
       !featured || spacesPending
         ? NO_FEATURED_CLAIMS
-        : featuredCatalog.filter(claim => spaceShowsClaims(claim.spaceId)),
+        : dedupeFeaturedClaims(featuredCatalog.filter(claim => spaceShowsClaims(claim.spaceId))),
     [featured, featuredCatalog, spaceShowsClaims, spacesPending]
   );
 
@@ -195,11 +201,12 @@ export function ClaimsTab() {
         : [...new Set(serverClaims.map(entry => entry.claim.claim_entity_id).filter(validateEntityId))],
     [featured, featuredMatching, serverClaims]
   );
-  const { entities: claimEntities } = useQueryEntities({
-    where: { id: { in: claimEntityIds } },
-    enabled: claimEntityIds.length > 0,
-    placeholderData: keepPreviousData,
-  });
+  // The picker's narrow projection rather than `useQueryEntities`: that one defaults to nine rows
+  // and slices to it, so a list of any length came back with topics for the first nine claims only
+  // — and Featured leans on the same lookup for the "Is factual" value that decides a card's side
+  // labels. This asks in batches of a hundred and pulls six fields instead of every value and
+  // relation on the entity.
+  const { entities: claimEntities } = useClaimEntitiesByIds(claimEntityIds);
 
   // Featured claims in the shape the rest of the tab already speaks. geo-chat has a row for a claim
   // only once someone has taken a side on it, so everything it would carry has a graph-derived

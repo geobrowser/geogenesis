@@ -10,6 +10,7 @@ import { parse } from 'graphql';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { FEATURED_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import { graphql } from '~/core/io/graphql-client';
+import { devLog } from '~/core/utils/dev-log';
 
 /**
  * GEO-2683. A claim is featured when a curator tags it — a `Tags` relation pointing at the
@@ -32,15 +33,21 @@ const FEATURED_CLAIMS_SOURCE = /* GraphQL */ `
     $typesPropertyId: UUID!
     $claimTypeId: UUID!
     $first: Int!
+    $after: Cursor
   ) {
     relationsConnection(
       first: $first
+      after: $after
       filter: {
         typeId: { is: $tagPropertyId }
         toEntityId: { is: $featuredTagId }
         fromEntity: { relations: { some: { typeId: { is: $typesPropertyId }, toEntityId: { is: $claimTypeId } } } }
       }
     ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
       nodes {
         spaceId
         fromEntity {
@@ -56,6 +63,7 @@ const FEATURED_CLAIMS_SOURCE = /* GraphQL */ `
 
 type FeaturedClaimsQuery = {
   relationsConnection: {
+    pageInfo: { hasNextPage: boolean; endCursor: string | null } | null;
     nodes: Array<{
       spaceId: string | null;
       fromEntity: {
@@ -75,6 +83,7 @@ type FeaturedClaimsVariables = {
   typesPropertyId: string;
   claimTypeId: string;
   first: number;
+  after: string | null;
 };
 
 const featuredClaimsDocument = parse(FEATURED_CLAIMS_SOURCE) as TypedDocumentNode<
@@ -82,12 +91,18 @@ const featuredClaimsDocument = parse(FEATURED_CLAIMS_SOURCE) as TypedDocumentNod
   FeaturedClaimsVariables
 >;
 
+/** Rows per request. The whole tagged set is what both callers filter and show, so it is paged
+ * through to exhaustion rather than sampled — a single capped request would decide what to keep by
+ * relation id, which is a random v4 and so has no relationship to the order this list is shown in. */
+const FEATURED_CLAIMS_PAGE_SIZE = 500;
+
 /**
- * A ceiling rather than a page size: the whole featured set is what both callers filter and show,
- * so it is fetched in one request. Set well above the current few hundred so growth doesn't
- * silently truncate the list, and low enough that a tagging mistake can't fetch the corpus.
+ * A runaway guard, not a product limit: a few hundred claims are tagged today, so this is an order
+ * of magnitude of headroom, and reaching it means a mis-tagging has pointed the whole corpus at
+ * Featured. If curation ever legitimately grows past it, the answer is a ranked server-side
+ * endpoint rather than a bigger number here — the client is already sorting the entire set.
  */
-export const FEATURED_CLAIMS_LIMIT = 500;
+export const FEATURED_CLAIMS_LIMIT = 5_000;
 
 /** A claim a curator has tagged Featured, and the space they tagged it in. */
 export type FeaturedClaim = {
@@ -117,18 +132,33 @@ export function compareFeaturedClaims(a: FeaturedClaim, z: FeaturedClaim): numbe
   return z.claimEntityId.localeCompare(a.claimEntityId);
 }
 
-function decodeFeaturedClaims(data: FeaturedClaimsQuery): FeaturedClaim[] {
-  const claims: FeaturedClaim[] = [];
+/**
+ * One claim per id, keeping the first entry.
+ *
+ * Deliberately not done while decoding. A claim can be tagged in several spaces, and which of those
+ * a viewer may be shown is a question only the callers can answer — deduplicating first would make
+ * an arbitrary space authoritative and drop the claim entirely when that one happens to be outside
+ * the viewer's allowlist, even though it is featured in a space they can see. So every tag survives
+ * the fetch and the callers collapse them *after* filtering.
+ */
+export function dedupeFeaturedClaims(claims: FeaturedClaim[]): FeaturedClaim[] {
   const seen = new Set<string>();
+  return claims.filter(claim => {
+    if (seen.has(claim.claimEntityId)) return false;
+    seen.add(claim.claimEntityId);
+    return true;
+  });
+}
+
+type FeaturedClaimsPage = { claims: FeaturedClaim[]; endCursor: string | null; hasNextPage: boolean };
+
+function decodeFeaturedClaimsPage(data: FeaturedClaimsQuery): FeaturedClaimsPage {
+  const claims: FeaturedClaim[] = [];
 
   for (const node of data.relationsConnection?.nodes ?? []) {
     // A claim with no name has nothing to render, and one whose tag carries no space can't be
     // grouped for the geo-chat lookups or tested against the viewer's spaces.
     if (!node?.fromEntity?.name || !node.spaceId) continue;
-    // The same claim can be tagged in more than one space. First tag wins: the alternative is
-    // listing the claim twice, and the card is keyed on the claim, not the tag.
-    if (seen.has(node.fromEntity.id)) continue;
-    seen.add(node.fromEntity.id);
     claims.push({
       claimEntityId: node.fromEntity.id,
       spaceId: node.spaceId,
@@ -138,26 +168,47 @@ function decodeFeaturedClaims(data: FeaturedClaimsQuery): FeaturedClaim[] {
     });
   }
 
-  // Sorted here rather than in the query: the connection can only order by its own columns, and the
-  // score belongs to the claim on the other end of the relation.
-  return claims.sort(compareFeaturedClaims);
+  return {
+    claims,
+    endCursor: data.relationsConnection?.pageInfo?.endCursor ?? null,
+    hasNextPage: data.relationsConnection?.pageInfo?.hasNextPage ?? false,
+  };
 }
 
-export function fetchFeaturedClaims(signal?: AbortSignal): Promise<FeaturedClaim[]> {
-  return Effect.runPromise(
-    graphql({
-      query: featuredClaimsDocument,
-      decoder: decodeFeaturedClaims,
-      variables: {
-        tagPropertyId: TAG_PROPERTY_ID,
-        featuredTagId: FEATURED_TAG_ID,
-        typesPropertyId: SystemIds.TYPES_PROPERTY,
-        claimTypeId: CLAIM_TYPE_ID,
-        first: FEATURED_CLAIMS_LIMIT,
-      },
-      signal,
-    })
-  );
+export async function fetchFeaturedClaims(signal?: AbortSignal): Promise<FeaturedClaim[]> {
+  const claims: FeaturedClaim[] = [];
+  let after: string | null = null;
+
+  // Paged to exhaustion. Sorting can only happen once every page is in — the score belongs to the
+  // claim on the other end of the relation, so the connection can't order by it, and a partial set
+  // would be ranked against itself rather than against the whole tagged corpus.
+  while (claims.length < FEATURED_CLAIMS_LIMIT) {
+    const page: FeaturedClaimsPage = await Effect.runPromise(
+      graphql({
+        query: featuredClaimsDocument,
+        decoder: decodeFeaturedClaimsPage,
+        variables: {
+          tagPropertyId: TAG_PROPERTY_ID,
+          featuredTagId: FEATURED_TAG_ID,
+          typesPropertyId: SystemIds.TYPES_PROPERTY,
+          claimTypeId: CLAIM_TYPE_ID,
+          first: FEATURED_CLAIMS_PAGE_SIZE,
+          after,
+        },
+        signal,
+      })
+    );
+
+    claims.push(...page.claims);
+    if (!page.hasNextPage || !page.endCursor) break;
+    after = page.endCursor;
+  }
+
+  if (claims.length >= FEATURED_CLAIMS_LIMIT) {
+    devLog(`[featured-claims] stopped at the ${FEATURED_CLAIMS_LIMIT}-row guard; the list is truncated.`);
+  }
+
+  return claims.sort(compareFeaturedClaims);
 }
 
 /**

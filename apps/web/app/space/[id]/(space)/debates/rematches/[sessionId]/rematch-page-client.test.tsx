@@ -51,6 +51,8 @@ const mocks = vi.hoisted(() => ({
   entityIdLookups: [] as string[][],
   featuredClaims: [] as Array<{ claimEntityId: string; spaceId: string; name: string; description: string | null }>,
   featuredCatalogLoading: false,
+  featuredCatalogError: null as Error | null,
+  featuredEnabledWith: [] as boolean[],
   entityQueryHasNextPage: false,
   /** The hub's claims query (the All tab) is still in flight. */
   entityQueryLoading: false,
@@ -199,12 +201,13 @@ vi.mock('~/core/debates/debate-entry-intent', () => ({
 vi.mock('~/core/debates/featured-claims', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/debates/featured-claims')>()),
   useFeaturedClaims: (enabled: boolean) => {
+    mocks.featuredEnabledWith.push(enabled);
     const claims = enabled ? mocks.featuredClaims : [];
     return {
       claims,
       claimIds: claims.map(claim => claim.claimEntityId),
       isLoading: enabled && mocks.featuredCatalogLoading,
-      error: null,
+      error: enabled ? mocks.featuredCatalogError : null,
       refetch: vi.fn(),
     };
   },
@@ -363,6 +366,8 @@ beforeEach(() => {
   mocks.entityIdLookups.length = 0;
   mocks.featuredClaims = [];
   mocks.featuredCatalogLoading = false;
+  mocks.featuredCatalogError = null;
+  mocks.featuredEnabledWith = [];
   mocks.entityQueryHasNextPage = false;
   mocks.entityQueryLoading = false;
   mocks.entityHydrationLoading = false;
@@ -808,6 +813,46 @@ describe('DebateRematchPageClient', () => {
 
       expect(screen.queryByText('A featured claim')).toBeNull();
       expect(screen.getByText('No featured claims are available to debate yet.')).toBeInTheDocument();
+    });
+
+    // A failed tag query is not an empty tag query. Reporting "nothing is featured" for one hides a
+    // fault behind a sentence that reads like a fact about the graph.
+    it('reports a failed tag lookup as an error rather than an empty list', async () => {
+      mocks.featuredCatalogError = new Error('tag lookup exploded');
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await settleTabSwap();
+
+      expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+      expect(screen.queryByText('No featured claims are available to debate yet.')).toBeNull();
+    });
+
+    // Featured ids are empty while the allowlist is resolving, so without counting that as part of
+    // the source's loading state the empty message painted and was then replaced by the list.
+    it('waits on the allowlist rather than flashing its empty state', async () => {
+      mocks.spaceAllowlist = null;
+      mocks.allowlistLoading = true;
+      mocks.featuredClaims = [featuredTag()];
+      mocks.entities = [sharedEntity(), featuredEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await settleTabSwap();
+
+      expect(screen.queryByText('No featured claims are available to debate yet.')).toBeNull();
+    });
+
+    // A remembered Featured source shouldn't keep a graph query alive behind the opponent's tab,
+    // which draws from somewhere else entirely.
+    it('stops asking for the tag once the viewer leaves Claims', async () => {
+      mocks.featuredClaims = [featuredTag()];
+      mocks.entities = [sharedEntity(), featuredEntity()];
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(mocks.featuredEnabledWith.at(-1)).toBe(true);
+
+      await showOpponentClaims();
+
+      expect(mocks.featuredEnabledWith.at(-1)).toBe(false);
     });
 
     it('says nothing is featured rather than nothing is debatable', async () => {
