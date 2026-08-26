@@ -192,69 +192,72 @@ export function ClaimsTab() {
   });
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3">
-      <Input
-        withSearchIcon
-        value={search}
-        onChange={event => setSearch(event.currentTarget.value)}
-        placeholder="Search claims"
-        aria-label="Search claims"
-      />
+    <div className="flex flex-col">
+      <HubStickyControls>
+        <Input
+          withSearchIcon
+          value={search}
+          onChange={event => setSearch(event.currentTarget.value)}
+          placeholder="Search claims"
+          aria-label="Search claims"
+        />
 
-      <SpaceTopicFilters
-        spaceId={spaceId}
-        onSpaceChange={setSpaceId}
-        topicId={topicId}
-        onTopicChange={setTopicId}
-        facetSpaceIds={facetSpaceIds}
-        facetTopics={facetTopics}
-        leading={
-          <HubFilterMenu
-            label={FILTER_OPTIONS.find(option => option.value === filter)?.label ?? 'All claims'}
-            options={FILTER_OPTIONS}
-            value={filter}
-            onChange={setFilter}
-          />
-        }
-      />
+        <SpaceTopicFilters
+          spaceId={spaceId}
+          onSpaceChange={setSpaceId}
+          topicId={topicId}
+          onTopicChange={setTopicId}
+          facetSpaceIds={facetSpaceIds}
+          facetTopics={facetTopics}
+          leading={
+            <HubFilterMenu
+              label={FILTER_OPTIONS.find(option => option.value === filter)?.label ?? 'All claims'}
+              options={FILTER_OPTIONS}
+              value={filter}
+              onChange={setFilter}
+            />
+          }
+        />
+      </HubStickyControls>
 
-      <HubQueryState
-        isLoading={claimsQuery.isLoading || spacesPending}
-        error={claimsQuery.error}
-        onRetry={() => void claimsQuery.refetch()}
-        isEmpty={claims.length === 0}
-        emptyMessage={hasFilters ? 'No claims match these filters.' : 'No debatable claims yet.'}
-        emptyAction={
-          hasFilters
-            ? {
-                label: 'Clear filters',
-                onClick: () => {
-                  setSearch('');
-                  setFilter('all');
-                  setSpaceId(null);
-                  setTopicId(null);
-                },
-              }
-            : undefined
-        }
-      >
-        {/* One list, in the server's order. Splitting out the claims you'd already answered
+      <div className="flex flex-col gap-3 px-4 py-3">
+        <HubQueryState
+          isLoading={claimsQuery.isLoading || spacesPending}
+          error={claimsQuery.error}
+          onRetry={() => void claimsQuery.refetch()}
+          isEmpty={claims.length === 0}
+          emptyMessage={hasFilters ? 'No claims match these filters.' : 'No debatable claims yet.'}
+          emptyAction={
+            hasFilters
+              ? {
+                  label: 'Clear filters',
+                  onClick: () => {
+                    setSearch('');
+                    setFilter('all');
+                    setSpaceId(null);
+                    setTopicId(null);
+                  },
+                }
+              : undefined
+          }
+        >
+          {/* One list, in the server's order. Splitting out the claims you'd already answered
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
-        <HubCardList>
-          {claims.map(entry => (
-            <MatchmakingClaimCard
-              key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
-              claim={entry.claim}
-              positions={entry.positions}
-              readiness={entry}
-              activeDebate={entry.active_debate}
-            />
-          ))}
-        </HubCardList>
-      </HubQueryState>
+          <HubCardList>
+            {claims.map(entry => (
+              <MatchmakingClaimCard
+                key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
+                claim={entry.claim}
+                positions={entry.positions}
+                readiness={entry}
+                activeDebate={entry.active_debate}
+              />
+            ))}
+          </HubCardList>
+        </HubQueryState>
 
-      {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
+        {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
           the empty state deliberately: the space allowlist and the topic filter both run over the
           loaded pages, so a page can arrive with nothing to show — and with the sentinel rendered
           only alongside results, the list would stop at the first such page and report "no claims"
@@ -264,10 +267,25 @@ export function ClaimsTab() {
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-      {!hasNoEligibleSpaces && claimsQuery.hasNextPage && !spacesPending ? (
-        <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
-      ) : null}
+        {!hasNoEligibleSpaces && claimsQuery.hasNextPage && !spacesPending ? (
+          <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
+        ) : null}
+      </div>
     </div>
+  );
+}
+
+/**
+ * The controls a tab pins above its list. Both hub surfaces page forever, so leaving search and
+ * the filters at the top of the document meant scrolling back to the start to change either.
+ *
+ * Deliberately thin: the panel is narrow and short, so every pinned pixel is a claim the viewer
+ * can't see. The tab row above it is already fixed — it sits outside the panel's scroll container
+ * — so this is the only piece that needed pinning here.
+ */
+export function HubStickyControls({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3">{children}</div>
   );
 }
 

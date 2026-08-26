@@ -7,7 +7,9 @@ if (isTelemetryEnabled) {
     dsn: telemetryDsn,
 
     environment: process.env.NEXT_PUBLIC_APP_ENV || 'development',
-    release: process.env.VERCEL_GIT_COMMIT_SHA,
+    // Server-side, so the unprefixed variable is available; falls back to the shared one so
+    // both SDKs report an identical release even if the build sets only NEXT_PUBLIC_SENTRY_RELEASE.
+    release: process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.NEXT_PUBLIC_SENTRY_RELEASE,
 
     // 100% of traces in development, 20% in production
     tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.2,

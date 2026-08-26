@@ -1877,6 +1877,27 @@ describe('DebateRematchPageClient', () => {
     expect(names).toEqual(['Ordered claim one', 'Ordered claim two', 'Ordered claim three']);
   });
 
+  // GEO-2684. This page's sticky block is its own implementation rather than the hub's shared
+  // helper, so nothing else covers it. Its tabs scroll with the page, unlike the panel's, which is
+  // why they are pinned alongside the filters — pinning the filters alone would float them over a
+  // tab strip sliding past behind them.
+  it('pins the tabs, filters and search together, leaving the list to scroll', () => {
+    mocks.entityQueryHasNextPage = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    const pinned = screen.getByRole('textbox', { name: 'Search claims' }).closest('.sticky');
+    expect(pinned).not.toBeNull();
+    expect(pinned?.className).toContain('top-0');
+
+    // The tab strip rides in the same block rather than scrolling out from under the controls.
+    expect(screen.getByRole('button', { name: 'All' }).closest('.sticky')).toBe(pinned);
+    expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).toBe(pinned);
+
+    // And the list is outside it, or it would be pinned too and never scroll.
+    expect(screen.getByTestId('claims-scroll-sentinel').closest('.sticky')).toBeNull();
+  });
+
   // GEO-2671. Rows the index hasn't paged to — a claim the opponent answered, a saved or curated
   // one — used to be appended after every paged row, so each new batch inserted rows above them
   // and slid them further down. A claim the viewer already held a position on was still sinking
