@@ -124,6 +124,14 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
     const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space) : space;
+    // Which *column* this is, as against which property's data lands in it. A mapping can render
+    // one property's value in another's slot — the entity's name in the Roles slot, say
+    // (`mappingToCell`, use-mapping.ts:155) — so `isNameCell` above answers "is this name data",
+    // which is the right question for the space to read it in and the wrong one for where the row's
+    // controls belong. Anything positional has to go by the slot, and `EntityTableCell` already
+    // does: it takes `property` from `propertiesSchema[cellData.slotId]`, so the title decorations
+    // this pairs with are in the slot-named column whatever is rendered elsewhere.
+    const isNameSlot = cellData.slotId === SystemIds.NAME_PROPERTY;
 
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
@@ -183,7 +191,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         onLinkEntry={onLinkEntry}
         source={source}
         openedWithMainViewEditing={openedWithMainViewEditing}
-        hideHoverActions={isNameCell && !isEditable}
+        hideHoverActions={isNameSlot && !isEditable}
       />
     );
 
@@ -191,7 +199,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     // their own, which is where list and bulleted-list views already put them (GEO-2672). The
     // hover actions ride along so they stop overlaying the title and squeezing it — `EntityTableCell`
     // is told to leave them out above.
-    if (!isNameCell || isEditable) {
+    if (!isNameSlot || isEditable) {
       return cellContents;
     }
 

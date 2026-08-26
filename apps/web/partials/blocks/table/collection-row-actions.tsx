@@ -120,7 +120,10 @@ export function CollectionRowActions({
                   clearTimeout(closeTimeoutRef.current);
                   closeTimeoutRef.current = null;
                 }
-                openedByHoverRef.current = true;
+                // Only when this is the event that opens it. A pointer wandering over the trigger of
+                // a popover someone opened from the keyboard must not relabel it as a hover open, or
+                // the close would skip the focus restoration that open is owed.
+                if (!isPopoverOpen) openedByHoverRef.current = true;
                 setIsPopoverOpen(true);
               }}
               onMouseLeave={() => {

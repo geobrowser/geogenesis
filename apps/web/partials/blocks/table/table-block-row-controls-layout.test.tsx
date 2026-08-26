@@ -139,8 +139,11 @@ function renderBulletedItem(source: { type: 'GEO' } | { type: 'COLLECTION' } = {
   );
 }
 
-function renderTable(source: { type: 'GEO' } | { type: 'COLLECTION' } = { type: 'GEO' }) {
-  const rows: Row[] = [{ entityId: 'entity-1', columns: nameColumn() } as Row];
+function renderTable(
+  source: { type: 'GEO' } | { type: 'COLLECTION' } = { type: 'GEO' },
+  columns: Record<string, Cell> = nameColumn()
+) {
+  const rows: Row[] = [{ entityId: 'entity-1', columns } as Row];
 
   return render(
     <TableBlockTable
@@ -222,5 +225,54 @@ describe('TableBlockTable control layout', () => {
     const cells = document.querySelectorAll('tbody tr')[0].querySelectorAll('td').length;
 
     expect(headers).toBe(cells);
+  });
+
+  describe('collection rows', () => {
+    it('tells the name to stop rendering its own hover actions', () => {
+      renderTable({ type: 'COLLECTION' });
+
+      expect(screen.getByTestId('collection-metadata')).toHaveAttribute('data-hide-hover-actions', 'true');
+    });
+
+    it('uses the collection controls, not the side panel button, beside the votes', () => {
+      renderTable({ type: 'COLLECTION' });
+
+      const votes = screen.getByTestId(VOTES);
+
+      expect(votes.parentElement).toContainElement(screen.getByTestId(COLLECTION_HOVER_CONTROL));
+      expect(screen.queryByTestId(HOVER_CONTROL)).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * A mapping can render one property's data in another's slot — the entity's name in the Roles
+   * slot (`mappingToCell`, use-mapping.ts:155). Where the controls go is a question about the
+   * column, so it has to follow `slotId`; following the rendered property would drop them into
+   * whichever column happens to show the name and leave the Name column without any, and with the
+   * trailing cell gone there is no longer a second place for them to appear.
+   */
+  it('puts the controls in the Name column even when another column renders the name', () => {
+    const crossedColumns = {
+      [SystemIds.NAME_PROPERTY]: {
+        propertyId: SystemIds.NAME_PROPERTY,
+        slotId: SystemIds.NAME_PROPERTY,
+        renderedPropertyId: OTHER_PROPERTY,
+        space: ENTITY_SPACE,
+        name: 'AGI development should be paused.',
+      },
+      [OTHER_PROPERTY]: {
+        propertyId: OTHER_PROPERTY,
+        slotId: OTHER_PROPERTY,
+        renderedPropertyId: SystemIds.NAME_PROPERTY,
+        space: ENTITY_SPACE,
+        name: 'AGI development should be paused.',
+      },
+    } as Record<string, Cell>;
+
+    renderTable({ type: 'GEO' }, crossedColumns);
+
+    const cells = document.querySelectorAll('tbody td');
+
+    expect(screen.getByTestId(VOTES).closest('td')).toBe(cells[0]);
   });
 });
