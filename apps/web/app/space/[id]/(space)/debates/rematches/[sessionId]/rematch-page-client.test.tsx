@@ -59,6 +59,9 @@ const mocks = vi.hoisted(() => ({
   entities: [] as Array<Record<string, unknown>>,
   /** The hub's claims rows the All tab lists. */
   matchmakingClaims: [] as MatchmakingClaim[],
+  /** Overrides the single-page default when a test needs paging to accumulate. */
+  entityQueryPages: null as MatchmakingClaim[][] | null,
+  entityQueryFetchingNextPage: false,
   /** Both participants' graph positions. */
   positions: [] as ParticipantPosition[],
   positionsLoading: false,
@@ -241,11 +244,17 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
   useMatchmakingClaims: (query: { search: string | null; spaceId: string | null }) => {
     mocks.entityQueries.push(query);
     return {
-      data: { pages: [{ claims: mocks.matchmakingClaims, next_cursor: null, facets: undefined }] },
+      data: {
+        pages: (mocks.entityQueryPages ?? [mocks.matchmakingClaims]).map(claims => ({
+          claims,
+          next_cursor: null,
+          facets: undefined,
+        })),
+      },
       isLoading: mocks.entityQueryLoading,
       error: null,
       hasNextPage: mocks.entityQueryHasNextPage,
-      isFetchingNextPage: false,
+      isFetchingNextPage: mocks.entityQueryFetchingNextPage,
       fetchNextPage: mocks.fetchNextPage,
     };
   },
@@ -340,6 +349,8 @@ beforeEach(() => {
   mocks.fetchNextPage.mockReset();
   mocks.entities = [sharedEntity(), publishedEntity()];
   mocks.matchmakingClaims = [matchmakingClaim()];
+  mocks.entityQueryPages = null;
+  mocks.entityQueryFetchingNextPage = false;
   mocks.positions = [
     position('profile-local', CLAIM_SHARED, SPACE_1, true),
     position('profile-remote', CLAIM_SHARED, SPACE_1, false),
@@ -1448,6 +1459,56 @@ describe('DebateRematchPageClient', () => {
     expect(names).toEqual(['Ordered claim one', 'Ordered claim two', 'Ordered claim three']);
   });
 
+  // GEO-2671. Rows the index hasn't paged to — a claim the opponent answered, a saved or curated
+  // one — used to be appended after every paged row, so each new batch inserted rows above them
+  // and slid them further down. A claim the viewer already held a position on was still sinking
+  // after ten pages. Their slot is fixed after the first page now.
+  it('holds a claim the pages have not reached in place when the next page lands', () => {
+    const PAGE_ONE = '019fedb4-3f74-7c61-8d44-5fa08b1e7b01';
+    const PAGE_TWO = '019fedb4-3f74-7c61-8d44-5fa08b1e7b02';
+    const ANSWERED = '019fedb7-5b96-7e83-9f66-7bc2ad4f9953';
+    mocks.savedClaims = [];
+    mocks.claims = [];
+    mocks.entityQueryPages = [
+      [matchmakingClaim(PAGE_ONE, 'Paged claim one')],
+      [matchmakingClaim(PAGE_TWO, 'Paged claim two')],
+    ];
+    // Answered by the opponent, so it joins the All tab without the index having paged to it.
+    mocks.entities = [{ ...sharedEntity(), id: ANSWERED, name: 'Claim the pages have not reached' }];
+    mocks.positions = [position('profile-remote', ANSWERED, SPACE_1, true)];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    // Its slot is after the first page and before the second — not swept to the end behind
+    // every row paging has since produced.
+    expect(appearsBefore('Paged claim one', 'Claim the pages have not reached')).toBe(true);
+    expect(appearsBefore('Claim the pages have not reached', 'Paged claim two')).toBe(true);
+  });
+
+  // Reaching the end of the list is what asks for the next page, so without this the sentinel
+  // fires silently and the list sits there looking finished.
+  it('shows a loading skeleton while the next page is on its way', () => {
+    mocks.entityQueryHasNextPage = true;
+    mocks.entityQueryFetchingNextPage = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // Not on the tabs that don't page — they load whole.
+    expect(screen.queryByTestId('claims-next-page-skeleton')).toBeNull();
+    showAllClaims();
+    expect(screen.getByTestId('claims-next-page-skeleton')).toBeInTheDocument();
+  });
+
+  it('shows no skeleton once the page has landed', () => {
+    mocks.entityQueryHasNextPage = true;
+    mocks.entityQueryFetchingNextPage = false;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+    expect(screen.queryByTestId('claims-next-page-skeleton')).toBeNull();
+  });
+
   // GEO-2647. A shared preference used to be pinned to the top of the All tab, which put it ahead
   // of what the viewer had typed and pushed their search results down. Matched claims stay
   // legible without the pin — they are the ones offering "Request debate", and the Matches tab
@@ -1741,6 +1802,13 @@ function browsedClaimsQueryOptions() {
 /** The picker opens on the opponent's positions; most assertions want the unfiltered list. */
 function showAllClaims() {
   fireEvent.click(screen.getByRole('button', { name: 'All' }));
+}
+
+/** Whether `first` is rendered ahead of `second` in the document. */
+function appearsBefore(first: string, second: string) {
+  const a = screen.getByText(first);
+  const b = screen.getByText(second);
+  return Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 }
 
 /**
