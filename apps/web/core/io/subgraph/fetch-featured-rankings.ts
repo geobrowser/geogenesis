@@ -19,6 +19,7 @@ import { MAX_FEATURED_RANKING_ENTRIES } from '~/core/explore/featured-rankings-c
 import type { EntityFilter } from '~/core/gql/graphql';
 import { getAllEntities, getBatchEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { RANKING_BLOCK_TYPE_ID, RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
+import { reportError } from '~/core/telemetry/logger';
 import type { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
@@ -139,6 +140,12 @@ async function resolveSubmitterSpaceIdsByBlock(
       // let the failure reach the per-ranking catch, which dropped the ranking. One shared batch
       // failing that way would now drop *every* featured ranking, so instead the fallback is
       // skipped and the affected cards render with the submitter avatars they could resolve.
+      //
+      // Reported rather than only logged, because that degradation is invisible: the old failure
+      // removed a card, which someone would eventually notice and report; fewer "Ranked by"
+      // avatars is not something anyone will. Without this the only trace is a server log nobody
+      // has a reason to read.
+      reportError(error);
       console.error('Unable to resolve featured ranking submitter home spaces', error);
     }
   }
@@ -207,7 +214,10 @@ async function resolveTopEntriesByBlock(
         }
       } catch (error) {
         // Scoped to the one space that failed: its rankings keep the empty leaderboard they were
-        // seeded with above and still render, exactly as the per-ranking version did.
+        // seeded with above and still render, exactly as the per-ranking version did. Reported
+        // for the same reason as above — silent before, and now one failure covers every ranking
+        // in the space rather than one card.
+        reportError(error);
         console.error(`Unable to resolve featured ranking top entries (space ${spaceId})`, error);
       }
     }
@@ -269,7 +279,9 @@ async function resolveBlockPlacements(
     )) as unknown as ToEntityRelation[];
   } catch (error) {
     // Every ranking needs a placement, so a failure here drops them all — same as the per-block
-    // version, where the throw reached each ranking's own catch.
+    // version, where the throw reached each ranking's own catch. Reported because an empty
+    // Featured rankings section is the hardest of these to trace back to a cause.
+    reportError(error);
     console.error('Unable to resolve featured ranking block placements', error);
     return placements;
   }
@@ -339,7 +351,9 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
         for (const entity of resolvedEntities) blockEntities.set(entity.id, entity);
       } catch (error) {
         // Scoped to the one space that failed — its rankings drop out below for want of an
-        // entity, the rest are unaffected.
+        // entity, the rest are unaffected. Reported because batching widened the blast radius
+        // from the single block the per-block fetch would have dropped.
+        reportError(error);
         console.error(`Unable to resolve featured ranking blocks (space ${spaceId})`, error);
       }
     }

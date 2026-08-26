@@ -17,12 +17,17 @@ const getSpacesMock = vi.fn();
 const getSubmitterRefsMock = vi.fn();
 const getSubmissionCountMock = vi.fn();
 const getOrderedRelationTargetIdsMock = vi.fn();
+const reportErrorMock = vi.fn();
 
 vi.mock('~/core/io/queries', () => ({
   getAllEntities: (...args: unknown[]) => getAllEntitiesMock(...args),
   getBatchEntities: (...args: unknown[]) => getBatchEntitiesMock(...args),
   getRelationsByToEntityIds: (...args: unknown[]) => getRelationsByToEntityIdsMock(...args),
   getSpaces: (...args: unknown[]) => getSpacesMock(...args),
+}));
+
+vi.mock('~/core/telemetry/logger', () => ({
+  reportError: (...args: unknown[]) => reportErrorMock(...args),
 }));
 
 vi.mock('~/core/blocks/ranking/ranking-block-relations', () => ({
@@ -82,6 +87,7 @@ describe('fetchFeaturedRankings', () => {
     getSubmitterRefsMock.mockReset();
     getSubmissionCountMock.mockReset();
     getOrderedRelationTargetIdsMock.mockReset();
+    reportErrorMock.mockReset();
 
     // Sensible happy-path defaults; individual tests override as needed.
     getAllEntitiesMock.mockReturnValue(Effect.succeed({ entities: [{ id: BLOCK, spaces: [SPACE] }] }));
@@ -379,5 +385,56 @@ describe('fetchFeaturedRankings', () => {
     expect(result).toHaveLength(10); // MAX_FEATURED_RANKINGS
     expect(peak).toBeLessThanOrEqual(6);
     expect(peak).toBeGreaterThan(1); // still concurrent, not accidentally serialised
+  });
+  it('reports a swallowed submitter-home-space failure rather than only logging it', async () => {
+    // This is the degradation with no user-visible symptom: the old failure removed a card, which
+    // someone would eventually notice; fewer "Ranked by" avatars is not something anyone reports.
+    // A server log nobody has a reason to read is not a substitute for that, so the swallow has to
+    // reach telemetry or the path can fail indefinitely without anyone finding out.
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({})]));
+    getSubmitterRefsMock.mockReturnValue([{ rankEntityId: RANK_ENTITY, spaceId: undefined }]);
+    const failure = new Error('home space lookup down');
+    getAllEntitiesMock.mockImplementation((opts: { filter?: { id?: { in?: string[] } } }) => {
+      if (opts.filter?.id?.in) return Effect.die(failure);
+      return Effect.succeed({ entities: [{ id: BLOCK, spaces: [SPACE] }] });
+    });
+
+    const result = await fetchFeaturedRankings();
+
+    // Still degrades rather than dropping the card...
+    expect(result).toHaveLength(1);
+    expect(result[0].submitterSpaceIds).toEqual([]);
+    // ...but does not do so silently.
+    expect(reportErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a swallowed leaderboard failure', async () => {
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({})]));
+    getOrderedRelationTargetIdsMock.mockReturnValue(['e1c9f267dcb0d270718c2a3c45a64afd']);
+    getAllEntitiesMock.mockImplementation((opts: { filter?: { id?: { in?: string[] } } }) => {
+      if (opts.filter?.id?.in) return Effect.die(new Error('entities lookup down'));
+      return Effect.succeed({ entities: [{ id: BLOCK, spaces: [SPACE] }] });
+    });
+
+    const result = await fetchFeaturedRankings();
+
+    expect(result[0].topEntries).toEqual([]);
+    expect(reportErrorMock).toHaveBeenCalled();
+  });
+
+  it('reports the placement failure that empties the whole section', async () => {
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({})]));
+    getRelationsByToEntityIdsMock.mockImplementation(() => Effect.die(new Error('relations down')));
+
+    expect(await fetchFeaturedRankings()).toEqual([]);
+    expect(reportErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports nothing on the happy path', async () => {
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({})]));
+
+    await fetchFeaturedRankings();
+
+    expect(reportErrorMock).not.toHaveBeenCalled();
   });
 });
