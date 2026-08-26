@@ -8,18 +8,16 @@ import { Editor } from '@tiptap/react';
 
 import React from 'react';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   BlockDragHandle,
   BlockGutterHoverArea,
-  createBlockMeasureScheduler,
-  disableScrollAnchoring,
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
-  getTopLevelBlockElements,
   makeDropZones,
   moveTopLevelBlock,
+  releasePointerDragFocus,
 } from './block-reorder';
 
 const editors: Editor[] = [];
@@ -70,7 +68,6 @@ describe('BlockDragHandle', () => {
 
     const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
     const handle = button.parentElement;
-    vi.spyOn(button, 'matches').mockImplementation(selector => selector === ':focus-visible');
     expect(handle).toHaveStyle({ opacity: '0', pointerEvents: 'none' });
 
     fireEvent.focus(button);
@@ -78,7 +75,7 @@ describe('BlockDragHandle', () => {
     expect(handle).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
   });
 
-  it('does not reveal a hidden handle for pointer focus', () => {
+  it('releases pointer focus after a drag so the old block slot does not stay highlighted', () => {
     render(
       React.createElement(
         DndContext,
@@ -88,19 +85,20 @@ describe('BlockDragHandle', () => {
           top: 12,
           left: -32,
           isDragging: false,
-          visible: false,
+          visible: true,
         })
       )
     );
 
     const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
-    const handle = button.parentElement;
-    vi.spyOn(button, 'matches').mockReturnValue(false);
-
     button.focus();
-
+    const pointerDown = new MouseEvent('pointerdown', { bubbles: true });
+    button.dispatchEvent(pointerDown);
     expect(button).toHaveFocus();
-    expect(handle).toHaveStyle({ opacity: '0', pointerEvents: 'none' });
+
+    releasePointerDragFocus(pointerDown);
+
+    expect(button).not.toHaveFocus();
   });
 });
 
@@ -125,70 +123,13 @@ describe('BlockGutterHoverArea', () => {
   });
 });
 
-describe('createBlockMeasureScheduler', () => {
-  it('measures once after several editor changes in the same frame', () => {
-    const callbacks: FrameRequestCallback[] = [];
-    const requestFrame = vi.fn((callback: FrameRequestCallback) => {
-      callbacks.push(callback);
-      return callbacks.length;
-    });
-    const cancelFrame = vi.fn();
-    const onMeasure = vi.fn();
-    const measurement = createBlockMeasureScheduler(onMeasure, requestFrame, cancelFrame);
-
-    measurement.schedule();
-    measurement.schedule();
-    expect(requestFrame).toHaveBeenCalledTimes(1);
-    expect(onMeasure).not.toHaveBeenCalled();
-
-    callbacks[0]?.(0);
-    expect(onMeasure).toHaveBeenCalledTimes(1);
-
-    measurement.schedule();
-    measurement.cancel();
-    expect(cancelFrame).toHaveBeenCalledWith(2);
-  });
-});
-
-describe('getTopLevelBlockElements', () => {
-  it('maps document indexes without counting direct gap-cursor widgets', () => {
-    const editor = makeEditor(['A', 'B']);
-    const editorElement = editor.view.dom;
-    const firstBlock = editor.view.nodeDOM(0);
-    const gapCursor = document.createElement('div');
-    gapCursor.className = 'ProseMirror-gapcursor';
-
-    expect(firstBlock).toBeInstanceOf(HTMLElement);
-    firstBlock?.parentNode?.insertBefore(gapCursor, firstBlock.nextSibling);
-
-    expect(Array.from(editorElement.children)).toHaveLength(3);
-    expect(getTopLevelBlockElements(editor, editorElement).map(block => block.childIndex)).toEqual([0, 1]);
-    expect(getTopLevelBlockElements(editor, editorElement).map(block => block.element)).not.toContain(gapCursor);
-  });
-});
-
-describe('disableScrollAnchoring', () => {
-  it('disables native anchoring while mounted and restores the previous value', () => {
-    const editorElement = document.createElement('div');
-    editorElement.style.overflowAnchor = 'auto';
-
-    const restore = disableScrollAnchoring(editorElement);
-    expect(editorElement.style.overflowAnchor).toBe('none');
-
-    restore();
-    expect(editorElement.style.overflowAnchor).toBe('auto');
-  });
-});
-
 describe('moveTopLevelBlock', () => {
   it('moves a block down to the selected document boundary', () => {
     const editor = makeEditor(['A', 'B', 'C', 'D']);
-    const dispatch = vi.spyOn(editor.view, 'dispatch');
 
     expect(moveTopLevelBlock(editor, 0, 3)).toBe(true);
 
     expect(blockText(editor)).toEqual(['B', 'C', 'A', 'D']);
-    expect(dispatch.mock.calls[0]?.[0].scrolledIntoView).toBe(false);
   });
 
   it('moves a block up to the selected document boundary', () => {
