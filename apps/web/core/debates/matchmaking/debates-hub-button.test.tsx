@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   incomingRequestCount: 0,
 }));
 
-
 vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: 'user-a' }),
   useDebateActivity: () => ({ data: { incoming_request_count: mocks.incomingRequestCount } }),
@@ -68,6 +67,48 @@ describe('DebatesHubButton', () => {
 
     expect(screen.getByRole('button', { name: 'Debates, 3 pending requests' })).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
+  });
+
+  /**
+   * GEO-2689. A megaphone on its own does not say "debates", and the button had nothing else to go
+   * on. The word has to agree with what the button already answers to — the panel it opens is
+   * headed "Debates" and so is its own accessible name, and a control that shows one name while
+   * answering to another is worse than one showing none.
+   */
+  describe('label', () => {
+    it('says what the button is for', () => {
+      renderButton();
+
+      expect(screen.getByText('Debates')).toBeInTheDocument();
+    });
+
+    it('shows the same word the button answers to', () => {
+      renderButton();
+
+      const button = screen.getByRole('button', { name: 'Debates' });
+
+      expect(button).toHaveTextContent('Debates');
+    });
+
+    // The count is the reason the accessible name is written by hand, and it has to keep winning
+    // over the visible text now that there is some.
+    it('still announces the pending count rather than reading out the label and a bare number', () => {
+      mocks.incomingRequestCount = 2;
+      renderButton();
+
+      expect(screen.getByRole('button', { name: 'Debates, 2 pending requests' })).toBeInTheDocument();
+      expect(screen.getByText('Debates')).toBeInTheDocument();
+      expect(screen.getByText('2')).toBeInTheDocument();
+    });
+
+    // Phones have the least room in the navbar, so the label is dropped there — but only the
+    // visible one. `aria-label` still names the button for anyone reading it that way.
+    it('drops the visible label on phones without dropping the name', () => {
+      renderButton();
+
+      expect(screen.getByText('Debates')).toHaveClass('sm:hidden');
+      expect(screen.getByRole('button', { name: 'Debates' })).toBeInTheDocument();
+    });
   });
 
   it('leaves the hub closed when there is no button to open it', () => {

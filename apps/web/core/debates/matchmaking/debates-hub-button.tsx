@@ -47,6 +47,15 @@ export function DebatesHubButton() {
       )}
     >
       <Megaphone />
+      {/* A megaphone says nothing about debates on its own (GEO-2689). "Debates" rather than
+          "Debate" because that is what the panel it opens is headed, and what this button already
+          calls itself to a screen reader — a control that answers to one name and shows another is
+          worse than an unlabelled icon.
+
+          Dropped on phones, where the navbar has the least room to give and the label is the only
+          thing here that can be spared. The `aria-label` carries the name through regardless, so
+          nothing is lost for anyone reading it that way. */}
+      <span className="text-metadataMedium leading-none sm:hidden">Debates</span>
       {requestCount > 0 ? <span className="text-metadataMedium leading-none">{requestCount}</span> : null}
     </button>
   );
