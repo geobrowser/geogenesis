@@ -101,17 +101,23 @@ export function EntityVoteButtons({
     activeRelations.some(
       relation => uuidToHex(relation.type.id) === TYPES_PROPERTY && uuidToHex(relation.toEntity.id) === CLAIM_TYPE
     ) ?? false;
-  // Which space the response belongs to, which is not always the one the caller renders from. A
-  // claim collected into a curated page without a pinned target space arrives here as the page's
-  // own space, where the claim holds nothing: the counts came back empty and the percentage read
-  // 0%. Resolving it to the space the claim actually lives in is what puts the tally back.
+  // Which space the response belongs to, which is not always the one the caller renders from. An
+  // entity collected into a curated page without a pinned target space arrives here as the page's
+  // own space, where it holds nothing: the counts came back empty and the percentage read 0%.
+  // Resolving it to the space the entity actually lives in is what puts the tally back.
   //
-  // Claims only. A claim is one debate wherever it is listed, so its responses belong to the space
-  // it was published to; curation is per-space by design — the same entity is upvoted separately in
-  // each space that lists it, and this component draws those arrows too. Re-homing them would hide
-  // a reader's existing vote behind a tally from a space they never visited, then write the next
-  // one somewhere else again.
-  const spaceId = isClaim ? resolveEntitySpaceId(entity, requestedSpaceId) : requestedSpaceId;
+  // Every response kind, not only claims (GEO-2660). A table that lists the top-ranked version of
+  // an entity should show that version's votes, so curation follows the same rule as a claim's
+  // stance: the arrows belong to whichever space the row is actually showing. This does not re-home
+  // curation wholesale — `resolveEntitySpaceId` keeps the requested space whenever the entity holds
+  // live content there, so every ordinary row and every entity page are untouched, and only a row
+  // listing an entity that lives somewhere else diverts.
+  //
+  // What it costs: a curation vote cast against a listing space before this reads as the entity
+  // holding nothing there — nothing but the Score that vote itself wrote, which residency ignores
+  // by design — so that vote is no longer the one displayed. It is still recorded in that space.
+  // Auto-join doesn't widen with it: `useEntityVote` excludes curation from `ensureSpaceMembership`.
+  const spaceId = resolveEntitySpaceId(entity, requestedSpaceId);
   const isFactualClaim =
     isClaim &&
     getChecked(
