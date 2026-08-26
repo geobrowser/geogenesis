@@ -2,7 +2,13 @@ import * as React from 'react';
 
 import { ConnectionState, DisconnectReason, Room } from 'livekit-client';
 
-export type ReconnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
+/**
+ * `ended` is never produced by this hook. A forced end-of-call cutoff and a voluntary Leave
+ * both go through `room.disconnect()` and arrive as CLIENT_INITIATED, so the room's own
+ * events cannot tell them apart — whoever triggers the cutoff has to say so. See
+ * live-room's `endedByCutoff` (GEO-2584).
+ */
+export type ReconnectionStatus = 'connected' | 'reconnecting' | 'disconnected' | 'ended';
 
 export type ReconnectionState = {
   /** Current connection status. */
