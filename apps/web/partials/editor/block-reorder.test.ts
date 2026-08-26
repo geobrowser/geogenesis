@@ -1,6 +1,6 @@
 import { DndContext } from '@dnd-kit/core';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
@@ -10,7 +10,13 @@ import React from 'react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { BlockDragHandle, getGutterHoveredChildIndex, makeDropZones, moveTopLevelBlock } from './block-reorder';
+import {
+  BlockDragHandle,
+  getGutterHoveredChildIndex,
+  getNextKeyboardDropBoundary,
+  makeDropZones,
+  moveTopLevelBlock,
+} from './block-reorder';
 
 const editors: Editor[] = [];
 
@@ -25,16 +31,46 @@ describe('BlockDragHandle', () => {
       React.createElement(
         DndContext,
         null,
-        React.createElement(BlockDragHandle, { childIndex: 0, top: 12, left: -32, isDragging: false })
+        React.createElement(BlockDragHandle, {
+          childIndex: 0,
+          top: 12,
+          left: -32,
+          isDragging: false,
+          visible: true,
+        })
       )
     );
 
-    const button = screen.getByRole('button', { name: 'Drag to reorder block' });
+    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
     const hoverBridge = button.parentElement;
 
     expect(button).toHaveClass('size-6');
     expect(hoverBridge).toHaveAttribute('data-block-drag-handle');
     expect(hoverBridge).toHaveClass('w-8');
+  });
+
+  it('reveals a hidden handle when it receives keyboard focus', () => {
+    render(
+      React.createElement(
+        DndContext,
+        null,
+        React.createElement(BlockDragHandle, {
+          childIndex: 0,
+          top: 12,
+          left: -32,
+          isDragging: false,
+          visible: false,
+        })
+      )
+    );
+
+    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    const handle = button.parentElement;
+    expect(handle).toHaveStyle({ opacity: '0', pointerEvents: 'none' });
+
+    fireEvent.focus(button);
+
+    expect(handle).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
   });
 });
 
@@ -83,6 +119,21 @@ describe('getGutterHoveredChildIndex', () => {
   it('ignores pointers outside the left gutter', () => {
     expect(getGutterHoveredChildIndex(blocks, 51, 20, 100)).toBeNull();
     expect(getGutterHoveredChildIndex(blocks, 101, 20, 100)).toBeNull();
+  });
+});
+
+describe('getNextKeyboardDropBoundary', () => {
+  const boundaries = [0, 1, 2, 3, 4];
+
+  it('moves one block at a time and can return to the original position', () => {
+    expect(getNextKeyboardDropBoundary(1, null, 1, boundaries)).toBe(3);
+    expect(getNextKeyboardDropBoundary(1, 3, -1, boundaries)).toBe(1);
+    expect(getNextKeyboardDropBoundary(1, 1, -1, boundaries)).toBe(0);
+  });
+
+  it('stops at the first and last positions', () => {
+    expect(getNextKeyboardDropBoundary(0, null, -1, boundaries)).toBeNull();
+    expect(getNextKeyboardDropBoundary(3, null, 1, boundaries)).toBeNull();
   });
 });
 
