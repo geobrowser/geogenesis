@@ -1,23 +1,21 @@
 import * as React from 'react';
 
-import * as Effect from 'effect/Effect';
 import { cookies } from 'next/headers';
 
-import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { WALLET_ADDRESS } from '~/core/cookie';
-import type { Space } from '~/core/io/dto/spaces';
-import { getSpaces } from '~/core/io/queries';
 import { cachedFetchProfile } from '~/core/io/subgraph';
-import { compareSpaceListOrderByRankNameId } from '~/core/utils/space/browse-space-list-sort';
 
-import { Component } from './component';
 import {
   type GovernanceHomeReviewCategory,
   type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
-import { GovernanceHomeSidebar, GovernanceHomeSidebarSkeleton } from './governance-home-sidebar';
-import { GovernanceHomeSidebarCounts } from './governance-home-sidebar-counts';
+import { parseCategory, parseSpace, parseStatus } from './governance-home-filter-params';
 import { getGovernanceHomeSpaceContext } from './governance-home-space-ids';
+import { HomeProposalsInfiniteScroll } from './home-proposals-infinite-scroll';
+import { LoadingSkeleton } from './loading-skeleton';
+import { MyGovernanceProposalsList } from './my-governance-proposals-list';
+import { PendingProposalsPage } from './pending-proposals-page';
+import { PersonalHomeDashboard } from './personal-home-dashboard';
 
 interface Props {
   searchParams: Promise<{
@@ -29,99 +27,139 @@ interface Props {
   }>;
 }
 
-function parseCategory(raw?: string, legacy?: 'membership' | 'content'): GovernanceHomeReviewCategory {
-  if (legacy === 'content') return 'knowledge';
-  if (legacy === 'membership') return 'membership';
-  const allowed: GovernanceHomeReviewCategory[] = ['all', 'knowledge', 'membership', 'settings'];
-  if (raw && (allowed as string[]).includes(raw)) return raw as GovernanceHomeReviewCategory;
-  return 'all';
-}
-
-function parseStatus(raw?: string): GovernanceHomeStatusFilter {
-  const allowed: GovernanceHomeStatusFilter[] = ['pending', 'accepted', 'rejected'];
-  if (raw && (allowed as string[]).includes(raw)) return raw as GovernanceHomeStatusFilter;
-  return 'pending';
-}
-
-type GovernanceSpaceOption = { id: string; name: string; image: string | null; unnamed: boolean };
-
-function mapAndSortGovernanceSpaceOptions(spaces: Space[]): GovernanceSpaceOption[] {
-  return spaces
-    .map(s => {
-      const rawName = s.entity?.name?.trim() ?? '';
-      const unnamed = rawName.length === 0;
-      return {
-        id: s.id,
-        name: unnamed ? s.id.slice(0, 8) : rawName,
-        image: s.entity?.image && s.entity.image !== PLACEHOLDER_SPACE_IMAGE ? s.entity.image : null,
-        unnamed,
-      };
-    })
-    .sort(compareSpaceListOrderByRankNameId);
-}
+type GovernanceFilters = {
+  spaceId: string;
+  category: GovernanceHomeReviewCategory;
+  status: GovernanceHomeStatusFilter;
+};
 
 export default async function PersonalHomePage(props: Props) {
   const [cookieStore, sp] = await Promise.all([cookies(), props.searchParams]);
   const connectedAddress = cookieStore.get(WALLET_ADDRESS)?.value;
 
-  const person = connectedAddress ? await cachedFetchProfile(connectedAddress) : null;
-
   const tab = sp.tab === 'my' ? 'my' : 'review';
-  const proposalCategory = parseCategory(sp.proposalCategory, sp.proposalType);
-  const proposalStatus = parseStatus(sp.proposalStatus);
-  const governanceSpaceId = sp.space && sp.space !== 'all' ? sp.space : 'all';
+  const governanceFilters: GovernanceFilters = {
+    spaceId: parseSpace(sp.space),
+    category: parseCategory(sp.proposalCategory, sp.proposalType),
+    status: parseStatus(sp.proposalStatus),
+  };
 
-  let editorSpaceOptions: GovernanceSpaceOption[] = [];
-  let myProposalSpaceOptions: GovernanceSpaceOption[] = [];
+  const person = connectedAddress ? await cachedFetchProfile(connectedAddress) : null;
+  const connectedSpaceId = person?.spaceId;
 
-  if (person?.spaceId) {
-    const ctx = await getGovernanceHomeSpaceContext(person.spaceId);
-    const [editorSpaces, mySpaces] = await Promise.all([
-      ctx.editorIds.length ? Effect.runPromise(getSpaces({ spaceIds: ctx.editorIds })) : Promise.resolve([]),
-      ctx.myProposalSpaceIds.length
-        ? Effect.runPromise(getSpaces({ spaceIds: ctx.myProposalSpaceIds }))
-        : Promise.resolve([]),
-    ]);
-    editorSpaceOptions = mapAndSortGovernanceSpaceOptions(editorSpaces);
-    myProposalSpaceOptions = mapAndSortGovernanceSpaceOptions(mySpaces);
-  }
-
-  const sidebar = person?.spaceId ? (
-    <React.Suspense fallback={<GovernanceHomeSidebarSkeleton />}>
-      <GovernanceHomeSidebarCounts memberSpaceId={person.spaceId} />
-    </React.Suspense>
-  ) : (
-    <GovernanceHomeSidebar />
-  );
+  const list = await renderList({
+    tab,
+    connectedAddress,
+    connectedSpaceId,
+    proposalType: sp.proposalType,
+    governanceFilters,
+  });
 
   return (
-    <Component
-      header={<GovernanceHomeHeader />}
-      proposalType={sp.proposalType}
-      sidebar={sidebar}
-      connectedAddress={connectedAddress}
-      connectedSpaceId={person?.spaceId}
-      governanceTab={tab}
-      governanceFilters={{
-        spaceId: governanceSpaceId,
-        category: proposalCategory,
-        status: proposalStatus,
-      }}
-      editorSpaceOptions={editorSpaceOptions}
-      myProposalSpaceOptions={myProposalSpaceOptions}
-      myProposalSpaceIds={myProposalSpaceOptions.map(s => s.id)}
-    />
+    <PersonalHomeDashboard governanceTab={tab} governanceFilters={governanceFilters}>
+      {list}
+    </PersonalHomeDashboard>
   );
 }
 
-export const metadata = {
-  title: `Governance home`,
-};
+async function renderList({
+  tab,
+  connectedAddress,
+  connectedSpaceId,
+  proposalType,
+  governanceFilters,
+}: {
+  tab: 'review' | 'my';
+  connectedAddress?: string;
+  connectedSpaceId?: string;
+  proposalType?: 'membership' | 'content';
+  governanceFilters: GovernanceFilters;
+}) {
+  if (tab === 'my') {
+    if (!connectedSpaceId) {
+      return <p className="text-body text-grey-04">Sign in to see your proposals.</p>;
+    }
 
-function GovernanceHomeHeader() {
+    const ctx = await getGovernanceHomeSpaceContext(connectedSpaceId);
+
+    return (
+      <React.Suspense fallback={<ListSkeleton count={2} />}>
+        <MyGovernanceProposalsList
+          memberSpaceId={connectedSpaceId}
+          viewerWalletAddress={connectedAddress}
+          spaceIds={ctx.myProposalSpaceIds}
+          spaceFilter={governanceFilters.spaceId}
+          category={governanceFilters.category}
+          status={governanceFilters.status}
+          governanceTab={tab}
+          proposalType={proposalType}
+        />
+      </React.Suspense>
+    );
+  }
+
   return (
-    <div className="flex w-full items-center justify-between">
-      <h1 className="text-mainPage text-text">Governance</h1>
+    <React.Suspense fallback={<ListSkeleton count={3} />}>
+      <PendingProposals
+        connectedAddress={connectedAddress}
+        connectedSpaceId={connectedSpaceId}
+        proposalType={proposalType}
+        governanceFilters={governanceFilters}
+      />
+    </React.Suspense>
+  );
+}
+
+function ListSkeleton({ count }: { count: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: count }).map((_, i) => (
+        <LoadingSkeleton key={i} />
+      ))}
     </div>
+  );
+}
+
+function NoActivity() {
+  return <p className="mb-4 text-body text-grey-04">You have no pending requests or proposals.</p>;
+}
+
+async function PendingProposals({
+  proposalType,
+  connectedAddress,
+  connectedSpaceId,
+  governanceFilters,
+}: {
+  proposalType?: 'membership' | 'content';
+  connectedAddress?: string;
+  connectedSpaceId?: string;
+  governanceFilters: GovernanceFilters;
+}) {
+  const { node, hasMore } = await PendingProposalsPage({
+    connectedSpaceId,
+    connectedAddress,
+    proposalType,
+    page: 0,
+    governanceFilters,
+  });
+
+  if (!node) {
+    return <NoActivity />;
+  }
+
+  return (
+    <>
+      {node}
+      {hasMore && connectedSpaceId && (
+        <HomeProposalsInfiniteScroll
+          connectedSpaceId={connectedSpaceId}
+          connectedAddress={connectedAddress}
+          proposalType={proposalType}
+          governanceFilters={governanceFilters}
+          page={0}
+          initialHasMore={hasMore}
+        />
+      )}
+    </>
   );
 }

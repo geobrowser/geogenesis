@@ -1,12 +1,8 @@
-import { Schema } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
 
 import { Environment } from '../environment';
-import { getSpacesWhereMember } from './queries';
-import { type ApiProposalListItem, ApiProposalListResponseSchema, encodePathSegment, restFetch } from './rest';
 import { isValidUUID, spaceIdToGraphqlUuid } from './rest/validation';
-import { fetchEditorSpaceIds } from './subgraph/fetch-editor-space-ids';
 import { graphql } from './subgraph/graphql';
 
 export type SidebarCounts = {
@@ -68,112 +64,120 @@ function buildMyProposalStatsQuery(spaceId: string, nowSeconds: string): string 
   }`;
 }
 
-const REST_PAGE_SIZE = 100;
-const MAX_PAGES_PER_SPACE = 40;
+const VOTE_PAGE_SIZE = 1000;
+const MAX_VOTE_PAGES = 50;
 
-async function fetchProposalPagesForSpace({
-  spaceId,
-  memberSpaceId,
-  status,
-}: {
-  spaceId: string;
-  memberSpaceId: string;
-  status: 'ACCEPTED' | 'REJECTED';
-}): Promise<readonly ApiProposalListItem[]> {
-  const config = Environment.getConfig();
-  const out: ApiProposalListItem[] = [];
-  let cursor: string | undefined;
+type ProposalVoteNode = {
+  vote: 'YES' | 'NO' | 'ABSTAIN' | null;
+  proposalId: string;
+  proposalVersionByProposalIdAndProposalVersion: {
+    endTime: string | null;
+    proposal: { executedAt: string | null } | null;
+    proposalActionsByProposalIdAndProposalVersionConnection: {
+      nodes: { actionType: string }[];
+    } | null;
+  } | null;
+};
 
-  for (let page = 0; page < MAX_PAGES_PER_SPACE; page++) {
-    const params = new URLSearchParams();
-    params.set('limit', String(REST_PAGE_SIZE));
-    params.set('status', status);
-    params.set('orderBy', 'end_time');
-    params.set('orderDirection', 'desc');
-    if (isValidUUID(memberSpaceId)) {
-      params.set('voterId', memberSpaceId);
+type ProposalVotesPage = {
+  proposalVotesConnection: {
+    pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    nodes: ProposalVoteNode[];
+  };
+};
+
+function buildMyVotesQuery(voterId: string, after: string | null): string {
+  return `query {
+    proposalVotesConnection(
+      first: ${VOTE_PAGE_SIZE}
+      orderBy: PROPOSAL_ID_ASC
+      ${after ? `after: "${after}"` : ''}
+      filter: { voterId: { is: "${voterId}" } }
+    ) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        vote
+        proposalId
+        proposalVersionByProposalIdAndProposalVersion {
+          endTime
+          proposal { executedAt }
+          proposalActionsByProposalIdAndProposalVersionConnection { nodes { actionType } }
+        }
+      }
     }
-    if (cursor) {
-      params.set('cursor', cursor);
-    }
+  }`;
+}
 
-    const path = `/proposals/space/${encodePathSegment(spaceId)}/status?${params.toString()}`;
+async function fetchMyVotesPage(
+  endpoint: string,
+  voterId: string,
+  after: string | null
+): Promise<ProposalVotesPage['proposalVotesConnection'] | null> {
+  const effect = graphql<ProposalVotesPage>({ endpoint, query: buildMyVotesQuery(voterId, after) });
+  const result = await Effect.runPromise(Effect.either(effect));
 
-    const result = await Effect.runPromise(
-      Effect.either(
-        restFetch<unknown>({
-          endpoint: config.api,
-          path,
-        })
-      )
-    );
-
-    if (Either.isLeft(result)) {
-      console.error(`fetchSidebarCounts REST proposals for space ${spaceId} (${status}):`, result.left);
-      break;
-    }
-
-    const decoded = Schema.decodeUnknownEither(ApiProposalListResponseSchema)(result.right);
-
-    if (Either.isLeft(decoded)) {
-      console.error(`fetchSidebarCounts decode proposals for space ${spaceId}:`, decoded.left);
-      break;
-    }
-
-    out.push(...decoded.right.proposals);
-    cursor = decoded.right.nextCursor ?? undefined;
-    if (!cursor) break;
+  if (Either.isLeft(result)) {
+    logBatchError('votes cast', result.left);
+    return null;
   }
 
-  return out;
+  return result.right.proposalVotesConnection;
 }
 
 /**
- * Vote-related sidebar metrics: the GraphQL API does not expose `proposal` on `ProposalVoteFilter`,
- * so we aggregate from REST (`voterId` + per-space lists) across spaces the user can act in.
+ * Vote-related sidebar metrics, computed from the viewer's OWN proposal votes.
  */
-async function fetchVoteBasedSidebarCountsRest(memberSpaceId: string): Promise<{
+async function fetchVoteBasedSidebarCounts(memberSpaceId: string): Promise<{
   votedOnAccepted: number;
   votedOnRejected: number;
   acceptedMembers: number;
   acceptedEditors: number;
 }> {
-  if (!isValidUUID(memberSpaceId)) {
-    return { votedOnAccepted: 0, votedOnRejected: 0, acceptedMembers: 0, acceptedEditors: 0 };
+  const empty = { votedOnAccepted: 0, votedOnRejected: 0, acceptedMembers: 0, acceptedEditors: 0 };
+  if (!isValidUUID(memberSpaceId)) return empty;
+
+  const voterId = spaceIdToGraphqlUuid(memberSpaceId);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const endpoint = Environment.getConfig().api;
+
+  const byProposal = new Map<string, { executed: boolean; endTime: number; votedYes: boolean; actionType?: string }>();
+
+  let after: string | null = null;
+  for (let page = 0; page < MAX_VOTE_PAGES; page++) {
+    const connection = await fetchMyVotesPage(endpoint, voterId, after);
+    if (!connection) break;
+
+    for (const node of connection.nodes) {
+      const version = node.proposalVersionByProposalIdAndProposalVersion;
+      const executed = version?.proposal?.executedAt != null;
+      const endTime = version?.endTime ? Number(version.endTime) : 0;
+      const actionType = version?.proposalActionsByProposalIdAndProposalVersionConnection?.nodes[0]?.actionType;
+
+      const existing = byProposal.get(node.proposalId);
+      byProposal.set(node.proposalId, {
+        executed: executed || (existing?.executed ?? false),
+        endTime: Math.max(endTime, existing?.endTime ?? 0),
+        votedYes: node.vote === 'YES' || (existing?.votedYes ?? false),
+        actionType: existing?.actionType ?? actionType,
+      });
+    }
+
+    if (!connection.pageInfo.hasNextPage || !connection.pageInfo.endCursor) break;
+    after = connection.pageInfo.endCursor;
   }
-
-  const [editorIds, memberSpaces] = await Promise.all([
-    fetchEditorSpaceIds(memberSpaceId),
-    Effect.runPromise(getSpacesWhereMember(memberSpaceId)),
-  ]);
-
-  const spaceIds = [...new Set([...editorIds, ...memberSpaces.map(s => s.id)])];
 
   let votedOnAccepted = 0;
   let votedOnRejected = 0;
   let acceptedMembers = 0;
   let acceptedEditors = 0;
 
-  for (const spaceId of spaceIds) {
-    const [accepted, rejected] = await Promise.all([
-      fetchProposalPagesForSpace({ spaceId, memberSpaceId, status: 'ACCEPTED' }),
-      fetchProposalPagesForSpace({ spaceId, memberSpaceId, status: 'REJECTED' }),
-    ]);
-
-    for (const p of accepted) {
-      if (p.userVote == null) continue;
+  for (const p of byProposal.values()) {
+    if (p.executed) {
       votedOnAccepted += 1;
-      if (p.userVote === 'YES') {
-        const actionType = p.actions[0]?.actionType;
-        if (actionType === 'ADD_MEMBER') acceptedMembers += 1;
-        if (actionType === 'ADD_EDITOR') acceptedEditors += 1;
-      }
-    }
-
-    for (const p of rejected) {
-      if (p.userVote != null) {
-        votedOnRejected += 1;
-      }
+      if (p.votedYes && p.actionType === 'ADD_MEMBER') acceptedMembers += 1;
+      if (p.votedYes && p.actionType === 'ADD_EDITOR') acceptedEditors += 1;
+    } else if (p.endTime > 0 && p.endTime < nowSeconds) {
+      votedOnRejected += 1;
     }
   }
 
@@ -188,9 +192,9 @@ export async function fetchSidebarCounts(spaceId: string): Promise<SidebarCounts
     query: buildMyProposalStatsQuery(gqlSpaceId, Math.floor(Date.now() / 1000).toString()),
   });
 
-  const [myResult, voteRest] = await Promise.all([
+  const [myResult, votes] = await Promise.all([
     Effect.runPromise(Effect.either(myProposalsEffect)),
-    fetchVoteBasedSidebarCountsRest(spaceId),
+    fetchVoteBasedSidebarCounts(spaceId),
   ]);
 
   if (Either.isLeft(myResult)) {
@@ -207,12 +211,12 @@ export async function fetchSidebarCounts(spaceId: string): Promise<SidebarCounts
       rejected: my.myRejected.totalCount,
     },
     votedOn: {
-      accepted: voteRest.votedOnAccepted,
-      rejected: voteRest.votedOnRejected,
+      accepted: votes.votedOnAccepted,
+      rejected: votes.votedOnRejected,
     },
     iHaveAccepted: {
-      members: voteRest.acceptedMembers,
-      editors: voteRest.acceptedEditors,
+      members: votes.acceptedMembers,
+      editors: votes.acceptedEditors,
     },
   };
 }

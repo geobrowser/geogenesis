@@ -7,7 +7,7 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
-import { useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 import { SmallButton } from '~/design-system/button';
 import { ThumbGeoImage } from '~/design-system/geo-image';
@@ -22,6 +22,7 @@ import {
   type GovernanceHomeReviewCategory,
   type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
+import { useGovernanceHomeChrome } from './governance-home-chrome-context';
 
 type GovernanceFilters = {
   spaceId: string;
@@ -58,12 +59,9 @@ const statusLabels: Record<GovernanceHomeStatusFilter, string> = {
 };
 
 type PersonalHomeDashboardProps = {
-  sidebar: React.ReactNode;
-  proposalsList: React.ReactNode;
+  children: React.ReactNode;
   governanceTab: 'review' | 'my';
   governanceFilters: GovernanceFilters;
-  editorSpaceOptions: { id: string; name: string; image: string | null }[];
-  myProposalSpaceOptions: { id: string; name: string; image: string | null }[];
 };
 
 function GovernanceTabsRow({
@@ -73,21 +71,13 @@ function GovernanceTabsRow({
   governanceTab: 'review' | 'my';
   filterState: { space: string; category: GovernanceHomeReviewCategory; status: GovernanceHomeStatusFilter };
 }) {
-  const searchParams = useSearchParams();
-  const hrefForTab = (target: 'review' | 'my') => {
-    const next = new URLSearchParams(searchParams?.toString() ?? '');
-    if (target === 'review') next.delete('tab');
-    else next.set('tab', 'my');
-    next.delete('proposalType');
-    next.delete('space');
-    next.delete('proposalCategory');
-    next.delete('proposalStatus');
-    if (filterState.space !== 'all') next.set('space', filterState.space);
-    if (filterState.category !== 'all') next.set('proposalCategory', filterState.category);
-    if (filterState.status !== 'pending') next.set('proposalStatus', filterState.status);
-    const q = next.toString();
-    return q ? `/home?${q}` : '/home';
-  };
+  const hrefForTab = (target: 'review' | 'my') =>
+    buildHomeHref({
+      tab: target,
+      space: filterState.space,
+      category: filterState.category,
+      status: filterState.status,
+    });
 
   return (
     <div className="relative mt-8 w-full">
@@ -128,14 +118,9 @@ function GovernanceTabsRow({
   );
 }
 
-export function PersonalHomeDashboard({
-  sidebar,
-  proposalsList,
-  governanceTab,
-  governanceFilters,
-  editorSpaceOptions,
-  myProposalSpaceOptions,
-}: PersonalHomeDashboardProps) {
+export function PersonalHomeDashboard({ children, governanceTab, governanceFilters }: PersonalHomeDashboardProps) {
+  const { editorSpaceOptions, myProposalSpaceOptions, sidebar } = useGovernanceHomeChrome();
+
   const spaceOptions = governanceTab === 'review' ? editorSpaceOptions : myProposalSpaceOptions;
 
   const spaceLabel =
@@ -152,14 +137,23 @@ export function PersonalHomeDashboard({
     status: governanceFilters.status,
   };
 
+  const router = useRouter();
+  const [isPending, startTransition] = React.useTransition();
+  const navigate = React.useCallback(
+    (href: string) => {
+      startTransition(() => router.push(href));
+    },
+    [router]
+  );
+
   return (
     <>
-      <React.Suspense fallback={<div className="mt-8 h-8" />}>
-        <GovernanceTabsRow governanceTab={governanceTab} filterState={filterState} />
-      </React.Suspense>
+      <GovernanceTabsRow governanceTab={governanceTab} filterState={filterState} />
       <div className="mt-4 flex flex-wrap gap-2">
         <GovernanceFilterMenu
           label={spaceLabel}
+          onNavigate={navigate}
+          disabled={isPending}
           showImages
           maxHeightClass="max-h-[25rem] overflow-y-auto"
           items={[
@@ -178,6 +172,8 @@ export function PersonalHomeDashboard({
         />
         <GovernanceFilterMenu
           label={categoryLabel}
+          onNavigate={navigate}
+          disabled={isPending}
           items={(Object.keys(categoryLabels) as GovernanceHomeReviewCategory[]).map(key => ({
             label: categoryLabels[key],
             href: buildHomeHref({ tab: governanceTab, ...filterState, category: key }),
@@ -185,6 +181,8 @@ export function PersonalHomeDashboard({
         />
         <GovernanceFilterMenu
           label={statusLabel}
+          onNavigate={navigate}
+          disabled={isPending}
           items={(Object.keys(statusLabels) as GovernanceHomeStatusFilter[]).map(key => ({
             label: statusLabels[key],
             href: buildHomeHref({ tab: governanceTab, ...filterState, status: key }),
@@ -194,7 +192,12 @@ export function PersonalHomeDashboard({
       <div className="mt-4 flex gap-8">
         <div className="w-2/3">
           <Notices />
-          {proposalsList}
+          <div
+            aria-busy={isPending}
+            className={cx('transition-opacity duration-150', isPending && 'pointer-events-none opacity-50')}
+          >
+            {children}
+          </div>
         </div>
         <div className="w-1/3">{sidebar}</div>
       </div>
@@ -207,11 +210,15 @@ function GovernanceFilterMenu({
   items,
   showImages,
   maxHeightClass,
+  onNavigate,
+  disabled,
 }: {
   label: string;
   items: { label: string; href: string; image?: string | null; showImage?: boolean }[];
   showImages?: boolean;
   maxHeightClass?: string;
+  onNavigate?: (href: string) => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const [pendingLabel, setPendingLabel] = React.useState<string | null>(null);
@@ -229,22 +236,31 @@ function GovernanceFilterMenu({
   return (
     <Menu
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={next => {
+        if (disabled) return;
+        setOpen(next);
+      }}
       asChild
       viewportClassName={cx(
         'min-h-0 w-full min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]',
         maxHeightClass ?? 'max-h-[200px]'
       )}
-      trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
+      trigger={
+        <SmallButton icon={<ChevronDownSmall />} disabled={disabled} className={cx(pendingLabel && 'opacity-70')}>
+          {displayLabel}
+        </SmallButton>
+      }
     >
       <>
         {items.map(item => (
           <Link
             key={item.href}
             href={item.href}
-            onClick={() => {
+            onClick={e => {
+              if (onNavigate) e.preventDefault();
               if (item.label !== displayLabel) setPendingLabel(item.label);
               setOpen(false);
+              onNavigate?.(item.href);
             }}
             className="flex w-full cursor-pointer items-center gap-2 bg-white px-3 py-2.5 hover:bg-bg"
           >
