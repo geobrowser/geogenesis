@@ -79,7 +79,6 @@ export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProp
         participant={slot1Participant}
         src={urls.slot1}
         videoRef={slot1VideoRef}
-        isActiveSpeaker={activeSlot === 1}
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         subtitle={activeSlot === 1 ? subtitle : null}
@@ -114,7 +113,6 @@ export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProp
         participant={slot2Participant}
         src={urls.slot2}
         videoRef={slot2VideoRef}
-        isActiveSpeaker={activeSlot === 2}
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
         subtitle={activeSlot === 2 ? subtitle : null}
@@ -170,7 +168,6 @@ function DebaterVideo({
   participant,
   src,
   videoRef,
-  isActiveSpeaker,
   audible,
   countdown,
   subtitle,
@@ -184,7 +181,6 @@ function DebaterVideo({
   participant: DebateParticipant | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  isActiveSpeaker: boolean;
   audible: boolean;
   countdown: TurnState;
   subtitle: string | null;
@@ -216,7 +212,7 @@ function DebaterVideo({
         {src ? (
           <video
             ref={videoRef}
-            className={cx('h-full w-full object-cover', !isActiveSpeaker && 'saturate-0')}
+            className="h-full w-full object-cover"
             playsInline
             preload="metadata"
             src={src}
