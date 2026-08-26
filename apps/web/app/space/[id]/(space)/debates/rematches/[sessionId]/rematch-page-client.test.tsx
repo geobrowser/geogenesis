@@ -1283,6 +1283,17 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: /Server only/ })).toBeNull();
   });
 
+  // The session's own exclusions — the source debate's claim, and anything this pairing has
+  // blocked — are geo-chat's to apply, so its facets describe the rows it actually returns. Left
+  // to the client they were applied after the facets were built, and a topic whose every claim in
+  // the space had been excluded stayed on the menu over an empty list (GEO-2674).
+  it('asks geo-chat to scope the corpus to this session', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ rematchSessionId: 'rematch-1' }));
+  });
+
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();

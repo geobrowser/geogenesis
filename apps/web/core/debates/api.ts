@@ -452,6 +452,14 @@ export type MatchmakingClaimsQuery = {
    */
   spaceIds?: string[] | null;
   topicId?: string | null;
+  /**
+   * Narrows rows *and* facets to what a debate-again session can still offer: geo-chat drops the
+   * claim the source debate was about, and any this pairing has blocked (GEO-2674).
+   *
+   * The session id rather than the ids themselves — that set is geo-chat's own, and the client
+   * would be handing back a value it isn't the authority on.
+   */
+  rematchSessionId?: string | null;
   filter?: MatchmakingClaimsFilter;
   cursor?: string | null;
   limit?: number;
@@ -1070,6 +1078,7 @@ export async function listMatchmakingClaims(
   // eligible set means.
   else if (query.spaceIds?.length) params.set('space_ids', query.spaceIds.join(','));
   if (query.topicId) params.set('topic_id', query.topicId);
+  if (query.rematchSessionId) params.set('rematch_session_id', query.rematchSessionId);
   if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
   if (query.cursor) params.set('cursor', query.cursor);
   if (query.limit) params.set('limit', String(query.limit));

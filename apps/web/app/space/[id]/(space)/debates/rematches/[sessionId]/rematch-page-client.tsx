@@ -249,8 +249,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // All tab, and the server's topic facet is narrowed by spaces rather than by topics — so a
     // topic selection can never collapse the menu it came from. The other two tabs are built
     // from graph entities geo-chat has never seen, so their topic filter stays client-side.
-    () => ({ search: debouncedSearch || null, spaceId, spaceIds: eligibleSpaceIds, topicId, filter: 'all' }),
-    [debouncedSearch, eligibleSpaceIds, spaceId, topicId]
+    () => ({
+      search: debouncedSearch || null,
+      spaceId,
+      spaceIds: eligibleSpaceIds,
+      topicId,
+      // What `excludedClaimIds` removes below, removed by the endpoint instead — so the facets
+      // describe the same corpus the rows do. Without it a topic whose every claim in the space
+      // was one this session had dropped stayed on the menu over an empty list.
+      rematchSessionId: sessionId,
+      filter: 'all',
+    }),
+    [debouncedSearch, eligibleSpaceIds, sessionId, spaceId, topicId]
   );
   const browsedClaimsQuery = useMatchmakingClaims(matchmakingQuery, !browsedCorpusUnusable);
   // Masked rather than left to `enabled`: the hook keeps previous data across a key change, so a
