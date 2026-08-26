@@ -220,22 +220,23 @@ function RoomBody({
   const [leaveDialogOpen, setLeaveDialogOpen] = React.useState(false);
   const [endCallBusy, setEndCallBusy] = React.useState(false);
 
-  // The forced end-of-call cutoff disconnects the room itself, so it reaches
-  // `useReconnectionState` as CLIENT_INITIATED — identical to pressing Leave, and therefore
-  // silently navigating away. Record that it was the cutoff before disconnecting, so the
-  // user is told the call ended rather than just finding themselves back on the calls page
-  // (GEO-2584). The ref is what the disconnect handler reads: `room.disconnect()` can emit
-  // before React has re-rendered with the new state.
-  const [endedByCutoff, setEndedByCutoff] = React.useState(false);
-  const endedByCutoffRef = React.useRef(false);
+  // Identifies this call on every drop episode reported to telemetry. Memoized so a new
+  // object each render can't churn the hook's room subscriptions.
+  const callTelemetry = React.useMemo(
+    () => ({
+      spaceId,
+      callId,
+      roomName,
+      occurrenceStart,
+      role: isViewer ? ('viewer' as const) : ('participant' as const),
+    }),
+    [spaceId, callId, roomName, occurrenceStart, isViewer]
+  );
 
   // Distinguishes an intentional Leave (CLIENT_INITIATED) — navigate away directly —
   // from a drop that should show the reconnection overlay instead of silently
   // kicking the user out. See use-reconnection-state.ts.
-  const reconnection = useReconnectionState(room, () => {
-    if (endedByCutoffRef.current) return;
-    router.push(backHref);
-  });
+  const reconnection = useReconnectionState(room, () => router.push(backHref), callTelemetry);
   const [rejoinBusy, setRejoinBusy] = React.useState(false);
   const [rejoinError, setRejoinError] = React.useState<string | null>(null);
 
@@ -321,8 +322,7 @@ function RoomBody({
   // itself first so the overlay can say why. No recording-stop confirmation on this
   // path — the call ends regardless of whether a recording is still running.
   const handleTimeUp = useCallTimeUp(() => {
-    endedByCutoffRef.current = true;
-    setEndedByCutoff(true);
+    reconnection.markEndedByCutoff();
     onLeave();
   });
 
@@ -527,7 +527,7 @@ function RoomBody({
       />
 
       <ReconnectionOverlay
-        status={endedByCutoff ? 'ended' : reconnection.status}
+        status={reconnection.status}
         disconnectReason={reconnection.disconnectReason}
         onRejoin={handleRejoin}
         onLeave={() => router.push(backHref)}
