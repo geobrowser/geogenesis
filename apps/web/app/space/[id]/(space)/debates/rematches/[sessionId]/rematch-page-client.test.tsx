@@ -1234,6 +1234,30 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
   });
 
+  // The All tab is the browsed corpus plus this session's own rows pinned in front, and geo-chat
+  // has never seen those. A topic carried only by one of them was on screen with no way to
+  // filter to it, because the menu came from the facet alone.
+  it('offers a topic carried only by a pinned row geo-chat does not know', async () => {
+    mocks.matchmakingClaims = [];
+    mocks.entities = [
+      sharedEntity(),
+      {
+        ...sharedEntity(),
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-pinned', name: 'Pinned only' }, isDeleted: false },
+        ],
+      },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    showAllClaims();
+
+    await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: /Pinned only/ })).toBeInTheDocument();
+  });
+
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     showAllClaims();

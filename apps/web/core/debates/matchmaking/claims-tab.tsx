@@ -246,7 +246,7 @@ export function ClaimsTab() {
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-      {claimsQuery.hasNextPage && !spacesPending ? (
+      {!hasNoEligibleSpaces && claimsQuery.hasNextPage && !spacesPending ? (
         <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
       ) : null}
     </div>

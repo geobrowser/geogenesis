@@ -657,14 +657,23 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // The server orders by count; kept in name order to match the other tabs and to leave the
   // count ordering, with the counts themselves, to GEO-2654.
   const facetTopics = React.useMemo(() => {
-    if (tab !== 'all')
-      return availableTopics(
-        topicFacetClaims.map(claim => claim.claim.claim_entity_id),
-        topicsByClaimId
-      );
-    return [...(browsedFacets?.topic_facets ?? [])]
-      .map(facet => ({ id: facet.id, name: facet.name }))
-      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+    const fromRows = availableTopics(
+      topicFacetClaims.map(claim => claim.claim.claim_entity_id),
+      topicsByClaimId
+    );
+    if (tab !== 'all') return fromRows;
+
+    // Both, because neither is the whole answer. The facet covers claims no page has reached,
+    // which the rows cannot; the rows cover this session's saved, opponent and curated claims,
+    // pinned in front of the browsed ones and unknown to geo-chat, which the facet cannot. A
+    // topic carried only by one of those was on screen with no way to filter to it.
+    //
+    // Adding rows can't reintroduce an empty option: every topic here comes from a claim the
+    // other filters already allow, so picking it leaves at least that one behind.
+    const merged = new Map<string, MatchmakingTopic>();
+    for (const facet of browsedFacets?.topic_facets ?? []) merged.set(facet.id, { id: facet.id, name: facet.name });
+    for (const topic of fromRows) if (!merged.has(topic.id)) merged.set(topic.id, topic);
+    return [...merged.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
   }, [browsedFacets?.topic_facets, tab, topicFacetClaims, topicsByClaimId]);
 
   // Search and space reach the browsed query; on the other tabs, and for the topic everywhere
@@ -693,7 +702,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const hasFilters = Boolean(debouncedSearch || spaceId || topicId);
 
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: Boolean(browsedClaimsQuery.hasNextPage),
+    // Masked for the same reason the pages are: the retained `hasNextPage` outlives the scope it
+    // described, and `fetchNextPage` is a manual call that ignores `enabled` — so a sentinel left
+    // in view would page the unscoped corpus the moment it was scrolled to.
+    hasNextPage: !hasNoEligibleSpaces && Boolean(browsedClaimsQuery.hasNextPage),
     isFetchingNextPage: browsedClaimsQuery.isFetchingNextPage,
     fetchNextPage: browsedClaimsQuery.fetchNextPage,
   });
@@ -978,7 +990,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             tab's sections come from the page whole, and the opponent's tab is the whole of what
             the graph knows about them, in one query. Not while the allowlist is pending either —
             the picker is showing a loading state then. */}
-        {tab === 'all' && browsedClaimsQuery.hasNextPage && !allowlistPending ? (
+        {tab === 'all' && !hasNoEligibleSpaces && browsedClaimsQuery.hasNextPage && !allowlistPending ? (
           <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         ) : null}
       </main>
