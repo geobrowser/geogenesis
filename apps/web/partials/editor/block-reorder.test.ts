@@ -1,3 +1,4 @@
+import { DndContext } from '@dnd-kit/core';
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import Document from '@tiptap/extension-document';
@@ -13,8 +14,8 @@ import {
   BlockDragHandle,
   BlockGutterHoverArea,
   getGutterHoveredChildIndex,
-  getSortableDropBoundary,
-  getTopLevelBlockElements,
+  getNextKeyboardDropBoundary,
+  makeDropZones,
   moveTopLevelBlock,
   releasePointerDragFocus,
 } from './block-reorder';
@@ -29,13 +30,17 @@ afterEach(() => {
 describe('BlockDragHandle', () => {
   it('bridges the gap between the visible handle and the hovered block', () => {
     render(
-      React.createElement(BlockDragHandle, {
-        childIndex: 0,
-        top: 12,
-        left: -32,
-        isDragging: false,
-        visible: true,
-      })
+      React.createElement(
+        DndContext,
+        null,
+        React.createElement(BlockDragHandle, {
+          childIndex: 0,
+          top: 12,
+          left: -32,
+          isDragging: false,
+          visible: true,
+        })
+      )
     );
 
     const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
@@ -48,13 +53,17 @@ describe('BlockDragHandle', () => {
 
   it('reveals a hidden handle when it receives keyboard focus', () => {
     render(
-      React.createElement(BlockDragHandle, {
-        childIndex: 0,
-        top: 12,
-        left: -32,
-        isDragging: false,
-        visible: false,
-      })
+      React.createElement(
+        DndContext,
+        null,
+        React.createElement(BlockDragHandle, {
+          childIndex: 0,
+          top: 12,
+          left: -32,
+          isDragging: false,
+          visible: false,
+        })
+      )
     );
 
     const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
@@ -68,13 +77,17 @@ describe('BlockDragHandle', () => {
 
   it('releases pointer focus after a drag so the old block slot does not stay highlighted', () => {
     render(
-      React.createElement(BlockDragHandle, {
-        childIndex: 0,
-        top: 12,
-        left: -32,
-        isDragging: false,
-        visible: true,
-      })
+      React.createElement(
+        DndContext,
+        null,
+        React.createElement(BlockDragHandle, {
+          childIndex: 0,
+          top: 12,
+          left: -32,
+          isDragging: false,
+          visible: true,
+        })
+      )
     );
 
     const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
@@ -158,36 +171,49 @@ describe('getGutterHoveredChildIndex', () => {
   });
 });
 
-describe('getSortableDropBoundary', () => {
-  const blocks = [{ childIndex: 0 }, { childIndex: 2 }, { childIndex: 3 }];
+describe('getNextKeyboardDropBoundary', () => {
+  const boundaries = [0, 1, 2, 3, 4];
 
-  it('maps a downward rank move to the boundary after the target block', () => {
-    expect(getSortableDropBoundary(blocks, 0, 2)).toBe(4);
+  it('moves one block at a time and can return to the original position', () => {
+    expect(getNextKeyboardDropBoundary(1, null, 1, boundaries)).toBe(3);
+    expect(getNextKeyboardDropBoundary(1, 3, -1, boundaries)).toBe(1);
+    expect(getNextKeyboardDropBoundary(1, 1, -1, boundaries)).toBe(0);
   });
 
-  it('maps an upward rank move to the boundary before the target block', () => {
-    expect(getSortableDropBoundary(blocks, 2, 0)).toBe(0);
+  it('stops at the first and last positions', () => {
+    expect(getNextKeyboardDropBoundary(0, null, -1, boundaries)).toBeNull();
+    expect(getNextKeyboardDropBoundary(3, null, 1, boundaries)).toBeNull();
   });
 
-  it('does nothing when the sortable rank is unchanged or invalid', () => {
-    expect(getSortableDropBoundary(blocks, 1, 1)).toBeNull();
-    expect(getSortableDropBoundary(blocks, -1, 1)).toBeNull();
+  it('moves by draggable rank when excluded nodes make child indexes non-contiguous', () => {
+    const boundariesWithExcludedNode = [0, 2, 3];
+
+    expect(getNextKeyboardDropBoundary(0, null, 1, boundariesWithExcludedNode)).toBe(3);
+    expect(getNextKeyboardDropBoundary(2, null, -1, boundariesWithExcludedNode)).toBe(0);
   });
 });
 
-describe('getTopLevelBlockElements', () => {
-  it('maps document indexes without counting direct gap-cursor widgets', () => {
-    const editor = makeEditor(['A', 'B']);
-    const editorElement = editor.view.dom;
-    const firstBlock = editor.view.nodeDOM(0);
-    const gapCursor = document.createElement('div');
-    gapCursor.className = 'ProseMirror-gapcursor';
+describe('makeDropZones', () => {
+  it('creates a drop target before, between, and after every draggable block', () => {
+    expect(
+      makeDropZones([
+        { childIndex: 0, top: 10, bottom: 30, center: 20 },
+        { childIndex: 1, top: 40, bottom: 80, center: 60 },
+      ])
+    ).toEqual([
+      { boundary: 0, top: 10, height: 10, indicatorTop: 10 },
+      { boundary: 1, top: 20, height: 40, indicatorTop: 35 },
+      { boundary: 2, top: 60, height: 20, indicatorTop: 80 },
+    ]);
+  });
 
-    expect(firstBlock).toBeInstanceOf(HTMLElement);
-    firstBlock?.parentNode?.insertBefore(gapCursor, firstBlock.nextSibling);
+  it('places the final drop boundary immediately after the last draggable block', () => {
+    const zones = makeDropZones([
+      { childIndex: 0, top: 10, bottom: 30, center: 20 },
+      { childIndex: 1, top: 50, bottom: 70, center: 60 },
+    ]);
 
-    expect(getTopLevelBlockElements(editor, editorElement).map(block => block.childIndex)).toEqual([0, 1]);
-    expect(getTopLevelBlockElements(editor, editorElement).map(block => block.element)).not.toContain(gapCursor);
+    expect(zones.map(zone => zone.boundary)).toEqual([0, 1, 2]);
   });
 });
 

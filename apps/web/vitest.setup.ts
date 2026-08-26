@@ -36,26 +36,9 @@
  */
 import { TEST_UNMOCKED_NETWORK_CODE } from './core/io/errors/retry-utils';
 
-// @dnd-kit/dom creates a ResizeObserver subclass at module scope. jsdom does
-// not provide the browser API, so sortable component imports need a minimal
-// global implementation during tests.
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
-
-if (typeof globalThis.ResizeObserver === 'undefined') {
-  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
-}
-
 const refuseNetwork: typeof fetch = async input => {
   const url =
-    typeof input === 'string'
-      ? input
-      : input instanceof URL
-        ? input.toString()
-        : ((input as Request).url ?? '<unknown>');
+    typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url ?? '<unknown>';
 
   const error = new Error(
     `Unmocked network request in a test: ${url}\n` +
