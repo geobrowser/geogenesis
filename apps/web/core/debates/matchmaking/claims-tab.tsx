@@ -249,6 +249,22 @@ export function ClaimsTab() {
   );
 }
 
+/**
+ * The controls a tab pins above its list. Both hub surfaces page forever, so leaving search and
+ * the filters at the top of the document meant scrolling back to the start to change either.
+ *
+ * Deliberately thin: the panel is narrow and short, so every pinned pixel is a claim the viewer
+ * can't see. The tab row above it is already fixed — it sits outside the panel's scroll container
+ * — so this is the only piece that needed pinning here.
+ */
+export function HubStickyControls({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3">
+      {children}
+    </div>
+  );
+}
+
 type SpaceTopicFiltersProps = {
   spaceId: string | null;
   onSpaceChange: (spaceId: string | null) => void;
@@ -269,22 +285,6 @@ type SpaceTopicFiltersProps = {
  * sidebar's already-loaded rows before falling back to the knowledge graph — the facets are
  * narrowed to the viewer's own spaces, which is exactly what the sidebar is holding.
  */
-/**
- * The controls a tab pins above its list. Both hub surfaces page forever, so leaving search and
- * the filters at the top of the document meant scrolling back to the start to change either.
- *
- * Deliberately thin: the panel is narrow and short, so every pinned pixel is a claim the viewer
- * can't see. The tab row above it is already fixed — it sits outside the panel's scroll container
- * — so this is the only piece that needed pinning here.
- */
-export function HubStickyControls({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3">
-      {children}
-    </div>
-  );
-}
-
 export function SpaceTopicFilters({
   spaceId,
   onSpaceChange,
