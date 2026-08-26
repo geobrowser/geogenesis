@@ -11,7 +11,7 @@ import {
 import { fetchFeaturedRankings } from './fetch-featured-rankings';
 
 const getAllEntitiesMock = vi.fn();
-const getEntityPageMock = vi.fn();
+const getBatchEntitiesMock = vi.fn();
 const getRelationsByToEntityIdsMock = vi.fn();
 const getSpacesMock = vi.fn();
 const getSubmitterRefsMock = vi.fn();
@@ -20,7 +20,7 @@ const getOrderedRelationTargetIdsMock = vi.fn();
 
 vi.mock('~/core/io/queries', () => ({
   getAllEntities: (...args: unknown[]) => getAllEntitiesMock(...args),
-  getEntityPage: (...args: unknown[]) => getEntityPageMock(...args),
+  getBatchEntities: (...args: unknown[]) => getBatchEntitiesMock(...args),
   getRelationsByToEntityIds: (...args: unknown[]) => getRelationsByToEntityIdsMock(...args),
   getSpaces: (...args: unknown[]) => getSpacesMock(...args),
 }));
@@ -47,8 +47,10 @@ function dateValue(propertyId: string, value: string) {
   return { property: { id: propertyId }, spaceId: SPACE, isDeleted: false, value };
 }
 
-// A page whose values place the ranking within [startDate, endDate].
-function entityPage({
+// A block entity whose values place the ranking within [startDate, endDate]. The fetcher reads
+// these through the batched entity lookup, so the fixture is a plain Entity rather than the page
+// wrapper the per-block version used.
+function blockEntity({
   name = 'Best Pizza',
   startDate,
   endDate,
@@ -64,7 +66,7 @@ function entityPage({
   const values = [];
   if (startDate) values.push(dateValue(startProperty, startDate));
   if (endDate) values.push(dateValue(endProperty, endDate));
-  return { entity: { name, values, relations: [] }, relations: [] };
+  return { id: BLOCK, name, values, relations: [], spaces: [SPACE] };
 }
 
 function blocksRelation() {
@@ -74,7 +76,7 @@ function blocksRelation() {
 describe('fetchFeaturedRankings', () => {
   beforeEach(() => {
     getAllEntitiesMock.mockReset();
-    getEntityPageMock.mockReset();
+    getBatchEntitiesMock.mockReset();
     getRelationsByToEntityIdsMock.mockReset();
     getSpacesMock.mockReset();
     getSubmitterRefsMock.mockReset();
@@ -91,7 +93,7 @@ describe('fetchFeaturedRankings', () => {
   });
 
   it('keeps a live ranking and resolves its space/block/parent coordinates and submitters', async () => {
-    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE })));
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({ startDate: PAST, endDate: FUTURE })]));
 
     const result = await fetchFeaturedRankings();
 
@@ -117,7 +119,7 @@ describe('fetchFeaturedRankings', () => {
     const FIRST = 'e1c9f267dcb0d270718c2a3c45a64afd';
     const SECOND = 'e2c9f267dcb0d270718c2a3c45a64afd';
 
-    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE })));
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({ startDate: PAST, endDate: FUTURE })]));
     getOrderedRelationTargetIdsMock.mockReturnValue([FIRST, SECOND]);
     getAllEntitiesMock.mockImplementation((opts: { filter?: { id?: { in?: string[] } } }) => {
       if (opts.filter?.id?.in) {
@@ -147,7 +149,7 @@ describe('fetchFeaturedRankings', () => {
   });
 
   it('still returns the ranking (without a leaderboard) when the top-entries lookup fails', async () => {
-    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE })));
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({ startDate: PAST, endDate: FUTURE })]));
     getOrderedRelationTargetIdsMock.mockReturnValue(['e1c9f267dcb0d270718c2a3c45a64afd']);
     getAllEntitiesMock.mockImplementation((opts: { filter?: { id?: { in?: string[] } } }) => {
       if (opts.filter?.id?.in) {
@@ -163,7 +165,7 @@ describe('fetchFeaturedRankings', () => {
   });
 
   it('still returns rankings when the space metadata lookup fails', async () => {
-    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE })));
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({ startDate: PAST, endDate: FUTURE })]));
     getSpacesMock.mockImplementation(() => Effect.die(new Error('boom')));
 
     const result = await fetchFeaturedRankings();
@@ -174,7 +176,7 @@ describe('fetchFeaturedRankings', () => {
   });
 
   it('resolves the window from the legacy date properties when the current ones are absent', async () => {
-    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE, legacy: true })));
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({ startDate: PAST, endDate: FUTURE, legacy: true })]));
 
     const result = await fetchFeaturedRankings();
 
@@ -184,7 +186,7 @@ describe('fetchFeaturedRankings', () => {
   });
 
   it('treats a ranking with no date window as live', async () => {
-    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({})));
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({})]));
 
     const result = await fetchFeaturedRankings();
 
@@ -194,20 +196,20 @@ describe('fetchFeaturedRankings', () => {
   });
 
   it('drops a ranking whose voting window has already ended', async () => {
-    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: PAST })));
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({ startDate: PAST, endDate: PAST })]));
 
     expect(await fetchFeaturedRankings()).toEqual([]);
   });
 
   it('drops a live ranking whose block placement cannot be resolved', async () => {
-    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE })));
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({ startDate: PAST, endDate: FUTURE })]));
     getRelationsByToEntityIdsMock.mockReturnValue(Effect.succeed([]));
 
     expect(await fetchFeaturedRankings()).toEqual([]);
   });
 
   it('falls back to the rank entity home space when a submitter ref lacks a space', async () => {
-    getEntityPageMock.mockReturnValue(Effect.succeed(entityPage({ startDate: PAST, endDate: FUTURE })));
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({ startDate: PAST, endDate: FUTURE })]));
     // Ref has no space of its own — the resolver must look up the rank entity's home space.
     getSubmitterRefsMock.mockReturnValue([{ rankEntityId: RANK_ENTITY, spaceId: undefined }]);
     getAllEntitiesMock.mockImplementation((opts: { filter?: { id?: { in?: string[] } } }) => {
@@ -227,6 +229,119 @@ describe('fetchFeaturedRankings', () => {
     getAllEntitiesMock.mockReturnValue(Effect.succeed({ entities: [] }));
 
     expect(await fetchFeaturedRankings()).toEqual([]);
-    expect(getEntityPageMock).not.toHaveBeenCalled();
+    expect(getBatchEntitiesMock).not.toHaveBeenCalled();
+  });
+  // ---------------------------------------------------------------------------------------
+  // Batching-specific. A per-block loop got these for free; resolving in batches has to do
+  // them deliberately, and getting them wrong is silent.
+  // ---------------------------------------------------------------------------------------
+
+  const BLOCK_B = 'b2c9f267dcb0d270718c2a3c45a64afd';
+  const SPACE_B = '89bd89bf28ff8a0963faf92a8c905e20';
+  const PARENT_B = 'p2c9f267dcb0d270718c2a3c45a64afd';
+
+  function twoBlocksInDifferentSpaces() {
+    getAllEntitiesMock.mockImplementation((opts: { filter?: { id?: { in?: string[] } } }) => {
+      if (opts.filter?.id?.in) return Effect.succeed({ entities: [] });
+      return Effect.succeed({
+        entities: [
+          { id: BLOCK, spaces: [SPACE] },
+          { id: BLOCK_B, spaces: [SPACE_B] },
+        ],
+      });
+    });
+    getBatchEntitiesMock.mockImplementation((ids: string[], spaceId?: string) =>
+      Effect.succeed(
+        spaceId === SPACE_B
+          ? [{ id: BLOCK_B, name: 'Best Pasta', values: [], relations: [], spaces: [SPACE_B] }]
+          : [blockEntity({})]
+      )
+    );
+    getRelationsByToEntityIdsMock.mockReturnValue(
+      Effect.succeed([
+        { id: RELATION, fromEntityId: PARENT, toEntityId: BLOCK, spaceId: SPACE },
+        { id: 'rel2', fromEntityId: PARENT_B, toEntityId: BLOCK_B, spaceId: SPACE_B },
+      ])
+    );
+  }
+
+  it('resolves placements for every block in a single query', async () => {
+    twoBlocksInDifferentSpaces();
+
+    const result = await fetchFeaturedRankings();
+
+    expect(result.map(r => r.blockEntityId)).toEqual([BLOCK, BLOCK_B]);
+    expect(result.map(r => r.parentEntityId)).toEqual([PARENT, PARENT_B]);
+
+    // The point of the change: one placement call carrying every block, not one call per block.
+    expect(getRelationsByToEntityIdsMock).toHaveBeenCalledTimes(1);
+    expect(getRelationsByToEntityIdsMock.mock.calls[0][0]).toEqual([BLOCK, BLOCK_B]);
+    // And one entity call per distinct space rather than per block.
+    expect(getBatchEntitiesMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes each placement from the block\'s own space, not whichever the batch returned first', async () => {
+    // Dropping the per-query space filter widens the response to every space, so a block that is
+    // also embedded elsewhere can come back with a foreign placement listed first. The per-block
+    // query could never do that; here it has to be excluded by hand.
+    getRelationsByToEntityIdsMock.mockReturnValue(
+      Effect.succeed([
+        { id: 'rel-other-space', fromEntityId: 'parent-elsewhere', toEntityId: BLOCK, spaceId: SPACE_B },
+        { id: RELATION, fromEntityId: PARENT, toEntityId: BLOCK, spaceId: SPACE },
+      ])
+    );
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({})]));
+
+    const result = await fetchFeaturedRankings();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].parentEntityId).toBe(PARENT);
+    expect(result[0].relationId).toBe(RELATION);
+  });
+
+  it('drops only the ranking whose placement is in another space', async () => {
+    getRelationsByToEntityIdsMock.mockReturnValue(
+      Effect.succeed([{ id: 'rel-elsewhere', fromEntityId: 'parent-elsewhere', toEntityId: BLOCK, spaceId: SPACE_B }])
+    );
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({})]));
+
+    expect(await fetchFeaturedRankings()).toEqual([]);
+  });
+
+  it('keeps one space\'s entity lookup failing from dropping another space\'s rankings', async () => {
+    twoBlocksInDifferentSpaces();
+    // Batching makes a failure shared by default. It has to stay scoped to the space that failed.
+    getBatchEntitiesMock.mockImplementation((ids: string[], spaceId?: string) =>
+      spaceId === SPACE_B ? Effect.die(new Error('space B is down')) : Effect.succeed([blockEntity({})])
+    );
+
+    const result = await fetchFeaturedRankings();
+
+    expect(result.map(r => r.blockEntityId)).toEqual([BLOCK]);
+  });
+
+  it('returns nothing when the shared placement query fails', async () => {
+    // Every ranking needs a placement, so this drops them all — same as the per-block version,
+    // where the throw reached each ranking's own catch.
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({})]));
+    getRelationsByToEntityIdsMock.mockImplementation(() => Effect.die(new Error('relations down')));
+
+    expect(await fetchFeaturedRankings()).toEqual([]);
+  });
+
+  it('still returns rankings when the shared submitter-home-space lookup fails', async () => {
+    // Softer than the per-ranking version it replaces, deliberately: that one let the failure drop
+    // the ranking, and one shared batch failing that way would now drop every featured ranking.
+    getBatchEntitiesMock.mockReturnValue(Effect.succeed([blockEntity({})]));
+    getSubmitterRefsMock.mockReturnValue([{ rankEntityId: RANK_ENTITY, spaceId: undefined }]);
+    getAllEntitiesMock.mockImplementation((opts: { filter?: { id?: { in?: string[] } } }) => {
+      if (opts.filter?.id?.in) return Effect.die(new Error('home space lookup down'));
+      return Effect.succeed({ entities: [{ id: BLOCK, spaces: [SPACE] }] });
+    });
+
+    const result = await fetchFeaturedRankings();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].submitterSpaceIds).toEqual([]);
   });
 });

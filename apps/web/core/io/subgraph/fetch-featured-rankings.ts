@@ -17,11 +17,10 @@ import { getRankingPeriodState, rankingSubmissionsOpen } from '~/core/blocks/ran
 import { FEATURED_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import { MAX_FEATURED_RANKING_ENTRIES } from '~/core/explore/featured-rankings-config';
 import type { EntityFilter } from '~/core/gql/graphql';
-import { getAllEntities, getEntityPage, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import { getAllEntities, getBatchEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { RANKING_BLOCK_TYPE_ID, RANK_POSITION_PROPERTY_ID } from '~/core/ranking-block-ids';
 import type { Entity } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
-import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 import { normId } from '~/core/utils/norm-id';
 
 // A featured ranking is a Ranking Block entity carrying a TAG_PROPERTY relation
@@ -59,7 +58,6 @@ export interface FeaturedRanking {
 // while bounding SSR cost.
 const MAX_CANDIDATES = 25;
 const MAX_FEATURED_RANKINGS = 10;
-const RESOLVE_CONCURRENCY = 6;
 
 // Entities that are Ranking Blocks AND tagged Featured.
 const FEATURED_RANKINGS_FILTER: EntityFilter = {
@@ -100,24 +98,45 @@ function dedupePreserveOrder(ids: string[]): string[] {
  * entity's home space. Without this fallback the "Ranked by" avatars come back
  * empty whenever `to_space` isn't populated even though the count is non-zero.
  */
-async function resolveSubmitterSpaceIds(refs: AggregatedRankingSubmitterRef[]): Promise<string[]> {
-  const rankEntityIdsNeedingSpace = refs.filter(ref => !ref.spaceId).map(ref => ref.rankEntityId);
-
-  let rankEntitySpaceById = new Map<string, string>();
-  if (rankEntityIdsNeedingSpace.length > 0) {
-    const { entities } = await Effect.runPromise(
-      getAllEntities({ filter: { id: { in: rankEntityIdsNeedingSpace } }, limit: rankEntityIdsNeedingSpace.length })
-    );
-    rankEntitySpaceById = new Map(
-      entities
-        .map(entity => [entity.id, entity.spaces?.[0]] as const)
-        .filter((entry): entry is [string, string] => Boolean(entry[1]))
-    );
+async function resolveSubmitterSpaceIdsByBlock(
+  refsByBlock: Map<string, AggregatedRankingSubmitterRef[]>
+): Promise<Map<string, string[]>> {
+  const idsNeedingSpace = new Set<string>();
+  for (const refs of refsByBlock.values()) {
+    for (const ref of refs) {
+      if (!ref.spaceId) idsNeedingSpace.add(ref.rankEntityId);
+    }
   }
 
-  return dedupePreserveOrder(
-    refs.map(ref => ref.spaceId ?? rankEntitySpaceById.get(ref.rankEntityId)).filter((id): id is string => Boolean(id))
-  );
+  let rankEntitySpaceById = new Map<string, string>();
+  if (idsNeedingSpace.size > 0) {
+    try {
+      const ids = [...idsNeedingSpace];
+      const { entities } = await Effect.runPromise(getAllEntities({ filter: { id: { in: ids } }, limit: ids.length }));
+      rankEntitySpaceById = new Map(
+        entities
+          .map(entity => [entity.id, entity.spaces?.[0]] as const)
+          .filter((entry): entry is [string, string] => Boolean(entry[1]))
+      );
+    } catch (error) {
+      // Best-effort, and deliberately softer than the per-ranking version this replaces: that one
+      // let the failure reach the per-ranking catch, which dropped the ranking. One shared batch
+      // failing that way would now drop *every* featured ranking, so instead the fallback is
+      // skipped and the affected cards render with the submitter avatars they could resolve.
+      console.error('Unable to resolve featured ranking submitter home spaces', error);
+    }
+  }
+
+  const byBlock = new Map<string, string[]>();
+  for (const [blockEntityId, refs] of refsByBlock) {
+    byBlock.set(
+      blockEntityId,
+      dedupePreserveOrder(
+        refs.map(ref => ref.spaceId ?? rankEntitySpaceById.get(ref.rankEntityId)).filter((id): id is string => Boolean(id))
+      )
+    );
+  }
+  return byBlock;
 }
 
 /**
@@ -127,26 +146,56 @@ async function resolveSubmitterSpaceIds(refs: AggregatedRankingSubmitterRef[]): 
  * and a failed lookup yields an empty list so the ranking card still renders
  * without its leaderboard instead of being dropped by the per-ranking catch.
  */
-async function resolveTopEntries(entityIds: string[], spaceId: string): Promise<FeaturedRankingEntry[]> {
-  if (entityIds.length === 0) return [];
+async function resolveTopEntriesByBlock(
+  requests: { blockEntityId: string; spaceId: string; entityIds: string[] }[]
+): Promise<Map<string, FeaturedRankingEntry[]>> {
+  const byBlock = new Map<string, FeaturedRankingEntry[]>();
+  const withEntries = requests.filter(request => request.entityIds.length > 0);
+  for (const request of requests) byBlock.set(request.blockEntityId, []);
+  if (withEntries.length === 0) return byBlock;
 
-  try {
-    const { entities } = await Effect.runPromise(
-      getAllEntities({ filter: { id: { in: entityIds } }, spaceId, limit: entityIds.length })
-    );
-    const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
-    return entityIds.map(entityId => {
-      const entity = entitiesById.get(entityId);
-      return {
-        entityId,
-        name: entity?.name?.trim() || 'Untitled',
-        image: entity ? (Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? null) : null,
-      };
-    });
-  } catch (error) {
-    console.error(`Unable to resolve featured ranking top entries (space ${spaceId})`, error);
-    return [];
+  // The batch query scopes values and relations to a single space, so rankings are grouped by
+  // their own space rather than merged into one call. Distinct spaces, not rankings, set the
+  // query count.
+  const bySpace = new Map<string, typeof withEntries>();
+  for (const request of withEntries) {
+    const group = bySpace.get(request.spaceId) ?? [];
+    group.push(request);
+    bySpace.set(request.spaceId, group);
   }
+
+  await Promise.all(
+    [...bySpace.entries()].map(async ([spaceId, group]) => {
+      const ids = dedupePreserveOrder(group.flatMap(request => request.entityIds));
+      try {
+        const { entities } = await Effect.runPromise(
+          getAllEntities({ filter: { id: { in: ids } }, spaceId, limit: ids.length })
+        );
+        const entitiesById = new Map(entities.map(entity => [entity.id, entity]));
+        for (const request of group) {
+          byBlock.set(
+            request.blockEntityId,
+            // Kept per ranking and in its own order: an entity missing from the response still
+            // renders as "Untitled" so the leaderboard keeps its positions.
+            request.entityIds.map(entityId => {
+              const entity = entitiesById.get(entityId);
+              return {
+                entityId,
+                name: entity?.name?.trim() || 'Untitled',
+                image: entity ? (Entities.avatar(entity.relations) ?? Entities.cover(entity.relations) ?? null) : null,
+              };
+            })
+          );
+        }
+      } catch (error) {
+        // Scoped to the one space that failed: its rankings keep the empty leaderboard they were
+        // seeded with above and still render, exactly as the per-ranking version did.
+        console.error(`Unable to resolve featured ranking top entries (space ${spaceId})`, error);
+      }
+    })
+  );
+
+  return byBlock;
 }
 
 /**
@@ -183,17 +232,47 @@ async function attachSpaceMetadata(rankings: FeaturedRanking[]): Promise<Feature
  * can't be resolved — such a ranking is dropped rather than shipping a Vote
  * button that leads to a broken compose view.
  */
-async function resolveBlockPlacement(
-  blockEntityId: string,
-  spaceId: string
-): Promise<{ parentEntityId: string; relationId: string } | null> {
-  const relations = (await Effect.runPromise(
-    getRelationsByToEntityIds([blockEntityId], SystemIds.BLOCKS, spaceId)
-  )) as unknown as ToEntityRelation[];
-  if (!relations || relations.length === 0) return null;
-  const match = relations.find(r => r.spaceId === spaceId) ?? relations[0];
-  if (!match.id || !match.fromEntityId) return null;
-  return { parentEntityId: match.fromEntityId, relationId: match.id };
+async function resolveBlockPlacements(
+  blocks: { blockEntityId: string; spaceId: string }[]
+): Promise<Map<string, { parentEntityId: string; relationId: string }>> {
+  const placements = new Map<string, { parentEntityId: string; relationId: string }>();
+  if (blocks.length === 0) return placements;
+
+  let relations: ToEntityRelation[] = [];
+  try {
+    // `spaceId` is omitted so every block resolves in one query rather than one per space. That
+    // widens the result to all spaces, so each block's own space is applied below — verified
+    // against the API to be a strict superset of the per-block, per-space responses.
+    relations = (await Effect.runPromise(
+      getRelationsByToEntityIds(
+        blocks.map(block => block.blockEntityId),
+        SystemIds.BLOCKS
+      )
+    )) as unknown as ToEntityRelation[];
+  } catch (error) {
+    // Every ranking needs a placement, so a failure here drops them all — same as the per-block
+    // version, where the throw reached each ranking's own catch.
+    console.error('Unable to resolve featured ranking block placements', error);
+    return placements;
+  }
+
+  const byBlock = new Map<string, ToEntityRelation[]>();
+  for (const relation of relations ?? []) {
+    const group = byBlock.get(relation.toEntityId) ?? [];
+    group.push(relation);
+    byBlock.set(relation.toEntityId, group);
+  }
+
+  for (const { blockEntityId, spaceId } of blocks) {
+    // Narrow to the block's own space first. The per-block query was already space-filtered, so
+    // its `find(spaceId) ?? [0]` could only ever return a relation from that space; picking the
+    // first of the scoped group here is the same choice.
+    const match = (byBlock.get(blockEntityId) ?? []).find(relation => relation.spaceId === spaceId);
+    if (!match?.id || !match.fromEntityId) continue;
+    placements.set(blockEntityId, { parentEntityId: match.fromEntityId, relationId: match.id });
+  }
+
+  return placements;
 }
 
 /**
@@ -204,7 +283,7 @@ async function resolveBlockPlacement(
  */
 export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
   // 1. Candidate featured ranking blocks (unscoped — we only need id + owning
-  //    space here; the scoped values/relations come from the per-block fetch).
+  //    space here; the scoped values/relations come from the batched fetch below).
   const { entities } = await Effect.runPromise(
     getAllEntities({ filter: FEATURED_RANKINGS_FILTER, limit: MAX_CANDIDATES })
   );
@@ -217,70 +296,112 @@ export async function fetchFeaturedRankings(): Promise<FeaturedRanking[]> {
     seen.add(entity.id);
     candidates.push({ blockEntityId: entity.id, spaceId });
   }
+  if (candidates.length === 0) return [];
 
-  // 2. Resolve each candidate scoped to its space: date window (for the live
-  //    check), aggregated submitters, and parent placement.
-  const resolved = await mapWithConcurrency(
-    candidates,
-    RESOLVE_CONCURRENCY,
-    async ({ blockEntityId, spaceId }): Promise<FeaturedRanking | null> => {
+  // 2. Block entities, space-scoped, one query per distinct space rather than one per block.
+  const candidatesBySpace = new Map<string, typeof candidates>();
+  for (const candidate of candidates) {
+    const group = candidatesBySpace.get(candidate.spaceId) ?? [];
+    group.push(candidate);
+    candidatesBySpace.set(candidate.spaceId, group);
+  }
+
+  const blockEntities = new Map<string, Entity>();
+  await Promise.all(
+    [...candidatesBySpace.entries()].map(async ([spaceId, group]) => {
       try {
-        const page = await Effect.runPromise(getEntityPage(blockEntityId, spaceId));
-        if (!page?.entity) return null;
-
-        const entity = page.entity;
-        const relations = page.relations.length > 0 ? page.relations : entity.relations;
-
-        const readBlockDate = (propertyId: string) => readDateValue(entity, propertyId, spaceId);
-        const rankingStartDate = resolveRankingDateValue(RANKING_START_PROPERTY_IDS, readBlockDate);
-        const rankingEndDate = resolveRankingDateValue(RANKING_END_PROPERTY_IDS, readBlockDate);
-
-        // "Live" == voting is currently open (in-progress, or no bounded window).
-        const periodState = getRankingPeriodState(rankingStartDate, rankingEndDate);
-        if (!rankingSubmissionsOpen(periodState)) return null;
-
-        const placement = await resolveBlockPlacement(blockEntityId, spaceId);
-        if (!placement) return null;
-
-        const submitterRefs = getAggregatedRankingSubmitterRefs(relations, blockEntityId, spaceId);
-        const submitterSpaceIds = await resolveSubmitterSpaceIds(submitterRefs);
-
-        const orderedEntityIds = getOrderedRelationTargetIds(
-          relations,
-          blockEntityId,
-          RANK_POSITION_PROPERTY_ID,
-          spaceId
-        ).slice(0, MAX_FEATURED_RANKING_ENTRIES);
-        const topEntries = await resolveTopEntries(orderedEntityIds, spaceId);
-
-        return {
-          blockEntityId,
-          spaceId,
-          parentEntityId: placement.parentEntityId,
-          relationId: placement.relationId,
-          name: entity.name?.trim() || 'Untitled ranking',
-          rankingStartDate: rankingStartDate.value,
-          rankingEndDate: rankingEndDate.value,
-          submitterSpaceIds,
-          submissionCount: getAggregatedRankingSubmissionCount(relations, blockEntityId, spaceId),
-          // Space metadata is attached in one batched lookup after the per-block resolve.
-          spaceName: null,
-          spaceImage: null,
-          topEntries,
-        } satisfies FeaturedRanking;
+        const resolvedEntities = await Effect.runPromise(
+          getBatchEntities(
+            group.map(candidate => candidate.blockEntityId),
+            spaceId
+          )
+        );
+        for (const entity of resolvedEntities) blockEntities.set(entity.id, entity);
       } catch (error) {
-        // Best-effort per ranking: a single block that fails to resolve is skipped
-        // rather than failing the whole section, but log it so silently-missing
-        // featured rankings stay debuggable in production.
-        console.error(`Unable to resolve featured ranking (block ${blockEntityId}, space ${spaceId})`, error);
-        return null;
+        // Scoped to the one space that failed — its rankings drop out below for want of an
+        // entity, the rest are unaffected.
+        console.error(`Unable to resolve featured ranking blocks (space ${spaceId})`, error);
       }
-    }
+    })
   );
 
-  const rankings = resolved
-    .filter((ranking): ranking is FeaturedRanking => ranking !== null)
-    .slice(0, MAX_FEATURED_RANKINGS);
+  // 3. Keep the live ones. Pure reads of what phase 2 returned, so this costs no requests and
+  //    still runs before the expensive work, as the per-block version did.
+  const live: {
+    blockEntityId: string;
+    spaceId: string;
+    entity: Entity;
+    relations: Entity['relations'];
+    rankingStartDate: { value: string };
+    rankingEndDate: { value: string };
+  }[] = [];
+
+  for (const { blockEntityId, spaceId } of candidates) {
+    const entity = blockEntities.get(blockEntityId);
+    if (!entity) continue;
+
+    const readBlockDate = (propertyId: string) => readDateValue(entity, propertyId, spaceId);
+    const rankingStartDate = resolveRankingDateValue(RANKING_START_PROPERTY_IDS, readBlockDate);
+    const rankingEndDate = resolveRankingDateValue(RANKING_END_PROPERTY_IDS, readBlockDate);
+
+    // "Live" == voting is currently open (in-progress, or no bounded window).
+    const periodState = getRankingPeriodState(rankingStartDate, rankingEndDate);
+    if (!rankingSubmissionsOpen(periodState)) continue;
+
+    live.push({ blockEntityId, spaceId, entity, relations: entity.relations, rankingStartDate, rankingEndDate });
+  }
+
+  if (live.length === 0) return [];
+
+  // 4. Placement, submitter spaces and leaderboards. Each depends only on phase 2, not on each
+  //    other, so they overlap instead of running as the three sequential steps they used to be.
+  const submitterRefsByBlock = new Map<string, AggregatedRankingSubmitterRef[]>();
+  const topEntryRequests: { blockEntityId: string; spaceId: string; entityIds: string[] }[] = [];
+  for (const { blockEntityId, spaceId, relations } of live) {
+    submitterRefsByBlock.set(blockEntityId, getAggregatedRankingSubmitterRefs(relations, blockEntityId, spaceId));
+    topEntryRequests.push({
+      blockEntityId,
+      spaceId,
+      entityIds: getOrderedRelationTargetIds(relations, blockEntityId, RANK_POSITION_PROPERTY_ID, spaceId).slice(
+        0,
+        MAX_FEATURED_RANKING_ENTRIES
+      ),
+    });
+  }
+
+  const [placements, submitterSpaceIdsByBlock, topEntriesByBlock] = await Promise.all([
+    resolveBlockPlacements(live.map(({ blockEntityId, spaceId }) => ({ blockEntityId, spaceId }))),
+    resolveSubmitterSpaceIdsByBlock(submitterRefsByBlock),
+    resolveTopEntriesByBlock(topEntryRequests),
+  ]);
+
+  // 5. Assemble in candidate order, then cap. The cap stays here rather than moving before the
+  //    resolve: batching made resolving the extras almost free (it adds ids to existing queries,
+  //    not queries), and capping early would shrink the list below the cap whenever a ranking
+  //    failed to resolve, instead of the next one taking its place.
+  const rankings: FeaturedRanking[] = [];
+  for (const { blockEntityId, spaceId, entity, relations, rankingStartDate, rankingEndDate } of live) {
+    const placement = placements.get(blockEntityId);
+    if (!placement) continue;
+
+    rankings.push({
+      blockEntityId,
+      spaceId,
+      parentEntityId: placement.parentEntityId,
+      relationId: placement.relationId,
+      name: entity.name?.trim() || 'Untitled ranking',
+      rankingStartDate: rankingStartDate.value,
+      rankingEndDate: rankingEndDate.value,
+      submitterSpaceIds: submitterSpaceIdsByBlock.get(blockEntityId) ?? [],
+      submissionCount: getAggregatedRankingSubmissionCount(relations, blockEntityId, spaceId),
+      // Space metadata is attached in one batched lookup after the per-block resolve.
+      spaceName: null,
+      spaceImage: null,
+      topEntries: topEntriesByBlock.get(blockEntityId) ?? [],
+    } satisfies FeaturedRanking);
+
+    if (rankings.length === MAX_FEATURED_RANKINGS) break;
+  }
 
   return attachSpaceMetadata(rankings);
 }
