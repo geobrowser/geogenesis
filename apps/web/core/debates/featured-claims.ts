@@ -20,6 +20,10 @@ import { graphql } from '~/core/io/graphql-client';
  * The relation carries the space it was written in, which is the space the claim was featured
  * *in* — a better answer than ranking the claim's spaces after the fact, and the one both callers
  * use to group their geo-chat lookups.
+ *
+ * `rankingScore` rides along so the list can be ordered the way Explore's "Best" sort and geo-chat
+ * both order theirs. Unordered, this connection comes back by relation id, and those are random
+ * v4s — a fixed shuffle with no relationship to anything a reader would recognise.
  */
 const FEATURED_CLAIMS_SOURCE = /* GraphQL */ `
   query FeaturedClaims(
@@ -43,6 +47,7 @@ const FEATURED_CLAIMS_SOURCE = /* GraphQL */ `
           id
           name
           description
+          rankingScore
         }
       }
     }
@@ -53,7 +58,13 @@ type FeaturedClaimsQuery = {
   relationsConnection: {
     nodes: Array<{
       spaceId: string | null;
-      fromEntity: { id: string; name: string | null; description: string | null } | null;
+      fromEntity: {
+        id: string;
+        name: string | null;
+        description: string | null;
+        // `BigFloat`, so it arrives as a string.
+        rankingScore: string | null;
+      } | null;
     } | null> | null;
   } | null;
 };
@@ -84,7 +95,27 @@ export type FeaturedClaim = {
   spaceId: string;
   name: string;
   description: string | null;
+  /** `null` for a claim the ranking feed has never scored. */
+  rankingScore: number | null;
 };
+
+/**
+ * Explore's "Best" order, which is `entities_ranked_for_feed`'s own
+ * `ORDER BY ranking_score DESC, entity_id DESC` — the tiebreak included, so two claims on the same
+ * score land the same way here as they do there.
+ *
+ * A claim the feed has never scored isn't in that table at all, so there is no place in the order
+ * for it. It goes last rather than being dropped: a curator tagged it deliberately, and leaving it
+ * out would quietly overrule them.
+ */
+export function compareFeaturedClaims(a: FeaturedClaim, z: FeaturedClaim): number {
+  if (a.rankingScore !== z.rankingScore) {
+    if (a.rankingScore === null) return 1;
+    if (z.rankingScore === null) return -1;
+    return z.rankingScore - a.rankingScore;
+  }
+  return z.claimEntityId.localeCompare(a.claimEntityId);
+}
 
 function decodeFeaturedClaims(data: FeaturedClaimsQuery): FeaturedClaim[] {
   const claims: FeaturedClaim[] = [];
@@ -103,10 +134,13 @@ function decodeFeaturedClaims(data: FeaturedClaimsQuery): FeaturedClaim[] {
       spaceId: node.spaceId,
       name: node.fromEntity.name,
       description: node.fromEntity.description,
+      rankingScore: node.fromEntity.rankingScore === null ? null : Number(node.fromEntity.rankingScore),
     });
   }
 
-  return claims;
+  // Sorted here rather than in the query: the connection can only order by its own columns, and the
+  // score belongs to the claim on the other end of the relation.
+  return claims.sort(compareFeaturedClaims);
 }
 
 export function fetchFeaturedClaims(signal?: AbortSignal): Promise<FeaturedClaim[]> {
@@ -136,9 +170,10 @@ export const featuredClaimsQueryKey = ['featured-claims', 'claims'] as const;
 const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
 
 /**
- * Every claim tagged Featured, unfiltered. Callers narrow it to the spaces they may show — the
- * viewer's allowlist and the acceptor's editor spaces — because which spaces those are is a
- * different question in the hub than it is in the rematch picker.
+ * Every claim tagged Featured, in Explore's "Best" order and unfiltered. Callers narrow it to the
+ * spaces they may show — the viewer's allowlist and the acceptor's editor spaces — because which
+ * spaces those are is a different question in the hub than it is in the rematch picker. Narrowing
+ * preserves the order, so what survives is still ranked.
  *
  * Curation moves at human speed, so this stays fresh for a good while; both callers ask for the
  * same key and share the one request.

@@ -642,6 +642,19 @@ describe('ClaimsTab -- Featured', () => {
     expect(screen.queryByText('Chips are better than fries')).toBeNull();
   });
 
+  // Featured leads the menu because it is what the tab opens on; an option you land on shouldn't
+  // sit below the one you didn't.
+  it('leads the position menu, ahead of All claims', () => {
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Featured' }));
+
+    const labels = ['Featured', 'All claims', 'My positions', 'Debate now'];
+    const options = screen.getAllByRole('button').filter(button => labels.includes(button.textContent?.trim() ?? ''));
+    // The trigger carries the current label too, and it is rendered ahead of the options.
+    expect(options.slice(-4).map(button => button.textContent?.trim())).toEqual(labels);
+  });
+
   // Featured claims are a few hundred in a corpus of hundreds of thousands, so the index is no help
   // here and asking it for a page while Featured is showing is a request for nothing.
   it('leaves the index alone until the viewer asks for All claims', async () => {

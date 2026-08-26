@@ -45,9 +45,11 @@ const SEARCH_DEBOUNCE_MS = 250;
  */
 type ClaimsTabFilter = MatchmakingClaimsFilter | 'featured';
 
+// Featured leads: it is where the tab opens, and an option the menu opens on should be the one at
+// the top of it.
 const FILTER_OPTIONS: HubFilterOption<ClaimsTabFilter>[] = [
-  { value: 'all', label: 'All claims' },
   { value: 'featured', label: 'Featured' },
+  { value: 'all', label: 'All claims' },
   { value: 'mine', label: 'My positions' },
   { value: 'debate_now', label: 'Debate now' },
 ];
