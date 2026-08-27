@@ -8,7 +8,7 @@ import { Editor } from '@tiptap/react';
 
 import React from 'react';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   BlockDragHandle,
@@ -27,6 +27,7 @@ const editors: Editor[] = [];
 afterEach(() => {
   cleanup();
   for (const editor of editors.splice(0)) editor.destroy();
+  vi.unstubAllGlobals();
 });
 
 describe('BlockDragHandle', () => {
@@ -75,6 +76,40 @@ describe('BlockDragHandle', () => {
     fireEvent.focus(button);
 
     expect(handle).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
+  });
+
+  it('keeps hidden handles available on coarse or hoverless pointers', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn().mockReturnValue({
+        matches: true,
+        media: '(hover: none), (pointer: coarse)',
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })
+    );
+
+    render(
+      React.createElement(
+        DndContext,
+        null,
+        React.createElement(BlockDragHandle, {
+          childIndex: 0,
+          top: 12,
+          left: -32,
+          isDragging: false,
+          visible: false,
+        })
+      )
+    );
+
+    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    expect(button.parentElement).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
+    expect(button).toHaveClass('touch-none');
   });
 
   it('releases pointer focus after a drag so the old block slot does not stay highlighted', () => {

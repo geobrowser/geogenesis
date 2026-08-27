@@ -345,10 +345,23 @@ export function BlockDragHandle({
   visible: boolean;
 }) {
   const [isFocused, setIsFocused] = React.useState(false);
+  const [isCoarseOrHoverlessPointer, setIsCoarseOrHoverlessPointer] = React.useState(false);
   const { attributes, listeners, setNodeRef } = useDraggable({
     id: `content-block-${childIndex}`,
     data: { childIndex },
   });
+  const isAvailable = !isDragging && (visible || isFocused || isCoarseOrHoverlessPointer);
+
+  React.useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+
+    const pointerQuery = window.matchMedia('(hover: none), (pointer: coarse)');
+    const updatePointerMode = () => setIsCoarseOrHoverlessPointer(pointerQuery.matches);
+    updatePointerMode();
+    pointerQuery.addEventListener('change', updatePointerMode);
+
+    return () => pointerQuery.removeEventListener('change', updatePointerMode);
+  }, []);
 
   return (
     <div
@@ -357,8 +370,8 @@ export function BlockDragHandle({
       style={{
         top,
         left,
-        opacity: isDragging ? 0 : visible || isFocused ? 1 : 0,
-        pointerEvents: visible || isFocused ? 'auto' : 'none',
+        opacity: isAvailable ? 1 : 0,
+        pointerEvents: isAvailable ? 'auto' : 'none',
       }}
     >
       <button
@@ -366,7 +379,7 @@ export function BlockDragHandle({
         type="button"
         aria-label={`Drag block ${childIndex + 1} to reorder`}
         title="Drag to reorder"
-        className="flex size-6 cursor-grab items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01 active:cursor-grabbing"
+        className="flex size-6 cursor-grab touch-none items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01 active:cursor-grabbing"
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         {...attributes}
