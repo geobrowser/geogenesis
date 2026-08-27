@@ -27,14 +27,22 @@ export function useDebatePublishableSpaces(): {
     queryKey: ['debates', 'publishable-spaces'],
     queryFn: async (): Promise<string[] | null> => {
       const response = await fetch('/api/debates/publishable-spaces');
-      if (!response.ok) return null;
+      // Throw rather than return null, so an HTTP failure is a *retryable* error instead of a
+      // cached "unknown". Returning null here made a single blip a settled answer for the session.
+      if (!response.ok) throw new Error(`publishable spaces: ${response.status}`);
       const body = (await response.json()) as { spaceIds?: string[] | null };
       return body.spaceIds ?? null;
     },
     // Editor sets change when someone is added to a space. Refetching this per mount would spend a
-    // request on an answer that is the same all session.
-    staleTime: 5 * 60_000,
-    retry: false,
+    // request on an answer that is the same all session — but only once there *is* an answer:
+    // `null` means the lookup could not be made, and holding that for five minutes keeps the
+    // filter off long after the upstream recovered. So a null is stale immediately.
+    staleTime: query => (query.state.data == null ? 0 : 5 * 60_000),
+    // Was `false`, which meant one transient 503 dropped the space filter entirely and nothing
+    // tried again. Both gates fail open on `null`, so a failed lookup silently widens the claims
+    // corpus rather than narrowing it — the failure mode that hides a retry being absent.
+    retry: 2,
+    retryDelay: attempt => Math.min(1_000 * 2 ** attempt, 5_000),
   });
 
   const publishableSpaceIds = React.useMemo(
