@@ -68,7 +68,6 @@ import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
-import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -1465,24 +1464,30 @@ function RematchClaimCard({
       // unknown — a settled lookup that simply has no row for it really does mean "not ready".
       hideReadinessToggle={claimReadiness === null && readinessUnresolved}
       footer={
-        awaitingResponse && !requesting ? (
-          <div className="mt-3 flex items-center gap-2" role="status" aria-live="polite">
-            <Spinner />
-            <Text as="span" variant="footnote" color="grey-04">
-              {awaitingLabel}
-            </Text>
-          </div>
-        ) : canRequest || requesting ? (
+        awaitingResponse || canRequest || requesting ? (
           <div className="mt-3">
+            {/* GEO-2697. The wait lives on the control it is blocking. This used to be a separate
+                spinner line rendered *instead* of the button, which left the viewer watching a
+                message in one place for a button that wasn't on screen yet — nothing connected the
+                two. `HubPillButton` already disables and sets `aria-busy` while pending, so the
+                button carries the whole state: named while it waits, pressable when it doesn't. */}
             <HubPillButton
               onClick={onRequest}
               disabled={!canRequest || busy || requesting || claim.recently_rejected}
-              pending={requesting}
-              pendingLabel="Requesting…"
+              pending={requesting || awaitingResponse}
+              pendingLabel={requesting ? 'Requesting…' : awaitingLabel}
               className="w-full"
             >
               Request debate
             </HubPillButton>
+            {/* The button's own label changes, but a disabled control nobody is focused on
+                announces nothing. This is what actually reaches a screen reader, and it is why the
+                wait is still a `status` even though it is no longer drawn as one. */}
+            {awaitingResponse && !requesting ? (
+              <span role="status" aria-live="polite" className="sr-only">
+                {awaitingLabel}
+              </span>
+            ) : null}
             {claim.recently_rejected ? (
               <Text as="p" variant="footnote" color="grey-04" className="mt-1">
                 Recently rejected

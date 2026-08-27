@@ -279,7 +279,11 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: ({ entityId }: { entityId: string }) => {
     const expectedResponse = mocks.optimisticResponses.get(entityId);
     if (expectedResponse === undefined) return { status: 'idle', pending: null, runId: null };
-    return { status: 'reconciling', pending: { entityId, expectedResponse }, runId: `run-${entityId}` };
+    return {
+      status: mocks.responseIndexingDelayed ? 'delayed' : 'reconciling',
+      pending: { entityId, expectedResponse },
+      runId: `run-${entityId}`,
+    };
   },
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
@@ -431,6 +435,7 @@ beforeEach(() => {
   mocks.rejectMutate.mockReset();
   mocks.submitResponse.mockReset();
   mocks.optimisticResponses.clear();
+  mocks.responseIndexingDelayed = false;
   mocks.claimReadiness = [];
   mocks.claimReadinessLoading = false;
   mocks.claimReadinessError = false;
@@ -2328,27 +2333,72 @@ describe('DebateRematchPageClient', () => {
   });
 
   // geo-chat rejects a request for a claim it has no position for — "respond to this claim before
-  // requesting a rematch" — so the button waits for geo-chat's copy, not the optimistic one. It
-  // stays hidden rather than disabled: an unpressable button reads as broken.
-  it('withholds the request until the graph has the position it will be validated against', async () => {
+  // requesting a rematch" — so the request waits for geo-chat's copy, not the optimistic one.
+  // GEO-2697: it waits as a pending button rather than by hiding, so the wait sits on the control
+  // it is blocking instead of beside a button that isn't on screen.
+  it('holds the request unpressable until the graph has the position it will be validated against', async () => {
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    // Needed since the Featured tab landed: this asserts the control is *present*, so the claim
+    // has to actually render. The version this replaces only checked for absence, which a tab
+    // showing no claims satisfies for free.
+    await showOpponentClaims();
 
+    const button = screen.getByRole('button', { name: 'Confirming your position…' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    // The old separate spinner line is gone: there is one element, not a message beside a gap.
     expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
   });
 
-  // GEO-2652. The wait above is real — a publish, an index and a notification — and rendering
-  // nothing while it runs is what Preston reported: no idea what he was waiting on. The button still
-  // waits, because geo-chat would reject an early request; what changes is that the wait is named.
-  it('says what it is waiting for while the position is being confirmed', async () => {
+  // GEO-2652. The wait is real — a publish, an index and a notification — so it is named rather
+  // than left as an inert control. A disabled button nobody is focused on announces nothing, so the
+  // wait is still a `status` for screen readers even though it is no longer drawn as one.
+  it('announces what it is waiting for while the position is being confirmed', async () => {
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
     expect(screen.getByRole('status')).toHaveTextContent('Confirming your position…');
-    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+  });
+
+  // The machine's own signal that this is running long. It matters more now that it is the
+  // button's label rather than a line of grey text: a control stuck reading the same thing for
+  // thirty seconds is what GEO-2687 leaves the viewer looking at.
+  it('says the wait is running long on the button itself', () => {
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    mocks.responseIndexingDelayed = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Still confirming your position…' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Still confirming your position…');
+  });
+
+  // The point of the ticket: one element, not two. Once geo-chat agrees the same button becomes
+  // pressable, rather than a spinner disappearing and a button appearing somewhere else.
+  it('turns the same button pressable once the position settles', () => {
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+    ];
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const button = screen.getByRole('button', { name: 'Request debate' });
+    expect(button).toBeEnabled();
+    expect(button).not.toHaveAttribute('aria-busy');
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   // And nothing is said before the viewer has taken a side — there is nothing being confirmed, so a
@@ -2390,6 +2440,11 @@ describe('DebateRematchPageClient', () => {
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
+    // Asserted on the disabled state rather than the button's absence: since GEO-2697 the control
+    // is on screen throughout, and it is only *named* differently while it waits. Checking the
+    // name alone would pass for a button that had become pressable under a new label.
+    const button = screen.getByRole('button', { name: 'Confirming your position…' });
+    expect(button).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
   });
 
