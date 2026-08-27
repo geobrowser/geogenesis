@@ -120,4 +120,25 @@ describe('collectTotalCount', () => {
   it('reports a genuine zero as zero', () => {
     expect(collectTotalCount({ entitiesConnection: { totalCount: 0 } })).toBe(0);
   });
+
+  it('never reports a row\'s own count as the list\'s', () => {
+    // A flat `entities` list has no totalCount of its own. Walking into the
+    // first row found its `relations.totalCount` and returned it — so a
+    // two-entity answer whose first entity has three relations was reported
+    // as "3", and the closer is told to trust this number over the rows.
+    const data = {
+      entities: [
+        { id: 'a', name: 'A', relations: { totalCount: 3, nodes: [] } },
+        { id: 'b', name: 'B', relations: { totalCount: 9, nodes: [] } },
+      ],
+    };
+
+    expect(collectTotalCount(data)).toBeUndefined();
+  });
+
+  it('still reads a single entity\'s own nested count', () => {
+    // No array hop here: "how many relations does X have" is a real question
+    // and this is its shape.
+    expect(collectTotalCount({ entity: { relations: { totalCount: 7 } } })).toBe(7);
+  });
 });

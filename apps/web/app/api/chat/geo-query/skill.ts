@@ -51,7 +51,7 @@ Use this skill when the user wants to:
 - **Type:** a category (\`Person\`, \`Article\`, …). Types define a schema of default properties that every entity of that type inherits.
 - **Space:** an independent community/topic scope. An entity can live in multiple spaces; each has its own perspective.
 
-Full conceptual details: see \`../../../knowledge-graph-ontology.md\`.
+These five concepts are the whole model — there is no further reading available from here.
 
 ## List query: \`entities\` vs \`entitiesConnection\`
 
@@ -205,7 +205,7 @@ Verified live (Bitcoin \`2f8238b2…\`): 6 Topic edges = three spaces with one e
 
 ### Cursor pagination
 
-Don't hand-roll it — use \`paginate()\` from the canonical client (below): \`await paginate(Q.ENTITIES_BY_TYPE_CONNECTION, { typeId, spaceId })\`. Manually, feed \`pageInfo.endCursor\` back as \`after:\` until \`hasNextPage\` is false — \`entitiesConnection(…, first: 500, after: "<endCursor>") { nodes {…} pageInfo { hasNextPage endCursor } }\`.
+Feed \`pageInfo.endCursor\` back as \`after:\` until \`hasNextPage\` is false — \`entitiesConnection(…, first: 500, after: "<endCursor>") { nodes {…} pageInfo { hasNextPage endCursor } }\`. Each page is its own \`runQuery\` call.
 
 ## Performance — think in filters, not loops (fixes the "5–10 minute query")
 

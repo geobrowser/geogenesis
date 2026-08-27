@@ -30,6 +30,17 @@ const MAX_ANSWER_CHARS = 4_000;
 // let the UI render pills. A block can hold 1,000 entities and none of them
 // belong in the main turn's context.
 const MAX_ROWS = 50;
+/**
+ * How much of the queries we ran travels back with the answer.
+ *
+ * Every other field here is capped; this one was not, so up to
+ * `MAX_TOOL_STEPS` full GraphQL documents rode into the main turn's context and
+ * were re-read on every executor pass and every resubmit. Nothing renders them
+ * — they exist so a developer can see what was asked — so a truncated tail is
+ * as useful as the whole thing at a fraction of the tokens.
+ */
+const MAX_REPORTED_QUERIES = 3;
+const MAX_QUERY_CHARS = 400;
 // Enough for discover → query → fix a mistake → confirm. Beyond this it is
 // flailing, and flailing slowly: the user is watching a spinner.
 const MAX_TOOL_STEPS = 8;
@@ -143,6 +154,13 @@ export function collectRows(data: unknown, limit = MAX_ROWS): GeoQueryRow[] {
  *
  * Shallowest wins: a query can nest connections (entities → their relations),
  * and the outer count is the one that answers the question asked.
+ *
+ * Array elements are never entered. A `totalCount` reachable only by stepping
+ * *through* a row — `entities[0].relations.totalCount` — is that row's count,
+ * not the list's, and returning it is worse than returning nothing: the closer
+ * is told to trust this number, so a flat two-entity list whose first row has
+ * three relations would be reported as "3 results". A flat list has no true
+ * total to give (it is capped by `first`), and `undefined` says so honestly.
  */
 export function collectTotalCount(data: unknown): number | undefined {
   let queue: unknown[] = [data];
@@ -152,10 +170,9 @@ export function collectTotalCount(data: unknown): number | undefined {
 
     for (const node of queue) {
       if (node === null || typeof node !== 'object') continue;
-      if (Array.isArray(node)) {
-        next.push(...node);
-        continue;
-      }
+      // Reached a row list. Whatever is inside belongs to a row.
+      if (Array.isArray(node)) continue;
+
       const record = node as Record<string, unknown>;
       if (typeof record.totalCount === 'number') return record.totalCount;
       next.push(...Object.values(record));
@@ -227,9 +244,13 @@ export async function POST(req: Request) {
       additionalProperties: false,
     }),
     execute: async ({ query, variables }: { query: string; variables?: Record<string, unknown> }) => {
-      executed.push(query);
       const result = await runGeoGraphql(query, variables, signal);
       if (!result.ok) return { error: result.error };
+      // Recorded only once it worked. Pushing before running put rejected and
+      // timed-out attempts in the list looking exactly like the one that
+      // produced the answer, which is the opposite of what a reader wants from
+      // "the queries I ran".
+      executed.push(query);
       lastData = result.data;
       return { data: result.data };
     },
@@ -272,7 +293,9 @@ export async function POST(req: Request) {
         answer,
         rows: collectRows(lastData),
         ...(totalCount === undefined ? {} : { totalCount }),
-        queries: executed,
+        // The last few, newest last: when several ran, the later ones are the
+        // corrected versions and the early ones are the false starts.
+        queries: executed.slice(-MAX_REPORTED_QUERIES).map(q => q.slice(0, MAX_QUERY_CHARS)),
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
