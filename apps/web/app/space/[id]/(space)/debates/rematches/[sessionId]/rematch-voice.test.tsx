@@ -26,9 +26,13 @@ const mocks = vi.hoisted(() => ({
   canPlayAudio: true,
   startAudio: vi.fn(() => Promise.resolve()),
   audioDevices: [] as Array<{ deviceId: string; groupId: string; kind: string; label: string }>,
+  speakerDevices: [] as Array<{ deviceId: string; groupId: string; kind: string; label: string }>,
   activeDeviceId: 'mic-a',
+  activeSpeakerId: 'speaker-a',
   setActiveMediaDevice: vi.fn(() => Promise.resolve()),
+  setActiveSpeaker: vi.fn(() => Promise.resolve()),
   changeAudioInput: vi.fn(),
+  changeAudioOutput: vi.fn(() => Promise.resolve()),
   remoteParticipants: [] as Array<{ identity: string }>,
   setMicrophoneEnabled: vi.fn(),
   isMicrophoneEnabled: true,
@@ -54,11 +58,18 @@ vi.mock('@livekit/components-react', () => ({
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
   useRoomContext: () => ({ disconnect: vi.fn(() => Promise.resolve()) }),
-  useMediaDeviceSelect: () => ({
-    devices: mocks.audioDevices,
-    activeDeviceId: mocks.activeDeviceId,
-    setActiveMediaDevice: mocks.setActiveMediaDevice,
-  }),
+  useMediaDeviceSelect: ({ kind }: { kind: MediaDeviceKind }) =>
+    kind === 'audiooutput'
+      ? {
+          devices: mocks.speakerDevices,
+          activeDeviceId: mocks.activeSpeakerId,
+          setActiveMediaDevice: mocks.setActiveSpeaker,
+        }
+      : {
+          devices: mocks.audioDevices,
+          activeDeviceId: mocks.activeDeviceId,
+          setActiveMediaDevice: mocks.setActiveMediaDevice,
+        },
 }));
 
 vi.mock('@livekit/components-react/krisp', () => ({
@@ -94,9 +105,11 @@ vi.mock('~/core/debates/hooks', () => ({
 }));
 
 vi.mock('~/core/debates/media-session', () => ({
+  systemDefaultAudioOutput: { deviceId: 'default', groupId: 'default', kind: 'audiooutput', label: 'System default' },
   useDebateMediaSession: () => ({
     selectedAudioInputId: '',
     changeAudioInput: mocks.changeAudioInput,
+    changeAudioOutput: mocks.changeAudioOutput,
   }),
 }));
 
@@ -165,8 +178,24 @@ async function flushOwnership() {
   });
 }
 
+function setMobileLayout(matches: boolean) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(max-width: 767px)' ? matches : false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+  );
+}
+
 beforeEach(() => {
-  // The device menu measures its trigger to place itself; jsdom has no ResizeObserver.
+  // The settings popover measures its trigger to place itself; jsdom has no ResizeObserver.
   vi.stubGlobal(
     'ResizeObserver',
     class MockResizeObserver {
@@ -175,6 +204,7 @@ beforeEach(() => {
       disconnect() {}
     }
   );
+  setMobileLayout(false);
   mocks.joinData = {
     token: 'token-1',
     url: 'wss://livekit.test',
@@ -196,9 +226,16 @@ beforeEach(() => {
     { deviceId: 'mic-a', groupId: 'g1', kind: 'audioinput', label: 'Built-in Microphone' },
     { deviceId: 'mic-b', groupId: 'g2', kind: 'audioinput', label: 'USB Microphone' },
   ];
+  mocks.speakerDevices = [
+    { deviceId: 'speaker-a', groupId: 'g1', kind: 'audiooutput', label: 'Built-in Speakers' },
+    { deviceId: 'speaker-b', groupId: 'g2', kind: 'audiooutput', label: 'AirPods' },
+  ];
   mocks.activeDeviceId = 'mic-a';
+  mocks.activeSpeakerId = 'speaker-a';
   mocks.setActiveMediaDevice.mockReset().mockResolvedValue(undefined);
+  mocks.setActiveSpeaker.mockReset().mockResolvedValue(undefined);
   mocks.changeAudioInput.mockReset();
+  mocks.changeAudioOutput.mockReset().mockResolvedValue(undefined);
   mocks.remoteParticipants = [];
   mocks.setMicrophoneEnabled.mockReset();
   mocks.isMicrophoneEnabled = true;
@@ -252,19 +289,35 @@ describe('RematchVoicePill', () => {
     render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
-    expect(screen.getByText('Waiting for Salina')).toBeInTheDocument();
+    // The design keeps both names on screen throughout; only the opponent's chip changes.
+    expect(screen.getByText('You')).toBeInTheDocument();
+    expect(screen.getByText('Salina')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Waiting for Salina to join' })).toBeInTheDocument();
     // Auto-join with a live mic: the room is asked to publish audio from the start.
     expect(mocks.livekitRoomProps[0]?.audio).toBe(true);
     // The ownership lock is namespaced away from real debate ids.
     expect(mocks.coordinatorOptions[0]?.debateId).toBe('rematch:session-1');
   });
 
-  it('shows the opponent once their participant appears', async () => {
+  // "Other person is muted → red muted variant; not muted → green unmuted variant" (GEO-2511).
+  it('shows the opponent as unmuted once their participant appears', async () => {
     mocks.remoteParticipants = [{ identity: 'them' }];
     render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
-    expect(screen.getByText('Salina')).toBeInTheDocument();
-    expect(screen.queryByText(/Waiting for/)).toBeNull();
+    const chip = screen.getByRole('img', { name: 'Salina is unmuted' });
+    expect(chip).toBeInTheDocument();
+    expect(chip).toHaveClass('bg-successTertiary');
+    expect(screen.queryByRole('img', { name: /Waiting for/ })).toBeNull();
+  });
+
+  it('shows the opponent as muted when they mute themselves', async () => {
+    mocks.remoteParticipants = [{ identity: 'them' }];
+    mocks.isMuted = true;
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    const chip = screen.getByRole('img', { name: 'Salina is muted' });
+    expect(chip).toBeInTheDocument();
+    expect(chip).toHaveClass('bg-errorTertiary');
   });
 
   it('mutes and unmutes the local microphone', async () => {
@@ -315,24 +368,49 @@ describe('RematchVoicePill', () => {
     expect(screen.queryByRole('button', { name: /enable audio/i })).toBeNull();
   });
 
-  // The picked mic has to switch the live call AND survive into the debate that follows, which is
-  // the whole reason the choice is written back to the shared media session.
+  // The picked devices have to switch the live call AND survive into the debate that follows, which
+  // is the whole reason each choice is written back to the shared media session.
   it('switches the live microphone and carries the choice into the debate', async () => {
     render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Choose microphone' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
     fireEvent.click(await screen.findByText('USB Microphone'));
 
     expect(mocks.setActiveMediaDevice).toHaveBeenCalledWith('mic-b');
     expect(mocks.changeAudioInput).toHaveBeenCalledWith('mic-b');
   });
 
-  it('hides the microphone picker when no devices are enumerated', async () => {
-    mocks.audioDevices = [];
+  it('switches the live speaker and carries the choice into the debate', async () => {
     render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
-    expect(screen.queryByRole('button', { name: 'Choose microphone' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    fireEvent.click(await screen.findByText('AirPods'));
+
+    expect(mocks.setActiveSpeaker).toHaveBeenCalledWith('speaker-b');
+    expect(mocks.changeAudioOutput).toHaveBeenCalledWith('speaker-b');
+  });
+
+  // Firefox and Safari enumerate no outputs at all, and an empty list reads as a broken picker.
+  it('falls back to the system default speaker when the browser cannot route audio', async () => {
+    mocks.speakerDevices = [];
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    expect(await screen.findByText('System default')).toBeInTheDocument();
+  });
+
+  it('opens the audio settings in a bottom sheet on mobile', async () => {
+    setMobileLayout(true);
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Audio settings' });
+    expect(sheet).toHaveAttribute('data-layout', 'bottom-sheet');
+    expect(screen.getByRole('button', { name: 'Close Audio settings' })).toBeInTheDocument();
   });
 
   it('yields to the tab that owns the voice connection', async () => {

@@ -19,12 +19,15 @@ export function DeviceOptionGroup({
   options,
   selectedDeviceId,
   disabled = false,
+  /** Draws a border around the list. The bottom sheet has no popover chrome to sit inside. */
+  framed = false,
   onChange,
 }: {
   label: string;
   options: MediaDeviceOption[];
   selectedDeviceId: string;
   disabled?: boolean;
+  framed?: boolean;
   onChange: (deviceId: string) => void;
 }) {
   return (
@@ -32,7 +35,7 @@ export function DeviceOptionGroup({
       <Text as="p" variant="metadata" color="grey-04" className="px-1 pb-1">
         {label}
       </Text>
-      <div className="space-y-0.5">
+      <div className={cx('space-y-1', framed && 'rounded-lg border border-grey-02 p-1')}>
         {options.map(device => {
           const selected = device.deviceId === selectedDeviceId;
           return (
@@ -40,8 +43,8 @@ export function DeviceOptionGroup({
               key={`${device.kind}:${device.deviceId}`}
               value={device.deviceId}
               className={cx(
-                'flex min-h-9 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-metadata text-text outline-none',
-                selected ? 'bg-grey-01' : 'hover:bg-grey-01',
+                'flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-metadata text-text outline-none',
+                selected ? 'rounded-md bg-grey-01' : 'rounded-sm hover:bg-grey-01',
                 'focus-visible:ring-1 focus-visible:ring-text disabled:cursor-default disabled:opacity-100'
               )}
             >

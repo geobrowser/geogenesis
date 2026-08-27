@@ -1,5 +1,6 @@
 'use client';
 
+import * as Popover from '@radix-ui/react-popover';
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -20,18 +21,19 @@ import * as React from 'react';
 import cx from 'classnames';
 import { ConnectionState, type MediaDeviceFailure, type Room, Track } from 'livekit-client';
 
+import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
 import type { DebateRematchParticipant, DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
-import { MicrophoneIcon, RecordingCircleButton, SpeakerIcon } from '~/core/debates/debate-room-controls';
+import { AudioSettings, MobileSettingsSheet } from '~/core/debates/audio-settings';
+import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
-import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
-import { useDebateMediaSession } from '~/core/debates/media-session';
+import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
-import { Menu } from '~/design-system/menu';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import type { RemoteParticipant } from 'livekit-client';
 
@@ -40,6 +42,9 @@ import type { RemoteParticipant } from 'livekit-client';
 const JOIN_UNMUTED = true;
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
+
+/** What the opponent's chip is saying: not here yet, here and muted, or here and live. */
+type OpponentMicState = 'waiting' | 'muted' | 'live';
 
 function voiceCapable(status: DebateRematchSession['status']) {
   return status === 'browsing' || status === 'request_pending';
@@ -63,6 +68,7 @@ export function RematchVoicePill({
 }) {
   const voiceActive = voiceCapable(session.status);
   const opponent = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
+  const local = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
 
   // Only one tab per user may hold the mic. Same coordinator as the debate room, namespaced so a
   // rematch session can never collide with a debate id.
@@ -157,18 +163,7 @@ export function RematchVoicePill({
   if (!voiceActive || !opponent) return null;
 
   if (ownership === 'elsewhere') {
-    return (
-      <VoicePillFrame>
-        <span className="text-metadata text-grey-04">Voice is active in another tab</span>
-        <button
-          type="button"
-          onClick={() => void takeOver()}
-          className="rounded-full bg-text px-3 py-1.5 text-metadataMedium text-white transition-opacity hover:opacity-80"
-        >
-          Use voice here
-        </button>
-      </VoicePillFrame>
-    );
+    return <VoiceDockMessage message="Voice is active in another tab" actionLabel="Use voice here" onAction={takeOver} />;
   }
 
   if (ownership === 'pending' || join.isLoading) return null;
@@ -177,27 +172,13 @@ export function RematchVoicePill({
     // No backend support: LiveKit unconfigured (503) or the endpoint not deployed yet (404). The
     // picker works exactly as before voice existed. A blocked state (400/403) likewise has no
     // user-facing remedy here.
-    if (
-      join.error instanceof GeoChatRequestError &&
-      [400, 403, 404].includes(join.error.status)
-    ) {
+    if (join.error instanceof GeoChatRequestError && [400, 403, 404].includes(join.error.status)) {
       return null;
     }
     if (join.error instanceof GeoChatRequestError && join.error.code === 'livekit_not_configured') {
       return null;
     }
-    return (
-      <VoicePillFrame>
-        <span className="text-metadata text-grey-04">Voice is unavailable</span>
-        <button
-          type="button"
-          onClick={retry}
-          className="rounded-full bg-text px-3 py-1.5 text-metadataMedium text-white transition-opacity hover:opacity-80"
-        >
-          Retry
-        </button>
-      </VoicePillFrame>
-    );
+    return <VoiceDockMessage message="Voice is unavailable" actionLabel="Retry" onAction={retry} />;
   }
 
   if (!join.data) return null;
@@ -214,33 +195,83 @@ export function RematchVoicePill({
       onMediaDeviceFailure={failure => setMicFailure(failure ?? null)}
       className="contents"
     >
-      <VoicePillBody opponent={opponent} micFailure={micFailure} onRetry={retry} roomRef={roomRef} />
+      <VoiceDockBody
+        local={local}
+        opponent={opponent}
+        micFailure={micFailure}
+        onRetry={retry}
+        roomRef={roomRef}
+      />
       <RoomAudioRenderer />
     </LiveKitRoom>
   );
 }
 
-function VoicePillFrame({ children }: { children: React.ReactNode }) {
-  // Above the picker overlay (z-[150]) and below the entity side panel (z-200): an opened claim
-  // may cover the pill, and the audio keeps playing underneath it.
+/**
+ * The dock chrome. Desktop is a card pinned to the bottom-right corner; mobile is a bar across the
+ * bottom of the viewport. Both sit above the picker overlay (z-[150]) and below the entity side
+ * panel (z-200), so an opened claim covers the dock while the audio keeps playing underneath it.
+ */
+function VoiceDockShell({ children }: { children: React.ReactNode }) {
+  const isMobile = useIsMobileCallLayout();
+
+  if (isMobile) {
+    return (
+      <div className="fixed inset-x-0 bottom-0 z-[160] border-t border-grey-02 bg-white px-5 pt-[9px] pb-[max(9px,env(safe-area-inset-bottom))]">
+        {children}
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed bottom-5 left-1/2 z-[160] flex -translate-x-1/2 items-center gap-3 rounded-full border border-grey-02 bg-white py-1.5 pr-1.5 pl-4 shadow-card">
+    <div className="fixed right-5 bottom-5 z-[160] w-[200px] rounded-[20px] border border-grey-02 bg-white p-3 shadow-[0px_8px_12.5px_rgba(0,0,0,0.09)]">
       {children}
     </div>
   );
 }
 
-function VoicePillBody({
+/** Everything the dock says when it has no two-participant state to show yet. */
+function VoiceDockMessage({
+  message,
+  actionLabel,
+  onAction,
+}: {
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <VoiceDockShell>
+      <div className="flex min-h-7 items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-metadata text-grey-04">{message}</span>
+        {actionLabel && onAction && (
+          <button
+            type="button"
+            onClick={onAction}
+            className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadataMedium text-white transition-opacity hover:opacity-80"
+          >
+            {actionLabel}
+          </button>
+        )}
+      </div>
+    </VoiceDockShell>
+  );
+}
+
+function VoiceDockBody({
+  local,
   opponent,
   micFailure,
   onRetry,
   roomRef,
 }: {
+  local: DebateRematchParticipant | null;
   opponent: DebateRematchParticipant;
   micFailure: MediaDeviceFailure | null;
   onRetry: () => void;
   roomRef: React.MutableRefObject<Room | null>;
 }) {
+  const isMobile = useIsMobileCallLayout();
   const room = useRoomContext();
   React.useEffect(() => {
     roomRef.current = room;
@@ -257,7 +288,7 @@ function VoicePillBody({
   // Auto-join means no click stands between arriving and connecting, so the browser's autoplay
   // policy can refuse to play the opponent's audio — silently, with the room otherwise healthy
   // (presence and mute state keep updating). The debate room never hits this because its pre-join
-  // screen supplies the gesture. `startAudio()` has to run from a real user event, so the pill
+  // screen supplies the gesture. `startAudio()` has to run from a real user event, so the dock
   // asks for one.
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
 
@@ -273,66 +304,184 @@ function VoicePillBody({
   const opponentParticipant = remoteParticipants.find(participant => participant.identity === opponent.user_id) ?? null;
   const opponentName = opponent.display_name || opponent.profile_space_id;
 
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
-
   if (connectionState === ConnectionState.Disconnected && everConnected) {
-    return (
-      <VoicePillFrame>
-        <span className="text-metadata text-grey-04">Voice disconnected</span>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded-full bg-text px-3 py-1.5 text-metadataMedium text-white transition-opacity hover:opacity-80"
-        >
-          Retry
-        </button>
-      </VoicePillFrame>
-    );
+    return <VoiceDockMessage message="Voice disconnected" actionLabel="Retry" onAction={onRetry} />;
   }
 
-  const connecting = connectionState !== ConnectionState.Connected;
-  const reconnecting =
-    connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
+  if (connectionState !== ConnectionState.Connected) {
+    const reconnecting =
+      connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
+    return <VoiceDockMessage message={reconnecting ? 'Reconnecting…' : 'Connecting voice…'} />;
+  }
 
-  // Blocked playback outranks everything else the pill could say: the room is fine, the opponent
+  // Blocked playback outranks everything else the dock could say: the room is fine, the opponent
   // may well be talking, and the viewer simply cannot hear it until they click.
-  if (!connecting && !canPlayAudio) {
+  if (!canPlayAudio) {
+    return <VoiceDockMessage message="Audio is blocked" actionLabel="Enable audio" onAction={() => void startAudio()} />;
+  }
+
+  const localRow = (
+    <>
+      <ParticipantIdentity name="You" avatarUrl={local?.avatar_cid} avatarValue={local?.profile_space_id} />
+      <LocalAudioControls room={room} micFailure={micFailure} />
+    </>
+  );
+  const opponentRow = <OpponentRow participant={opponentParticipant} opponent={opponent} name={opponentName} />;
+
+  if (isMobile) {
     return (
-      <VoicePillFrame>
-        <button
-          type="button"
-          onClick={() => void startAudio()}
-          className="flex items-center gap-2 rounded-full bg-text px-3 py-1.5 text-metadataMedium text-white transition-opacity hover:opacity-80"
-        >
-          <SpeakerIcon disabled={false} />
-          Enable audio
-        </button>
-      </VoicePillFrame>
+      <VoiceDockShell>
+        <div className="flex items-center gap-3">
+          <div className="flex h-7 min-w-0 flex-1 items-center justify-between gap-2">{localRow}</div>
+          <span aria-hidden className="h-7 w-px shrink-0 rounded-xs bg-grey-02" />
+          <div className="flex h-7 min-w-0 flex-1 items-center justify-between gap-2">{opponentRow}</div>
+        </div>
+      </VoiceDockShell>
     );
   }
 
   return (
-    <VoicePillFrame>
-      {connecting ? (
-        <span className="flex items-center gap-2 text-metadata text-grey-04">
-          <span className="size-2 animate-pulse rounded-full bg-grey-03" aria-hidden />
-          {reconnecting ? 'Reconnecting…' : 'Connecting voice…'}
-        </span>
-      ) : opponentParticipant ? (
-        <span className="flex items-center gap-2">
-          <OpponentStatus participant={opponentParticipant} opponent={opponent} />
-          <span className="max-w-[10rem] truncate text-metadata text-text">{opponentName}</span>
-        </span>
-      ) : (
-        <span className="flex items-center gap-2">
-          <span className="opacity-40">
-            <Avatar avatarUrl={opponent.avatar_cid} value={opponent.profile_space_id} size={28} alt="" />
-          </span>
-          <span className="max-w-[12rem] truncate text-metadata text-grey-04">Waiting for {opponentName}</span>
-        </span>
+    <VoiceDockShell>
+      <div className="flex flex-col gap-2">
+        <div className="flex h-7 items-center justify-between gap-2">{localRow}</div>
+        <span aria-hidden className="h-px w-full bg-divider" />
+        <div className="flex h-7 items-center justify-between gap-2">{opponentRow}</div>
+      </div>
+    </VoiceDockShell>
+  );
+}
+
+function ParticipantIdentity({
+  name,
+  avatarUrl,
+  avatarValue,
+  speaking = false,
+  dimmed = false,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  avatarValue?: string;
+  speaking?: boolean;
+  dimmed?: boolean;
+}) {
+  return (
+    <span className={cx('flex min-w-0 flex-1 items-center gap-2', dimmed && 'opacity-60')}>
+      <span
+        className={cx(
+          'inline-flex shrink-0 overflow-hidden rounded-full',
+          speaking && 'ring-1 ring-green ring-offset-1 ring-offset-white'
+        )}
+      >
+        <Avatar avatarUrl={avatarUrl ?? null} value={avatarValue ?? name} size={16} alt="" />
+      </span>
+      <span className="min-w-0 truncate text-metadata text-text">{name}</span>
+    </span>
+  );
+}
+
+function OpponentRow({
+  participant,
+  opponent,
+  name,
+}: {
+  participant: RemoteParticipant | null;
+  opponent: DebateRematchParticipant;
+  name: string;
+}) {
+  if (!participant) {
+    return (
+      <>
+        <ParticipantIdentity name={name} avatarUrl={opponent.avatar_cid} avatarValue={opponent.profile_space_id} dimmed />
+        <OpponentMicChip state="waiting" name={name} />
+      </>
+    );
+  }
+  return <ConnectedOpponentRow participant={participant} opponent={opponent} name={name} />;
+}
+
+/**
+ * Split out because `useIsSpeaking`/`useIsMuted` need a participant — there is nothing to subscribe
+ * to until the opponent actually joins the room.
+ */
+function ConnectedOpponentRow({
+  participant,
+  opponent,
+  name,
+}: {
+  participant: RemoteParticipant;
+  opponent: DebateRematchParticipant;
+  name: string;
+}) {
+  const speaking = useIsSpeaking(participant);
+  const muted = useIsMuted({ participant, source: Track.Source.Microphone });
+
+  return (
+    <>
+      <ParticipantIdentity
+        name={name}
+        avatarUrl={opponent.avatar_cid}
+        avatarValue={opponent.profile_space_id}
+        speaking={speaking}
+      />
+      <OpponentMicChip state={muted ? 'muted' : 'live'} name={name} />
+    </>
+  );
+}
+
+/** Red when the other person is muted, green when they are live, neutral before they arrive. */
+function OpponentMicChip({ state, name }: { state: OpponentMicState; name: string }) {
+  const label =
+    state === 'waiting' ? `Waiting for ${name} to join` : state === 'muted' ? `${name} is muted` : `${name} is unmuted`;
+
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className={cx(
+        'grid h-7 shrink-0 place-items-center rounded-full px-2 [&>svg]:size-3',
+        state === 'waiting' && 'bg-grey-01 text-grey-04',
+        state === 'muted' && 'bg-errorTertiary text-red-01',
+        state === 'live' && 'bg-successTertiary text-green'
       )}
-      <RecordingCircleButton
-        ariaLabel={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
+    >
+      <MicrophoneIcon muted={state !== 'live'} />
+    </span>
+  );
+}
+
+/**
+ * The user's own control: mute toggle and audio settings, joined into one pill by a hairline.
+ */
+function LocalAudioControls({ room, micFailure }: { room: Room; micFailure: MediaDeviceFailure | null }) {
+  const isMobile = useIsMobileCallLayout();
+  const [open, setOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
+  const settings = useVoiceAudioSettings(room);
+
+  const muted = !isMicrophoneEnabled || Boolean(micFailure);
+  const settingsTrigger = (
+    <button
+      ref={triggerRef}
+      type="button"
+      aria-label="Audio settings"
+      title="Audio settings"
+      aria-expanded={open}
+      onClick={isMobile ? () => setOpen(current => !current) : undefined}
+      className="grid h-full shrink-0 place-items-center px-2 text-grey-04 transition-colors hover:text-text"
+    >
+      <span className={cx('grid place-items-center transition-transform', open && 'rotate-180')}>
+        <ChevronDownSmall />
+      </span>
+    </button>
+  );
+
+  return (
+    <span className="flex h-7 shrink-0 items-center rounded-full border border-grey-02 bg-white">
+      <button
+        type="button"
+        aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
         title={
           micFailure
             ? 'Microphone unavailable — check browser permissions'
@@ -342,99 +491,126 @@ function VoicePillBody({
         }
         onClick={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
         disabled={Boolean(micFailure)}
-        active={!isMicrophoneEnabled}
-        className={cx('size-9 shadow-none', micFailure && 'text-orange')}
+        className={cx(
+          'grid h-full shrink-0 place-items-center px-2 transition-colors [&>svg]:size-3',
+          micFailure ? 'text-red-01' : 'text-text hover:text-grey-04',
+          'disabled:cursor-default disabled:hover:text-red-01'
+        )}
       >
-        <MicrophoneIcon muted={!isMicrophoneEnabled || Boolean(micFailure)} />
-      </RecordingCircleButton>
-      <MicrophonePicker room={room} />
-    </VoicePillFrame>
+        <MicrophoneIcon muted={muted} />
+      </button>
+      <span aria-hidden className="h-[13px] w-px shrink-0 rounded-xs bg-grey-02" />
+      {isMobile ? (
+        <>
+          {settingsTrigger}
+          <MobileSettingsSheet
+            title="Audio settings"
+            open={open}
+            onOpenChange={setOpen}
+            returnFocusRef={triggerRef}
+          >
+            <AudioSettings {...settings} framed />
+          </MobileSettingsSheet>
+        </>
+      ) : (
+        <DesktopSettingsPopover open={open} onOpenChange={setOpen} trigger={settingsTrigger} triggerRef={triggerRef}>
+          <AudioSettings {...settings} />
+        </DesktopSettingsPopover>
+      )}
+    </span>
+  );
+}
+
+function DesktopSettingsPopover({
+  open,
+  onOpenChange,
+  trigger,
+  triggerRef,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  trigger: React.ReactNode;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
+  children: React.ReactNode;
+}) {
+  // Radix's default portal wrapper is globally capped at z-60, below this dock's z-[160].
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
+
+  return (
+    <Popover.Root open={open} onOpenChange={onOpenChange}>
+      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+      {elevatedPopoverPortal && (
+        <Popover.Portal container={elevatedPopoverPortal}>
+          <Popover.Content
+            role="dialog"
+            aria-label="Audio settings"
+            side="top"
+            align="end"
+            sideOffset={12}
+            collisionPadding={16}
+            onCloseAutoFocus={event => {
+              event.preventDefault();
+              triggerRef.current?.focus();
+            }}
+            className="z-[170] max-h-[360px] w-[248px] overflow-y-auto rounded-lg border border-grey-02 bg-white p-1 text-left text-text shadow-lg outline-none"
+          >
+            {children}
+          </Popover.Content>
+        </Popover.Portal>
+      )}
+    </Popover.Root>
   );
 }
 
 /**
- * Picks the microphone for the voice channel, and for the debate that follows it.
+ * Feeds the settings panel, and carries what the user picks into the debate that follows.
  *
- * The device list and the live switch come from LiveKit, which already holds mic permission here
- * so the labels are real. The choice is then written back to the app-wide media session, which is
- * what the debate room's pre-join screen reads — so whatever the pair settled on while browsing
- * claims is still selected when they walk into the debate. That write cannot grab the microphone
- * a second time: `ensurePreview` bails unless a preview session is open, and the pill never opens
- * one.
+ * The device lists and the live switching come from LiveKit, which already holds microphone
+ * permission here so the labels are real — the app-wide media session enumerates nothing without
+ * an open preview, which this dock deliberately never starts. Each choice is then written back to
+ * that session, which is what the debate room's pre-join screen reads, so whatever the pair settled
+ * on while browsing claims is still selected when they walk into the debate. Writing the microphone
+ * back cannot grab it a second time: `ensurePreview` bails unless a preview session is open.
  */
-function MicrophonePicker({ room }: { room: Room }) {
-  const [open, setOpen] = React.useState(false);
-  const { changeAudioInput } = useDebateMediaSession();
-  const { devices, activeDeviceId, setActiveMediaDevice } = useMediaDeviceSelect({
-    kind: 'audioinput',
-    room,
-  });
+function useVoiceAudioSettings(room: Room) {
+  const { changeAudioInput, changeAudioOutput } = useDebateMediaSession();
+  const microphones = useMediaDeviceSelect({ kind: 'audioinput', room });
+  const speakers = useMediaDeviceSelect({ kind: 'audiooutput', room, requestPermissions: false });
 
-  const select = React.useCallback(
-    (deviceId: string) => {
-      setOpen(false);
-      void setActiveMediaDevice(deviceId);
-      changeAudioInput(deviceId);
-    },
-    [changeAudioInput, setActiveMediaDevice]
-  );
+  const selectMicrophone = (deviceId: string) => {
+    void microphones.setActiveMediaDevice(deviceId);
+    changeAudioInput(deviceId);
+  };
 
-  if (devices.length === 0) return null;
+  const selectSpeaker = (deviceId: string) => {
+    void speakers.setActiveMediaDevice(deviceId);
+    void changeAudioOutput(deviceId);
+  };
 
-  return (
-    <Menu
-      open={open}
-      onOpenChange={setOpen}
-      className="max-w-[min(20rem,calc(100vw-2rem))] p-1"
-      trigger={
-        <button
-          type="button"
-          aria-label="Choose microphone"
-          title="Choose microphone"
-          className="grid size-9 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text"
-        >
-          <ChevronDownSmall />
-        </button>
-      }
-    >
-      <DeviceOptionGroup
-        label="Select a microphone"
-        options={devices.map(device => ({
-          deviceId: device.deviceId,
-          groupId: device.groupId,
-          kind: device.kind,
-          label: device.label || 'Microphone',
-        }))}
-        selectedDeviceId={activeDeviceId}
-        onChange={select}
-      />
-    </Menu>
-  );
+  // Browsers without `setSinkId` enumerate no outputs at all; show the same disabled "System
+  // default" row the pre-join screen falls back to rather than an empty list.
+  const audioOutputSupported = speakers.devices.length > 0;
+
+  return {
+    audioInputDevices: toDeviceOptions(microphones.devices, 'Microphone'),
+    audioOutputDevices: audioOutputSupported
+      ? toDeviceOptions(speakers.devices, 'Speaker')
+      : [systemDefaultAudioOutput],
+    selectedAudioInputId: microphones.activeDeviceId,
+    selectedAudioOutputId: speakers.activeDeviceId,
+    audioOutputSupported,
+    error: null,
+    onAudioInputChange: selectMicrophone,
+    onAudioOutputChange: selectSpeaker,
+  };
 }
 
-function OpponentStatus({
-  participant,
-  opponent,
-}: {
-  participant: RemoteParticipant;
-  opponent: DebateRematchParticipant;
-}) {
-  const speaking = useIsSpeaking(participant);
-  const muted = useIsMuted({ participant, source: Track.Source.Microphone });
-
-  return (
-    <span className="relative inline-flex shrink-0">
-      <span className={cx('inline-flex rounded-full transition-shadow', speaking && 'ring-2 ring-green')}>
-        <Avatar avatarUrl={opponent.avatar_cid} value={opponent.profile_space_id} size={28} alt="" />
-      </span>
-      {muted ? (
-        <span
-          aria-label={`${opponent.display_name || 'Opponent'} is muted`}
-          className="absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full border border-white bg-text text-white [&>svg]:size-3"
-        >
-          <MicrophoneIcon muted />
-        </span>
-      ) : null}
-    </span>
-  );
+function toDeviceOptions(devices: MediaDeviceInfo[], fallbackLabel: string): MediaDeviceOption[] {
+  return devices.map((device, index) => ({
+    deviceId: device.deviceId,
+    groupId: device.groupId,
+    kind: device.kind as MediaDeviceOption['kind'],
+    label: device.label || `${fallbackLabel} ${index + 1}`,
+  }));
 }
