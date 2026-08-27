@@ -5,13 +5,13 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublishedInSpace } from '~/core/claims/publish';
+import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
 import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
 import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
 import { useDebateClaims } from '~/core/debates/hooks';
-import { uuidToHex } from '~/core/id/normalize';
 import {
   ClaimResponseBatchBoundary,
   useClaimResponseSummaryBatch,
@@ -22,7 +22,6 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
 
 import { Button } from '~/design-system/button';
-import { getChecked } from '~/design-system/checkbox';
 import { Plus } from '~/design-system/icons/plus';
 import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
 import { Text } from '~/design-system/text';
@@ -407,14 +406,4 @@ function RelationChipGroup({
 
 function relationsForProperty(relations: Relation[], propertyId: string): Relation[] {
   return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
-}
-
-function claimResponseKind(claim: Entity, spaceId: string): 'stance' | 'veracity' {
-  const isFactual = claim.values.find(
-    value =>
-      value.isDeleted !== true &&
-      uuidToHex(value.spaceId) === uuidToHex(spaceId) &&
-      uuidToHex(value.property.id) === uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID)
-  )?.value;
-  return getChecked(isFactual) === true ? 'veracity' : 'stance';
 }
