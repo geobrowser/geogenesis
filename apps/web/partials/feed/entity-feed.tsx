@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { claimResponseKind } from '~/core/claims/response-kind';
 import { EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
 import {
   EXPLORE_TYPE_FILTER_STORAGE_KEY,
@@ -14,6 +15,12 @@ import {
 } from '~/core/explore/explore-type-filter';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import {
+  ClaimResponseBatchBoundary,
+  type CrossSpaceClaimResponseTarget,
+  useClaimResponseSummaryBatchAcrossSpaces,
+} from '~/core/responses/use-claim-response-summaries';
+import { useQueryEntities } from '~/core/sync/use-store';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Menu, MenuItem } from '~/design-system/menu';
@@ -223,6 +230,44 @@ export function EntityFeed({
     return flat;
   }, [data?.pages]);
 
+  /**
+   * One batched response lookup for the whole feed, instead of two queries per row.
+   *
+   * `EntityVoteButtons` and `ClaimVoterAvatars` each fetch their own counts and responders, so a
+   * page of 66 rows cost 125 requests and kept the network busy long after first paint. They
+   * already stand down when a `ClaimResponseBatchBoundary` says the data is managed — the Claims
+   * tab has done this since GEO-2599 — but nothing set that up for a feed.
+   *
+   * `responseKind` is read from the same store entity the buttons read it from, so the keys the
+   * batch writes are the keys they look for. Before an entity hydrates it resolves to the default,
+   * the row falls back to its own fetch as it does today, and the target list changes once the
+   * store fills — `keepPreviousData` in the hook keeps the visible positions through that.
+   */
+  const feedEntityIds = React.useMemo(() => [...new Set(items.map(item => item.entityId))], [items]);
+  const { entities: feedEntities } = useQueryEntities({
+    where: { id: { in: feedEntityIds } },
+    first: feedEntityIds.length,
+    enabled: feedEntityIds.length > 0,
+  });
+  const feedEntitiesById = React.useMemo(
+    () => new Map((feedEntities ?? []).map(entity => [entity.id, entity])),
+    [feedEntities]
+  );
+  const responseTargets = React.useMemo<CrossSpaceClaimResponseTarget[]>(
+    () =>
+      items.map(item => ({
+        entityId: item.entityId,
+        spaceId: item.spaceId,
+        responseKind: claimResponseKind(feedEntitiesById.get(item.entityId) ?? {}, item.spaceId),
+      })),
+    [items, feedEntitiesById]
+  );
+  const responseBatch = useClaimResponseSummaryBatchAcrossSpaces({
+    targets: responseTargets,
+    enabled: responseTargets.length > 0,
+  });
+  const responseBatchReady = responseTargets.length === 0 || responseBatch.isSuccess;
+
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
   const spaceLabel =
@@ -373,14 +418,16 @@ export function EntityFeed({
         ) : items.length === 0 ? (
           <p className="text-browseMenu text-grey-04">No entities match these filters yet.</p>
         ) : (
-          items.map(item => (
-            <ExploreFeedCard
-              key={`${item.entityId}-${item.spaceId}`}
-              item={item}
-              hideSpaceLink={lockedSpaceId != null}
-              hideJoinButton={lockedSpaceId != null}
-            />
-          ))
+          <ClaimResponseBatchBoundary ready={responseBatchReady}>
+            {items.map(item => (
+              <ExploreFeedCard
+                key={`${item.entityId}-${item.spaceId}`}
+                item={item}
+                hideSpaceLink={lockedSpaceId != null}
+                hideJoinButton={lockedSpaceId != null}
+              />
+            ))}
+          </ClaimResponseBatchBoundary>
         )}
         <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
         {isFetchingNextPage ? (

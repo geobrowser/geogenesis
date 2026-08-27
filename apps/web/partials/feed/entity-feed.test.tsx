@@ -29,6 +29,10 @@ function createLocalStorage(): Storage {
   };
 }
 
+// The feed reads entities from the sync store to resolve each row's response kind. This suite has
+// no SyncEngineProvider and does not exercise that path.
+vi.mock('~/core/sync/use-store', () => ({ useQueryEntities: () => ({ entities: [] }) }));
+
 vi.mock('@tanstack/react-query', () => ({
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
@@ -41,6 +45,13 @@ vi.mock('@tanstack/react-query', () => ({
       error: null,
     };
   },
+  // The feed batches claim responses for its rows (GEO-2692), which pulls in the query client and
+  // a plain `useQuery`. This suite only exercises the filter row and request params, so these are
+  // inert stand-ins rather than a second thing to keep in sync.
+  useQuery: () => ({ data: undefined, isSuccess: false, isLoading: false, error: null }),
+  useQueryClient: () => ({ fetchQuery: vi.fn(), setQueryData: vi.fn(), getQueryData: vi.fn() }),
+  QueryClient: class {},
+  keepPreviousData: undefined,
 }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
