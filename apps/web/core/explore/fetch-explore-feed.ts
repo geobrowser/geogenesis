@@ -22,9 +22,15 @@ import {
   EXPLORE_PAGE_SIZE,
 } from './explore-constants';
 import { exploreBestConnectionDocument } from './explore-best-document';
+import {
+  EXPLORE_DIVERSITY_WINDOW_SIZE,
+  applyDiversityCap,
+  exploreItemTypeKey,
+} from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
 
 /**
  * `best` is the Phase A ranked feed (quality + structure + recency, server-side).
@@ -448,38 +454,63 @@ export async function fetchExploreFeed(args: {
     return out;
   };
 
+  const { after, offset } = decodeExploreWindowCursor(args.cursor);
+
+  // Every sort scans wider than it serves — `buildItems` drops entities with no
+  // displayable space, so over-scanning absorbs that. Best scans wider still, because a
+  // diversity cap cannot break up a page it cannot see past. A single type is the
+  // exception: there is nothing to diversify against, so it keeps the narrow scan.
+  const windowSize =
+    args.sort === 'best' && (args.typeIds?.length ?? 0) !== 1 ? EXPLORE_DIVERSITY_WINDOW_SIZE : scanChunk;
+
   const page =
     args.sort === 'best'
       ? await fetchBestEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
-          limit: scanChunk,
-          after: args.cursor,
+          limit: windowSize,
+          after,
           typeIds: args.typeIds,
         })
       : args.sort === 'top'
       ? await fetchTopEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
-          limit: scanChunk,
-          after: args.cursor,
+          limit: windowSize,
+          after,
           typeIds: args.typeIds,
           requireName: args.requireName,
         })
       : await fetchExploreEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
-          limit: scanChunk,
-          after: args.cursor,
+          limit: windowSize,
+          after,
           orderBy: [EntitiesOrderBy.CreatedAtDesc],
           typeIds: args.typeIds,
           requireName: args.requireName,
         });
 
-  const enriched = buildItems(page.entities, allowed, memberOrEditorSet);
-  const items = await attachMeta(enriched.slice(0, pageSize));
+  const rows = buildItems(page.entities, allowed, memberOrEditorSet);
 
-  const nextCursor = page.hasNextPage ? page.endCursor : null;
+  // "Best" is the only sort that reorders (GEO-2690). "New" is reverse-chronological and
+  // an activity log that shuffles is simply wrong; "Top" is an explicit "rank by score"
+  // request, and the crowding-out was measured on Best, which is also the default tab.
+  const ordered = args.sort === 'best' ? applyDiversityCap(rows, exploreItemTypeKey) : rows;
 
-  return { items, nextCursor };
+  // Serving a prefix and advancing the cursor past the whole scan is what dropped ranks
+  // 23-30 of every page before (GEO-2695). The offset keeps the rest reachable.
+  const slice = ordered.slice(offset, offset + pageSize);
+
+  return {
+    items: await attachMeta(slice),
+    nextCursor: nextExploreWindowCursor({
+      after,
+      offset,
+      served: slice.length,
+      windowLength: ordered.length,
+      hasNextPage: page.hasNextPage,
+      endCursor: page.endCursor,
+    }),
+  };
 }

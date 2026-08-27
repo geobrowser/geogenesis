@@ -9,6 +9,7 @@ import {
   hasDefaultSearchExcludedType,
   shouldIncludeRestSearchResult,
 } from './queries';
+import { MAX_SEARCH_QUERY_LENGTH } from './search-query';
 
 const graphqlMock = vi.hoisted(() => vi.fn());
 
@@ -23,6 +24,33 @@ describe('buildSearchPath', () => {
 
   it('builds a minimal global path with default limit/offset', () => {
     expect(buildSearchPath({ query: 'football' })).toBe('/search?query=football&limit=10&offset=0');
+  });
+
+  // GEO-2646. Every REST search in the app is built here, so this is where the endpoint's length
+  // limit has to hold — a longer query came back 400 and read as "no results" wherever it was run.
+  describe('query length', () => {
+    it('sends a long query capped to the limit', () => {
+      const path = buildSearchPath({ query: 'a'.repeat(MAX_SEARCH_QUERY_LENGTH + 150) });
+
+      expect(path).toBe(`/search?query=${'a'.repeat(MAX_SEARCH_QUERY_LENGTH)}&limit=10&offset=0`);
+    });
+
+    it('leaves a query within the limit untouched', () => {
+      expect(buildSearchPath({ query: 'football' })).toBe('/search?query=football&limit=10&offset=0');
+    });
+
+    // The cap is on the query alone; a scoped search still carries everything else it was given.
+    it('caps the query without disturbing the rest of the path', () => {
+      const path = buildSearchPath({
+        query: 'b'.repeat(MAX_SEARCH_QUERY_LENGTH + 10),
+        spaceId: ROOT,
+        limit: 25,
+      });
+
+      expect(path).toContain(`query=${'b'.repeat(MAX_SEARCH_QUERY_LENGTH)}&`);
+      expect(path).toContain('limit=25');
+      expect(path).toContain('scope=SPACE_SINGLE');
+    });
   });
 
   it('omits additional_space_ids when the array is empty or undefined', () => {

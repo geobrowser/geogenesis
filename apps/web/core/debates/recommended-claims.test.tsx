@@ -23,20 +23,33 @@ const mocks = vi.hoisted(() => ({
   blocks: [] as unknown[],
   items: [] as unknown[],
   loading: false,
+  itemsLoading: false,
   wheres: [] as Array<Record<string, unknown>>,
+  itemIdLookups: [] as string[][],
 }));
 
-// Three stages: pages by type, the blocks they point at, then the blocks' collection items. The
-// two id lookups are told apart by which ids they ask for.
+// The first two stages: pages by type, then the blocks they point at.
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: ({ where }: { where: Record<string, unknown> }) => {
     mocks.wheres.push(where);
     if ('types' in where) return { entities: mocks.pages, isLoading: mocks.loading };
     const ids = (where.id as { in?: string[] } | undefined)?.in ?? [];
-    const blocks = (mocks.blocks as Array<{ id: string }>).filter(block => ids.includes(block.id));
+    return { entities: (mocks.blocks as Array<{ id: string }>).filter(block => ids.includes(block.id)) };
+  },
+}));
+
+// The third: the blocks' collection items, through the picker's batched claim lookup. That lookup
+// asks the graph for claims specifically and batches the ids, so it answers with the claims among
+// the ids it was given and nothing else — which is what the mock reproduces.
+vi.mock('./claim-picker-page', () => ({
+  useClaimEntitiesByIds: (ids: string[]) => {
+    mocks.itemIdLookups.push(ids);
     return {
-      entities:
-        blocks.length > 0 ? blocks : (mocks.items as Array<{ id: string }>).filter(item => ids.includes(item.id)),
+      entities: (mocks.items as Array<{ id: string; types: Array<{ id: string }> }>).filter(
+        item => ids.includes(item.id) && item.types.some(type => type.id === CLAIM_TYPE_ID)
+      ),
+      isLoading: mocks.itemsLoading,
+      error: null,
     };
   },
 }));
@@ -92,7 +105,9 @@ beforeEach(() => {
   mocks.blocks = [block('block-1', 'Geopolitics & chips', ['claim-a', 'claim-b'])];
   mocks.items = [claimEntity('claim-a'), claimEntity('claim-b')];
   mocks.loading = false;
+  mocks.itemsLoading = false;
   mocks.wheres.length = 0;
+  mocks.itemIdLookups.length = 0;
 });
 
 describe('useRecommendedClaimSections', () => {
@@ -189,6 +204,30 @@ describe('useRecommendedClaimSections', () => {
       '8a4955bcd9d0fc0d8613f17f01de3b9f',
       CURATOR_SPACE,
     ]);
+  });
+
+  // The items used to be asked for as one page capped at a hundred ids, and the cap fell across
+  // every block at once: a page of six collections holding a hundred and forty claims resolved the
+  // first hundred in block order, so the last block's claims were all missing and its section was
+  // dropped as empty. Every collected id has to reach the lookup, which batches them itself.
+  it('asks for every collected item id, however many blocks there are', () => {
+    const claimIds = Array.from({ length: 140 }, (_, index) => `claim-${index}`);
+    // Positions sort as strings, so pad them — otherwise `a10` lands between `a1` and `a2` and the
+    // fixture, not the hook, decides the order.
+    const positions = claimIds.map((_, index) => `a${String(index).padStart(3, '0')}`);
+    mocks.blocks = [
+      block('block-1', 'Politics', claimIds.slice(0, 120), positions.slice(0, 120)),
+      block('block-2', 'Current affairs', claimIds.slice(120), positions.slice(120)),
+    ];
+    mocks.pages = [page({ blockIds: ['block-1', 'block-2'] })];
+    mocks.items = claimIds.map(claimEntity);
+
+    const { result } = renderHook(() => useRecommendedClaimSections([ME, OPPONENT]));
+
+    expect(mocks.itemIdLookups.at(-1)).toEqual(claimIds);
+    // The last block is the one a shared cap reaches first, so assert it by name and in full.
+    expect(result.current.sections.map(section => section.name)).toEqual(['Politics', 'Current affairs']);
+    expect(result.current.sections[1]!.claimIds).toEqual(claimIds.slice(120));
   });
 
   it('reports that it is still looking rather than that nothing is recommended', () => {

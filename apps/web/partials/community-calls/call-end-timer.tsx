@@ -27,6 +27,13 @@ export function CallEndTimer({ endTime, onTimeUp }: Props) {
   const [secondsLeft, setSecondsLeft] = React.useState<number | null>(null);
   const firedRef = React.useRef(false);
 
+  // Callers pass a fresh closure every render (it has to close over the room), so keeping
+  // `onTimeUp` in the effect's deps tore down and rebuilt the interval on every render —
+  // which on a busy call is more often than once a second, so the tick could go long
+  // stretches without ever firing. Read it through a ref instead.
+  const onTimeUpRef = React.useRef(onTimeUp);
+  onTimeUpRef.current = onTimeUp;
+
   const hardCutoffMs = endTime.getTime() + LIVE_MEETING_GRACE_MINUTES * 60 * 1000;
   const timerVisibleMs = endTime.getTime() + CALL_END_TIMER_DELAY_MINUTES * 60 * 1000;
 
@@ -43,14 +50,14 @@ export function CallEndTimer({ endTime, onTimeUp }: Props) {
 
       if (remaining <= 0 && !firedRef.current) {
         firedRef.current = true;
-        onTimeUp?.();
+        onTimeUpRef.current?.();
       }
     };
 
     update();
     const interval = window.setInterval(update, 1000);
     return () => window.clearInterval(interval);
-  }, [hardCutoffMs, timerVisibleMs, onTimeUp]);
+  }, [hardCutoffMs, timerVisibleMs]);
 
   if (secondsLeft === null) return null;
 
