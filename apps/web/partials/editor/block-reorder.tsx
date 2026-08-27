@@ -49,7 +49,7 @@ type DropZoneLayout = {
 const GUTTER_HOVER_WIDTH = 60;
 const BLOCK_LINK_REVEAL_TIMEOUT_MS = 30_000;
 const BLOCK_LINK_RETRY_INTERVAL_MS = 250;
-const BLOCK_LINK_SETTLE_DELAYS_MS = [0, 250, 750, 1500, 3000, 6000] as const;
+const BLOCK_LINK_SETTLE_DELAYS_MS = [0, 1000, 3000, 6000] as const;
 export const blockKeyboardCodes: KeyboardCodes = {
   // Keep Enter available for the Radix menu trigger. Space remains the
   // conventional dnd-kit keyboard gesture for pick up and drop.
@@ -272,7 +272,7 @@ export function BlockReorder({
 
       settleTimers = BLOCK_LINK_SETTLE_DELAYS_MS.map((delay, index) =>
         setTimeout(() => {
-          if (!settleInterrupted && element.isConnected && (index === 0 || !isElementNearViewportCenter(element))) {
+          if (!settleInterrupted && element.isConnected && (index === 0 || !isElementInUsefulViewport(element))) {
             element.scrollIntoView({
               behavior: index === 0 ? 'smooth' : 'auto',
               block: 'center',
@@ -798,11 +798,11 @@ export function findTopLevelBlockElement(editor: Editor, blockId: string): HTMLE
   return block?.element ?? null;
 }
 
-export function isElementNearViewportCenter(element: HTMLElement, viewportHeight = window.innerHeight) {
+export function isElementInUsefulViewport(element: HTMLElement, viewportHeight = window.innerHeight) {
   const rect = element.getBoundingClientRect();
-  const elementCenter = rect.top + rect.height / 2;
-  const tolerance = Math.max(80, viewportHeight * 0.15);
-  return Math.abs(elementCenter - viewportHeight / 2) <= tolerance;
+  const usefulTop = viewportHeight * 0.15;
+  const usefulBottom = viewportHeight * 0.85;
+  return rect.bottom >= usefulTop && rect.top <= usefulBottom;
 }
 
 export function makeDropZones(blocks: BlockLayout[]): DropZoneLayout[] {

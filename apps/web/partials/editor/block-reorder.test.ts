@@ -21,7 +21,7 @@ import {
   getTopLevelBlockElements,
   insertTextBlockBelow,
   isBlockDropNoOp,
-  isElementNearViewportCenter,
+  isElementInUsefulViewport,
   makeDropZones,
   moveTopLevelBlock,
   releasePointerDragFocus,
@@ -435,18 +435,32 @@ describe('findTopLevelBlockElement', () => {
   });
 });
 
-describe('isElementNearViewportCenter', () => {
-  it('distinguishes a centered target from one displaced by late layout changes', () => {
+describe('isElementInUsefulViewport', () => {
+  it('accepts visible and tall targets without demanding exact centering', () => {
     const element = document.createElement('div');
-    const rect = (top: number) =>
-      ({ top, bottom: top + 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: top, toJSON() {} }) as DOMRect;
+    const rect = (top: number, height = 100) =>
+      ({ top, bottom: top + height, left: 0, right: 100, width: 100, height, x: 0, y: top, toJSON() {} }) as DOMRect;
     const rectSpy = vi.spyOn(element, 'getBoundingClientRect');
 
     rectSpy.mockReturnValue(rect(450));
-    expect(isElementNearViewportCenter(element, 1000)).toBe(true);
+    expect(isElementInUsefulViewport(element, 1000)).toBe(true);
 
     rectSpy.mockReturnValue(rect(50));
-    expect(isElementNearViewportCenter(element, 1000)).toBe(false);
+    expect(isElementInUsefulViewport(element, 1000)).toBe(true);
+
+    rectSpy.mockReturnValue(rect(-400, 1600));
+    expect(isElementInUsefulViewport(element, 1000)).toBe(true);
+  });
+
+  it('retries only after layout moves the target outside the useful viewport', () => {
+    const element = document.createElement('div');
+    const rectSpy = vi.spyOn(element, 'getBoundingClientRect');
+
+    rectSpy.mockReturnValue({ top: -300, bottom: -200 } as DOMRect);
+    expect(isElementInUsefulViewport(element, 1000)).toBe(false);
+
+    rectSpy.mockReturnValue({ top: 1100, bottom: 1200 } as DOMRect);
+    expect(isElementInUsefulViewport(element, 1000)).toBe(false);
   });
 });
 
