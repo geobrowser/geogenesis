@@ -391,11 +391,19 @@ export type DebatePeopleResponse = {
 export type DebateClaimPositionSummary = {
   position: boolean;
   position_label: string;
-  /** Everyone who set this position, online or not. */
+  /**
+   * Everyone geo-chat counts as holding this position — which is narrower than it sounds: the
+   * query only counts rows surviving `readiness.is_ready`, so someone who took the position
+   * without standing ready to debate it is excluded. Not shown on the claim card.
+   */
   total_count: number;
   /** Online, available, not in a debate, not blocked either way. */
   available_now_count: number;
-  /** Capped list used for avatar stacks. */
+  /**
+   * Capped list for the avatar stack, drawn only from available people (GEO-2691). Any count
+   * rendered beside it has to come from `available_now_count`, not `total_count`, or the overflow
+   * describes a different population than the faces.
+   */
   participants: DebateParticipantSummary[];
 };
 

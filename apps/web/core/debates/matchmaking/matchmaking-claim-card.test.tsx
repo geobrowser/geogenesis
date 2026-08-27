@@ -121,6 +121,15 @@ function readiness(overrides: Partial<MatchmakingReadiness> = {}): MatchmakingRe
   };
 }
 
+function participant(id: string) {
+  return {
+    user_id: id,
+    profile_space_id: `${id}-space`,
+    display_name: id,
+    avatar_cid: null,
+  } as DebateClaimPositionSummary['participants'][number];
+}
+
 const toggleName = 'Ready to debate this claim';
 
 function renderCard(card: ReactElement) {
@@ -140,6 +149,79 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+/**
+ * GEO-2691. The avatar stack means "who could I debate about this, right now". geo-chat narrowed
+ * the preview to available people; the overflow was still `total_count - shown`, which counts
+ * every holder including offline ones. So a side with nobody available rendered a bare "+2" and no
+ * faces, and a side with one available person out of three said "+2" when only one was reachable.
+ */
+describe('position avatar stack', () => {
+  const withCounts = (overrides: Array<Partial<DebateClaimPositionSummary>>): DebateClaimPositionSummary[] => [
+    { ...positions[0], ...overrides[0] },
+    { ...positions[1], ...overrides[1] },
+  ];
+
+  it('draws no stack at all for a side with nobody available', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={withCounts([
+          { total_count: 1, available_now_count: 1, participants: [participant('available-one')] },
+          { total_count: 2, available_now_count: 0, participants: [] },
+        ])}
+        readiness={readiness()}
+      />
+    );
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    // No faces and no count: two offline holders are not "+2" people you could debate.
+    expect(within(disagree).queryByText('+2')).toBeNull();
+    expect(within(disagree).queryByText(/^\+/)).toBeNull();
+  });
+
+  it('counts the overflow from available people, not from every holder', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={withCounts([
+          {
+            total_count: 9,
+            available_now_count: 4,
+            participants: [participant('one'), participant('two')],
+          },
+          { total_count: 3, available_now_count: 0, participants: [] },
+        ])}
+        readiness={readiness()}
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    // 4 available, 2 shown -> +2. Not 9 - 2 = +7, which counted five people who are offline.
+    expect(within(agree).getByText('+2')).toBeInTheDocument();
+    expect(within(agree).queryByText('+7')).toBeNull();
+  });
+
+  it('shows no overflow when every available person is already on screen', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={withCounts([
+          {
+            total_count: 6,
+            available_now_count: 2,
+            participants: [participant('one'), participant('two')],
+          },
+          { total_count: 0, available_now_count: 0, participants: [] },
+        ])}
+        readiness={readiness()}
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(within(agree).queryByText(/^\+/)).toBeNull();
+  });
+});
 
 describe('MatchmakingClaimCard', () => {
   it('puts the debate toggle in the card header beside the space name', () => {
@@ -191,15 +273,17 @@ describe('MatchmakingClaimCard', () => {
       />
     );
 
-    // Three on the server plus the viewer: their face is shown, the other three counted over.
+    // Disagree has 3 holders but only 2 available. The viewer's face is shown and the count is of
+    // the *available* others behind it, so +2 — not +3, which used to include the offline holder
+    // (GEO-2691).
     const disagree = screen.getByRole('button', { name: /^Disagree/ });
     expect(within(disagree).getByTestId('avatar')).toHaveTextContent('https://example.com/you.png');
-    expect(within(disagree).getByText('+3')).toBeInTheDocument();
+    expect(within(disagree).getByText('+2')).toBeInTheDocument();
 
-    // The side they didn't take is left exactly as the server reported it.
+    // The side they didn't take is left as the server reported it: 2 holders, 1 available.
     const agree = screen.getByRole('button', { name: /^Agree/ });
     expect(within(agree).queryByTestId('avatar')).not.toBeInTheDocument();
-    expect(within(agree).getByText('+2')).toBeInTheDocument();
+    expect(within(agree).getByText('+1')).toBeInTheDocument();
   });
 
   // The switch of sides, which the test above doesn't reach: it starts from no server position, so
