@@ -281,8 +281,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // rows that cannot be shown, and a facet describing them, while only the pinned rows survive.
   // Every picked space, not any: with one allowed space picked alongside a disallowed one, the
   // browsed corpus still has rows to give.
-  const selectedSpaceShowsNothing =
-    spaceIds.length > 0 && spaceIds.every(id => !isClaimSpaceAllowed(id, spaceAllowlist));
+  // The graph-backed sources deliberately offer spaces outside the viewer's allowlist, so a
+  // selection can hold both kinds at once. Only the allowed ones may reach geo-chat: `browsedRows`
+  // drops the rest anyway, but the facets riding with them would still name their topics and count
+  // their claims. The full selection stays in `spaceIds` for the pinned rows, which come from the
+  // graph and are not narrowed by the allowlist.
+  const browsableSpaceIds = React.useMemo(
+    () => spaceIds.filter(id => isClaimSpaceAllowed(id, spaceAllowlist)),
+    [spaceAllowlist, spaceIds]
+  );
+
+  // Nothing left to ask about once every pick is one geo-chat cannot answer for.
+  const selectedSpaceShowsNothing = spaceIds.length > 0 && browsableSpaceIds.length === 0;
 
   // Every lookup the scope is built from. Until they have all landed the scope is `null`, which
   // geo-chat reads as "no filter" — so asking now buys an answer about the whole corpus, whose
@@ -375,7 +385,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // also feed the space menu and their spaces the gateway scopes this page holds — both of which
   // have to describe every list, not the one in front of the viewer. Only the sentinel is gated,
   // below: paging a corpus that isn't on screen is the part that would be waste.
-  const browsedClaimsQuery = useScopedMatchmakingClaims(matchmakingQuery, scope, spaceIds, selectedSpaceShowsNothing);
+  const browsedClaimsQuery = useScopedMatchmakingClaims(
+    matchmakingQuery,
+    scope,
+    browsableSpaceIds,
+    selectedSpaceShowsNothing
+  );
   const { pages: browsedPages, facets: browsedFacets } = browsedClaimsQuery;
 
   // What geo-chat knows about this session's claims — readiness, the shared-preference and
@@ -882,10 +897,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     );
     const fromServer = (browsedFacets?.space_facets ?? []).filter(facet => offered.has(facet.id));
     const merged = mergeFacetCounts(browsesPages ? fromServer : [], fromRows);
-    // Every id the menu offers, including any the counts can't reach — a space whose only rows are
-    // filtered out right now is still somewhere the viewer can go back to.
-    for (const id of facetSpaceIds)
-      if (!merged.some(entry => entry.id === id)) merged.push({ id, name: null, count: 0 });
+    // No zero-count backfill. A space the other filters leave empty is an option that can only ever
+    // produce an empty list, which is the thing this menu exists not to do — and the way back is
+    // already safe without it, since the space facet is never narrowed by the space selection.
     return orderFacetOptions(merged, spaceIds);
   }, [browsedFacets?.space_facets, claims, debouncedSearch, facetSpaceIds, spaceIds, tab, topicIds, topicsByClaimId]);
 

@@ -57,19 +57,18 @@ export function RequestsTab() {
   const sent = status === 'received' || !outbound || !inSpace(outbound.claim.space_id) ? null : outbound;
 
   // No server facet here either: the requests in hand are the whole list.
-  const facetSpaces = React.useMemo(
-    () =>
-      orderFacetOptions(
-        countBy(
-          [...(outbound ? [outbound.claim.space_id] : []), ...incoming.map(r => r.claim.space_id)].map(id => ({
-            id,
-            name: null,
-          }))
-        ),
-        spaceIds
-      ),
-    [incoming, outbound, spaceIds]
-  );
+  //
+  // Counted under the status filter, not across both directions. A count has to describe what
+  // picking the option would leave, and status is one of the filters that decides that — so with
+  // "Awaiting response" showing, a space that only appears in received requests would otherwise
+  // carry a number over a list it cannot fill.
+  const facetSpaces = React.useMemo(() => {
+    const spaces = [
+      ...(outbound && status !== 'received' ? [outbound.claim.space_id] : []),
+      ...(status === 'sent' ? [] : incoming.map(request => request.claim.space_id)),
+    ];
+    return orderFacetOptions(countBy(spaces.map(id => ({ id, name: null }))), spaceIds);
+  }, [incoming, outbound, spaceIds, status]);
 
   // The claimless challenge sits alongside claim requests: it expires the same way, and "Not now"
   // in its popup leaves it here rather than answering it.

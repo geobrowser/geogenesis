@@ -195,6 +195,9 @@ export function HubMultiFilterMenu<T extends string>({
             key={option.value}
             type="button"
             disabled={option.pending}
+            // The checkbox is a graphic, and `aria-hidden` at that, so without this the row reads as
+            // an ordinary button and nothing says whether it is picked.
+            aria-pressed={selected.has(option.value)}
             // No `setOpen(false)`: the point of multi-select is picking more than one, and closing
             // on the first tick would make the second a whole new trip through the trigger.
             onClick={() => onToggle(option.value)}

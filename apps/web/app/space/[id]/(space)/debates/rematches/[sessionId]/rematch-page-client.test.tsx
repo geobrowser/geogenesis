@@ -1701,18 +1701,43 @@ describe('DebateRematchPageClient', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
   });
 
-  it('lets go of a selected topic once the space no longer has claims for it', async () => {
+  // A space can be on the menu without being in the allowlist — the graph-backed sources aren't
+  // narrowed by it, so their rows put their spaces there. Picking one alongside an allowed space
+  // used to send both: `browsedRows` dropped the disallowed rows, but the facets riding with them
+  // still named their topics and counted their claims.
+  it('sends geo-chat only the picked spaces it can answer for', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    selectFilter('Any topic', 'Governance');
-    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    selectFilter('Any space', 'Governance space');
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ spaceIds: [SPACE_2] }));
 
-    selectFilter('Any space', 'Crypto');
+    // Crypto reaches the menu through a pinned row, not through the allowlist. The trigger now
+    // reads the picked space's own name, so that is what opens the menu again.
+    selectFilter('Governance space', 'Crypto');
+
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ spaceIds: [SPACE_2] }));
+  });
+
+  // Not reachable by picking a topic and then a space it has nothing in: each menu is narrowed by
+  // the other, so such a space is never on offer. It is reachable by the corpus moving under a
+  // selection that was valid when it was made.
+  it('lets go of a selected topic once the space no longer has claims for it', async () => {
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    selectFilter('Any space', 'Governance space');
+    selectFilter('Any topic', 'Ethics');
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ topicIds: ['topic-eth'] }));
+
+    // The one Ethics claim in that space is answered, published elsewhere, or otherwise leaves the
+    // candidate set, so the facet stops naming the topic.
+    mocks.matchmakingClaims = [{ ...matchmakingClaim(), topics: [{ id: 'topic-gov', name: 'Governance' }] }];
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
     // Held, it would filter the list by a chip that is no longer in the menu to unpick.
     await waitFor(() => expect(screen.getByRole('button', { name: /Any topic/ })).toBeInTheDocument());
-    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 
   it('narrows the list to the selected space', async () => {
