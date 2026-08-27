@@ -981,6 +981,16 @@ describe('ClaimsTab -- Featured', () => {
     expect(screen.queryByText('Chips are better than fries')).toBeNull();
   });
 
+  // The panel is narrow enough that three menus fill the row on their own. Pushing the topic one to
+  // the far end there — as the rematch picker does, where there is width to spare — would only
+  // separate it from the two it sits with.
+  it('leaves the topic menu beside the others rather than at the far end', () => {
+    render(<ClaimsTab />);
+
+    const topicMenu = screen.getByRole('button', { name: /Any topic/ });
+    expect(topicMenu.parentElement?.className ?? '').not.toContain('ml-auto');
+  });
+
   // Featured leads the menu because it is what the tab opens on; an option you land on shouldn't
   // sit below the one you didn't.
   it('leads the position menu, ahead of All claims', () => {

@@ -1215,7 +1215,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               onTopicsClear={() => setTopicIds([])}
               facetSpaces={facetSpaces}
               facetTopics={facetTopics}
-              className="justify-between"
+              topicAtEnd
               // Only on Claims: the opponent's tab is one fixed source — their own responses — and
               // a menu offering three others there would read as filtering a list it can't reach.
               leading={
@@ -1670,8 +1670,13 @@ function rematchPositionSummaries(
       position_label:
         holders.find(holder => holder.position_label)?.position_label ?? responsePositionLabel(responseKind, position),
       total_count: holders.length,
-      // Only meaningful for the hub's "available now" counts; a rematch is already a fixed pair.
+      // Only meaningful for the hub's "available now" counts; a rematch is already a fixed pair,
+      // so there is nobody here the viewer would send a request to.
       available_now_count: 0,
+      // The people this surface knows are on the side, which is what the stack draws. It has to be
+      // its own number rather than reusing `available_now_count`: that is 0 here, and while the
+      // stack was gated on it these faces were silently never rendered.
+      present_count: participants.length,
       participants,
     };
   });

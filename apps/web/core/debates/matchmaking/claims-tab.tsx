@@ -498,6 +498,11 @@ function featuredPositionSummaries(
       position_label: choice?.position_label ?? responsePositionLabel(responseKind, position),
       total_count: choice?.participant_count ?? 0,
       available_now_count: choice?.participant_count ?? 0,
+      // These are `online_choices`, so the count already *is* the present population — the same
+      // number, but it has to be set explicitly. `present_count` is what the avatar stack and its
+      // `+N` read (GEO-2691), and leaving it unset would fall back to the length of the capped
+      // preview and silently drop the overflow: 5 people behind 2 faces would render no "+3".
+      present_count: choice?.participant_count ?? 0,
       participants: choice?.participants ?? [],
     };
   });
@@ -516,8 +521,13 @@ type SpaceTopicFiltersProps = {
   facetTopics?: { id: string; name: string | null; count: number }[];
   /** Rendered before the space filter — the Claims tab puts its position filter here. */
   leading?: React.ReactNode;
-  /** Overrides the row layout — the rematch picker spreads the two menus across its width. */
-  className?: string;
+  /**
+   * Pushes the topic menu to the far end of the row, leaving the source and space menus together on
+   * the left. For a surface with width to spare: the rematch picker is a full page, where a row of
+   * menus huddled at one edge leaves an obvious gap. The side panel is narrow enough that they fill
+   * the row anyway, and pushing one out there would only separate it from the others.
+   */
+  topicAtEnd?: boolean;
 };
 
 /**
@@ -536,7 +546,7 @@ export function SpaceTopicFilters({
   facetSpaces,
   facetTopics,
   leading,
-  className,
+  topicAtEnd,
 }: SpaceTopicFiltersProps) {
   const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(facetSpaceIds);
@@ -578,7 +588,7 @@ export function SpaceTopicFilters({
   );
 
   return (
-    <div className={cx('flex flex-wrap items-center gap-2', className)}>
+    <div className="flex flex-wrap items-center gap-2">
       {leading}
       <HubMultiFilterMenu
         label={spaceMenuLabel}
@@ -591,14 +601,19 @@ export function SpaceTopicFilters({
         showImages
       />
       {facetTopics && topicIds && onTopicToggle && onTopicsClear ? (
-        <HubMultiFilterMenu
-          label={topicMenuLabel}
-          options={topicOptions}
-          values={topicIds}
-          onToggle={onTopicToggle}
-          onClear={onTopicsClear}
-          clearLabel="Any topic"
-        />
+        // `ml-auto` on the menu itself rather than `justify-between` on the row: with three items
+        // that spread all of them, which stranded the space menu in the middle instead of leaving
+        // it beside the source it narrows.
+        <div className={cx(topicAtEnd && 'ml-auto')}>
+          <HubMultiFilterMenu
+            label={topicMenuLabel}
+            options={topicOptions}
+            values={topicIds}
+            onToggle={onTopicToggle}
+            onClear={onTopicsClear}
+            clearLabel="Any topic"
+          />
+        </div>
       ) : null}
     </div>
   );
