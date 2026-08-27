@@ -35,7 +35,7 @@ export function DeviceOptionGroup({
       <Text as="p" variant="metadata" color="grey-04" className="px-1 pb-1">
         {label}
       </Text>
-      <div className={cx('space-y-1', framed && 'rounded-lg border border-grey-02 p-1')}>
+      <div className={cx(framed ? 'space-y-1 rounded-lg border border-grey-02 p-1' : 'space-y-0.5')}>
         {options.map(device => {
           const selected = device.deviceId === selectedDeviceId;
           return (
@@ -43,8 +43,11 @@ export function DeviceOptionGroup({
               key={`${device.kind}:${device.deviceId}`}
               value={device.deviceId}
               className={cx(
-                'flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-metadata text-text outline-none',
-                selected ? 'rounded-md bg-grey-01' : 'rounded-sm hover:bg-grey-01',
+                'flex w-full items-center justify-between gap-3 rounded-md text-left text-metadata text-text outline-none',
+                // The bottom sheet has the room for the taller rows the designs draw; the pre-join
+                // popover does not, and its metrics predate this component being shared.
+                framed ? 'px-4 py-3' : 'min-h-9 px-3 py-2',
+                selected ? 'bg-grey-01' : 'hover:bg-grey-01',
                 'focus-visible:ring-1 focus-visible:ring-text disabled:cursor-default disabled:opacity-100'
               )}
             >

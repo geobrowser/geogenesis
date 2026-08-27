@@ -46,7 +46,7 @@ export function AudioSettings({
         framed={framed}
         onChange={onAudioInputChange}
       />
-      <div className={framed ? undefined : 'border-t border-divider pt-3'}>
+      <div className={framed ? undefined : 'border-t border-grey-02 pt-3'}>
         <DeviceOptionGroup
           label="Select a speaker"
           options={audioOutputSupported ? audioOutputDevices : [systemDefaultAudioOutput]}
