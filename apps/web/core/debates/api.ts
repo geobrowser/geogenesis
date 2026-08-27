@@ -412,8 +412,13 @@ export type DebateClaimPositionSummary = {
    *
    * This is the population `participants` is drawn from, so a `+N` overflow beside those faces
    * must be computed against this and not against `available_now_count`.
+   *
+   * Optional because geo-chat only started sending it in geo-chat#74, and the two deploy
+   * separately. Read it through {@link presentCount}, never directly: a client that ships first
+   * would otherwise gate every avatar stack on `undefined > 0` and render no faces at all, which
+   * is the exact bug this field exists to fix. The fallback also covers a geo-chat rollback.
    */
-  present_count: number;
+  present_count?: number;
   /** Capped list for the avatar stack, drawn from `present_count`'s population (GEO-2691). */
   participants: DebateParticipantSummary[];
 };

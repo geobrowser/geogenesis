@@ -225,6 +225,44 @@ describe('position avatar stack', () => {
     expect(within(disagree).queryByText(/^\+/)).toBeNull();
   });
 
+  // The deploy window, which is the state production was actually in: geo-chat reverted so it
+  // sends every holder, geogenesis still gating the stack on `available_now_count`. On a claim
+  // whose only opponent is pair-blocked that count is 0, so the whole stack rendered nothing.
+  // Preston: "The images still arent there."
+  //
+  // A client that ships before geo-chat#74 sees no `present_count` at all, and must draw the faces
+  // it was sent rather than gating on an undefined number.
+  it('draws the faces geo-chat sent even when it sends no present_count', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={[
+          {
+            position: true,
+            position_label: 'Agree',
+            total_count: 1,
+            available_now_count: 0,
+            participants: [],
+          },
+          {
+            position: false,
+            position_label: 'Disagree',
+            total_count: 1,
+            // Pair-blocked, so not requestable — and an older geo-chat offers no present_count.
+            available_now_count: 0,
+            participants: [participant('already-debated')],
+          },
+        ]}
+        readiness={readiness()}
+      />
+    );
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(within(disagree).getAllByTestId('avatar')).toHaveLength(1);
+    // The face count is all we know, so no overflow claiming anyone else is there.
+    expect(within(disagree).queryByText(/^\+/)).toBeNull();
+  });
+
   it('counts the overflow from available people, not from every holder', () => {
     renderCard(
       <MatchmakingClaimCard
