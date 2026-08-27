@@ -1,11 +1,14 @@
 'use client';
 
+import { capSearchQuery } from '~/core/io/search-query';
+
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
 export type DebateRecordingSource = 'local';
 export type DebateRematchStatus = 'deciding' | 'browsing' | 'request_pending' | 'converted' | 'ended' | 'expired';
 export type DebateRematchRequestStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
+export type DebateResponseKind = 'stance' | 'veracity';
 
 export type DebateParticipantSummary = {
   user_id: string;
@@ -25,6 +28,8 @@ export type DebateClaimSummary = {
 export type DebateMatch = {
   id: string;
   status: DebateMatchStatus;
+  response_kind: DebateResponseKind | null;
+  cancellation_reason?: string | null;
   claim: DebateClaimSummary;
   participants: DebateMatchParticipant[];
   turn_format_id: string | null;
@@ -175,6 +180,7 @@ export type Debate = {
   id: string;
   claim: DebateClaimSummary;
   status: DebateStatus;
+  response_kind: DebateResponseKind | null;
   room_name: string;
   first_participant_slot: ParticipantSlot;
   current_turn_index: number;
@@ -203,10 +209,21 @@ export type DebateActivity = {
   online: boolean;
   available_to_debate: boolean;
   cooldown_until: string | null;
+  /**
+   * Always `null` since GEO-2514 removed auto-pairing: nothing populates `active_match_id` any
+   * more. geo-chat keeps the field until every client has stopped reading it — nothing here does.
+   */
   match: DebateMatch | null;
   debate: Debate | null;
   rematch: DebateRematchSession | null;
   challenge: DebateChallenge | null;
+  /**
+   * The single debate request the viewer currently has awaiting a response. Optional until
+   * geo-chat ships `debate_matchmaking_v1`.
+   */
+  outbound_request?: DebateRequest | null;
+  /** Number of unexpired incoming debate requests. Drives the navbar badge. */
+  incoming_request_count?: number;
 };
 
 export type DebateChallengeStatus = 'pending' | 'accepted' | 'rejected' | 'expired';
@@ -251,7 +268,11 @@ export type DebateRematchRequest = {
   requester_user_id: string;
   recipient_user_id: string;
   requester_position: boolean;
+  requester_position_label?: string | null;
   recipient_position: boolean;
+  recipient_position_label?: string | null;
+  response_kind?: DebateResponseKind | null;
+  cancellation_reason?: string | null;
   turn_format_id: string;
   created_at: string;
   expires_at: string;
@@ -276,14 +297,23 @@ export type DebateRematchSession = {
 export type DebateRematchClaimPosition = {
   user_id: string;
   position: boolean | null;
+  position_label: string | null;
 };
 
 export type DebateRematchClaim = {
   claim: DebateClaimSummary;
+  response_kind: DebateResponseKind | null;
   participants: DebateRematchClaimPosition[];
   shared_preference: boolean;
   recently_rejected: boolean;
   previously_debated: boolean;
+  /**
+   * The viewer's readiness on this claim, the same two fields the per-space `debate-claims` list
+   * carries. Optional while geo-chat rolls the fields out: absent means the backend predates them
+   * and the picker has to ask the per-space endpoint instead.
+   */
+  viewer_debate_ready?: boolean;
+  readiness_disabled_reason?: string | null;
 };
 
 export type DebateRematchClaimsResponse = {
@@ -322,12 +352,244 @@ export type DebateClaim = {
   claim_entity_id: string;
   claim: string;
   description: string | null;
-  viewer_waiting_position: boolean | null;
+  response_kind: DebateResponseKind;
+  viewer_response: { position: boolean; position_label: string } | null;
+  viewer_debate_ready: boolean;
+  readiness_disabled_reason: string | null;
+  readiness_changed_at: string | null;
   online_choices: DebateOnlineChoice[];
+  /** Always `null` after GEO-2514: this only ever reported a *pending* match, and nothing creates
+   * one now. Left in the shape until geo-chat drops the field. */
   active_match: DebateMatch | null;
   active_debate: Debate | null;
   created_at: string;
   updated_at: string;
+};
+
+/* -------------------------------------------------------------------------------------------------
+ * Matchmaking hub (GEO-2514)
+ * -----------------------------------------------------------------------------------------------*/
+
+export type DebateMatchmakingPresence = {
+  online: boolean;
+  available_to_debate: boolean;
+  /** `true` while the user is in an active match or debate, so requests to them stay pending. */
+  in_debate: boolean;
+  /** Server-authoritative. Requests target the candidate who has been online longest. */
+  online_since: string | null;
+};
+
+export type DebatePerson = DebateParticipantSummary &
+  DebateMatchmakingPresence & {
+    can_challenge: boolean;
+  };
+
+export type DebatePeopleResponse = {
+  people: DebatePerson[];
+};
+
+export type DebateClaimPositionSummary = {
+  position: boolean;
+  position_label: string;
+  /**
+   * Everyone geo-chat counts as holding this position — which is narrower than it sounds: the
+   * query only counts rows surviving `readiness.is_ready`, so someone who took the position
+   * without standing ready to debate it is excluded. Not shown on the claim card.
+   */
+  total_count: number;
+  /**
+   * Eligible for *this viewer* to send a request to right now: excludes the viewer themselves and
+   * anyone they are already pair-blocked with on this claim. Drives the "Debate now" filter.
+   *
+   * Viewer-relative, so it is the wrong basis for anything presented as a fact about the claim.
+   * Using it for the avatar stack made a claim you had already debated show you an empty stack,
+   * because debating someone pair-blocks that pair on that claim (GEO-2691).
+   */
+  available_now_count: number;
+  /**
+   * Available to debate right now as a property of the *person* — online, reachable, not busy,
+   * not paused — including the viewer and anyone they have already debated here.
+   *
+   * This is the population `participants` is drawn from, so a `+N` overflow beside those faces
+   * must be computed against this and not against `available_now_count`.
+   *
+   * Optional because geo-chat only started sending it in geo-chat#74, and the two deploy
+   * separately. Read it through {@link presentCount}, never directly: a client that ships first
+   * would otherwise gate every avatar stack on `undefined > 0` and render no faces at all, which
+   * is the exact bug this field exists to fix. The fallback also covers a geo-chat rollback.
+   */
+  present_count?: number;
+  /** Capped list for the avatar stack, drawn from `present_count`'s population (GEO-2691). */
+  participants: DebateParticipantSummary[];
+};
+
+export type MatchmakingTopic = {
+  id: string;
+  name: string | null;
+};
+
+/** The viewer's active on-chain claim response. `position_label` is server-supplied and semantic. */
+export type DebateResponseSummary = {
+  position: boolean;
+  position_label: string;
+};
+
+/** Everything the hub needs to render a claim's readiness state alongside the viewer's response. */
+export type MatchmakingReadiness = {
+  /** Which vocabulary labels the sides: Agree/Disagree for `stance`, Verify/Dispute for `veracity`. */
+  response_kind: DebateResponseKind;
+  /** Present whenever the viewer has an active response — including while readiness is off. */
+  viewer_response: DebateResponseSummary | null;
+  viewer_debate_ready: boolean;
+  /** Why readiness can't be turned on, when the server knows a reason. */
+  readiness_disabled_reason: string | null;
+};
+
+export type MatchmakingClaim = MatchmakingReadiness & {
+  claim: DebateClaimSummary;
+  topics: MatchmakingTopic[];
+  /**
+   * Legacy shape of the viewer's side, gated on readiness. Prefer `viewer_response`, which also
+   * carries the label and survives readiness being switched off.
+   */
+  viewer_position: boolean | null;
+  positions: DebateClaimPositionSummary[];
+  score: number;
+  active_debate: boolean;
+};
+
+export type MatchmakingClaimsFilter = 'all' | 'mine' | 'debate_now';
+
+/** Topics are Knowledge Graph data, which geo-chat replicates as of GEO-2659 — so `topicId`
+ * filters server-side and the response carries a topic facet. Before that the server returned
+ * `topics: []` and ignored the parameter, and both pickers resolved and filtered topics
+ * themselves over whatever pages they had loaded. */
+export type MatchmakingClaimsQuery = {
+  search?: string | null;
+  spaceId?: string | null;
+  /**
+   * The spaces this viewer may see claims from at all, sent when they haven't picked one.
+   *
+   * Both this and `spaceId` are OR-ed together server-side rather than one overriding the other,
+   * so only ever send one of them: sending both would widen the query back out to every space in
+   * either list.
+   */
+  spaceIds?: string[] | null;
+  topicId?: string | null;
+  /**
+   * Topics to narrow by, OR-ed together. Merged with `topicId` the same way `spaceIds` is with
+   * `spaceId`, so send one or the other rather than both.
+   */
+  topicIds?: string[] | null;
+  /**
+   * Narrows rows *and* facets to what a debate-again session can still offer: geo-chat drops the
+   * claim the source debate was about, and any this pairing has blocked (GEO-2674).
+   *
+   * The session id rather than the ids themselves — that set is geo-chat's own, and the client
+   * would be handing back a value it isn't the authority on.
+   */
+  rematchSessionId?: string | null;
+  filter?: MatchmakingClaimsFilter;
+  cursor?: string | null;
+  limit?: number;
+};
+
+/** One dropdown option and how many claims the current filters leave behind it. */
+export type MatchmakingFacetCount = {
+  id: string;
+  /** Topics carry a replicated name; spaces don't — the client resolves those from the sidebar. */
+  name: string | null;
+  count: number;
+};
+
+/**
+ * The two menus, counted over the whole candidate set rather than the page being returned.
+ *
+ * Each dimension is narrowed by *the other* and never by itself — standard faceted counting, and
+ * what makes a count answer "how many of the claims matching everything else I have chosen are in
+ * here". Picking a space therefore doesn't collapse the space menu, and picking a topic doesn't
+ * collapse the topic menu, but each does narrow its counterpart.
+ *
+ * The half that is easy to miss is that this cuts both ways: a space can disappear from
+ * `space_facets` because the selected *topic* has nothing in it. That is "this combination is
+ * empty", not "this space is no longer yours to pick", and the two must not be confused — see the
+ * space effect in `claims-tab.tsx`.
+ */
+export type MatchmakingFacets = {
+  /** Superseded by `space_facets`, and derived from it — so it inherits the topic narrowing too. */
+  space_ids: string[];
+  /** Superseded by `topic_facets`. Empty on every response until GEO-2659 made it real. */
+  topics: MatchmakingTopic[];
+  /** Count descending. Narrowed by the topic filter, not by the space filter. */
+  space_facets: MatchmakingFacetCount[];
+  /** Count descending. Narrowed by the space filter, not by the topic filter. */
+  topic_facets: MatchmakingFacetCount[];
+};
+
+export type MatchmakingClaimsResponse = {
+  claims: MatchmakingClaim[];
+  next_cursor: string | null;
+  /** Only returned on the first (cursor-less) page. */
+  facets?: MatchmakingFacets;
+};
+
+export type MatchmakingMatch = MatchmakingReadiness & {
+  claim: DebateClaimSummary;
+  topics: MatchmakingTopic[];
+  viewer_position: boolean;
+  positions: DebateClaimPositionSummary[];
+};
+
+export type MatchmakingMatchesResponse = {
+  matches: MatchmakingMatch[];
+};
+
+export type DebateRequestStatus = 'pending' | 'accepted' | 'dismissed' | 'withdrawn' | 'expired' | 'exhausted';
+
+export type DebateRequestParty = DebateParticipantSummary &
+  DebateMatchmakingPresence & {
+    position: boolean;
+    position_label: string;
+  };
+
+export type DebateRequest = {
+  id: string;
+  status: DebateRequestStatus;
+  claim: DebateClaimSummary;
+  requester: DebateRequestParty;
+  /** The current target. The server re-targets the request when a recipient dismisses or blocks. */
+  recipient: DebateRequestParty;
+  turn_format_id: string | null;
+  created_at: string;
+  /** Fixed for the lifetime of the request, even as it advances between recipients. */
+  expires_at: string;
+};
+
+export type DebateRequestsResponse = {
+  /** At most one outbound request may be pending at a time. */
+  outbound: DebateRequest | null;
+  incoming: DebateRequest[];
+};
+
+export type DebateRequestActionResponse = {
+  request: DebateRequest;
+  match: DebateMatch | null;
+  debate: Debate | null;
+};
+
+export type CreateDebateRequestBody = {
+  space_id: string;
+  claim_entity_id: string;
+  format_id?: string;
+};
+
+export type DismissDebateRequestBody = {
+  /** Also clears the recipient's debate intent for the claim. */
+  remove_intent?: boolean;
+};
+
+export type DebateBlocksResponse = {
+  blocked: DebateParticipantSummary[];
 };
 
 export type ObjectStoreUpload = {
@@ -341,18 +603,9 @@ export type DebateClaimsResponse = {
   claims: DebateClaim[];
 };
 
-export type JoinDebateQueueRequest = {
-  position: boolean;
-};
-
 export type JoinDebateQueueResponse = {
   claim: DebateClaim;
   match: DebateMatch | null;
-};
-
-export type MatchActionResponse = {
-  match: DebateMatch;
-  debate: Debate | null;
 };
 
 export type SpaceDebatesResponse = {
@@ -497,23 +750,27 @@ export async function listDebateClaims(
 ) {
   const query = claimIds.length > 0 ? `?claim_ids=${encodeURIComponent(claimIds.join(','))}` : '';
   return geoChatRequest<DebateClaimsResponse>(`/spaces/${spaceId}/debate-claims${query}`, {
-    auth: 'optional',
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,
   });
 }
 
+/**
+ * Standing ready on a claim — pure intent, since GEO-2514's cutover left requests as the only route
+ * into a debate. The endpoint takes no body: one used to carry a client-chosen position, and a
+ * `source` discriminator briefly lived here to separate hub readiness from legacy queue joins, so
+ * geo-chat rejects any body at all with 426.
+ */
 export async function joinDebateQueue(
   spaceId: string,
   claimId: string,
-  request: JoinDebateQueueRequest,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
   return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-queue`, {
     method: 'POST',
-    body: request,
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -534,48 +791,33 @@ export async function leaveDebateQueue(
   });
 }
 
-export async function updateDebatePreference(
+export async function notifyClaimResponseIndexed(
   spaceId: string,
   claimId: string,
-  request: JoinDebateQueueRequest,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
-) {
-  return geoChatRequest<JoinDebateQueueResponse>(`/spaces/${spaceId}/claims/${claimId}/debate-preference`, {
-    method: 'PUT',
-    body: request,
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
-}
-
-export async function acceptDebateMatch(
-  matchId: string,
+  responseKind: DebateResponseKind,
+  position: boolean | null,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,
-  formatId?: string
+  signal?: AbortSignal
 ) {
-  return geoChatRequest<MatchActionResponse>(`/debate-matches/${matchId}/accept`, {
-    method: 'POST',
-    body: { format_id: formatId },
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
-}
+  const request = () =>
+    geoChatRequest<void>(`/spaces/${spaceId}/claims/${claimId}/response-indexed`, {
+      method: 'POST',
+      body: { response_kind: responseKind, position },
+      auth: true,
+      getPrivyIdentityToken,
+      accountKey,
+      signal,
+    });
 
-export async function declineDebateMatch(
-  matchId: string,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
-) {
-  return geoChatRequest<MatchActionResponse>(`/debate-matches/${matchId}/decline`, {
-    method: 'POST',
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await request();
+    } catch (error) {
+      if (attempt >= 2 || !isTransientResponseNotificationError(error)) throw error;
+      await waitForResponseNotificationRetry(250 * 2 ** attempt, signal);
+    }
+  }
 }
 
 export async function listSpaceDebates(
@@ -743,23 +985,6 @@ export async function listDebateRematchClaims(
   });
 }
 
-export async function updateDebateRematchPosition(
-  sessionId: string,
-  claimId: string,
-  position: boolean,
-  sourceSpaceId: string,
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null
-) {
-  return geoChatRequest<DebateRematchClaimsResponse>(`/debate-rematches/${sessionId}/claims/${claimId}/position`, {
-    method: 'PUT',
-    body: { position, source_space_id: sourceSpaceId },
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-  });
-}
-
 export async function createDebateRematchRequest(
   sessionId: string,
   request: { source_space_id: string; claim_id: string; format_id: string },
@@ -849,6 +1074,186 @@ export async function rejectDebateChallenge(
 ) {
   return geoChatRequest<DebateChallengeActionResponse>(`/debate-challenges/${challengeId}/reject`, {
     method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Matchmaking hub (GEO-2514)
+ * -----------------------------------------------------------------------------------------------*/
+
+export async function listDebatePeople(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebatePeopleResponse>('/matchmaking/people', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function listMatchmakingClaims(
+  query: MatchmakingClaimsQuery,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams();
+  // GEO-2658. Capped for consistency, not to stay inside a limit: `/matchmaking/claims` has no
+  // ceiling on `search` — it trims, escapes the LIKE wildcards and binds, so an over-long query is
+  // answered rather than rejected. This is the only search box in debates, and the same typed
+  // string shouldn't behave differently depending on which box it went into.
+  //
+  // `capSearchQuery` also does the work that matters more than the length: it slices by code point,
+  // so a cut never lands inside a surrogate pair and hands `URLSearchParams` a lone surrogate.
+  if (query.search) params.set('search', capSearchQuery(query.search));
+  if (query.spaceId) params.set('space_id', query.spaceId);
+  // Only when no single space is picked — see the note on the type. An empty list is left off
+  // entirely: the server reads "no ids" as "no filter", which is the opposite of what an empty
+  // eligible set means.
+  else if (query.spaceIds?.length) params.set('space_ids', query.spaceIds.join(','));
+  if (query.topicId) params.set('topic_id', query.topicId);
+  else if (query.topicIds?.length) params.set('topic_ids', query.topicIds.join(','));
+  if (query.rematchSessionId) params.set('rematch_session_id', query.rematchSessionId);
+  if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
+  if (query.cursor) params.set('cursor', query.cursor);
+  if (query.limit) params.set('limit', String(query.limit));
+
+  const search = params.toString();
+  return geoChatRequest<MatchmakingClaimsResponse>(`/matchmaking/claims${search ? `?${search}` : ''}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function listMatchmakingMatches(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<MatchmakingMatchesResponse>('/matchmaking/matches', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/*
+ * There is no debate-intent endpoint. A position is an on-chain claim response, never something
+ * the client sends — `joinDebateQueue` / `leaveDebateQueue` toggle readiness on top of it.
+ */
+
+export async function listDebateRequests(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateRequestsResponse>('/me/debate-requests', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function createDebateRequest(
+  request: CreateDebateRequestBody,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateRequest>('/debate-requests', {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function withdrawDebateRequest(
+  requestId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateRequestActionResponse>(`/debate-requests/${requestId}/withdraw`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function acceptDebateRequest(
+  requestId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  formatId?: string
+) {
+  return geoChatRequest<DebateRequestActionResponse>(`/debate-requests/${requestId}/accept`, {
+    method: 'POST',
+    body: { format_id: formatId },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function dismissDebateRequest(
+  requestId: string,
+  request: DismissDebateRequestBody,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateRequestActionResponse>(`/debate-requests/${requestId}/dismiss`, {
+    method: 'POST',
+    body: request,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function listDebateBlocks(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateBlocksResponse>('/me/debate-blocks', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export async function blockDebateUser(
+  userId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateBlocksResponse>(`/me/debate-blocks/${userId}`, {
+    method: 'PUT',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function unblockDebateUser(
+  userId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateBlocksResponse>(`/me/debate-blocks/${userId}`, {
+    method: 'DELETE',
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -999,6 +1404,8 @@ async function geoChatRequest<T>(path: string, options: RequestOptions = {}): Pr
     throw await requestError(response);
   }
 
+  if (response.status === 204) return undefined as T;
+
   return response.json() as Promise<T>;
 }
 
@@ -1019,6 +1426,31 @@ const debatePhaseBoundaryRetryCodes = new Set([
   'recording_not_cancellable',
   'recording_not_ready',
 ]);
+
+function isTransientResponseNotificationError(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    return error.status === 429 || error.status >= 500;
+  }
+  return !(error instanceof DOMException && error.name === 'AbortError');
+}
+
+function waitForResponseNotificationRetry(delayMs: number, signal?: AbortSignal) {
+  if (signal?.aborted)
+    return Promise.reject(signal.reason ?? new DOMException('The operation was aborted', 'AbortError'));
+
+  return new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      signal?.removeEventListener('abort', abort);
+      resolve();
+    };
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException('The operation was aborted', 'AbortError'));
+    };
+    const timer = setTimeout(finish, delayMs);
+    signal?.addEventListener('abort', abort, { once: true });
+  });
+}
 
 export async function retryDebatePhaseBoundaryRequest<T>(request: () => Promise<T>): Promise<T> {
   try {

@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import { dedupeRelationsByToEntityId } from '~/core/utils/dedupe-relations';
@@ -37,6 +38,12 @@ type Props = {
   source: Source;
   relationChipTruncateLabel?: boolean;
   openedWithMainViewEditing?: boolean;
+  /**
+   * Suppress the hover actions `CollectionMetadata` otherwise overlays on the title, for callers
+   * that render them somewhere with room — the data block's browse table puts them beneath the
+   * name, beside the vote controls (GEO-2672). The verified checkmark still renders inline.
+   */
+  hideHoverActions?: boolean;
 };
 
 export const EntityTableCell = ({
@@ -54,6 +61,7 @@ export const EntityTableCell = ({
   source,
   relationChipTruncateLabel = false,
   openedWithMainViewEditing = false,
+  hideHoverActions = false,
 }: Props) => {
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
   const isRelation = property.dataType === 'RELATION';
@@ -83,6 +91,7 @@ export const EntityTableCell = ({
               verified={verified}
               onLinkEntry={onLinkEntry}
               openedWithMainViewEditing={openedWithMainViewEditing}
+              hideHoverActions={hideHoverActions}
             >
               <Link
                 entityId={entityId}

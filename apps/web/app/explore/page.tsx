@@ -6,7 +6,7 @@ import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-s
 import { type ExploreCall, fetchCommunityCallsForExplore } from '~/core/community-calls/fetch-community-calls';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { type FeaturedRanking, fetchFeaturedRankings } from '~/core/io/subgraph/fetch-featured-rankings';
-import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
+import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
 import { normId } from '~/core/utils/norm-id';
@@ -27,7 +27,7 @@ export default async function ExploreRoutePage() {
 
   // Fire every fetch in parallel. Each branch handles its own failure so one
   // degraded indexer call doesn't drop the whole page.
-  const featuredSpacesPromise = fetchFeaturedSpaces().catch(() => [] as FeaturedSpace[]);
+  const featuredSpacesPromise = fetchFeaturedSpacesShared().catch(() => [] as FeaturedSpace[]);
   // Reuse the same in-flight Root-topic traversal for the Browse Featured-spaces
   // section and the Explore Join-spaces panel.
   const browsePromise = fetchBrowseSidebarData(memberSpaceId, featuredSpacesPromise).catch(() =>
@@ -87,6 +87,17 @@ export default async function ExploreRoutePage() {
     pendingMembershipSpaceIds = checks.filter((id): id is string => id !== null);
   }
 
+  // Featured rankings surface only from spaces the viewer can already see in the
+  // panel: the featured (Join spaces) set or spaces they're a member/editor of. A
+  // ranking tagged Featured in some unrelated space shouldn't reach the panel.
+  const rankingSpaceAllowlist = new Set([
+    ...featuredSpaces.map(space => normId(space.spaceId)),
+    ...memberOrEditorSpaceIds.map(normId),
+  ]);
+  const visibleFeaturedRankings = featuredRankings.filter(ranking =>
+    rankingSpaceAllowlist.has(normId(ranking.spaceId))
+  );
+
   const seen = new Set<string>();
   const initialSpaceOptions: { value: string; label: string }[] = [];
   for (const row of [...browse.featured, ...browse.editorOf, ...browse.memberOf]) {
@@ -100,7 +111,7 @@ export default async function ExploreRoutePage() {
     <ExplorePage
       initialSpaceOptions={initialSpaceOptions}
       featuredSpaces={featuredSpaces}
-      featuredRankings={featuredRankings}
+      featuredRankings={visibleFeaturedRankings}
       pendingMembershipSpaceIds={pendingMembershipSpaceIds}
       memberOrEditorSpaceIds={memberOrEditorSpaceIds}
       communityCalls={communityCalls}

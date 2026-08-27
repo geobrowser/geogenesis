@@ -7,7 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 
 import { useHydrated } from '~/core/hooks/use-hydrated';
 import { useEditable } from '~/core/state/editable-store';
-import { EditorProvider } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { pendingPersonalSpaceId, usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
@@ -62,7 +62,7 @@ export default function PendingPersonalSpacePage() {
 
   return (
     <EntityStoreProvider id={topicId} spaceId={spaceId}>
-      <EditorProvider id={topicId} spaceId={spaceId} initialBlocks={[]} initialBlockRelations={[]}>
+      <RouteEditorProvider id={topicId} spaceId={spaceId} initialBlocks={[]} initialBlockRelations={[]}>
         <EntityPageContentContainer>
           <div className="flex items-center gap-3">
             <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-grey-01">
@@ -93,7 +93,7 @@ export default function PendingPersonalSpacePage() {
             placeholder={<p className="text-body text-grey-04">There is no overview here yet.</p>}
           />
         </EntityPageContentContainer>
-      </EditorProvider>
+      </RouteEditorProvider>
     </EntityStoreProvider>
   );
 }

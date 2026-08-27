@@ -51,6 +51,32 @@ function buildValue({
   };
 }
 
+/**
+ * A community call without a schedule cannot be shown anywhere.
+ *
+ * Both readers expand a call into occurrences and drop anything that yields none —
+ * `fetchCommunityCalls` bails on a falsy schedule outright, and the curator app filters on
+ * `occurrence.end`. So writing an empty Meeting Time does not produce a call with a missing
+ * time; it produces a call that has silently vanished, with the entity still in the graph
+ * and no feedback to whoever saved it. That is what happened to
+ * `65587cf0adea4ea8b5c2c8b3c39cc87f`: a Meeting Time value stored as the empty string.
+ *
+ * Every other optional field here unsets when empty rather than writing blank (see
+ * `buildUpdateCallOps`'s doc). The schedule cannot take that route either — an unset is
+ * equally invisible — so it is neither written nor unset: it is refused.
+ *
+ * A throw rather than a silent skip because the form already validates this
+ * (`validateSchedule` rejects an empty schedule), so reaching here means a caller bypassed
+ * validation. That is a bug worth surfacing, not one worth absorbing.
+ */
+function assertScheduleWritable(schedule: string): void {
+  if (!schedule.trim()) {
+    throw new Error(
+      'Refusing to write a community call with an empty schedule: the call would exist in the graph but be invisible in every view.'
+    );
+  }
+}
+
 /** An `isDeleted` Value becomes an `unset: [{property, language: 'all'}]` op on publish. */
 function buildUnsetValue(args: {
   entityRef: { id: string; name: string | null };
@@ -223,6 +249,8 @@ export function buildCreateCallOps({ spaceId, name, description, schedule, autoP
   values: Value[];
   relations: Relation[];
 } {
+  assertScheduleWritable(schedule);
+
   const entityId = createEntityId();
   const entityRef = { id: entityId, name };
 
@@ -314,6 +342,8 @@ export function buildUpdateCallOps({
   autoPublishAhead,
   existingBlockRelations = [],
 }: CallFields & { entityId: string; existingBlockRelations?: Relation[] }): { values: Value[]; relations: Relation[] } {
+  assertScheduleWritable(schedule);
+
   const entityRef = { id: entityId, name };
 
   const values: Value[] = [

@@ -1,28 +1,34 @@
 'use client';
 
 import { usePrivy } from '@geogenesis/auth';
-import { type UseQueryResult, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type QueryClient,
+  type UseQueryResult,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 
-import { useDebateAttention } from './debate-attention';
-
 import {
   type Debate,
   type DebateActivity,
+  type DebateClaimsResponse,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
+  type DebateRematchClaimsResponse,
   GeoChatRequestError,
-  type JoinDebateQueueRequest,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
+  type MatchmakingClaimsQuery,
   type TranscriptFormat,
   abortDebate,
   acceptDebateChallenge,
-  acceptDebateMatch,
   acceptDebateRematchRequest,
   cancelDebateRecording,
   completeLocalRecordingUpload,
@@ -30,7 +36,6 @@ import {
   createDebateChallenge,
   createDebateRematchRequest,
   createLocalRecordingUpload,
-  declineDebateMatch,
   endDebateTurn,
   getDebate,
   getDebateActivity,
@@ -56,13 +61,20 @@ import {
   requestDebateMediaProcessing,
   retryDebatePhaseBoundaryRequest,
   updateDebateAvailability,
-  updateDebatePreference,
-  updateDebateRematchPosition,
 } from './api';
-import { useDebateGatewayScope } from './debate-gateway';
+import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
+import { useDebateAttention, useDebatePresence } from './debate-attention';
+import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
+import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
+import {
+  isRematchClaimsQueryKey,
+  refreshRematchClaimBatches,
+  rematchClaimBatchesWithClaim,
+} from './rematch-claims-query-key';
+import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
 
-const debateQueryNetworkOptions = {
+export const debateQueryNetworkOptions = {
   retry: false,
   refetchOnReconnect: false,
   refetchOnWindowFocus: false,
@@ -75,6 +87,7 @@ export const debateQueryKeys = {
   media: (debateId: string) => ['debates', 'media', debateId] as const,
   transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
+  rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
@@ -82,6 +95,15 @@ export const debateQueryKeys = {
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
   profile: (accountKey: string | null, profileSpaceId: string) =>
     ['debates', 'account', accountKey, 'profile', profileSpaceId] as const,
+  people: (accountKey: string | null) => ['debates', 'account', accountKey, 'people'] as const,
+  /** Prefix covering every filter combination of the claims list. */
+  matchmakingClaimsRoot: (accountKey: string | null) =>
+    ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
+  matchmakingClaims: (accountKey: string | null, filters: MatchmakingClaimsQuery) =>
+    ['debates', 'account', accountKey, 'matchmaking-claims', filters] as const,
+  matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
+  requests: (accountKey: string | null) => ['debates', 'account', accountKey, 'requests'] as const,
+  blocks: (accountKey: string | null) => ['debates', 'account', accountKey, 'blocks'] as const,
 };
 
 export function useGeoChatAuth() {
@@ -96,15 +118,27 @@ export function useGeoChatAuth() {
   };
 }
 
+/**
+ * Holds a query's own result open while the space type is still resolving.
+ *
+ * The gate can't just disable the query and leave it at that: a disabled react-query reports
+ * `isLoading: false` with no data, so consumers read the wait as a settled empty answer. See
+ * {@link SpaceDebateSupport}.
+ */
+function holdWhileSpaceResolves<T extends { isLoading: boolean }>(query: T, support: SpaceDebateSupport): T {
+  return support === 'unknown' ? { ...query, isLoading: true } : query;
+}
+
 // Pass a claim-id array to enrich a known set, or `null` to list every debatable
 // claim in the space. geo-chat indexes them, so this skips the KG scan over all
 // the space's Claim entities that 504s on large spaces.
 export function useDebateClaims(spaceId: string, claimIds: string[] | null, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  const shouldFetch = enabled && (claimIds === null || claimIds.length > 0);
+  const support = useSpaceDebateSupport(spaceId);
+  const shouldFetch = enabled && support === 'indexed' && (claimIds === null || claimIds.length > 0);
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated && shouldFetch);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.claims(spaceId, claimIds),
     queryFn: ({ signal }) =>
@@ -117,6 +151,157 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
       ),
     enabled: shouldFetch,
   });
+
+  return holdWhileSpaceResolves(query, support);
+}
+
+/**
+ * The same per-space payload as {@link useDebateClaims}, for callers holding claims spread across
+ * several spaces — the rematch picker mixes geo-chat's session claims with published ones from
+ * anywhere. A hook per space is impossible when the list changes length, so this fans out.
+ *
+ * `claims` comes back in no particular order: batches are keyed by sorted id so their query keys
+ * survive the caller reordering or prepending ids. Key the result by `claim_entity_id`.
+ */
+export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  // Deliberately ungated on space type, unlike the single-space {@link useDebateClaims}. The
+  // rematch picker filters its claims by `isSpaceDebatePublishable` before they reach here, and it
+  // holds scopes on both participants' personal spaces on purpose — a debater's own claims live
+  // there, and the opponent's *first* position is exactly the case with no claim to derive the
+  // scope from yet. Narrowing this to indexed spaces would strip those, and since a scope-level
+  // rejection now recycles the socket rather than parking it (GEO-2650), there is nothing left for
+  // the narrowing to save.
+  //
+  // Same subscription `useDebateClaims` makes for its one space: without it the gateway never
+  // delivers this space's claim changes, so nothing here would refresh when someone responds.
+  const spaceIds = React.useMemo(() => groups.map(group => group.spaceId), [groups]);
+  useDebateGatewaySpaceScopes(spaceIds, authenticated && spaceIds.length > 0);
+
+  // Stable by contract: react-query re-runs `combine` whenever its identity changes and diffs the
+  // result with `replaceEqualDeep`, so a fresh closure each render would defeat callers' memos.
+  //
+  // Status rides along with the claims deliberately. Flattening to a bare list makes a pending or
+  // failed lookup indistinguishable from "no readiness on this claim", and callers rendering a
+  // readiness switch would then draw it off — misreporting a claim the viewer is standing ready on
+  // for as long as the failure lasts.
+  const combine = React.useCallback(
+    (results: UseQueryResult<DebateClaimsResponse>[]) => ({
+      claims: results.flatMap(result => result.data?.claims ?? []),
+      isLoading: results.some(result => result.isLoading),
+      isError: results.some(result => result.isError),
+    }),
+    []
+  );
+
+  const batches = React.useMemo(
+    () =>
+      groups.flatMap(group =>
+        stableClaimIdChunks(group.claimIds).map(claimIds => ({ spaceId: group.spaceId, claimIds }))
+      ),
+    [groups]
+  );
+
+  return useQueries({
+    queries: batches.map(group => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.claims(group.spaceId, group.claimIds),
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        listDebateClaims(
+          group.spaceId,
+          group.claimIds,
+          authenticated ? getPrivyIdentityToken : undefined,
+          authenticated ? accountKey : null,
+          signal
+        ),
+      enabled: authenticated && group.claimIds.length > 0,
+    })),
+    combine,
+  });
+}
+
+/** Maximum number of ids accepted by geo-chat's per-space debate-claims endpoint. */
+export const DEBATE_CLAIM_ID_BATCH_SIZE = 50;
+
+/**
+ * Smallest chunk a content-defined boundary may close, and how often such a boundary occurs. Chosen
+ * so the average chunk lands just under {@link DEBATE_CLAIM_ID_BATCH_SIZE} — batching stays about as
+ * dense as fixed-size slicing while boundaries remain content-defined.
+ */
+const DEBATE_CLAIM_ID_MIN_CHUNK = 32;
+const DEBATE_CLAIM_ID_BOUNDARY_DIVISOR = 16;
+
+/**
+ * Splits ids into query batches whose boundaries come from the ids themselves rather than from their
+ * position in the list.
+ *
+ * Fixed-size slicing makes every chunk after an insertion point change, and each chunk *is* a query
+ * key — so one claim arriving at the head of the list re-fetches the entire space and flips every
+ * readiness switch on screen back to unresolved. The rematch picker rebuilds this list on every page
+ * and filter change, so that is the ordinary case. Sorting alone would only fix reordering of an
+ * unchanged set; deriving the cut points from the ids makes an insertion rebuild the chunk it lands
+ * in and then resynchronise at the next boundary, leaving the rest of the space cached.
+ */
+function stableClaimIdChunks(claimIds: string[], batchSize = DEBATE_CLAIM_ID_BATCH_SIZE) {
+  const uniqueClaimIds = [...new Set(claimIds)].sort();
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  // Scale the boundary rule with the cap so the average chunk stays just under it.
+  const minChunk = Math.max(1, Math.round((batchSize * DEBATE_CLAIM_ID_MIN_CHUNK) / DEBATE_CLAIM_ID_BATCH_SIZE));
+  const boundaryDivisor = Math.max(
+    1,
+    Math.round((batchSize * DEBATE_CLAIM_ID_BOUNDARY_DIVISOR) / DEBATE_CLAIM_ID_BATCH_SIZE)
+  );
+
+  for (const claimId of uniqueClaimIds) {
+    current.push(claimId);
+    const atContentBoundary = current.length >= minChunk && claimIdHash(claimId) % boundaryDivisor === 0;
+    if (atContentBoundary || current.length >= batchSize) {
+      chunks.push(current);
+      current = [];
+    }
+  }
+  if (current.length > 0) chunks.push(current);
+
+  return chunks;
+}
+
+/** FNV-1a. Only needs to spread ids evenly across boundary buckets, so 32 bits is plenty. */
+function claimIdHash(claimId: string) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < claimId.length; index += 1) {
+    hash ^= claimId.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
+/**
+ * Everything under `'debates'` except the rematch claim batches. The root-wide invalidation a
+ * mutation used to fire refetched every batch the picker had loaded — a request per page on
+ * screen — for a change that touched none of them.
+ */
+export function invalidateDebatesOutsideRematchClaims(queryClient: QueryClient) {
+  return queryClient.invalidateQueries({
+    predicate: query => query.queryKey[0] === 'debates' && !isRematchClaimsQueryKey(query.queryKey),
+  });
+}
+
+/**
+ * Standing ready (or down) on one claim moves that claim's readiness wherever it is listed and
+ * re-sorts who is matchable. Nothing else under `'debates'` changes, so only those families go.
+ */
+function invalidateAfterReadinessChange(queryClient: QueryClient, accountKey: string | null, claimId: string) {
+  for (const queryKey of [
+    ['debates', 'claims'] as const,
+    debateQueryKeys.matchmakingClaimsRoot(accountKey),
+    debateQueryKeys.matches(accountKey),
+    debateQueryKeys.activity(accountKey),
+  ]) {
+    void queryClient.invalidateQueries({ queryKey });
+  }
+  void refreshRematchClaimBatches(queryClient, rematchClaimBatchesWithClaim(accountKey, claimId));
 }
 
 export function useJoinDebateQueue(spaceId: string) {
@@ -124,11 +309,9 @@ export function useJoinDebateQueue(spaceId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: ({ claimId, request }: { claimId: string; request: JoinDebateQueueRequest }) =>
-      joinDebateQueue(spaceId, claimId, request, getPrivyIdentityToken, accountKey),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
-    },
+    mutationFn: ({ claimId }: { claimId: string }) =>
+      joinDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
+    onSuccess: (_result, { claimId }) => invalidateAfterReadinessChange(queryClient, accountKey, claimId),
   });
 }
 
@@ -139,28 +322,55 @@ export function useLeaveDebateQueue(spaceId: string) {
   return useMutation({
     mutationFn: ({ claimId }: { claimId: string }) =>
       leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
-    },
+    onSuccess: (_result, { claimId }) => invalidateAfterReadinessChange(queryClient, accountKey, claimId),
   });
 }
 
-export function useUpdateDebatePreference(spaceId: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+/** How often activity re-asks while this tab is on screen, with a live gateway behind it. */
+const ACTIVITY_POLL_MS = 30_000;
+/** And while the gateway is paused, when this is the only thing still asking. */
+const ACTIVITY_DEGRADED_POLL_MS = 10_000;
 
-  return useMutation({
-    mutationFn: ({ claimId, position }: { claimId: string; position: boolean }) =>
-      updateDebatePreference(spaceId, claimId, { position }, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
-  });
-}
-
+/**
+ * The viewer's own debate state: the debate or rematch they are in, and the counts that gate the
+ * incoming-request popup.
+ *
+ * This is the entry point for anything that arrives unannounced. `DebateCoordinator` only fetches
+ * the request list once `incoming_request_count` says one exists, so a stale answer here is a
+ * request the recipient is never shown — and every other route to freshness is switched off:
+ * `debateQueryNetworkOptions` turns off `refetchOnWindowFocus` and `refetchOnReconnect`, which
+ * leaves the gateway's `debate.requests_changed` as the only thing that ever re-asked.
+ *
+ * That is fine until the socket is not listening, and it has two ways not to be. A dropped
+ * connection backs off for up to thirty seconds before `READY` triggers its reconcile. And an
+ * `ERROR` frame the gateway can't act on pauses live updates deliberately, without scheduling a
+ * reconnect — a scope-level rejection, but it takes the account-level stream down with it, and
+ * nothing recovers it. Either way the popup waited on a remount, which is how a request took
+ * "30-60 seconds" to appear (GEO-2638).
+ *
+ * So: poll while this tab is on screen, faster while the gateway is paused and this is the only
+ * thing still asking, and re-ask on return to the tab. The socket still does the fast path — a
+ * couple of seconds, of which the outbox relay is two — and this only bounds the bad case.
+ *
+ * The gate is *presence*, not attention. Attention additionally requires `document.hasFocus()`,
+ * and gating the poll on that meant a tab sitting open on screen — but behind the window the
+ * viewer happened to be typing in — did not poll at all, leaving the socket as the only delivery
+ * path for the exact case this poll exists to cover. An incoming request is by definition the
+ * thing that arrives while you are looking at something else, so focus is the wrong question to
+ * ask; that is why geo-chat keys reachability (`is_online`) on presence too. This is what was
+ * still reported as a ~36 second delivery after GEO-2638 (GEO-2650).
+ */
 export function useDebateActivity(enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const attentive = useDebateAttention();
+  const present = useDebatePresence();
+  const { paused } = useDebateGatewaySnapshot();
+  const queryEnabled = enabled && authenticated;
+  const wasPresent = React.useRef(present);
+  const wasAttentive = React.useRef(attentive);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.activity(accountKey),
     queryFn: async ({ signal }) => {
@@ -173,8 +383,24 @@ export function useDebateActivity(enabled = true) {
       }
       return activity;
     },
-    enabled: enabled && authenticated,
+    enabled: queryEnabled,
+    // Hidden tabs still don't poll: they have no popup to draw, and browsers throttle their timers
+    // anyway. On-screen is the bar, whether or not this is the frontmost window.
+    refetchInterval: present ? (paused ? ACTIVITY_DEGRADED_POLL_MS : ACTIVITY_POLL_MS) : false,
   });
+
+  // Coming back is the one moment a viewer expects to be shown what they missed, and the shared
+  // options switch off React Query's own focus refetch for every debate query. Both transitions
+  // count: becoming visible restarts the poll but not immediately, and regaining focus is when
+  // someone is most likely to be waiting on a popup.
+  React.useEffect(() => {
+    const returned = (present && !wasPresent.current) || (attentive && !wasAttentive.current);
+    wasPresent.current = present;
+    wasAttentive.current = attentive;
+    if (returned && queryEnabled) void query.refetch();
+  }, [attentive, present, query.refetch, queryEnabled]);
+
+  return query;
 }
 
 export function useUpdateDebateAvailability() {
@@ -200,7 +426,7 @@ export function useUpdateDebateAvailability() {
       queryClient.setQueryData(activityKey, activity);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
+      void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
 }
@@ -212,8 +438,19 @@ function useClearDebateActivityCache({ clearCooldown, reconcile }: { clearCooldo
   return React.useCallback(
     (debateId: string) => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => {
-        if (!current || current.debate?.id !== debateId) return current;
-        return clearCooldown ? { ...current, debate: null, cooldown_until: null } : { ...current, debate: null };
+        if (!current) return current;
+        const clearsDebate = current.debate?.id === debateId;
+        // The rematch anchored to this debate goes with it. DebateCoordinator navigates into
+        // `source_debate_id` for as long as a session is deciding, so leaving the room while the
+        // session sat in activity sent the viewer straight back into the room they just left.
+        const clearsRematch = current.rematch?.source_debate_id === debateId;
+        if (!clearsDebate && !clearsRematch) return current;
+        return {
+          ...current,
+          ...(clearsDebate ? { debate: null } : null),
+          ...(clearsDebate && clearCooldown ? { cooldown_until: null } : null),
+          ...(clearsRematch ? { rematch: null } : null),
+        };
       });
       if (reconcile) {
         void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
@@ -231,41 +468,15 @@ export function useClearDebateActivity() {
   return useClearDebateActivityCache({ clearCooldown: false, reconcile: false });
 }
 
-export function useAcceptDebateMatch(spaceId?: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ matchId, formatId }: { matchId: string; formatId?: string }) =>
-      acceptDebateMatch(matchId, getPrivyIdentityToken, accountKey, formatId),
-    onSuccess: result => {
-      if (result.debate) {
-        queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
-      }
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
-      if (spaceId) void queryClient.invalidateQueries({ queryKey: debateQueryKeys.spaceDebates(spaceId) });
-    },
-  });
-}
-
-export function useDeclineDebateMatch(spaceId?: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: (matchId: string) => declineDebateMatch(matchId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
-      if (spaceId) void queryClient.invalidateQueries({ queryKey: debateQueryKeys.spaceDebates(spaceId) });
-    },
-  });
-}
-
 export function useSpaceDebates(spaceId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  useDebateGatewayScope({ scope: 'space', space_id: spaceId }, enabled && authenticated);
+  // The browse feed subscribes the same way `useDebateClaims` does, so it needs the same gate:
+  // opening the debate feed on a personal space raised the banner on its own.
+  const support = useSpaceDebateSupport(spaceId);
+  const shouldFetch = enabled && support === 'indexed';
+  useDebateGatewayScope({ scope: 'space', space_id: spaceId }, shouldFetch && authenticated);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.spaceDebates(spaceId),
     queryFn: ({ signal }) =>
@@ -275,8 +486,10 @@ export function useSpaceDebates(spaceId: string, enabled: boolean) {
         authenticated ? accountKey : null,
         signal
       ),
-    enabled,
+    enabled: shouldFetch,
   });
+
+  return holdWhileSpaceResolves(query, support);
 }
 
 export function useDebate(debateId: string, enabled: boolean) {
@@ -381,7 +594,11 @@ export function useConsentToDebateRematch(debateId: string) {
       queryClient.setQueryData<Debate>(debateQueryKeys.debate(debateId), current =>
         current ? { ...current, rematch_session_id: session.id } : current
       );
+      // Spread what is already there: rebuilding the object from scratch dropped
+      // `incoming_request_count` and `outbound_request`, which zeroed the navbar badge and stopped
+      // the coordinator fetching requests until the invalidation below landed.
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current => ({
+        ...current,
         online: current?.online ?? true,
         available_to_debate: current?.available_to_debate ?? true,
         cooldown_until: null,
@@ -431,28 +648,87 @@ export function useLeaveDebateRematch(sessionId: string) {
   });
 }
 
-export function useDebateRematchClaims(sessionId: string, claimIds: string[] = [], enabled = true) {
+/**
+ * geo-chat rejects a request naming more than this many claims outright, so a caller browsing more
+ * claims than this has to ask in batches rather than in one request that 400s.
+ */
+export const REMATCH_CLAIM_ID_BATCH_SIZE = 100;
+
+/**
+ * {@link useDebateRematchClaims} for a list of ids of any length, split across as many requests as
+ * the server's per-request cap needs. The rematch picker accumulates claims a page at a time and
+ * adds curated ones on top, so it passes the cap in ordinary use — and losing the whole response
+ * to a 400 takes every claim's positions with it, not just the ones past the limit.
+ */
+export function useDebateRematchClaimsForIds(sessionId: string, claimIds: string[], enabled = true) {
+  // Content-defined chunks for the same reason as `useDebateClaimsBySpaces`: callers rebuild this
+  // list as they filter, and index-sliced batches would all change key on every insertion.
+  const batches = React.useMemo(() => stableClaimIdChunks(claimIds, REMATCH_CLAIM_ID_BATCH_SIZE), [claimIds]);
+  return useDebateRematchClaimBatches(sessionId, batches, enabled);
+}
+
+function useDebateRematchClaimBatches(sessionId: string, batches: string[][], enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  // Stable by contract, as in `useDebateClaimsBySpaces`.
+  const combine = React.useCallback(
+    (results: UseQueryResult<DebateRematchClaimsResponse>[]) => ({
+      data: {
+        claims: results.flatMap(result => result.data?.claims ?? []),
+        excluded_claim_ids: [...new Set(results.flatMap(result => result.data?.excluded_claim_ids ?? []))],
+      },
+      isLoading: results.some(result => result.isLoading),
+      error: results.find(result => result.error)?.error ?? null,
+    }),
+    []
+  );
+
+  return useQueries({
+    queries: batches.map(batch => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.rematchClaims(accountKey, sessionId, batch),
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        listDebateRematchClaims(sessionId, batch, getPrivyIdentityToken, accountKey, signal),
+      enabled: enabled && Boolean(sessionId),
+    })),
+    combine,
+  });
+}
+
+const NO_CLAIM_IDS: string[] = [];
+
+export function useDebateRematchClaims(sessionId: string, claimIds: string[] = NO_CLAIM_IDS, enabled = true) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  React.useEffect(
+    function refetchRematchClaimsAfterIndexedResponse() {
+      if (!enabled || !sessionId) return;
+
+      return queryClient.getQueryCache().subscribe(event => {
+        if (event.type !== 'updated' || event.action.type !== 'success') return;
+        const response = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
+        if (!response || (claimIds.length > 0 && !claimIds.includes(response.entityId))) {
+          return;
+        }
+
+        // Only the batches that name the claim, plus the session's own list. Refetching every
+        // batch the picker holds — one per page on screen — for a single response is what left
+        // the positions trailing on a long list.
+        void refreshRematchClaimBatches(
+          queryClient,
+          rematchClaimBatchesWithClaim(accountKey, response.entityId, sessionId)
+        );
+      });
+    },
+    [accountKey, claimIds, enabled, queryClient, sessionId]
+  );
 
   return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.rematchClaims(accountKey, sessionId, claimIds),
     queryFn: ({ signal }) => listDebateRematchClaims(sessionId, claimIds, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && Boolean(sessionId),
-  });
-}
-
-export function useUpdateDebateRematchPosition(sessionId: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ claimId, position, sourceSpaceId }: { claimId: string; position: boolean; sourceSpaceId: string }) =>
-      updateDebateRematchPosition(sessionId, claimId, position, sourceSpaceId, getPrivyIdentityToken, accountKey),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: ['debates', 'account', accountKey, 'rematch', sessionId, 'claims'],
-      }),
   });
 }
 
@@ -477,10 +753,19 @@ export function useAcceptDebateRematchRequest() {
 
   return useMutation({
     mutationFn: (requestId: string) => acceptDebateRematchRequest(requestId, getPrivyIdentityToken, accountKey),
+    // Same window as the hub's accept: the debate is created inside this round trip and announced to
+    // this tab over its own socket, so the id-keyed intent below is taken too late to stop the
+    // coordinator prompting us to join it (GEO-2604).
+    onMutate: () => ({ releaseEntry: markEnteringPendingDebate() }),
+    onSettled: (_result, _error, _variables, context) => context?.releaseEntry(),
     onSuccess: result => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, result.session.id) });
       if (result.debate) {
+        // The converted session routes from the rematch picker on its next render. Activity can
+        // refetch first and would otherwise make the app-wide coordinator prompt this accepting tab
+        // to join the same debate it is already walking into.
+        markEnteringDebate(result.debate.id);
         queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
         void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(result.debate.id) });
       }
@@ -498,9 +783,14 @@ export function useRejectDebateRematchRequest() {
     onSuccess: result => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, result.session.id) });
-      void queryClient.invalidateQueries({
-        queryKey: ['debates', 'account', accountKey, 'rematch', result.session.id, 'claims'],
-      });
+      // A rejection marks one claim `recently_rejected`; only the batches carrying it need to hear.
+      const rejectedClaimId = result.request?.claim.claim_entity_id;
+      void refreshRematchClaimBatches(
+        queryClient,
+        rejectedClaimId
+          ? rematchClaimBatchesWithClaim(accountKey, rejectedClaimId, result.session.id)
+          : { queryKey: ['debates', 'account', accountKey, 'rematch', result.session.id, 'claims'] }
+      );
     },
   });
 }

@@ -8,8 +8,15 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { getCommunityCallToken, getViewerToken } from '~/core/community-calls/api';
-import { CALL_SCHEMA, buildRoomName, isOccurrenceLive } from '~/core/community-calls/constants';
-import { getOccurrences } from '~/core/community-calls/occurrences';
+import {
+  CALL_SCHEMA,
+  LIVE_OCCURRENCE_TICK_MS,
+  LIVE_WINDOW_AFTER_MS,
+  LIVE_WINDOW_BEFORE_MS,
+  buildRoomName,
+  isOccurrenceLive,
+} from '~/core/community-calls/constants';
+import { findOccurrenceByStart, getOccurrences } from '~/core/community-calls/occurrences';
 import { CommunityCallToken, ViewerToken } from '~/core/community-calls/types';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { useAccessControl } from '~/core/hooks/use-access-control';
@@ -65,11 +72,40 @@ export function CommunityCallFlow({ spaceId, callId }: { spaceId: string; callId
   const [joining, setJoining] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Re-read on a tick rather than once. `Date.now()` inside a memo keyed only on the
+  // schedule freezes "what is live" at the moment the schedule loaded, so a page left
+  // open across a boundary keeps answering with the wrong occurrence — or with none,
+  // which is what stops the viewer auto-join below from ever firing once a call goes
+  // live under an already-open tab.
+  const [nowTick, setNowTick] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const interval = window.setInterval(() => setNowTick(Date.now()), LIVE_OCCURRENCE_TICK_MS);
+    return () => window.clearInterval(interval);
+  }, []);
+
   const liveOccurrence = React.useMemo(() => {
     if (!data?.schedule) return null;
-    const now = Date.now();
-    return getOccurrences(data.schedule, now).find(o => isOccurrenceLive(o.startMs, o.endMs, now)) ?? null;
-  }, [data?.schedule]);
+    return getOccurrences(data.schedule, nowTick).find(o => isOccurrenceLive(o.startMs, o.endMs, nowTick)) ?? null;
+  }, [data?.schedule, nowTick]);
+
+  /**
+   * The end of the occurrence the viewer actually joined, taken from the `occurrenceStart`
+   * the server minted the token for.
+   *
+   * Deliberately not `liveOccurrence.endMs`. That is a client-side answer to "what is live
+   * right now", and the forced cutoff has to be tied to the occurrence the participant is
+   * *in*. When the two disagreed the cutoff was computed from the wrong occurrence, and a
+   * past one puts `hardCutoffMs` behind us — so `CallEndTimer` reaches `remaining <= 0` on
+   * its first tick and disconnects immediately, which reads as being kicked out mid-call.
+   *
+   * Matched with the same tolerance the other occurrence lookups use, since the server's
+   * `occurrenceStart` need not be identical to the locally computed instant.
+   */
+  const joinedOccurrenceEnd = React.useMemo(() => {
+    const occurrenceStart = joined?.token.occurrenceStart;
+    if (!data?.schedule || occurrenceStart === undefined) return undefined;
+    return findOccurrenceByStart(data.schedule, occurrenceStart)?.endMs;
+  }, [data?.schedule, joined]);
 
   const backHref = `/space/${spaceId}/community`;
   const spaceName = data?.spaceName ?? 'this space';
@@ -119,7 +155,7 @@ export function CommunityCallFlow({ spaceId, callId }: { spaceId: string; callId
         spaceId={spaceId}
         callId={callId}
         occurrenceStart={joined.token.occurrenceStart}
-        occurrenceEnd={liveOccurrence?.endMs}
+        occurrenceEnd={joinedOccurrenceEnd}
         audio={joined.settings.audioEnabled}
         video={joined.settings.videoEnabled}
         backHref={backHref}
@@ -139,7 +175,7 @@ export function CommunityCallFlow({ spaceId, callId }: { spaceId: string; callId
         spaceId={spaceId}
         callId={callId}
         occurrenceStart={joined.token.occurrenceStart}
-        occurrenceEnd={liveOccurrence?.endMs}
+        occurrenceEnd={joinedOccurrenceEnd}
         audio={false}
         video={false}
         backHref={backHref}
@@ -154,7 +190,12 @@ export function CommunityCallFlow({ spaceId, callId }: { spaceId: string; callId
     return (
       <Notice>
         <p className="text-smallTitle text-text">This call isn’t active right now.</p>
-        <p>You can join from 15 minutes before it starts until 30 minutes after it ends.</p>
+        {/* Read off the constants rather than written out — the window moved once already
+            (GEO-2584) and hardcoded copy silently kept quoting the old one. */}
+        <p>
+          You can join from {LIVE_WINDOW_BEFORE_MS / 60_000} minutes before it starts until{' '}
+          {LIVE_WINDOW_AFTER_MS / 60_000} minutes after it ends.
+        </p>
       </Notice>
     );
   }

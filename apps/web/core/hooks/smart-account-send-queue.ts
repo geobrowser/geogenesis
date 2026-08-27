@@ -38,6 +38,43 @@ export class QueuedSendTimeoutError extends Error {
  */
 export const MAX_QUEUE_WAIT_MS = 120_000;
 
+const NONCE_RETRY_ATTEMPTS = 3;
+const NONCE_RETRY_DELAY_MS = 500;
+
+const isInvalidAccountNonceError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const walk = (error as { walk?: (fn: (e: unknown) => boolean) => unknown }).walk;
+  if (typeof walk === 'function') {
+    return Boolean(walk.call(error, e => (e as Error)?.name === 'InvalidAccountNonceError'));
+  }
+  return error.name === 'InvalidAccountNonceError';
+};
+
+/**
+ * AA25 ("Invalid Smart Account nonce used for User Operation") is a bundler
+ * validation-phase rejection thrown from eth_sendUserOperation before any hash is
+ * returned — by the ERC-4337 spec, nothing was accepted into the mempool. Retrying is
+ * safe for the same reason QueuedSendTimeoutError is safe to retry: never submitted.
+ * A short retry absorbs the case where the account's on-chain nonce read (via a
+ * separate RPC client from the bundler) lags just behind a just-confirmed prior send
+ * on the same key — the next read picks up the advanced nonce.
+ */
+export const withNonceRetry = async <T>(task: () => Promise<T>): Promise<T> => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < NONCE_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      if (!isInvalidAccountNonceError(error)) throw error;
+      if (attempt < NONCE_RETRY_ATTEMPTS - 1) {
+        await new Promise(resolve => setTimeout(resolve, NONCE_RETRY_DELAY_MS));
+      }
+    }
+  }
+  throw lastError;
+};
+
 export const enqueueFor = <T>(
   address: string,
   task: () => Promise<T>,

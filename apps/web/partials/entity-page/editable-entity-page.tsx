@@ -305,7 +305,6 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   );
 }
 
-export const EditableEntityProperties = EditableEntityPage;
 function InlinePropertyRow({
   entityId,
   propertyId,
@@ -1373,7 +1372,7 @@ function useVisiblePropertySections(
         id: 'ungrouped',
         isGroup: true,
         groupId: 'ungrouped',
-        label: 'Ungrouped properties',
+        label: 'Other properties',
         defaultCollapsed: false,
         collapsible: false,
         entries: ungroupedEntries,

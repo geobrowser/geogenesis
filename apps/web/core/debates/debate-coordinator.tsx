@@ -4,23 +4,20 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import { useDebatesEnabled } from '~/core/state/feature-flags';
-
 import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import { type DebateMatch, type DebateSharePrompt, getCurrentGeoChatUserId } from './api';
+import { activeDebate } from './activity-state';
+import { type DebateSharePrompt } from './api';
+import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
+import { useDebateAttention, useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
-import { useDebateAttention } from './debate-attention';
+import { clearEnteringDebate, useEnteringDebateId, useEnteringDebatePending } from './debate-entry-intent';
 import { useDebateGateway } from './debate-gateway';
-import {
-  clearDebateMatchTabOwnership,
-  createDebateMatchTabOwnershipCoordinator,
-  debateMatchOwnershipMatchesDebate,
-  readDebateMatchTabOwnership,
-} from './debate-match-tab-ownership';
+import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
+import { rememberDebateReturnDestination } from './debate-return-navigation';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -29,49 +26,160 @@ import {
   useHandleDebateSharePrompt,
   useRejectDebateChallenge,
 } from './hooks';
-import { DebateMatchPrompt } from './match-prompt';
+import { useDebateRequests } from './matchmaking/hooks';
+import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
+import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import {
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
   isAbortError,
   usePreparedSocialVideo,
 } from './social-video-share';
+import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
+import { useScrollLock } from './use-scroll-lock';
 
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
-  const isDebatesEnabled = useDebatesEnabled();
   const geoChatAuth = useGeoChatAuth();
-  const debateAttention = useDebateAttention();
+  // Presence, not attention: being available to debate has to survive looking at another window.
+  const debatePresence = useDebatePresence();
+  // Exactly one tab: visible *and* focused. See the rematch routing effect below.
+  const hasAttention = useDebateAttention();
   const gateway = useDebateGateway(
-    isDebatesEnabled && geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
     geoChatAuth.accountKey,
-    debateAttention
+    debatePresence
   );
-  const activityQuery = useDebateActivity(isDebatesEnabled);
-  const currentUserId = getCurrentGeoChatUserId();
+  useClaimResponseIndexedNotifier(
+    geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.getPrivyIdentityToken,
+    geoChatAuth.accountKey
+  );
+  const activityQuery = useDebateActivity();
+  const currentUserId = useCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
-  const match = activity?.match ?? null;
-  const reportedDebate = activity?.debate ?? null;
-  const debate = reportedDebate && !['complete', 'cancelled'].includes(reportedDebate.status) ? reportedDebate : null;
-  const challenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  const debate = activeDebate(activity);
+  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
+  // A challenge expires the way a request does, so the same filter owns both — otherwise the popup
+  // keeps prompting for a dead one until activity next refetches.
+  const liveChallenges = useUnexpiredRequests(
+    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
+  );
+  const challenge = liveChallenges[0] ?? null;
   const acceptChallenge = useAcceptDebateChallenge();
   const rejectChallenge = useRejectDebateChallenge();
   const challengeError = acceptChallenge.error ?? rejectChallenge.error;
-  const lastMatchRef = React.useRef<DebateMatch | null>(null);
-  const viewingDebate = Boolean(debate && pathname.includes(`/debates/${debate.id}`));
-  const retainedMatch =
-    !match && debate && !viewingDebate && lastMatchRef.current?.claim.id === debate.claim.id
-      ? lastMatchRef.current
-      : null;
-  const visibleMatch = match ?? retainedMatch;
-  const activeFlow = Boolean(match || debate || activity?.rematch || challenge);
+  // "Already in it" has to cover the walk there as well as the arrival. The room is a server
+  // segment with no `loading` boundary, so the tab that accepted keeps this page — and this
+  // pathname — for the seconds the route takes, while the activity it invalidated on the way out
+  // comes straight back reporting the debate.
+  const enteringDebateId = useEnteringDebateId();
+  // And the same, one step earlier: an accept in flight has no debate id to key on yet, but this tab
+  // is just as much on its way in, and its own `debate.state_changed` can arrive before the response
+  // does (GEO-2604). Not keyed on `debate` — the point is to cover the window where the id is not
+  // known, so it cannot be matched against one.
+  const enteringPending = useEnteringDebatePending();
+  const atDebate =
+    enteringPending || Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
+  // The rematch page walks the viewer into its own converted debate, and accepting fires a single
+  // `debate.rematch_changed` that the gateway turns into *two* refetches — the account's activity
+  // and the rematch session — either of which can land first. When activity wins, this coordinator
+  // sees a `ready` debate, no rematch, and nobody at it, which is the exact shape it opens the
+  // ready prompt for, while the page has not yet learned to redirect. So it opened the dialog on
+  // top of a page that was already navigating, and it flashed up and vanished without being touched
+  // (GEO-2604).
+  //
+  // Nothing app-wide belongs over that page: it owns its own routing, and whatever it is about to
+  // do is more current than activity is.
+  const atRematchPage = pathname.includes('/debates/rematches/');
+  const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
     activeFlow || sharePromptsQuery.isFetching ? null : (sharePromptsQuery.data?.prompts[0] ?? null);
   const [retainedSharePrompt, setRetainedSharePrompt] = React.useState<DebateSharePrompt | null>(null);
   const [closedSharePromptId, setClosedSharePromptId] = React.useState<string | null>(null);
+
+  // Only fetch the request list once activity says one exists, so idle sessions stay quiet. "Not
+  // now" snoozes a request for this session; it stays in the hub's Requests tab either way.
+  const hasIncomingRequests = (activity?.incoming_request_count ?? 0) > 0;
+  const requestsQuery = useDebateRequests(hasIncomingRequests && !activeFlow);
+  const [snoozedRequestIds, setSnoozedRequestIds] = React.useState<string[]>([]);
+  // Expired requests are dropped here too, so the popup can never prompt for a dead request while
+  // waiting on the server's `debate.requests_changed` event.
+  const incomingRequests = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
+  const promptedRequest =
+    activeFlow || !currentUserId
+      ? null
+      : (incomingRequests.find(request => request.status === 'pending' && !snoozedRequestIds.includes(request.id)) ??
+        null);
+
+  React.useEffect(() => {
+    const liveIds = new Set(incomingRequests.map(request => request.id));
+    setSnoozedRequestIds(current => {
+      const next = current.filter(id => liveIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [incomingRequests]);
+
+  // The claimless challenge gets the same treatment: "Not now" only closes the popup, and the
+  // challenge keeps its place in the hub's Requests tab until it is answered or expires.
+  const [snoozedChallengeId, setSnoozedChallengeId] = React.useState<string | null>(null);
+  const promptedChallenge = challenge && challenge.id !== snoozedChallengeId ? challenge : null;
+  // Only the recipient is prompted. `challenge` itself stays live for everyone, since `activeFlow`
+  // above reads it to keep other popups from stacking on top of an outstanding challenge.
+  const isChallengeRecipient = promptedChallenge?.recipient.user_id === currentUserId;
+
+  React.useEffect(() => {
+    if (snoozedChallengeId && challenge?.id !== snoozedChallengeId) setSnoozedChallengeId(null);
+  }, [challenge, snoozedChallengeId]);
+
+  // How the person who *sent* the request learns it was accepted (GEO-2514): the debate exists
+  // already, and this is the only thing that tells them. `atDebate` keeps it off the accepting
+  // tab's screen, which is walking into the room and does not need telling.
+  //
+  // There is no snooze here, unlike the request and challenge popups. Those leave something behind
+  // that the other side is not waiting on; this one is a debate with an opponent already in the
+  // room, so the only two honest answers are to join or to decline — and declining cancels it for
+  // both of them. Dismissing it locally stranded the opponent in the ready screen.
+  //
+  // The dialog names both sides, so it needs both. Deciding that here rather than letting the
+  // dialog render nothing keeps the rejoin bar as the fallback — otherwise a debate reported
+  // without its participants would offer no way in at all.
+  //
+  // Only while it is still `ready`, for the same reason declining cancels: past that point there is
+  // nothing to decline. Aborting an `in_progress` debate ends a room the pair is recording in, and
+  // aborting a `thanking` one throws away a recording that is finished but not yet published. This
+  // coordinator is mounted app-wide, so a second tab opened on any other Geo page would put that
+  // button in front of someone mid-debate, in a dialog that covers the page and has no other way
+  // out. Everything past `ready` falls through to the rejoin bar, which offers the way in without
+  // offering a way to destroy it.
+  const describable = (debate?.participants?.length ?? 0) >= 2;
+  const promptedDebate =
+    debate && debate.status === 'ready' && describable && !atDebate && !atRematchPage ? debate : null;
+
+  // Held until a navigation commits, then released. Arriving at the room is the expected end, and
+  // `atDebate` carries on from the pathname there. Going anywhere else abandons the walk — holding
+  // the intent past that would suppress the prompt and the rejoin bar both, which are the only two
+  // ways into an unfinished debate, for the rest of the window. The timeout in the store is the
+  // backstop for a push that commits nothing at all.
+  const entryPathnameRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!enteringDebateId) {
+      entryPathnameRef.current = null;
+      return;
+    }
+    if (pathname.includes(`/debates/${enteringDebateId}`)) {
+      clearEnteringDebate(enteringDebateId);
+      return;
+    }
+    if (entryPathnameRef.current === null) {
+      entryPathnameRef.current = pathname;
+      return;
+    }
+    if (pathname !== entryPathnameRef.current) clearEnteringDebate(enteringDebateId);
+  }, [enteringDebateId, pathname]);
 
   React.useEffect(() => {
     if (!queriedSharePrompt || retainedSharePrompt || queriedSharePrompt.id === closedSharePromptId) return;
@@ -83,80 +191,39 @@ export function DebateCoordinator() {
   }, [activeFlow]);
 
   React.useEffect(() => {
-    if (match) {
-      lastMatchRef.current = match;
-      return;
-    }
-    if (!debate || viewingDebate) {
-      lastMatchRef.current = null;
-    }
-  }, [debate, match, viewingDebate]);
-
-  React.useEffect(() => {
     if (!activity) return;
     const rematch = activity.rematch;
     if (!rematch) return;
     const sourceDebatePath = rematch.source_debate_id ? `/debates/${rematch.source_debate_id}` : null;
-    if (rematch.status === 'deciding') {
-      if (sourceDebatePath && !pathname.includes(sourceDebatePath)) {
-        router.push(`/space/${rematch.source_space_id}${sourceDebatePath}`);
-      }
-      return;
-    }
+    // A debate-again session is shared across every tab, but only the tab already in the source
+    // room owns its recording and transition into the rematch browser. Routing from this app-wide
+    // coordinator sent every other open tab into that room, where ownership correctly rejected it.
+    // The room handles deciding, recording finalization, browsing, and conversion itself.
+    if (sourceDebatePath) return;
+    // Past that guard there is no room to hand off from — a session with no source debate comes
+    // from the matchmaking hub or a profile challenge, so this coordinator is the only thing that
+    // can route the viewer in, and it must. But it runs in *every* tab, and the guard above only
+    // covers the source-debate branch: a null `source_debate_id` fell through and pushed every
+    // open tab into the picker at once (GEO-2648, and the majority of sessions take this branch).
+    //
+    // Attention rather than presence is what makes it one tab. Presence is per-document
+    // visibility, so several windows report it together; attention additionally requires
+    // `document.hasFocus()`, which is true of at most one tab in the browser — the one the viewer
+    // is actually looking at, which is the only one that should move under them. Unfocused tabs
+    // stay put, and because attention is a subscription this re-runs when one is focused, so
+    // whichever tab they turn to still routes in rather than stranding them.
+    if (!hasAttention) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
-      // The debate room owns recording finalization before entering the browser.
-      if (sourceDebatePath && pathname.includes(sourceDebatePath)) return;
       const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
-      if (pathname !== path) router.push(path);
+      if (pathname !== path) {
+        rememberDebateReturnDestination();
+        router.push(path);
+      }
     }
-  }, [activity, pathname, router]);
+    // `hasAttention` is in here on purpose: an unfocused tab returns early above, and this is what
+    // re-runs the effect when the viewer turns to a tab, so it routes in then rather than never.
+  }, [activity, hasAttention, pathname, router]);
 
-  React.useEffect(() => {
-    if (!currentUserId || !activity) return;
-    if (debate && pathname.includes(`/debates/${debate.id}`)) {
-      clearDebateMatchTabOwnership(currentUserId);
-      return;
-    }
-    const record = readDebateMatchTabOwnership(currentUserId);
-    if (!record) return;
-    if (match) {
-      if (match.id !== record.matchId) clearDebateMatchTabOwnership(currentUserId);
-      return;
-    }
-    if (reportedDebate && ['complete', 'cancelled'].includes(reportedDebate.status)) {
-      clearDebateMatchTabOwnership(currentUserId);
-      return;
-    }
-    if (!debate || pathname.includes('/debates/rematches/')) {
-      clearDebateMatchTabOwnership(currentUserId);
-      return;
-    }
-    if (visibleMatch) return;
-    if (!debateMatchOwnershipMatchesDebate(record, debate, currentUserId)) {
-      clearDebateMatchTabOwnership(currentUserId);
-      return;
-    }
-
-    const ownership = createDebateMatchTabOwnershipCoordinator({
-      matchId: record.matchId,
-      claimId: record.claimId,
-      spaceId: record.spaceId,
-      userId: currentUserId,
-      onAcceptedElsewhere: () => undefined,
-    });
-    let active = true;
-    void ownership.recover().then(recovered => {
-      if (!active || !recovered) return;
-      if (record.state === 'pending') ownership.confirmAcceptance();
-      router.push(`/space/${debate.claim.space_id}/debates/${debate.id}`);
-    });
-    return () => {
-      active = false;
-      ownership.close();
-    };
-  }, [activity, currentUserId, debate, match, pathname, reportedDebate, router, visibleMatch]);
-
-  if (!isDebatesEnabled) return null;
   const visibleSharePrompt =
     retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);
 
@@ -171,25 +238,34 @@ export function DebateCoordinator() {
           Live debate updates are paused while reconnecting.
         </div>
       )}
-      {visibleMatch && (
-        <DebateMatchPrompt
-          spaceId={visibleMatch.claim.space_id}
-          matches={[visibleMatch]}
-          debates={debate ? [debate] : []}
-          reconcileActivity={async () => (await activityQuery.refetch({ throwOnError: true })).data ?? null}
-        />
+      {promptedDebate && currentUserId && !activity?.rematch && (
+        <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
-      {challenge && !visibleMatch && !debate && !activity?.rematch && (
+      {debate && !atDebate && !atRematchPage && !promptedDebate && !activity?.rematch && (
+        <DebateRejoinBar debate={debate} />
+      )}
+      {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the
+          hub's Requests tab, and the rematch routing effect above walks them into the claim picker
+          the moment it is accepted. */}
+      {promptedChallenge && isChallengeRecipient && !debate && !activity?.rematch && (
         <DebateChallengeDialog
-          challenge={challenge}
-          role={challenge.recipient.user_id === getCurrentGeoChatUserId() ? 'recipient' : 'requester'}
+          challenge={promptedChallenge}
           busy={acceptChallenge.isPending || rejectChallenge.isPending}
           error={challengeError instanceof Error ? challengeError.message : null}
-          onAccept={() => acceptChallenge.mutate(challenge.id)}
-          onReject={() => rejectChallenge.mutate(challenge.id)}
+          onAccept={() => acceptChallenge.mutate(promptedChallenge.id)}
+          onReject={() => rejectChallenge.mutate(promptedChallenge.id)}
+          onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
         />
       )}
-      {!activeFlow && visibleSharePrompt && (
+      {promptedRequest && currentUserId && (
+        <IncomingRequestPopup
+          key={promptedRequest.id}
+          request={promptedRequest}
+          currentUserId={currentUserId}
+          onNotNow={() => setSnoozedRequestIds(current => [...current, promptedRequest.id])}
+        />
+      )}
+      {!activeFlow && !promptedRequest && visibleSharePrompt && (
         <DebateSharePromptDialog
           key={visibleSharePrompt.id}
           prompt={visibleSharePrompt}
@@ -223,16 +299,7 @@ function DebateSharePromptDialog({
   const promptActionRef = React.useRef(false);
   const preparedVideo = usePreparedSocialVideo(prompt.debate_id, { enabled: true, includePreview: true });
 
-  React.useEffect(() => {
-    const previousBodyOverflow = document.body.style.overflow;
-    const previousDocumentOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousBodyOverflow;
-      document.documentElement.style.overflow = previousDocumentOverflow;
-    };
-  }, []);
+  useScrollLock();
 
   const closeDialog = () => {
     onClose();

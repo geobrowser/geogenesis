@@ -14,23 +14,27 @@ import { useSmartAccount } from './use-smart-account';
  */
 const UNREGISTERED_POLL_INTERVAL_MS = 3_000;
 
+export function personalSpaceIdQueryKey(address: string | null | undefined) {
+  return ['personal-space-id', address] as const;
+}
+
 /** Hook to get the user's personal space ID from the GraphQL API. */
 export function usePersonalSpaceId() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
 
   const { data, isLoading, isFetched } = useQuery({
-    queryKey: ['personal-space-id', address],
+    queryKey: personalSpaceIdQueryKey(address),
     queryFn: async () => {
       if (!address) return null;
 
       const space = await Effect.runPromise(getSpaceByAddress(address));
 
       if (!space) {
-        return { isRegistered: false, personalSpaceId: null };
+        return { isRegistered: false, personalSpaceId: null, personalEntityId: null };
       }
 
-      return { isRegistered: true, personalSpaceId: space.id };
+      return { isRegistered: true, personalSpaceId: space.id, personalEntityId: space.topicId ?? null };
     },
     enabled: !!address,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
@@ -54,6 +58,7 @@ export function usePersonalSpaceId() {
 
   return {
     personalSpaceId: data?.personalSpaceId ?? null,
+    personalEntityId: data?.personalEntityId ?? null,
     isRegistered: data?.isRegistered ?? false,
     // TanStack's isLoading can read false for a tick after the query becomes enabled but
     // before it dispatches a fetch — same gap a disabled query has pre-address. isFetched

@@ -6,10 +6,8 @@ import * as React from 'react';
 
 import equal from 'fast-deep-equal';
 
-import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { ID } from '~/core/id';
 import { EntityId } from '~/core/io/substream-schema';
-import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { reactiveRelations } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
@@ -18,6 +16,7 @@ import { store } from '~/core/sync/use-sync-engine';
 import { Entity, Relation } from '~/core/types';
 import { getImagePath } from '~/core/utils/utils';
 
+import { type DataBlockView, getView, selectViewRelation } from './data-block-view';
 import {
   columnPropertyIdFromRelation,
   dedupeRelationsByColumnProperty,
@@ -28,6 +27,7 @@ import { useDataBlockInstance } from './use-data-block';
 import { useMapping } from './use-mapping';
 
 export { columnPropertyIdFromRelation } from './shown-column-relations';
+export { type DataBlockView, dataBlockViewFromRelations } from './data-block-view';
 
 type DataBlockViewDetails = { name: string; id: string; value: DataBlockView };
 type Column = {
@@ -361,36 +361,6 @@ export function useView() {
     mapping,
   };
 }
-
-export type DataBlockView = 'TABLE' | 'LIST' | 'GALLERY' | 'BULLETED_LIST' | 'EXPLORE' | 'PILL';
-
-function selectViewRelation(relations: Relation[]): Relation | undefined {
-  const views = relations.filter(r => r.type.id === SystemIds.VIEW_PROPERTY && !r.isDeleted);
-  if (views.length === 0) return undefined;
-
-  const pool = views.some(r => r.isLocal) ? views.filter(r => r.isLocal) : views;
-
-  return pool.reduce<Relation | undefined>((best, relation) => {
-    if (!best) return relation;
-    const bestTs = best.timestamp ?? '';
-    const nextTs = relation.timestamp ?? '';
-    return nextTs >= bestTs ? relation : best;
-  }, undefined);
-}
-
-const getView = (viewRelation: Relation | undefined): DataBlockView => {
-  if (!viewRelation) return 'TABLE';
-
-  const targetId = viewRelation.toEntity.id;
-  if (ID.equals(targetId, SystemIds.TABLE_VIEW)) return 'TABLE';
-  if (ID.equals(targetId, SystemIds.LIST_VIEW)) return 'LIST';
-  if (ID.equals(targetId, SystemIds.GALLERY_VIEW)) return 'GALLERY';
-  if (ID.equals(targetId, SystemIds.BULLETED_LIST_VIEW)) return 'BULLETED_LIST';
-  if (ID.equals(targetId, DATA_BLOCK_VIEW_EXPLORE_ID)) return 'EXPLORE';
-  if (ID.equals(targetId, RANKING_VIEW_PILL_ID)) return 'PILL';
-
-  return 'TABLE';
-};
 
 const getPlaceholder = (blockEntity: Entity | null | undefined, view: DataBlockView) => {
   let text = DEFAULT_PLACEHOLDERS[view].text;

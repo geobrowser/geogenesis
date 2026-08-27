@@ -8,6 +8,7 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 import { useSearchParams } from 'next/navigation';
 
+import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { storage } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
 import { store } from '~/core/sync/use-sync-engine';
@@ -16,8 +17,11 @@ import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
+import { dataBlockViewFromRelations } from '../../blocks/data/data-block-view';
 import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
+import { readBlockPageSizeFromValues } from '../../blocks/data/parse-block-page-size';
+import { readBlockMediaDimensions } from '../../blocks/data/read-block-media-dimensions';
 import { makeInitialRankingBlockRelations } from '../../blocks/ranking/initialize';
 import {
   RANKING_DATE_PROPERTY_IDS,
@@ -31,6 +35,7 @@ import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
 import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
+import { makeBlockPosition } from './make-block-position';
 import { markdownToEditorJson } from './markdown-adapter';
 import {
   PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
@@ -63,40 +68,12 @@ function makeNewBlockRelation({
 }: MakeNewBlockArgs) {
   const newRelationId = ID.createEntityId();
 
-  const position = nextBlockIds.indexOf(addedBlock.id);
-
-  // @TODO: noUncheckedIndexAccess
-  const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
-  const afterBlockIndex = nextBlockIds[position + 1] as string | undefined;
-
-  // Create a unified array with consistent structure for both blockRelations and newBlocks
-  const allRelations = [
-    ...blockRelations.map(r => ({
-      toEntity: { id: r.block.id },
-      // @TODO(migration): default position
-      position: r.position ?? 'a0',
-    })),
-    ...newBlocks.map(b => ({
-      toEntity: { id: b.toEntity.id },
-      // @TODO(migration): default position
-      position: b.position ?? 'a0',
-    })),
-  ].sort((a, b) => (a.position < b.position ? -1 : 1));
-
-  // Check both the existing blocks and any that are created as part of this update
-  // tick. This is necessary as right now we don't update the Geo state until the
-  // user blurs the editor. See the comment earlier in this function.
-  const beforeCollectionItemIndex = allRelations.find(c => c.toEntity.id === beforeBlockIndex)?.position;
-
-  // When the afterCollectionItemIndex is undefined, we need to use the next block of beforeBlockIndex
-  const afterCollectionItemIndex =
-    allRelations.find(c => c.toEntity.id === afterBlockIndex)?.position ??
-    allRelations[allRelations.findIndex(c => c.position === beforeCollectionItemIndex) + 1]?.position;
-
-  const newBlockOrdering = Position.generateBetween(
-    beforeCollectionItemIndex ?? null,
-    afterCollectionItemIndex ?? null
-  );
+  const newBlockOrdering = makeBlockPosition({
+    blockId: addedBlock.id,
+    nextBlockIds,
+    blockRelations,
+    newBlocks,
+  });
 
   const renderableType = ((): RenderableEntityType => {
     switch (tiptapBlock.type) {
@@ -120,8 +97,8 @@ function makeNewBlockRelation({
     }
   })();
 
-  const newRelation: Relation = {
-    spaceId: spaceId,
+  return {
+    spaceId,
     id: newRelationId,
     position: newBlockOrdering,
     verified: false,
@@ -140,9 +117,7 @@ function makeNewBlockRelation({
       id: entityPageId,
       name: null,
     },
-  };
-
-  return newRelation;
+  } satisfies Relation;
 }
 
 interface UpsertBlocksRelationsArgs {
@@ -157,7 +132,7 @@ interface UpsertBlocksRelationsArgs {
 
 // Helper function to create or update the block IDs on an entity
 // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
-const makeBlocksRelations = async ({
+const makeBlocksRelations = ({
   nextBlocks,
   blockRelations,
   spaceId,
@@ -203,22 +178,18 @@ const makeBlocksRelations = async ({
 
   for (const movedBlock of movedBlocks) {
     const relationForMovedBlock = blockRelations.find(r => r.block.id === movedBlock.id);
+    if (!relationForMovedBlock) continue;
 
-    if (relationForMovedBlock) {
-      storage.relations.delete(relationForMovedBlock);
-    }
-
-    const newRelation = makeNewBlockRelation({
-      tiptapBlock: nextBlocks.find(b => b.id === movedBlock.id)!,
-      addedBlock: movedBlock,
+    const position = makeBlockPosition({
+      blockId: movedBlock.id,
       nextBlockIds,
       blockRelations,
-      spaceId,
       newBlocks,
-      entityPageId,
     });
 
-    storage.relations.set(newRelation);
+    storage.relations.update(relationForMovedBlock, draft => {
+      draft.position = position;
+    });
   }
 };
 
@@ -256,7 +227,7 @@ export function useEditorStoreLite() {
 }
 
 export function useEditorStore() {
-  const { id: entityId, spaceId } = useEditorInstance();
+  const { id: entityId, spaceId, initialBlocks } = useEditorInstance();
   const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
 
   const tabId = useActiveTabIdForEditor();
@@ -275,6 +246,13 @@ export function useEditorStore() {
   const initialBlockEntityRelations = React.useMemo(() => {
     return initialBlockEntities.flatMap(b => b.relations);
   }, [initialBlockEntities]);
+
+  // Shown-column property entities are only ever attached to the page's own blocks, never to a
+  // tab's, so a tab's data blocks have to look outside their own scope to size their media frame.
+  const mediaPropertySource = React.useMemo(
+    () => (initialBlockEntities === initialBlocks ? initialBlockEntities : [...initialBlockEntities, ...initialBlocks]),
+    [initialBlockEntities, initialBlocks]
+  );
 
   const markdownValues = useValues({
     selector: value => blockIds.includes(value.entity.id) && value.property.id === SystemIds.MARKDOWN_CONTENT,
@@ -425,7 +403,26 @@ export function useEditorStore() {
         }
 
         if (toEntity?.type === 'DATA') {
-          sBlocks.push({ type: 'data' });
+          // Shape the pre-hydration placeholder exactly like what's about to replace it: same
+          // view, same page size, same card ratio. All three come off the BLOCKS relation entity
+          // and the shown-column properties the server sends down with the page, so a gallery
+          // block never has to flash a table skeleton or a default-ratio one on its way to cards.
+          const blockRelationEntity = initialBlockEntities.find(b => b.id === block.entityId);
+          const viewRelations = getRelations({
+            mergeWith: initialBlockEntityRelations,
+            selector: r =>
+              r.fromEntity.id === block.entityId &&
+              r.type.id === SystemIds.VIEW_PROPERTY &&
+              r.spaceId === spaceId &&
+              !r.isDeleted,
+          });
+
+          sBlocks.push({
+            type: 'data',
+            view: dataBlockViewFromRelations(viewRelations),
+            pageSize: readBlockPageSizeFromValues(blockRelationEntity?.values, spaceId),
+            mediaFrame: blockMediaFrame(readBlockMediaDimensions(block.entityId, mediaPropertySource)),
+          });
 
           const dataSourceType = getRelations({
             mergeWith: initialBlockEntityRelations,
@@ -530,6 +527,7 @@ export function useEditorStore() {
     spaceId,
     initialBlockValues,
     initialBlockEntities,
+    mediaPropertySource,
     markdownValues,
     blockConfigValues,
     blockTypesRelations,

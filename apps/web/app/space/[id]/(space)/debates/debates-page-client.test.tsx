@@ -32,13 +32,16 @@ vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotesByVoter: () => new Map(),
 }));
 
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: () => <div data-testid="entity-vote-buttons" />,
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: () => true,
-  useDebatesEnabled: () => true,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -48,7 +51,14 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
-  useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false }),
+  useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
+// The feed orders itself by the explore "Best" ranking. These tests are about readiness and
+// error states, so the ranking is settled and empty — which leaves the feed on recency, the order
+// they were written against.
+vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
+  useDebatesBestOrder: () => ({ rankByDebateId: new Map(), isLoading: false, isError: false }),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({
@@ -57,6 +67,17 @@ vi.mock('~/core/hooks/use-space', () => ({
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
+}));
+
+// The feed's comment button opens a panel backed by the entity-comments stack,
+// whose storage-backed atoms initialize at import time. Stub it (and the live
+// count) the way the other debate suites do.
+vi.mock('~/partials/comments/entity-comments-panel', () => ({
+  EntityCommentsPanel: () => <div>Comments panel</div>,
+}));
+
+vi.mock('~/core/hooks/use-comments', () => ({
+  useComments: () => ({ comments: [], totalCount: 0, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
@@ -90,8 +111,9 @@ describe('DebatesPageClient browse feed', () => {
 
     expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
     expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'Join debate' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Join a debate' }).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Winner?').length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
 
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
   });
@@ -138,6 +160,7 @@ function completedDebate(): Debate {
       description: null,
     },
     status: 'complete',
+    response_kind: null,
     room_name: 'debate-1',
     first_participant_slot: 1,
     current_turn_index: 1,

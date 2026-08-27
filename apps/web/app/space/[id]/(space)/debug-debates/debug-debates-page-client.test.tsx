@@ -414,6 +414,7 @@ function debate(id: string, createdAt = '2026-07-02T00:00:00.000Z'): Debate {
       description: null,
     },
     status: 'complete',
+    response_kind: null,
     room_name: id,
     first_participant_slot: 1,
     current_turn_index: 1,

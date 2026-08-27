@@ -79,7 +79,11 @@ export function PendingPersonalSpaceRunner() {
       // redirects itself onto the real space the moment `setPending(null)`
       // clears the pending state, so no navigation is needed here.
       store.remapSpaceId(pendingPersonalSpaceId(topicId), spaceId);
-      queryClient.setQueryData(['personal-space-id', address], { isRegistered: true, personalSpaceId: spaceId });
+      queryClient.setQueryData(['personal-space-id', address], {
+        isRegistered: true,
+        personalSpaceId: spaceId,
+        personalEntityId: topicId,
+      });
       setResolvedSpaceId(spaceId);
       setPending(null);
 

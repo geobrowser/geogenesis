@@ -5,14 +5,7 @@ import { Effect } from 'effect';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProfile } from '~/core/io/subgraph';
 import { Address } from '~/core/io/substream-schema';
-import {
-  NavUtils,
-  formatGovernanceOutcomeDate,
-  formatGovernanceOutcomeTime,
-  getIsProposalEnded,
-  getProposalName,
-  getProposalTimeRemaining,
-} from '~/core/utils/utils';
+import { NavUtils, getIsProposalEnded, getProposalName, getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { ThumbGeoImage } from '~/design-system/geo-image';
@@ -20,6 +13,9 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 import { TickSmall } from '~/design-system/icons/tick-small';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
+
+import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { GovernanceRejectedProposalMenu } from '~/partials/governance/governance-rejected-proposal-menu';
 
 import { cachedFetchSpace } from '../space/[id]/cached-fetch-space';
@@ -162,6 +158,8 @@ async function PendingMembershipProposal({
       proposalName={proposalName}
       proposalType={proposal.type}
       governanceHomeReturnSearch={governanceHomeReturnSearch}
+      startTime={proposal.startTime}
+      submittedAt={proposal.submittedAt}
       endTime={proposal.endTime}
       isProposalEnded={isProposalEnded}
       canExecute={proposal.canExecute}
@@ -242,24 +240,42 @@ async function PendingContentProposal({
     : undefined;
   const { hours, minutes } = getProposalTimeRemaining(proposal.endTime);
   const showReopenMenu = proposal.status === 'REJECTED' && proposal.type === 'ADD_EDIT' && isProposalEnded;
+  const timestampSeconds = proposalTimestampSeconds({
+    status: proposal.status,
+    endTime: proposal.endTime,
+    startTime: proposal.startTime,
+    submittedAt: proposal.submittedAt,
+  });
+  // While voting is open the timestamp says when the proposal was submitted, which
+  // answers a different question from the countdown beside it — so both are shown.
+  const openStatusLabel =
+    // v2 contracts don't stamp startTime/endTime until the first vote fires, so a
+    // countdown here would render negative values for freshly proposed items with
+    // zero votes.
+    proposal.endTime <= 0 ? 'Voting opens on first vote' : `${hours}h ${minutes}m remaining`;
   const footerLeft =
     proposal.status === 'ACCEPTED' || proposal.status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <span className="shrink-0">{formatGovernanceOutcomeDate(proposal.endTime)}</span>
+        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <time className="shrink-0 tabular-nums" dateTime={new Date(proposal.endTime * 1000).toISOString()}>
-          {formatGovernanceOutcomeTime(proposal.endTime)}
-        </time>
+        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
       </div>
-    ) : proposal.endTime <= 0 ? (
-      // v2 contracts don't stamp startTime/endTime until the first vote fires,
-      // so a countdown here would render negative values for freshly proposed
-      // items with zero votes.
-      <p className="text-metadataMedium">Voting opens on first vote</p>
+    ) : timestampSeconds > 0 ? (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
+        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
+          ·
+        </span>
+        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
+          ·
+        </span>
+        <span className="shrink-0 text-grey-04">{openStatusLabel}</span>
+      </div>
     ) : (
-      <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+      <p className="text-metadataMedium">{openStatusLabel}</p>
     );
 
   return (

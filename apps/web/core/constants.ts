@@ -57,9 +57,18 @@ export const BOUNTY_ALLOCATED_PROPERTY_ID = 'cfeb642223c54df4b3f9375a489d9e22';
 /** Bounty "Task status" relation property; linking is disabled when it points at Done. */
 export const BOUNTY_TASK_STATUS_PROPERTY_ID = '054a7993ec2843e29688c84ac7a09220';
 export const BOUNTY_TASK_STATUS_DONE_ENTITY_ID = '425f3e809cf9488696581775159dfc33';
+export const BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID = '548fca08e94743668457b0d8429d5bf9';
+export const BOUNTY_TASK_STATUS_TODO_ENTITY_ID = '76b5b831a5fa4203ad61b3f93915edec';
+export const INTERESTED_IN_RELATION_TYPE_ID = 'ff7e1b4444a2419187324e6c222afe07';
+export const BOUNTY_SKILLS_PROPERTY_ID = 'a38732e33a3d47f9a459fb369c287709';
+export const BOUNTY_DIFFICULTY_LEVELS = ['Easy', 'Medium', 'Hard'] as const;
+export type BountyDifficultyLevel = (typeof BOUNTY_DIFFICULTY_LEVELS)[number];
 /** Share of a bounty's budget shown as the per-contributor estimated payout. */
 export const BOUNTY_EST_PAYOUT_RATIO = 0.2;
 export const PROPOSAL_TYPE_ID = '490a7c90ad4b4029b2b4d85d22fe203a';
+
+export const NEWS_STORY_TYPE_ID = 'e550fe517e904b2c8fffdf13408f5634';
+export const AVATAR_PROPERTY_ID = '1155befffad549b7a2e0da4777b8792c';
 
 // Video file types and upload constraints
 export const VALID_VIDEO_TYPES = [

@@ -165,6 +165,7 @@ function PowerToolsEntityPanel({
               spaceId={spaceId}
               initialBlocks={blocks ?? []}
               initialBlockRelations={blockRelations}
+              activeTabId={null}
             >
               <EntityPageCover avatarUrl={null} coverUrl={null} />
               <div className="px-4">

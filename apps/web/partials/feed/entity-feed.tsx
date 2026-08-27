@@ -36,9 +36,20 @@ function LoadingSkeleton() {
 }
 
 const SORT_OPTIONS: { value: ExploreSort; label: string }[] = [
+  { value: 'best', label: 'Best' },
   { value: 'new', label: 'New' },
   { value: 'top', label: 'Top' },
 ];
+
+/**
+ * The sorts a time range applies to.
+ *
+ * "Top" is the only one that asks "of when?" — it ranks by score, so the window is what makes the
+ * answer mean anything. "Best" is ranked server-side and "New" is ordered by recency already, so a
+ * window over either is a filter the viewer never asked for and can't see they have. The dropdown
+ * is hidden for those, and the range leaves the request with it.
+ */
+const SORTS_WITH_TIME_RANGE: readonly ExploreSort[] = ['top'];
 
 const TIME_OPTIONS: { value: ExploreTime; label: string }[] = [
   { value: 'today', label: 'Today' },
@@ -63,7 +74,7 @@ type EntityFeedProps = {
   initialSort?: ExploreSort;
   /** Whether to render the time-range dropdown. Defaults to true. */
   showTimeFilter?: boolean;
-  /** Whether to render the sort dropdown (New / Top). Defaults to false. */
+  /** Whether to render the sort dropdown (Best / New / Top). Defaults to false. */
   showSortFilter?: boolean;
   /** Whether to render the Explore-only, locally persisted type checklist. Defaults to false. */
   showTypeFilter?: boolean;
@@ -77,7 +88,8 @@ async function fetchFeedPage(
   apiEndpoint: string,
   params: {
     sort: ExploreSort;
-    time: ExploreTime;
+    /** Omitted when the feed's sort has no time range. */
+    time: ExploreTime | undefined;
     spaceId: string;
     typeIds: readonly string[] | undefined;
     cursor: string | undefined;
@@ -85,7 +97,9 @@ async function fetchFeedPage(
 ): Promise<ExploreFeedResult> {
   const sp = new URLSearchParams();
   sp.set('sort', params.sort);
-  sp.set('time', params.time);
+  // Absent means "no time filter" — see the route's parseTime. Sending nothing is what keeps a
+  // hidden range out of the feed it isn't shown for.
+  if (params.time !== undefined) sp.set('time', params.time);
   sp.set('spaceId', params.spaceId);
   if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
   if (params.cursor) sp.set('cursor', params.cursor);
@@ -125,7 +139,12 @@ export function EntityFeed({
   const typeIds =
     showTypeFilter && selectedTypeIds.length !== EXPLORE_ENTITY_TYPE_IDS.length ? selectedTypeIds : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
-  const showFilterRow = showSortFilter || showTimeFilter || lockedSpaceId == null || showTypeFilter;
+  // One condition behind both the dropdown and the request, so what the viewer can see and what
+  // the feed is filtered by cannot drift apart. `time` state is left alone while hidden, so
+  // returning to Top restores the range the viewer last picked rather than resetting it.
+  const timeRangeApplies = showTimeFilter && SORTS_WITH_TIME_RANGE.includes(sort);
+  const requestedTime = timeRangeApplies ? time : undefined;
+  const showFilterRow = showSortFilter || timeRangeApplies || lockedSpaceId == null || showTypeFilter;
 
   React.useEffect(() => {
     if (!showTypeFilter) return;
@@ -157,14 +176,22 @@ export function EntityFeed({
   // sign-in and leave "Join space" buttons stuck for a few seconds.
   const { smartAccount } = useSmartAccount();
   const smartAccountAddress = smartAccount?.account.address ?? null;
+  // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
+  // request, and caching them apart would refetch on a change the viewer never made.
   const queryKey = showTypeFilter
-    ? [apiEndpoint, sort, time, spaceId, typeIdsKey, smartAccountAddress]
-    : [apiEndpoint, sort, time, spaceId, smartAccountAddress];
+    ? [apiEndpoint, sort, requestedTime, spaceId, typeIdsKey, smartAccountAddress]
+    : [apiEndpoint, sort, requestedTime, spaceId, smartAccountAddress];
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam }) =>
-      fetchFeedPage(apiEndpoint, { sort, time, spaceId, typeIds, cursor: pageParam as string | undefined }),
+      fetchFeedPage(apiEndpoint, {
+        sort,
+        time: requestedTime,
+        spaceId,
+        typeIds,
+        cursor: pageParam as string | undefined,
+      }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: last => last.nextCursor ?? undefined,
     retry: 2,
@@ -217,6 +244,7 @@ export function EntityFeed({
               trigger={
                 <button
                   type="button"
+                  aria-label={`Sort: ${sortLabel}`}
                   className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
                 >
                   <span>{sortLabel}</span>
@@ -240,7 +268,7 @@ export function EntityFeed({
               ))}
             </Menu>
           ) : null}
-          {showTimeFilter ? (
+          {timeRangeApplies ? (
             <Menu
               asChild
               open={timeMenuOpen}
@@ -250,6 +278,7 @@ export function EntityFeed({
               trigger={
                 <button
                   type="button"
+                  aria-label={`Time range: ${timeLabel}`}
                   className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
                 >
                   <span>{timeLabel}</span>

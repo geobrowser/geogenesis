@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { EditorProvider } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 
@@ -12,7 +12,7 @@ import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggl
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
-import { TogglePostEntityPage } from '~/partials/entity-page/toggle-post-entity-page';
+import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 
 import { EntityPageHeader } from './entity-page-header';
 import { fetchEntityPageData } from './fetch-entity-page-data';
@@ -49,7 +49,7 @@ export default async function PostEntityPage({
       preventRedirect={isEditing}
     >
       <EntityStoreProvider id={props.id} spaceId={props.spaceId}>
-        <EditorProvider
+        <RouteEditorProvider
           id={props.id}
           spaceId={props.spaceId}
           initialBlocks={props.blocks}
@@ -71,7 +71,7 @@ export default async function PostEntityPage({
             {(showSpacer || !!notice) && <Spacer height={40} />}
 
             <Editor spaceId={props.spaceId} shouldHandleOwnSpacing />
-            <TogglePostEntityPage id={props.id} spaceId={props.spaceId} />
+            <ToggleEntityPage id={props.id} spaceId={props.spaceId} />
             <AutomaticModeToggle />
             <Spacer height={40} />
             <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
@@ -80,7 +80,7 @@ export default async function PostEntityPage({
               </React.Suspense>
             </TrackedErrorBoundary>
           </EntityPageContentContainer>
-        </EditorProvider>
+        </RouteEditorProvider>
       </EntityStoreProvider>
     </SpaceRedirect>
   );
