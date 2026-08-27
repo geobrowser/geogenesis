@@ -25,6 +25,10 @@ const mocks = vi.hoisted(() => ({
   connectionState: 'connected',
   canPlayAudio: true,
   startAudio: vi.fn(() => Promise.resolve()),
+  audioDevices: [] as Array<{ deviceId: string; groupId: string; kind: string; label: string }>,
+  activeDeviceId: 'mic-a',
+  setActiveMediaDevice: vi.fn(() => Promise.resolve()),
+  changeAudioInput: vi.fn(),
   remoteParticipants: [] as Array<{ identity: string }>,
   setMicrophoneEnabled: vi.fn(),
   isMicrophoneEnabled: true,
@@ -50,6 +54,11 @@ vi.mock('@livekit/components-react', () => ({
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
   useRoomContext: () => ({ disconnect: vi.fn(() => Promise.resolve()) }),
+  useMediaDeviceSelect: () => ({
+    devices: mocks.audioDevices,
+    activeDeviceId: mocks.activeDeviceId,
+    setActiveMediaDevice: mocks.setActiveMediaDevice,
+  }),
 }));
 
 vi.mock('@livekit/components-react/krisp', () => ({
@@ -85,7 +94,10 @@ vi.mock('~/core/debates/hooks', () => ({
 }));
 
 vi.mock('~/core/debates/media-session', () => ({
-  useDebateMediaSession: () => ({ selectedAudioInputId: '' }),
+  useDebateMediaSession: () => ({
+    selectedAudioInputId: '',
+    changeAudioInput: mocks.changeAudioInput,
+  }),
 }));
 
 vi.mock('~/core/debates/debate-room-ownership', () => ({
@@ -154,6 +166,15 @@ async function flushOwnership() {
 }
 
 beforeEach(() => {
+  // The device menu measures its trigger to place itself; jsdom has no ResizeObserver.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class MockResizeObserver {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   mocks.joinData = {
     token: 'token-1',
     url: 'wss://livekit.test',
@@ -171,6 +192,13 @@ beforeEach(() => {
   mocks.connectionState = 'connected';
   mocks.canPlayAudio = true;
   mocks.startAudio.mockReset().mockResolvedValue(undefined);
+  mocks.audioDevices = [
+    { deviceId: 'mic-a', groupId: 'g1', kind: 'audioinput', label: 'Built-in Microphone' },
+    { deviceId: 'mic-b', groupId: 'g2', kind: 'audioinput', label: 'USB Microphone' },
+  ];
+  mocks.activeDeviceId = 'mic-a';
+  mocks.setActiveMediaDevice.mockReset().mockResolvedValue(undefined);
+  mocks.changeAudioInput.mockReset();
   mocks.remoteParticipants = [];
   mocks.setMicrophoneEnabled.mockReset();
   mocks.isMicrophoneEnabled = true;
@@ -262,7 +290,7 @@ describe('RematchVoicePill', () => {
 
     // The room stays mounted — opponent audio keeps playing — but publishing is off the table.
     expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
-    const muteButton = screen.getByRole('button', { name: /microphone/i });
+    const muteButton = screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ });
     expect(muteButton).toBeDisabled();
     expect(muteButton).toHaveAttribute('title', 'Microphone unavailable — check browser permissions');
   });
@@ -285,6 +313,26 @@ describe('RematchVoicePill', () => {
     render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     expect(screen.queryByRole('button', { name: /enable audio/i })).toBeNull();
+  });
+
+  // The picked mic has to switch the live call AND survive into the debate that follows, which is
+  // the whole reason the choice is written back to the shared media session.
+  it('switches the live microphone and carries the choice into the debate', async () => {
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Choose microphone' }));
+    fireEvent.click(await screen.findByText('USB Microphone'));
+
+    expect(mocks.setActiveMediaDevice).toHaveBeenCalledWith('mic-b');
+    expect(mocks.changeAudioInput).toHaveBeenCalledWith('mic-b');
+  });
+
+  it('hides the microphone picker when no devices are enumerated', async () => {
+    mocks.audioDevices = [];
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.queryByRole('button', { name: 'Choose microphone' })).toBeNull();
   });
 
   it('yields to the tab that owns the voice connection', async () => {

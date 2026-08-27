@@ -8,6 +8,7 @@ import {
   useIsMuted,
   useIsSpeaking,
   useLocalParticipant,
+  useMediaDeviceSelect,
   useRemoteParticipants,
   useRoomContext,
 } from '@livekit/components-react';
@@ -23,11 +24,14 @@ import type { DebateRematchParticipant, DebateRematchSession } from '~/core/deba
 import { GeoChatRequestError } from '~/core/debates/api';
 import { MicrophoneIcon, RecordingCircleButton, SpeakerIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
+import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { useDebateMediaSession } from '~/core/debates/media-session';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { Avatar } from '~/design-system/avatar';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Menu } from '~/design-system/menu';
 
 import type { RemoteParticipant } from 'livekit-client';
 
@@ -343,7 +347,68 @@ function VoicePillBody({
       >
         <MicrophoneIcon muted={!isMicrophoneEnabled || Boolean(micFailure)} />
       </RecordingCircleButton>
+      <MicrophonePicker room={room} />
     </VoicePillFrame>
+  );
+}
+
+/**
+ * Picks the microphone for the voice channel, and for the debate that follows it.
+ *
+ * The device list and the live switch come from LiveKit, which already holds mic permission here
+ * so the labels are real. The choice is then written back to the app-wide media session, which is
+ * what the debate room's pre-join screen reads — so whatever the pair settled on while browsing
+ * claims is still selected when they walk into the debate. That write cannot grab the microphone
+ * a second time: `ensurePreview` bails unless a preview session is open, and the pill never opens
+ * one.
+ */
+function MicrophonePicker({ room }: { room: Room }) {
+  const [open, setOpen] = React.useState(false);
+  const { changeAudioInput } = useDebateMediaSession();
+  const { devices, activeDeviceId, setActiveMediaDevice } = useMediaDeviceSelect({
+    kind: 'audioinput',
+    room,
+  });
+
+  const select = React.useCallback(
+    (deviceId: string) => {
+      setOpen(false);
+      void setActiveMediaDevice(deviceId);
+      changeAudioInput(deviceId);
+    },
+    [changeAudioInput, setActiveMediaDevice]
+  );
+
+  if (devices.length === 0) return null;
+
+  return (
+    <Menu
+      open={open}
+      onOpenChange={setOpen}
+      className="max-w-[min(20rem,calc(100vw-2rem))] p-1"
+      trigger={
+        <button
+          type="button"
+          aria-label="Choose microphone"
+          title="Choose microphone"
+          className="grid size-9 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text"
+        >
+          <ChevronDownSmall />
+        </button>
+      }
+    >
+      <DeviceOptionGroup
+        label="Select a microphone"
+        options={devices.map(device => ({
+          deviceId: device.deviceId,
+          groupId: device.groupId,
+          kind: device.kind,
+          label: device.label || 'Microphone',
+        }))}
+        selectedDeviceId={activeDeviceId}
+        onChange={select}
+      />
+    </Menu>
   );
 }
 
