@@ -38,9 +38,17 @@ export function usePrivySignIn(onComplete?: () => void) {
   const onCompleteRef = React.useRef(onComplete);
   onCompleteRef.current = onComplete;
 
+  // Privy fires `onComplete` on session restoration too, not just on a login someone asked for —
+  // opening a second tab is enough (see the note in `core/wallet/wallet.tsx`). So the consumer's
+  // callback is armed here and only fires for a sign-in this hook actually started. Without it,
+  // loading the feed in a new tab would open the hub with nobody having pressed anything.
+  const requestedRef = React.useRef(false);
+
   const { login } = useGeoLogin({
     onComplete: args => {
       trackPrivyAuth(args, { auth_flow: 'manual_login' });
+      if (!requestedRef.current) return;
+      requestedRef.current = false;
       onCompleteRef.current?.();
     },
   });
@@ -53,6 +61,7 @@ export function usePrivySignIn(onComplete?: () => void) {
     setAvatar('');
     setSpaceId('');
     setStep('start');
+    requestedRef.current = true;
     login();
   }, [login, pathname, searchParams, setAvatar, setName, setPostOnboardingRedirect, setSpaceId, setStep, setTopicId]);
 }
