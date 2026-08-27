@@ -15,6 +15,7 @@ import {
   BlockGutterHoverArea,
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
+  getTopLevelBlockChildIndexFromTarget,
   getTopLevelBlockElements,
   insertTextBlockBelow,
   isBlockDropNoOp,
@@ -147,6 +148,46 @@ describe('BlockDragHandle', () => {
 
     expect(button).not.toHaveFocus();
   });
+
+  it('shows block actions from the drag handle', () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        disconnect() {}
+      }
+    );
+    const onCopyLink = vi.fn();
+    const onCopyBlock = vi.fn();
+    const onDuplicateBlock = vi.fn();
+
+    render(
+      React.createElement(
+        DndContext,
+        null,
+        React.createElement(BlockDragHandle, {
+          childIndex: 0,
+          top: 12,
+          left: -32,
+          isDragging: false,
+          visible: true,
+          actionsOpen: true,
+          onActionsOpenChange: vi.fn(),
+          onCopyLink,
+          onCopyBlock,
+          onDuplicateBlock,
+        })
+      )
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link to block' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy block' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Duplicate block' }));
+
+    expect(onCopyLink).toHaveBeenCalledOnce();
+    expect(onCopyBlock).toHaveBeenCalledOnce();
+    expect(onDuplicateBlock).toHaveBeenCalledOnce();
+  });
 });
 
 describe('BlockGutterHoverArea', () => {
@@ -242,6 +283,26 @@ describe('getGutterHoveredChildIndex', () => {
   it('ignores pointers outside the left gutter', () => {
     expect(getGutterHoveredChildIndex(blocks, 39, 20, 100)).toBeNull();
     expect(getGutterHoveredChildIndex(blocks, 101, 20, 100)).toBeNull();
+  });
+});
+
+describe('getTopLevelBlockChildIndexFromTarget', () => {
+  it('maps a nested context-menu target to its top-level block', () => {
+    const editorElement = document.createElement('div');
+    editorElement.className = 'ProseMirror';
+    const firstBlock = document.createElement('p');
+    const nestedTarget = document.createElement('span');
+    firstBlock.appendChild(nestedTarget);
+    editorElement.appendChild(firstBlock);
+    document.body.appendChild(editorElement);
+
+    const childIndex = getTopLevelBlockChildIndexFromTarget(
+      [{ childIndex: 3, element: firstBlock, top: 0, bottom: 20, center: 10 }],
+      nestedTarget
+    );
+    editorElement.remove();
+
+    expect(childIndex).toBe(3);
   });
 });
 

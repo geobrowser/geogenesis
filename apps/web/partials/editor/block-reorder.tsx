@@ -21,8 +21,11 @@ import type { Editor } from '@tiptap/react';
 
 import * as React from 'react';
 
+import { Copy } from '~/design-system/icons/copy';
+import { Link } from '~/design-system/icons/link';
 import { OrderDots } from '~/design-system/icons/order-dots';
 import { Plus } from '~/design-system/icons/plus';
+import { Menu, MenuItem } from '~/design-system/menu';
 
 import { ensureUniqueNodeIds } from './id-extension';
 
@@ -42,6 +45,13 @@ type DropZoneLayout = {
 };
 
 const GUTTER_HOVER_WIDTH = 60;
+const BLOCK_LINK_HIGHLIGHT_CLASSES = [
+  'rounded',
+  'ring-2',
+  'ring-ctaPrimary',
+  'ring-offset-4',
+  'transition-shadow',
+] as const;
 
 type Props = {
   children: React.ReactNode;
@@ -49,10 +59,22 @@ type Props = {
   editorWrapperRef: React.RefObject<HTMLDivElement | null>;
   enabled: boolean;
   onReorder: () => void;
+  onCopyLink: (childIndex: number) => void | Promise<void>;
+  onCopyBlock: (childIndex: number) => void | Promise<void>;
+  onDuplicateBlock: (childIndex: number) => void | Promise<void>;
 };
 
 /** Adds edit-mode drag controls around TipTap's top-level content blocks. */
-export function BlockReorder({ children, editor, editorWrapperRef, enabled, onReorder }: Props) {
+export function BlockReorder({
+  children,
+  editor,
+  editorWrapperRef,
+  enabled,
+  onReorder,
+  onCopyLink,
+  onCopyBlock,
+  onDuplicateBlock,
+}: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
@@ -67,10 +89,17 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
   const hoveredChildIndexRef = React.useRef<number | null>(null);
   const [activeChildIndex, setActiveChildIndex] = React.useState<number | null>(null);
   const [activeBoundary, setActiveBoundary] = React.useState<number | null>(null);
+  const [actionsChildIndex, setActionsChildIndex] = React.useState<number | null>(null);
+  const actionsChildIndexRef = React.useRef<number | null>(null);
 
   const updateHoveredChildIndex = React.useCallback((childIndex: number | null) => {
     hoveredChildIndexRef.current = childIndex;
     setHoveredChildIndex(childIndex);
+  }, []);
+
+  const updateActionsChildIndex = React.useCallback((childIndex: number | null) => {
+    actionsChildIndexRef.current = childIndex;
+    setActionsChildIndex(childIndex);
   }, []);
 
   const measureBlocks = React.useCallback(() => {
@@ -123,7 +152,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     editor.on('update', scheduleMeasureBlocks);
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (activeChildIndex !== null) return;
+      if (activeChildIndex !== null || actionsChildIndexRef.current !== null) return;
 
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -153,11 +182,23 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     };
 
     const handlePointerLeave = () => {
-      if (activeChildIndex === null) updateHoveredChildIndex(null);
+      if (activeChildIndex === null && actionsChildIndexRef.current === null) updateHoveredChildIndex(null);
+    };
+
+    const handleContextMenu = (event: MouseEvent) => {
+      if (activeChildIndex !== null) return;
+
+      const childIndex = getTopLevelBlockChildIndexFromTarget(blockLayoutRef.current, event.target);
+      if (childIndex === null) return;
+
+      event.preventDefault();
+      updateHoveredChildIndex(childIndex);
+      updateActionsChildIndex(childIndex);
     };
 
     wrapper.addEventListener('pointermove', handlePointerMove);
     wrapper.addEventListener('pointerleave', handlePointerLeave);
+    wrapper.addEventListener('contextmenu', handleContextMenu);
 
     return () => {
       resizeObserver.disconnect();
@@ -166,8 +207,84 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       if (measureFrame !== null) cancelAnimationFrame(measureFrame);
       wrapper.removeEventListener('pointermove', handlePointerMove);
       wrapper.removeEventListener('pointerleave', handlePointerLeave);
+      wrapper.removeEventListener('contextmenu', handleContextMenu);
     };
-  }, [activeChildIndex, editor, editorWrapperRef, enabled, measureBlocks, updateHoveredChildIndex]);
+  }, [
+    activeChildIndex,
+    editor,
+    editorWrapperRef,
+    enabled,
+    measureBlocks,
+    updateActionsChildIndex,
+    updateHoveredChildIndex,
+  ]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let highlightTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempts = 0;
+    let highlightedElement: HTMLElement | null = null;
+    let revealedLocation: string | null = null;
+
+    const revealLinkedBlock = () => {
+      if (new URL(window.location.href).searchParams.get('source') !== 'copy_link') return;
+
+      const locationKey = `${window.location.search}${window.location.hash}`;
+      if (revealedLocation === locationKey) return;
+
+      let blockId: string;
+      try {
+        blockId = decodeURIComponent(window.location.hash.slice(1));
+      } catch {
+        return;
+      }
+      if (!blockId) return;
+
+      const element = findTopLevelBlockElement(editor, blockId);
+      if (!element) {
+        if (attempts < 20 && retryTimer === null) {
+          attempts += 1;
+          retryTimer = setTimeout(() => {
+            retryTimer = null;
+            revealLinkedBlock();
+          }, 100);
+        }
+        return;
+      }
+
+      revealedLocation = locationKey;
+      highlightedElement?.classList.remove(...BLOCK_LINK_HIGHLIGHT_CLASSES);
+      highlightedElement = element;
+      element.classList.add(...BLOCK_LINK_HIGHLIGHT_CLASSES);
+      element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+
+      if (highlightTimer) clearTimeout(highlightTimer);
+      highlightTimer = setTimeout(() => {
+        element.classList.remove(...BLOCK_LINK_HIGHLIGHT_CLASSES);
+        if (highlightedElement === element) highlightedElement = null;
+      }, 4000);
+    };
+
+    const handleHashChange = () => {
+      attempts = 0;
+      revealedLocation = null;
+      revealLinkedBlock();
+    };
+
+    revealLinkedBlock();
+    window.addEventListener('hashchange', handleHashChange);
+    editor.on('update', revealLinkedBlock);
+
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      if (highlightTimer) clearTimeout(highlightTimer);
+      highlightedElement?.classList.remove(...BLOCK_LINK_HIGHLIGHT_CLASSES);
+      window.removeEventListener('hashchange', handleHashChange);
+      editor.off('update', revealLinkedBlock);
+    };
+  }, [editor]);
 
   React.useEffect(() => {
     if (enabled) return;
@@ -176,13 +293,14 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     setHoveredChildIndex(null);
     setActiveChildIndex(null);
     setActiveBoundary(null);
-  }, [enabled]);
+    updateActionsChildIndex(null);
+  }, [enabled, updateActionsChildIndex]);
 
   const editorRect = editorWrapperRef.current?.querySelector<HTMLElement>('.ProseMirror')?.getBoundingClientRect();
   const wrapperRect = editorWrapperRef.current?.getBoundingClientRect();
   const editorLeft = editorRect && wrapperRect ? editorRect.left - wrapperRect.left : 0;
   const editorWidth = editorRect?.width ?? 0;
-  const visibleHandleIndex = activeChildIndex ?? hoveredChildIndex;
+  const visibleHandleIndex = activeChildIndex ?? actionsChildIndex ?? hoveredChildIndex;
   const handleLayout = blockLayout.find(block => block.childIndex === visibleHandleIndex);
   const dropZones = makeDropZones(blockLayout);
   const indicatorTop = dropZones.find(zone => zone.boundary === activeBoundary)?.indicatorTop;
@@ -208,6 +326,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     // A drag can happen before blur, so assign/dedupe IDs before persisting it.
     ensureUniqueNodeIds(editor);
     measureBlocks();
+    updateActionsChildIndex(null);
     setActiveChildIndex(childIndex);
   };
 
@@ -266,6 +385,14 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
               isDragging={activeChildIndex !== null}
               visible={layout === handleLayout && visibleHandleIndex !== null}
               onInsertBelow={() => handleInsertBelow(layout.childIndex)}
+              actionsOpen={actionsChildIndex === layout.childIndex}
+              onActionsOpenChange={open => {
+                updateActionsChildIndex(open ? layout.childIndex : null);
+                if (!open) updateHoveredChildIndex(null);
+              }}
+              onCopyLink={() => void onCopyLink(layout.childIndex)}
+              onCopyBlock={() => void onCopyBlock(layout.childIndex)}
+              onDuplicateBlock={() => void onDuplicateBlock(layout.childIndex)}
             />
           ))
         : null}
@@ -346,6 +473,11 @@ export function BlockDragHandle({
   isDragging,
   visible,
   onInsertBelow,
+  actionsOpen = false,
+  onActionsOpenChange,
+  onCopyLink,
+  onCopyBlock,
+  onDuplicateBlock,
 }: {
   childIndex: number;
   top: number;
@@ -353,6 +485,11 @@ export function BlockDragHandle({
   isDragging: boolean;
   visible: boolean;
   onInsertBelow?: () => void;
+  actionsOpen?: boolean;
+  onActionsOpenChange?: (open: boolean) => void;
+  onCopyLink?: () => void;
+  onCopyBlock?: () => void;
+  onDuplicateBlock?: () => void;
 }) {
   const [isFocused, setIsFocused] = React.useState(false);
   const [isCoarseOrHoverlessPointer, setIsCoarseOrHoverlessPointer] = React.useState(false);
@@ -360,7 +497,7 @@ export function BlockDragHandle({
     id: `content-block-${childIndex}`,
     data: { childIndex },
   });
-  const isAvailable = !isDragging && (visible || isFocused || isCoarseOrHoverlessPointer);
+  const isAvailable = !isDragging && (visible || isFocused || actionsOpen || isCoarseOrHoverlessPointer);
 
   React.useEffect(() => {
     if (typeof window.matchMedia !== 'function') return;
@@ -398,19 +535,60 @@ export function BlockDragHandle({
           <Plus />
         </button>
       ) : null}
-      <button
-        ref={setNodeRef}
-        type="button"
-        aria-label={`Drag block ${childIndex + 1} to reorder`}
-        title="Drag to reorder"
-        className="flex size-6 cursor-grab touch-none items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01 active:cursor-grabbing"
-        onFocus={() => setIsFocused(true)}
-        onBlur={() => setIsFocused(false)}
-        {...attributes}
-        {...listeners}
+      <Menu
+        open={actionsOpen}
+        onOpenChange={open => onActionsOpenChange?.(open)}
+        asChild
+        className="w-52"
+        sideOffset={4}
+        trigger={
+          <button
+            ref={setNodeRef}
+            type="button"
+            aria-label={`Drag block ${childIndex + 1} to reorder`}
+            title="Drag to reorder or click for actions"
+            className="flex size-6 cursor-grab touch-none items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01 active:cursor-grabbing"
+            onContextMenu={event => {
+              event.preventDefault();
+              onActionsOpenChange?.(true);
+            }}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            {...attributes}
+            {...listeners}
+          >
+            <OrderDots color="currentColor" />
+          </button>
+        }
       >
-        <OrderDots color="currentColor" />
-      </button>
+        <MenuItem
+          onClick={() => {
+            onActionsOpenChange?.(false);
+            onCopyLink?.();
+          }}
+        >
+          <Link />
+          Copy link to block
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            onActionsOpenChange?.(false);
+            onCopyBlock?.();
+          }}
+        >
+          <Copy />
+          Copy block
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            onActionsOpenChange?.(false);
+            onDuplicateBlock?.();
+          }}
+        >
+          <Copy />
+          Duplicate block
+        </MenuItem>
+      </Menu>
     </div>
   );
 }
@@ -520,6 +698,22 @@ export function getTopLevelBlockElements(editor: Editor, editorElement: HTMLElem
   }
 
   return blocks;
+}
+
+export function getTopLevelBlockChildIndexFromTarget(blocks: BlockLayout[], target: EventTarget | null) {
+  if (!(target instanceof Element)) return null;
+
+  const blockElement = target.closest<HTMLElement>('.ProseMirror > *');
+  return blocks.find(block => block.element === blockElement)?.childIndex ?? null;
+}
+
+export function findTopLevelBlockElement(editor: Editor, blockId: string): HTMLElement | null {
+  const editorElement = editor.view.dom;
+  const block = getTopLevelBlockElements(editor, editorElement).find(({ childIndex }) => {
+    return editor.state.doc.child(childIndex).attrs.id === blockId;
+  });
+
+  return block?.element ?? null;
 }
 
 export function makeDropZones(blocks: BlockLayout[]): DropZoneLayout[] {
