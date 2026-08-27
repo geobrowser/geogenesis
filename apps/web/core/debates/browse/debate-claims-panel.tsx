@@ -149,7 +149,7 @@ function ClaimList({
 
   return (
     <>
-      <ul className="mt-5 space-y-4">
+      <ul className="mt-4 space-y-3">
         {visible.map(claim => (
           <li key={claim.id}>
             <ClaimRow claim={claim} />
@@ -160,7 +160,7 @@ function ClaimList({
         <button
           type="button"
           onClick={() => setExpanded(current => !current)}
-          className="mt-4 text-metadata text-grey-04 transition-colors hover:text-text"
+          className="mt-3 text-metadata text-grey-04 transition-colors hover:text-text"
         >
           {expanded ? 'Show less' : `Show ${hidden} more`}
         </button>
