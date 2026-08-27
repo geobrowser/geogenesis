@@ -12,7 +12,6 @@ import { SpaceVerifyButton } from '~/core/space/space-verify-button';
 import { RouteEditorProvider, Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { Entities } from '~/core/utils/entity';
-import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
 
 import { Skeleton } from '~/design-system/skeleton';
@@ -52,10 +51,12 @@ export default async function Layout(props0: LayoutProps) {
     notFound();
   }
 
-  const [props, { communityCalls }] = await Promise.all([getSpaceFrontPage(spaceId), resolveSpaceSidebar(spaceId)]);
+  const [props, { hasSidebar, isExternalTopic }] = await Promise.all([
+    getSpaceFrontPage(spaceId),
+    resolveSpaceSidebar(spaceId),
+  ]);
 
   const typeIds = props.space?.entity?.types?.map(t => t.id) ?? [];
-  const isExternalTopic = Spaces.hasExternalTopic(props.space);
 
   return (
     <EntityStoreProvider id={props.id} spaceId={spaceId}>
@@ -69,11 +70,7 @@ export default async function Layout(props0: LayoutProps) {
       >
         <SpaceChromeGate>
           <EntityPageCover avatarUrl={props.avatarUrl} coverUrl={props.coverUrl} />
-          <SpaceHeaderContentGate
-            spaceId={spaceId}
-            hasCommunityCalls={communityCalls.length > 0}
-            isExternalTopic={isExternalTopic}
-          >
+          <SpaceHeaderContentGate serverHasSidebar={hasSidebar} isExternalTopic={isExternalTopic}>
             <div className="space-y-2">
               <EditableSpaceHeading
                 spaceId={spaceId}

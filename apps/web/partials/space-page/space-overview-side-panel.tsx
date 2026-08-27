@@ -2,35 +2,49 @@
 
 import * as React from 'react';
 
+import { useSetAtom } from 'jotai';
+
 import type { CallSeries } from '~/core/community-calls/types';
 import { useSpaceDailyActivityTasks } from '~/core/space/use-space-daily-activities';
 
 import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
-import { EntityPageSideRail } from '~/partials/entity-page/entity-page-side-rail';
+import { StickySideRail } from '~/partials/entity-page/sticky-side-rail';
 
 import { SpaceDailyActivitiesSection } from './space-daily-activities-section';
+import { spaceSidebarHasContentAtom } from '~/atoms';
 
 type Props = {
   spaceId: string;
-  communityCalls: CallSeries[];
+  /** Daily activities are client-only (signed-in viewer); pass true on Overview only. */
+  dailyActivities?: boolean;
+  communityCalls?: CallSeries[];
 };
 
 /**
- * Daily activities (when the viewer is signed in and tasks exist) first, then the community-calls
- * digest. Hidden entirely when neither has content. A checklist with nothing left to do stays —
- * folded down to its heading, which it handles itself.
+ * Non-root space rail: daily activities (Overview) + community calls. Root and Explore
+ * use {@link ExploreSidePanel} instead. Publishes content state to the layout header via
+ * {@link spaceSidebarHasContentAtom}.
  */
-export function SpaceOverviewSidePanel({ spaceId, communityCalls }: Props) {
+export function SpaceOverviewSidePanel({ spaceId, dailyActivities = false, communityCalls }: Props) {
   const { tasks } = useSpaceDailyActivityTasks(spaceId);
-  const showDaily = tasks.length > 0;
-  const showCalls = communityCalls.length > 0;
 
-  if (!showDaily && !showCalls) return null;
+  const showDaily = dailyActivities && tasks.length > 0;
+  const showCalls = !!communityCalls && communityCalls.length > 0;
+  const hasContent = showDaily || showCalls;
+
+  const setSidebarHasContent = useSetAtom(spaceSidebarHasContentAtom);
+  React.useEffect(() => {
+    setSidebarHasContent(hasContent);
+    return () => setSidebarHasContent(null);
+  }, [hasContent, setSidebarHasContent]);
+
+  if (!hasContent) return null;
 
   return (
-    <EntityPageSideRail>
+    <StickySideRail>
       {showDaily ? <SpaceDailyActivitiesSection spaceId={spaceId} tasks={tasks} /> : null}
+      {showDaily && showCalls ? <hr className="my-6 border-t border-divider" /> : null}
       {showCalls ? <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} /> : null}
-    </EntityPageSideRail>
+    </StickySideRail>
   );
 }
