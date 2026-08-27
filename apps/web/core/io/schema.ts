@@ -136,6 +136,8 @@ export const Entity = Schema.Struct({
   spaceIds: Schema.Array(Schema.String),
   allValuesList: Schema.optional(Schema.Array(RoutingValueProjection)),
   allRelationsList: Schema.optional(Schema.Array(RoutingRelationProjection)),
+  // Unfiltered total, used to tell a truncated relation list from a short one.
+  relations: Schema.optional(Schema.Struct({ totalCount: Schema.Number })),
   // cover
   // blocks: Schema.
   valuesList: Schema.Array(Value),

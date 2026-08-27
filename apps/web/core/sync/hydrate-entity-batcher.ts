@@ -27,9 +27,14 @@ import { GeoEventStream } from './stream';
  * does not paginate, while the singular `getEntity` drains its paginated `relations` connection to
  * completion — deliberately, so hydration is correct for entities with any number of relations.
  *
- * Batching without accounting for that would silently drop relations past the cap. An entity that
- * comes back at the cap is therefore topped up through the draining path, so the common case costs
- * one request and only genuinely large entities pay for themselves.
+ * Batching without accounting for that would silently drop relations past the cap. An entity over
+ * the cap is therefore topped up through the draining path, so the common case costs one request
+ * and only genuinely large entities pay for themselves.
+ *
+ * Compared against `relationsTotalCount`, never against `relations.length`. The decoded array is
+ * filtered — `hasRelationTarget` drops dangling relations — so a capped page containing a single
+ * dangling one decodes to 999 and would read as complete. The count comes straight from the
+ * server's own total and is not filtered.
  */
 const BATCH_RELATIONS_CAP = 1000;
 
@@ -123,7 +128,7 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
 
   // Anything at the cap may have had relations dropped and needs the draining singular read.
   const truncatedIds = new Set(
-    remote.filter(entity => (entity.relations?.length ?? 0) >= BATCH_RELATIONS_CAP).map(entity => entity.id)
+    remote.filter(entity => (entity.relationsTotalCount ?? 0) > BATCH_RELATIONS_CAP).map(entity => entity.id)
   );
 
   /**

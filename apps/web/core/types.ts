@@ -286,6 +286,12 @@ export type Entity = {
   createdAt?: string | number;
   /** Unix seconds (stringified or numeric) or ISO 8601 string — varies by backend. */
   updatedAt?: string | number;
+  /**
+   * Total relations this entity has on the server, before any page cap and before dangling ones
+   * are dropped. Only set by queries that ask for it. `relations.length` cannot stand in: it is
+   * filtered, so a truncated page and a short one are indistinguishable from it alone.
+   */
+  relationsTotalCount?: number;
 };
 
 export type EntityWithSchema = Entity & { schema: Property[] };

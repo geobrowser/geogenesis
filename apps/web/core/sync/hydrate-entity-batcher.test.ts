@@ -157,7 +157,7 @@ describe('hydrateEntityBatched', () => {
     // `EntitiesBatch` caps relationsList at 1000 and does not paginate, while the singular
     // `getEntity` drains its connection to completion. Batching without accounting for that drops
     // relations past the cap silently — nothing errors, the entity is just missing some.
-    const capped = { ...entity('big'), relations: Array.from({ length: 1000 }, (_, i) => ({ id: `r${i}` })) };
+    const capped = { ...entity('big'), relationsTotalCount: 2500 };
     mocks.syncMany.mockResolvedValue({ merged: [entity('big'), entity('small')], remote: [capped, entity('small')] });
     mocks.syncOne.mockResolvedValue({
       merged: { ...entity('big'), relations: Array.from({ length: 2500 }, (_, i) => ({ id: `r${i}` })) },
@@ -182,7 +182,7 @@ describe('hydrateEntityBatched', () => {
     // this event — `useQueryEntity` reads `store.getEntity(...)`, not the resolved promise. Without
     // the emit the complete relations reach the caller and nothing else, and the store keeps the
     // truncated version the batch already emitted.
-    const capped = { ...entity('big'), relations: Array.from({ length: 1000 }, (_, i) => ({ id: `r${i}` })) };
+    const capped = { ...entity('big'), relationsTotalCount: 2500 };
     const drained = { ...entity('big'), relations: Array.from({ length: 2500 }, (_, i) => ({ id: `r${i}` })) };
     mocks.syncMany.mockResolvedValue({ merged: [entity('big')], remote: [capped] });
     mocks.syncOne.mockResolvedValue({ merged: drained, remote: drained });
@@ -206,7 +206,7 @@ describe('hydrateEntityBatched', () => {
   });
 
   it('does not top up entities that came back under the cap', async () => {
-    mocks.syncMany.mockResolvedValue({ merged: [entity('a')], remote: [{ ...entity('a'), relations: [{ id: 'r1' }] }] });
+    mocks.syncMany.mockResolvedValue({ merged: [entity('a')], remote: [{ ...entity('a'), relationsTotalCount: 12 }] });
 
     await hydrateEntityBatched({ id: 'a', store, cache, stream });
 
@@ -218,7 +218,7 @@ describe('hydrateEntityBatched', () => {
     // Query does not retry a success — the entity would stay incomplete for as long as the entry is
     // cached, with nothing to signal it. The singular path this replaced threw and the row's own
     // retry repaired it, so a failed top-up has to stay a failure.
-    const capped = { ...entity('big'), relations: Array.from({ length: 1000 }, (_, i) => ({ id: `r${i}` })) };
+    const capped = { ...entity('big'), relationsTotalCount: 2500 };
     mocks.syncMany.mockResolvedValue({
       merged: [entity('big'), entity('small')],
       remote: [capped, entity('small')],
@@ -241,7 +241,7 @@ describe('hydrateEntityBatched', () => {
     // arrived, so `useQueryEntity` keeps `isLoading` true on unrelated rows until the slowest
     // capped entity finishes — and one stalled top-up stalls the whole batch. The singular queries
     // this replaced settled independently.
-    const capped = { ...entity('big'), relations: Array.from({ length: 1000 }, (_, i) => ({ id: `r${i}` })) };
+    const capped = { ...entity('big'), relationsTotalCount: 2500 };
     mocks.syncMany.mockResolvedValue({
       merged: [entity('big'), entity('small')],
       remote: [capped, entity('small')],
@@ -268,5 +268,35 @@ describe('hydrateEntityBatched', () => {
     // Only now does the capped row finish.
     releaseTopUp(null);
     expect((await bigPromise)?.id).toBe('big');
+  });
+  it('detects truncation from the unfiltered count, not the filtered relation array', async () => {
+    // `EntityDtoLive` drops dangling relations (`hasRelationTarget`), so a page that hit the
+    // 1000-row cap and held even one dangling relation decodes to 999 entries. Reading the decoded
+    // array would call that complete and silently lose everything past the cap.
+    const cappedButFiltered = {
+      ...entity('big'),
+      relations: Array.from({ length: 999 }, (_, i) => ({ id: `r${i}` })),
+      relationsTotalCount: 4000,
+    };
+    mocks.syncMany.mockResolvedValue({ merged: [entity('big')], remote: [cappedButFiltered] });
+    mocks.syncOne.mockResolvedValue({ merged: entity('big'), remote: null });
+
+    await hydrateEntityBatched({ id: 'big', store, cache, stream });
+
+    expect(mocks.syncOne).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not top up an entity that merely has many relations, all of them present', async () => {
+    // The counterpart: a full page that was not truncated must not pay for a second read.
+    const full = {
+      ...entity('a'),
+      relations: Array.from({ length: 1000 }, (_, i) => ({ id: `r${i}` })),
+      relationsTotalCount: 1000,
+    };
+    mocks.syncMany.mockResolvedValue({ merged: [entity('a')], remote: [full] });
+
+    await hydrateEntityBatched({ id: 'a', store, cache, stream });
+
+    expect(mocks.syncOne).not.toHaveBeenCalled();
   });
 });
