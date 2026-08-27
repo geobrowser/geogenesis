@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => ({
   // `publishEdit` instead would sit in Effect.retry for a minute before surfacing.
   prepareFails: false,
   gate: null as null | Promise<'ok' | 'fail'>,
+  openPrivySignIn: vi.fn(),
+  /** Whether a smart account exists, i.e. the viewer is signed in. */
+  signedIn: true,
 }));
 
 vi.mock('@geoprotocol/geo-sdk', () => ({
@@ -75,11 +78,17 @@ vi.mock('~/core/io/subgraph/fetch-profile', () => ({
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({
-    smartAccount: {
-      account: { address: '0xabc' },
-      sendUserOperation: (...args: unknown[]) => mocks.sendUserOperation(...args),
-    },
+    smartAccount: mocks.signedIn
+      ? {
+          account: { address: '0xabc' },
+          sendUserOperation: (...args: unknown[]) => mocks.sendUserOperation(...args),
+        }
+      : null,
   }),
+}));
+
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => mocks.openPrivySignIn,
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
@@ -150,6 +159,9 @@ async function renderVotes() {
 
 beforeEach(() => {
   resetDebateVotePublishStateForTests();
+  // Not a mock fn, so no automatic reset restores it.
+  mocks.signedIn = true;
+  mocks.openPrivySignIn.mockClear();
   mocks.voteEntities = [];
   mocks.publishedRelations = [];
   mocks.idCounter = 0;
@@ -162,6 +174,20 @@ beforeEach(() => {
 });
 
 describe('useDebateVotes castVote', () => {
+  // Signed out is a step, not an error: a toast saying "connect your wallet" left the viewer to
+  // find the way in themselves, so the pill opens the login the upvote control opens.
+  it('opens the sign-in instead of publishing when the viewer is signed out', async () => {
+    mocks.signedIn = false;
+    const view = await renderVotes();
+
+    await act(async () => {
+      await view.result.current.castVote(ALICE);
+    });
+
+    expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
+    expect(mocks.publishEdit).not.toHaveBeenCalled();
+  });
+
   it('publishes a whole Vote entity on a first vote', async () => {
     const view = await renderVotes();
 

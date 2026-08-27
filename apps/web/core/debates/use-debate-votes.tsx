@@ -20,6 +20,7 @@ import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils
 import { type DebateVoteRecord, tallyDebateVotes, voteSharePercentages } from '~/core/debates/vote-tally';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { ID } from '~/core/id';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { checkEntityExists, getDebateVoteEntities } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -147,6 +148,7 @@ export type DebateVotesResult = {
  */
 export function useDebateVotes(debate: Debate): DebateVotesResult {
   const { smartAccount } = useSmartAccount();
+  const openPrivySignIn = usePrivySignIn();
   const { personalSpaceId } = usePersonalSpaceId();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
@@ -198,7 +200,10 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       if (previousVote && previousVote.winnerRelationId == null) return;
 
       if (!smartAccount) {
-        setToast(<span>Please connect your wallet to vote</span>);
+        // A toast telling someone to connect their wallet leaves them to find the way in
+        // themselves. Signed out is not an error here, it is a step — so open the login the way
+        // the upvote control does.
+        openPrivySignIn();
         return;
       }
       if (!personalSpaceId) {
@@ -365,6 +370,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       debate.claim.claim,
       debateEntityId,
       queryClient,
+      openPrivySignIn,
       setToast,
       reportError,
     ]

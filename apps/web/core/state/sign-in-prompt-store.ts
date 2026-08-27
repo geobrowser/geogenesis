@@ -7,7 +7,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
-export type SignInPromptAction = 'vote' | 'join' | 'comment' | 'bounty' | 'debate';
+export type SignInPromptAction = 'vote' | 'join' | 'comment' | 'bounty';
 
 export const signInPromptActionAtom = atom<SignInPromptAction | null>(null);
 

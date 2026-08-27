@@ -66,8 +66,8 @@ vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({ smartAccount: { account: { address: '0xfeed' } } }),
 }));
-vi.mock('~/core/state/sign-in-prompt-store', () => ({
-  useSignInPrompt: () => ({ action: null, open: vi.fn(), close: vi.fn() }),
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => vi.fn(),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({

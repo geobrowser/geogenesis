@@ -25,8 +25,8 @@ import { Text } from '~/design-system/text';
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
@@ -135,7 +135,7 @@ export function DebatesBrowseFeed({
   // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
   const debatesHub = useDebatesHub();
   const { smartAccount } = useSmartAccount();
-  const { open: openSignInPrompt } = useSignInPrompt();
+  const openPrivySignIn = usePrivySignIn();
   const isSignedIn = Boolean(smartAccount?.account.address);
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
@@ -247,7 +247,7 @@ export function DebatesBrowseFeed({
             // needs an account, so a signed-out viewer gets the same prompt voting gives them
             // rather than a panel whose every control refuses them.
             if (!isSignedIn) {
-              openSignInPrompt('debate');
+              openPrivySignIn();
               return;
             }
             // The hub is its own portal, so the feed's panel state stays out of it. Closing the

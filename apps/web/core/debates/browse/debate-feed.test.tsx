@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   bestOrderIds: [] as string[],
   bestOrderLoading: false,
   hubOpen: vi.fn(),
-  openSignInPrompt: vi.fn(),
+  openPrivySignIn: vi.fn(),
   /** Whether a smart account exists, i.e. the viewer is signed in. */
   signedIn: true,
 }));
@@ -126,8 +126,8 @@ vi.mock('~/core/hooks/use-comments', () => ({
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({ smartAccount: mocks.signedIn ? { account: { address: '0xfeed' } } : null }),
 }));
-vi.mock('~/core/state/sign-in-prompt-store', () => ({
-  useSignInPrompt: () => ({ action: null, open: mocks.openSignInPrompt, close: vi.fn() }),
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => mocks.openPrivySignIn,
 }));
 
 beforeEach(() => {
@@ -592,15 +592,15 @@ describe('DebatesBrowseFeed comments', () => {
     expect(screen.queryByText(/^Comments panel for/)).not.toBeInTheDocument();
   });
 
-  // Every control in the hub needs an account, so a signed-out viewer gets the prompt rather than
-  // a panel that refuses them at each step — the same gate upvoting puts in front of them.
-  it('prompts a signed-out viewer to sign in instead of opening the hub', () => {
+  // Every control in the hub needs an account, so a signed-out viewer goes straight to the login
+  // rather than a panel that refuses them at each step.
+  it('sends a signed-out viewer to sign in instead of opening the hub', () => {
     mocks.signedIn = false;
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
 
-    expect(mocks.openSignInPrompt).toHaveBeenCalledWith('debate');
+    expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
     expect(mocks.hubOpen).not.toHaveBeenCalled();
   });
 
