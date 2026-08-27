@@ -39,6 +39,8 @@ export type PayoutItem = {
   payoutEntityId: string;
   recipientEntityId: string;
   recipientName: string | null;
+  /** True when the recipient id is a personal space (its system entity); link to the space, not the entity. */
+  recipientIsSpace?: boolean;
   amount: number;
   proposalIds: string[];
   createdAt: Date;

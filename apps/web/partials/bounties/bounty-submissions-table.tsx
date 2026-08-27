@@ -13,6 +13,8 @@ import { SmallButton } from '~/design-system/button';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
+import { TablePager, usePagedRows } from './table-pager';
+
 const STATUS_LABELS: Record<SubmissionStatus, { label: string; className: string }> = {
   'in-progress': { label: 'In progress', className: 'bg-grey-02 text-grey-04' },
   paid: { label: 'Paid', className: 'bg-green/10 text-green' },
@@ -48,6 +50,7 @@ export function BountySubmissionsTable({
   onRefresh,
 }: Props) {
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
+  const { pageRows, ...pager } = usePagedRows(submissions);
   const toggle = (key: string) =>
     setExpanded(prev => {
       const next = new Set(prev);
@@ -96,7 +99,7 @@ export function BountySubmissionsTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-grey-02">
-              {submissions.map(submission => {
+              {pageRows.map(submission => {
                 const status = STATUS_LABELS[submission.status];
                 const busy = busyKey === submission.submissionKey;
                 const isOpen = expanded.has(submission.submissionKey);
@@ -183,6 +186,7 @@ export function BountySubmissionsTable({
           </table>
         </div>
       )}
+      <TablePager {...pager} />
     </section>
   );
 }

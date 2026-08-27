@@ -8,6 +8,7 @@ import { Effect } from 'effect';
 
 import { uuidToHex } from '~/core/id/normalize';
 import { getBatchEntities } from '~/core/io/queries';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 
 import type { BountyDetail } from './fetch-bounty-detail';
 import { fetchBountyReviews, fetchPayoutItems, fetchProposalStatuses, fetchSubmissionItems } from './fetch-submissions';
@@ -47,19 +48,33 @@ export function useBountySubmissions(detail: BountyDetail | null | undefined, ro
             { concurrency: 2 }
           );
           const recipientIds = [...new Set(payoutsRaw.map(p => p.recipientEntityId))];
-          const [recipients, proposalStatuses, reviews] = yield* Effect.all(
+          // Recipients are personal-space system entities (or legacy person entities).
+          // A space entity's own name is just "Space <uuid>", so resolve the space's
+          // profile first — that is what a reader expects to see — and only fall back
+          // to the entity name for legacy person-entity recipients.
+          const [recipients, recipientProfiles, proposalStatuses, reviews] = yield* Effect.all(
             [
               recipientIds.length > 0 ? getBatchEntities(recipientIds) : Effect.succeed([]),
+              recipientIds.length > 0 ? fetchProfilesBySpaceIds(recipientIds) : Effect.succeed([]),
               fetchProposalStatuses(submissions.map(s => s.entityId)),
               fetchBountyReviews(submissions.map(s => s.entityId)),
             ],
-            { concurrency: 3 }
+            { concurrency: 4 }
           );
-          const recipientNames = new Map(recipients.map(entity => [uuidToHex(entity.id), entity.name]));
-          const payouts = payoutsRaw.map(p => ({
-            ...p,
-            recipientName: recipientNames.get(p.recipientEntityId) ?? null,
-          }));
+          const entityNames = new Map(recipients.map(entity => [uuidToHex(entity.id), entity.name]));
+          const profileNames = new Map<string, string>();
+          recipientProfiles.forEach((profile, index) => {
+            const name = profile?.name?.trim();
+            if (name) profileNames.set(uuidToHex(recipientIds[index]), name);
+          });
+          const payouts = payoutsRaw.map(p => {
+            const profileName = profileNames.get(p.recipientEntityId);
+            return {
+              ...p,
+              recipientName: profileName ?? entityNames.get(p.recipientEntityId) ?? null,
+              recipientIsSpace: profileName != null,
+            };
+          });
           return { submissions, payouts, proposalStatuses, reviews };
         })
       ),

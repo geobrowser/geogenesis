@@ -90,6 +90,23 @@ describe('BountySubmissionsTable', () => {
     expect(h.onOpenReview).toHaveBeenCalledWith(expect.objectContaining({ submissionKey: 'k2' }));
   });
 
+  it('pages at ten rows', () => {
+    render(
+      <BountySubmissionsTable
+        spaceId="dao"
+        submissions={Array.from({ length: 12 }, (_, i) => row({ submissionKey: `k${i}`, creatorName: `Curator ${i}` }))}
+        isLoading={false}
+        isError={false}
+        busyKey={null}
+        {...handlers()}
+      />
+    );
+    expect(screen.getAllByTestId('submission-row')).toHaveLength(10);
+    expect(screen.getByTestId('table-pager')).toHaveTextContent('1–10 of 12');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getAllByTestId('submission-row')).toHaveLength(2);
+  });
+
   it('shows the rejected status chip', () => {
     render(
       <BountySubmissionsTable

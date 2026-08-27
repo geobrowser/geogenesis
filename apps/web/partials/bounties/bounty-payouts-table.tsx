@@ -9,6 +9,8 @@ import { NavUtils } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
+import { TablePager, usePagedRows } from './table-pager';
+
 type Props = {
   spaceId: string;
   payouts: PayoutItem[];
@@ -16,6 +18,7 @@ type Props = {
 
 export function BountyPayoutsTable({ spaceId, payouts }: Props) {
   const total = payouts.reduce((sum, payout) => sum + payout.amount, 0);
+  const { pageRows, ...pager } = usePagedRows(payouts);
   return (
     <section aria-label="Payouts" data-testid="bounty-payouts" className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-4">
@@ -44,10 +47,17 @@ export function BountyPayoutsTable({ spaceId, payouts }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-grey-02">
-              {payouts.map(payout => (
+              {pageRows.map(payout => (
                 <tr key={payout.id} data-testid="payout-row">
                   <td className="px-3 py-2">
-                    <Link href={NavUtils.toEntity(spaceId, payout.recipientEntityId)} className="hover:underline">
+                    <Link
+                      href={
+                        payout.recipientIsSpace
+                          ? NavUtils.toSpace(payout.recipientEntityId)
+                          : NavUtils.toEntity(spaceId, payout.recipientEntityId)
+                      }
+                      className="hover:underline"
+                    >
                       {payout.recipientName ?? `${payout.recipientEntityId.slice(0, 6)}…`}
                     </Link>
                   </td>
@@ -60,6 +70,7 @@ export function BountyPayoutsTable({ spaceId, payouts }: Props) {
           </table>
         </div>
       )}
+      <TablePager {...pager} />
     </section>
   );
 }

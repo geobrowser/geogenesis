@@ -35,8 +35,7 @@ export function BountiesPageClient() {
                 <NewBountyButton />
               </div>
               <Text as="p" color="grey-04">
-                Paid curation work from spaces in the curator program. Express interest on a bounty to apply, then
-                submit proposals in its space to earn points.
+                Express interest on a bounty to apply, then submit proposals in its space to earn points.
               </Text>
             </header>
           }
