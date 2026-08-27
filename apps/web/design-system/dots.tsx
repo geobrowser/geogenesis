@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 
 interface Props {
@@ -14,7 +15,7 @@ export function Dots({ color = 'bg-grey-03' }: Props) {
       {[0, 1, 2].map(index => (
         <motion.span
           key={index}
-          className={`block h-1 w-1 rounded-full ${color}`}
+          className={cx('block h-1 w-1 rounded-full', color)}
           animate={{ y: ['-100%', '25%'] }}
           transition={{
             duration: 0.225,

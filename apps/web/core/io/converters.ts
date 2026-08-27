@@ -200,23 +200,55 @@ function convertBacklinkConditionToRelationFilter(condition: BacklinkCondition):
   return filter;
 }
 
+export type ConvertWhereOptions = {
+  /**
+   * When false (default), the produced filter is AND-combined with
+   * `name: { isNull: false, isNot: "" }` so entities with null/empty names
+   * are excluded. Pass `true` to receive the raw filter without that clause
+   * (e.g., dev tooling that needs to see every entity).
+   */
+  includeEmptyNames?: boolean;
+};
+
 /**
- * Main function to convert WhereCondition to EntityFilter
+ * Convert WhereCondition to EntityFilter and inject the default empty-name
+ * exclusion at the top level (unless opted out). Recursive subtree conversion
+ * goes through `convertWhereConditionToEntityFilterInner` directly so the
+ * empty-name clause is added exactly once.
  */
-export function convertWhereConditionToEntityFilter(where: WhereCondition): EntityFilter {
+export function convertWhereConditionToEntityFilter(
+  where: WhereCondition,
+  options?: ConvertWhereOptions
+): EntityFilter {
+  const filter = convertWhereConditionToEntityFilterInner(where);
+
+  if (options?.includeEmptyNames) {
+    return filter;
+  }
+
+  const emptyNameExclusion: EntityFilter = { name: { isNull: false, isNot: '' } };
+
+  if (Object.keys(filter).length === 0) {
+    return emptyNameExclusion;
+  }
+
+  return { and: [filter, emptyNameExclusion] };
+}
+
+function convertWhereConditionToEntityFilterInner(where: WhereCondition): EntityFilter {
   const filter: EntityFilter = {};
 
   // Handle logical operators
   if (where.OR && where.OR.length > 0) {
-    filter.or = where.OR.map(cond => convertWhereConditionToEntityFilter(cond));
+    filter.or = where.OR.map(cond => convertWhereConditionToEntityFilterInner(cond));
   }
 
   if (where.AND && where.AND.length > 0) {
-    filter.and = where.AND.map(cond => convertWhereConditionToEntityFilter(cond));
+    filter.and = where.AND.map(cond => convertWhereConditionToEntityFilterInner(cond));
   }
 
   if (where.NOT) {
-    filter.not = convertWhereConditionToEntityFilter(where.NOT);
+    filter.not = convertWhereConditionToEntityFilterInner(where.NOT);
   }
 
   // Handle simple fields

@@ -18,7 +18,16 @@ export type Profile = {
    * the fallback values (wallet addresses) are not valid entity IDs.
    */
   id: string;
-  /** The user's personal space ID (bytes16 hex without 0x prefix) */
+  /**
+   * The user's personal space ID (bytes16 hex without 0x prefix).
+   *
+   * Carries the same hazard as `id` above, and the warning was previously only on `id`:
+   * `fetchProfile` falls back to `defaultProfile(walletAddress, walletAddress)` on every failure
+   * path, so this is a `0x…` wallet address whenever the profile lookup failed. Check
+   * `IdUtils.isValid()` rather than truthiness before passing it anywhere typed as a space or
+   * entity id — a non-empty address passes a truthiness check and then fails at the API as
+   * `Invalid UUID`.
+   */
   spaceId: string;
   name: string | null;
   avatarUrl: string | null;
@@ -238,6 +247,10 @@ export type Value = LocalMetadata & {
 // ==============================================================================
 
 export type Relation = LocalMetadata & {
+  /** Publish this local change with the SDK's updateRelation operation. */
+  isRelationUpdate?: boolean;
+  /** Optional relation fields that the pending updateRelation operation clears. */
+  relationUpdateUnsetFields?: Array<'toSpace'>;
   id: string;
   entityId: string;
   type: {
@@ -269,13 +282,14 @@ export type Entity = {
   name: string | null;
   description: string | null;
   spaces: string[];
+  nameTripleSpaces?: string[];
   types: { id: string; name: string | null }[];
   relations: Relation[];
   values: Value[];
-  /**
-   * UNIX timestamp in seconds
-   */
-  updatedAt?: string;
+  /** Unix seconds (stringified or numeric) or ISO 8601 string — varies by backend. */
+  createdAt?: string | number;
+  /** Unix seconds (stringified or numeric) or ISO 8601 string — varies by backend. */
+  updatedAt?: string | number;
 };
 
 export type EntityWithSchema = Entity & { schema: Property[] };
@@ -296,6 +310,8 @@ export type SearchResult = {
   description: string | null;
   spaces: SpaceEntity[];
   types: { id: string; name: string | null }[];
+  /** Entity names keyed by spaceId, so search can show the name for the displayed top-ranked space. */
+  namesBySpace?: Record<string, string | null>;
   /** Types keyed by spaceId, so the UI can show only the types relevant to the displayed space */
   typesBySpace?: Record<string, { id: string; name: string | null }[]>;
 };

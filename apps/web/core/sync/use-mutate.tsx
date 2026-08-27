@@ -1,4 +1,4 @@
-import { Graph, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { Draft, produce } from 'immer';
 
@@ -12,10 +12,17 @@ import {
   VIDEO_RENDERABLE_TYPE,
 } from '../constants';
 import { ID } from '../id';
+import { createGeoImage } from '../sdk/geo-client';
 import { OmitStrict, SWITCHABLE_RENDERABLE_TYPE_LABELS } from '../types';
 import { DataType, Relation, Value } from '../types';
 import { toHexId } from '../utils/hex-id';
 import { extractValueString } from '../utils/value';
+import { saveVideoKeyframe } from '../utils/video/save-keyframe';
+import {
+  getRelationUpdateUnsetFields,
+  isExistingRelationWithUnchangedIdentity,
+  requiresRelationIdentityReplacement,
+} from './relation-update';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
@@ -27,6 +34,47 @@ const RENDERABLE_TYPE_ENTITY_LABELS: Record<string, string> = {
   [PLACE]: 'Place',
   [ADDRESS]: 'Address',
 };
+
+// Maps a GRC-20 v2 typed value's `type` discriminant to the local store's
+// DataType. `Graph.createImage` emits `text` for the IPFS URL value and
+// `float` for the Height/Width values — declaring all of them as TEXT (as
+// this used to do unconditionally) mis-types the numeric dimension
+// properties and trips the SDK's E005 property-type-mismatch check at
+// publish time.
+function graphValueDataType(value: unknown): DataType {
+  const type = value && typeof value === 'object' && 'type' in value ? (value as { type: unknown }).type : undefined;
+  switch (type) {
+    case 'integer':
+      return 'INTEGER';
+    case 'float':
+      return 'FLOAT';
+    case 'decimal':
+      return 'DECIMAL';
+    case 'boolean':
+      return 'BOOLEAN';
+    case 'date':
+      return 'DATE';
+    case 'datetime':
+      return 'DATETIME';
+    case 'time':
+      return 'TIME';
+    case 'point':
+      return 'POINT';
+    case 'bytes':
+      return 'BYTES';
+    case 'schedule':
+      return 'SCHEDULE';
+    case 'embedding':
+      return 'EMBEDDING';
+    case 'text':
+      return 'TEXT';
+    default:
+      console.warn(
+        `[use-mutate] unrecognized GRC-20 value type "${String(type)}" in createImageOps; defaulting to TEXT`
+      );
+      return 'TEXT';
+  }
+}
 
 type Recipe<T> = (draft: Draft<T>) => void | T | undefined;
 type GeoProduceFn<T> = (base: T, recipe: Recipe<T>) => void;
@@ -62,6 +110,8 @@ export interface Mutator {
       verified?: boolean;
       toSpaceId?: string;
       skipTypeRelation?: boolean;
+      /** Optional list of to-entity-types to register as RELATION_VALUE_RELATIONSHIP_TYPE relations. */
+      relationValueTypes?: Array<{ id: string; name: string | null }>;
     }) => void;
     setDataType: (propertyId: string, dataType: DataType) => void;
   };
@@ -80,14 +130,15 @@ export interface Mutator {
     deleteMany: (relations: Relation[]) => void;
   };
   images: {
-    createAndLink: (params: {
-      file: File;
-      fromEntityId: string;
-      fromEntityName?: string | null;
-      relationPropertyId: string;
-      relationPropertyName: string | null;
-      spaceId: string;
-    }) => Promise<{ imageId: string; relationId: string }>;
+    createAndLink: (
+      params: {
+        fromEntityId: string;
+        fromEntityName?: string | null;
+        relationPropertyId: string;
+        relationPropertyName: string | null;
+        spaceId: string;
+      } & ({ file: File } | { url: string })
+    ) => Promise<{ imageId: string; relationId: string }>;
     createOnly: (params: { file: File; spaceId: string }) => Promise<{ imageId: string }>;
   };
   videos: {
@@ -104,6 +155,93 @@ export interface Mutator {
 }
 
 function createMutator(store: GeoStore): Mutator {
+  // Create an Image entity from a file/URL and link it onto `fromEntityId` under
+  // `relationPropertyId` as an IMAGE renderable. Shared by `images.createAndLink`
+  // and the video-keyframe flow so both mint images against the same store.
+  const createAndLinkImage: Mutator['images']['createAndLink'] = async params => {
+    const { fromEntityId, fromEntityName, relationPropertyId, relationPropertyName, spaceId } = params;
+    // Create the image entity via the configured Geo client. URL inputs are
+    // fetched and pinned to IPFS by the SDK; blob inputs upload directly.
+    const { id: imageId, ops: createImageOps } = await createGeoImage(
+      'file' in params ? { blob: params.file } : { url: params.url }
+    );
+
+    for (const op of createImageOps) {
+      if (op.type === 'createRelation') {
+        store.setRelation({
+          id: toHexId(op.id),
+          entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
+          fromEntity: {
+            id: toHexId(op.from),
+            name: null,
+          },
+          type: {
+            id: toHexId(op.relationType),
+            name: 'Image',
+          },
+          toEntity: {
+            id: toHexId(op.to),
+            name: 'Image',
+            value: toHexId(op.to),
+          },
+          spaceId,
+          position: Position.generate(),
+          verified: false,
+          renderableType: 'RELATION',
+        });
+      } else if (op.type === 'createEntity') {
+        for (const pv of op.values) {
+          const dataType = graphValueDataType(pv.value);
+          store.setValue({
+            id: ID.createValueId({
+              entityId: toHexId(op.id),
+              propertyId: toHexId(pv.property),
+              spaceId,
+            }),
+            entity: {
+              id: toHexId(op.id),
+              name: null,
+            },
+            property: {
+              id: toHexId(pv.property),
+              name: 'Image Property',
+              dataType,
+              renderableType: dataType === 'TEXT' ? 'URL' : null,
+            },
+            spaceId,
+            value: extractValueString(pv.value),
+          });
+        }
+      }
+    }
+
+    const relationId = ID.createEntityId();
+    const imageIdStr = toHexId(imageId);
+    store.setRelation({
+      id: relationId,
+      entityId: ID.createEntityId(),
+      fromEntity: {
+        id: fromEntityId,
+        name: fromEntityName || '',
+      },
+      type: {
+        id: relationPropertyId,
+        name: relationPropertyName || '',
+      },
+      toEntity: {
+        id: imageIdStr,
+        name: null,
+        value: imageIdStr,
+      },
+      spaceId,
+      position: Position.generate(),
+      verified: false,
+      renderableType: 'IMAGE',
+    });
+
+    return { imageId: imageIdStr, relationId };
+  };
+
   return {
     entities: {
       name: {
@@ -142,6 +280,7 @@ function createMutator(store: GeoStore): Mutator {
         verified = false,
         toSpaceId,
         skipTypeRelation = false,
+        relationValueTypes,
       }) => {
         // Check existing relations for duplicate prevention
         const existingRelations = store.getResolvedRelations(entityId);
@@ -267,6 +406,49 @@ function createMutator(store: GeoStore): Mutator {
             store.setRelation(renderableTypeRelation);
           }
         }
+
+        // For RELATION properties, register the allowed to-entity-types so the
+        // property carries the constraint and the rest of the app (search,
+        // hydration, generation) can use it.
+        if (relationValueTypes && relationValueTypes.length > 0) {
+          // Track ids written in this call so duplicates inside the caller's
+          // input array can't double-write. `existingRelations` is a snapshot
+          // taken at function entry and doesn't see the writes we issue here.
+          const writtenRvtIds = new Set<string>();
+          for (const rvt of relationValueTypes) {
+            if (writtenRvtIds.has(rvt.id)) continue;
+            const alreadyPresent = existingRelations.some(
+              r => r.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE && r.toEntity.id === rvt.id && !r.isDeleted
+            );
+            if (alreadyPresent) {
+              writtenRvtIds.add(rvt.id);
+              continue;
+            }
+
+            store.setRelation({
+              id: ID.createEntityId(),
+              entityId: ID.createEntityId(),
+              spaceId,
+              renderableType: 'RELATION',
+              verified: false,
+              position: Position.generate(),
+              type: {
+                id: SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE,
+                name: 'Relation Value Type',
+              },
+              fromEntity: {
+                id: entityId,
+                name: name,
+              },
+              toEntity: {
+                id: rvt.id,
+                name: rvt.name,
+                value: rvt.id,
+              },
+            });
+            writtenRvtIds.add(rvt.id);
+          }
+        }
       },
       setDataType: (propertyId: string, dataType: DataType) => {
         store.setDataType(propertyId, dataType);
@@ -305,7 +487,32 @@ function createMutator(store: GeoStore): Mutator {
         store.setRelation(newRelation);
       },
       update: (base, recipe) => {
-        const newRelation = produce(base, recipe);
+        const changedRelation = produce(base, recipe);
+
+        // The SDK cannot update relation endpoints or other identity fields.
+        // Replace an existing edge with a fresh relation ID so the backend does
+        // not ignore a createRelation operation that reuses the committed ID.
+        if (requiresRelationIdentityReplacement(base, changedRelation)) {
+          store.deleteRelation(base);
+          store.setRelation({
+            ...changedRelation,
+            id: ID.createEntityId(),
+            isRelationUpdate: undefined,
+            relationUpdateUnsetFields: undefined,
+          });
+          return;
+        }
+
+        // Relations created in the current local edit still need createRelation.
+        // Once a relation exists remotely and its identity is unchanged, retain
+        // that identity. The publish layer serializes its SDK-updateable fields.
+        const newRelation = produce(changedRelation, draft => {
+          const isRelationUpdate = isExistingRelationWithUnchangedIdentity(base, changedRelation);
+          draft.isRelationUpdate = isRelationUpdate;
+          draft.relationUpdateUnsetFields = isRelationUpdate
+            ? getRelationUpdateUnsetFields(base, changedRelation)
+            : undefined;
+        });
         store.setRelation(newRelation);
       },
       delete: newRelation => {
@@ -316,101 +523,9 @@ function createMutator(store: GeoStore): Mutator {
       },
     },
     images: {
-      createAndLink: async ({
-        file,
-        fromEntityId,
-        fromEntityName,
-        relationPropertyId,
-        relationPropertyName,
-        spaceId,
-      }) => {
-        // Create the image entity using the Graph API
-        // Use TESTNET network to upload to Pinata via alternative gateway
-        const { id: imageId, ops: createImageOps } = await Graph.createImage({
-          blob: file,
-          network: 'TESTNET',
-        });
-
-        for (const op of createImageOps) {
-          if (op.type === 'createRelation') {
-            store.setRelation({
-              id: toHexId(op.id),
-              entityId: op.entity ? toHexId(op.entity) : toHexId(op.from),
-              fromEntity: {
-                id: toHexId(op.from),
-                name: null,
-              },
-              type: {
-                id: toHexId(op.relationType),
-                name: 'Image',
-              },
-              toEntity: {
-                id: toHexId(op.to),
-                name: 'Image',
-                value: toHexId(op.to),
-              },
-              spaceId,
-              position: Position.generate(),
-              verified: false,
-              renderableType: 'RELATION',
-            });
-          } else if (op.type === 'createEntity') {
-            for (const pv of op.values) {
-              store.setValue({
-                id: ID.createValueId({
-                  entityId: toHexId(op.id),
-                  propertyId: toHexId(pv.property),
-                  spaceId,
-                }),
-                entity: {
-                  id: toHexId(op.id),
-                  name: null,
-                },
-                property: {
-                  id: toHexId(pv.property),
-                  name: 'Image Property',
-                  dataType: 'TEXT',
-                  renderableType: 'URL',
-                },
-                spaceId,
-                value: extractValueString(pv.value),
-              });
-            }
-          }
-        }
-
-        // Create relation from parent entity to image entity
-        const relationId = ID.createEntityId();
-        const imageIdStr = toHexId(imageId);
-        store.setRelation({
-          id: relationId,
-          entityId: ID.createEntityId(),
-          fromEntity: {
-            id: fromEntityId,
-            name: fromEntityName || '',
-          },
-          type: {
-            id: relationPropertyId,
-            name: relationPropertyName || '',
-          },
-          toEntity: {
-            id: imageIdStr,
-            name: null,
-            value: imageIdStr,
-          },
-          spaceId,
-          position: Position.generate(),
-          verified: false,
-          renderableType: 'IMAGE',
-        });
-
-        return { imageId: imageIdStr, relationId };
-      },
+      createAndLink: createAndLinkImage,
       createOnly: async ({ file, spaceId }) => {
-        const { id: imageId, ops: createImageOps } = await Graph.createImage({
-          blob: file,
-          network: 'TESTNET',
-        });
+        const { id: imageId, ops: createImageOps } = await createGeoImage({ blob: file });
 
         for (const op of createImageOps) {
           if (op.type === 'createRelation') {
@@ -437,6 +552,7 @@ function createMutator(store: GeoStore): Mutator {
             });
           } else if (op.type === 'createEntity') {
             for (const pv of op.values) {
+              const dataType = graphValueDataType(pv.value);
               store.setValue({
                 id: ID.createValueId({
                   entityId: toHexId(op.id),
@@ -450,8 +566,8 @@ function createMutator(store: GeoStore): Mutator {
                 property: {
                   id: toHexId(pv.property),
                   name: 'Image Property',
-                  dataType: 'TEXT',
-                  renderableType: 'URL',
+                  dataType,
+                  renderableType: dataType === 'TEXT' ? 'URL' : null,
                 },
                 spaceId,
                 value: extractValueString(pv.value),
@@ -472,12 +588,9 @@ function createMutator(store: GeoStore): Mutator {
         relationPropertyName,
         spaceId,
       }) => {
-        // Create the video entity using the Graph API (uses same upload mechanism as images)
-        // Use TESTNET network to upload to Pinata via alternative gateway
-        const { id: videoId, ops: createVideoOps } = await Graph.createImage({
-          blob: file,
-          network: 'TESTNET',
-        });
+        // Create the video entity via the configured Geo client (uses the same
+        // upload mechanism as images)
+        const { id: videoId, ops: createVideoOps } = await createGeoImage({ blob: file });
 
         let ipfsUrl: string | undefined;
         for (const op of createVideoOps) {
@@ -563,6 +676,8 @@ function createMutator(store: GeoStore): Mutator {
           verified: false,
           renderableType: 'VIDEO',
         });
+
+        saveVideoKeyframe(file, { fromEntityId: videoIdStr, spaceId, link: createAndLinkImage });
 
         return { videoId: videoIdStr, relationId };
       },

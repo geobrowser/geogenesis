@@ -102,8 +102,35 @@ describe('detectWeb2URLsInMarkdown', () => {
   });
 
   it('should detect auto-generated markdown links', () => {
-    const text = '[https://www.markdownguide.org/basic-syntax/#links](https://www.markdownguide.org/basic-syntax/#links)';
+    const text =
+      '[https://www.markdownguide.org/basic-syntax/#links](https://www.markdownguide.org/basic-syntax/#links)';
     const result = detectWeb2URLsInMarkdown(text);
-    expect(result).toEqual(['[https://www.markdownguide.org/basic-syntax/#links](https://www.markdownguide.org/basic-syntax/#links)']);
+    expect(result).toEqual([
+      '[https://www.markdownguide.org/basic-syntax/#links](https://www.markdownguide.org/basic-syntax/#links)',
+    ]);
+  });
+
+  it('should detect standalone www URLs without a scheme', () => {
+    const text = 'Visit www.rhcp.com/albums for the list';
+    const result = detectWeb2URLsInMarkdown(text);
+    expect(result).toEqual(['www.rhcp.com/albums']);
+  });
+
+  it('should NOT linkify bare domains without http/https or www', () => {
+    const text = 'Email me at example.com or check the site';
+    const result = detectWeb2URLsInMarkdown(text);
+    expect(result).toEqual([]);
+  });
+
+  it('should NOT linkify filenames that look like domains', () => {
+    const text = 'Edit package.json and index.ts then run README.md instructions';
+    const result = detectWeb2URLsInMarkdown(text);
+    expect(result).toEqual([]);
+  });
+
+  it('should NOT linkify prose with a missing space after a period', () => {
+    const text = 'I went home.Then I left';
+    const result = detectWeb2URLsInMarkdown(text);
+    expect(result).toEqual([]);
   });
 });

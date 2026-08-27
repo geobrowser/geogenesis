@@ -81,6 +81,10 @@ const subtopicsQuery = (spaceId: string) => `
   }
 `;
 
+/**
+ * Returns topics declared as subtopics of this space (governance subspace-topic links).
+ * Used by the space overview gallery — not the Subtopics relation tree in the dialog.
+ */
 export async function fetchSubtopics(spaceId: string): Promise<TopicUsage[]> {
   if (!validateSpaceId(spaceId)) {
     throw new Error(`Invalid space ID provided for subtopics fetch: ${spaceId}`);

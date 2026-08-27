@@ -5,13 +5,15 @@ import { ReactRenderer } from '@tiptap/react';
 import * as React from 'react';
 
 import { EditorCode } from '~/design-system/icons/editor-code';
+import { EditorCollection } from '~/design-system/icons/editor-collection';
 import { EditorFormula } from '~/design-system/icons/editor-formula';
 import { EditorH1 } from '~/design-system/icons/editor-h1';
 import { EditorH2 } from '~/design-system/icons/editor-h2';
 import { EditorH3 } from '~/design-system/icons/editor-h3';
 import { EditorImage } from '~/design-system/icons/editor-image';
 import { EditorList } from '~/design-system/icons/editor-list';
-import { EditorTable } from '~/design-system/icons/editor-table';
+import { EditorQuery } from '~/design-system/icons/editor-query';
+import { EditorRanking } from '~/design-system/icons/editor-ranking';
 import { EditorText } from '~/design-system/icons/editor-text';
 import { EditorVideo } from '~/design-system/icons/editor-video';
 import { Link } from '~/design-system/icons/link';
@@ -147,9 +149,9 @@ export const getGlobalSpaceId = () => globalSpaceId;
 // Command Items
 // ============================================================================
 
-const tableCommandItem: CommandSuggestionItem = {
-  icon: <EditorTable />,
-  title: 'Data',
+const collectionDataBlockCommandItem: CommandSuggestionItem = {
+  icon: <EditorCollection />,
+  title: 'Collection',
   command: ({ editor, range }) => {
     editor
       .chain()
@@ -157,6 +159,47 @@ const tableCommandItem: CommandSuggestionItem = {
       .deleteRange({ from: range.from, to: range.to })
       .insertContent({
         type: 'tableNode',
+        attrs: { initialDataSource: 'COLLECTION', filtersOpenOnCreate: true },
+      })
+      .createParagraphNear()
+      .blur()
+      .focus()
+      .run();
+  },
+};
+
+const queryDataBlockCommandItem: CommandSuggestionItem = {
+  icon: <EditorQuery />,
+  title: 'Query',
+  command: ({ editor, range }) => {
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: range.from, to: range.to })
+      .insertContent({
+        type: 'tableNode',
+        attrs: { initialDataSource: 'QUERY', querySetupCompleted: false, filtersOpenOnCreate: true },
+      })
+      .createParagraphNear()
+      .blur()
+      .focus()
+      .run();
+  },
+};
+
+const rankingDataBlockCommandItem: CommandSuggestionItem = {
+  icon: <EditorRanking />,
+  title: 'Ranking',
+  command: ({ editor, range }) => {
+    editor
+      .chain()
+      .focus()
+      .deleteRange({ from: range.from, to: range.to })
+      .insertContent({
+        type: 'rankingNode',
+        attrs: {
+          rankingSetupCompleted: false,
+        },
       })
       .createParagraphNear()
       .blur()
@@ -194,7 +237,7 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
   textCommandItem,
   {
     icon: <EditorList />,
-    title: 'Bullet points',
+    title: 'Bullet list',
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).toggleBulletList().run();
     },
@@ -254,7 +297,7 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
           type: 'image',
         })
         .createParagraphNear()
-        .blur() 
+        .blur()
         .focus()
         .run();
     },
@@ -303,7 +346,9 @@ export const getCommandItems = (spaceId: string): CommandSuggestionItem[] => [
       );
     },
   },
-  tableCommandItem,
+  collectionDataBlockCommandItem,
+  queryDataBlockCommandItem,
+  rankingDataBlockCommandItem,
 ];
 
 // For backward compatibility if needed

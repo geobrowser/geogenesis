@@ -6,8 +6,10 @@ import { Metadata } from 'next';
 
 import { notFound } from 'next/navigation';
 
+import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
+import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { firstLine } from '~/core/opengraph';
-import { EditorProvider } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TabEntity } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
@@ -19,8 +21,11 @@ import { Spacer } from '~/design-system/spacer';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
+import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { EntityTabs } from '~/partials/entity-page/entity-tabs';
+import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
+import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntity, cachedFetchEntityPage } from './cached-fetch-entity';
 
@@ -71,20 +76,27 @@ export default async function ProfileLayout(props: Props) {
 
   return (
     <EntityStoreProvider id={entityId} spaceId={spaceId}>
-      <EditorProvider
+      <RouteEditorProvider
         id={profile.id}
         spaceId={spaceId}
         initialBlocks={profile.blocks}
         initialBlockRelations={profile.blockRelations}
+        initialTabs={profile.tabs}
+        initialCollectionItems={profile.initialCollectionItems}
       >
         <EntityPageCover avatarUrl={profile.avatarUrl} coverUrl={profile.coverUrl} />
         <EntityPageContentContainer>
           <div className="space-y-2">
             <EditableHeading spaceId={spaceId} entityId={entityId} />
-            <EntityPageMetadataHeader id={profile.id} spaceId={spaceId} />
+            <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />
+            <EntityPageMetadataHeader id={profile.id} spaceId={spaceId} isVoteable />
           </div>
 
           <Spacer height={40} />
+
+          <PersonalProfileSuggestedTaskSync entityId={entityId} spaceId={spaceId} />
+          <PersonalProfileSuggestedCard spaceId={spaceId} entityId={entityId} />
+
           <React.Suspense fallback={null}>
             <EntityTabs
               entityId={entityId}
@@ -98,7 +110,7 @@ export default async function ProfileLayout(props: Props) {
 
           {children}
         </EntityPageContentContainer>
-      </EditorProvider>
+      </RouteEditorProvider>
     </EntityStoreProvider>
   );
 }
@@ -116,6 +128,8 @@ async function getProfilePage(
   blockRelations: Relation[];
   tabEntities: TabEntity[];
   tabRelations: Relation[];
+  tabs: Tabs;
+  initialCollectionItems: Record<string, Entity[]>;
 }> {
   const person = await cachedFetchEntity(entityId, spaceId);
 
@@ -131,6 +145,8 @@ async function getProfilePage(
       blockRelations: [],
       tabEntities: [],
       tabRelations: [],
+      tabs: {},
+      initialCollectionItems: {},
     };
   }
 
@@ -148,10 +164,38 @@ async function getProfilePage(
 
   // Re-order entities to match the sorted tabIds order
   const tabEntityMap = new Map(fetchedTabEntities.map(e => [e.id, e]));
-  const tabEntities: TabEntity[] = tabIds
-    .map(id => tabEntityMap.get(id))
-    .filter((e): e is Entity => e != null)
-    .map(e => ({ id: e.id, name: e.name }));
+  const orderedTabEntities = tabIds.map(id => tabEntityMap.get(id)).filter((e): e is Entity => e != null);
+
+  const tabEntities: TabEntity[] = orderedTabEntities.map(e => ({ id: e.id, name: e.name }));
+
+  const tabBlocks = await Promise.all(
+    orderedTabEntities.map(async entity => {
+      const tabBlockRelations = entity?.relations.filter(r => r.type.id === SystemIds.BLOCKS) ?? [];
+      const tabBlockEntityIds = tabBlockRelations.map(r => r.toEntity.id);
+      const tabBlockRelationEntityIds = tabBlockRelations.map(r => r.entityId).filter(Boolean);
+      const allTabBlockIds = [...new Set([...tabBlockEntityIds, ...tabBlockRelationEntityIds])];
+
+      return allTabBlockIds.length > 0 ? await cachedFetchEntitiesBatch(allTabBlockIds, spaceId) : [];
+    })
+  );
+
+  const tabs: Tabs = {};
+  orderedTabEntities.forEach((entity, index) => {
+    tabs[entity.id] = {
+      entity,
+      blocks: tabBlocks[index],
+    };
+  });
+
+  const allBlocks = [...blocks, ...tabBlocks.flat()];
+  const allBlockRelations = [
+    ...(blockRelations ?? []),
+    ...orderedTabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
+  ];
+  const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
+    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
+  ]);
 
   return {
     ...person,
@@ -159,8 +203,12 @@ async function getProfilePage(
     avatarUrl: Entities.avatar(person.relations),
     coverUrl: Entities.cover(person.relations),
     blockRelations: blockRelations,
-    blocks,
+    // Shown-column properties ride along with the blocks so the editor hydrates them in the same
+    // pass — a gallery needs the dimensions on them to size its cards on the first paint.
+    blocks: [...blocks, ...shownPropertyEntities],
     tabEntities,
     tabRelations,
+    tabs,
+    initialCollectionItems,
   };
 }

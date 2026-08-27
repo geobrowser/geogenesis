@@ -1,60 +1,91 @@
-import { cookies } from 'next/headers';
+'use client';
+
+import * as React from 'react';
+
 import pluralize from 'pluralize';
 
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { type ActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
+import { type SpaceParticipantsPage } from '~/core/space-members/fetch-space-participants-page';
+import {
+  useInfiniteScrollSentinel,
+  useSpaceParticipantsInfinite,
+} from '~/core/space-members/use-space-participants-infinite';
 
-import { getHasRequestedSpaceMembership } from '~/partials/space-page/get-has-requested-space-membership';
+import { Skeleton } from '~/design-system/skeleton';
 
-import { getIsMemberForSpace } from './get-is-member-for-space';
-import { getMembersForSpace } from './get-members-for-space';
 import { MemberRow } from './space-member-row';
 import { SpaceMembersPopoverMemberRequestButton } from './space-members-popover-members-request-button';
 
 interface Props {
   spaceId: string;
   isPublicSpace: boolean;
+  isMember: boolean;
+  isEditor: boolean;
+  memberRequest: ActiveMemberRequest | null;
+  initialParticipantsPage?: SpaceParticipantsPage;
 }
 
-export async function SpaceMembersContent({ spaceId, isPublicSpace }: Props) {
-  const connectedAddress = (await cookies()).get(WALLET_ADDRESS)?.value;
+export function SpaceMembersContent({
+  spaceId,
+  isPublicSpace,
+  isMember,
+  isEditor,
+  memberRequest,
+  initialParticipantsPage,
+}: Props) {
+  const { participants, totalCount, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } =
+    useSpaceParticipantsInfinite({
+      spaceId,
+      kind: 'members',
+      initialPage: initialParticipantsPage,
+    });
 
-  // For now we use editors for both editors and members until we have the new membership
-  const [{ allMembers, totalMembers }, isEditor, hasRequestedSpaceMembership] = await Promise.all([
-    getMembersForSpace(spaceId),
-    getIsMemberForSpace(spaceId, connectedAddress),
-    getHasRequestedSpaceMembership(spaceId, connectedAddress),
-  ]);
+  const sentinelRef = useInfiniteScrollSentinel({ hasNextPage, isFetchingNextPage, fetchNextPage });
 
   return (
     <div className="z-10 w-[356px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
       <div className="max-h-[265px] overflow-hidden overflow-y-auto">
-        {allMembers.map(e => (
-          <MemberRow key={e.id} user={e} />
-        ))}
+        {isLoading ? (
+          <ParticipantRowSkeletons />
+        ) : (
+          <>
+            {participants.map(p => (
+              <MemberRow key={p.id} user={p} />
+            ))}
+            {hasNextPage ? <div ref={sentinelRef} className="h-px" /> : null}
+            {isFetchingNextPage ? <ParticipantRowSkeletons count={3} /> : null}
+          </>
+        )}
       </div>
       <div className="flex items-center justify-between p-2">
         <p className="text-smallButton text-text">
-          {totalMembers} {pluralize('member', totalMembers)}
+          {totalCount} {pluralize('member', totalCount)}
         </p>
         {isPublicSpace && (
           <>
-            {isEditor ? (
+            {isMember ? (
               <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-                {connectedAddress ? 'Leave space' : 'Sign in to join'}
+                Leave space
               </button>
-            ) : connectedAddress ? (
-              <SpaceMembersPopoverMemberRequestButton
-                spaceId={spaceId}
-                hasRequestedSpaceMembership={hasRequestedSpaceMembership}
-              />
-            ) : (
-              <button className="text-smallButton text-grey-04 transition-colors duration-75 hover:text-text">
-                Sign in to join
-              </button>
+            ) : isEditor ? null : (
+              <SpaceMembersPopoverMemberRequestButton spaceId={spaceId} memberRequest={memberRequest} />
             )}
           </>
         )}
       </div>
     </div>
+  );
+}
+
+function ParticipantRowSkeletons({ count = 5 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="flex items-center gap-2 p-2">
+          <Skeleton className="h-8 w-8 rounded-full" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+      ))}
+    </>
   );
 }

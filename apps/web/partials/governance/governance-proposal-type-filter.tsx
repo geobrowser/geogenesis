@@ -37,8 +37,7 @@ export function GovernanceProposalTypeFilter({ spaceId }: Props) {
       onOpenChange={setIsMenuOpen}
       asChild
       trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
-      align="start"
-      sideOffset={-8} // not sure why, but this is necessary for proper gap spacing
+      className="min-w-[200px]"
     >
       <Link
         href={`${baseHref}?proposalType=all`}

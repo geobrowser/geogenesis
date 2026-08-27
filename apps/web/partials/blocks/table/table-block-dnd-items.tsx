@@ -16,6 +16,7 @@ import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import React from 'react';
 
 import { Source } from '~/core/blocks/data/source';
+import type { BlockMainMedia } from '~/core/hooks/use-block-main-media';
 import { Property, Relation, Row } from '~/core/types';
 
 import { PositionBox } from '~/design-system/position-box';
@@ -29,9 +30,12 @@ export type RenderItemProps = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   properties?: Record<string, Property>;
+  mainMedia?: BlockMainMedia | null;
   source: Source;
   isPlaceholder: boolean;
   autoFocus?: boolean;
+  /** Bumps when user clicks "+" so Find or create refocuses even if the row already exists. */
+  placeholderFocusKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
@@ -50,6 +54,7 @@ export type DndItemsConfig = {
 export type TableBlockDndItemsProps = {
   spaceId: string;
   propertiesSchema?: Record<string, Property>;
+  mainMedia?: BlockMainMedia | null;
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   source: Source;
@@ -62,6 +67,7 @@ export type TableBlockDndItemsProps = {
   pageNumber: number;
   pageSize: number;
   shouldAutoFocusPlaceholder?: boolean;
+  placeholderFocusKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
   config: DndItemsConfig;
 };
@@ -73,6 +79,7 @@ export const TableBlockDndItems = ({
   onChangeEntry,
   onLinkEntry,
   propertiesSchema,
+  mainMedia,
   source,
   onUpdateRelation,
   relations,
@@ -81,6 +88,7 @@ export const TableBlockDndItems = ({
   pageNumber,
   pageSize,
   shouldAutoFocusPlaceholder = false,
+  placeholderFocusKey = 0,
   collectionTypeFilters,
   config,
 }: TableBlockDndItemsProps) => {
@@ -191,8 +199,10 @@ export const TableBlockDndItems = ({
     onChangeEntry,
     onLinkEntry,
     properties: propertiesSchema,
+    mainMedia,
     source,
     collectionTypeFilters,
+    placeholderFocusKey,
   };
 
   const resolvedOuterClassName =
@@ -209,6 +219,7 @@ export const TableBlockDndItems = ({
             row,
             isPlaceholder: true,
             autoFocus: shouldAutoFocusPlaceholder,
+            placeholderFocusKey,
           })}
         </React.Fragment>
       ))}

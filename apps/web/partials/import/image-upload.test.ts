@@ -148,7 +148,12 @@ describe('buildImageValuesAndRelations', () => {
           {
             id: 'val-1',
             entity: { id: 'img-entity-1', name: null },
-            property: { id: 'image-url-prop', name: 'Image URL', dataType: 'TEXT' as const, renderableType: 'URL' as const },
+            property: {
+              id: 'image-url-prop',
+              name: 'Image URL',
+              dataType: 'TEXT' as const,
+              renderableType: 'URL' as const,
+            },
             spaceId: 'space-1',
             value: 'ipfs://bafkrei123',
             isLocal: true,

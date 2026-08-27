@@ -51,5 +51,9 @@ export const BacklinksServerContainer = async ({ entityId }: BacklinksServerCont
 
   backlinks.sort(compareBySpaceRank(b => b.primarySpace.id));
 
+  if (backlinks.length === 0) {
+    return null;
+  }
+
   return <Backlinks backlinks={backlinks} />;
 };

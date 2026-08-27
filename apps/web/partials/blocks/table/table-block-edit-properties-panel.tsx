@@ -18,10 +18,11 @@ import { useSource } from '~/core/blocks/data/use-source';
 import { useView } from '~/core/blocks/data/use-view';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getSchemaFromTypeIds } from '~/core/database/entities';
+import { ID } from '~/core/id';
 import { getProperties } from '~/core/io/queries';
 import { useQueryEntityAsync } from '~/core/sync/use-store';
 
-import { Checkbox } from '~/design-system/checkbox';
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { Dots } from '~/design-system/dots';
 import { GeoImage } from '~/design-system/geo-image';
 import { EntitySmall } from '~/design-system/icons/entity-small';
@@ -161,7 +162,10 @@ function DefaultPropertySelector() {
       const typeFilters = filterState.filter(f => f.columnId === SystemIds.TYPES_PROPERTY).map(f => ({ id: f.value }));
       const spaceIds = filterState.filter(f => f.columnId === SystemIds.SPACE_FILTER).map(f => f.value);
       if (!spaceIds.includes(spaceId)) spaceIds.push(spaceId);
-      const schema = await getSchemaFromTypeIds(typeFilters, spaceIds);
+      // Union every space iteration of a multi-space type so its non-root-space
+      // properties are addable as columns too, matching the sort/filter menus
+      // (GEO-2202). Without this the column picker is Root-space only.
+      const schema = await getSchemaFromTypeIds(typeFilters, spaceIds, { includeAllTypeSpaces: true });
 
       return schema;
     },
@@ -270,7 +274,7 @@ function PropertySelector({ entityIds, where }: PropertySelectorProps) {
           <MenuItem key={p.id} onClick={() => onSelectProperty(p)}>
             <div className="flex w-full items-center justify-between">
               <span className="text-button text-grey-04">{p.name}</span>
-              <Checkbox checked={isSelected} />
+              <CheckboxVisual checked={isSelected} />
             </div>
           </MenuItem>
         );
@@ -285,7 +289,7 @@ type ToggleColumnProps = {
 
 function ToggleColumn({ column }: ToggleColumnProps) {
   const { toggleProperty: setColumn, shownColumnIds } = useView();
-  const isShown = shownColumnIds.includes(column.id);
+  const isShown = shownColumnIds.some(sid => ID.equals(sid, column.id));
 
   const onToggleColumn = async () => {
     setColumn(column);

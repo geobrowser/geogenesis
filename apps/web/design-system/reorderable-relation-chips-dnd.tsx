@@ -77,12 +77,11 @@ export default function ReorderableRelationChipsDnd({
     setActiveId(null);
   };
 
-  // Don't render reorder component if there's only one or no relations
   if (sortedRelations.length <= 1) {
     return (
       <>
         {sortedRelations.map(relation => (
-          <div key={`relation-${relation.id}`} className="min-w-0 max-w-full">
+          <div key={`relation-${relation.id}`} className="max-w-full min-w-0">
             <LinkableRelationChip
               isEditing
               small
@@ -117,11 +116,9 @@ export default function ReorderableRelationChipsDnd({
       onDragEnd={handleDragEnd}
     >
       <SortableContext items={sortedRelations.map(r => r.id)} strategy={horizontalListSortingStrategy}>
-        <div className="flex min-w-0 w-full max-w-full flex-wrap gap-1">
-          {sortedRelations.map(relation => (
-            <SortableRelationChip key={relation?.id} relation={relation} spaceId={spaceId} />
-          ))}
-        </div>
+        {sortedRelations.map(relation => (
+          <SortableRelationChip key={relation?.id} relation={relation} spaceId={spaceId} />
+        ))}
       </SortableContext>
 
       <DragOverlay>
@@ -191,26 +188,32 @@ function SortableRelationChip({ relation, spaceId }: SortableRelationChipProps) 
     <div
       ref={setNodeRef}
       style={style}
-      className="relative inline-block min-w-0 max-w-full"
+      {...attributes}
+      className="relative inline-block max-w-full min-w-0"
       onClick={handleClick}
       onClickCapture={handleClick}
     >
-      <div {...attributes} {...listeners} className="inline-flex min-w-0 max-w-full items-center">
-        <LinkableRelationChip
-          isEditing
-          small
-          truncateLabel
-          onDelete={() => storage.relations.delete(relation)}
-          currentSpaceId={spaceId}
-          entityId={relation.toEntity.id}
-          relationId={relation.id}
-          relationEntityId={relation.entityId}
-          spaceId={relation.toSpaceId}
-          verified={relation.verified}
-        >
-          {relation.toEntity.name}
-        </LinkableRelationChip>
-      </div>
+      <LinkableRelationChip
+        isEditing
+        small
+        truncateLabel
+        sortableDragHandleListeners={listeners}
+        onDelete={() => storage.relations.delete(relation)}
+        onDone={result => {
+          storage.relations.update(relation, draft => {
+            draft.toSpaceId = result.space;
+            draft.verified = result.verified;
+          });
+        }}
+        currentSpaceId={spaceId}
+        entityId={relation.toEntity.id}
+        relationId={relation.id}
+        relationEntityId={relation.entityId}
+        spaceId={relation.toSpaceId}
+        verified={relation.verified}
+      >
+        {relation.toEntity.name}
+      </LinkableRelationChip>
     </div>
   );
 }

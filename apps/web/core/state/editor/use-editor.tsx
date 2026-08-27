@@ -8,20 +8,39 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 import { useSearchParams } from 'next/navigation';
 
+import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { storage } from '~/core/sync/use-mutate';
-import { getRelations, getValues, useValues } from '~/core/sync/use-store';
+import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
+import { store } from '~/core/sync/use-sync-engine';
 import { Relation, RenderableEntityType, Value } from '~/core/types';
 import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 
 import type { ServerBlock } from '~/partials/editor/server-content';
 
+import { dataBlockViewFromRelations } from '../../blocks/data/data-block-view';
+import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
+import { readBlockPageSizeFromValues } from '../../blocks/data/parse-block-page-size';
+import { readBlockMediaDimensions } from '../../blocks/data/read-block-media-dimensions';
+import { makeInitialRankingBlockRelations } from '../../blocks/ranking/initialize';
+import {
+  RANKING_DATE_PROPERTY_IDS,
+  RANKING_END_PROPERTY_IDS,
+  RANKING_START_PROPERTY_IDS,
+  resolveRankingDate,
+} from '../../blocks/ranking/ranking-block-dates';
+import { isRankingBlockEntity, isRankingSetupConfigured } from '../../blocks/ranking/ranking-block-state';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
-import { useEditorBlocks, useEditorInstance } from './editor-provider';
+import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
+import { makeBlockPosition } from './make-block-position';
 import { markdownToEditorJson } from './markdown-adapter';
+import {
+  PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
+  PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
+} from './profile-overview-tail-placeholder';
 import * as TextEntity from './text-entity';
 import { Content } from './types';
 import { RelationWithBlock } from './use-blocks';
@@ -49,40 +68,12 @@ function makeNewBlockRelation({
 }: MakeNewBlockArgs) {
   const newRelationId = ID.createEntityId();
 
-  const position = nextBlockIds.indexOf(addedBlock.id);
-
-  // @TODO: noUncheckedIndexAccess
-  const beforeBlockIndex = nextBlockIds[position - 1] as string | undefined;
-  const afterBlockIndex = nextBlockIds[position + 1] as string | undefined;
-
-  // Create a unified array with consistent structure for both blockRelations and newBlocks
-  const allRelations = [
-    ...blockRelations.map(r => ({
-      toEntity: { id: r.block.id },
-      // @TODO(migration): default position
-      position: r.position ?? 'a0',
-    })),
-    ...newBlocks.map(b => ({
-      toEntity: { id: b.toEntity.id },
-      // @TODO(migration): default position
-      position: b.position ?? 'a0',
-    })),
-  ].sort((a, b) => (a.position < b.position ? -1 : 1));
-
-  // Check both the existing blocks and any that are created as part of this update
-  // tick. This is necessary as right now we don't update the Geo state until the
-  // user blurs the editor. See the comment earlier in this function.
-  const beforeCollectionItemIndex = allRelations.find(c => c.toEntity.id === beforeBlockIndex)?.position;
-
-  // When the afterCollectionItemIndex is undefined, we need to use the next block of beforeBlockIndex
-  const afterCollectionItemIndex =
-    allRelations.find(c => c.toEntity.id === afterBlockIndex)?.position ??
-    allRelations[allRelations.findIndex(c => c.position === beforeCollectionItemIndex) + 1]?.position;
-
-  const newBlockOrdering = Position.generateBetween(
-    beforeCollectionItemIndex ?? null,
-    afterCollectionItemIndex ?? null
-  );
+  const newBlockOrdering = makeBlockPosition({
+    blockId: addedBlock.id,
+    nextBlockIds,
+    blockRelations,
+    newBlocks,
+  });
 
   const renderableType = ((): RenderableEntityType => {
     switch (tiptapBlock.type) {
@@ -95,6 +86,7 @@ function makeNewBlockRelation({
       case 'codeBlock':
         return 'TEXT';
       case 'tableNode':
+      case 'rankingNode':
         return 'DATA';
       case 'image':
         return 'IMAGE';
@@ -105,8 +97,8 @@ function makeNewBlockRelation({
     }
   })();
 
-  const newRelation: Relation = {
-    spaceId: spaceId,
+  return {
+    spaceId,
     id: newRelationId,
     position: newBlockOrdering,
     verified: false,
@@ -125,9 +117,7 @@ function makeNewBlockRelation({
       id: entityPageId,
       name: null,
     },
-  };
-
-  return newRelation;
+  } satisfies Relation;
 }
 
 interface UpsertBlocksRelationsArgs {
@@ -142,7 +132,7 @@ interface UpsertBlocksRelationsArgs {
 
 // Helper function to create or update the block IDs on an entity
 // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
-const makeBlocksRelations = async ({
+const makeBlocksRelations = ({
   nextBlocks,
   blockRelations,
   spaceId,
@@ -188,22 +178,18 @@ const makeBlocksRelations = async ({
 
   for (const movedBlock of movedBlocks) {
     const relationForMovedBlock = blockRelations.find(r => r.block.id === movedBlock.id);
+    if (!relationForMovedBlock) continue;
 
-    if (relationForMovedBlock) {
-      storage.relations.delete(relationForMovedBlock);
-    }
-
-    const newRelation = makeNewBlockRelation({
-      tiptapBlock: nextBlocks.find(b => b.id === movedBlock.id)!,
-      addedBlock: movedBlock,
+    const position = makeBlockPosition({
+      blockId: movedBlock.id,
       nextBlockIds,
       blockRelations,
-      spaceId,
       newBlocks,
-      entityPageId,
     });
 
-    storage.relations.set(newRelation);
+    storage.relations.update(relationForMovedBlock, draft => {
+      draft.position = position;
+    });
   }
 };
 
@@ -241,10 +227,10 @@ export function useEditorStoreLite() {
 }
 
 export function useEditorStore() {
-  const { id: entityId, spaceId } = useEditorInstance();
+  const { id: entityId, spaceId, initialBlocks } = useEditorInstance();
   const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
 
-  const tabId = useTabId();
+  const tabId = useActiveTabIdForEditor();
   const activeEntityId = tabId ?? entityId;
 
   const { blockRelations, initialBlockEntities } = useEditorBlocks();
@@ -261,25 +247,39 @@ export function useEditorStore() {
     return initialBlockEntities.flatMap(b => b.relations);
   }, [initialBlockEntities]);
 
-  // Subscribe to markdown content changes for all text blocks.
-  // This ensures editorJson re-computes when text content is edited.
+  // Shown-column property entities are only ever attached to the page's own blocks, never to a
+  // tab's, so a tab's data blocks have to look outside their own scope to size their media frame.
+  const mediaPropertySource = React.useMemo(
+    () => (initialBlockEntities === initialBlocks ? initialBlockEntities : [...initialBlockEntities, ...initialBlocks]),
+    [initialBlockEntities, initialBlocks]
+  );
+
   const markdownValues = useValues({
     selector: value => blockIds.includes(value.entity.id) && value.property.id === SystemIds.MARKDOWN_CONTENT,
   });
 
-  /**
-   * Tiptap expects a JSON representation of the editor state, but we store our block state
-   * in a Knowledge Graph-specific data model. We need to map from our KG representation
-   * back to the Tiptap representation whenever the KG data changes.
-   */
+  const blockConfigValues = useValues({
+    selector: value =>
+      blockIds.includes(value.entity.id) &&
+      value.spaceId === spaceId &&
+      (value.property.id === SystemIds.NAME_PROPERTY ||
+        value.property.id === SystemIds.FILTER ||
+        RANKING_DATE_PROPERTY_IDS.has(value.property.id)),
+  });
+
+  const blockTypesRelations = useRelations({
+    selector: relation =>
+      blockIds.includes(relation.fromEntity.id) &&
+      relation.spaceId === spaceId &&
+      relation.type.id === SystemIds.TYPES_PROPERTY,
+  });
+
   const { editorJson, serverBlocks } = React.useMemo(() => {
     const sBlocks: ServerBlock[] = [];
 
     const json = {
       type: 'doc',
       content: blockRelations.flatMap(block => {
-        // Find the markdown value for this block. Prefer local (reactive) values over initial server values.
-        // Local values from markdownValues take precedence since they reflect user edits.
         const markdownValueForBlockId =
           markdownValues.find(v => v.entity.id === block.block.id) ??
           initialBlockValues.find(v => v.entity.id === block.block.id && v.property.id === SystemIds.MARKDOWN_CONTENT);
@@ -349,8 +349,110 @@ export function useEditorStore() {
           ];
         }
 
-        if (toEntity?.type === 'DATA') {
+        const blockTypeRelations = getRelations({
+          mergeWith: initialBlockEntityRelations,
+          selector: r =>
+            r.fromEntity.id === block.block.id &&
+            r.type.id === SystemIds.TYPES_PROPERTY &&
+            r.spaceId === spaceId &&
+            !r.isDeleted,
+        });
+
+        if (isRankingBlockEntity(block.block.id, blockTypeRelations, spaceId)) {
           sBlocks.push({ type: 'data' });
+
+          const configuredFilters = getValues({
+            mergeWith: initialBlockValues,
+            selector: v =>
+              v.entity.id === block.block.id &&
+              v.property.id === SystemIds.FILTER &&
+              v.spaceId === spaceId &&
+              v.value.length > 0 &&
+              !v.isDeleted,
+          });
+          const rankingBlockEntity = initialBlockEntities.find(b => b.id === block.block.id);
+          const blockName = store.getEntity(block.block.id, { spaceId })?.name ?? rankingBlockEntity?.name;
+          const rankingSetupConfigured = isRankingSetupConfigured(
+            block.block.id,
+            blockName,
+            configuredFilters,
+            spaceId
+          );
+          const readRankingDate = (propertyId: string) =>
+            getValues({
+              mergeWith: initialBlockValues,
+              selector: v =>
+                v.entity.id === block.block.id && v.property.id === propertyId && v.spaceId === spaceId && !v.isDeleted,
+            })[0]?.value ?? null;
+          const rankingStartDate = resolveRankingDate(RANKING_START_PROPERTY_IDS, readRankingDate) || null;
+          const rankingEndDate = resolveRankingDate(RANKING_END_PROPERTY_IDS, readRankingDate) || null;
+
+          return [
+            {
+              type: 'rankingNode',
+              attrs: {
+                id: block.block.id,
+                relationId: block.relationId,
+                spaceId,
+                rankingSetupCompleted: rankingSetupConfigured,
+                rankingStartDate,
+                rankingEndDate,
+              },
+            },
+          ];
+        }
+
+        if (toEntity?.type === 'DATA') {
+          // Shape the pre-hydration placeholder exactly like what's about to replace it: same
+          // view, same page size, same card ratio. All three come off the BLOCKS relation entity
+          // and the shown-column properties the server sends down with the page, so a gallery
+          // block never has to flash a table skeleton or a default-ratio one on its way to cards.
+          const blockRelationEntity = initialBlockEntities.find(b => b.id === block.entityId);
+          const viewRelations = getRelations({
+            mergeWith: initialBlockEntityRelations,
+            selector: r =>
+              r.fromEntity.id === block.entityId &&
+              r.type.id === SystemIds.VIEW_PROPERTY &&
+              r.spaceId === spaceId &&
+              !r.isDeleted,
+          });
+
+          sBlocks.push({
+            type: 'data',
+            view: dataBlockViewFromRelations(viewRelations),
+            pageSize: readBlockPageSizeFromValues(blockRelationEntity?.values, spaceId),
+            mediaFrame: blockMediaFrame(readBlockMediaDimensions(block.entityId, mediaPropertySource)),
+          });
+
+          const dataSourceType = getRelations({
+            mergeWith: initialBlockEntityRelations,
+            selector: r =>
+              r.fromEntity.id === block.block.id &&
+              r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE &&
+              r.spaceId === spaceId &&
+              !r.isDeleted,
+          })[0]?.toEntity.id;
+          const isQuerySource =
+            dataSourceType === SystemIds.QUERY_DATA_SOURCE || dataSourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE;
+          const configuredShownColumns = getRelations({
+            mergeWith: initialBlockEntityRelations,
+            selector: r =>
+              r.fromEntity.id === block.entityId &&
+              (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
+              r.spaceId === spaceId &&
+              !r.isDeleted,
+          });
+          const configuredFilters = getValues({
+            mergeWith: initialBlockValues,
+            selector: v =>
+              v.entity.id === block.block.id &&
+              v.property.id === SystemIds.FILTER &&
+              v.spaceId === spaceId &&
+              v.value.length > 0 &&
+              !v.isDeleted,
+          });
+
+          const initialDataSource = isQuerySource ? ('QUERY' as const) : ('COLLECTION' as const);
 
           return [
             {
@@ -359,12 +461,25 @@ export function useEditorStore() {
                 id: block.block.id,
                 relationId: block.relationId,
                 spaceId,
+                initialDataSource,
+                querySetupCompleted: isQuerySource
+                  ? configuredShownColumns.length > 0 || configuredFilters.length > 0
+                  : null,
               },
             },
           ];
         }
 
-        const markdownStr = markdownValueForBlockId?.value || '';
+        let markdownStr = markdownValueForBlockId?.value || '';
+        const mdTrimmed = markdownStr.trim();
+        let restoreTailPlaceholder = false;
+        if (mdTrimmed === PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT) {
+          restoreTailPlaceholder = true;
+          markdownStr = '';
+        } else if (mdTrimmed === PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL) {
+          restoreTailPlaceholder = true;
+          markdownStr = '';
+        }
         sBlocks.push({ type: 'text', markdown: markdownStr });
 
         const parsed = markdownStr ? markdownToEditorJson(markdownStr) : { type: 'doc', content: [] };
@@ -379,6 +494,7 @@ export function useEditorStore() {
                 id: block.block.id,
                 relationId: block.relationId,
                 spaceId,
+                ...(restoreTailPlaceholder ? { tailPlaceholder: true } : {}),
               },
             },
           ];
@@ -406,7 +522,16 @@ export function useEditorStore() {
     }
 
     return { editorJson: json, serverBlocks: sBlocks };
-  }, [blockRelations, spaceId, initialBlockValues, markdownValues]);
+  }, [
+    blockRelations,
+    spaceId,
+    initialBlockValues,
+    initialBlockEntities,
+    mediaPropertySource,
+    markdownValues,
+    blockConfigValues,
+    blockTypesRelations,
+  ]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent) => {
@@ -414,13 +539,20 @@ export function useEditorStore() {
 
       const populatedContent = content.filter(node => {
         const isNonParagraph = node.type !== 'paragraph';
+
+        const paragraphLooksLikePopulatedLine = (t: string) => !t.startsWith('/') || t.startsWith('//');
         const isParagraphWithContent =
           node.type === 'paragraph' &&
           node.content &&
           node.content.length > 0 &&
-          node.content.some(child => child.type !== 'text' || (child.text && !child.text.startsWith('/')));
+          node.content.some(
+            child => child.type !== 'text' || (child.text && paragraphLooksLikePopulatedLine(child.text))
+          );
+        const isTailPlaceholderParagraph =
+          node.type === 'paragraph' &&
+          Boolean(node.attrs && 'tailPlaceholder' in node.attrs && node.attrs.tailPlaceholder);
 
-        return isNonParagraph || isParagraphWithContent;
+        return isNonParagraph || isParagraphWithContent || isTailPlaceholderParagraph;
       });
 
       const newBlocks = populatedContent.map(node => {
@@ -433,13 +565,18 @@ export function useEditorStore() {
 
       const newBlockIds = newBlocks.map(b => b.id);
 
+      // Use `blockRelations` (merges the SSR page→block BLOCKS via useBlocks), not a raw
+      // store read: the page entity hydrates async, so a store read can miss published
+      // blocks mid-load and misclassify them as newly added, duplicating their relations.
+      const currentBlockIds = blockRelations.map(r => r.block.id);
+
       // We also need to check the re-ordering of any blocks. If a block has been reordered then
       // we need to calculate it's new position.
       //
       // Q:
       // Does tiptap copy metadata about the block when you copy-paste it in the editor?
 
-      const { added, removed, moved } = getBlockPositionChanges(blockIds, newBlockIds);
+      const { added, removed, moved } = getBlockPositionChanges(currentBlockIds, newBlockIds);
 
       const addedBlocks = newBlocks.filter(b => added.includes(b.id));
       const movedBlocks = newBlocks.filter(b => moved.includes(b.id));
@@ -462,6 +599,8 @@ export function useEditorStore() {
       for (const node of addedBlocks) {
         const blockType = (() => {
           switch (node.type) {
+            case 'rankingNode':
+              return 'RANKING' as const;
             case 'tableNode':
               return SystemIds.DATA_BLOCK;
             case 'bulletList':
@@ -498,10 +637,48 @@ export function useEditorStore() {
             storage.relations.set(relation);
             break;
           }
-          case SystemIds.DATA_BLOCK: {
-            // @TODO(performance): upsertMany
-            for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId)) {
+          case 'RANKING': {
+            for (const relation of makeInitialRankingBlockRelations(EntityId(node.id), spaceId)) {
               storage.relations.set(relation);
+            }
+            break;
+          }
+          case SystemIds.DATA_BLOCK: {
+            const isQuery = node.attrs?.initialDataSource === 'QUERY';
+            const initialSourceType = isQuery ? ('SPACES' as const) : ('COLLECTION' as const);
+
+            for (const relation of makeInitialDataEntityRelations(EntityId(node.id), spaceId, initialSourceType)) {
+              storage.relations.set(relation);
+            }
+
+            if (isQuery) {
+              const initialFilterString = toGeoFilterState(
+                [
+                  {
+                    columnId: SystemIds.SPACE_FILTER,
+                    columnName: 'Space',
+                    valueType: 'RELATION',
+                    value: spaceId,
+                  },
+                ],
+                'AND'
+              );
+
+              storage.values.set({
+                id: ID.createValueId({
+                  entityId: node.id,
+                  propertyId: SystemIds.FILTER,
+                  spaceId,
+                }),
+                spaceId,
+                entity: { id: node.id, name: null },
+                property: {
+                  id: SystemIds.FILTER,
+                  name: 'Filter',
+                  dataType: 'TEXT',
+                },
+                value: initialFilterString,
+              });
             }
 
             break;
@@ -524,6 +701,55 @@ export function useEditorStore() {
         entityPageId: activeEntityId,
       });
 
+      // New collection data blocks: persist Types + Description as shown columns (with Name)
+      for (const node of addedBlocks) {
+        if (node.type !== 'tableNode') continue;
+        if (node.attrs?.initialDataSource === 'QUERY') continue;
+
+        const blockRel = getRelations({
+          mergeWith: initialBlockEntityRelations,
+          selector: r => r.type.id === SystemIds.BLOCKS && ID.equals(r.toEntity.id, node.id) && r.spaceId === spaceId,
+        })[0];
+
+        if (!blockRel?.entityId) continue;
+
+        const fromId = blockRel.entityId;
+        const existingShown = getRelations({
+          mergeWith: initialBlockEntityRelations,
+          selector: r =>
+            (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
+            ID.equals(r.fromEntity.id, fromId) &&
+            r.spaceId === spaceId,
+        });
+
+        const addShownProperty = (propertyId: string, propertyName: string) => {
+          if (existingShown.some(r => ID.equals(r.toEntity.id, propertyId))) return;
+          storage.relations.set({
+            id: IdUtils.generate(),
+            entityId: IdUtils.generate(),
+            spaceId,
+            position: Position.generate(),
+            renderableType: 'RELATION',
+            type: {
+              id: SystemIds.PROPERTIES,
+              name: 'Properties',
+            },
+            fromEntity: {
+              id: fromId,
+              name: null,
+            },
+            toEntity: {
+              id: propertyId,
+              name: propertyName,
+              value: propertyId,
+            },
+          });
+        };
+
+        addShownProperty(SystemIds.TYPES_PROPERTY, 'Types');
+        addShownProperty(SystemIds.DESCRIPTION_PROPERTY, 'Description');
+      }
+
       /**
        * After creating/deleting any blocks and relations we set any updated
        * ops for the current set of blocks. e.g., updating a text block's name.
@@ -532,6 +758,8 @@ export function useEditorStore() {
         switch (node.type) {
           case 'tableNode':
             // createTableBlockMetadata(node);
+            break;
+          case 'rankingNode':
             break;
           case 'bulletList':
           case 'heading':
@@ -555,7 +783,7 @@ export function useEditorStore() {
         }
       }
     },
-    [blockIds, activeEntityId, spaceId, blockRelations, initialBlockValues, initialBlockEntityRelations]
+    [activeEntityId, spaceId, blockRelations, initialBlockValues, initialBlockEntityRelations]
   );
 
   return {

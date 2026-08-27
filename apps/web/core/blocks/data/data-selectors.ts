@@ -128,7 +128,6 @@ export async function mapSelectorLexiconToSourceEntity(
         cache: queryClient,
         where: { id: { in: relations.map(r => r.toEntity.id) } },
         first: 100,
-        skip: 0,
       });
     }
   }

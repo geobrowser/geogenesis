@@ -1,10 +1,22 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
+
+import { Effect } from 'effect';
+
+import { type SpaceAccess, normalizeSpaceId } from '~/core/access/space-access';
+import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
+import { isPendingPersonalSpaceId } from '~/core/state/pending-personal-space';
+
 import { useHydrated } from './use-hydrated';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSpace } from './use-space';
 
-export function useAccessControl(spaceId: string) {
+type SpaceAccessState = SpaceAccess & {
+  isLoading: boolean;
+};
+
+export function useAccessControl(spaceId: string): SpaceAccessState {
   // We need to wait for the client to check the status of the client-side wallet
   // before setting state. Otherwise there will be client-server hydration mismatches.
   const hydrated = useHydrated();
@@ -13,26 +25,60 @@ export function useAccessControl(spaceId: string) {
   // not their wallet address. Look up the user's personal space ID from SpaceRegistry.
   const { personalSpaceId, isLoading: isLoadingSpaceId } = usePersonalSpaceId();
 
-  const { space } = useSpace(spaceId);
+  const { space, isLoading: isLoadingSpace } = useSpace(spaceId);
+  const normalizedSpaceId = normalizeSpaceId(spaceId);
+  const normalizedPersonalSpaceId = personalSpaceId ? normalizeSpaceId(personalSpaceId) : undefined;
+  const shouldCheckDaoAccess = Boolean(
+    hydrated && spaceId && normalizedPersonalSpaceId && !isLoadingSpace && space?.type === 'DAO'
+  );
+
+  const { data: isMemberOfDao = false, isLoading: isLoadingMember } = useQuery({
+    queryKey: ['space-access-control', 'member', normalizedSpaceId, normalizedPersonalSpaceId],
+    queryFn: ({ signal }) =>
+      Effect.runPromise(getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId!, signal)),
+    enabled: shouldCheckDaoAccess,
+  });
+
+  const { data: isEditorOfDao = false, isLoading: isLoadingEditor } = useQuery({
+    queryKey: ['space-access-control', 'editor', normalizedSpaceId, normalizedPersonalSpaceId],
+    queryFn: ({ signal }) =>
+      Effect.runPromise(getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId!, signal)),
+    enabled: shouldCheckDaoAccess,
+  });
+
+  // The optimistic personal space doesn't exist on the indexer yet, so the
+  // usual editor/owner lookups can't resolve. Its owner is whoever is sitting
+  // on the `pending:` page — grant edit so they can fill in their profile.
+  if (isPendingPersonalSpaceId(spaceId)) {
+    return { isEditor: true, isMember: true, canEdit: true, isLoading: false };
+  }
 
   if (!personalSpaceId || !hydrated || !space || isLoadingSpaceId) {
     return {
       isEditor: false,
       isMember: false,
+      canEdit: false,
+      isLoading: !hydrated || isLoadingSpaceId || isLoadingSpace,
     };
   }
 
   // For personal spaces, the owner is the editor
   if (space.type === 'PERSONAL') {
-    const isOwner = personalSpaceId === spaceId;
+    const isOwner = normalizedPersonalSpaceId === normalizedSpaceId;
     return {
       isEditor: isOwner,
       isMember: isOwner,
+      canEdit: isOwner,
+      isLoading: false,
     };
   }
 
+  const canEdit = isMemberOfDao || isEditorOfDao;
+
   return {
-    isMember: space.members.map(s => s.toLowerCase()).includes(personalSpaceId.toLowerCase()),
-    isEditor: space.editors.map(s => s.toLowerCase()).includes(personalSpaceId.toLowerCase()),
+    isMember: isMemberOfDao,
+    isEditor: isEditorOfDao,
+    canEdit,
+    isLoading: !canEdit && (isLoadingMember || isLoadingEditor),
   };
 }

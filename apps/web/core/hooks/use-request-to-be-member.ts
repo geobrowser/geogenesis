@@ -1,112 +1,85 @@
 'use client';
 
-import { IdUtils } from '@geoprotocol/geo-sdk/lite';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { encodeFunctionData } from 'viem';
 
+import { requestSpaceMembership } from '~/core/access/request-space-membership';
+import { normalizeSpaceId } from '~/core/access/space-access';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { encodeMembershipRequestData } from '~/core/utils/contracts/governance';
-import {
-  EMPTY_SIGNATURE,
-  EMPTY_TOPIC_HEX,
-  GOVERNANCE_ACTIONS,
-  SPACE_REGISTRY_ADDRESS,
-  SpaceRegistryAbi,
-} from '~/core/utils/contracts/space-registry';
+import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseRequestToBeMemberArgs {
   /** The space ID (bytes16 hex without 0x, e.g., UUID format) of the space to join */
   spaceId: string | null;
+  /** Optional display data so the optimistic "pending" row can render a name/image immediately. */
+  space?: { name?: string; image?: string | null };
 }
 
-export function useRequestToBeMember({ spaceId }: UseRequestToBeMemberArgs) {
+export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArgs) {
   const { dispatch } = useStatusBar();
 
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const queryClient = useQueryClient();
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleRequestToBeMember = useCallback(async () => {
     if (!smartAccount) {
-      console.error('No smart account available');
-      return null;
+      throw new Error('No smart account available');
     }
 
     if (!personalSpaceId || !isRegistered) {
-      console.error('User does not have a registered personal space ID');
       dispatch({
         type: 'ERROR',
-        payload: 'You need a registered personal space ID to request membership',
+        payload: isAccountSetupPending
+          ? 'Your account is still finishing setup — try again in a moment.'
+          : 'You need a registered personal space ID to request membership',
       });
-      return null;
+      throw new Error('User does not have a registered personal space ID');
     }
 
-    if (!spaceId) {
-      console.error('No target space ID provided');
-      return null;
+    if (!validateSpaceId(spaceId)) {
+      throw new Error('Invalid target space ID');
     }
 
-    console.log('Requesting to be member', {
-      fromSpaceId: personalSpaceId,
-      toSpaceId: spaceId,
-    });
+    const normalizedSpaceId = normalizeSpaceId(spaceId);
+    const normalizedPersonalSpaceId = normalizeSpaceId(personalSpaceId);
+    const access = await runEffectEither(
+      Effect.all([
+        getIsMemberOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
+        getIsEditorOfSpace(normalizedSpaceId, normalizedPersonalSpaceId),
+      ])
+    );
+    if (Either.isRight(access) && (access.right[0] || access.right[1])) {
+      dispatch({ type: 'ERROR', payload: 'You are already a member of this space' });
+      throw new Error('User is already a member or editor of the space');
+    }
 
-    const writeTxEffect = Effect.gen(function* () {
-      const proposalId = `0x${IdUtils.generate()}` as const;
-      const fromSpaceId = `0x${personalSpaceId}` as const;
-      const toSpaceId = `0x${spaceId}` as const;
+    try {
+      await requestSpaceMembership({ spaceId, personalSpaceId, tx, queryClient, space });
+    } catch (error) {
+      dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeMember });
+      // Necessary to propagate error status to useMutation
+      throw error;
+    }
+  }, [dispatch, smartAccount, personalSpaceId, isRegistered, isAccountSetupPending, spaceId, space, tx, queryClient]);
 
-      // Encode the data payload: (proposalId, newMemberSpaceId)
-      const data = encodeMembershipRequestData(proposalId, fromSpaceId);
-
-      const callData = encodeFunctionData({
-        functionName: 'enter',
-        abi: SpaceRegistryAbi,
-        args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.MEMBERSHIP_REQUESTED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
-      });
-
-      const hash = yield* tx(callData).pipe(
-        Effect.withSpan('web.write.requestMembership'),
-        Effect.annotateSpans({
-          'io.operation': 'request_membership',
-          'space.type': 'DAO',
-          'governance.action': 'membership_requested',
-        })
-      );
-      console.log('Transaction hash: ', hash);
-      return hash;
-    });
-
-    const result = await runEffectEither(writeTxEffect);
-
-    Either.match(result, {
-      onLeft: error => {
-        console.error('Failed to request membership', { spaceId, personalSpaceId }, error);
-        dispatch({ type: 'ERROR', payload: `${error}`, retry: handleRequestToBeMember });
-        // Necessary to propagate error status to useMutation
-        throw error;
-      },
-      onRight: () => console.log('Successfully requested to be member'),
-    });
-  }, [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, tx]);
-
-  const { mutate, status } = useMutation({
-    mutationFn: handleRequestToBeMember,
-  });
+  const { mutate, mutateAsync, status } = useMutation({ mutationFn: handleRequestToBeMember });
 
   return {
     requestToBeMember: mutate,
+    requestToBeMemberAsync: mutateAsync,
     status,
   };
 }

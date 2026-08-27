@@ -26,10 +26,13 @@ import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
+import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
+import { CopyEntityIdButton } from '~/partials/blocks/table/copy-entity-id-button';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
-import { EditableEntityTableColumnHeader } from '~/partials/entity-page/editable-entity-table-column-header';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
+import { PropertyNameLink } from '~/partials/entity-page/property-name-link';
 
 import type { onChangeEntryFn, onLinkEntryFn } from './change-entry';
 import { SortableColumnHeader } from './sortable-column-header';
@@ -39,14 +42,12 @@ const columnHelper = createColumnHelper<Row>();
 
 const ColumnHeader = ({
   column,
-  isEditMode,
   spaceId,
   isLastColumn,
   sort,
   onSort,
 }: {
   column: Property;
-  isEditMode: boolean;
   spaceId: string;
   isLastColumn: boolean;
   sort: ColumnSortState;
@@ -56,34 +57,24 @@ const ColumnHeader = ({
   const label = isNameColumn ? 'Name' : (column.name ?? column.id);
   const isSortable = SORTABLE_DATA_TYPES.includes(column.dataType);
 
-  const editableHeader =
-    isEditMode && !isNameColumn ? (
-      <EditableEntityTableColumnHeader
-        unpublishedColumns={[]}
-        column={column}
-        entityId={column.id}
-        spaceId={spaceId}
-        isLastColumn={isLastColumn}
-      />
-    ) : undefined;
+  const propertyHeader = !isNameColumn ? (
+    <div className={cx('inline-flex min-w-0', isLastColumn ? 'pr-12' : '')}>
+      <PropertyNameLink property={column} spaceId={spaceId} />
+    </div>
+  ) : undefined;
 
   if (!isSortable) {
-    return editableHeader ?? <Text variant="smallTitle">{label}</Text>;
+    return propertyHeader ?? <Text variant="smallTitle">{label}</Text>;
   }
 
   return (
     <SortableColumnHeader columnId={column.id} label={label} sort={sort} onSort={onSort}>
-      {editableHeader}
+      {propertyHeader}
     </SortableColumnHeader>
   );
 };
 
-const formatColumns = (
-  columns: { id: string; name: string | null }[] = [],
-  isEditMode: boolean,
-  unpublishedColumns: { id: string }[],
-  spaceId: string
-) => {
+const formatColumns = (columns: { id: string; name: string | null }[] = [], spaceId: string) => {
   return columns.map((column, i) => {
     return columnHelper.accessor(row => row.columns[column.id], {
       id: column.id,
@@ -93,14 +84,10 @@ const formatColumns = (
         /* Add some right padding for the last column to account for the add new column button */
         const isLastColumn = i === columns.length - 1;
 
-        return isEditMode && !isNameColumn ? (
-          <EditableEntityTableColumnHeader
-            unpublishedColumns={unpublishedColumns}
-            column={column}
-            entityId={column.id}
-            spaceId={spaceId}
-            isLastColumn={isLastColumn}
-          />
+        return !isNameColumn ? (
+          <div className={cx('inline-flex min-w-0', isLastColumn ? 'pr-12' : '')}>
+            <PropertyNameLink property={column} spaceId={spaceId} />
+          </div>
         ) : (
           <Text variant="smallTitle">{isNameColumn ? 'Name' : (column.name ?? column.id)}</Text>
         );
@@ -120,7 +107,11 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
     const propertiesSchema = table.options.meta!.propertiesSchema;
     const source = table.options.meta!.source;
     const shouldAutoFocusPlaceholder = table.options.meta!.shouldAutoFocusPlaceholder;
+    const placeholderFocusKey = table.options.meta!.placeholderFocusKey;
+    const focusRowEntityIdRef = table.options.meta!.focusRowEntityIdRef;
+    const focusRowEntityId = focusRowEntityIdRef?.current ?? null;
     const collectionTypeFilters = table.options.meta!.collectionTypeFilters;
+    const openedWithMainViewEditing = table.options.meta!.openedWithMainViewEditing;
 
     const cellData = getValue<Cell | undefined>();
 
@@ -134,17 +125,26 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
     const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space) : space;
+    // Which *column* this is, as against which property's data lands in it. A mapping can render
+    // one property's value in another's slot — the entity's name in the Roles slot, say
+    // (`mappingToCell`, use-mapping.ts:155) — so `isNameCell` above answers "is this name data",
+    // which is the right question for the space to read it in and the wrong one for where the row's
+    // controls belong. Anything positional has to go by the slot, and `EntityTableCell` already
+    // does: it takes `property` from `propertiesSchema[cellData.slotId]`, so the title decorations
+    // this pairs with are in the slot-named column whatever is rendered elsewhere.
+    const isNameSlot = cellData.slotId === SystemIds.NAME_PROPERTY;
 
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
 
-    const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: space })?.value ?? null;
-    const href = NavUtils.toEntity(nameCell.space ?? space, entityId);
+    const name = useSpaceAwareValue({ entityId, propertyId: SystemIds.NAME_PROPERTY, spaceId })?.value ?? null;
+    const href = NavUtils.toEntity(nameCell.space ?? space, entityId, false);
     const verified = nameCell?.verified;
     const collectionId = nameCell?.collectionId;
     const relationId = nameCell?.relationId;
 
-    const autofocus = Boolean(row.original.placeholder) && isNameCell && shouldAutoFocusPlaceholder;
+    const autofocus =
+      isNameCell && shouldAutoFocusPlaceholder && (Boolean(row.original.placeholder) || focusRowEntityId === entityId);
 
     if (!property) {
       return null;
@@ -159,7 +159,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           property={property}
           isPlaceholderRow={Boolean(row.original.placeholder)}
           name={name}
-          currentSpaceId={space}
+          currentSpaceId={spaceId}
           collectionId={collectionId}
           relationId={relationId}
           toSpaceId={nameCell?.space}
@@ -169,12 +169,14 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
           onAddPlaceholder={onAddPlaceholder}
           source={source}
           autoFocus={autofocus}
+          focusRequestKey={row.original.placeholder || focusRowEntityId === entityId ? placeholderFocusKey : undefined}
           collectionTypeFilters={collectionTypeFilters}
+          openedWithMainViewEditing={openedWithMainViewEditing}
         />
       );
     }
 
-    return (
+    const cellContents = (
       <EntityTableCell
         key={entityId}
         entityId={entityId}
@@ -189,7 +191,54 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         verified={verified}
         onLinkEntry={onLinkEntry}
         source={source}
+        openedWithMainViewEditing={openedWithMainViewEditing}
+        hideHoverActions={isNameSlot && !isEditable}
       />
+    );
+
+    // Browse mode puts the row's controls under the name rather than in a trailing column of
+    // their own, which is where list and bulleted-list views already put them (GEO-2672). The
+    // hover actions ride along so they stop overlaying the title and squeezing it — `EntityTableCell`
+    // is told to leave them out above.
+    if (!isNameSlot || isEditable) {
+      return cellContents;
+    }
+
+    return (
+      <div className="flex min-w-0 flex-col">
+        {cellContents}
+        <div className="mt-1 flex items-center gap-4">
+          {/* The entity's own space, not the block's — a data block lists rows from many spaces,
+              and the Debate button forwards this to geo-chat, which rejects the claim if it does
+              not belong to the space given (GEO-2581). */}
+          <EntityRowActions entityId={entityId} spaceId={nameCell?.space ?? space} />
+          <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 has-data-[state=open]:visible has-data-[state=open]:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+            {source.type === 'COLLECTION' ? (
+              <CollectionRowActions
+                isEditing={false}
+                currentSpaceId={space}
+                entityId={entityId}
+                spaceId={nameCell?.space}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                openedWithMainViewEditing={openedWithMainViewEditing}
+              />
+            ) : (
+              <div className="flex items-center gap-0.5">
+                {/* Query rows have no menu to put this behind, so it sits in the row itself,
+                    ahead of the side panel and drawn to match it (GEO-2679). */}
+                <CopyEntityIdButton entityId={entityId} variant="row" />
+                <DataBlockOpenSidePanelButton
+                  entityId={entityId}
+                  entitySpaceId={nameCell?.space ?? space}
+                  openedWithMainViewEditing={openedWithMainViewEditing}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     );
   },
 };
@@ -208,6 +257,8 @@ type TableBlockTableProps = {
   onAddPlaceholder?: () => void;
   source: Source;
   shouldAutoFocusPlaceholder: boolean;
+  placeholderFocusKey?: number;
+  focusRowEntityIdRef?: React.RefObject<string | null>;
   collectionTypeFilters?: { id: string; name: string | null }[];
   sortState: ColumnSortState;
   onSort: (next: ColumnSortState) => void;
@@ -227,6 +278,8 @@ export const TableBlockTable = ({
   onAddPlaceholder,
   source,
   shouldAutoFocusPlaceholder,
+  placeholderFocusKey = 0,
+  focusRowEntityIdRef,
   collectionTypeFilters,
   sortState,
   onSort,
@@ -237,7 +290,7 @@ export const TableBlockTable = ({
 
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(properties, isEditing, [], space),
+    columns: formatColumns(properties, space),
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -258,13 +311,16 @@ export const TableBlockTable = ({
       propertiesSchema,
       source,
       shouldAutoFocusPlaceholder,
+      placeholderFocusKey,
+      focusRowEntityIdRef,
       collectionTypeFilters,
+      openedWithMainViewEditing: isEditing,
     },
   });
 
   const isEmpty = rows.length === 0;
 
-  if (isEmpty && isFetched && !isLoading) {
+  if (isEmpty && isFetched && !isLoading && source.type !== 'COLLECTION') {
     return (
       <div className="flex min-h-[200px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">
@@ -304,7 +360,7 @@ export const TableBlockTable = ({
 
                 return (
                   <th
-                    key={column.id}
+                    key={`${column.id}-${i}`}
                     className={cx(
                       'group relative p-[10px] text-left',
                       headerClassNames,
@@ -316,7 +372,6 @@ export const TableBlockTable = ({
                       <ColumnHeader
                         key={column.id}
                         column={column}
-                        isEditMode={isEditing}
                         isLastColumn={i === properties.length - 1}
                         spaceId={space}
                         sort={sortState}
@@ -326,7 +381,6 @@ export const TableBlockTable = ({
                   </th>
                 );
               })}
-              {!isEditing && <th className="w-px p-[10px]" />}
             </tr>
           </thead>
           <tbody>
@@ -334,9 +388,9 @@ export const TableBlockTable = ({
               const cells = row.getVisibleCells();
 
               return (
-                <tr key={row.original.entityId ?? index} className="hover:bg-bg">
-                  {cells.map(cell => {
-                    const cellId = `${row.original.entityId}-${cell.column.id}`;
+                <tr key={row.original.entityId ?? index} className="group/table-row hover:bg-bg">
+                  {cells.map((cell, cellIndex) => {
+                    const cellId = `${row.original.entityId}-${cell.column.id}-${cellIndex}`;
                     const isShown = shownColumnIds.includes(cell.column.id);
 
                     return (
@@ -345,11 +399,6 @@ export const TableBlockTable = ({
                       </TableCell>
                     );
                   })}
-                  {!isEditing && (
-                    <TableCell isShown={true} isEditMode={false}>
-                      <EntityVoteButtons entityId={row.original.entityId} spaceId={space} />
-                    </TableCell>
-                  )}
                 </tr>
               );
             })}

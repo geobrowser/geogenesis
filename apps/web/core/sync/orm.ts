@@ -1,22 +1,28 @@
-import { QueryClient } from '@tanstack/react-query';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { type FetchQueryOptions, QueryClient } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 import { dedupeWith } from 'effect/Array';
 
-import { SortOrder } from '~/core/gql/graphql';
+import { type EntitiesOrderBy } from '~/core/gql/graphql';
 import { convertWhereConditionToEntityFilter, extractTypeIdsFromWhere } from '~/core/io/converters';
+import { SortOrder } from '~/core/io/sort-order';
 
 import { readTypes } from '../database/entities';
 import {
+  ENTITY_ID_BATCH_SIZE,
   getAllEntities,
   getBatchEntities,
-  getEntitiesOrderedByProperty,
+  getBatchEntitySpaces,
+  getEntitiesOrderedByPropertyConnection,
   getEntity,
   getEntityNames,
   getRelation,
-  getResults,
+  getResultsPage,
   getSpaces,
+  hasDefaultSearchExcludedType,
 } from '../io/queries';
+import { capSearchQuery } from '../io/search-query';
 import { OmitStrict } from '../types';
 import { Entity, Relation, SearchResult, SpaceEntity } from '../types';
 import { Entities } from '../utils/entity';
@@ -25,10 +31,35 @@ import { hasName } from '../utils/utils';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
-import { GeoStore } from './store';
+import { GeoStore, dedupeRelationsByKey, relationKey } from './store';
 
-function relationKey(r: Relation): string {
-  return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
+/**
+ * Every read the sync layer makes goes through here.
+ *
+ * `staleTime` on the app's `QueryClient` exists for `useQuery` — it decides whether a *mount* or a
+ * *focus* refetches. The same setting also governs `fetchQuery`, where it decides something else
+ * entirely: whether an imperative "go and get this" issues a request at all. A cached key inside
+ * the window returns without touching the network.
+ *
+ * That is the wrong default here. Every call routed through this helper is a deliberate read,
+ * usually to reconcile local state against the indexer, and one silently answered from cache is a
+ * sync that returns pre-write data — wrong in a way nothing renders differently for.
+ *
+ * A helper rather than a spread-in constant on purpose. Spread at each call site, the opt-out is
+ * eight separate things that can be dropped one at a time, and a *new* read added later inherits
+ * the global default by saying nothing. Here there is one place to get it right, `staleTime` is
+ * applied last so a caller cannot reintroduce the window by accident, and a test can assert no
+ * raw `fetchQuery` remains in this layer.
+ *
+ * The cost is real and accepted: an entity synced several times during one page load makes several
+ * requests. Collapsing those belongs to whatever stops the sync being triggered that many times,
+ * not to a cache window wide enough to hide a stale read.
+ */
+export function syncFetchQuery<TData>(
+  cache: QueryClient,
+  options: Omit<FetchQueryOptions<TData>, 'staleTime'>
+): Promise<TData> {
+  return cache.fetchQuery({ ...options, staleTime: 0 } as FetchQueryOptions<TData>);
 }
 
 export function resolveSearchSpaces(
@@ -42,6 +73,66 @@ export function resolveSearchSpaces(
       return spacesById[spaceId] ?? (typeof space === 'string' ? null : space);
     })
     .filter((space): space is SpaceEntity => space !== null);
+}
+
+type SearchResultWithResolvableSpaces = OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> };
+
+export function getSearchResultNameForTopSpace(
+  result: Pick<SearchResult, 'name' | 'namesBySpace'>,
+  spaces: SpaceEntity[]
+): string | null {
+  const topSpaceName = result.namesBySpace?.[spaces[0]?.spaceId ?? ''];
+  if (hasName(topSpaceName)) return topSpaceName ?? null;
+  return hasName(result.name) ? result.name : null;
+}
+
+export function applyKnownEntitySpaces(
+  result: SearchResult,
+  knownEntity: Pick<Entity, 'spaces'> | null | undefined
+): SearchResultWithResolvableSpaces {
+  if (!knownEntity) return result;
+
+  return {
+    ...result,
+    spaces: knownEntity.spaces,
+  };
+}
+
+export function isDisplayableSearchResult(result: Pick<SearchResult, 'name' | 'spaces'>): boolean {
+  return result.spaces.length > 0 && hasName(result.name);
+}
+
+export function isIncludedSearchResult(result: Pick<SearchResult, 'name' | 'spaces' | 'types'>): boolean {
+  return isDisplayableSearchResult(result) && !hasDefaultSearchExcludedType(result.types);
+}
+
+function getLocalSearchResultSpaces(values: Entity['values'], relations: Entity['relations']): string[] {
+  return Entities.spaces(values, relations);
+}
+
+export function mergeResolvableSpaces(
+  remoteSpaces: Array<string | SpaceEntity>,
+  localSpaces: string[]
+): Array<string | SpaceEntity> {
+  const seen = new Set(remoteSpaces.map(space => (typeof space === 'string' ? space : space.spaceId)));
+  const merged = [...remoteSpaces];
+
+  for (const space of localSpaces) {
+    if (!seen.has(space)) {
+      seen.add(space);
+      merged.push(space);
+    }
+  }
+
+  return merged;
+}
+
+function getLocalNamesBySpace(values: Entity['values']): Record<string, string | null> {
+  return Object.fromEntries(
+    values
+      .filter(value => value.property.id === SystemIds.NAME_PROPERTY)
+      .map(value => [value.spaceId, hasName(value.value) ? value.value : null])
+  );
 }
 
 export function mergeRelations(localRelations: Relation[], remoteRelations: Relation[]) {
@@ -64,7 +155,34 @@ export function mergeRelations(localRelations: Relation[], remoteRelations: Rela
     }
   }
 
-  return [...localRelations, ...remotes];
+  // Collapse semantic duplicates (same from/type/to/space) like the store does
+  // on hydrate, so duplicate relations in the published graph don't render the
+  // same block multiple times through `mergeWith` reads.
+  return dedupeRelationsByKey([...localRelations, ...remotes]);
+}
+
+/**
+ * The `where` a fuzzy page is cached and requested under: the caller's, with the query capped.
+ *
+ * Keyed on the raw query instead, every keystroke past the cap mints a fresh entry for a request
+ * that is byte-identical to the last one. Note this collapses the entries, not the requests: these
+ * reads go through `syncFetchQuery`, so a key hit still goes to the network. (Before the client had
+ * global defaults, the same was true for a different reason — a bare `QueryClient` left every page
+ * stale on arrival.) Not re-running the search at all is the *caller's* outer query key, which each
+ * of the four callers now caps for itself.
+ *
+ * Both the cache key and the request arguments read the query from here, so what is cached and
+ * what is fetched cannot disagree about what was asked. Returns the caller's own object when the
+ * cap didn't bite, so an ordinary query keeps its identity and nothing re-renders on a new
+ * reference.
+ */
+export function fuzzyPageCacheWhere(where: WhereCondition): WhereCondition {
+  const fuzzy = where.name?.fuzzy ?? '';
+  const capped = capSearchQuery(fuzzy);
+
+  if (fuzzy === capped) return where;
+
+  return { ...where, name: { ...where.name, fuzzy: capped } };
 }
 
 /**
@@ -156,7 +274,7 @@ export class E {
   }): Promise<{ merged: Entity | null; remote: Entity | null }> {
     if (id === '') return { merged: null, remote: null };
 
-    const cachedEntity = await cache.fetchQuery({
+    const cachedEntity = await syncFetchQuery(cache, {
       queryKey: ['network', 'entity', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getEntity(id, spaceId, signal)),
     });
@@ -178,7 +296,7 @@ export class E {
   }): Promise<Entity | null> {
     if (id === '') return null;
 
-    const cachedEntity = await cache.fetchQuery({
+    const cachedEntity = await syncFetchQuery(cache, {
       queryKey: ['network', 'relation', id, spaceId],
       queryFn: ({ signal }) => Effect.runPromise(getRelation(id, spaceId, signal)),
     });
@@ -191,9 +309,10 @@ export class E {
     cache: QueryClient;
     where: WhereCondition;
     first: number;
-    skip: number;
+    after?: string;
+    offset?: number;
     spaceId?: string;
-    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
+    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
   }): Promise<Entity[]> {
     const { merged } = await this.syncMany(args);
     return merged;
@@ -211,49 +330,60 @@ export class E {
     cache,
     where,
     first,
-    skip,
+    after,
+    offset,
     spaceId,
     sort,
+    orderBy,
   }: {
     store: GeoStore;
     cache: QueryClient;
     where: WhereCondition;
     first: number;
-    skip: number;
+    after?: string;
+    offset?: number;
     spaceId?: string;
-    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string };
-  }): Promise<{ merged: Entity[]; remote: Entity[] }> {
+    sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
+    orderBy?: EntitiesOrderBy[];
+  }): Promise<{ merged: Entity[]; remote: Entity[]; endCursor: string | null; hasNextPage: boolean }> {
     if (where?.id?.in) {
       const entityIds = where.id.in.filter(id => id !== '');
 
       if (sort) {
         const filter = convertWhereConditionToEntityFilter(where);
-        const remoteEntities = await Effect.runPromise(
-          getEntitiesOrderedByProperty({
+        const page = await Effect.runPromise(
+          getEntitiesOrderedByPropertyConnection({
             propertyId: sort.propertyId,
             sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
             dataType: sort.dataType,
+            includeWithoutValue: sort.includeWithoutValue,
             spaceId,
             limit: first,
-            offset: skip,
+            after,
+            offset,
             filter,
           })
         );
 
+        const remoteEntities = page.entities;
         const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
         const merged = remoteEntities
           .map(e => this.merge({ id: e.id, store, spaceId, mergeWith: remoteById.get(e.id) }))
           .filter((e): e is Entity => e !== null);
-        return { merged, remote: remoteEntities };
+        return { merged, remote: remoteEntities, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
       }
 
-      const remoteEntities = await cache.fetchQuery({
-        queryKey: ['network', 'entities', entityIds, spaceId],
-        queryFn: async ({ signal }) => {
-          const entities = await Effect.runPromise(getBatchEntities(entityIds, spaceId, signal));
-          return entities;
-        },
-      });
+      const remoteEntities = (
+        await Promise.all(
+          Array.from({ length: Math.ceil(entityIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
+            const batchIds = entityIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
+            return syncFetchQuery(cache, {
+              queryKey: ['network', 'entities', batchIds, spaceId],
+              queryFn: ({ signal }) => Effect.runPromise(getBatchEntities(batchIds, spaceId, signal)),
+            });
+          })
+        )
+      ).flat();
 
       const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
@@ -266,94 +396,144 @@ export class E {
       const hasAdditionalFilters = Object.keys(where).some(key => key !== 'id');
       if (hasAdditionalFilters) {
         const localQuery = new EntityQuery(nonNullEntities).where(where);
-        return { merged: localQuery.execute(), remote: remoteEntities };
+        return { merged: localQuery.execute(), remote: remoteEntities, endCursor: null, hasNextPage: false };
       }
 
-      return { merged: nonNullEntities, remote: remoteEntities };
+      return { merged: nonNullEntities, remote: remoteEntities, endCursor: null, hasNextPage: false };
     }
 
-    const limit = first;
-    const offset = skip;
     const filter = convertWhereConditionToEntityFilter(where);
     const typeIds = extractTypeIdsFromWhere(where);
 
-    const remoteEntities = sort
+    const page = sort
       ? await Effect.runPromise(
-          getEntitiesOrderedByProperty({
+          getEntitiesOrderedByPropertyConnection({
             propertyId: sort.propertyId,
             sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
             dataType: sort.dataType,
+            includeWithoutValue: sort.includeWithoutValue,
             spaceId,
-            limit,
+            limit: first,
+            after,
             offset,
             filter,
           })
         )
       : await Effect.runPromise(
           getAllEntities({
-            limit,
+            limit: first,
+            after,
             offset,
             filter,
             typeIds,
+            orderBy,
           })
         );
 
-    const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
+    const remoteEntities = page.entities;
 
-    const remoteIds = remoteEntities.map(e => e.id);
-    const dedupedRemoteIds = dedupeWith(remoteIds, (a, b) => a === b);
-    const remoteIdSet = new Set(dedupedRemoteIds);
-    const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
-    const mergedIds = [...dedupedRemoteIds, ...localOnlyIds];
+    // The merged result is exactly the server page, with local edits overlaid
+    // per id by `merge`. Local store entities matching `where` must NOT be
+    // appended here: entities synced into the store while viewing one page
+    // would be re-appended to every other page, duplicating them across
+    // pagination (GEO-2181). Unpublished local entities are surfaced on the
+    // first page by the hook layer (mergeUnpublishedLocalEntities) instead.
+    const dedupedRemoteIds = dedupeWith(
+      remoteEntities.map(e => e.id),
+      (a, b) => a === b
+    );
 
     const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
 
-    const merged = mergedIds
+    const merged = dedupedRemoteIds
       .map(entityId => this.merge({ id: entityId, store, spaceId, mergeWith: remoteById.get(entityId) }))
       .filter((e): e is Entity => e !== null);
 
-    return { merged, remote: remoteEntities };
+    return { merged, remote: remoteEntities, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
   }
 
-  static async findFuzzy({
+  static async findFuzzy(args: {
+    store: GeoStore;
+    cache: QueryClient;
+    where: WhereCondition;
+    first: number;
+    skip: number;
+    additionalSpaceIds?: string[];
+  }): Promise<SearchResult[]> {
+    const page = await this.findFuzzyPage(args);
+    return page.results;
+  }
+
+  /**
+   * Same as findFuzzy but exposes the raw REST /search count alongside the
+   * post-processed results. Paginated callers need this because the post-
+   * processing step filters out entities whose spaces cannot be resolved —
+   * a full 25-row REST page can shrink to <25 results, which would otherwise
+   * be mistaken for "end of the result set".
+   */
+  static async findFuzzyPage({
     store,
     cache,
     where,
     first,
     skip,
+    signal,
+    additionalSpaceIds,
+    includeNonCanonical,
   }: {
     store: GeoStore;
     cache: QueryClient;
     where: WhereCondition;
     first: number;
     skip: number;
-  }): Promise<SearchResult[]> {
-    const nameFilter = where.name?.fuzzy;
-
-    if (!nameFilter) {
-      console.error('findFuzzy requires a query. Received: ', nameFilter);
-      return [];
-    }
+    signal?: AbortController['signal'];
+    additionalSpaceIds?: string[];
+    includeNonCanonical?: boolean;
+  }): Promise<{ results: SearchResult[]; rawCount: number; serverCount: number; total: number }> {
+    // Empty string is intentional here: the REST /search endpoint accepts
+    // an empty query and returns top-N globally ranked entities (optionally
+    // constrained by typeIds / spaceId). Callers that want paginated "every
+    // entity of this type" results pass '' on purpose.
+    // Both the cache key and the request below read the query from here, so the thing cached and
+    // the thing fetched cannot disagree about what was asked.
+    const cacheWhere = fuzzyPageCacheWhere(where);
+    const nameFilter = cacheWhere.name?.fuzzy ?? '';
 
     const spaceIdsFilter = where.space?.id?.equals ? where.space.id.equals : undefined;
     const typeIdsFilter = where.types?.map(t => t.id?.equals).filter(t => t !== undefined) ?? [];
 
-    const remoteEntities = await cache.fetchQuery({
-      queryKey: ['network', 'entities', 'fuzzy', where],
-      queryFn: ({ signal }) =>
+    const page = await syncFetchQuery(cache, {
+      queryKey: [
+        'network',
+        'entities',
+        'fuzzy',
+        'page',
+        cacheWhere,
+        first,
+        skip,
+        additionalSpaceIds,
+        includeNonCanonical,
+      ],
+      queryFn: ({ signal: innerSignal }) =>
         Effect.runPromise(
-          getResults(
+          getResultsPage(
             {
               limit: first,
               offset: skip,
               query: nameFilter,
               spaceId: spaceIdsFilter ? spaceIdsFilter : undefined,
               typeIds: typeIdsFilter,
+              additionalSpaceIds,
+              includeNonCanonical,
             },
-            signal
+            // Prefer the caller-supplied signal so React Query cancellation
+            // on the hook side (query change, unmount) aborts the in-flight
+            // REST /search request instead of letting it run to completion.
+            signal ?? innerSignal
           )
         ),
     });
+    const remoteEntities = page.results;
 
     const localEntities = new EntityQuery(store.getEntities()).where(where).execute();
 
@@ -363,13 +543,26 @@ export class E {
     const remoteIdSet = new Set(dedupedRemoteIds);
     const localOnlyIds = localEntities.filter(e => !remoteIdSet.has(e.id)).map(e => e.id);
     const mergedIds = [...dedupedRemoteIds, ...localOnlyIds];
-    const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
+    const remoteEntityDetails =
+      dedupedRemoteIds.length > 0
+        ? await syncFetchQuery(cache, {
+            queryKey: ['network', 'entities', 'fuzzy', 'entity-spaces', dedupedRemoteIds],
+            queryFn: ({ signal: innerSignal }) =>
+              Effect.runPromise(getBatchEntitySpaces(dedupedRemoteIds, signal ?? innerSignal)),
+          })
+        : [];
+    const remoteEntityDetailsById = new Map(remoteEntityDetails.map(e => [e.id, e]));
+    const remoteById = new Map(
+      remoteEntities.map(e => [e.id as string, applyKnownEntitySpaces(e, remoteEntityDetailsById.get(e.id))])
+    );
 
     const maybeEntities = mergedIds.map(entityId => {
       return mergeSearchResult({ id: entityId, store, mergeWith: remoteById.get(entityId) });
     });
 
-    const entities = maybeEntities.filter(e => e !== null);
+    const entities = maybeEntities
+      .filter(e => e !== null)
+      .filter(entity => !hasDefaultSearchExcludedType(entity.types));
 
     const spaceIds = [
       ...new Set(entities.flatMap(e => e.spaces.map(space => (typeof space === 'string' ? space : space.spaceId)))),
@@ -377,19 +570,14 @@ export class E {
     const typeIds = [...new Set(entities.flatMap(e => e.types.map(t => t.id)))];
 
     const [spaces, typeNames] = await Promise.all([
-      cache.fetchQuery({
+      syncFetchQuery(cache, {
         queryKey: ['network', 'entities', 'fuzzy', 'spaces', spaceIds],
-        queryFn: () =>
-          Effect.runPromise(
-            getSpaces({
-              spaceIds,
-            })
-          ),
+        queryFn: ({ signal: innerSignal }) => Effect.runPromise(getSpaces({ spaceIds }, signal ?? innerSignal)),
       }),
       typeIds.length > 0
-        ? cache.fetchQuery({
+        ? syncFetchQuery(cache, {
             queryKey: ['network', 'entities', 'fuzzy', 'type-names', typeIds],
-            queryFn: () => Effect.runPromise(getEntityNames(typeIds)),
+            queryFn: ({ signal: innerSignal }) => Effect.runPromise(getEntityNames(typeIds, signal ?? innerSignal)),
           })
         : Promise.resolve([]),
     ]);
@@ -397,7 +585,7 @@ export class E {
     const spacesById = Object.fromEntries(spaces.map(space => [space.id, space.entity]));
     const typeNamesById = new Map(typeNames.map(t => [t.id, t.name]));
 
-    return entities
+    const results = entities
       .map(e => {
         const resolvedSpaces = resolveSearchSpaces(e.spaces, spacesById)
           .filter(s => hasName(s.name))
@@ -414,6 +602,7 @@ export class E {
 
         return {
           ...e,
+          name: getSearchResultNameForTopSpace(e, resolvedSpaces),
           types: e.types.map(t => ({
             id: t.id,
             name: t.name ?? typeNamesById.get(t.id) ?? null,
@@ -422,7 +611,9 @@ export class E {
           spaces: resolvedSpaces,
         };
       })
-      .filter(e => e.spaces.length > 0);
+      .filter(isIncludedSearchResult);
+
+    return { results, rawCount: page.rawCount, serverCount: page.serverCount, total: page.total };
   }
 }
 
@@ -433,7 +624,7 @@ function mergeSearchResult({
 }: {
   id: string;
   store: GeoStore;
-  mergeWith?: SearchResult | null;
+  mergeWith?: SearchResultWithResolvableSpaces | null;
 }): (OmitStrict<SearchResult, 'spaces'> & { spaces: Array<string | SpaceEntity> }) | null {
   const remoteEntity = mergeWith;
 
@@ -464,13 +655,18 @@ function mergeSearchResult({
   const name = Entities.name(values) ?? remoteEntity.name;
   const description = Entities.description(values) ?? remoteEntity.description;
   const types = dedupeWith([...readTypes(relations), ...remoteEntity.types], (a, z) => a.id === z.id);
+  const namesBySpace = {
+    ...remoteEntity.namesBySpace,
+    ...getLocalNamesBySpace(values),
+  };
 
   return {
     id: id,
     name,
     description,
     types,
+    namesBySpace,
     typesBySpace: remoteEntity.typesBySpace,
-    spaces: localEntity.spaces,
+    spaces: mergeResolvableSpaces(remoteEntity.spaces, getLocalSearchResultSpaces(values, relations)),
   };
 }

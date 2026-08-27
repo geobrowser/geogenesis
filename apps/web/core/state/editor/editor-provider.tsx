@@ -1,15 +1,18 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as React from 'react';
 
 import { useSearchParams } from 'next/navigation';
 
+import { useRelations } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { OmitStrict } from '~/core/types';
 import { Entity, Relation } from '~/core/types';
 
-import { EntityId } from '../../io/substream-schema';
 import { validateEntityId } from '../../utils/utils';
+import { EntitySidePanelActiveTabContext } from '../entity-side-panel-active-tab';
 import { RelationWithBlock, useBlocks } from './use-blocks';
 
 const EditorContext = React.createContext<OmitStrict<EditorProviderProps, 'children'> | null>(null);
@@ -23,8 +26,12 @@ type EditorProviderProps = {
   initialBlockRelations: Relation[];
   initialTabs?: Tabs;
   initialCollectionItems?: Record<string, Entity[]>;
+  /** Explicit tab selection for this editor surface (URL tab, panel tab, or null for root entity). */
+  activeTabId: string | null;
   children: React.ReactNode;
 };
+
+export type EditorProviderInputProps = Omit<EditorProviderProps, 'activeTabId'>;
 
 export const EditorProvider = ({
   id,
@@ -33,6 +40,7 @@ export const EditorProvider = ({
   initialBlockRelations,
   initialTabs,
   initialCollectionItems,
+  activeTabId,
   children,
 }: EditorProviderProps) => {
   const { store } = useSyncEngine();
@@ -75,8 +83,9 @@ export const EditorProvider = ({
       initialBlocks,
       initialTabs,
       initialCollectionItems,
+      activeTabId,
     };
-  }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs, initialCollectionItems]);
+  }, [id, spaceId, initialBlockRelations, initialBlocks, initialTabs, initialCollectionItems, activeTabId]);
 
   return (
     <EditorContext.Provider value={value}>
@@ -84,6 +93,18 @@ export const EditorProvider = ({
     </EditorContext.Provider>
   );
 };
+
+/** Route surfaces: bind editor tab scope to `?tabId=` in the URL. */
+export function RouteEditorProvider(props: EditorProviderInputProps) {
+  const searchParamTabId = useTabIdFromSearchParams();
+  return <EditorProvider {...props} activeTabId={searchParamTabId} />;
+}
+
+/** Side panel: bind editor tab scope to panel tab state (never the host page URL). */
+export function SidePanelEditorProvider(props: EditorProviderInputProps) {
+  const tabCtx = React.useContext(EntitySidePanelActiveTabContext);
+  return <EditorProvider {...props} activeTabId={tabCtx?.activeTabId ?? null} />;
+}
 
 export function useEditorInstance() {
   const value = React.useContext(EditorContext);
@@ -103,11 +124,44 @@ type EditorBlocksState = {
 
 const EditorBlocksContext = React.createContext<EditorBlocksState | null>(null);
 
+const EditorResolvedTabContext = React.createContext<string | null | undefined>(undefined);
+
 function useTabIdFromSearchParams() {
   const searchParams = useSearchParams();
   const maybeTabId = searchParams?.get('tabId');
   if (!validateEntityId(maybeTabId)) return null;
   return maybeTabId;
+}
+
+/**
+ * main-page URL tab while a different entity is open in the side panel).
+ */
+export function resolveEditorTabId(
+  requestedTabId: string | null,
+  initialTabs: Tabs | undefined,
+  liveTabEntityIds?: ReadonlySet<string>
+): string | null {
+  if (!requestedTabId) return null;
+  if (initialTabs && Object.hasOwn(initialTabs, requestedTabId)) return requestedTabId;
+  if (liveTabEntityIds?.has(requestedTabId)) return requestedTabId;
+  return null;
+}
+
+export function useActiveTabIdForEditor(): string | null {
+  // These hooks must stay above the early return. The resolved-tab context flips
+  // between `undefined` (no provider) and string|null (inside the editor) across
+  // renders, so a conditional return before them changes the hook count and crashes
+  // with "Rendered more hooks than during the previous render".
+  const resolved = React.useContext(EditorResolvedTabContext);
+  const urlTabId = useTabIdFromSearchParams();
+  const editor = React.useContext(EditorContext);
+
+  if (resolved !== undefined) {
+    return resolved;
+  }
+
+  if (!editor) return urlTabId;
+  return resolveEditorTabId(urlTabId, editor.initialTabs);
 }
 
 function EditorBlocksProvider({ children }: { children: React.ReactNode }) {
@@ -118,28 +172,51 @@ function EditorBlocksProvider({ children }: { children: React.ReactNode }) {
     initialBlocks,
     initialTabs,
     initialCollectionItems: allCollectionItems,
+    activeTabId: requestedTabId,
   } = useEditorInstance();
 
-  const tabId = useTabIdFromSearchParams();
+  const liveTabRelations = useRelations({
+    selector: r =>
+      r.fromEntity.id === entityId && r.type.id === SystemIds.TABS_PROPERTY && r.spaceId === spaceId && !r.isDeleted,
+  });
+
+  const liveTabEntityIds = React.useMemo(() => new Set(liveTabRelations.map(r => r.toEntity.id)), [liveTabRelations]);
+
+  const tabId = React.useMemo(() => {
+    if (!requestedTabId) return null;
+    return resolveEditorTabId(requestedTabId, initialTabs, liveTabEntityIds) ?? requestedTabId;
+  }, [requestedTabId, initialTabs, liveTabEntityIds]);
+
   const activeEntityId = tabId ?? entityId;
-  const isTab = React.useMemo(() => tabId && !!initialTabs && Object.hasOwn(initialTabs, tabId), [initialTabs, tabId]);
+  const isTab =
+    tabId != null &&
+    tabId !== entityId &&
+    ((initialTabs != null && Object.hasOwn(initialTabs, tabId)) ||
+      liveTabEntityIds.has(tabId) ||
+      requestedTabId === tabId);
+  const tabSnapshot =
+    isTab && tabId && initialTabs && Object.hasOwn(initialTabs, tabId) ? initialTabs[tabId] : undefined;
 
   const blockRelations = useBlocks(
     activeEntityId,
     spaceId,
-    isTab ? initialTabs![tabId as EntityId].entity.relations : initialBlockRelations
+    isTab ? (tabSnapshot?.entity.relations ?? []) : initialBlockRelations
   );
 
   const initialBlockEntities = React.useMemo(() => {
-    return isTab ? initialTabs![tabId as EntityId].blocks : initialBlocks;
-  }, [initialBlocks, initialTabs, isTab, tabId]);
+    return isTab ? (tabSnapshot?.blocks ?? []) : initialBlocks;
+  }, [initialBlocks, isTab, tabSnapshot]);
 
   const value = React.useMemo(
     () => ({ blockRelations, initialBlockEntities, initialCollectionItems: allCollectionItems ?? {} }),
     [blockRelations, initialBlockEntities, allCollectionItems]
   );
 
-  return <EditorBlocksContext.Provider value={value}>{children}</EditorBlocksContext.Provider>;
+  return (
+    <EditorResolvedTabContext.Provider value={tabId}>
+      <EditorBlocksContext.Provider value={value}>{children}</EditorBlocksContext.Provider>
+    </EditorResolvedTabContext.Provider>
+  );
 }
 
 export function useEditorBlocks() {

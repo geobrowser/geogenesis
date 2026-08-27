@@ -1,12 +1,47 @@
 export const ZERO_WIDTH_SPACE = '\u200b';
 export const ALL_SPACES_IMAGE = 'ipfs://QmQXJYrbJJZcukgkzk8C71nQL1V8ND9TQjrtP4sKWjYPFH';
 export const PLACEHOLDER_SPACE_IMAGE = '/placeholder.png';
+export const FILEBASE_GATEWAY_READ_PATH = 'https://mature-tomato-basilisk.myfilebase.com/ipfs/';
 export const PINATA_GATEWAY_READ_PATH = 'https://magenta-naval-crow-536.mypinata.cloud/files/';
 export const LIGHTHOUSE_GATEWAY_READ_PATH = 'https://gateway.lighthouse.storage/ipfs/';
 
 export const RENDERABLE_TYPE_PROPERTY = '2316bbe1c76f463583f23e03b4f1fe46';
 
+/** Integer score property used to rank entities; hidden from the entity properties panel. */
+export const SCORE_SYSTEM_PROPERTY = '85a4668a42fa4f488969c0a9de0c294b';
+
+/**
+ * Properties that should be treated as invisible: hidden from the entity
+ * properties panel and ignored when deciding which space an entity link
+ * routes to. A space whose only contribution to an entity is a hidden
+ * property is not a real "home" for that entity.
+ *
+ * Add new entries here when a property should be treated like score.
+ */
+export const HIDDEN_PROPERTIES: ReadonlySet<string> = new Set([SCORE_SYSTEM_PROPERTY]);
+
 export const VIDEO_RENDERABLE_TYPE = '0fb6bbf022044db49f70fa82c41570a4';
+
+/** Image-renderable property on a Video entity that holds its extracted keyframe still. */
+export const KEY_FRAME_IMAGE_PROPERTY = '7379342cf33e48e1b54fb015b3ef0f86';
+
+/**
+ * Default pixel dimensions for Image/Video properties.
+ */
+export const PROPERTY_WIDTH_PIXELS_ID = 'e39e49bbebb14718b2feba15103c1fe4';
+export const PROPERTY_HEIGHT_PIXELS_ID = 'fc5fb630a7ba49e485e84d4d0bbe4a07';
+
+// Topic taxonomy
+/** Entity type for Topic — used to identify Topic entities via the standard TYPES_PROPERTY. */
+export const TOPIC_TYPE_ID = '5ef5a5860f274d8e8f6c59ae5b3e89e2';
+/** Property used to tag a Topic entity (e.g. with the curated-topic tag). */
+export const TAG_PROPERTY_ID = '257090341ba5406f94e4d4af90042fba';
+/** Entity that, when used as the value of TAG_PROPERTY_ID, marks a Topic as editorially curated. */
+export const CURATED_TOPIC_TAG_ID = '7f796eb5bfc5449c98649bf7d996a2ca';
+/** Entity that, when used as the value of TAG_PROPERTY_ID, marks an entity (e.g. a ranking) as featured. */
+export const FEATURED_TAG_ID = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
+/** Relation type that links a parent Topic to its immediate subtopics. */
+export const SUBTOPIC_RELATION_TYPE_ID = '39e40cadb23d4f63ab2faea1596436c7';
 
 // Bounty linking - relation type used to link proposals to bounties
 export const BOUNTIES_RELATION_TYPE = '3b4c516ff3ac41e0a939374119a27d6e';
@@ -19,7 +54,21 @@ export const BOUNTY_DIFFICULTY_PROPERTY_ID = '8c8405abc6bc4d46a5806e4fc80d8187';
 export const BOUNTY_STATUS_PROPERTY_ID = 'f54a81632f4c44a8a6a5d7b97ec0370e';
 export const BOUNTY_DEADLINE_PROPERTY_ID = '7566286ca054405a83e185ffd60492fb';
 export const BOUNTY_ALLOCATED_PROPERTY_ID = 'cfeb642223c54df4b3f9375a489d9e22';
+/** Bounty "Task status" relation property; linking is disabled when it points at Done. */
+export const BOUNTY_TASK_STATUS_PROPERTY_ID = '054a7993ec2843e29688c84ac7a09220';
+export const BOUNTY_TASK_STATUS_DONE_ENTITY_ID = '425f3e809cf9488696581775159dfc33';
+export const BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID = '548fca08e94743668457b0d8429d5bf9';
+export const BOUNTY_TASK_STATUS_TODO_ENTITY_ID = '76b5b831a5fa4203ad61b3f93915edec';
+export const INTERESTED_IN_RELATION_TYPE_ID = 'ff7e1b4444a2419187324e6c222afe07';
+export const BOUNTY_SKILLS_PROPERTY_ID = 'a38732e33a3d47f9a459fb369c287709';
+export const BOUNTY_DIFFICULTY_LEVELS = ['Easy', 'Medium', 'Hard'] as const;
+export type BountyDifficultyLevel = (typeof BOUNTY_DIFFICULTY_LEVELS)[number];
+/** Share of a bounty's budget shown as the per-contributor estimated payout. */
+export const BOUNTY_EST_PAYOUT_RATIO = 0.2;
 export const PROPOSAL_TYPE_ID = '490a7c90ad4b4029b2b4d85d22fe203a';
+
+export const NEWS_STORY_TYPE_ID = 'e550fe517e904b2c8fffdf13408f5634';
+export const AVATAR_PROPERTY_ID = '1155befffad549b7a2e0da4777b8792c';
 
 // Video file types and upload constraints
 export const VALID_VIDEO_TYPES = [
@@ -58,11 +107,16 @@ export const DATA_TYPE_ENTITY_IDS: Record<string, string> = {
 };
 export const VALUE_TYPE_PROPERTY = 'ee26ef23f7f14eb6b7423b0fa38c1fd8';
 export const IS_TYPE_PROPERTY = 'd2c1a10114e3464a8272f4e75b0f1407';
+export const PROPERTY_GROUPS_PROPERTY = '1bb88a7a6b29406496503992a3009e7a';
+export const PROPERTY_GROUP_TYPE = '3964d13c6e444b7d887fbd0812a3dd43';
+export const COLLAPSED_PROPERTY = 'c4e252d805144840b5bca58d89731e22';
 
 // Like RELATION_VALUE_RELATIONSHIP_TYPE but for the edge entity (relation.entityId)
 export const RELATION_ENTITY_RELATIONSHIP_TYPE = 'f394b9b4420d4ab4bceb81ded11df4d5';
 
 export const ROOT_SPACE = 'a19c345ab9866679b001d7d2138d88a1';
+/** Static icon shown for the Root space wherever a space thumbnail is rendered (search, sidebar, breadcrumbs, etc). */
+export const ROOT_SPACE_IMAGE = '/browse-nav/root.svg';
 
 /** Legacy external docs URL; browse menu links to `DOCUMENTATION_SPACE_ID` instead. */
 export const GEO_DOCUMENTATION_URL = 'https://docs.geobrowser.io';

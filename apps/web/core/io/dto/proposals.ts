@@ -1,4 +1,5 @@
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import type { ProposalVotingMode } from '~/core/hooks/use-publish';
 import { OmitStrict, Profile } from '~/core/types';
 import { Entities } from '~/core/utils/entity';
 
@@ -30,8 +31,25 @@ export type SpaceTopicProposalDetails = {
   targetTopicId: string;
 };
 
+/**
+ * Proposed new voting settings for an `UPDATE_VOTING_SETTINGS` proposal. Values are raw
+ * from the API action: `slowThreshold`/`universalThreshold` are contract ratios (1e7 = 100%),
+ * `duration` is in seconds, and `fastThreshold`/`quorum` are editor counts. (Grace period and
+ * new-member fast-path aren't surfaced.)
+ */
+export type VotingSettingsProposalDetails = {
+  slowThreshold?: number;
+  universalThreshold?: number;
+  fastThreshold?: number;
+  quorum?: number;
+  durationSeconds?: number;
+};
+
 export type Proposal = {
   id: string;
+  /** Proposal version this data describes (REST `proposalVersion`). Votes must
+   *  target it; undefined when the source doesn't expose versions. */
+  version?: number;
   editId: string;
   type: ProposalType;
   name: string | null;
@@ -43,12 +61,20 @@ export type Proposal = {
   endTime: number;
   status: ProposalStatus;
   canExecute: boolean;
+  /** Which governance path the author chose when they submitted. Optional because only
+   *  the REST proposal endpoint reports it — the GraphQL sources behind the list views
+   *  have it on `ProposalVersion` rather than `Proposal`, and don't select it. */
+  votingMode?: ProposalVotingMode;
   proposalVotes: {
     totalCount: number;
     nodes: VoteWithProfile[];
   };
   subspaceDetails?: SubspaceProposalDetails;
   spaceTopicDetails?: SpaceTopicProposalDetails;
+  /** Proposed new voting settings, for `UPDATE_VOTING_SETTINGS` proposals. */
+  votingSettingsDetails?: VotingSettingsProposalDetails;
+  /** The person being added/removed, for membership proposals. */
+  targetProfile?: Profile;
 };
 
 export function ProposalDto(

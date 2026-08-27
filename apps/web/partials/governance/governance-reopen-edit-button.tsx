@@ -15,12 +15,7 @@ export function GovernanceReopenEditButton({ proposalId, spaceId }: Props) {
   const { reopenEdit, busy } = useReopenRejectedProposalEdits(proposalId, spaceId);
 
   return (
-    <Button
-      variant="secondary"
-      disabled={busy}
-      onClick={() => void reopenEdit()}
-      className="shrink-0"
-    >
+    <Button variant="secondary" small disabled={busy} onClick={() => void reopenEdit()} className="shrink-0">
       Reopen edit
     </Button>
   );

@@ -6,14 +6,16 @@ import { useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { Effect } from 'effect';
 
 import { useKey } from '~/core/hooks/use-key';
-import { useToast } from '~/core/hooks/use-toast';
 import { getSpaces } from '~/core/io/queries';
+import { useReportError } from '~/core/state/status-bar-store';
 import { useQueryProperty, useRelations } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import type { SpaceEntity, SwitchableRenderableType } from '~/core/types';
+import { describeError } from '~/core/utils/error-diagnostics';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
@@ -448,9 +450,10 @@ function RemovePropertyPanel(props: RemovePropertyPanelProps) {
                       return (
                         <div
                           key={prop.id}
-                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1.5 ${
+                          className={cx(
+                            'inline-flex items-center gap-1.5 rounded-md border px-2 py-1.5',
                             isMarked ? 'border-grey-04 bg-grey-01' : 'border-grey-02 bg-white'
-                          }`}
+                          )}
                         >
                           <span className="max-w-[140px] truncate text-[0.8125rem] text-text">
                             {prop.name ?? prop.id}
@@ -672,7 +675,7 @@ export function EditEntitiesPopover({
   const [showAllDeleteValues, setShowAllDeleteValues] = React.useState(false);
   const [pendingValue, setPendingValue] = React.useState<string>('');
 
-  const [, setToast] = useToast();
+  const reportError = useReportError();
   const [isApplyingNewProperty, setIsApplyingNewProperty] = React.useState(false);
   const [isApplyingImageValue, setIsApplyingImageValue] = React.useState(false);
 
@@ -807,8 +810,8 @@ export function EditEntitiesPopover({
         setAddImageFile(null);
         setSelectedProperty(null);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setToast(<div className="text-[13px] font-medium">Failed to apply: {message}</div>);
+        const message = describeError(err);
+        reportError(`Failed to apply: ${message}`);
       } finally {
         setIsApplyingImageValue(false);
       }
@@ -826,14 +829,14 @@ export function EditEntitiesPopover({
         await result;
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setToast(<div className="text-[13px] font-medium">Failed to apply: {message}</div>);
+      const message = describeError(err);
+      reportError(`Failed to apply: ${message}`);
       return;
     }
     setOpen(false);
     setSelectedAttributeEntities([]);
     setSelectedProperty(null);
-  }, [effectiveProperty, selectedAttributeEntities, onApply, addImageFile]);
+  }, [effectiveProperty, selectedAttributeEntities, onApply, addImageFile, reportError]);
 
   const handleApplyValue = React.useCallback(() => {
     if (!effectiveProperty || selectedEntityIds.length === 0 || !onApplyValue) return;
@@ -913,8 +916,8 @@ export function EditEntitiesPopover({
       setSelectedAttributeEntities([]);
       setNewPropertyImageFile(null);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setToast(<div className="text-[13px] font-medium">Failed to apply: {message}</div>);
+      const message = describeError(err);
+      reportError(`Failed to apply: ${message}`);
     } finally {
       setIsApplyingNewProperty(false);
     }
@@ -930,7 +933,7 @@ export function EditEntitiesPopover({
     selectedAttributeEntities,
     selectedEntityIds,
     isApplyingNewProperty,
-    setToast,
+    reportError,
   ]);
 
   React.useEffect(() => {
@@ -1130,9 +1133,10 @@ export function EditEntitiesPopover({
                         key={id}
                         type="button"
                         onClick={() => setAction(id)}
-                        className={`rounded-sm px-3 py-1 text-[13px] font-medium ${
+                        className={cx(
+                          'rounded-sm px-3 py-1 text-[13px] font-medium',
                           action === id ? 'shadow-sm bg-white text-text' : 'bg-transparent text-grey-04 hover:text-text'
-                        }`}
+                        )}
                       >
                         {label}
                       </button>

@@ -1,12 +1,12 @@
 import { Position, SystemIds } from '@geoprotocol/geo-sdk';
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
-import { produce } from 'immer';
 import { Effect } from 'effect';
+import { produce } from 'immer';
 
+import { ID } from '~/core/id';
 import { getBatchEntities, getProperties } from '~/core/io/queries';
 import { GeoStore } from '~/core/sync/store';
-import { ID } from '~/core/id';
 import type { DataType, Entity, Property, Relation, RenderableEntityType, Value } from '~/core/types';
 import type {
   BlockChange,
@@ -58,7 +58,10 @@ function valueChangeToDataType(vc: ValueChange): DataType {
 }
 
 function textAfterFromDiffChunks(chunks: DiffChunk[]): string {
-  return chunks.filter(c => !c.removed).map(c => c.value).join('');
+  return chunks
+    .filter(c => !c.removed)
+    .map(c => c.value)
+    .join('');
 }
 
 function resolvedScalarAfter(vc: ValueChange): string | null {
@@ -100,7 +103,7 @@ function propertyForValueChange(vc: ValueChange, fromMap: Map<string, Property |
   if (fromApi) return fromApi;
   return {
     id: vc.propertyId,
-    name: 'propertyName' in vc ? vc.propertyName ?? null : null,
+    name: 'propertyName' in vc ? (vc.propertyName ?? null) : null,
     dataType: valueChangeToDataType(vc),
   };
 }
@@ -182,7 +185,7 @@ function buildRelationFromChange(
       name: name,
       value: valueStr,
     },
-    position: after.position ?? (remoteRelation?.position ?? Position.generate()),
+    position: after.position ?? remoteRelation?.position ?? Position.generate(),
     toSpaceId: after.toSpaceId ?? undefined,
     verified: remoteRelation?.verified ?? false,
     renderableType: rt,
@@ -522,7 +525,11 @@ function materializeBlockChanges(
   }
 }
 
-export async function applyEntityDiffsToLocalStore(entityDiffs: EntityDiff[], spaceId: string, store: GeoStore): Promise<void> {
+export async function applyEntityDiffsToLocalStore(
+  entityDiffs: EntityDiff[],
+  spaceId: string,
+  store: GeoStore
+): Promise<void> {
   if (entityDiffs.length === 0) return;
 
   const propertyIds = new Set<string>();
@@ -563,7 +570,14 @@ export async function applyEntityDiffsToLocalStore(entityDiffs: EntityDiff[], sp
   for (const ed of entityDiffs) {
     const remoteEntity = getEntityFromMap(entityById, ed.entityId);
     const pageId = wireEntityId(ed.entityId, remoteEntity);
-    materializeValueChanges(pageId, ed.name ?? remoteEntity?.name ?? null, ed.values, remoteEntity, propertyById, outValues);
+    materializeValueChanges(
+      pageId,
+      ed.name ?? remoteEntity?.name ?? null,
+      ed.values,
+      remoteEntity,
+      propertyById,
+      outValues
+    );
     materializeRelationChanges(
       pageId,
       ed.name ?? remoteEntity?.name ?? null,

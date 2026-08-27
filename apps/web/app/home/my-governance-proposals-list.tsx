@@ -4,8 +4,6 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 
-import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
-
 import {
   type GovernanceHomeReviewCategory,
   type GovernanceHomeStatusFilter,
@@ -13,6 +11,7 @@ import {
 import { getMyGovernanceProposals } from './fetch-my-governance-proposals';
 import { serializeGovernanceHomeReturnSearch } from './governance-home-return-search';
 import { MyGovernanceProposalCard } from './my-governance-proposal-card';
+import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
 
 type Props = {
   memberSpaceId: string;
@@ -82,12 +81,15 @@ export async function MyGovernanceProposalsList({
             key={p.id}
             spaceId={p.spaceId}
             proposalId={p.id}
+            proposalVersion={p.version}
             displayTitle={p.displayTitle}
             spaceName={spaceName}
             spaceImage={spaceImage}
             creatorName={creatorName}
             creatorAvatarUrl={creator.avatarUrl}
             creatorValue={creatorValue}
+            startTime={p.startTime}
+            submittedAt={p.submittedAt}
             endTime={p.endTime}
             status={p.status}
             canExecute={p.canExecute}

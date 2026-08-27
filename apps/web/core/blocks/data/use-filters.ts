@@ -1,9 +1,10 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useSelector } from '@xstate/store/react';
-import equal from 'fast-deep-equal';
 
 import * as React from 'react';
+
+import equal from 'fast-deep-equal';
 
 import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { ID } from '~/core/id';
@@ -52,6 +53,8 @@ export function useFilters(canEdit?: boolean) {
     [geoFilterString]
   );
 
+  const [optimisticFilterState, setOptimisticFilterState] = React.useState<Filter[] | null>(null);
+
   const { data: resolvedFilterState, isPlaceholderData } = useQuery({
     enabled: filterState.length > 0,
     placeholderData: keepPreviousData,
@@ -68,23 +71,42 @@ export function useFilters(canEdit?: boolean) {
       if (!spacesInFilter.includes(spaceId)) spacesInFilter.push(spaceId);
       return await getSchemaFromTypeIds(
         typesInFilter.map(id => ({ id })),
-        spacesInFilter
+        spacesInFilter,
+        { includeAllTypeSpaces: true }
       );
     },
   });
 
   const relationsSnapshot = useSelector(reactiveRelations, r => r, equal);
 
+  // Strip NAME — both the filter picker and the properties menu render it
+  // explicitly, so leaving it in here would surface as duplicate-value items
+  // in Radix Select.
   const filterableProperties = React.useMemo(() => {
     const base = schemaProperties ?? [];
-    return base.map(p => mergeRelationValueTypesFromStore(p, store));
-  }, [schemaProperties, relationsSnapshot]);
+    return base
+      .filter(p => !ID.equals(p.id, SystemIds.NAME_PROPERTY))
+      .map(p => mergeRelationValueTypesFromStore(p, store, spaceId));
+  }, [schemaProperties, relationsSnapshot, spaceId]);
 
   // When the query key changes, keepPreviousData returns stale resolved filters from the old key.
   // Fall back to the freshly-parsed filterState until the new resolution completes.
   const freshResolvedState = isPlaceholderData ? undefined : resolvedFilterState;
+  const optimisticResolvedState = React.useMemo(
+    () =>
+      optimisticFilterState && areSameFilterSet(filterState, optimisticFilterState)
+        ? mergeFilterDisplayNames(filterState, optimisticFilterState)
+        : filterState,
+    [filterState, optimisticFilterState]
+  );
   const isFilterResolving = filterState.length > 0 && freshResolvedState === undefined;
-  const effectiveResolvedState = filterState.length === 0 ? [] : (freshResolvedState ?? filterState);
+  const effectiveResolvedState = filterState.length === 0 ? [] : (freshResolvedState ?? optimisticResolvedState);
+
+  React.useEffect(() => {
+    if (freshResolvedState !== undefined) {
+      setOptimisticFilterState(null);
+    }
+  }, [freshResolvedState]);
 
   const [temporaryFilterOverride, setTemporaryFilterOverride] = React.useState<Filter[] | null>(null);
   const [temporaryModeOverride, setTemporaryModeOverride] = React.useState<FilterMode | null>(null);
@@ -146,6 +168,7 @@ export function useFilters(canEdit?: boolean) {
 
   const setFilterState = React.useCallback(
     (filters: Filter[]) => {
+      setOptimisticFilterState(filters);
       writeFilterTriple(filters, filterModeRef.current);
     },
     [writeFilterTriple]
@@ -172,4 +195,33 @@ export function useFilters(canEdit?: boolean) {
     setTemporaryFilters,
     setTemporaryFilterMode,
   };
+}
+
+function filterIdentity(f: Filter): string {
+  return `${f.columnId}\0${f.valueType}\0${f.value}\0${f.isBacklink === true ? '1' : '0'}`;
+}
+
+function areSameFilterSet(a: Filter[], b: Filter[]): boolean {
+  if (a.length !== b.length) return false;
+
+  const aKeys = a.map(filterIdentity).sort();
+  const bKeys = b.map(filterIdentity).sort();
+
+  return aKeys.every((key, index) => key === bKeys[index]);
+}
+
+function mergeFilterDisplayNames(filters: Filter[], displayNameSource: Filter[]): Filter[] {
+  const namesByKey = new Map(displayNameSource.map(f => [filterIdentity(f), f]));
+
+  return filters.map(filter => {
+    const source = namesByKey.get(filterIdentity(filter));
+    if (!source) return filter;
+
+    return {
+      ...filter,
+      columnName: filter.columnName ?? source.columnName,
+      valueName: filter.valueName ?? source.valueName,
+      relationValueTypes: filter.relationValueTypes ?? source.relationValueTypes,
+    };
+  });
 }

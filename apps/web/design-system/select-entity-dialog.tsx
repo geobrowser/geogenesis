@@ -9,6 +9,7 @@ import { useKey } from '~/core/hooks/use-key';
 import { Property, SwitchableRenderableType } from '~/core/types';
 
 import { SelectEntity } from './select-entity';
+import { useElevatedPopoverPortal } from './use-elevated-popover-portal';
 
 type SelectEntityAsPopoverProps = {
   trigger: React.ReactNode;
@@ -29,6 +30,8 @@ type SelectEntityAsPopoverProps = {
   advanced?: boolean;
   showIDs?: boolean;
   initialQuery?: string;
+  waitForFilterTypes?: boolean;
+  restrictToFilterTypes?: boolean;
   selectedEntityId?: string;
 };
 
@@ -42,9 +45,12 @@ export function SelectEntityAsPopover({
   advanced = true,
   showIDs = true,
   initialQuery,
+  waitForFilterTypes,
+  restrictToFilterTypes,
   selectedEntityId,
 }: SelectEntityAsPopoverProps) {
   const [open, setOpen] = useState<boolean>(false);
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
 
   useKey('Escape', () => {
     if (!open) return;
@@ -53,27 +59,37 @@ export function SelectEntityAsPopover({
   });
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root open={open} onOpenChange={setOpen} modal={false}>
       <Popover.Trigger asChild>{trigger}</Popover.Trigger>
 
-      <Popover.Portal>
-        <Popover.Content sideOffset={4} align="start" className="z-1001" collisionPadding={10} avoidCollisions={true}>
-          <SelectEntity
-            key={JSON.stringify(relationValueTypes)}
-            withSearchIcon={true}
-            spaceId={spaceId}
-            relationValueTypes={relationValueTypes}
-            placeholder={placeholder}
-            onDone={onDone}
-            onCreateEntity={onCreateEntity}
-            variant="floating"
-            advanced={advanced}
-            showIDs={showIDs}
-            initialQuery={initialQuery}
-            selectedEntityId={selectedEntityId}
-          />
-        </Popover.Content>
-      </Popover.Portal>
+      {open && elevatedPopoverPortal ? (
+        <Popover.Portal container={elevatedPopoverPortal}>
+          <Popover.Content
+            sideOffset={4}
+            align="start"
+            className="pointer-events-auto z-[var(--elevated-popover-z,1001)]"
+            collisionPadding={10}
+            avoidCollisions={true}
+          >
+            <SelectEntity
+              key={JSON.stringify(relationValueTypes)}
+              withSearchIcon={true}
+              spaceId={spaceId}
+              relationValueTypes={relationValueTypes}
+              placeholder={placeholder}
+              onDone={onDone}
+              onCreateEntity={onCreateEntity}
+              variant="floating"
+              advanced={advanced}
+              showIDs={showIDs}
+              initialQuery={initialQuery}
+              waitForFilterTypes={waitForFilterTypes}
+              restrictToFilterTypes={restrictToFilterTypes}
+              selectedEntityId={selectedEntityId}
+            />
+          </Popover.Content>
+        </Popover.Portal>
+      ) : null}
     </Popover.Root>
   );
 }

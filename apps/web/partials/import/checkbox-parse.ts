@@ -6,9 +6,7 @@
 const TRUE_VALUES = new Set(['1', 'true', 'yes', 'y', 'on']);
 const FALSE_VALUES = new Set(['0', 'false', 'no', 'n', 'off']);
 
-export type CheckboxParseResult =
-  | { parsed: true; value: boolean }
-  | { parsed: false };
+export type CheckboxParseResult = { parsed: true; value: boolean } | { parsed: false };
 
 /**
  * Attempt to parse a raw CSV string as a checkbox (boolean) value.

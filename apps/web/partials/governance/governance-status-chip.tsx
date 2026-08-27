@@ -1,7 +1,11 @@
+'use client';
+
 import { ProposalStatus } from '~/core/io/substream-schema';
 import { getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+
+import { Execute } from '~/partials/active-proposal/execute';
 
 import { CheckSuccess } from './check-success';
 
@@ -11,9 +15,12 @@ interface Props {
   canExecute: boolean;
   /** When set while voting is still open, do not repeat the same countdown as the card footer. */
   viewerVote?: 'ACCEPT' | 'REJECT' | 'ABSTAIN';
+  /** Pass `spaceId` + `proposalId` to offer an Execute button (eligible users) in place of the "Pending execution" label. */
+  spaceId?: string;
+  proposalId?: string;
 }
 
-export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote }: Props) {
+export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote, spaceId, proposalId }: Props) {
   switch (status) {
     case 'ACCEPTED': {
       return (
@@ -29,7 +36,7 @@ export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote }
     case 'PROPOSED': {
       const { days, hours, minutes, seconds } = getProposalTimeRemaining(endTime);
       const totalSecondsRemaining = days * 86400 + hours * 3600 + minutes * 60 + seconds;
-      const isVotingEnded = totalSecondsRemaining <= 0;
+      const isVotingEnded = endTime > 0 && totalSecondsRemaining <= 0;
 
       if (isVotingEnded && !canExecute) {
         return (
@@ -44,9 +51,30 @@ export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote }
       }
 
       if (isVotingEnded) {
-        return (
+        const pendingExecutionLabel = (
           <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">Pending execution</div>
         );
+
+        // Offer the Execute button so curators can unstick a passed proposal from
+        // the list instead of only from the proposal detail page. Execute()
+        // self-gates on a registered personal space + an on-chain simulation,
+        // falling back to the label while it checks or when the user can't
+        // execute — so the status is never blank.
+        //
+        // Rendered without requiring a connected wallet: Execute's chain probe
+        // detects a proposal the DAO has no record of (permanently unexecutable)
+        // without one, and that is the case this label was lying about. Gating on
+        // `smartAccount` meant every signed-out viewer saw "Pending execution"
+        // forever on proposals nobody could ever execute.
+        if (spaceId && proposalId) {
+          return (
+            <div className="relative z-10">
+              <Execute spaceId={spaceId} proposalId={proposalId} variant="small" fallback={pendingExecutionLabel} />
+            </div>
+          );
+        }
+
+        return pendingExecutionLabel;
       }
 
       if (viewerVote) {
@@ -54,6 +82,12 @@ export function GovernanceStatusChip({ status, endTime, canExecute, viewerVote }
           <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium text-grey-04">
             Voting period open
           </div>
+        );
+      }
+
+      if (endTime <= 0) {
+        return (
+          <div className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-metadataMedium">Voting period open</div>
         );
       }
 

@@ -8,6 +8,7 @@ import { useEntity } from '~/core/database/entities';
 import { SearchResult, SpaceEntity } from '~/core/types';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { CheckCircleSmall } from '~/design-system/icons/check-circle-small';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -17,17 +18,27 @@ import { Text } from '~/design-system/text';
 import { Truncate } from '~/design-system/truncate';
 
 import { RightArrowLong } from '../icons/right-arrow-long';
+import { trapWheelToElement } from '../trap-wheel-scroll';
 
 type ResultsListProps = React.ComponentPropsWithoutRef<'ul'>;
 
 export const ResultsList = React.forwardRef<HTMLUListElement, ResultsListProps>(function ResultsList(
-  props,
+  { className = '', onWheel, ...props },
   ref
 ) {
+  const handleWheel: React.WheelEventHandler<HTMLUListElement> = e => {
+    trapWheelToElement(e.currentTarget, e);
+    onWheel?.(e);
+  };
+
   return (
     <ul
       ref={ref}
-      className="m-0 flex max-h-[340px] list-none flex-col justify-start overflow-x-hidden overflow-y-auto"
+      className={cx(
+        'm-0 flex max-h-[340px] list-none flex-col justify-start overflow-x-hidden overflow-y-auto overscroll-contain',
+        className
+      )}
+      onWheel={handleWheel}
       {...props}
     />
   );
@@ -53,6 +64,8 @@ type ResultContentProps = {
   onChooseSpace?: () => void;
   withDescription?: boolean;
   active?: boolean;
+  /** When set, renders a multi-select checkbox (empty/checked) on the row instead of the single-select indicator. */
+  multiSelectChecked?: boolean;
 } & React.ComponentPropsWithoutRef<'button'>;
 
 export const ResultContent = ({
@@ -62,6 +75,7 @@ export const ResultContent = ({
   alreadySelected = false,
   withDescription = true,
   onChooseSpace,
+  multiSelectChecked,
   ...rest
 }: ResultContentProps) => {
   const [space, ...otherSpaces] = result.spaces;
@@ -98,7 +112,11 @@ export const ResultContent = ({
           <Text variant="metadataMedium" ellipsize className="leading-4.5">
             {result.name ?? result.id}
           </Text>
-          {alreadySelected && <CheckCircleSmall color="grey-04" />}
+          {multiSelectChecked !== undefined ? (
+            <CheckboxVisual checked={multiSelectChecked} className="ml-2 self-start" />
+          ) : (
+            alreadySelected && <CheckCircleSmall color="grey-04" />
+          )}
         </div>
         {showBreadcrumbs && (
           <>

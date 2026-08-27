@@ -23,6 +23,19 @@ export interface CommentEntity {
   spaceId: string;
   /** Whether this comment has been resolved */
   resolved: boolean;
+  /**
+   * True while the chain publish (IPFS upload + userOp) is in flight. Surfaces as the
+   * "Publishing…" tag. Cleared as soon as the publish Effect resolves, even though the
+   * indexer may still be catching up — we don't need a UI indicator after that point
+   * because the "Comment published!" toast has already told the user it's safe.
+   */
+  isPublishing?: boolean;
+  /**
+   * True while the optimistic row is waiting for the indexer to return the real comment.
+   * Used by mergePendingWithServer to preserve client-only rows across cache refetches
+   * (e.g. window-focus refetch) before the server has indexed them. No UI meaning.
+   */
+  isPendingPublish?: boolean;
 }
 
 export interface CommentWithReplies extends CommentEntity {
@@ -33,8 +46,11 @@ export interface CreateCommentParams {
   text: string;
   targetEntityId: string;
   targetSpaceId: string;
-  /** Immediate parent when replying to a comment; omit for a top-level comment on the page entity. */
-  replyTo?: { entityId: string; spaceId: string };
+  /**
+   * The reply chain ordered [immediate parent, ..., root]; omit for a top-level comment on the
+   * page entity. The hook maps index 0 (the immediate parent) to the SDK's `replyTo` target.
+   */
+  ancestorComments?: Array<{ id: string; spaceId: string }>;
 }
 
 export type CommentSortOrder = 'newest' | 'oldest';

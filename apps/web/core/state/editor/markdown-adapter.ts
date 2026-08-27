@@ -1,8 +1,15 @@
 import type { Extensions } from '@tiptap/core';
 import type { JSONContent } from '@tiptap/core';
 import { generateJSON } from '@tiptap/html';
+
 import katex from 'katex';
 import type Token from 'markdown-it/lib/token.mjs';
+
+import {
+  PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
+  PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
+} from '~/core/state/editor/profile-overview-tail-placeholder';
+import { tokenizeWeb2Urls } from '~/core/utils/url-detection';
 
 import { createMarkdownIt, getRenderedLinkState } from './markdown-core';
 
@@ -21,9 +28,7 @@ editorMd.renderer.rules['link_open'] = (tokens: Token[], idx: number) => {
     return `<span data-web2-url="true" data-url="${escapeHtml(href)}">`;
   }
   // Non-web2 links (e.g. graph://) — emit a normal <a>
-  const attrs = (tokens[idx].attrs ?? [])
-    .map(([k, v]) => `${k}="${escapeHtml(v)}"`)
-    .join(' ');
+  const attrs = (tokens[idx].attrs ?? []).map(([k, v]) => `${k}="${escapeHtml(v)}"`).join(' ');
   return `<a ${attrs}>`;
 };
 
@@ -39,11 +44,7 @@ editorMd.renderer.rules['link_close'] = (tokens: Token[], idx: number) => {
 
 editorMd.renderer.rules['inline_math'] = (tokens: Token[], idx: number) => {
   const latex = tokens[idx].content;
-  const escaped = latex
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  const escaped = latex.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return `<span data-type="inlineMath" data-latex="${escaped}">${escapeHtml(latex)}</span>`;
 };
 
@@ -120,7 +121,45 @@ function getExtensions(): Extensions {
  */
 export function markdownToEditorJson(markdown: string, extensions?: Extensions): JSONContent {
   const html = editorMd.render(markdown);
-  return generateJSON(html, extensions ?? getExtensions());
+  const json = generateJSON(html, extensions ?? getExtensions());
+  return markWeb2UrlsInJson(json);
+}
+
+// Pre-marks raw web2 URLs (e.g. "https://x.com" typed as plain text) with the
+// web2URL mark so the editor's FIRST paint renders them as styled anchors.
+// Markdown links ([label](url)) are already converted to web2URL spans by
+// editorMd above; this closes the gap for raw URLs, which markdown-it leaves as
+// plain text (linkify is off). Without this, only the async detection plugin
+// adds the mark (~150ms after mount), so links visibly flicker from plain text
+// to styled on every editor (re)mount.
+function markWeb2UrlsInJson(node: JSONContent): JSONContent {
+  if (!node.content) return node;
+
+  const content: JSONContent[] = [];
+  for (const child of node.content) {
+    const alreadyLinked = (child.marks ?? []).some(mark => mark.type === 'link' || mark.type === 'web2URL');
+
+    if (child.type === 'text' && typeof child.text === 'string' && !alreadyLinked) {
+      const segments = tokenizeWeb2Urls(child.text);
+      if (segments.some(segment => segment.type === 'url')) {
+        for (const segment of segments) {
+          if (!segment.value) continue;
+          content.push({
+            ...child,
+            text: segment.value,
+            ...(segment.type === 'url'
+              ? { marks: [...(child.marks ?? []), { type: 'web2URL', attrs: { url: segment.value, editMode: false } }] }
+              : {}),
+          });
+        }
+        continue;
+      }
+    }
+
+    content.push(markWeb2UrlsInJson(child));
+  }
+
+  return { ...node, content };
 }
 
 // ---------------------------------------------------------------------------
@@ -136,8 +175,18 @@ function serializeNode(node: JSONContent): string {
   switch (node.type) {
     case 'doc':
       return (node.content ?? []).map(serializeNode).join('\n');
-    case 'paragraph':
-      return serializeInlineContent(node.content ?? []) + '\n';
+    case 'paragraph': {
+      const body = serializeInlineContent(node.content ?? []);
+      const trimmed = body.trim();
+      if (node.attrs?.tailPlaceholder) {
+        if (trimmed === '' || trimmed === PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT) {
+          return `${PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL}\n`;
+        }
+      } else if (trimmed === PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT) {
+        return `${PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL}\n`;
+      }
+      return body + '\n';
+    }
     case 'heading': {
       const level = node.attrs?.level ?? 1;
       const prefix = '#'.repeat(level);
@@ -158,9 +207,7 @@ function serializeNode(node: JSONContent): string {
     case 'bulletList':
       return (node.content ?? []).map(child => serializeListItem(child, '-')).join('');
     case 'orderedList':
-      return (node.content ?? [])
-        .map((child, i) => serializeListItem(child, `${i + 1}.`))
-        .join('');
+      return (node.content ?? []).map((child, i) => serializeListItem(child, `${i + 1}.`)).join('');
     case 'listItem':
       return (node.content ?? []).map(serializeNode).join('');
     case 'hardBreak':
@@ -212,7 +259,13 @@ function serializeInlineNode(node: JSONContent): string {
     let text = node.text ?? '';
     const marks = node.marks ?? [];
 
-    for (const mark of marks) {
+    const orderedMarks = [...marks].sort((a, z) => {
+      if (a.type === 'underline' && z.type !== 'underline') return 1;
+      if (z.type === 'underline' && a.type !== 'underline') return -1;
+      return 0;
+    });
+
+    for (const mark of orderedMarks) {
       switch (mark.type) {
         case 'code':
           return serializeInlineCode(text);
@@ -221,6 +274,9 @@ function serializeInlineNode(node: JSONContent): string {
           break;
         case 'italic':
           text = `*${text}*`;
+          break;
+        case 'underline':
+          text = `++${text}++`;
           break;
         case 'link': {
           // Handle graph:// links (entity mentions) and other standard links
@@ -256,7 +312,10 @@ function serializeInlineNode(node: JSONContent): string {
 
   if (node.type === 'inlineMath') {
     const latex = node.attrs?.latex ?? '';
-    return `\\(${latex}\\)`;
+    // Space-pad when content contains $ to avoid ambiguity with the delimiters
+    // (covers start/end $ merging into $$, and internal $$ causing early close)
+    const needsPad = latex.includes('$');
+    return needsPad ? `$$ ${latex} $$` : `$$${latex}$$`;
   }
 
   if (node.type === 'hardBreak') {
@@ -305,9 +364,7 @@ function renderLinkTagOpen(token: Token): string {
   }
 
   // Invalid link → <span> tag
-  const attrs = new Map(
-    (token.attrs ?? []).filter(([name]) => name !== 'href' && name !== 'target' && name !== 'rel')
-  );
+  const attrs = new Map((token.attrs ?? []).filter(([name]) => name !== 'href' && name !== 'target' && name !== 'rel'));
   attrs.set('class', appendClassName(attrs.get('class') ?? null, className));
   attrs.set('data-invalid-link', 'true');
 

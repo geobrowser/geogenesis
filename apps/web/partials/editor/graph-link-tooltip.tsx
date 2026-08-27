@@ -75,7 +75,7 @@ export const GraphLinkTooltip: React.FC<GraphLinkTooltipProps> = ({
         onClick={showConnectionHandler}
         aria-label={`Show connection for ${entityNameValue || linkText}`}
         disabled={isLoading}
-        className="flex-1 cursor-pointer truncate rounded border border-grey-02 px-1.5 text-text transition-colors hover:bg-grey-01 focus:outline-none focus:ring-2 focus:ring-ctaPrimary focus:ring-offset-1 disabled:cursor-wait"
+        className="flex-1 cursor-pointer truncate rounded border border-grey-02 px-1.5 text-text transition-colors hover:bg-grey-01 focus:ring-2 focus:ring-ctaPrimary focus:ring-offset-1 focus:outline-none disabled:cursor-wait"
       >
         {isLoading && !propEntityName ? (
           <span className="flex items-center justify-center">

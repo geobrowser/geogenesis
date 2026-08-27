@@ -67,7 +67,6 @@ export const insertGraphLink = (options: InsertGraphLinkOptions): void => {
     ],
   };
 
-
   // If we have a range to delete (from/to) and a chain function (handler use case)
   if (chain && from !== undefined && to !== undefined) {
     // Delete the range, then insert content at the explicit 'from' position.

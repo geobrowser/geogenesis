@@ -1,10 +1,23 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { RemoteEntityType, RemoteRelation } from '~/core/io/schema';
+import { RemoteRelation } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
-export function RelationDtoLive(relation: RemoteRelation): Relation {
+/** A relation whose target entity resolved. Dangling relations (`toEntity: null`) are dropped upstream. */
+export type RemoteRelationWithTarget = RemoteRelation & { toEntity: NonNullable<RemoteRelation['toEntity']> };
+
+/**
+ * Drops dangling relations — ones the indexer returns with `toEntity: null`
+ * because the target entity was deleted or isn't in the queried space. They
+ * have no target to render, and letting them through would crash the DTO
+ * (which dereferences `toEntity`) or blank the whole entity at decode time.
+ */
+export function hasRelationTarget(relation: RemoteRelation): relation is RemoteRelationWithTarget {
+  return relation.toEntity !== null;
+}
+
+export function RelationDtoLive(relation: RemoteRelationWithTarget): Relation {
   const ipfsUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
   const mediaEntityUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
   const baseRenderableType = v2_getRenderableEntityType(relation.toEntity.types);
@@ -42,7 +55,7 @@ export function RelationDtoLive(relation: RemoteRelation): Relation {
  * Resolve the toEntity name from the highest-ranked space. The API's top-level
  * name field is not space-scoped, so we derive the name from valuesList instead.
  */
-function resolveToEntityName(relation: RemoteRelation): string | null {
+function resolveToEntityName(relation: RemoteRelationWithTarget): string | null {
   const namePropertyHex = SystemIds.NAME_PROPERTY.replace(/-/g, '');
   const nameValues = relation.toEntity.valuesList.filter(v => v.propertyId === namePropertyHex && v.text);
 
@@ -52,7 +65,7 @@ function resolveToEntityName(relation: RemoteRelation): string | null {
   return nameValues.reduce((a, b) => (getSpaceRank(a.spaceId) <= getSpaceRank(b.spaceId) ? a : b)).text;
 }
 
-function v2_getRenderableEntityType(types: readonly RemoteEntityType[]): RenderableEntityType {
+function v2_getRenderableEntityType(types: readonly { id: string }[]): RenderableEntityType {
   const typeIds = types.map(type => type.id);
 
   const imageTypeHex = SystemIds.IMAGE_TYPE.replace(/-/g, '');

@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Fragment } from 'react';
 
 import { Source } from '~/core/blocks/data/source';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
 import { dedupeRelationsByToEntityId } from '~/core/utils/dedupe-relations';
@@ -36,6 +37,13 @@ type Props = {
   onLinkEntry: onLinkEntryFn;
   source: Source;
   relationChipTruncateLabel?: boolean;
+  openedWithMainViewEditing?: boolean;
+  /**
+   * Suppress the hover actions `CollectionMetadata` otherwise overlays on the title, for callers
+   * that render them somewhere with room — the data block's browse table puts them beneath the
+   * name, beside the vote controls (GEO-2672). The verified checkmark still renders inline.
+   */
+  hideHoverActions?: boolean;
 };
 
 export const EntityTableCell = ({
@@ -52,6 +60,8 @@ export const EntityTableCell = ({
   onLinkEntry,
   source,
   relationChipTruncateLabel = false,
+  openedWithMainViewEditing = false,
+  hideHoverActions = false,
 }: Props) => {
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
   const isRelation = property.dataType === 'RELATION';
@@ -63,41 +73,50 @@ export const EntityTableCell = ({
           <Link
             entityId={entityId}
             href={href}
-            className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-tableCell text-ctaHover hover:underline"
+            className="block min-w-0 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
           >
             {name || entityId}
           </Link>
         ) : (
-          <CollectionMetadata
-            view="TABLE"
-            isEditing={false}
-            name={name}
-            currentSpaceId={currentSpaceId}
-            entityId={entityId}
-            spaceId={spaceId}
-            collectionId={collectionId}
-            relationId={relationId}
-            verified={verified}
-            onLinkEntry={onLinkEntry}
-          >
-            <Link
+          <div className="group/name-table-browse-coll w-full min-w-0">
+            <CollectionMetadata
+              view="TABLE"
+              isEditing={false}
+              name={name}
+              currentSpaceId={currentSpaceId}
               entityId={entityId}
               spaceId={spaceId}
-              href={href}
-              className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] text-tableCell text-ctaHover hover:underline"
+              collectionId={collectionId}
+              relationId={relationId}
+              verified={verified}
+              onLinkEntry={onLinkEntry}
+              openedWithMainViewEditing={openedWithMainViewEditing}
+              hideHoverActions={hideHoverActions}
             >
-              {name || entityId}
-            </Link>
-          </CollectionMetadata>
+              <Link
+                entityId={entityId}
+                spaceId={spaceId}
+                href={href}
+                className="block max-w-full min-w-0 text-tableCell [overflow-wrap:anywhere] break-words text-ctaHover hover:underline"
+              >
+                {name || entityId}
+              </Link>
+            </CollectionMetadata>
+          </div>
         )}
       </Fragment>
     );
   }
 
   return (
-    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
       {isRelation ? (
-        <RelationGroup entityId={entityId} property={property} spaceId={spaceId} truncateLabel={relationChipTruncateLabel} />
+        <RelationGroup
+          entityId={entityId}
+          property={property}
+          spaceId={spaceId}
+          truncateLabel={relationChipTruncateLabel}
+        />
       ) : (
         <ValueGroup entityId={entityId} property={property} spaceId={spaceId} isExpanded={isExpanded} />
       )}
@@ -118,18 +137,23 @@ function RelationGroup({ entityId, property, spaceId, truncateLabel = false }: R
   });
   const dedupedRelations = dedupeRelationsByToEntityId(relations);
 
-  return dedupedRelations.map(relation => {
-    if (property.renderableTypeStrict === 'IMAGE') {
-      return (
-        <ImageRelation
-          key={relation.id}
-          linkedEntityId={relation.toEntity.id}
-          directImageUrl={relation.toEntity.value}
-          spaceId={spaceId}
-        />
-      );
-    }
+  // Avatar/cover are single-valued, but this selector isn't space-scoped and
+  // dedupe only collapses identical targets — so a replaced image's old relation
+  // still shows alongside the new one. Render one, preferring the current space.
+  if (property.renderableTypeStrict === 'IMAGE') {
+    const relation = dedupedRelations.find(r => r.spaceId === spaceId) ?? dedupedRelations[0];
+    if (!relation) return null;
+    return (
+      <ImageRelation
+        key={relation.id}
+        linkedEntityId={relation.toEntity.id}
+        directImageUrl={relation.toEntity.value}
+        spaceId={relation.spaceId}
+      />
+    );
+  }
 
+  return dedupedRelations.map(relation => {
     const value = relation.toEntity.value;
     const name = relation.toEntity.name;
     const relationId = relation.id;
@@ -143,7 +167,7 @@ function RelationGroup({ entityId, property, spaceId, truncateLabel = false }: R
         currentSpaceId={spaceId}
         entityId={relationValue}
         relationEntityId={relation.entityId}
-        spaceId={relation.spaceId}
+        spaceId={relation.toSpaceId}
         relationId={relationId}
         truncateLabel={truncateLabel}
       >

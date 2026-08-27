@@ -1,0 +1,35 @@
+/**
+ * Ranking block ontology ids.
+ */
+export const RANKING_BLOCK_TYPE_ID = '150db6defe2344f0805afa57502e2c32';
+
+export const RANKING_BLOCK_TYPE_NAME = 'Ranking Block';
+
+export const RANKING_START_TIME_PROPERTY_ID = '2d696bf0510f403e985b8cd1e73feb9b';
+export const RANKING_END_TIME_PROPERTY_ID = 'c3445f6be2c04f25b73a5eb876c4f50c';
+
+export const LEGACY_RANKING_START_DATE_PROPERTY_ID = 'eed03a040acd4a9e81e08272ed70a817';
+export const LEGACY_RANKING_END_DATE_PROPERTY_ID = 'b08b8f63dc1e41568b0819946f2b011c';
+
+export const RANKING_AGGREGATION_RESTRICTION_PROPERTY_ID = '1e4caa2de3314efa8ac24e8d9d3e9fe9';
+export const RANKING_AGGREGATION_RESTRICTION_MEMBERS_AND_EDITORS_ID = '10a7b10390f94a728087935052ffaa69';
+export const RANKING_AGGREGATION_RESTRICTION_MEMBERS_AND_EDITORS_NAME = 'Members and editors';
+
+export const RANK_POSITION_PROPERTY_ID = '890deffb384349fa826974000e3dcef6';
+export const RANK_POSITION_PROPERTY_NAME = 'Rank position';
+
+export const AGGREGATED_RANKINGS_PROPERTY_ID = '67651da611a942469ff4039aafbe9e43';
+export const AGGREGATED_RANKINGS_PROPERTY_NAME = 'Aggregated rankings';
+
+export const RANK_TYPE_ID = '5c74731dfabb4dc8b5c53346521c639a';
+export const RANK_VOTES_RELATION_TYPE_ID = '19a4cfff45f24150abf2af0f43eb2eec';
+
+export const RANKING_VIEW_PILL_ID = '60022d24d9df4e1888faa71e915f8101';
+
+export const ROLLING_RANKING_TYPE_ID = 'd00ddc89b23c4a20a63febf545ddc139';
+export const ROLLING_RANKING_TYPE_NAME = 'Rolling ranking';
+
+export const SUBMISSION_FREQUENCY_PROPERTY_ID = 'c0ab99538eeb4d7c8ccb1dd585ae4711';
+export const SUBMISSION_FREQUENCY_PROPERTY_NAME = 'Submission frequency';
+
+export const SUBMITTED_TO_PROPERTY_ID = '09c219c103d14d2aa5c78edbf2d0182a';

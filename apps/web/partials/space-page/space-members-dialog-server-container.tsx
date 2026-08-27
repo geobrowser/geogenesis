@@ -1,23 +1,28 @@
-import { SpaceGovernanceType } from '~/core/types';
+import { type SpaceParticipantsPage } from '~/core/space-members/fetch-space-participants-page';
 
-import { getMembersForSpace } from './get-members-for-space';
 import { SpaceMembersManageDialog } from './space-members-manage-dialog';
 import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-content';
 
-export async function SpaceMembersDialogServerContainer({
-  spaceType,
+export function SpaceMembersDialogServerContainer({
   spaceId,
+  isEditor,
+  initialParticipantsPage,
 }: {
-  spaceType: SpaceGovernanceType;
   spaceId: string;
+  isEditor: boolean;
+  initialParticipantsPage?: SpaceParticipantsPage;
 }) {
-  const { allMembers } = await getMembersForSpace(spaceId);
-
   return (
     <SpaceMembersManageDialog
       header={<h1 className="text-smallTitle">Manage members</h1>}
       trigger={<p>Manage members</p>}
-      content={<SpaceMembersManageDialogContent spaceId={spaceId} members={allMembers} />}
+      content={
+        <SpaceMembersManageDialogContent
+          spaceId={spaceId}
+          isEditor={isEditor}
+          initialParticipantsPage={initialParticipantsPage}
+        />
+      }
     />
   );
 }

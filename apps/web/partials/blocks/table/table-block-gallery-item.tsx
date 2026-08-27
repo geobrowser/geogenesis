@@ -1,15 +1,19 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import cx from 'classnames';
 import NextImage from 'next/image';
 
+import { isBlockMediaColumn } from '~/core/blocks/data/resolve-main-media-property';
 import { Source } from '~/core/blocks/data/source';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import type { BlockMainMedia } from '~/core/hooks/use-block-main-media';
+import { useBlockMainMediaUrl } from '~/core/hooks/use-block-main-media-url';
+import { NO_BLOCK_MEDIA_DIMENSIONS, blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { useMutate } from '~/core/sync/use-mutate';
-import { useRelation, useSpaceAwareValue } from '~/core/sync/use-store';
+import { useSpaceAwareValue } from '~/core/sync/use-store';
 import { Cell, Property } from '~/core/types';
-import { useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 import { NavUtils } from '~/core/utils/utils';
 
 import { BlockImageField, PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -19,8 +23,11 @@ import { SelectEntity } from '~/design-system/select-entity';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
+import { CopyEntityIdButton } from '~/partials/blocks/table/copy-entity-id-button';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import {
   LIST_GALLERY_BROWSE_BODY_CLASS,
@@ -38,9 +45,11 @@ type Props = {
   onLinkEntry: onLinkEntryFn;
   isPlaceholder: boolean;
   properties?: Record<string, Property>;
+  mainMedia?: BlockMainMedia | null;
   relationId?: string;
   source: Source;
   autoFocus?: boolean;
+  focusRequestKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
 };
 
@@ -53,16 +62,18 @@ export function TableBlockGalleryItem({
   onLinkEntry,
   isPlaceholder,
   properties,
+  mainMedia,
   relationId,
   source,
   autoFocus = false,
+  focusRequestKey,
   collectionTypeFilters,
 }: Props) {
   const { storage } = useMutate();
   const nameCell: Cell | undefined = columns[SystemIds.NAME_PROPERTY];
 
   const { propertyId: cellId, verified } = nameCell;
-  let { image } = nameCell;
+  const nameCellImageHint = nameCell?.image ?? null;
 
   const name =
     useSpaceAwareValue({ entityId: rowEntityId, propertyId: SystemIds.NAME_PROPERTY, spaceId: currentSpaceId })
@@ -73,36 +84,26 @@ export function TableBlockGalleryItem({
     nameCell.description ??
     null;
 
-  const avatarRelation = useRelation({
-    selector: r => r.type.id === ContentIds.AVATAR_PROPERTY && r.fromEntity.id === rowEntityId,
+  const { url: image, isResolving: isImageResolving } = useBlockMainMediaUrl({
+    entityId: rowEntityId,
+    spaceId: currentSpaceId,
+    mediaPropertyId: mainMedia?.propertyId ?? null,
+    mediaKind: mainMedia?.kind,
+    fallbackHint: nameCellImageHint,
   });
 
-  const maybeAvatarUrl = avatarRelation?.toEntity.value;
-
-  const coverRelation = useRelation({
-    selector: r => r.type.id === SystemIds.COVER_PROPERTY && r.fromEntity.id === rowEntityId,
-  });
-
-  const maybeCoverUrl = coverRelation?.toEntity.value;
-
-  // Always show cover if available, then fall back to avatar.
-  // This ensures images render even when cover/avatar aren't
-  // configured as shown columns on the data block.
-  image = maybeCoverUrl ?? maybeAvatarUrl ?? image;
-
-  const imageUrl = useImageUrlFromEntity(image || undefined, currentSpaceId || '');
-  if (image && imageUrl) {
-    image = imageUrl;
-  }
+  const imageUploadProperty =
+    mainMedia && mainMedia.kind === 'IMAGE'
+      ? { id: mainMedia.propertyId, name: mainMedia.name ?? 'Image' }
+      : { id: SystemIds.COVER_PROPERTY, name: 'Cover' };
 
   const href = NavUtils.toEntity(nameCell?.space ?? currentSpaceId, cellId);
 
-  const otherPropertyData = Object.values(columns).filter(
-    c =>
-      c.slotId !== SystemIds.NAME_PROPERTY &&
-      c.slotId !== ContentIds.AVATAR_PROPERTY &&
-      c.slotId !== SystemIds.COVER_PROPERTY
-  );
+  const otherPropertyData = Object.values(columns).filter(c => {
+    if (c.slotId === SystemIds.NAME_PROPERTY) return false;
+    if (isBlockMediaColumn(c.slotId, properties)) return false;
+    return true;
+  });
 
   /**
    * We render descriptions in a specific style, but want to treat whether to render the description
@@ -113,14 +114,28 @@ export function TableBlockGalleryItem({
    */
   const propertyDataHasDescription = otherPropertyData.some(c => c.slotId === SystemIds.DESCRIPTION_PROPERTY);
 
+  const mediaFrame = blockMediaFrame(mainMedia?.dimensions ?? NO_BLOCK_MEDIA_DIMENSIONS);
+  const mediaFrameClassName = cx(
+    'relative w-full overflow-clip rounded-lg bg-grey-01',
+    !mediaFrame.hasCustomHeight && 'aspect-2/1'
+  );
+
+  const mediaFrameStyle = mediaFrame.style;
+  // When a property sets explicit dimensions, keep the frame at the configured aspect ratio
+  // Blocks without dimensions keep the fixed 2:1 frame and fill/crop the image.
+  const mediaImageFitClassName = mediaFrame.hasCustomHeight ? 'object-contain' : 'object-cover';
+
   if (isEditing && source.type !== 'RELATIONS') {
     return (
-      <div className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2">
-        <div className="relative flex aspect-2/1 w-full items-center justify-center overflow-clip rounded-lg bg-grey-01">
+      <div className="group flex flex-col gap-3 rounded-[17px] p-1 pb-2">
+        <div className={cx(mediaFrameClassName, 'flex items-center justify-center')} style={mediaFrameStyle}>
           {image ? (
             <GeoImage
               value={image}
-              className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+              className={cx(
+                mediaImageFitClassName,
+                'transition-transform duration-150 ease-in-out group-hover:scale-105'
+              )}
               alt=""
               fill
             />
@@ -129,14 +144,12 @@ export function TableBlockGalleryItem({
               variant="gallery"
               imageSrc={image ?? undefined}
               onFileChange={async file => {
-                // Gallery items default to cover for new uploads since
-                // the large image area is a natural fit for cover images.
                 await storage.images.createAndLink({
                   file,
                   fromEntityId: rowEntityId,
                   fromEntityName: name,
-                  relationPropertyId: SystemIds.COVER_PROPERTY,
-                  relationPropertyName: 'Cover',
+                  relationPropertyId: imageUploadProperty.id,
+                  relationPropertyName: imageUploadProperty.name,
                   spaceId: currentSpaceId,
                 });
               }}
@@ -158,6 +171,7 @@ export function TableBlockGalleryItem({
                 }}
                 spaceId={currentSpaceId}
                 autoFocus={autoFocus}
+                focusRequestKey={focusRequestKey}
                 relationValueTypes={collectionTypeFilters}
               />
             ) : (
@@ -167,6 +181,9 @@ export function TableBlockGalleryItem({
                     name={name}
                     entityId={rowEntityId}
                     spaceId={currentSpaceId}
+                    entitySpaceIdForPanel={nameCell?.space ?? currentSpaceId}
+                    openedWithMainViewEditing={isEditing}
+                    hideHoverActions
                     onChange={value => {
                       onChangeEntry(rowEntityId, currentSpaceId, { type: 'SET_NAME', name: value });
                     }}
@@ -183,6 +200,9 @@ export function TableBlockGalleryItem({
                     relationId={relationId}
                     verified={verified}
                     onLinkEntry={onLinkEntry}
+                    showSidePanel={!isPlaceholder}
+                    openedWithMainViewEditing={isEditing}
+                    hideHoverActions
                   >
                     <PageStringField
                       placeholder="Entity name..."
@@ -218,23 +238,61 @@ export function TableBlockGalleryItem({
                 </div>
               );
             })}
+
+          {/* Bottom actions row like browse mode, minus votes — voting is browse-only.
+              Side panel / relation actions sit bottom-right on hover. */}
+          {!isPlaceholder && (
+            <div className="mt-2 flex items-center justify-end gap-2">
+              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 has-data-[state=open]:visible has-data-[state=open]:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+                {source.type === 'COLLECTION' ? (
+                  <CollectionRowActions
+                    isEditing={true}
+                    currentSpaceId={currentSpaceId}
+                    entityId={rowEntityId}
+                    spaceId={nameCell?.space}
+                    relationId={relationId}
+                    verified={verified}
+                    onLinkEntry={onLinkEntry}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                ) : (
+                  <div className="flex items-center gap-0.5">
+                    {/* Query rows have no menu to put this behind, so it sits in the row itself,
+                        ahead of the side panel and drawn to match it (GEO-2679). */}
+                    <CopyEntityIdButton entityId={rowEntityId} variant="row" />
+                    <DataBlockOpenSidePanelButton
+                      entityId={rowEntityId}
+                      entitySpaceId={nameCell?.space ?? currentSpaceId}
+                      openedWithMainViewEditing={isEditing}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="group flex flex-col gap-3 rounded-[17px] p-[5px] py-2 transition duration-200 hover:bg-divider">
+    <div className="group flex flex-col gap-3 rounded-[17px] p-1 pb-2 transition duration-200 hover:bg-grey-01">
       <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
-        <div className="relative aspect-2/1 w-full overflow-clip rounded-lg bg-grey-01">
+        <div className={mediaFrameClassName} style={mediaFrameStyle}>
           {image ? (
             <GeoImage
               value={image}
-              className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
+              className={cx(
+                mediaImageFitClassName,
+                'transition-transform duration-150 ease-in-out group-hover:scale-105'
+              )}
               alt=""
               fill
             />
-          ) : (
+          ) : isImageResolving ? // Still looking the image up. Leaving the frame empty reads as the card still
+          // loading; dropping the placeholder in here would show every card the fallback
+          // image and then swap it for the real one.
+          null : (
             <NextImage
               src={PLACEHOLDER_SPACE_IMAGE}
               className="object-cover transition-transform duration-150 ease-in-out group-hover:scale-105"
@@ -247,39 +305,34 @@ export function TableBlockGalleryItem({
         </div>
       </Link>
       <div className="flex w-full flex-col px-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 grow">
-            {source.type !== 'COLLECTION' ? (
+        <div className="min-w-0">
+          {source.type !== 'COLLECTION' ? (
+            <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
+              <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
+            </Link>
+          ) : (
+            <CollectionMetadata
+              view="GALLERY"
+              isEditing={false}
+              name={name}
+              currentSpaceId={currentSpaceId}
+              entityId={rowEntityId}
+              spaceId={nameCell?.space}
+              collectionId={nameCell?.collectionId}
+              relationId={relationId}
+              verified={verified}
+              onLinkEntry={onLinkEntry}
+              hideHoverActions
+              openedWithMainViewEditing={isEditing}
+            >
               <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
                 <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
               </Link>
-            ) : (
-              <CollectionMetadata
-                view="GALLERY"
-                isEditing={false}
-                name={name}
-                currentSpaceId={currentSpaceId}
-                entityId={rowEntityId}
-                spaceId={nameCell?.space}
-                collectionId={nameCell?.collectionId}
-                relationId={relationId}
-                verified={verified}
-                onLinkEntry={onLinkEntry}
-              >
-                <Link entityId={rowEntityId} spaceId={currentSpaceId} href={href}>
-                  <div className="text-smallTitle font-medium text-text">{name || rowEntityId}</div>
-                </Link>
-              </CollectionMetadata>
-            )}
-          </div>
-          <EntityVoteButtons entityId={rowEntityId} spaceId={currentSpaceId} />
+            </CollectionMetadata>
+          )}
         </div>
         {description && propertyDataHasDescription && (
-          <div
-            className={`mt-1 line-clamp-4 md:line-clamp-3 ${LIST_GALLERY_BROWSE_BODY_CLASS}`}
-          >
-            {description}
-          </div>
+          <div className={cx('mt-1 line-clamp-4 md:line-clamp-3', LIST_GALLERY_BROWSE_BODY_CLASS)}>{description}</div>
         )}
 
         {orderCellsForBrowseFigma(
@@ -308,6 +361,38 @@ export function TableBlockGalleryItem({
             </div>
           );
         })}
+        <div className="mt-1 flex items-center gap-4">
+          {/* The entity's own space, not the block's (GEO-2581) — every other space-scoped
+              prop in this component already resolves it this way. */}
+          <EntityRowActions entityId={rowEntityId} spaceId={nameCell?.space ?? currentSpaceId} />
+          {!isPlaceholder && (
+            <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 has-data-[state=open]:visible has-data-[state=open]:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+              {source.type === 'COLLECTION' ? (
+                <CollectionRowActions
+                  isEditing={false}
+                  currentSpaceId={currentSpaceId}
+                  entityId={rowEntityId}
+                  spaceId={nameCell?.space}
+                  relationId={relationId}
+                  verified={verified}
+                  onLinkEntry={onLinkEntry}
+                  openedWithMainViewEditing={isEditing}
+                />
+              ) : (
+                <div className="flex items-center gap-0.5">
+                  {/* Query rows have no menu to put this behind, so it sits in the row itself,
+                      ahead of the side panel and drawn to match it (GEO-2679). */}
+                  <CopyEntityIdButton entityId={rowEntityId} variant="row" />
+                  <DataBlockOpenSidePanelButton
+                    entityId={rowEntityId}
+                    entitySpaceId={nameCell?.space ?? currentSpaceId}
+                    openedWithMainViewEditing={isEditing}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

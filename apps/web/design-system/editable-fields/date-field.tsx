@@ -32,6 +32,7 @@ interface DateInputProps {
   initialDate: string;
   onDateChange: (date: string) => void;
   label?: string;
+  timezone?: 'utc' | 'local';
 }
 
 const dateTextStyles = cva('', {
@@ -220,6 +221,12 @@ const VALID_DAY_LENGTH = 2;
 const VALID_HOUR_LENGTH = 2;
 const VALID_MINUTE_LENGTH = 2;
 
+export function to24HourString(hour12: string, meridiem: 'am' | 'pm'): string {
+  if (hour12.trim() === '') return '';
+  const normalized = Number(hour12) % 12; // 12 → 0; 1–11 unchanged
+  return String(meridiem === 'pm' ? normalized + 12 : normalized);
+}
+
 // Default display formats per data type
 const DATE_ONLY_FORMAT = 'MMM d, yyyy';
 const TIME_ONLY_FORMAT = 'h:mm aaa';
@@ -263,7 +270,7 @@ function useSelectAllOnFocus(refs: React.RefObject<HTMLInputElement | null>[]) {
  * Only shows date fields (year, month, day)
  * Serializes to date-only ISO string (YYYY-MM-DDT00:00:00.000Z)
  */
-function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
+export function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
   const { day: initialDay, month: initialMonth, year: initialYear } = GeoDate.fromISOStringUTC(initialDate);
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
@@ -288,6 +295,15 @@ function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
   const dayInputRef = React.useRef<HTMLInputElement>(null);
 
   useSelectAllOnFocus([yearInputRef, monthInputRef, dayInputRef]);
+
+  // Reset local input state when the value is cleared externally (e.g. the delete/trashcan button).
+  React.useEffect(() => {
+    if (initialDate === '') {
+      setYear('');
+      setMonth('');
+      setDay('');
+    }
+  }, [initialDate, setYear, setMonth, setDay]);
 
   const isValidYear =
     year.value === '' ||
@@ -387,7 +403,7 @@ function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
 
   return (
     <div className="flex flex-col">
-      {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
+      {label && <p className="mb-2 text-sm font-medium text-grey-05">{label}</p>}
       <div className="flex items-start justify-between gap-3">
         <div className="flex w-[136px] items-center gap-1">
           <div className="flex flex-6 flex-col">
@@ -400,7 +416,7 @@ function DateOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
                 updateDate();
               }}
               placeholder="YYYY"
-              className={`${dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
+              className={cx(dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid }), 'text-start')}
             />
           </div>
 
@@ -483,6 +499,15 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
 
   useSelectAllOnFocus([hourInputRef, minuteInputRef]);
 
+  // Reset local input state when the value is cleared externally (e.g. the delete/trashcan button).
+  React.useEffect(() => {
+    if (initialDate === '') {
+      setHour('');
+      setMinute('');
+      setMeridiem('am');
+    }
+  }, [initialDate, setHour, setMinute]);
+
   const isValidHour =
     hour.value === '' ||
     (!hour.isValidating && hour.isValid) ||
@@ -507,10 +532,6 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
       setHour(newHour);
     }
 
-    if (Number(hour.value) === 12) {
-      newHour = '00';
-    }
-
     const isValidHourCheck = hour.value === '' || (!hour.isValidating && hour.isValid);
     const isValidMinuteCheck = minute.value === '' || (!minute.isValidating && minute.isValid);
     const isValid = isValidHourCheck && isValidMinuteCheck && timeFormState.isValid;
@@ -521,7 +542,7 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
         day: '01',
         month: '01',
         year: '1970',
-        hour: newMeridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
+        hour: to24HourString(newHour, newMeridiem),
         minute: newMinute,
       });
 
@@ -569,7 +590,7 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
 
   return (
     <div className="flex flex-col">
-      {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
+      {label && <p className="mb-2 text-sm font-medium text-grey-05">{label}</p>}
       <div className="flex items-start justify-between gap-3">
         <div className="flex grow items-center">
           <div className="flex items-center gap-1">
@@ -627,9 +648,10 @@ function TimeOnlyInput({ variant, initialDate, onDateChange, label }: DateInputP
 /**
  * DateTimeInput - handles DATETIME dataType (default)
  * Shows all fields: date (year, month, day) and time (hour, minute, meridiem)
- * Serializes to full datetime ISO string
+ * Serializes to a UTC ISO string. By default typed values are UTC; pass
+ * `timezone="local"` to interpret wall-clock fields in the user's timezone.
  */
-function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputProps) {
+export function DateTimeInput({ variant, initialDate, onDateChange, label, timezone = 'utc' }: DateInputProps) {
   const {
     day: initialDay,
     month: initialMonth,
@@ -637,7 +659,7 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
     hour: initialHour,
     minute: initialMinute,
     meridiem: initialMeridiem,
-  } = GeoDate.fromISOStringUTC(initialDate);
+  } = timezone === 'local' ? GeoDate.fromISOStringLocal(initialDate) : GeoDate.fromISOStringUTC(initialDate);
 
   const formattedInitialDay = initialDay === '' ? initialDay : initialDay.padStart(2, '0');
   const formattedInitialMonth = initialMonth === '' ? initialMonth : initialMonth.padStart(2, '0');
@@ -673,6 +695,18 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
   const meridiemButtonRef = React.useRef<HTMLButtonElement>(null);
 
   useSelectAllOnFocus([yearInputRef, monthInputRef, dayInputRef, hourInputRef, minuteInputRef]);
+
+  // Reset local input state when the value is cleared externally (e.g. the delete/trashcan button).
+  React.useEffect(() => {
+    if (initialDate === '') {
+      setYear('');
+      setMonth('');
+      setDay('');
+      setHour('');
+      setMinute('');
+      setMeridiem('am');
+    }
+  }, [initialDate, setYear, setMonth, setDay, setHour, setMinute]);
 
   const isValidYear =
     year.value === '' ||
@@ -730,10 +764,6 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
       setYear(newYear);
     }
 
-    if (Number(hour.value) === 12) {
-      newHour = '00';
-    }
-
     const isValidDayCheck = day.value !== '' || (!day.isValidating && day.isValid);
     const isValidMonthCheck = month.value !== '' || (!month.isValidating && month.isValid) || !dateFormState.isValid;
     const isValidYearCheck = year.value !== '' || (!year.isValidating && year.isValid);
@@ -749,13 +779,14 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
       timeFormState.isValid;
 
     if (isValid) {
-      const isoString = GeoDate.toISOStringUTC({
+      const parts = {
         day: newDay,
         month: newMonth,
         year: newYear,
         minute: newMinute,
-        hour: newMeridiem === 'am' ? newHour : (Number(newHour) + 12).toString(),
-      });
+        hour: to24HourString(newHour, newMeridiem),
+      };
+      const isoString = timezone === 'local' ? GeoDate.toISOStringLocal(parts) : GeoDate.toISOStringUTC(parts);
 
       onDateChange(isoString);
     }
@@ -850,7 +881,7 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
 
   return (
     <div className="flex flex-col">
-      {label && <p className="text-grey-05 mb-2 text-sm font-medium">{label}</p>}
+      {label && <p className="mb-2 text-sm font-medium text-grey-05">{label}</p>}
       <div className="flex items-start justify-between gap-3">
         <div className="flex w-[136px] items-center gap-1">
           <div className="flex flex-6 flex-col">
@@ -863,7 +894,7 @@ function DateTimeInput({ variant, initialDate, onDateChange, label }: DateInputP
                 updateDate(meridiem);
               }}
               placeholder="YYYY"
-              className={`${dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid })} text-start`}
+              className={cx(dateFieldStyles({ variant, error: !isValidYear || !dateFormState.isValid }), 'text-start')}
             />
           </div>
 

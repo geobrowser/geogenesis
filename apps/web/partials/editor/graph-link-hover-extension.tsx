@@ -1,8 +1,9 @@
+import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom';
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
+
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
-import { computePosition, flip, shift, offset, autoUpdate } from '@floating-ui/dom';
 
 import { NavUtils } from '~/core/utils/utils';
 
@@ -162,17 +163,10 @@ export const createGraphLinkHoverExtension = (spaceId: string, router: AppRouter
                         try {
                           if (currentLinkElement && state.schema.marks.link) {
                             const from = editorView.posAtDOM(currentLinkElement, 0);
-                            const to = editorView.posAtDOM(
-                              currentLinkElement,
-                              currentLinkElement.childNodes.length
-                            );
+                            const to = editorView.posAtDOM(currentLinkElement, currentLinkElement.childNodes.length);
 
                             if (from < to) {
-                              transaction = transaction.removeMark(
-                                from,
-                                to,
-                                state.schema.marks.link
-                              );
+                              transaction = transaction.removeMark(from, to, state.schema.marks.link);
                             }
                           }
 

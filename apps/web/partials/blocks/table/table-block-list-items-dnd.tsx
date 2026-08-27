@@ -15,9 +15,11 @@ const renderItem = ({
   onChangeEntry,
   onLinkEntry,
   properties,
+  mainMedia,
   source,
   isPlaceholder,
   autoFocus,
+  placeholderFocusKey,
   collectionTypeFilters,
 }: RenderItemProps) => (
   <TableBlockListItem
@@ -29,9 +31,11 @@ const renderItem = ({
     onChangeEntry={onChangeEntry}
     onLinkEntry={onLinkEntry}
     properties={properties}
+    mainMedia={mainMedia}
     relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
     source={source}
     autoFocus={autoFocus}
+    focusRequestKey={placeholderFocusKey}
     collectionTypeFilters={collectionTypeFilters}
   />
 );

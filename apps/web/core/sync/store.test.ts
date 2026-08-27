@@ -298,6 +298,173 @@ describe('GeoStore', () => {
       expect(reactiveRelations.get()).toContain(mockRelation1);
     });
 
+    it('should dedupe column-property relations, preferring local over remote', () => {
+      const remoteShownColumn: Relation = {
+        ...mockRelation1,
+        id: 'remote-shown-column',
+        type: { id: SystemIds.SHOWN_COLUMNS, name: 'Shown Columns' },
+        toEntity: { id: 'property-1', name: 'Property 1', value: 'property-1' },
+        timestamp: '2023-01-01T00:00:00Z',
+        isLocal: false,
+        hasBeenPublished: true,
+      };
+      const localShownColumn: Relation = {
+        ...remoteShownColumn,
+        id: 'local-shown-column',
+        timestamp: '2023-01-02T00:00:00Z',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+
+      reactiveRelations.set([remoteShownColumn]);
+
+      store.hydrateWith([
+        {
+          ...mockEntity1,
+          relations: [localShownColumn],
+        },
+      ]);
+
+      const relations = reactiveRelations.get();
+      expect(relations).toHaveLength(1);
+      expect(relations[0].id).toBe('local-shown-column');
+    });
+
+    it('should dedupe view-property relations by from-entity, preferring local', () => {
+      const remoteView: Relation = {
+        ...mockRelation1,
+        id: 'remote-view',
+        type: { id: SystemIds.VIEW_PROPERTY, name: 'View' },
+        toEntity: { id: SystemIds.TABLE_VIEW, name: 'Table', value: SystemIds.TABLE_VIEW },
+        timestamp: '2023-01-01T00:00:00Z',
+        isLocal: false,
+        hasBeenPublished: true,
+      };
+      const localView: Relation = {
+        ...remoteView,
+        id: 'local-view',
+        toEntity: { id: SystemIds.GALLERY_VIEW, name: 'Gallery', value: SystemIds.GALLERY_VIEW },
+        timestamp: '2023-01-02T00:00:00Z',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+
+      reactiveRelations.set([remoteView]);
+
+      store.hydrateWith([
+        {
+          ...mockEntity1,
+          relations: [localView],
+        },
+      ]);
+
+      const relations = reactiveRelations.get();
+      expect(relations).toHaveLength(1);
+      expect(relations[0].id).toBe('local-view');
+    });
+
+    it('should preserve locally-deleted relations alongside a same-key replacement', () => {
+      const publishedBlockRelation: Relation = {
+        ...mockRelation1,
+        id: 'relation-old',
+        type: { id: SystemIds.BLOCKS, name: 'Blocks' },
+        toEntity: { id: 'block-1', name: null, value: 'block-1' },
+        isLocal: false,
+        hasBeenPublished: true,
+      };
+      // Moving a block deletes its old BLOCKS relation and creates a same-key
+      // replacement. The deleted relation carries the pending delete op and must
+      // survive hydration, or the publish never deletes the old relation.
+      const deletedOld: Relation = {
+        ...publishedBlockRelation,
+        isDeleted: true,
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+      const replacement: Relation = {
+        ...publishedBlockRelation,
+        id: 'relation-new',
+        isLocal: true,
+        hasBeenPublished: false,
+      };
+
+      reactiveRelations.set([deletedOld, replacement]);
+
+      // A sync delivers the server copy of the old relation.
+      store.hydrateWith([
+        {
+          ...mockEntity1,
+          relations: [publishedBlockRelation],
+        },
+      ]);
+
+      const relations = reactiveRelations.get();
+      expect(relations.map(r => r.id).sort()).toEqual(['relation-new', 'relation-old']);
+      expect(relations.find(r => r.id === 'relation-old')?.isDeleted).toBe(true);
+    });
+
+    it('should keep the duplicate BLOCKS relation whose relation entity carries view config, across re-hydrations in any order', () => {
+      // Duplicate published page→block relations (no timestamps, like real
+      // remote data). Only one junction entity holds the block's view config.
+      const configured: Relation = {
+        ...mockRelation1,
+        id: 'blocks-configured',
+        entityId: 'junction-configured',
+        type: { id: SystemIds.BLOCKS, name: 'Blocks' },
+        toEntity: { id: 'block-1', name: null, value: 'block-1' },
+        timestamp: undefined,
+      };
+      const bare: Relation = {
+        ...configured,
+        id: 'blocks-bare',
+        entityId: 'junction-bare',
+      };
+      const viewConfig: Relation = {
+        ...mockRelation1,
+        id: 'view-config',
+        entityId: 'view-config-entity',
+        type: { id: SystemIds.VIEW_PROPERTY, name: 'View' },
+        fromEntity: { id: 'junction-configured', name: null },
+        toEntity: { id: SystemIds.LIST_VIEW, name: 'List', value: SystemIds.LIST_VIEW },
+        timestamp: undefined,
+      };
+
+      store.hydrateWith([{ ...mockEntity1, relations: [configured, bare, viewConfig] }]);
+
+      const survivingBlocks = () => reactiveRelations.get().filter(r => r.type.id === SystemIds.BLOCKS && !r.isDeleted);
+
+      expect(survivingBlocks()).toHaveLength(1);
+      expect(survivingBlocks()[0].entityId).toBe('junction-configured');
+
+      // A later sync delivers the duplicates in the opposite order — the
+      // survivor must not flip, or the view config is orphaned.
+      store.hydrateWith([{ ...mockEntity1, relations: [bare, configured] }]);
+
+      expect(survivingBlocks()).toHaveLength(1);
+      expect(survivingBlocks()[0].entityId).toBe('junction-configured');
+    });
+
+    it('should collapse timestamp-less duplicates to the same survivor regardless of hydration order', () => {
+      const relationA: Relation = {
+        ...mockRelation1,
+        id: 'dup-a',
+        entityId: 'junction-a',
+        type: { id: SystemIds.BLOCKS, name: 'Blocks' },
+        toEntity: { id: 'block-1', name: null, value: 'block-1' },
+        timestamp: undefined,
+      };
+      const relationB: Relation = { ...relationA, id: 'dup-b', entityId: 'junction-b' };
+
+      store.hydrateWith([{ ...mockEntity1, relations: [relationA, relationB] }]);
+      const firstSurvivor = reactiveRelations.get().find(r => r.type.id === SystemIds.BLOCKS);
+
+      reactiveRelations.set([]);
+      store.hydrateWith([{ ...mockEntity1, relations: [relationB, relationA] }]);
+      const secondSurvivor = reactiveRelations.get().find(r => r.type.id === SystemIds.BLOCKS);
+
+      expect(firstSurvivor?.id).toBe(secondSurvivor?.id);
+    });
+
     it('should replace existing values and relations with same ID', () => {
       // Set initial data
       reactiveValues.set([mockValue1]);
@@ -382,6 +549,29 @@ describe('GeoStore', () => {
 
       expect(entities).toHaveLength(2);
       expect(entities.map(e => e.id)).toEqual(['entity-1', 'entity-2']);
+    });
+
+    it('includes local-only entities that exist only in the value/relation indexes (GEO-2189)', () => {
+      // A new entity created in the UI lives only in the value/relation indexes
+      // (via setValue/setRelation) and never gets a syncedEntities entry until
+      // it is fetched back from remote. getEntities() feeds relation and global
+      // search, so these unpublished entities must still be surfaced.
+      store.setValue({
+        ...mockValue1,
+        id: 'local-value',
+        entity: { id: 'value-only-entity', name: 'Value Only Entity' },
+      });
+      store.setRelation({
+        ...mockRelation1,
+        id: 'local-relation',
+        entityId: 'relation-only-entity',
+        fromEntity: { id: 'relation-only-entity', name: 'Relation Only Entity' },
+      });
+
+      const ids = store.getEntities().map(e => e.id);
+
+      expect(ids).toContain('value-only-entity');
+      expect(ids).toContain('relation-only-entity');
     });
   });
 
@@ -798,6 +988,70 @@ describe('GeoStore', () => {
         spaceId: 'space-1',
       });
     });
+
+    it('should immediately restore a locally deleted remote relation from the synced baseline', () => {
+      const remoteRelation: Relation = {
+        ...mockRelation1,
+        type: { id: SystemIds.PROPERTIES, name: 'Properties' },
+        isLocal: false,
+        hasBeenPublished: true,
+        isDeleted: false,
+      };
+      const localDeletedRelation: Relation = {
+        ...remoteRelation,
+        isLocal: true,
+        hasBeenPublished: false,
+        isDeleted: true,
+      };
+
+      syncedEntities.set('entity-1', {
+        ...mockEntity1,
+        relations: [remoteRelation],
+      });
+      reactiveRelations.set([localDeletedRelation]);
+
+      store.clearLocalChangesByIds({
+        spaceId: 'space-1',
+        valueIds: [],
+        relationIds: [remoteRelation.id],
+      });
+
+      expect(reactiveRelations.get()).toEqual([remoteRelation]);
+    });
+  });
+
+  describe('clearLocalChangesForSpace', () => {
+    it('should immediately restore locally deleted remote type properties from the synced baseline', () => {
+      const remotePropertyRelation: Relation = {
+        ...mockRelation1,
+        id: 'type-property-relation',
+        type: { id: SystemIds.PROPERTIES, name: 'Properties' },
+        toEntity: { id: 'property-1', name: 'Property 1', value: 'property-1' },
+        isLocal: false,
+        hasBeenPublished: true,
+        isDeleted: false,
+      };
+      const localDeletedPropertyRelation: Relation = {
+        ...remotePropertyRelation,
+        isLocal: true,
+        hasBeenPublished: false,
+        isDeleted: true,
+      };
+
+      syncedEntities.set('entity-1', {
+        ...mockEntity1,
+        relations: [remotePropertyRelation],
+      });
+      reactiveRelations.set([localDeletedPropertyRelation]);
+
+      store.clearLocalChangesForSpace('space-1');
+
+      expect(reactiveRelations.get()).toEqual([remotePropertyRelation]);
+      expect(mockStream.emit).toHaveBeenCalledWith({
+        type: GeoEventStream.HYDRATE,
+        entities: ['entity-1'],
+      });
+    });
   });
 
   describe('findReferencingEntities', () => {
@@ -929,20 +1183,35 @@ describe('GeoStore', () => {
     describe('queryKeys', () => {
       it('should return query keys for entities query', () => {
         const where = { id: { equals: 'entity-1' } };
-        const keys = GeoStore.queryKeys(where, 10, 0);
+        const keys = GeoStore.queryKeys(where, 10);
 
         // Uses stableStringify for deterministic key order
-        expect(keys).toEqual(['store', 'entities', '{"id":{"equals":"entity-1"}}', 10, 0]);
+        expect(keys).toEqual(['store', 'entities', '{"id":{"equals":"entity-1"}}', 10, null, 0]);
       });
 
       it('should produce consistent keys regardless of object key order', () => {
         const where1 = { name: { equals: 'test' }, id: { equals: 'entity-1' } };
         const where2 = { id: { equals: 'entity-1' }, name: { equals: 'test' } };
 
-        const keys1 = GeoStore.queryKeys(where1, 10, 0);
-        const keys2 = GeoStore.queryKeys(where2, 10, 0);
+        const keys1 = GeoStore.queryKeys(where1, 10);
+        const keys2 = GeoStore.queryKeys(where2, 10);
 
         expect(keys1).toEqual(keys2);
+      });
+
+      it('threads cursor and offset through the key tail', () => {
+        const where = { id: { equals: 'entity-1' } };
+        const keys = GeoStore.queryKeys(where, 10, 'after-cursor', 5);
+
+        expect(keys).toEqual(['store', 'entities', '{"id":{"equals":"entity-1"}}', 10, 'after-cursor', 5]);
+      });
+
+      it('distinguishes jumped-to pages from sequentially walked ones', () => {
+        const where = { id: { equals: 'entity-1' } };
+        const sequential = GeoStore.queryKeys(where, 10, 'cursor-page-3', 0);
+        const jumped = GeoStore.queryKeys(where, 10, 'cursor-page-3', 4);
+
+        expect(sequential).not.toEqual(jumped);
       });
     });
   });

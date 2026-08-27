@@ -1,14 +1,11 @@
 import * as React from 'react';
 
-import { SidebarCounts } from '~/core/io/fetch-sidebar-counts';
-
-import { Skeleton } from '~/design-system/skeleton';
-
 import {
   type GovernanceHomeReviewCategory,
   type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
 import { HomeProposalsInfiniteScroll } from './home-proposals-infinite-scroll';
+import { LoadingSkeleton } from './loading-skeleton';
 import { MyGovernanceProposalsList } from './my-governance-proposals-list';
 import { PendingProposalsPage } from './pending-proposals-page';
 import { PersonalHomeDashboard } from './personal-home-dashboard';
@@ -21,7 +18,7 @@ type GovernanceFilters = {
 
 type Props = {
   header: React.ReactNode;
-  sidebarCounts?: SidebarCounts;
+  sidebar: React.ReactNode;
   proposalType?: 'membership' | 'content';
   connectedAddress?: string;
   connectedSpaceId?: string;
@@ -34,7 +31,7 @@ type Props = {
 
 export async function Component({
   header,
-  sidebarCounts,
+  sidebar,
   proposalType,
   connectedAddress,
   connectedSpaceId,
@@ -44,11 +41,9 @@ export async function Component({
   myProposalSpaceOptions,
   myProposalSpaceIds,
 }: Props) {
-  const listKey = `${governanceTab}-${governanceFilters.spaceId}-${governanceFilters.category}-${governanceFilters.status}-${proposalType}-${connectedAddress}`;
-
   return (
     <>
-      <div className="mx-auto max-w-[880px]">
+      <div className="mx-auto w-full max-w-[880px]">
         {header}
         <PersonalHomeDashboard
           governanceTab={governanceTab}
@@ -60,7 +55,6 @@ export async function Component({
               <p className="text-body text-grey-04">Sign in to see your proposals.</p>
             ) : governanceTab === 'my' && connectedSpaceId ? (
               <React.Suspense
-                key={listKey}
                 fallback={
                   <div className="space-y-2">
                     <LoadingSkeleton />
@@ -81,7 +75,6 @@ export async function Component({
               </React.Suspense>
             ) : (
               <React.Suspense
-                key={listKey}
                 fallback={
                   <div className="space-y-2">
                     <LoadingSkeleton />
@@ -99,22 +92,10 @@ export async function Component({
               </React.Suspense>
             )
           }
-          sidebarCounts={sidebarCounts}
+          sidebar={sidebar}
         />
       </div>
     </>
-  );
-}
-
-export function LoadingSkeleton() {
-  return (
-    <div className="space-y-4 rounded-lg border border-grey-02 p-4">
-      <div className="space-y-2">
-        <Skeleton className="h-5 w-36" />
-        <Skeleton className="h-4 w-20" />
-      </div>
-      <Skeleton className="h-5 w-48" />
-    </div>
   );
 }
 

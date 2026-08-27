@@ -1,11 +1,85 @@
 import { graphql } from '~/core/gql';
 
+// Shared selection sets for the entity-shaped queries below. These collapse
+// the per-relation/per-value shape into one place so a schema change (or a
+// truncation/payload fix) happens once instead of being re-inlined per query.
+//
+// Field selections are intentionally trimmed to what consumers actually read
+// (see core/io/dto/relations.ts + values.ts):
+//   - toEntity.valuesList → only { spaceId, propertyId, text }
+//   - toEntity.types      → only { id } (renderableType detection)
+//   - top-level valuesList → no `bytes` (getValueFromDataType returns null for BYTES)
+
+export const relationToEntityFragment = graphql(/* GraphQL */ `
+  fragment RelationToEntity on Entity {
+    id
+    name
+    types {
+      id
+    }
+    # Bounded like every sibling list in this file. This one rides on each relation of each
+    # entity in a batch, so it is the most multiplied list here and the only one that was
+    # left open — an entity with a heavily-valued neighbour could pull far more than the
+    # three fields below suggest.
+    valuesList(first: 1000) {
+      spaceId
+      propertyId
+      text
+    }
+  }
+`);
+
+export const entityValueFragment = graphql(/* GraphQL */ `
+  fragment EntityValueFields on Value {
+    spaceId
+    property {
+      ...PropertyFragment
+    }
+    text
+    integer
+    float
+    point
+    boolean
+    time
+    language
+    unit
+    datetime
+    date
+    decimal
+    schedule
+  }
+`);
+
+export const relationFieldsFragment = graphql(/* GraphQL */ `
+  fragment RelationFields on Relation {
+    id
+    spaceId
+    position
+    verified
+    entityId
+    fromEntity {
+      id
+      name
+    }
+    toEntity {
+      ...RelationToEntity
+    }
+    toSpaceId
+    type {
+      id
+      name
+    }
+  }
+`);
+
 export const entityFragment = graphql(/* GraphQL */ `
   fragment FullEntity on Entity {
     id
     name
     description
     spaceIds
+    createdAt
+    createdAtBlock
     updatedAt
 
     types {
@@ -13,64 +87,12 @@ export const entityFragment = graphql(/* GraphQL */ `
       name
     }
 
-    valuesList {
-      spaceId
-      property {
-        ...PropertyFragment
-      }
-      text
-      integer
-      float
-      point
-      boolean
-      time
-      language
-      unit
-      datetime
-      date
-      decimal
-      bytes
-      schedule
+    valuesList(first: 1000) {
+      ...EntityValueFields
     }
 
-    relationsList {
-      id
-      spaceId
-      position
-      verified
-      entityId
-      fromEntity {
-        id
-        name
-      }
-      toEntity {
-        id
-        name
-        types {
-          id
-          name
-        }
-        valuesList {
-          spaceId
-          propertyId
-          text
-          integer
-          float
-          point
-          boolean
-          time
-          datetime
-          date
-          decimal
-          bytes
-          schedule
-        }
-      }
-      toSpaceId
-      type {
-        id
-        name
-      }
+    relationsList(first: 1000) {
+      ...RelationFields
     }
   }
 `);
@@ -107,157 +129,24 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         name
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      # Lightweight cross-space view used to decide which spaces still hold
+      # real entity data. The main valuesList/relationsList below are scoped
+      # for display, so routing/search display needs this unscoped projection.
+      allValuesList: valuesList(first: 1000) {
         spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
+        propertyId
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
-        id
+      allRelationsList: relationsList(first: 1000) {
         spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
-        }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
-        }
-        toSpaceId
-        type {
-          id
-          name
-        }
-      }
-    }
-  }
-`);
-
-export const entitiesOrderedByPropertyQuery = graphql(/* GraphQL */ `
-  query EntitiesOrderedByProperty(
-    $propertyId: UUID
-    $sortDirection: SortOrder
-    $dataType: String
-    $spaceId: UUID
-    $limit: Int
-    $offset: Int
-    $filter: EntityFilter
-  ) {
-    entitiesOrderedByProperty(
-      propertyId: $propertyId
-      sortDirection: $sortDirection
-      dataType: $dataType
-      spaceId: $spaceId
-      first: $limit
-      offset: $offset
-      filter: $filter
-    ) {
-      id
-      name
-      description
-      spaceIds
-      updatedAt
-
-      types {
-        id
-        name
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
-        spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
+        ...EntityValueFields
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
-        id
-        spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
-        }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
-        }
-        toSpaceId
-        type {
-          id
-          name
-        }
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
+        ...RelationFields
       }
     }
   }
@@ -276,139 +165,98 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
         name
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
-        spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
+        ...EntityValueFields
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
-        id
-        spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
-        }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
-        }
-        toSpaceId
-        type {
-          id
-          name
-        }
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
+        ...RelationFields
       }
     }
   }
 `);
 
+export const entitySpacesBatchQuery = graphql(/* GraphQL */ `
+  query EntitySpacesBatch($filter: EntityFilter) {
+    entities(filter: $filter) {
+      id
+      spaceIds
+
+      allValuesList: valuesList(first: 1000) {
+        spaceId
+        propertyId
+      }
+
+      allRelationsList: relationsList(first: 1000) {
+        spaceId
+      }
+    }
+  }
+`);
+
+// Relations are fetched through the paginated `relations` connection (not the
+// non-paginated `relationsList`, which silently truncates at the server's
+// 100-row default). `getEntity` drains follow-up pages via $cursor when
+// `pageInfo.hasNextPage`, so hydration is correct for any number of relations.
+// Most entities fit in the first page, so the extra round-trips only fire when
+// actually needed.
 export const entityQuery = graphql(/* GraphQL */ `
-  query Entity($id: UUID!, $spaceId: UUID) {
+  query Entity($id: UUID!, $spaceId: UUID, $cursor: Cursor) {
     entity(id: $id) {
       id
       name
       description
       spaceIds
+      updatedAt
 
       types {
         id
         name
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      # Lightweight cross-space view used to decide which space an entity link
+      # routes to. The main valuesList/relations below are space-scoped for
+      # display, so we need an unscoped projection to know which spaces hold
+      # real (non-hidden) content.
+      allValuesList: valuesList(first: 1000) {
         spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
+        propertyId
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
-        id
+      allRelationsList: relationsList(first: 1000) {
         spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
+      }
+
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
+        ...EntityValueFields
+      }
+
+      relations(first: 500, after: $cursor, filter: { spaceId: { is: $spaceId } }) {
+        pageInfo {
+          hasNextPage
+          endCursor
         }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
+        nodes {
+          ...RelationFields
         }
-        toSpaceId
-        type {
-          id
-          name
+      }
+    }
+  }
+`);
+
+// Drains subsequent relation pages for an entity. `getEntity` calls this with
+// the prior page's `endCursor` until `hasNextPage` is false, then merges all
+// nodes into the entity's `relationsList` before decoding.
+export const entityRelationsPageQuery = graphql(/* GraphQL */ `
+  query EntityRelationsPage($id: UUID!, $spaceId: UUID, $cursor: Cursor) {
+    entity(id: $id) {
+      relations(first: 500, after: $cursor, filter: { spaceId: { is: $spaceId } }) {
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+        nodes {
+          ...RelationFields
         }
       }
     }
@@ -417,44 +265,8 @@ export const entityQuery = graphql(/* GraphQL */ `
 
 export const relationFragment = graphql(/* GraphQL */ `
   fragment FullRelation on Relation {
-    id
-    spaceId
-    position
-    verified
-    entityId
+    ...RelationFields
     entity {
-      id
-      name
-    }
-    fromEntity {
-      id
-      name
-    }
-    toEntity {
-      id
-      name
-      types {
-        id
-        name
-      }
-      valuesList {
-        spaceId
-        propertyId
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        datetime
-        date
-        decimal
-        bytes
-        schedule
-      }
-    }
-    toSpaceId
-    type {
       id
       name
     }
@@ -480,6 +292,14 @@ export const relationsByToEntityIdsQuery = graphql(/* GraphQL */ `
   }
 `);
 
+export const relationsByFromEntityIdQuery = graphql(/* GraphQL */ `
+  query RelationsByFromEntityId($fromEntityId: UUID!, $typeId: UUID!, $spaceId: UUID!) {
+    relations(filter: { fromEntityId: { is: $fromEntityId }, typeId: { is: $typeId }, spaceId: { is: $spaceId } }) {
+      ...FullRelation
+    }
+  }
+`);
+
 export const entityPageQuery = graphql(/* GraphQL */ `
   query EntityPage($id: UUID!, $spaceId: UUID) {
     entity(id: $id) {
@@ -493,64 +313,25 @@ export const entityPageQuery = graphql(/* GraphQL */ `
         name
       }
 
-      valuesList(filter: { spaceId: { is: $spaceId } }) {
+      # Lightweight cross-space view used to decide which space an entity link
+      # routes to. The main valuesList/relationsList below are space-scoped for
+      # display, so we need an unscoped projection to know which spaces hold
+      # real (non-hidden) content.
+      allValuesList: valuesList(first: 1000) {
         spaceId
-        property {
-          ...PropertyFragment
-        }
-        text
-        integer
-        float
-        point
-        boolean
-        time
-        language
-        unit
-        datetime
-        date
-        decimal
-        bytes
-        schedule
+        propertyId
       }
 
-      relationsList(filter: { spaceId: { is: $spaceId } }) {
-        id
+      allRelationsList: relationsList(first: 1000) {
         spaceId
-        position
-        verified
-        entityId
-        fromEntity {
-          id
-          name
-        }
-        toEntity {
-          id
-          name
-          types {
-            id
-            name
-          }
-          valuesList {
-            spaceId
-            propertyId
-            text
-            integer
-            float
-            point
-            boolean
-            time
-            datetime
-            date
-            decimal
-            bytes
-            schedule
-          }
-        }
-        toSpaceId
-        type {
-          id
-          name
-        }
+      }
+
+      valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
+        ...EntityValueFields
+      }
+
+      relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
+        ...RelationFields
       }
     }
     relations(filter: { entityId: { is: $id }, spaceId: { is: $spaceId } }) {
@@ -565,6 +346,62 @@ export const entityTypesQuery = graphql(/* GraphQL */ `
       types(filter: { spaceIds: { anyEqualTo: $spaceId } }) {
         id
         name
+      }
+    }
+  }
+`);
+
+export const entityExistsQuery = graphql(/* GraphQL */ `
+  query EntityExists($id: UUID!) {
+    entity(id: $id) {
+      id
+    }
+  }
+`);
+
+export const entityCommentReplyBacklinksPageQuery = graphql(/* GraphQL */ `
+  query EntityCommentReplyBacklinksPage(
+    $id: UUID!
+    $replyToTypeId: UUID!
+    $commentTypeId: UUID!
+    $first: Int!
+    $offset: Int!
+  ) {
+    entity(id: $id) {
+      backlinksList(
+        first: $first
+        offset: $offset
+        filter: { typeId: { is: $replyToTypeId }, fromEntity: { typeIds: { overlaps: [$commentTypeId] } } }
+      ) {
+        fromEntity {
+          id
+        }
+      }
+    }
+  }
+`);
+
+export const entitiesBatchForCommentsQuery = graphql(/* GraphQL */ `
+  query EntitiesBatchForComments($filter: EntityFilter) {
+    entities(filter: $filter) {
+      id
+      name
+      description
+      spaceIds
+      createdAt
+      updatedAt
+
+      types {
+        id
+        name
+      }
+
+      valuesList(first: 1000) {
+        ...EntityValueFields
+      }
+
+      relationsList(first: 1000) {
+        ...RelationFields
       }
     }
   }
@@ -601,12 +438,26 @@ export const spaceFragment = graphql(/* GraphQL */ `
       ...FullEntity
     }
 
+    members {
+      totalCount
+    }
+
     membersList {
       memberSpaceId
     }
 
+    editors {
+      totalCount
+    }
+
     editorsList {
       memberSpaceId
+    }
+
+    # DAO voting settings. Only populated on DAO spaces after the indexer has
+    # ingested the DAO's createDAOSpaceProxy event.
+    spaceVotingSetting {
+      flatSupportThreshold
     }
 
     page {
@@ -635,6 +486,59 @@ export const spacesWhereMemberQuery = graphql(/* GraphQL */ `
   query SpacesWhereMember($memberSpaceId: UUID!) {
     spaces(filter: { members: { some: { memberSpaceId: { is: $memberSpaceId } } } }) {
       ...FullSpace
+    }
+  }
+`);
+
+// Targeted membership/editorship checks.
+// `membersList`/`editorsList` is paginated server-side (default 100), so a
+// client-side `includes()` against `space.membersList` misses members past
+// the first page. These queries filter server-side and ask for a single row.
+export const isMemberOfSpaceQuery = graphql(/* GraphQL */ `
+  query IsMemberOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {
+    space(id: $spaceId) {
+      membersList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
+export const isEditorOfSpaceQuery = graphql(/* GraphQL */ `
+  query IsEditorOfSpace($spaceId: UUID!, $memberSpaceId: UUID!) {
+    space(id: $spaceId) {
+      editorsList(filter: { memberSpaceId: { is: $memberSpaceId } }, first: 1) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
+// Paginated members/editors. `totalCount` is authoritative for the count
+// shown in the chip and footers; `membersList`/`editorsList` carry the
+// current page of memberSpaceIds.
+export const spaceMembersPageQuery = graphql(/* GraphQL */ `
+  query SpaceMembersPage($spaceId: UUID!, $first: Int!, $offset: Int!) {
+    space(id: $spaceId) {
+      members {
+        totalCount
+      }
+      membersList(first: $first, offset: $offset) {
+        memberSpaceId
+      }
+    }
+  }
+`);
+
+export const spaceEditorsPageQuery = graphql(/* GraphQL */ `
+  query SpaceEditorsPage($spaceId: UUID!, $first: Int!, $offset: Int!) {
+    space(id: $spaceId) {
+      editors {
+        totalCount
+      }
+      editorsList(first: $first, offset: $offset) {
+        memberSpaceId
+      }
     }
   }
 `);
@@ -695,6 +599,31 @@ export const resultQuery = graphql(/* GraphQL */ `
 export const resultsQuery = graphql(/* GraphQL */ `
   query Results($query: String!, $filter: EntityFilter, $spaceId: UUID, $limit: Int, $offset: Int) {
     search(query: $query, filter: $filter, spaceId: $spaceId, first: $limit, offset: $offset) {
+      id
+      name
+      description
+      spaceIds
+      types {
+        id
+        name
+      }
+    }
+  }
+`);
+
+/**
+ * Paginated `entities(filter)` returning the minimal SearchResult shape.
+ * Used by the property-mapping popover, which builds an `EntityFilter` with
+ * `relations.some` clauses so dataType / renderableType / relationValueTypes
+ * narrowing happens server-side (REST `/search` doesn't expose those).
+ *
+ * `entities()` is used instead of `search()` because GraphQL `search` returns
+ * an empty set on an empty query, but we need the popover to pre-populate
+ * before the user has typed anything.
+ */
+export const entitiesPageQuery = graphql(/* GraphQL */ `
+  query EntitiesPage($filter: EntityFilter, $first: Int!, $offset: Int!) {
+    entities(filter: $filter, first: $first, offset: $offset) {
       id
       name
       description
@@ -770,7 +699,16 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           name
         }
 
-        valuesList(filter: { spaceId: { is: $spaceId } }) {
+        allValuesList: valuesList(first: 1000) {
+          spaceId
+          propertyId
+        }
+
+        allRelationsList: relationsList(first: 1000) {
+          spaceId
+        }
+
+        valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           spaceId
           property {
             id
@@ -792,10 +730,9 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
           datetime
           date
           decimal
-          bytes
           schedule
         }
-        relationsList {
+        relationsList(first: 1000) {
           verified
           toSpaceId
           position
@@ -807,27 +744,7 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
             name
           }
           toEntity {
-            id
-            name
-            types {
-              id
-              name
-            }
-            valuesList {
-              spaceId
-              propertyId
-              text
-              integer
-              float
-              point
-              boolean
-              time
-              datetime
-              date
-              decimal
-              bytes
-              schedule
-            }
+            ...RelationToEntity
           }
           type {
             id
@@ -840,36 +757,81 @@ export const relationEntityQuery = graphql(/* GraphQL */ `
   }
 `);
 
-export const entityVoteCountQuery = graphql(/* GraphQL */ `
-  query EntityVoteCount($objectId: UUID!, $objectType: Int!) {
-    votesCountsConnection(condition: { objectId: $objectId, objectType: $objectType }) {
-      nodes {
-        spaceId
-        upvotes
-        downvotes
-      }
+export const entityResponseCountsQuery = graphql(/* GraphQL */ `
+  query EntityResponseCounts($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {
+    votesCountByObjectIdAndObjectTypeAndSpaceIdAndVoteKind(
+      objectId: $objectId
+      objectType: $objectType
+      spaceId: $spaceId
+      voteKind: $voteKind
+    ) {
+      positive
+      negative
+      voteKind
     }
   }
 `);
 
-export const userEntityVoteQuery = graphql(/* GraphQL */ `
-  query UserEntityVote($userId: UUID!, $objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {
-    userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId(
+export const userEntityResponseQuery = graphql(/* GraphQL */ `
+  query UserEntityResponse($userId: UUID!, $objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {
+    userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdAndVoteKind(
       userId: $userId
       objectId: $objectId
       objectType: $objectType
       spaceId: $spaceId
+      voteKind: $voteKind
     ) {
       voteType
     }
   }
 `);
 
-export const entityVotersQuery = graphql(/* GraphQL */ `
-  query EntityVoters($objectId: UUID!, $objectType: Int!, $spaceId: UUID!) {
-    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId }) {
+export const entityRespondersQuery = graphql(/* GraphQL */ `
+  query EntityResponders($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {
+    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId, voteKind: $voteKind }) {
       userId
       voteType
+    }
+  }
+`);
+
+export const claimResponseSummariesQuery = graphql(/* GraphQL */ `
+  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {
+    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {
+      userId
+      objectId
+      voteType
+      voteKind
+    }
+  }
+`);
+
+export const userHasEntityVoteQuery = graphql(/* GraphQL */ `
+  query UserHasEntityVote($userId: UUID!) {
+    userVotes(condition: { userId: $userId }, first: 1) {
+      userId
+    }
+  }
+`);
+
+/**
+ * Offset pagination rather than a cursor: `VOTED_AT_*` 500s on `userVotesConnection`,
+ * but works on the `userVotes` list field (as `ParticipantPositions` already relies on).
+ * Server-side ordering is what keeps a freshly cast vote on the first page — sorting
+ * client-side only orders the pages already fetched, so the newest vote would land on
+ * the last page and vanish from the tab the moment its pending override cleared.
+ */
+export const userEntityVotesByTypeQuery = graphql(/* GraphQL */ `
+  query UserEntityVotesByType($userId: UUID!, $voteType: Int!, $objectType: Int!, $first: Int!, $offset: Int!) {
+    userVotes(
+      condition: { userId: $userId, voteType: $voteType, objectType: $objectType }
+      first: $first
+      offset: $offset
+      orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]
+    ) {
+      objectId
+      voteKind
+      votedAt
     }
   }
 `);

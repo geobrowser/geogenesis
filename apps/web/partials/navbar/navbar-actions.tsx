@@ -1,31 +1,37 @@
 'use client';
 
-import { useLogout } from '@geogenesis/auth';
+import { useLogout, usePrivy } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
-import { cva } from 'class-variance-authority';
+import cx from 'classnames';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
-import { useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 
-import { Cookie } from '~/core/cookie';
+import { browseModeToggled, editModeToggled } from '~/core/analytics';
+import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
-import { useCanUserEdit } from '~/core/hooks/use-user-is-editing';
 import { useEditable } from '~/core/state/editable-store';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
 
 import { Avatar } from '~/design-system/avatar';
+import { FallbackImage } from '~/design-system/fallback-image';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
-import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Menu } from '~/design-system/menu';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '../onboarding/dialog';
+import { EditModeToggleTip, useEditModeToggleTip } from '~/partials/hints/edit-mode-toggle-tip';
+
+import { avatarAtom } from '../onboarding/dialog';
 
 function useUser() {
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
@@ -35,37 +41,17 @@ function useUser() {
   return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile };
 }
 
-function useResetOnboarding() {
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
-  const setAvatar = useSetAtom(avatarAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
-  const setStep = useSetAtom(stepAtom);
-
-  const resetOnboarding = () => {
-    setName('');
-    setTopicId('');
-    setAvatar('');
-    setSpaceId('');
-    setStep('start');
-  };
-
-  return resetOnboarding;
-}
-
 export function NavbarActions() {
   const [open, onOpenChange] = React.useState(false);
 
   const { isLoading: isUserLoading, profile, address } = useUser();
-  const resetOnboarding = useResetOnboarding();
-
-  const { logout } = useLogout({
-    onSuccess: async () => {
-      console.log('disconnecting');
-      await Cookie.onConnectionChange({ type: 'disconnect' });
-      resetOnboarding();
-    },
-  });
+  const { personalSpaceId } = usePersonalSpaceId();
+  const { isPending, topicId } = usePendingPersonalSpace();
+  const pendingAvatar = useAtomValue(avatarAtom);
+  const { user } = usePrivy();
+  // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
+  // only trigger the logout.
+  const { logout } = useLogout();
 
   if (isUserLoading) {
     return (
@@ -80,6 +66,18 @@ export function NavbarActions() {
     return <GeoConnectButton />;
   }
 
+  // Optimistic identity: while the personal space is being created in the
+  // background, show the avatar the user just picked and link the menu item to
+  // the navigable `pending:` page until the real spaceId resolves.
+  const avatarValue = profile?.avatarUrl || (isPending ? pendingAvatar : '');
+  const personalHref = personalSpaceId
+    ? NavUtils.toSpace(personalSpaceId)
+    : isPending && topicId
+      ? `/space/pending/${topicId}`
+      : null;
+  const displayName = profile?.name?.trim() || shortAddress(address);
+  const email = userEmail(user);
+  const identityDetail = email ?? address;
   return (
     <div className="flex items-center gap-4">
       <ModeToggle />
@@ -87,51 +85,128 @@ export function NavbarActions() {
       <Menu
         trigger={
           <div className="relative h-7 w-7 overflow-hidden rounded-full">
-            <Avatar value={address} avatarUrl={profile?.avatarUrl} size={28} />
+            {avatarValue ? (
+              <FallbackImage value={avatarValue} sizes="28px" className="object-cover" />
+            ) : (
+              <Avatar value={address} size={28} />
+            )}
           </div>
         }
         open={open}
         onOpenChange={onOpenChange}
-        className="max-w-[165px]"
+        sideOffset={12}
+        className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]"
       >
-        <AvatarMenuItem onClick={logout}>
-          <p className="text-button">Sign out</p>
-          <DisconnectWallet />
-        </AvatarMenuItem>
+        <IdentityHeader
+          address={address}
+          avatarValue={avatarValue}
+          displayName={displayName}
+          detail={identityDetail}
+          href={personalHref}
+          onNavigate={() => onOpenChange(false)}
+        />
+        <div className="border-t border-grey-02">
+          <button
+            type="button"
+            onClick={logout}
+            className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+          >
+            Sign out
+          </button>
+        </div>
       </Menu>
     </div>
   );
 }
 
-const avatarMenuItemStyles = cva(
-  'flex w-full items-center justify-between bg-white px-3 py-2 text-button select-none hover:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
-  {
-    variants: {
-      disabled: {
-        true: 'cursor-not-allowed text-grey-03',
-        false: 'cursor-pointer text-grey-04 hover:bg-bg hover:text-text',
-      },
-    },
-    defaultVariants: {
-      disabled: false,
-    },
-  }
-);
-
-function AvatarMenuItem({
-  children,
-  onClick,
-  disabled = false,
+function IdentityHeader({
+  address,
+  avatarValue,
+  displayName,
+  detail,
+  href,
+  onNavigate,
 }: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
+  address: `0x${string}`;
+  avatarValue: string;
+  displayName: string;
+  detail: string;
+  href: string | null;
+  onNavigate: () => void;
 }) {
-  return (
-    <button onClick={onClick} disabled={disabled} className={avatarMenuItemStyles({ disabled })}>
-      {children}
-    </button>
+  const content = (
+    <>
+      <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
+        {avatarValue ? (
+          <FallbackImage value={avatarValue} sizes="32px" className="object-cover" />
+        ) : (
+          <Avatar value={address} size={32} />
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className="truncate font-[family-name:var(--font-calibre)] text-[1rem] leading-5 font-medium tracking-[-0.03125rem] text-text not-italic">
+          {displayName}
+        </p>
+        <p className="truncate font-[family-name:var(--font-calibre)] text-[1rem] leading-5 font-medium tracking-[-0.03125rem] text-grey-04 not-italic">
+          {detail}
+        </p>
+      </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        onClick={onNavigate}
+        className="flex w-full flex-col items-start gap-3 px-3 py-2.5 transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="flex w-full flex-col items-start gap-3 px-3 py-2.5">{content}</div>;
+}
+
+function shortAddress(address: string) {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function userEmail(user: unknown) {
+  if (!isRecord(user)) return undefined;
+  const primary = emailFromUnknown(user.email);
+  if (primary) return primary;
+  if (!Array.isArray(user.linkedAccounts)) return undefined;
+
+  for (const account of user.linkedAccounts) {
+    const email = emailFromUnknown(account);
+    if (email) return email;
+  }
+
+  return undefined;
+}
+
+function emailFromUnknown(value: unknown) {
+  if (typeof value === 'string') return normalizeEmail(value);
+  if (!isRecord(value)) return undefined;
+
+  for (const key of ['address', 'email', 'emailAddress']) {
+    const email = normalizeEmail(value[key]);
+    if (email) return email;
+  }
+
+  return undefined;
+}
+
+function normalizeEmail(value: unknown) {
+  if (typeof value !== 'string') return undefined;
+  const email = value.trim().toLowerCase();
+  return email.includes('@') ? email : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];
@@ -153,24 +228,30 @@ function ModeToggle() {
   const { editable, setEditable } = useEditable();
 
   const spaceId = useSpaceId();
-  const canUserEdit = useCanUserEdit(spaceId ?? '');
+  const { canEdit: canUserEdit, isLoading: isLoadingAccessControl } = useAccessControl(spaceId ?? '');
 
   React.useEffect(() => {
     // If a user doesn't have edit access on the page, make sure we set the toggle
     // state to false. This can happen if a user is in edit mode in a space they
     // have edit access in, then they navigate to a space they don't have edit
     // access in.
-    if (!canUserEdit) {
+    if (!isLoadingAccessControl && !canUserEdit) {
       setEditable(false);
     }
-  }, [canUserEdit, setEditable]);
+  }, [canUserEdit, isLoadingAccessControl, setEditable]);
 
   const [attemptCount, setAttemptCount] = React.useState(0);
   const [showEditAccessTooltip, setShowEditAccessTooltip] = React.useState(false);
+  const toggleRef = React.useRef<HTMLButtonElement>(null);
+  const { open: editModeTipOpen, dismiss: dismissEditModeTip, isActive: editModeTipActive } = useEditModeToggleTip();
 
   const onToggle = React.useCallback(() => {
     if (!spaceId) {
       setEditable(false);
+      return;
+    }
+
+    if (isLoadingAccessControl && !editable) {
       return;
     }
 
@@ -180,18 +261,38 @@ function ModeToggle() {
       if (editable) {
         // Make sure they can always escape edit mode
         setEditable(false);
+        browseModeToggled(modeToggleProperties(spaceId, 'no_edit_access'));
         return;
       }
 
       controls.start('shake');
 
       // Allow the user two attempts to toggle edit mode before showing the tooltip.
-      if (attemptCount > 0) {
+      if (attemptCount > 0 && !editModeTipActive) {
         setShowEditAccessTooltip(true);
         setAttemptCount(0);
       } else setAttemptCount(attemptCount => attemptCount + 1);
-    } else setEditable(!editable);
-  }, [canUserEdit, controls, editable, setEditable, attemptCount, spaceId]);
+    } else {
+      dismissEditModeTip();
+      const nextEditable = !editable;
+      setEditable(nextEditable);
+      if (nextEditable) {
+        editModeToggled(modeToggleProperties(spaceId, 'navbar_toggle'));
+      } else {
+        browseModeToggled(modeToggleProperties(spaceId, 'navbar_toggle'));
+      }
+    }
+  }, [
+    canUserEdit,
+    controls,
+    dismissEditModeTip,
+    editable,
+    setEditable,
+    attemptCount,
+    spaceId,
+    isLoadingAccessControl,
+    editModeTipActive,
+  ]);
 
   const memoizedShortcuts = React.useMemo(
     () => [
@@ -212,75 +313,78 @@ function ModeToggle() {
   }
 
   return (
-    <button
-      onClick={onToggle}
-      data-testid="edit-toggle"
-      className="flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
-    >
-      <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {!editable && <AnimatedTogglePill controls={controls} />}
+    <>
+      <motion.button
+        ref={toggleRef}
+        onClick={onToggle}
+        data-testid="edit-toggle"
+        animate={controls}
+        variants={variants}
+        className="relative flex w-[66px] items-center justify-between rounded-[47px] bg-divider p-1"
+      >
         <motion.div
-          animate={controls}
-          variants={variants}
-          className={`z-10 transition-colors duration-300 ${!editable ? 'text-text' : 'text-grey-03'}`}
-        >
-          <EyeSmall />
-        </motion.div>
-      </div>
-      <div className="flex h-5 w-7 items-center justify-center rounded-[44px]">
-        {editable && <AnimatedTogglePill controls={controls} />}
-        <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
-          <Popover.Anchor asChild>
-            <div
-              className={`z-10 transition-colors duration-300 ${
-                showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
-              }`}
-            >
-              <BulkEdit />
-            </div>
-          </Popover.Anchor>
-          <Popover.Portal>
-            <AnimatePresence mode="popLayout">
-              {showEditAccessTooltip && (
-                <MotionPopoverContent
-                  className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
-                  side="bottom"
-                  align="end"
-                  alignOffset={-8}
-                  sideOffset={16}
-                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                  transition={{
-                    type: 'spring',
-                    duration: 0.15,
-                    bounce: 0,
-                  }}
-                >
-                  <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
-                  <Popover.Arrow />
-                </MotionPopoverContent>
-              )}
-            </AnimatePresence>
-          </Popover.Portal>
-        </Popover.Root>
-      </div>
-    </button>
+          aria-hidden
+          initial={false}
+          animate={{ x: editable ? 30 : 0 }}
+          transition={{
+            duration: 0.5,
+            type: 'spring',
+            bounce: 0,
+          }}
+          className="pointer-events-none absolute top-1 left-1 z-0 h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
+        />
+        <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
+          <div className={cx('transition-colors duration-300', !editable ? 'text-text' : 'text-grey-03')}>
+            <EyeSmall />
+          </div>
+        </div>
+        <div className="relative z-10 flex h-5 w-7 items-center justify-center rounded-[44px]">
+          <Popover.Root open={showEditAccessTooltip} onOpenChange={setShowEditAccessTooltip}>
+            <Popover.Anchor asChild>
+              <div
+                className={cx(
+                  'transition-colors duration-300',
+                  showEditAccessTooltip ? 'text-red-01' : editable ? 'text-text' : 'text-grey-03'
+                )}
+              >
+                <BulkEdit />
+              </div>
+            </Popover.Anchor>
+            <Popover.Portal>
+              <AnimatePresence mode="popLayout">
+                {showEditAccessTooltip && (
+                  <MotionPopoverContent
+                    className="z-10 max-w-[164px] origin-top-right rounded bg-text p-2 text-white shadow-button focus:outline-hidden"
+                    side="bottom"
+                    align="end"
+                    alignOffset={-8}
+                    sideOffset={16}
+                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                    transition={{
+                      type: 'spring',
+                      duration: 0.15,
+                      bounce: 0,
+                    }}
+                  >
+                    <h1 className="text-center text-breadcrumb">You don’t have edit access in this space</h1>
+                    <Popover.Arrow />
+                  </MotionPopoverContent>
+                )}
+              </AnimatePresence>
+            </Popover.Portal>
+          </Popover.Root>
+        </div>
+      </motion.button>
+      <EditModeToggleTip open={editModeTipOpen} dismiss={dismissEditModeTip} anchorRef={toggleRef} />
+    </>
   );
 }
 
-function AnimatedTogglePill({ controls }: { controls: ReturnType<typeof useAnimation> }) {
-  return (
-    <motion.div
-      animate={controls}
-      variants={variants}
-      transition={{
-        duration: 0.5,
-        type: 'spring',
-        bounce: 0,
-      }}
-      layoutId="edit-toggle"
-      className="absolute h-5 w-7 rounded-[44px] bg-white shadow-dropdown"
-    />
-  );
+function modeToggleProperties(spaceId: string, trigger: string) {
+  return {
+    space_id: spaceId,
+    toggle_trigger: trigger,
+  };
 }

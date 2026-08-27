@@ -219,7 +219,7 @@ const FindEntities = () => {
   const handleFindEntities = async (event: any) => {
     event.preventDefault();
 
-    const allEntities = (await Effect.runPromise(getAllEntities({ spaceId }))) as any[];
+    const { entities: allEntities } = await Effect.runPromise(getAllEntities({ spaceId }));
 
     if (allEntities) {
       const newEntities: any = allEntities

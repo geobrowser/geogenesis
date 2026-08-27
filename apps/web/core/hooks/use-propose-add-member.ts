@@ -1,29 +1,18 @@
 'use client';
 
-import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import { useMutation } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { type Hex, encodeFunctionData } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { useSpace } from '~/core/hooks/use-space';
+import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { encodeProposalCreatedData } from '~/core/utils/contracts/governance';
-import {
-  DAOSpaceAbi,
-  EMPTY_SIGNATURE,
-  EMPTY_TOPIC_HEX,
-  GOVERNANCE_ACTIONS,
-  SPACE_REGISTRY_ADDRESS,
-  SpaceRegistryAbi,
-  VOTING_MODE,
-} from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseProposeAddMemberArgs {
@@ -45,9 +34,7 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId ?? undefined);
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleProposeAddMember = useCallback(
     async ({ targetMemberSpaceId, votingMode = 'fast' }: ProposeAddMemberParams) => {
@@ -72,13 +59,6 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
         throw new Error(message);
       }
 
-      if (!space?.address) {
-        const message = 'Space information is still loading. Please try again.';
-        console.error('No space address found');
-        dispatch({ type: 'ERROR', payload: message });
-        throw new Error(message);
-      }
-
       if (!validateSpaceId(targetMemberSpaceId)) {
         const message = 'Invalid member ID format. Please try again.';
         console.error('Invalid target member space ID:', targetMemberSpaceId);
@@ -86,60 +66,42 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
         throw new Error(message);
       }
 
-      const spaceAddress = space.address as Hex;
-      const normalizedVotingMode = votingMode === 'slow' ? 'SLOW' : 'FAST';
-      const votingModeValue = normalizedVotingMode === 'FAST' ? VOTING_MODE.FAST : VOTING_MODE.SLOW;
+      // The action targets the space by id and the contract resolves it at execution time, so
+      // the address is no longer passed. Still required as a precondition: no address means the
+      // space isn't a resolvable deployed DAO, and the proposal would be unexecutable.
+      if (!space?.address) {
+        const message = 'No space address found. Please try again.';
+        console.error('No space address found for space:', spaceId);
+        dispatch({ type: 'ERROR', payload: message });
+        throw new Error(message);
+      }
+
+      const normalizedVotingMode = votingMode === 'slow' ? ('SLOW' as const) : ('FAST' as const);
 
       console.log('Proposing to add member', {
-        fromSpaceId: personalSpaceId,
-        toSpaceId: spaceId,
+        authorSpaceId: personalSpaceId,
+        spaceId,
         targetMemberSpaceId,
-        votingMode,
-        spaceAddress,
+        votingMode: normalizedVotingMode,
       });
 
-      const writeTxEffect = Effect.gen(function* () {
-        const proposalId = `0x${IdUtils.generate()}` as const;
-        const fromSpaceId = `0x${personalSpaceId}` as const;
-        const toSpaceId = `0x${spaceId}` as const;
-        const memberSpaceId = `0x${targetMemberSpaceId}` as const;
-
-        // Encode the addMember call that will execute if the proposal passes
-        const addMemberCallData = encodeFunctionData({
-          functionName: 'addMember',
-          abi: DAOSpaceAbi,
-          args: [memberSpaceId],
-        });
-
-        const proposalActions = [
-          {
-            to: spaceAddress,
-            value: 0n,
-            data: addMemberCallData,
-          },
-        ];
-
-        const data = encodeProposalCreatedData(proposalId, votingModeValue, proposalActions);
-
-        const callData = encodeFunctionData({
-          functionName: 'enter',
-          abi: SpaceRegistryAbi,
-          args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_CREATED, EMPTY_TOPIC_HEX, data, EMPTY_SIGNATURE],
-        });
-
-        const hash = yield* tx(callData).pipe(
-          Effect.withSpan('web.write.createProposal.addMember'),
-          Effect.annotateSpans({
-            'io.operation': 'create_proposal',
-            'space.type': 'DAO',
-            'governance.action': 'proposal_created',
-            'governance.proposal_action': 'add_member',
-            'governance.voting_mode': normalizedVotingMode,
-          })
-        );
-        console.log('Transaction hash: ', hash);
-        return hash;
+      const { to, calldata } = geo.daoSpaces.proposeAddMember({
+        authorSpaceId: personalSpaceId,
+        spaceId,
+        newMemberSpaceId: targetMemberSpaceId,
+        votingMode: normalizedVotingMode,
       });
+
+      const writeTxEffect = tx({ to, data: calldata }).pipe(
+        Effect.withSpan('web.write.createProposal.addMember'),
+        Effect.annotateSpans({
+          'io.operation': 'create_proposal',
+          'space.type': 'DAO',
+          'governance.action': 'proposal_created',
+          'governance.proposal_action': 'add_member',
+          'governance.voting_mode': normalizedVotingMode,
+        })
+      );
 
       const result = await runEffectEither(writeTxEffect);
 
@@ -158,7 +120,7 @@ export function useProposeAddMember({ spaceId }: UseProposeAddMemberArgs) {
           // Necessary to propagate error status to useMutation
           throw error;
         },
-        onRight: () => console.log('Successfully proposed to add member'),
+        onRight: hash => console.log('Successfully proposed to add member. Transaction hash:', hash),
       });
     },
     [dispatch, smartAccount, personalSpaceId, isRegistered, spaceId, space, tx]

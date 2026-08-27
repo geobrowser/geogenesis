@@ -5,6 +5,9 @@ import * as Popover from '@radix-ui/react-popover';
 import * as React from 'react';
 import { useState } from 'react';
 
+import cx from 'classnames';
+
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { useSearch } from '~/core/hooks/use-search';
 import { ID } from '~/core/id';
@@ -12,10 +15,13 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { SwitchableRenderableType } from '~/core/types';
 
 import { RenderableTypeDropdown } from '~/partials/entity-page/renderable-type-dropdown';
+
 import { NativeGeoImage } from './geo-image';
 import { Search } from './icons/search';
 import { Tag } from './tag';
 import { Text } from './text';
+import { trapWheelToElement } from './trap-wheel-scroll';
+import { useAdaptiveDropdownPlacement } from './use-adaptive-dropdown-placement';
 
 export type SelectEntityCompactResult = {
   id: string;
@@ -52,14 +58,18 @@ export function SelectEntityCompact({
   renderableTypeValue = 'TEXT',
   onRenderableTypeChange,
 }: SelectEntityCompactProps) {
+  const anchorWrapperRef = React.useRef<HTMLDivElement | null>(null);
+  const [focused, setFocused] = React.useState(false);
   const { storage } = useMutate();
   const filterByTypes = relationValueTypes?.length ? relationValueTypes.map(r => r.id) : undefined;
-  const { query, onQueryChange, results, isLoading, isEmpty } = useSearch({
-    filterByTypes,
-  });
+  const { query, onQueryChange, results, isLoading, isEmpty, hasNextPage, fetchNextPage, isFetchingNextPage } =
+    useSearch({
+      filterByTypes,
+      enabled: focused,
+    });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [renderableType, setRenderableType] = useState<SwitchableRenderableType>(renderableTypeValue);
-  const hasResults = query.trim() && results.length > 0;
+  const hasResults = !isLoading && results.length > 0;
   const canCreate = Boolean(onCreateEntity) && query.trim().length > 0;
 
   React.useEffect(() => {
@@ -77,6 +87,7 @@ export function SelectEntityCompact({
         primarySpaceName: space?.name,
       });
       onQueryChange('');
+      setFocused(false);
     },
     [onDone, onQueryChange]
   );
@@ -93,6 +104,7 @@ export function SelectEntityCompact({
     storage.entities.name.set(newEntityId, spaceId, query);
     onDone({ id: newEntityId, name: query });
     onQueryChange('');
+    setFocused(false);
   }, [onCreateEntity, onDone, onQueryChange, query, renderableType, spaceId, storage.entities.name]);
 
   const handleRenderableTypeChange = React.useCallback(
@@ -108,11 +120,22 @@ export function SelectEntityCompact({
     setSelectedIndex(0);
   }, [query, results.length]);
 
+  const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
+  const { align: popoverAlign, side: popoverSide } = useAdaptiveDropdownPlacement(anchorWrapperRef, {
+    isOpen: focused,
+    preferredHeight: 320,
+    gap: 12,
+    contentElement,
+  });
+
   useKey('Escape', () => {
+    if (!focused) return;
     onQueryChange('');
+    setFocused(false);
   });
 
   useKey('Enter', () => {
+    if (!focused) return;
     if (!hasResults && canCreate) {
       handleCreate();
       return;
@@ -123,21 +146,41 @@ export function SelectEntityCompact({
   });
 
   useKey('ArrowUp', e => {
+    if (!focused) return;
     if (!hasResults) return;
     e.preventDefault();
     setSelectedIndex(i => (i - 1 + results.length) % results.length);
   });
 
   useKey('ArrowDown', e => {
+    if (!focused) return;
     if (!hasResults) return;
     e.preventDefault();
     setSelectedIndex(i => (i + 1) % results.length);
   });
 
+  const resultsScrollRef = React.useRef<HTMLDivElement | null>(null);
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLDivElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsScrollRef,
+  });
+
+  const handleOpenChange = React.useCallback(
+    (open: boolean) => {
+      setFocused(open);
+      if (!open) {
+        onQueryChange('');
+      }
+    },
+    [onQueryChange]
+  );
+
   return (
-    <Popover.Root open={query.trim().length > 0}>
+    <Popover.Root open={focused} onOpenChange={handleOpenChange}>
       <Popover.Anchor asChild>
-        <div className="w-full space-y-2">
+        <div ref={anchorWrapperRef} className="w-full space-y-2">
           <div className="relative w-full">
             <div className="pointer-events-none absolute top-1/2 left-3 z-10 -translate-y-1/2">
               <Search />
@@ -147,8 +190,10 @@ export function SelectEntityCompact({
               value={query}
               onChange={e => {
                 onQueryChange(e.target.value);
+                setFocused(true);
                 setSelectedIndex(0);
               }}
+              onFocus={() => setFocused(true)}
               aria-label="Search"
               placeholder={placeholder}
               className="w-full rounded-md border border-grey-02 bg-white py-2 pr-3 pl-9 text-body text-text shadow-inner shadow-grey-02 outline-hidden placeholder:text-grey-03 focus:shadow-inner-lg focus:shadow-text"
@@ -192,14 +237,22 @@ export function SelectEntityCompact({
       </Popover.Anchor>
       <Popover.Portal>
         <Popover.Content
+          ref={setContentElement}
+          side={popoverSide}
+          align={popoverAlign}
           sideOffset={4}
-          align="start"
-          className="z-1001 w-(--radix-popper-anchor-width) overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg"
-          collisionPadding={10}
+          className="z-1001 w-(--radix-popper-anchor-width) max-w-[min(400px,calc(100vw-24px))] overflow-hidden rounded-md border border-grey-02 bg-white shadow-lg"
+          collisionPadding={16}
           avoidCollisions
           onOpenAutoFocus={e => e.preventDefault()}
+          onInteractOutside={() => setFocused(false)}
         >
-          <div className="max-h-[min(50vh,300px)] overflow-y-auto">
+          <div
+            ref={resultsScrollRef}
+            className="max-h-[min(50vh,300px)] overflow-y-auto overscroll-contain"
+            onScroll={handleResultsScroll}
+            onWheel={e => trapWheelToElement(e.currentTarget, e)}
+          >
             {isLoading && <div className="px-3 py-2 text-resultTitle text-text">Loading...</div>}
             {!isLoading && isEmpty && <div className="px-3 py-2 text-resultTitle text-grey-04">No results.</div>}
             {!isLoading && !isEmpty && (
@@ -209,15 +262,16 @@ export function SelectEntityCompact({
                     key={`${result.id}-${index}`}
                     type="button"
                     onClick={() => handleSelectResult(result)}
-                    className={`flex w-full flex-col px-3 py-2 text-left transition-colors hover:bg-grey-01 focus:outline-hidden ${
-                      index === selectedIndex ? 'bg-grey-01' : ''
-                    }`}
+                    className={cx(
+                      'flex w-full flex-col px-3 py-2 text-left transition-colors hover:bg-grey-01 focus:outline-hidden',
+                      index === selectedIndex && 'bg-grey-01'
+                    )}
                   >
                     <div className="max-w-full truncate text-resultTitle text-text">{result.name}</div>
                     <div className="mt-1.5 flex items-center gap-1.5">
                       {(result.spaces ?? []).length > 0 && (
                         <div className="flex shrink-0 items-center gap-1">
-                          <span className="inline-flex size-[12px] items-center justify-center overflow-hidden rounded-sm border border-grey-04">
+                          <span className="inline-flex size-[12px] items-center justify-center overflow-hidden rounded-sm">
                             <NativeGeoImage
                               value={result.spaces[0].image}
                               alt=""
@@ -255,6 +309,9 @@ export function SelectEntityCompact({
                     </div>
                   </button>
                 ))}
+                {isFetchingNextPage ? (
+                  <div className="px-3 py-2 text-resultTitle text-text">Loading more...</div>
+                ) : null}
               </div>
             )}
           </div>

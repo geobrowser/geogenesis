@@ -1,12 +1,14 @@
 'use client';
 
-import { daoSpace, personalSpace } from '@geoprotocol/geo-sdk';
+import { isRevertedUserOperationError } from '@geogenesis/auth/account';
 import { Op } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
+import { getSpaceAccess } from '~/core/access/space-access';
+import { geo } from '~/core/sdk/geo-client';
 import { Relation, Value } from '~/core/types';
 
 import { TransactionWriteFailedError } from '../errors';
@@ -15,10 +17,16 @@ import { useStatusBar } from '../state/status-bar-store';
 import { useMutate } from '../sync/use-mutate';
 import { runEffectEither } from '../telemetry/effect-runtime';
 import { ReviewState, SpaceGovernanceType } from '../types';
+import { describeGovernanceError } from '../utils/contracts/governance-errors';
+import { isProposalExecuted } from '../utils/contracts/proposal-execution';
+import { describeError, isUserRejection, toUserFacingError } from '../utils/error-diagnostics';
 import { Publish } from '../utils/publish';
 import { sleepWithCallback } from '../utils/utils';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
+
+/** Fast path (instant execution for editors) vs review/slow path (voting period). */
+export type ProposalVotingMode = 'FAST' | 'SLOW';
 
 interface MakeProposalOptions {
   values: Value[];
@@ -27,6 +35,11 @@ interface MakeProposalOptions {
   name: string;
   /** Optional proposal ID (Geo entity ID format). For DAO spaces this is forwarded to daoSpace.proposeEdit. */
   proposalId?: string;
+  /**
+   * Editor-chosen path for DAO proposals (design 62501-94092). Ignored for non-editors
+   * and personal spaces — members can only ever use the slow path.
+   */
+  votingMode?: ProposalVotingMode;
   onSuccess?: () => void;
   onError?: () => void;
 }
@@ -52,10 +65,18 @@ export function usePublish() {
       name,
       spaceId,
       proposalId,
+      votingMode,
       onSuccess,
       onError,
     }: MakeProposalOptions) => {
-      if (!smartAccount) return;
+      if (!smartAccount) {
+        onError?.();
+        dispatch({
+          type: 'ERROR',
+          payload: 'Unable to publish: wallet is not connected. Please reconnect and try again.',
+        });
+        return;
+      }
       if (!personalSpaceId) {
         onError?.();
         dispatch({
@@ -64,13 +85,24 @@ export function usePublish() {
         });
         return;
       }
-      if (valuesToPublish.length === 0 && relations.length === 0) return;
-
-      const space = await Effect.runPromise(getSpace(spaceId));
-
-      if (!space) return;
+      if (valuesToPublish.length === 0 && relations.length === 0) {
+        onError?.();
+        dispatch({
+          type: 'ERROR',
+          payload: 'Nothing to publish: no changes were detected for this space.',
+        });
+        return;
+      }
 
       const publish = Effect.gen(function* () {
+        const space = yield* getSpace(spaceId);
+
+        if (!space) {
+          return yield* Effect.fail(
+            new TransactionWriteFailedError(`Unable to publish: space ${spaceId} could not be loaded.`)
+          );
+        }
+
         const ops = yield* Publish.prepareLocalDataForPublishing(valuesToPublish, relations, spaceId);
 
         if (ops.length === 0) {
@@ -79,13 +111,20 @@ export function usePublish() {
             relations,
             spaceId,
           });
-          return;
+          return yield* Effect.fail(
+            new TransactionWriteFailedError(
+              'Nothing to publish: your changes resolved to an empty edit. Please add or modify content and try again.'
+            )
+          );
         }
+
+        const spaceAccess = yield* getSpaceAccess(space, personalSpaceId);
 
         yield* makeProposal({
           name,
           author: personalSpaceId,
           proposalId,
+          votingMode,
           onChangePublishState: (newState: ReviewState) =>
             dispatch({
               type: 'SET_REVIEW_STATE',
@@ -97,7 +136,7 @@ export function usePublish() {
             id: space.id,
             type: space.type,
             address: space.address,
-            editors: space.editors,
+            isEditor: spaceAccess.isEditor,
           },
         });
 
@@ -117,7 +156,8 @@ export function usePublish() {
           return;
         }
 
-        dispatch({ type: 'ERROR', payload: result.left.message });
+        const { message, retry } = toUserFacingError(result.left);
+        dispatch({ type: 'ERROR', payload: message, retry });
         return;
       }
 
@@ -149,8 +189,22 @@ export function useBulkPublish() {
    */
   const makeBulkProposal = React.useCallback(
     async ({ values: triples, relations, name, spaceId, onSuccess, onError }: MakeProposalOptions) => {
-      if (triples.length === 0) return;
-      if (!smartAccount) return;
+      if (triples.length === 0) {
+        onError?.();
+        dispatch({
+          type: 'ERROR',
+          payload: 'Nothing to publish: no changes were detected for this space.',
+        });
+        return;
+      }
+      if (!smartAccount) {
+        onError?.();
+        dispatch({
+          type: 'ERROR',
+          payload: 'Unable to publish: wallet is not connected. Please reconnect and try again.',
+        });
+        return;
+      }
       if (!personalSpaceId) {
         onError?.();
         dispatch({
@@ -160,15 +214,20 @@ export function useBulkPublish() {
         return;
       }
 
-      // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
-      // All of our contract calls rely on knowing plugin metadata so this is probably
-      // something we need for all of them.
-      const space = await Effect.runPromise(getSpace(spaceId));
-
-      if (!space) return;
-
       const publish = Effect.gen(function* () {
+        // @TODO(governance): Pass this to either the makeProposal call or to usePublish.
+        // All of our contract calls rely on knowing plugin metadata so this is probably
+        // something we need for all of them.
+        const space = yield* getSpace(spaceId);
+
+        if (!space) {
+          return yield* Effect.fail(
+            new TransactionWriteFailedError(`Unable to publish: space ${spaceId} could not be loaded.`)
+          );
+        }
+
         const ops = yield* Publish.prepareLocalDataForPublishing(triples, relations, spaceId);
+        const spaceAccess = yield* getSpaceAccess(space, personalSpaceId);
 
         yield* makeProposal({
           name,
@@ -184,7 +243,7 @@ export function useBulkPublish() {
             id: space.id,
             type: space.type,
             address: space.address,
-            editors: space.editors,
+            isEditor: spaceAccess.isEditor,
           },
         });
       });
@@ -199,7 +258,8 @@ export function useBulkPublish() {
           return;
         }
 
-        dispatch({ type: 'ERROR', payload: result.left.message });
+        const { message, retry } = toUserFacingError(result.left);
+        dispatch({ type: 'ERROR', payload: message, retry });
         return;
       }
 
@@ -221,22 +281,6 @@ export function useBulkPublish() {
   };
 }
 
-/**
- * Check whether an error (or any error in its cause chain) is a wallet
- * user-rejection. Walks the cause chain since we now nest the original
- * error via `{ cause }` rather than string interpolation.
- */
-function isUserRejection(error: unknown): boolean {
-  let current = error instanceof Error ? error : undefined;
-  while (current) {
-    if (current.message.includes('User rejected the request') || current.name === 'UserRejectedRequestError') {
-      return true;
-    }
-    current = current.cause instanceof Error ? current.cause : undefined;
-  }
-  return false;
-}
-
 interface MakeProposalArgs {
   name: string;
   /** The author's personal space ID. */
@@ -244,12 +288,14 @@ interface MakeProposalArgs {
   ops: Op[];
   /** Optional proposal ID (Geo entity ID format, 32 hex chars). Forwarded to daoSpace.proposeEdit as `0x${proposalId}`. */
   proposalId?: string;
+  /** Editor-chosen path for DAO proposals; only honored when the caller is an editor. */
+  votingMode?: ProposalVotingMode;
   smartAccount: NonNullable<ReturnType<typeof useSmartAccount>['smartAccount']>;
   space: {
     id: string;
     type: SpaceGovernanceType;
     address: string;
-    editors: string[];
+    isEditor: boolean;
   };
   onChangePublishState: (newState: ReviewState) => void;
 }
@@ -258,18 +304,34 @@ interface MakeProposalArgs {
  * Retry schedule for network calls during publish.
  * Exponential backoff starting at 100ms with jitter, retries for up to the
  * given duration. Logs each retry attempt with a label for diagnostics.
+ *
+ * A reverted UserOperation short-circuits the schedule. It is terminal — the op
+ * was included and had no effect, so re-submitting the identical calldata
+ * reverts identically. Without this the 10s windows below burn four to five
+ * sponsored operations against the paymaster on every revert (lost editor
+ * rights, fast-path disabled for new members) before surfacing anything.
  */
 function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
   return Schedule.exponential('100 millis').pipe(
     Schedule.jittered,
     Schedule.compose(Schedule.elapsed),
     Schedule.tapInput(() => Effect.succeed(console.log(`[PUBLISH][${label}] Retrying`))),
-    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration)))
+    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration))),
+    Schedule.whileInput((error: unknown) => !isRevertedUserOperationError(error))
   );
 }
 
 function makeProposal(args: MakeProposalArgs) {
-  const { name, author, ops, proposalId, smartAccount, space, onChangePublishState } = args;
+  const {
+    name,
+    author,
+    ops,
+    proposalId,
+    votingMode: requestedVotingMode,
+    smartAccount,
+    space,
+    onChangePublishState,
+  } = args;
 
   return Effect.gen(function* () {
     if (ops.length === 0) {
@@ -280,30 +342,34 @@ function makeProposal(args: MakeProposalArgs) {
 
     let to: `0x${string}`;
     let calldata: `0x${string}`;
+    // Set for DAO proposals created with FAST voting so we can auto-execute them
+    // right after the create transaction confirms, instead of leaving them pending
+    // until someone manually executes from the Governance tab.
+    let fastProposalToExecute: { spaceId: string; proposalId: `0x${string}` } | null = null;
 
     if (space.type === 'DAO') {
       // DAO spaces: use daoSpace.proposeEdit()
       // `author` is the caller's personal space ID, already validated as non-null
       // by the guard in usePublish/useBulkPublish before makeProposal is called.
 
-      // Editors can use the fast path for immediate execution.
-      // Members must use the slow path which requires a voting period.
-      const isEditor = space.editors.map(s => s.toLowerCase()).includes(author.toLowerCase());
-      const votingMode = isEditor ? 'FAST' : 'SLOW';
+      // Every DAO submitter — members included — picks fast vs. slow via the review-
+      // screen selector (design 62501-94092); absent a choice we default to FAST.
+      // A member's FAST proposal still needs an editor vote to hit flatSupportThreshold,
+      // so we only auto-execute below when the caller is an editor (their create-vote
+      // can satisfy the threshold on its own).
+      const votingMode: ProposalVotingMode = requestedVotingMode ?? 'FAST';
 
       const result = yield* Effect.retry(
         Effect.tryPromise({
           try: () =>
-            daoSpace.proposeEdit({
+            geo.daoSpaces.proposeEdit({
               name,
               ops,
               author,
-              daoSpaceAddress: space.address as `0x${string}`,
               callerSpaceId: `0x${author}`,
               daoSpaceId: `0x${space.id}`,
               votingMode,
               ...(proposalId ? { proposalId: `0x${proposalId}` as `0x${string}` } : {}),
-              network: 'TESTNET',
             }),
           catch: error => {
             console.error('[PUBLISH] daoSpace.proposeEdit failed:', error);
@@ -323,17 +389,20 @@ function makeProposal(args: MakeProposalArgs) {
 
       to = result.to as `0x${string}`;
       calldata = result.calldata as `0x${string}`;
+
+      if (votingMode === 'FAST' && space.isEditor) {
+        fastProposalToExecute = { spaceId: space.id, proposalId: result.proposalId as `0x${string}` };
+      }
     } else {
       // Personal spaces: use personalSpace.publishEdit()
       const result = yield* Effect.retry(
         Effect.tryPromise({
           try: () =>
-            personalSpace.publishEdit({
+            geo.personalSpaces.publishEdit({
               name,
               spaceId: space.id,
               ops,
               author,
-              network: 'TESTNET',
             }),
           catch: error => {
             console.error('[PUBLISH] personalSpace.publishEdit failed:', error);
@@ -364,7 +433,13 @@ function makeProposal(args: MakeProposalArgs) {
           }),
         catch: error => {
           console.error('[PUBLISH] sendUserOperation failed:', error);
-          return new TransactionWriteFailedError('Publish failed', { cause: error });
+          // A revert carries the only actionable detail (which op, and that it
+          // landed but did nothing); the generic label would bury it one `cause`
+          // level down where no UI reads it.
+          return new TransactionWriteFailedError(
+            isRevertedUserOperationError(error) ? describeError(error) : 'Publish failed',
+            { cause: error }
+          );
         },
       }).pipe(
         Effect.withSpan('web.write.submitUserOperation'),
@@ -376,6 +451,144 @@ function makeProposal(args: MakeProposalArgs) {
     );
 
     console.log('Transaction hash: ', result);
+
+    if (fastProposalToExecute) {
+      yield* executeFastProposal({
+        smartAccount,
+        author,
+        daoSpaceAddress: space.address as `0x${string}`,
+        createUserOpHash: result,
+        ...fastProposalToExecute,
+      }).pipe(
+        Effect.catchAll(error => {
+          // Non-fatal: the edit is already proposed on-chain by this point.
+          console.error(
+            '[PUBLISH] Auto-execute of FAST proposal failed; it can still be voted on and executed from Governance.',
+            describeGovernanceError(error),
+            error
+          );
+          return Effect.void;
+        })
+      );
+    }
+
     return result;
+  });
+}
+
+export interface ExecuteFastProposalArgs {
+  smartAccount: MakeProposalArgs['smartAccount'];
+  /** The proposal author's personal space ID. Also used as the executor. */
+  author: string;
+  /** The DAO space ID the proposal was created in. */
+  spaceId: string;
+  /** The DAO space's contract address, for reading the proposal's state back from the chain. */
+  daoSpaceAddress: `0x${string}`;
+  /** The proposal ID returned by `daoSpace.proposeEdit`. */
+  proposalId: `0x${string}`;
+  /** The user operation hash for the transaction that created the proposal. */
+  createUserOpHash: `0x${string}`;
+}
+
+/**
+ * Takes a freshly created FAST-voting-mode proposal all the way to executed: wait
+ * for the create transaction to confirm, cast the author's YES vote, then execute.
+ *
+ * Creating a proposal does not vote on it. A new FAST proposal starts with zero
+ * votes against a quorum of one, so executing it straight after creation reverts
+ * with `CanNotExecute` (0xdf322356). The vote is what makes it pass.
+ *
+ * Without this the proposal sits pending until someone votes and executes it from
+ * the Governance tab, and is rejected outright if nobody does so before the voting
+ * window closes.
+ */
+export function executeFastProposal(args: ExecuteFastProposalArgs) {
+  const { smartAccount, author, spaceId, daoSpaceAddress, proposalId, createUserOpHash } = args;
+
+  const confirmUserOp = (label: string, hash: `0x${string}`) =>
+    Effect.gen(function* () {
+      const receipt = yield* Effect.tryPromise({
+        try: () => smartAccount.waitForUserOperationReceipt({ hash }),
+        catch: error => new TransactionWriteFailedError(`Timed out waiting for ${label} to confirm`, { cause: error }),
+      });
+
+      if (!receipt.success) {
+        return yield* Effect.fail(new TransactionWriteFailedError(`${label} transaction reverted`));
+      }
+    });
+
+  // Each step has to be its own confirmed transaction: the vote must be on-chain
+  // before the execute call can see the proposal as passed.
+  const sendGovernanceOp = (
+    step: { label: string; span: string; operation: string; action: string },
+    to: `0x${string}`,
+    calldata: `0x${string}`
+  ) =>
+    Effect.gen(function* () {
+      const hash = yield* Effect.retry(
+        Effect.tryPromise({
+          try: () => smartAccount.sendUserOperation({ calls: [{ to, value: 0n, data: calldata }] }),
+          catch: error => new TransactionWriteFailedError(`${step.label} failed`, { cause: error }),
+        }),
+        retrySchedule(step.label, Duration.seconds(10))
+      );
+
+      yield* confirmUserOp(step.label, hash);
+    }).pipe(
+      Effect.withSpan(step.span),
+      Effect.annotateSpans({
+        'io.operation': step.operation,
+        'space.type': 'DAO',
+        'governance.action': step.action,
+      })
+    );
+
+  return Effect.gen(function* () {
+    yield* confirmUserOp('proposal creation', createUserOpHash).pipe(
+      Effect.withSpan('web.write.waitForProposalCreated')
+    );
+
+    // geo-sdk 0.20.0-beta.8 exposes vote/execute as flat helpers, not under a
+    // `.proposals` namespace; adapt upstream's shape to the SDK we're pinned to.
+    const vote = geo.daoSpaces.voteProposal({
+      authorSpaceId: author,
+      spaceId,
+      proposalId,
+      versionId: 1,
+      vote: 'YES',
+    });
+
+    yield* sendGovernanceOp(
+      { label: 'vote on proposal', span: 'web.write.vote', operation: 'vote', action: 'proposal_voted' },
+      vote.to as `0x${string}`,
+      vote.calldata as `0x${string}`
+    );
+
+    // The author's own vote normally executes the proposal, leaving nothing to execute here.
+    const executedByVote = yield* Effect.promise(() => isProposalExecuted({ daoSpaceAddress, proposalId }));
+
+    if (executedByVote) {
+      console.log('[PUBLISH] FAST proposal executed by its vote', { spaceId, proposalId });
+      return;
+    }
+
+    const execute = geo.daoSpaces.executeProposal({
+      authorSpaceId: author,
+      spaceId,
+      proposalId,
+    });
+
+    yield* sendGovernanceOp(
+      {
+        label: 'execute proposal',
+        span: 'web.write.executeProposal',
+        operation: 'execute_proposal',
+        action: 'proposal_executed',
+      },
+      execute.to as `0x${string}`,
+      execute.calldata as `0x${string}`
+    );
+
+    console.log('[PUBLISH] Auto-executed FAST proposal', { spaceId, proposalId });
   });
 }

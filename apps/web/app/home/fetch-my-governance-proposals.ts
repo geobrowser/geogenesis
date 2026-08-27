@@ -1,12 +1,15 @@
 import * as Effect from 'effect/Effect';
 
 import {
+  type ApiProposalListItem,
   convertVoteOption,
+  getApiProposalCanExecute,
   mapApiActionsToProposalType,
   mapProposalStatus,
-  type ApiProposalListItem,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
+import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import type { Profile } from '~/core/types';
 
@@ -28,12 +31,16 @@ function sameMemberSpaceId(a: string, b: string): boolean {
 
 export type MyGovernanceProposalRow = {
   id: string;
+  /** Proposal version this row describes (REST `proposalVersion`); votes must target it. */
+  version?: number;
   spaceId: string;
   name: string | null;
   displayTitle: string;
   type: ProposalType;
   endTime: number;
   startTime: number;
+  /** Indexed submission time; 0 when unavailable. */
+  submittedAt: number;
   status: ProposalStatus;
   canExecute: boolean;
   proposalVotes: { totalCount: number; yesCount: number; noCount: number };
@@ -64,11 +71,7 @@ export async function getMyGovernanceProposals(opts: {
   const { memberSpaceId, spaceIds, spaceFilter, category, status, page = 0 } = opts;
 
   const effectiveSpaceIds =
-    spaceFilter && spaceFilter !== 'all'
-      ? spaceIds.includes(spaceFilter)
-        ? [spaceFilter]
-        : []
-      : spaceIds;
+    spaceFilter && spaceFilter !== 'all' ? (spaceIds.includes(spaceFilter) ? [spaceFilter] : []) : spaceIds;
 
   if (effectiveSpaceIds.length === 0) {
     return { proposals: [], hasMore: false };
@@ -90,9 +93,16 @@ export async function getMyGovernanceProposals(opts: {
     }
   }
 
-  const votingRows =
-    status === 'pending' ? allRows.filter(p => p.status === 'PROPOSED') : allRows;
-  votingRows.sort((a, b) => b.timing.endTime - a.timing.endTime);
+  const votingRows = status === 'pending' ? allRows.filter(p => p.status === 'PROPOSED') : allRows;
+  // Resolved before the sort, since submission time is its last key.
+  const submittedTimes = await fetchProposalSubmittedTimes(votingRows.map(p => p.proposalId));
+  const order = (p: (typeof votingRows)[number]) => ({
+    hasViewerVote: p.userVote !== null,
+    endTime: p.timing.endTime,
+    submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
+  });
+  // These are the viewer's own proposals, so there is no unvoted-first rule to apply.
+  votingRows.sort((a, b) => compareOpenProposals(order(a), order(b), { unvotedFirst: false, endTime: 'desc' }));
   const unique = dedupeByProposalId(votingRows);
   const offset = page * PAGE_SIZE;
   const pageSlice = unique.slice(offset, offset + PAGE_SIZE);
@@ -125,14 +135,16 @@ export async function getMyGovernanceProposals(opts: {
 
     proposals.push({
       id: p.proposalId,
+      version: p.proposalVersion,
       spaceId: p.spaceId,
       name: p.name,
       displayTitle,
       type,
       startTime: p.timing.startTime,
+      submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
       endTime: p.timing.endTime,
       status: mapProposalStatus(p.status),
-      canExecute: p.canExecute,
+      canExecute: getApiProposalCanExecute(p),
       proposalVotes: {
         totalCount: p.votes.total,
         yesCount: p.votes.yes,

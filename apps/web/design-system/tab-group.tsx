@@ -8,7 +8,9 @@ import { motion } from 'framer-motion';
 import { usePathname } from 'next/navigation';
 
 import { useEditable } from '~/core/state/editable-store';
-import { useTabId } from '~/core/state/editor/use-editor';
+import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
+import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
+import { validateEntityId } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
@@ -20,7 +22,7 @@ interface TabGroupProps {
 export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollPosition, setScrollPosition] = useState<'start' | 'middle' | 'end'>('start');
-  const isScrollable = useRef(false);
+  const [isScrollable, setIsScrollable] = useState(false);
   const isDragging = useRef(false);
   const dragStartX = useRef<number>(0);
   const scrollStartLeft = useRef<number>(0);
@@ -34,7 +36,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
       const maxScrollLeft = element.scrollWidth - element.clientWidth;
 
       // Check if content is scrollable (overflows container)
-      isScrollable.current = maxScrollLeft > 0;
+      setIsScrollable(maxScrollLeft > 0);
 
       if (element.scrollLeft <= 2) setScrollPosition('start');
       else if (element.scrollLeft >= maxScrollLeft - 2) setScrollPosition('end');
@@ -59,7 +61,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
 
   const handlePointerDown = (e: React.PointerEvent) => {
     // Only allow dragging if content is scrollable
-    if (!isScrollable.current) return;
+    if (!isScrollable) return;
 
     isDragging.current = true;
     dragStartX.current = e.clientX;
@@ -79,7 +81,7 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
 
   const handlePointerMove = (e: React.PointerEvent) => {
     // Only allow dragging if content is scrollable
-    if (!isScrollable.current) return;
+    if (!isScrollable) return;
 
     if (!isDragging.current || !scrollRef.current) return;
     e.preventDefault();
@@ -105,8 +107,8 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
         ref={scrollRef}
         className={cx(
           'relative z-0 overflow-x-auto overflow-y-clip select-none',
-          isScrollable.current && 'cursor-grab active:cursor-grabbing',
-          '[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          isScrollable && 'cursor-grab active:cursor-grabbing',
+          '[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden',
           className
         )}
         onPointerDown={handlePointerDown}
@@ -117,12 +119,12 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
             <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
           ))}
         </div>
-        <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
+        <div className="sticky right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
       </div>
-      {scrollPosition !== 'end' && (
+      {scrollPosition !== 'end' && isScrollable && (
         <div className="pointer-events-none absolute top-0 right-0 bottom-0 z-50 h-6 w-[50px] bg-linear-to-l from-white" />
       )}
-      {scrollPosition !== 'start' && (
+      {scrollPosition !== 'start' && isScrollable && (
         <div className="pointer-events-none absolute top-0 bottom-0 left-0 z-50 h-6 w-[50px] bg-linear-to-r from-white" />
       )}
     </div>
@@ -157,14 +159,26 @@ export const tabGroupTabLinkStyles = cva(
   }
 );
 
+function tabIdFromEntityTabHref(href: string): string | null {
+  const idx = href.indexOf('tabId=');
+  if (idx === -1) return null;
+  const raw = href.slice(idx + 6).split('&')[0];
+  return validateEntityId(raw) ? raw : null;
+}
+
 function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   const { editable } = useEditable();
 
   const path = usePathname();
-  const tabId = useTabId();
+  const activeTabId = useActiveTabIdForEditor();
+  const sidePanelTab = useEntitySidePanelActiveTab();
 
-  const fullPath = tabId ? `${path}?tabId=${tabId}` : `${path}`;
-  const active = href === fullPath;
+  const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
+  const active = sidePanelTab
+    ? tabIdFromEntityTabHref(href) === null
+      ? activeTabId === null
+      : activeTabId === tabIdFromEntityTabHref(href)
+    : href === fullPath;
 
   if (!editable && hidden) {
     return null;
@@ -176,6 +190,30 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
         {label}
         {badge && <Badge>{badge}</Badge>}
       </div>
+    );
+  }
+
+  const hrefTabId = tabIdFromEntityTabHref(href);
+
+  if (sidePanelTab) {
+    return (
+      <button
+        type="button"
+        className={tabGroupTabLinkStyles({ active, disabled })}
+        onClick={() => sidePanelTab.setActiveTabId(hrefTabId)}
+      >
+        {label}
+        {badge && <Badge>{badge}</Badge>}
+        {active && (
+          <motion.div
+            layoutId="tab-group-active-border"
+            layout
+            initial={false}
+            transition={{ duration: 0.2 }}
+            className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+          />
+        )}
+      </button>
     );
   }
 
@@ -200,7 +238,7 @@ type BadgeProps = {
   children: React.ReactNode;
 };
 
-const Badge = ({ children }: BadgeProps) => {
+export const Badge = ({ children }: BadgeProps) => {
   return (
     <div className="shrink-0">
       <div className="rounded bg-black px-1.25 py-0.5 text-xs leading-none text-white">{children}</div>

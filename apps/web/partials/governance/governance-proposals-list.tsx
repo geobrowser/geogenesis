@@ -11,59 +11,74 @@ import { Effect, Either, Schema } from 'effect';
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import { Environment } from '~/core/environment';
 import {
   type ApiProposalListItem,
   ApiProposalListResponseSchema,
   convertVoteOption,
   encodePathSegment,
+  findMembershipAction,
   isValidUUID,
-  mapActionTypeToProposalType,
+  mapApiActionsToProposalType,
   mapProposalStatus,
   restFetch,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph';
+import {
+  fetchProposalSubmittedTimes,
+  getSubmittedTime,
+} from '~/core/io/subgraph/fetch-proposal-submitted-times';
+import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
-import {
-  formatGovernanceOutcomeDate,
-  formatGovernanceOutcomeTime,
-  getIsProposalEnded,
-  getProposalName,
-} from '~/core/utils/utils';
+import { getIsProposalEnded, getMembershipProposalDisplayName, getProposalName } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { GovernanceOutcomeDate, GovernanceOutcomeTime } from './governance-outcome-timestamp';
 import type { GovernanceProposalType } from './governance-proposal-type-filter';
 import { GovernanceProposalVoteState } from './governance-proposal-vote-state';
 import { GovernanceRejectedProposalMenu } from './governance-rejected-proposal-menu';
 import { GovernanceStatusChip } from './governance-status-chip';
+import { ProposalListItem } from './proposal-list-item';
 import { cachedFetchSpace } from '~/app/space/[id]/cached-fetch-space';
+
+type ProposalBucket = 'executable' | 'active' | 'completed';
+const BUCKET_BASE_ORDER: Record<ProposalBucket, number> = {
+  executable: 0,
+  active: 10000,
+  completed: 20000,
+};
 
 const PAGE_SIZE = 100;
 
-const MEMBERSHIP_ACTION_TYPES = new Set(['ADD_MEMBER', 'REMOVE_MEMBER', 'ADD_EDITOR', 'REMOVE_EDITOR']);
+/**
+ * Unvoted proposals first; voted ones sink to the bottom (same as governance home review).
+ * Then soonest-closing first, and newest submission first among proposals that close at
+ * the same time.
+ *
+ * That last key is what orders the "Voting period open" group: their voting window is
+ * unstamped until the first vote, so they all carry endTime 0 and used to tie — leaving
+ * them in whatever order the API happened to return.
+ */
+function sortOpenProposalsUnvotedFirstByEndTimeAsc(
+  items: readonly ApiProposalListItem[],
+  submittedTimes: Map<string, number>
+): ApiProposalListItem[] {
+  const order = (p: ApiProposalListItem) => ({
+    hasViewerVote: p.userVote != null,
+    endTime: p.timing.endTime,
+    submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
+  });
+  return [...items].sort((a, b) => compareOpenProposals(order(a), order(b), { unvotedFirst: true, endTime: 'asc' }));
+}
 
 function percentageFromCounts(count: number, total: number): number {
   if (total === 0) return 0;
   return Math.floor((count / total) * 100);
-}
-
-function getMembershipProposalDisplayName(type: ProposalType, targetProfile: Profile): string {
-  const targetName = targetProfile.name ?? targetProfile.address ?? targetProfile.id;
-  switch (type) {
-    case 'ADD_MEMBER':
-      return `Add ${targetName} as member`;
-    case 'REMOVE_MEMBER':
-      return `Remove ${targetName} as member`;
-    case 'ADD_EDITOR':
-      return `Add ${targetName} as editor`;
-    case 'REMOVE_EDITOR':
-      return `Remove ${targetName} as editor`;
-    default:
-      return targetName;
-  }
 }
 
 interface Props {
@@ -100,11 +115,19 @@ export async function GovernanceProposalsList({
 
   const spaceName = space?.entity?.name ?? '';
 
+  const bucketPositions: Record<ProposalBucket, number> = { executable: 0, active: 0, completed: 0 };
+
   return {
     node: (
-      <div className="flex flex-col divide-y divide-grey-01">
+      <div className="flex flex-col">
         {proposals.map(p => {
           const displayProfile = p.targetProfile ?? p.createdBy;
+          const timestampSeconds = proposalTimestampSeconds({
+            status: p.status,
+            endTime: p.endTime,
+            startTime: p.startTime,
+            submittedAt: p.createdAt,
+          });
           const proposalTitle = p.targetProfile
             ? getMembershipProposalDisplayName(p.type, p.targetProfile)
             : getProposalName({
@@ -120,64 +143,92 @@ export async function GovernanceProposalsList({
           const showReopenMenu =
             p.status === 'REJECTED' && p.type === 'ADD_EDIT' && getIsProposalEnded(p.status, p.endTime);
 
+          const baseOrder = BUCKET_BASE_ORDER[p.bucket] + bucketPositions[p.bucket]++;
+
           return (
-            <Link
-              key={p.id}
-              href={`/space/${spaceId}/governance?proposalId=${p.id}`}
-              className="flex w-full flex-col gap-3 py-4"
-            >
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="min-w-0 flex-1 text-smallTitle">{proposalTitle}</h3>
-                  {showReopenMenu ? (
-                    <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} />
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-breadcrumb text-grey-04">
-                  <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
-                    <Avatar avatarUrl={displayProfile.avatarUrl} value={displayProfile.address ?? displayProfile.id} />
+            <ProposalListItem key={p.id} proposalId={p.id} baseOrder={baseOrder} canSink={p.bucket !== 'completed'}>
+              <div className="relative flex w-full flex-col gap-3 py-4">
+                <Link
+                  href={`/space/${spaceId}/governance?proposalId=${p.id}`}
+                  className="absolute inset-0"
+                  aria-label={proposalTitle}
+                />
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="min-w-0 flex-1 text-smallTitle">{proposalTitle}</h3>
+                    {showReopenMenu ? (
+                      <div className="relative z-10">
+                        <GovernanceRejectedProposalMenu proposalId={p.id} spaceId={spaceId} />
+                      </div>
+                    ) : null}
                   </div>
-                  <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
-                  {(p.status === 'ACCEPTED' || p.status === 'REJECTED') && (
-                    <>
-                      <span aria-hidden className="shrink-0 select-none">
-                        ·
-                      </span>
-                      <span className="shrink-0">{formatGovernanceOutcomeDate(p.endTime)}</span>
-                      <span aria-hidden className="shrink-0 select-none">
-                        ·
-                      </span>
-                      <time
-                        className="shrink-0 tabular-nums"
-                        dateTime={new Date(p.endTime * 1000).toISOString()}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-breadcrumb text-grey-04">
+                    {displayProfile.profileLink ? (
+                      <Link
+                        href={displayProfile.profileLink}
+                        className="relative z-10 flex min-w-0 items-center gap-2 transition-colors duration-75 hover:text-text"
                       >
-                        {formatGovernanceOutcomeTime(p.endTime)}
-                      </time>
-                    </>
-                  )}
+                        <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
+                          <Avatar
+                            avatarUrl={displayProfile.avatarUrl}
+                            value={displayProfile.address ?? displayProfile.id}
+                          />
+                        </div>
+                        <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
+                      </Link>
+                    ) : (
+                      <div className="flex min-w-0 items-center gap-2">
+                        <div className="relative h-3 w-3 shrink-0 overflow-hidden rounded-full">
+                          <Avatar
+                            avatarUrl={displayProfile.avatarUrl}
+                            value={displayProfile.address ?? displayProfile.id}
+                          />
+                        </div>
+                        <p className="min-w-0">{displayProfile.name ?? displayProfile.address ?? displayProfile.id}</p>
+                      </div>
+                    )}
+                    {timestampSeconds > 0 && (
+                      <>
+                        <span aria-hidden className="shrink-0 select-none">
+                          ·
+                        </span>
+                        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
+                        <span aria-hidden className="shrink-0 select-none">
+                          ·
+                        </span>
+                        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="inline-flex min-w-0 flex-3 items-center gap-8">
-                  <GovernanceProposalVoteState
-                    variant="space"
-                    yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
-                    noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
-                    userVote={p.userVote}
-                    user={
-                      profile || connectedAddress
-                        ? {
-                            address: connectedAddress,
-                            avatarUrl: profile?.avatarUrl ?? null,
-                          }
-                        : undefined
-                    }
+                <div className="flex items-center justify-between">
+                  <div className="inline-flex min-w-0 flex-3 items-center gap-8">
+                    <GovernanceProposalVoteState
+                      variant="space"
+                      yesPercentage={percentageFromCounts(p.proposalVotes.yesCount, p.proposalVotes.totalCount)}
+                      noPercentage={percentageFromCounts(p.proposalVotes.noCount, p.proposalVotes.totalCount)}
+                      userVote={p.userVote}
+                      user={
+                        profile || connectedAddress
+                          ? {
+                              address: connectedAddress,
+                              avatarUrl: profile?.avatarUrl ?? null,
+                            }
+                          : undefined
+                      }
+                    />
+                  </div>
+
+                  <GovernanceStatusChip
+                    endTime={p.endTime}
+                    status={p.status}
+                    canExecute={p.canExecute}
+                    spaceId={spaceId}
+                    proposalId={p.id}
                   />
                 </div>
-
-                <GovernanceStatusChip endTime={p.endTime} status={p.status} canExecute={p.canExecute} />
               </div>
-            </Link>
+            </ProposalListItem>
           );
         })}
       </div>
@@ -208,6 +259,7 @@ type GovernanceProposal = {
   endTime: number;
   status: ProposalStatus;
   canExecute: boolean;
+  bucket: ProposalBucket;
   proposalVotes: {
     totalCount: number;
     yesCount: number;
@@ -218,24 +270,29 @@ type GovernanceProposal = {
 
 function apiProposalToGovernanceDto(
   proposal: ApiProposalListItem,
+  bucket: ProposalBucket,
+  submittedAt: number,
   maybeProfile?: Profile,
   maybeTargetProfile?: Profile
 ): GovernanceProposal {
   const profile = maybeProfile ?? defaultProfile(proposal.proposedBy, proposal.proposedBy);
 
-  const firstAction = proposal.actions[0];
-  const proposalType = mapActionTypeToProposalType(firstAction?.actionType ?? 'UNKNOWN');
+  // Walks all actions rather than reading actions[0] — REST action order isn't
+  // guaranteed, so a multi-action proposal that contains a PUBLISH would be
+  // misclassified if PUBLISH happens to be at a later index.
+  const proposalType = mapApiActionsToProposalType(proposal.actions);
 
   return {
     id: proposal.proposalId,
     name: proposal.name,
     type: proposalType,
-    createdAt: proposal.timing.startTime,
+    createdAt: submittedAt,
     createdAtBlock: '0',
     startTime: proposal.timing.startTime,
     endTime: proposal.timing.endTime,
     status: mapProposalStatus(proposal.status),
     canExecute: proposal.canExecute,
+    bucket,
     createdBy: profile,
     targetProfile: maybeTargetProfile,
     userVote: proposal.userVote ? convertVoteOption(proposal.userVote) : undefined,
@@ -245,6 +302,18 @@ function apiProposalToGovernanceDto(
       noCount: proposal.votes.no,
     },
   };
+}
+
+function getProposalBucket(apiStatus: ApiProposalListItem['status']): ProposalBucket {
+  switch (apiStatus) {
+    case 'EXECUTABLE':
+      return 'executable';
+    case 'PROPOSED':
+      return 'active';
+    case 'ACCEPTED':
+    case 'REJECTED':
+      return 'completed';
+  }
 }
 
 /**
@@ -352,14 +421,36 @@ async function fetchGovernanceProposals({
     }),
   ]);
 
-  // Combine in priority order: executable > active > completed
-  let combinedProposals = [...executableProposals, ...activeProposals, ...completedProposals];
+  // Requests whose target already belongs to the space (a duplicate request was
+  // accepted, or they were added another way) stay PROPOSED/EXECUTABLE forever —
+  // drop them from the open buckets. Completed history stays intact.
+  const openProposals = await filterGrantedMembershipRequests([...executableProposals, ...activeProposals]);
+
+  // Resolved before sorting, not just for the rendered page: submission time is the
+  // tiebreaker for open proposals, so it has to be known for every candidate rather
+  // than the slice that survives pagination.
+  const submittedTimes = await fetchProposalSubmittedTimes(
+    [...openProposals, ...completedProposals].map(p => p.proposalId)
+  );
+
+  // Combine in priority order: executable > active > completed; within open phases, unvoted first.
+  let combinedProposals = [
+    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
+      openProposals.filter(p => p.status === 'EXECUTABLE'),
+      submittedTimes
+    ),
+    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
+      openProposals.filter(p => p.status !== 'EXECUTABLE'),
+      submittedTimes
+    ),
+    ...completedProposals,
+  ];
 
   // Filter by proposal type
   if (effectiveType === 'proposals') {
-    combinedProposals = combinedProposals.filter(p => !MEMBERSHIP_ACTION_TYPES.has(p.actions[0]?.actionType ?? ''));
+    combinedProposals = combinedProposals.filter(p => findMembershipAction(p.actions) === undefined);
   } else if (effectiveType === 'requests') {
-    combinedProposals = combinedProposals.filter(p => MEMBERSHIP_ACTION_TYPES.has(p.actions[0]?.actionType ?? ''));
+    combinedProposals = combinedProposals.filter(p => findMembershipAction(p.actions) !== undefined);
   }
 
   // Apply pagination
@@ -376,8 +467,7 @@ async function fetchGovernanceProposals({
 
   // Fetch target profiles for membership proposals (extract targetId from actions)
   const targetIds = paginatedProposals
-    .filter(p => MEMBERSHIP_ACTION_TYPES.has(p.actions[0]?.actionType ?? ''))
-    .map(p => p.actions[0]?.targetId)
+    .map(p => findMembershipAction(p.actions)?.targetId)
     .filter((id): id is string => !!id);
   const uniqueTargetIds = [...new Set(targetIds)];
 
@@ -392,9 +482,15 @@ async function fetchGovernanceProposals({
 
   const proposals = paginatedProposals.map(p => {
     const maybeProfile = profilesBySpaceId.get(p.proposedBy);
-    const targetId = p.actions[0]?.targetId;
+    const targetId = findMembershipAction(p.actions)?.targetId;
     const maybeTargetProfile = targetId ? targetProfilesBySpaceId.get(targetId) : undefined;
-    return apiProposalToGovernanceDto(p, maybeProfile, maybeTargetProfile);
+    return apiProposalToGovernanceDto(
+      p,
+      getProposalBucket(p.status),
+      getSubmittedTime(submittedTimes, p.proposalId),
+      maybeProfile,
+      maybeTargetProfile
+    );
   });
 
   return { proposals, hasMore };

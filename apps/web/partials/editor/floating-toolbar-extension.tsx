@@ -1,7 +1,7 @@
+import { autoUpdate, computePosition, flip, offset, shift } from '@floating-ui/dom';
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { ReactRenderer } from '@tiptap/react';
-import { computePosition, flip, shift, offset, autoUpdate } from '@floating-ui/dom';
 
 import React from 'react';
 

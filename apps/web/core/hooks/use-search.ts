@@ -1,20 +1,22 @@
 'use client';
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { Duration } from 'effect';
-import * as Effect from 'effect/Effect';
-import * as Either from 'effect/Either';
 
-import { Subgraph } from '~/core/io';
+import { dedupeSearchResultTypeTags } from '~/core/utils/search-result-types';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { mergeSearchResult } from '../database/result';
+import { capSearchQuery } from '../io/search-query';
 import { E } from '../sync/orm';
 import { useSyncEngine } from '../sync/use-sync-engine';
+import type { SearchResult } from '../types';
+import { selectSearchAdditionalSpaceIds } from './search-additional-space-ids';
 import { useDebouncedValue } from './use-debounced-value';
+import { useGlobalSearchSpaceIds } from './use-global-search-space-ids';
 
 interface SearchOptions {
   filterByTypes?: string[];
@@ -22,7 +24,43 @@ interface SearchOptions {
   initialQuery?: string;
   waitForFilterTypes?: boolean;
   restrictToFilterTypes?: boolean;
+  enabled?: boolean;
+  pageSize?: number;
+  /**
+   * Tri-state, not a plain boolean — `undefined` and `true` are different.
+   * Always threaded through to E.findFuzzyPage/getResultsPage, where it
+   * drives client-side canonical gating (shouldIncludeRestSearchResult) —
+   * that part applies regardless of `filterBySpace`. The additionalSpaceIds
+   * widening described below is the part that's specific to unscoped
+   * (global) searches: when `filterBySpace` is set, additionalSpaceIds is
+   * never applied, no matter what this value is.
+   * - `false`: restrict results to the canonical graph plus the scoped spaces
+   *   from useGlobalSearchSpaceIds (root/current/personal/member/editor —
+   *   additionalSpaceIds applied).
+   * - `undefined` (omitted): same eligibility restriction as `false` —
+   *   additionalSpaceIds is still applied. Callers with no opinion on
+   *   canonical-only should just omit this.
+   * - `true` (explicit): drop the canonical/scoped-spaces eligibility
+   *   restriction — additionalSpaceIds is NOT applied. Any other filters
+   *   the caller passes (filterBySpace, filterByTypes, etc.) still apply as
+   *   normal; this only lifts the canonical-graph-and-scoped-spaces gating,
+   *   not every constraint on the search. Only pass this when the caller
+   *   genuinely wants that specific restriction lifted.
+   */
+  includeNonCanonical?: boolean;
 }
+
+const DEFAULT_SEARCH_PAGE_SIZE = 10;
+const EMPTY_PAGE_PUMP_LIMIT = 3;
+
+type SearchPage = {
+  rows: SearchResult[];
+  offset: number;
+  serverCount: number;
+  total: number;
+};
+
+const emptySearchPage = (offset: number): SearchPage => ({ rows: [], offset, serverCount: 0, total: 0 });
 
 function normalizeTypeId(id: string): string {
   return id.replace(/-/g, '');
@@ -44,10 +82,7 @@ export function entityTypesMatchFilter(
   return searchResultMatchesAllowedTypes({ types: types ?? [] }, relationTargetTypeIds);
 }
 
-function resultMatchesFilterTypes(
-  result: { types: { id: string }[] },
-  filterByTypes: string[] | undefined
-): boolean {
+function resultMatchesFilterTypes(result: { types: { id: string }[] }, filterByTypes: string[] | undefined): boolean {
   return searchResultMatchesAllowedTypes(result, filterByTypes);
 }
 
@@ -57,122 +92,120 @@ export function useSearch({
   initialQuery,
   waitForFilterTypes,
   restrictToFilterTypes,
+  enabled,
+  pageSize = DEFAULT_SEARCH_PAGE_SIZE,
+  includeNonCanonical,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
   const [query, setQuery] = React.useState<string>(initialQuery ?? '');
   const debouncedQuery = useDebouncedValue(query);
 
+  const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
+  const additionalSpaceIds = selectSearchAdditionalSpaceIds({
+    filterBySpace,
+    includeNonCanonical,
+    globalAdditionalSpaceIds,
+  });
+
   const maybeEntityId = debouncedQuery.trim();
+  const cappedQuery = capSearchQuery(debouncedQuery);
+  const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
 
   const searchBlocked =
     (Boolean(waitForFilterTypes) && !filterByTypes?.length) ||
     (Boolean(restrictToFilterTypes) && !filterByTypes?.length);
 
-  const { data: results, isLoading } = useQuery({
-    enabled: debouncedQuery !== '' && !searchBlocked,
+  const shouldSearch = (enabled ?? debouncedQuery !== '') && !searchBlocked;
+
+  const {
+    data: resultPages,
+    isPending: isSearchQueryPending,
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+  } = useInfiniteQuery({
+    enabled: shouldSearch,
     queryKey: [
       'search',
-      debouncedQuery,
-      filterByTypes?.join('-'),
+      // The capped query, so typing past the cap stops minting keys for a request that cannot
+      // change. `debouncedQuery` stays the raw text everywhere it describes what was typed.
+      cappedQuery,
+      filterTypeKey,
       filterBySpace,
       Boolean(waitForFilterTypes),
       Boolean(restrictToFilterTypes),
+      additionalSpaceIds,
+      pageSize,
+      includeNonCanonical,
     ],
-    queryFn: async () => {
-      if (query.length === 0) return [];
+    initialPageParam: 0,
+    queryFn: async ({ pageParam, signal }): Promise<SearchPage> => {
+      try {
+        const isValidEntityId = validateEntityId(maybeEntityId);
 
-      const isValidEntityId = validateEntityId(maybeEntityId);
+        if (isValidEntityId) {
+          if (pageParam > 0) return emptySearchPage(pageParam);
 
-      if (isValidEntityId) {
-        const id = maybeEntityId;
-
-        const fetchResultEffect = Effect.either(
-          Effect.tryPromise({
-            try: async () =>
-              await mergeSearchResult({
-                id,
-                store,
-              }),
-            catch: error => {
-              console.error('error', error);
-              return new Subgraph.Errors.AbortError();
-            },
-          })
-        );
-
-        const resultOrError = await Effect.runPromise(fetchResultEffect);
-
-        if (Either.isLeft(resultOrError)) {
-          const error = resultOrError.left;
-
-          switch (error._tag) {
-            case 'AbortError':
-              console.log(`abort error`);
-              return [];
-            default:
-              console.error('useSearch error:', String(error));
-              throw error;
+          const merged = await mergeSearchResult({
+            id: maybeEntityId,
+            store,
+          });
+          if (!merged) return emptySearchPage(pageParam);
+          if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
+            return emptySearchPage(pageParam);
           }
+          return { rows: [merged], offset: pageParam, serverCount: 1, total: 1 };
         }
 
-        const merged = resultOrError.right;
-        if (!merged) return [];
-        if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
-          return [];
-        }
-        return [merged];
-      }
-
-      const fetchResultsEffect = Effect.either(
-        Effect.tryPromise({
-          try: async () =>
-            await E.findFuzzy({
-              store,
-              cache,
-              where: {
-                name: {
-                  fuzzy: debouncedQuery,
-                },
-                ...(filterByTypes?.length
-                  ? {
-                      types: filterByTypes.map(t => ({
-                        id: {
-                          equals: t,
-                        },
-                      })),
-                    }
-                  : {}),
-                ...(filterBySpace ? { space: { id: { equals: filterBySpace } } } : {}),
-              },
-              first: 10,
-              skip: 0,
-            }),
-          catch: error => {
-            console.error('error', error);
-            return new Subgraph.Errors.AbortError();
+        const page = await E.findFuzzyPage({
+          store,
+          cache,
+          where: {
+            name: {
+              fuzzy: cappedQuery,
+            },
+            ...(filterByTypes?.length
+              ? {
+                  types: filterByTypes.map(t => ({
+                    id: {
+                      equals: t,
+                    },
+                  })),
+                }
+              : {}),
+            ...(filterBySpace ? { space: { id: { equals: filterBySpace } } } : {}),
           },
-        })
-      );
+          first: pageSize,
+          skip: pageParam,
+          signal,
+          additionalSpaceIds,
+          includeNonCanonical,
+        });
 
-      const resultOrError = await Effect.runPromise(fetchResultsEffect);
+        const rows = !filterByTypes?.length
+          ? page.results
+          : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
 
-      if (Either.isLeft(resultOrError)) {
-        const error = resultOrError.left;
-
-        switch (error._tag) {
-          case 'AbortError':
-            console.log(`abort error`);
-            return [];
-          default:
-            console.error('useSearch error:', String(error));
-            throw error;
+        return { rows, offset: pageParam, serverCount: page.serverCount, total: page.total };
+      } catch (error) {
+        // Re-throw cancellations so React Query treats them as a cancel, not a
+        // successful empty result. Returning `emptySearchPage` here would let RQ
+        // cache the empty page under the canceled queryKey — leaving popovers
+        // stuck on "No matches" when the key changes mid-fetch (e.g.
+        // `additionalSpaceIds` settles after mount, or React StrictMode
+        // double-mounts in dev).
+        if (signal.aborted || (error as { name?: string })?.name === 'AbortError') {
+          throw error;
         }
+        console.error(error);
+        return emptySearchPage(pageParam);
       }
-
-      const rows = resultOrError.right;
-      if (!filterByTypes?.length) return rows;
-      return rows.filter(r => resultMatchesFilterTypes(r, filterByTypes));
+    },
+    getNextPageParam: lastPage => {
+      const nextOffset = lastPage.offset + pageSize;
+      return nextOffset >= lastPage.total ? undefined : nextOffset;
     },
     /**
      * We don't want to return stale search results. Instead we just
@@ -182,15 +215,59 @@ export function useSearch({
      * shift or confusing results.
      */
     gcTime: Duration.toMillis(Duration.seconds(15)),
+    throwOnError: false,
   });
 
+  const emptyPagePumpCountRef = React.useRef(0);
+
+  React.useEffect(() => {
+    const lastPage = resultPages?.pages.at(-1);
+    if (!lastPage) {
+      emptyPagePumpCountRef.current = 0;
+      return;
+    }
+
+    if (lastPage.rows.length > 0 || !hasNextPage) {
+      emptyPagePumpCountRef.current = 0;
+      return;
+    }
+
+    if (
+      lastPage.serverCount < pageSize ||
+      isFetchingNextPage ||
+      emptyPagePumpCountRef.current >= EMPTY_PAGE_PUMP_LIMIT
+    ) {
+      return;
+    }
+
+    emptyPagePumpCountRef.current += 1;
+    void fetchNextPage();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, pageSize, resultPages]);
+
+  const results = React.useMemo(() => {
+    const seen = new Set<string>();
+    const rows: NonNullable<typeof resultPages>['pages'][number]['rows'] = [];
+    for (const row of resultPages?.pages.flatMap(page => page.rows) ?? []) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      rows.push(dedupeSearchResultTypeTags(row));
+    }
+    return rows;
+  }, [resultPages]);
+
   const isQuerySyncing = query !== debouncedQuery;
-  const shouldSuspend = isQuerySyncing || isLoading;
+  const isWaitingForFilterTypes = shouldSearch === false && searchBlocked && (enabled ?? debouncedQuery !== '');
+  /** Pending = no usable data yet (RQ v5); avoids treating the pre-fetch tick as “loaded empty”. */
+  const shouldSuspend = isWaitingForFilterTypes || isQuerySyncing || isSearchQueryPending;
 
   return {
-    isEmpty: isArrayEmpty(results ?? []) && !isStringEmpty(query) && !shouldSuspend,
+    isEmpty: isArrayEmpty(results) && (Boolean(enabled) || !isStringEmpty(query)) && !shouldSuspend,
     isLoading: shouldSuspend,
-    results: results ?? [],
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    results,
     query,
     onQueryChange: setQuery,
   };

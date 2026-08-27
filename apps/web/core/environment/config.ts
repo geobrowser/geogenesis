@@ -1,70 +1,43 @@
 // Not required, only set in test environments
 const TEST_ENV = process.env.NEXT_PUBLIC_IS_TEST_ENV;
 
+// REQUIRED chain selector — '55516' (Geo testnet) or '80451' (mainnet). There is
+// no default: see resolveChainId in environment.ts for why an implicit network is
+// unsafe. The mainnet cutover flips this env var instead of editing code.
+const CHAIN_ID = process.env.NEXT_PUBLIC_CHAIN_ID;
+
+// OPTIONAL contract address overrides. When unset on testnet, the geo-sdk's
+// built-in testnet addresses apply. REQUIRED on any non-testnet chain — the SDK
+// only ships testnet addresses, and falling back silently is exactly the
+// failure mode these exist to prevent (txs sent to a codeless address succeed
+// with no events).
+const SPACE_REGISTRY_ADDRESS = process.env.NEXT_PUBLIC_SPACE_REGISTRY_ADDRESS;
+const DAO_SPACE_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_DAO_SPACE_FACTORY_ADDRESS;
+
+// OPTIONAL gas-sponsorship RPC override. When unset on testnet, the geo-sdk's
+// built-in sponsorship endpoint applies. Exists so a ZeroDev-side proxy bug
+// (or endpoint change) can be routed around without waiting on a geo-sdk release.
+const SPONSORSHIP_RPC_URL = process.env.NEXT_PUBLIC_SPONSORSHIP_RPC_URL;
+
 const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
 if (!PRIVY_APP_ID) {
   throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is not set');
 }
 
+// RPC/API endpoints. All four are OPTIONAL raw reads here; environment.ts
+// applies the rules — testnet endpoints default from the geo-sdk's built-in
+// network config, mainnet endpoints are required only when the mainnet chain
+// is selected (the SDK has no mainnet config to fall back to).
 const RPC_ENDPOINT = process.env.NEXT_PUBLIC_GEOGENESIS_RPC;
-
-if (!RPC_ENDPOINT) {
-  throw new Error('NEXT_PUBLIC_GEOGENESIS_RPC is not set');
-}
-
 const RPC_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET;
-
-if (!RPC_ENDPOINT_TESTNET) {
-  throw new Error('NEXT_PUBLIC_GEOGENESIS_RPC_TESTNET is not set');
-}
-
 const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT;
-
-if (!API_ENDPOINT) {
-  throw new Error('NEXT_PUBLIC_API_ENDPOINT is not set');
-}
-
 const API_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_API_ENDPOINT_TESTNET;
-
-if (!API_ENDPOINT_TESTNET) {
-  throw new Error('NEXT_PUBLIC_API_ENDPOINT_TESTNET is not set');
-}
-
-const BUNDLER_RPC_ENDPOINT = process.env.NEXT_PUBLIC_BUNDLER_RPC;
-
-if (!BUNDLER_RPC_ENDPOINT) {
-  throw new Error('NEXT_PUBLIC_BUNDLER_RPC is not set');
-}
-
-const BUNDLER_RPC_ENDPOINT_TESTNET = process.env.NEXT_PUBLIC_BUNDLER_RPC_TESTNET;
-
-if (!BUNDLER_RPC_ENDPOINT_TESTNET) {
-  throw new Error('NEXT_PUBLIC_BUNDLER_RPC_TESTNET is not set');
-}
 
 const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
 
 if (!WALLETCONNECT_PROJECT_ID) {
   throw new Error('NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set');
-}
-
-const ACCOUNT_ABSTRACTION_API_KEY = process.env.NEXT_PUBLIC_PIMLICO_API_KEY;
-
-if (!ACCOUNT_ABSTRACTION_API_KEY) {
-  throw new Error('NEXT_PUBLIC_PIMLICO_API_KEY is not set');
-}
-
-const ONBOARD_FLAG = process.env.NEXT_PUBLIC_ONBOARD_FLAG;
-
-if (!ONBOARD_FLAG) {
-  throw new Error('NEXT_PUBLIC_ONBOARD_FLAG is not set');
-}
-
-const ONBOARD_CODE = process.env.NEXT_PUBLIC_ONBOARD_CODE;
-
-if (!ONBOARD_CODE) {
-  throw new Error('NEXT_PUBLIC_ONBOARD_CODE is not set');
 }
 
 const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
@@ -83,16 +56,15 @@ if (SENTRY_DSN) {
 
 export {
   TEST_ENV,
+  CHAIN_ID,
+  SPACE_REGISTRY_ADDRESS,
+  DAO_SPACE_FACTORY_ADDRESS,
+  SPONSORSHIP_RPC_URL,
   PRIVY_APP_ID,
   RPC_ENDPOINT,
   API_ENDPOINT,
-  BUNDLER_RPC_ENDPOINT,
   RPC_ENDPOINT_TESTNET,
   API_ENDPOINT_TESTNET,
-  BUNDLER_RPC_ENDPOINT_TESTNET,
   WALLETCONNECT_PROJECT_ID,
-  ACCOUNT_ABSTRACTION_API_KEY,
-  ONBOARD_FLAG,
-  ONBOARD_CODE,
   SENTRY_DSN,
 };

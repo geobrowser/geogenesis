@@ -1,15 +1,10 @@
+import { Schema } from 'effect';
 import * as Effect from 'effect/Effect';
 import * as Either from 'effect/Either';
-import { Schema } from 'effect';
 
 import { Environment } from '../environment';
 import { getSpacesWhereMember } from './queries';
-import {
-  type ApiProposalListItem,
-  ApiProposalListResponseSchema,
-  encodePathSegment,
-  restFetch,
-} from './rest';
+import { type ApiProposalListItem, ApiProposalListResponseSchema, encodePathSegment, restFetch } from './rest';
 import { isValidUUID, spaceIdToGraphqlUuid } from './rest/validation';
 import { fetchEditorSpaceIds } from './subgraph/fetch-editor-space-ids';
 import { graphql } from './subgraph/graphql';
@@ -32,20 +27,27 @@ type MyProposalStatsResult = {
   myRejected: { totalCount: number };
 };
 
-/** Proposals you created — GraphQL `proposedBy` filter is supported on this API. */
+/**
+ * Proposals you created — GraphQL `proposedBy` filter is supported on this API.
+ *
+ * proposalsCurrents joins each proposal with its *current* version, so endTime
+ * is the live voting window and multi-version proposals can't land in two
+ * buckets. v2 encodes "not-yet-voted" as `endTime = 0` (voting window opens on
+ * the first vote), so a fresh proposal counts as In Progress, not Rejected.
+ */
 function buildMyProposalStatsQuery(spaceId: string, nowSeconds: string): string {
   return `query {
-    myInProgress: proposalsConnection(
+    myInProgress: proposalsCurrentsConnection(
       filter: {
         proposedBy: { is: "${spaceId}" }
         executedAt: { isNull: true }
-        endTime: { greaterThanOrEqualTo: "${nowSeconds}" }
+        or: [{ endTime: { is: "0" } }, { endTime: { greaterThan: "${nowSeconds}" } }]
       }
     ) {
       totalCount
     }
 
-    myAccepted: proposalsConnection(
+    myAccepted: proposalsCurrentsConnection(
       filter: {
         proposedBy: { is: "${spaceId}" }
         executedAt: { isNull: false }
@@ -54,11 +56,11 @@ function buildMyProposalStatsQuery(spaceId: string, nowSeconds: string): string 
       totalCount
     }
 
-    myRejected: proposalsConnection(
+    myRejected: proposalsCurrentsConnection(
       filter: {
         proposedBy: { is: "${spaceId}" }
         executedAt: { isNull: true }
-        endTime: { lessThan: "${nowSeconds}" }
+        endTime: { lessThan: "${nowSeconds}", greaterThan: "0" }
       }
     ) {
       totalCount

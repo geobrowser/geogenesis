@@ -22,9 +22,7 @@ export async function buildGovernanceHomeProposalTitle(
       return apiName?.trim() || 'Proposal';
     case 'ADD_EDITOR':
     case 'ADD_MEMBER': {
-      const profile = createdBy.address
-        ? await Effect.runPromise(fetchProfile(createdBy.address))
-        : createdBy;
+      const profile = createdBy.address ? await Effect.runPromise(fetchProfile(createdBy.address)) : createdBy;
       const displayName = profile?.name ?? profile?.address ?? profile?.id ?? 'Unknown';
       return type === 'ADD_EDITOR' ? `Add ${displayName} as editor` : `Add ${displayName} as member`;
     }

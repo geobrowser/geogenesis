@@ -8,24 +8,32 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { Effect } from 'effect';
-import { useSetAtom } from 'jotai';
+import { useSetAtom, useStore } from 'jotai';
 
-import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PROPOSAL_TYPE_ID } from '~/core/constants';
+import { publishedEdit, reviewChangesOpened } from '~/core/analytics';
+import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOSAL_TYPE_ID } from '~/core/constants';
 import { useAutofocus } from '~/core/hooks/use-autofocus';
+import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { usePublish } from '~/core/hooks/use-publish';
+import { type ProposalVotingMode, usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useIsFastPathRestricted } from '~/core/hooks/use-fast-path-restricted';
+import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
+import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
 import { useDiff } from '~/core/state/diff-store';
-import { useStatusBar } from '~/core/state/status-bar-store';
+import { isPendingPersonalSpaceId, usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
+import type { EntityDiff } from '~/core/utils/diff/types';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dropdown } from '~/design-system/dropdown';
@@ -38,18 +46,57 @@ import { SlideUp } from '~/design-system/slide-up';
 import { Text } from '~/design-system/text';
 
 import { ChangedEntity, hasVisibleChanges } from '~/partials/diffs/changed-entity';
+import { ProposalPathSelector } from '~/partials/governance/proposal-path-selector';
+import { ProposalNameTip, useProposalNameTip } from '~/partials/hints/proposal-name-tip';
 
 import {
   BountyLinkingPanel,
   buildBounties,
   buildBounty,
+  buildBountyAllocationTargets,
+  hasBountyTaskStatusDoneRelation,
   isAllocatedToUser,
   isBountyTypeRelation,
 } from './bounty-linking';
 import type { Bounty } from './bounty-linking/types';
-import { editorContentVersionAtom } from '~/atoms';
+import {
+  clearPersonalProfileSessionDismissStorage,
+  editorContentVersionAtom,
+  personalProfileSuggestedDismissAtom,
+  personalProfileSuggestedTasksAtom,
+} from '~/atoms';
 
 type Proposals = Record<string, { name: string; description: string }>;
+
+function orderVisibleEntitiesStable(
+  entities: EntityDiff[],
+  orderStateRef: React.MutableRefObject<{ spaceId: string; order: string[] }>,
+  activeSpace: string
+): EntityDiff[] {
+  const filtered = entities.filter(hasVisibleChanges);
+  if (!activeSpace) return filtered;
+
+  if (orderStateRef.current.spaceId !== activeSpace) {
+    orderStateRef.current = { spaceId: activeSpace, order: [] };
+  }
+
+  const visibleIds = new Set(filtered.map(e => e.entityId));
+  const nextOrder = orderStateRef.current.order.filter(id => visibleIds.has(id));
+  for (const entity of filtered) {
+    if (!nextOrder.includes(entity.entityId)) {
+      nextOrder.push(entity.entityId);
+    }
+  }
+  orderStateRef.current.order = nextOrder;
+
+  const byId = new Map(filtered.map(e => [e.entityId, e]));
+  return nextOrder.map(id => byId.get(id)).filter((e): e is EntityDiff => e != null);
+}
+
+function bountySpaceFallbackLabel(spaceId: string): string {
+  const compact = spaceId.replace(/-/g, '');
+  return compact.length > 14 ? `${compact.slice(0, 6)}…${compact.slice(-4)}` : spaceId;
+}
 
 export const ReviewChanges = () => {
   const {
@@ -59,11 +106,16 @@ export const ReviewChanges = () => {
     activeSpace: diffPreferredSpaceId,
     setActiveSpace: setDiffPreferredSpaceId,
   } = useDiff();
-  const { state: statusBarState } = useStatusBar();
+  const { state: statusBarState, dispatch: dispatchStatusBar } = useStatusBar();
+  const jotaiStore = useStore();
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
   const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
+  const resetSuggestedTasks = useSetAtom(personalProfileSuggestedTasksAtom);
+  const resetSuggestedDismiss = useSetAtom(personalProfileSuggestedDismissAtom);
+  const { openSidePanel } = useEntitySidePanel();
   const { personalSpaceId } = usePersonalSpaceId();
+  const { isPending: isPersonalSpacePending } = usePendingPersonalSpace();
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { profile } = useGeoProfile(address);
@@ -201,18 +253,39 @@ export const ReviewChanges = () => {
       relation.spaceId === activeSpace && bountyEntityIdSet.has(relation.fromEntity.id) && relation.isDeleted !== true,
   });
 
-  const { data: remoteBountyEntities = [] } = useQuery({
-    queryKey: ['bounties-by-type', activeSpace, BOUNTY_TYPE_ID],
+  const { data: bountySearchSpaceIds = [] } = useQuery({
+    queryKey: ['bounty-link-spaces-with-parents', activeSpace],
     enabled: Boolean(activeSpace && isReviewOpen),
     staleTime: 60_000,
     queryFn: async () => {
       if (!activeSpace) return [];
-      return await Effect.runPromise(
-        getAllEntities({
-          spaceId: activeSpace,
-          typeIds: { is: BOUNTY_TYPE_ID },
-        })
+      return await fetchSpaceWithParents(activeSpace);
+    },
+  });
+
+  const { data: remoteBountyEntities = [] } = useQuery({
+    queryKey: ['bounties-by-type', bountySearchSpaceIds.join(','), BOUNTY_TYPE_ID],
+    enabled: bountySearchSpaceIds.length > 0 && isReviewOpen,
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (bountySearchSpaceIds.length === 0) return [];
+      const pages = await Promise.all(
+        bountySearchSpaceIds.map(spaceId =>
+          Effect.runPromise(
+            getAllEntities({
+              spaceId,
+              typeIds: { is: BOUNTY_TYPE_ID },
+            })
+          )
+        )
       );
+      const merged = new Map<string, (typeof pages)[0]['entities'][0]>();
+      for (const { entities } of pages) {
+        for (const entity of entities) {
+          merged.set(entity.id, entity);
+        }
+      }
+      return [...merged.values()];
     },
   });
 
@@ -265,7 +338,7 @@ export const ReviewChanges = () => {
       return { bounties: [], bountiesById: new Map<string, Bounty>() };
     }
 
-    const allocationTargets = [personalSpaceId, personalPageEntityId].filter((id): id is string => Boolean(id));
+    const allocationTargets = buildBountyAllocationTargets(personalSpaceId, personalPageEntityId);
     const localResult = buildBounties(
       bountyEntityIds,
       bountyValues,
@@ -277,18 +350,23 @@ export const ReviewChanges = () => {
       personalSpaceId
     );
     const remoteBounties = remoteBountyEntities
-      .filter(entity => isAllocatedToUser(entity.relations ?? [], allocationTargets))
-      .map(entity =>
-        buildBounty(
+      .filter(
+        entity =>
+          isAllocatedToUser(entity.relations ?? [], allocationTargets) &&
+          !hasBountyTaskStatusDoneRelation(entity.relations ?? [])
+      )
+      .map(entity => {
+        const bountySpaceId = entity.spaces?.[0] ?? activeSpace;
+        return buildBounty(
           entity.id,
           entity.values ?? [],
           entity.relations ?? [],
           bountySubmissionCounts,
           bountyPersonalSubmissionCounts,
-          activeSpace,
+          bountySpaceId,
           personalSpaceId
-        )
-      );
+        );
+      });
 
     const merged = new Map<string, Bounty>();
     for (const bounty of remoteBounties) merged.set(bounty.id, bounty);
@@ -307,18 +385,141 @@ export const ReviewChanges = () => {
     personalPageEntityId,
   ]);
 
+  const bountySpaceIdsForLabels = React.useMemo(
+    () => [...new Set(bounties.map(b => b.spaceId).filter((id): id is string => Boolean(id)))].sort(),
+    [bounties]
+  );
+
+  const { data: bountyLabelSpaces = [] } = useQuery({
+    queryKey: ['bounty-space-labels', bountySpaceIdsForLabels.join(',')],
+    enabled: bountySpaceIdsForLabels.length > 0 && isReviewOpen,
+    staleTime: 60_000,
+    queryFn: async () => {
+      if (bountySpaceIdsForLabels.length === 0) return [];
+      return await Effect.runPromise(getSpaces({ spaceIds: bountySpaceIdsForLabels }));
+    },
+  });
+
+  const bountySpaceRowById = React.useMemo(() => {
+    const m = new Map<string, { label: string; image: string }>();
+    for (const id of bountySpaceIdsForLabels) {
+      const space = bountyLabelSpaces.find(s => s.id === id);
+      const name = space?.entity?.name?.trim();
+      const label = name && name.length > 0 ? name : bountySpaceFallbackLabel(id);
+      const image =
+        space?.entity?.image && space.entity.image.length > 0 ? space.entity.image : PLACEHOLDER_SPACE_IMAGE;
+      m.set(id, { label, image });
+    }
+    return m;
+  }, [bountyLabelSpaces, bountySpaceIdsForLabels]);
+
+  const bountiesWithSpaceLabels = React.useMemo(
+    (): Bounty[] =>
+      bounties.map(b => {
+        const row = b.spaceId ? bountySpaceRowById.get(b.spaceId) : undefined;
+        return {
+          ...b,
+          spaceLabel: b.spaceId ? (row?.label ?? bountySpaceFallbackLabel(b.spaceId)) : null,
+          spaceImage: b.spaceId ? (row?.image ?? PLACEHOLDER_SPACE_IMAGE) : null,
+        };
+      }),
+    [bounties, bountySpaceRowById]
+  );
+
   const bountyIdSet = React.useMemo(() => new Set(bounties.map(bounty => bounty.id)), [bounties]);
 
   const isReadyToPublish = proposalName.length > 0;
 
+  // While the optimistic personal space is still being created on-chain there's
+  // no real space to publish into (and edits buffered under the `pending:`
+  // sentinel can't be proposed). Gate Publish until setup finishes.
+  const isPublishGatedByPendingSetup = isPersonalSpacePending || isPendingPersonalSpaceId(activeSpace);
+
   // Focus the proposal name input after the SlideUp animation completes (0.5s delay + 0.5s duration)
   const proposalNameRef = useAutofocus<HTMLInputElement>(isReviewOpen, 1000);
+  const proposalNameSectionRef = React.useRef<HTMLDivElement>(null);
 
   const [entities, isLoadingChanges] = useLocalChanges(activeSpace, reviewVersion);
-  const visibleEntities = React.useMemo(() => entities.filter(hasVisibleChanges), [entities]);
+  const stableEntityOrderRef = React.useRef<{ spaceId: string; order: string[] }>({ spaceId: '', order: [] });
+  const visibleEntities = React.useMemo(
+    () => orderVisibleEntitiesStable(entities, stableEntityOrderRef, activeSpace),
+    [entities, activeSpace]
+  );
   const hasVisibleEntities = visibleEntities.length > 0;
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
+
+  // Fast/slow path selection (design 62501-94092). Every DAO-space submitter gets the
+  // choice — members as well as editors. Personal spaces don't vote at all.
+  const canChoosePath = activeSpaceMetadata?.type === 'DAO';
+  const { votingSettings: activeSpaceVotingSettings } = useVotingSettings(
+    activeSpaceMetadata?.address,
+    canChoosePath
+  );
+  // A space with disableFastPathAccessForNewMembers grants incoming members the
+  // FAST_PATH_RESTRICTED role; a fast-path proposal from one reverts during simulation.
+  const { isFastPathRestricted } = useIsFastPathRestricted(
+    activeSpaceMetadata?.address,
+    personalSpaceId,
+    canChoosePath
+  );
+  const [votingMode, setVotingMode] = React.useState<ProposalVotingMode>('FAST');
+
+  // Reset to the default fast path whenever the active space changes so a slow-path
+  // choice for one space doesn't silently carry over to the next. Restricted authors
+  // start on — and stay on — the review path: the role resolves asynchronously, so
+  // this also corrects a FAST default that was chosen before the answer arrived,
+  // which is what otherwise submits a proposal doomed to revert.
+  React.useEffect(() => {
+    setVotingMode(isFastPathRestricted ? 'SLOW' : 'FAST');
+  }, [activeSpace, isFastPathRestricted]);
+
+  const { settled: slideUpEnterSettled, onEnterAnimationComplete: onSlideUpEnterAnimationComplete } =
+    useEnterAnimationSettled(isReviewOpen);
+
+  const { open: proposalNameTipOpen, dismiss: dismissProposalNameTip } = useProposalNameTip({
+    enabled: isReviewOpen && hasRemainingSpaces && statusBarState.reviewState === 'idle',
+    slideUpEnterSettled,
+  });
+  const lastReviewOpenAnalyticsKey = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    if (!isReviewOpen) {
+      lastReviewOpenAnalyticsKey.current = null;
+      return;
+    }
+
+    if (isLoadingChanges || !activeSpace) {
+      return;
+    }
+
+    const analyticsKey = `${reviewVersion}:${activeSpace}`;
+
+    if (lastReviewOpenAnalyticsKey.current === analyticsKey) {
+      return;
+    }
+
+    lastReviewOpenAnalyticsKey.current = analyticsKey;
+    reviewChangesOpened({
+      content_id: `review_changes:${reviewVersion}:${activeSpace}`,
+      content_type: 'review_changes',
+      source: 'review_panel',
+      space_id: activeSpace,
+      value_count: valuesFromSpace.length,
+      relation_count: relationsFromSpace.length,
+      entity_count: visibleEntities.length,
+      space_count: dedupedSpacesWithActions.length,
+    });
+  }, [
+    activeSpace,
+    dedupedSpacesWithActions.length,
+    isLoadingChanges,
+    isReviewOpen,
+    relationsFromSpace.length,
+    reviewVersion,
+    valuesFromSpace.length,
+    visibleEntities.length,
+  ]);
 
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
@@ -329,7 +530,24 @@ export const ReviewChanges = () => {
     gap: 8,
   });
 
+  React.useEffect(() => {
+    rowVirtualizer.measure();
+  }, [entities, visibleEntities.length]);
+
+  const handleOpenReviewEntity = React.useCallback(
+    (entityId: string) => {
+      if (!activeSpace) return;
+
+      bumpEditorContentVersion(v => v + 1);
+      openSidePanel(entityId, activeSpace, true, { openedFromReviewEdits: true });
+    },
+    [activeSpace, bumpEditorContentVersion, openSidePanel]
+  );
+
   const handleProposalNameChange = (name: string) => {
+    if (name.length > 0) {
+      dismissProposalNameTip();
+    }
     setProposals(prev => ({
       ...prev,
       [activeSpace]: { ...prev[activeSpace], name, description: prev[activeSpace]?.description ?? '' },
@@ -337,10 +555,20 @@ export const ReviewChanges = () => {
   };
 
   const handleSubmit = React.useCallback(async () => {
-    if (!activeSpace || !isReadyToPublish) return;
+    if (!activeSpace) return;
+    if (!isReadyToPublish) return;
     setIsPublishing(true);
-
     const proposalEntityId = ID.createEntityId();
+
+    publishedEdit({
+      content_id: proposalEntityId,
+      content_type: 'publish',
+      publish_flow: 'review_changes',
+      publish_kind: activeSpaceMetadata?.type === 'PERSONAL' ? 'edit' : 'proposal',
+      space_id: activeSpace,
+      value_count: valuesFromSpace.length,
+      relation_count: relationsFromSpace.length,
+    });
 
     let resolved = false;
     const publishSucceeded = await new Promise<boolean>(resolve => {
@@ -357,6 +585,7 @@ export const ReviewChanges = () => {
         spaceId: activeSpace,
         name: proposalName,
         proposalId: proposalEntityId,
+        votingMode: canChoosePath ? votingMode : undefined,
         onSuccess: () => {
           setProposals(prev => ({ ...prev, [activeSpace]: { name: '', description: '' } }));
           settle(true);
@@ -458,19 +687,47 @@ export const ReviewChanges = () => {
         }),
       ];
 
-      await makeProposal({
-        values: bountyLinkValues,
-        relations: bountyLinkRelations,
-        spaceId: personalSpaceId,
-        name: `Bounty links for: ${proposalName}`,
-        onSuccess: () => {
-          setSelectedBountyIds(new Set());
-        },
-        onError: () => {
-          // usePublish dispatches the error to the status bar internally.
-          // Keep selectedBountyIds so the user can retry.
-        },
-      });
+      // Bounty linking publishes a SECOND proposal into the user's personal space.
+      // If it fails, usePublish dispatches the underlying error — but the user
+      // would have no way to know it was the bounty-link step that broke (their
+      // primary edit already succeeded). Wrap the error with bounty-specific
+      // context and offer Retry that re-runs only the bounty-link publish.
+      const publishBountyLinks = async () => {
+        let bountyFailed = false;
+        await makeProposal({
+          values: bountyLinkValues,
+          relations: bountyLinkRelations,
+          spaceId: personalSpaceId,
+          name: `Bounty links for: ${proposalName}`,
+          onSuccess: () => {
+            setSelectedBountyIds(new Set());
+          },
+          onError: () => {
+            bountyFailed = true;
+          },
+        });
+
+        if (bountyFailed) {
+          // usePublish clears the error atom on user-rejection (cancellation
+          // shouldn't surface as an error). If there's no underlying error,
+          // the user dismissed the wallet prompt — leave the status bar idle
+          // rather than wrapping a phantom "Unknown error" message.
+          const underlying = jotaiStore.get(statusBarStateAtom).error;
+          if (!underlying) return;
+          const linked = Array.from(selectedBountyIds)
+            .map(id => bountiesById.get(id)?.name)
+            .filter(Boolean)
+            .join(', ');
+          const wrapped = [
+            `Bounty linking failed: your proposal "${proposalName}" was published successfully, but linking it to ${linked || 'the selected bounties'} did not.`,
+            '',
+            underlying,
+          ].join('\n');
+          dispatchStatusBar({ type: 'ERROR', payload: wrapped, retry: publishBountyLinks });
+        }
+      };
+
+      await publishBountyLinks();
     }
 
     setIsPublishing(false);
@@ -481,9 +738,14 @@ export const ReviewChanges = () => {
     valuesFromSpace,
     relationsFromSpace,
     proposalName,
+    activeSpaceMetadata?.type,
+    canChoosePath,
+    votingMode,
     selectedBountyIds,
     personalSpaceId,
     bountiesById,
+    dispatchStatusBar,
+    jotaiStore,
   ]);
 
   useKeyboardShortcuts(
@@ -499,6 +761,9 @@ export const ReviewChanges = () => {
     store.clearLocalChangesForSpace(activeSpace);
     // Force the TipTap editor to recreate with fresh server content.
     bumpEditorContentVersion(v => v + 1);
+    resetSuggestedTasks({ bio: false, work: false, education: false, skills: false, post: false });
+    resetSuggestedDismiss({ forever: false, softDismissCount: 0 });
+    clearPersonalProfileSessionDismissStorage();
   };
 
   React.useEffect(() => {
@@ -537,167 +802,204 @@ export const ReviewChanges = () => {
   }));
 
   return (
-    <SlideUp isOpen={isReviewOpen} setIsOpen={setIsReviewOpen}>
-      <div className="flex h-full w-full flex-col gap-2 bg-grey-01">
-        <div className="flex shrink-0 items-center justify-between bg-white px-4 py-3">
-          <div className="flex items-center gap-4">
-            <SquareButton onClick={() => setIsReviewOpen(false)} icon={<Close />} />
-            <span className="text-metadataMedium leading-none">Review your edits in</span>
-            {dedupedSpacesWithActions.length > 1 ? (
-              <Dropdown
-                trigger={
-                  <div className="flex items-center gap-2">
-                    {activeSpaceMetadata?.entity.image && (
-                      <div className="h-5 w-5 overflow-hidden rounded">
-                        <NativeGeoImage
-                          value={activeSpaceMetadata.entity.image}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <span>{activeSpaceMetadata?.entity.name ?? activeSpace}</span>
-                  </div>
-                }
-                options={spaceOptions}
-              />
-            ) : (
+    <>
+      <SlideUp
+        isOpen={isReviewOpen}
+        setIsOpen={setIsReviewOpen}
+        deferEscapeClose={proposalNameTipOpen}
+        onEnterAnimationComplete={onSlideUpEnterAnimationComplete}
+      >
+        <div className="flex h-full w-full flex-col gap-2 bg-grey-01">
+          <div className="flex shrink-0 items-center justify-between bg-white px-4 py-3">
+            <div className="flex items-center gap-4">
+              <SquareButton onClick={() => setIsReviewOpen(false)} icon={<Close />} />
+              <span className="text-metadataMedium leading-none">Review your edits in</span>
+              {dedupedSpacesWithActions.length > 1 ? (
+                <Dropdown
+                  trigger={
+                    <div className="flex items-center gap-2">
+                      {activeSpaceMetadata?.entity.image && (
+                        <div className="h-5 w-5 overflow-hidden rounded">
+                          <NativeGeoImage
+                            value={activeSpaceMetadata.entity.image}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      )}
+                      <span>{activeSpaceMetadata?.entity.name ?? activeSpace}</span>
+                    </div>
+                  }
+                  options={spaceOptions}
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  {activeSpaceMetadata?.entity.image && (
+                    <div className="h-5 w-5 overflow-hidden rounded">
+                      <NativeGeoImage
+                        value={activeSpaceMetadata.entity.image}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <span className="text-metadataMedium leading-none font-semibold">
+                    {activeSpaceMetadata?.entity.name ?? activeSpace}
+                  </span>
+                </div>
+              )}
+            </div>
+            {hasRemainingSpaces && (
               <div className="flex items-center gap-2">
-                {activeSpaceMetadata?.entity.image && (
-                  <div className="h-5 w-5 overflow-hidden rounded">
-                    <NativeGeoImage
-                      value={activeSpaceMetadata.entity.image}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
+                {isPublishGatedByPendingSetup && (
+                  <span className="text-metadataMedium text-grey-04">Your space is finishing setup…</span>
                 )}
-                <span className="text-metadataMedium leading-none font-semibold">
-                  {activeSpaceMetadata?.entity.name ?? activeSpace}
-                </span>
+                {activeSpaceMetadata?.type !== 'PERSONAL' && (
+                  <button
+                    onClick={() => setIsBountyLinkingOpen(prev => !prev)}
+                    className={cx(
+                      'group inline-flex items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
+                      'border-grey-02 bg-white text-text hover:border-text'
+                    )}
+                  >
+                    <Gem color="purple" />
+                    {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
+                  </button>
+                )}
+                {canChoosePath && (
+                  <ProposalPathSelector
+                    votingMode={votingMode}
+                    onChange={setVotingMode}
+                    votingSettings={activeSpaceVotingSettings}
+                    isFastPathRestricted={isFastPathRestricted}
+                  />
+                )}
+                <Button
+                  variant="primary"
+                  onClick={handleSubmit}
+                  disabled={!isReadyToPublish || isPublishing || isPublishGatedByPendingSetup}
+                >
+                  <Pending isPending={isPublishing}>
+                    {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edit' : 'Publish proposal'}
+                  </Pending>
+                </Button>
               </div>
             )}
           </div>
-          {hasRemainingSpaces && (
-            <div className="flex items-center gap-2">
-              {activeSpaceMetadata?.type !== 'PERSONAL' && (
-                <button
-                  onClick={() => setIsBountyLinkingOpen(prev => !prev)}
-                  className={cx(
-                    'group inline-flex items-center gap-1.5 rounded border px-2 py-2 text-button font-normal transition-colors',
-                    'border-grey-02 bg-white text-text hover:border-text'
-                  )}
-                >
-                  <Gem color="purple" />
-                  {selectedBountyIds.size > 0 ? <span>{selectedBountyIds.size}</span> : <span>Link to bounty</span>}
-                </button>
-              )}
-              <Button variant="primary" onClick={handleSubmit} disabled={!isReadyToPublish || isPublishing}>
-                <Pending isPending={isPublishing}>
-                  {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edit' : 'Publish proposal'}
-                </Pending>
-              </Button>
-            </div>
-          )}
-        </div>
-        <div className="flex grow overflow-hidden">
-          {hasRemainingSpaces ? (
-            <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
-              <div className="px-2">
-                <div className="rounded-xl bg-white px-4 py-10">
-                  <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="text-body">Proposal name</div>
-                        <input
-                          ref={proposalNameRef}
-                          type="text"
-                          value={rawProposalName}
-                          onChange={e => handleProposalNameChange(e.target.value)}
-                          placeholder="Name your proposal..."
-                          className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 pt-2">
-                        <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
+          <div className="flex grow overflow-hidden">
+            {hasRemainingSpaces ? (
+              <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+                <div className="px-2">
+                  <div ref={proposalNameSectionRef} className="rounded-lg border border-grey-02 bg-white px-6 py-10">
+                    <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="text-body">Proposal name</div>
+                          <input
+                            ref={proposalNameRef}
+                            type="text"
+                            value={rawProposalName}
+                            onChange={e => handleProposalNameChange(e.target.value)}
+                            placeholder="Name your proposal..."
+                            className="w-full bg-transparent text-[40px] font-semibold text-text placeholder:text-grey-02 focus:outline-none"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 pt-2">
+                          <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <div ref={scrollContainerRef} className="grow overflow-y-scroll px-2 pb-2">
-                {isLoadingChanges ? (
-                  <div className="rounded-xl bg-white p-4">
-                    <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                      <div className="mb-4 flex items-center gap-3">
-                        <Skeleton className="h-8 w-8" />
-                        <Skeleton className="h-6 w-48" />
-                      </div>
-                      <div className="mb-4 grid grid-cols-2 gap-20">
-                        <Skeleton className="h-4 w-20" />
-                        <Skeleton className="h-4 w-28" />
-                      </div>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-20">
-                          <Skeleton className="h-24 w-full" />
-                          <Skeleton className="h-24 w-full" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-20">
-                          <Skeleton className="h-16 w-full" />
-                          <Skeleton className="h-16 w-full" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : !hasVisibleEntities ? (
-                  <div className="rounded-xl bg-white p-4">
-                    <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
-                      <Text as="p" variant="body" className="text-grey-04">
-                        No changes to review. Make some edits to see them here.
-                      </Text>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
-                    {rowVirtualizer.getVirtualItems().map(virtualRow => {
-                      const entity = visibleEntities[virtualRow.index];
-                      return (
-                        <div
-                          key={virtualRow.key}
-                          data-index={virtualRow.index}
-                          ref={node => rowVirtualizer.measureElement(node)}
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            transform: `translateY(${virtualRow.start}px)`,
-                          }}
-                        >
-                          <div className="rounded-xl bg-white p-4">
-                            <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
-                              <ChangedEntity entity={entity} spaceId={activeSpace} />
+                <div className="grow overflow-hidden px-2 pb-2">
+                  <div
+                    ref={scrollContainerRef}
+                    className="h-full overflow-y-auto rounded-lg border border-grey-02 bg-white"
+                  >
+                    {isLoadingChanges ? (
+                      <div className="px-6 py-6">
+                        <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                          <div className="mb-4 flex items-center gap-3">
+                            <Skeleton className="h-8 w-8" />
+                            <Skeleton className="h-6 w-48" />
+                          </div>
+                          <div className="mb-4 grid grid-cols-2 gap-20">
+                            <Skeleton className="h-4 w-20" />
+                            <Skeleton className="h-4 w-28" />
+                          </div>
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-20">
+                              <Skeleton className="h-24 w-full" />
+                              <Skeleton className="h-24 w-full" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-20">
+                              <Skeleton className="h-16 w-full" />
+                              <Skeleton className="h-16 w-full" />
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ) : !hasVisibleEntities ? (
+                      <div className="px-6 py-6">
+                        <div className="relative mx-auto w-full max-w-[1350px] shrink-0 py-12 text-center">
+                          <Text as="p" variant="body" className="text-grey-04">
+                            No changes to review. Make some edits to see them here.
+                          </Text>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
+                        {rowVirtualizer.getVirtualItems().map(virtualRow => {
+                          const entity = visibleEntities[virtualRow.index];
+                          return (
+                            <div
+                              key={entity.entityId}
+                              data-index={virtualRow.index}
+                              ref={node => rowVirtualizer.measureElement(node)}
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                transform: `translateY(${virtualRow.start}px)`,
+                              }}
+                            >
+                              <div className="px-6 py-4">
+                                <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
+                                  <ChangedEntity
+                                    entity={entity}
+                                    spaceId={activeSpace}
+                                    onOpenEntity={handleOpenReviewEntity}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex min-w-0 flex-1" />
-          )}
-          <BountyLinkingPanel
-            isOpen={isBountyLinkingOpen}
-            setIsOpen={setIsBountyLinkingOpen}
-            selectedBountyIds={selectedBountyIds}
-            setSelectedBountyIds={setSelectedBountyIds}
-            bounties={bounties}
-          />
+            ) : (
+              <div className="flex min-w-0 flex-1" />
+            )}
+            <BountyLinkingPanel
+              isOpen={isBountyLinkingOpen}
+              setIsOpen={setIsBountyLinkingOpen}
+              selectedBountyIds={selectedBountyIds}
+              setSelectedBountyIds={setSelectedBountyIds}
+              bounties={bountiesWithSpaceLabels}
+            />
+          </div>
         </div>
-      </div>
-    </SlideUp>
+      </SlideUp>
+      <ProposalNameTip
+        open={proposalNameTipOpen}
+        dismiss={dismissProposalNameTip}
+        anchorRef={proposalNameSectionRef}
+        slideUpEnterSettled={slideUpEnterSettled}
+      />
+    </>
   );
 };

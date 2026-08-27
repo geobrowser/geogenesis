@@ -5,26 +5,85 @@ import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { type Hex, encodeFunctionData } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { SubstreamVote } from '~/core/io/substream-schema';
+import { ProposalType, SubstreamVote } from '~/core/io/substream-schema';
+import { geo } from '~/core/sdk/geo-client';
+import { assertSpaceRegistryDeployed } from '~/core/sdk/geo-network';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { VoteOption, encodeProposalVotedData, padBytes16ToBytes32 } from '~/core/utils/contracts/governance';
-import {
-  EMPTY_SIGNATURE,
-  GOVERNANCE_ACTIONS,
-  SPACE_REGISTRY_ADDRESS,
-  SpaceRegistryAbi,
-} from '~/core/utils/contracts/space-registry';
+import { decodeGovernanceRevert } from '~/core/utils/contracts/governance-errors';
 import { validateSpaceId } from '~/core/utils/utils';
+
+/**
+ * A vote can fail because the UI showed a stale proposal the chain has already
+ * moved past. We divert those to a toast + refresh instead of the retry error
+ * modal, which would loop forever (a stale write reverts the same way every
+ * time). Everything else surfaces as a named error (see
+ * {@link decodeGovernanceRevert}) so the report tells us the real cause.
+ *
+ * Staleness policy, by revert:
+ * - CanNotVote: the vote was rejected upfront (already voted, closed, not
+ *   eligible). No action runs, so it's always stale.
+ * - ActionReverted: an inline action reverted. For membership proposals this is
+ *   almost always "already added via a duplicate request"; for other types it
+ *   can be a genuine failure, so only membership proposals treat it as stale.
+ *
+ * The explicit Execute button deliberately does NOT use this: an execute revert
+ * surfaces its decoded reason directly, because CanNotExecute often means "needs
+ * more votes to pass" or "voting period not elapsed", not "already executed" —
+ * toasting "already executed" + refreshing would mislead and loop.
+ */
+function isMembershipProposalType(type: ProposalType): boolean {
+  return type === 'ADD_MEMBER' || type === 'REMOVE_MEMBER' || type === 'ADD_EDITOR' || type === 'REMOVE_EDITOR';
+}
+
+const VOTE_NOT_ACCEPTED_MESSAGE =
+  'Your vote could not be cast — voting may have ended, or your vote may already be counted. Refreshing to show the latest state.';
+
+const VOTE_CHANGE_NOT_ACCEPTED_MESSAGE =
+  "Your vote couldn't be changed — this proposal may not allow changing a vote, or its voting period just ended. Your original vote still stands.";
+
+const MEMBERSHIP_ALREADY_APPLIED_MESSAGE =
+  'This change could not be applied — it has likely already been made. Refreshing to show the latest state.';
+
+/**
+ * Toast message for a vote error caused by a stale proposal, or null when the
+ * error should surface through the regular (named) error path. Callers toast the
+ * message and refresh instead of raising the retry error modal.
+ *
+ * `isVoteChange` distinguishes a first vote from an attempt to *replace* an
+ * existing vote. A `CanNotVote` revert on a change is the degraded path for a
+ * DAO whose voting plugin doesn't allow replacement (or where the window just
+ * closed) — so the message says the original vote stands rather than implying
+ * the vote vanished.
+ */
+export function getStaleProposalVoteToastMessage(
+  error: unknown,
+  proposalType: ProposalType,
+  options?: { isVoteChange?: boolean }
+): string | null {
+  const revert = decodeGovernanceRevert(error);
+  if (revert?.name === 'CanNotVote') {
+    return options?.isVoteChange ? VOTE_CHANGE_NOT_ACCEPTED_MESSAGE : VOTE_NOT_ACCEPTED_MESSAGE;
+  }
+  if (revert?.name === 'ActionReverted' && isMembershipProposalType(proposalType)) {
+    return MEMBERSHIP_ALREADY_APPLIED_MESSAGE;
+  }
+  return null;
+}
 
 interface UseVoteArgs {
   /** The DAO space ID (bytes16 hex without 0x prefix) where the proposal exists */
   spaceId: string;
   /** The proposal ID (bytes16 hex without 0x prefix) */
   proposalId: string;
+  /** The proposal version to vote on (REST `proposalVersion`). The vote
+   *  calldata is (proposalId, versionId, voteOption) — the SDK defaults
+   *  versionId to 1 when omitted, which targets the superseded version for
+   *  any proposal updated via PROPOSAL_UPDATED. Pass the version shown to
+   *  the user; omit only when the source genuinely doesn't have it. */
+  proposalVersion?: number;
 }
 
 /**
@@ -37,12 +96,10 @@ interface UseVoteArgs {
  * - topic: The proposal ID (as bytes32)
  * - data: Encoded (proposalId, voteOption)
  */
-export function useVote({ spaceId, proposalId }: UseVoteArgs) {
+export function useVote({ spaceId, proposalId, proposalVersion }: UseVoteArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleVote = useCallback(
     async (option: SubstreamVote['vote']) => {
@@ -58,39 +115,30 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
         throw new Error('You need a registered personal space to vote');
       }
 
-      const normalizedSpaceId = spaceId.replace(/-/g, '').toLowerCase();
-      const normalizedProposalId = proposalId.replace(/-/g, '').toLowerCase();
+      const vote = option === 'ACCEPT' ? 'YES' : option === 'REJECT' ? 'NO' : 'ABSTAIN';
 
-      const fromSpaceId = `0x${personalSpaceId}` as Hex;
-      const toSpaceId = `0x${normalizedSpaceId}` as Hex;
-      const proposalIdHex = `0x${normalizedProposalId}` as Hex;
+      // Fail closed: a registry address that doesn't match this chain produces
+      // a "successful" tx that emits nothing. Catch it before sending.
+      await assertSpaceRegistryDeployed();
 
-      // Map vote option to contract enum
-      const voteOption =
-        option === 'ACCEPT' ? VoteOption.Yes : option === 'REJECT' ? VoteOption.No : VoteOption.Abstain;
-
-      // Encode the vote data: (proposalId, voteOption)
-      const data = encodeProposalVotedData(proposalIdHex, voteOption);
-
-      // The topic is the proposal ID padded to bytes32
-      const topic = padBytes16ToBytes32(normalizedProposalId);
-
-      const callData = encodeFunctionData({
-        functionName: 'enter',
-        abi: SpaceRegistryAbi,
-        args: [fromSpaceId, toSpaceId, GOVERNANCE_ACTIONS.PROPOSAL_VOTED, topic, data, EMPTY_SIGNATURE],
+      const { to, calldata } = geo.daoSpaces.voteProposal({
+        authorSpaceId: personalSpaceId,
+        spaceId,
+        proposalId,
+        versionId: proposalVersion,
+        vote,
       });
 
-      // Log before transaction for debugging
       console.log('Submitting vote', {
-        fromSpaceId,
-        toSpaceId,
+        authorSpaceId: personalSpaceId,
+        spaceId,
         proposalId,
-        voteOption: option,
+        proposalVersion,
+        vote,
         action: 'PROPOSAL_VOTED',
       });
 
-      const txEffect = tx(callData).pipe(
+      const txEffect = tx({ to, data: calldata }).pipe(
         Effect.withSpan('web.write.vote'),
         Effect.annotateSpans({
           'io.operation': 'vote',
@@ -104,7 +152,7 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
         const error = result.left;
         console.error(
           `Vote failed: ${error.message}`,
-          { fromSpaceId, toSpaceId, proposalId, voteOption: option },
+          { authorSpaceId: personalSpaceId, spaceId, proposalId, vote },
           error
         );
         throw error;
@@ -112,15 +160,15 @@ export function useVote({ spaceId, proposalId }: UseVoteArgs) {
 
       console.log('Vote successful', {
         txHash: result.right,
-        fromSpaceId,
-        toSpaceId,
+        authorSpaceId: personalSpaceId,
+        spaceId,
         proposalId,
-        voteOption: option,
+        vote,
       });
 
       return result.right;
     },
-    [personalSpaceId, isRegistered, spaceId, proposalId, tx]
+    [personalSpaceId, isRegistered, spaceId, proposalId, proposalVersion, tx]
   );
 
   const { mutate, status, error } = useMutation({

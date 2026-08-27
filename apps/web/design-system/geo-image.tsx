@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { type ReactNode, useCallback, useState } from 'react';
 import type { ImgHTMLAttributes } from 'react';
 
 import cn from 'classnames';
 import Image, { ImageProps } from 'next/image';
 
-import { getImagePath, getImagePathFallback } from '~/core/utils/utils';
+import { IPFS_GATEWAY_COUNT, getImagePathAtLevel } from '~/core/utils/utils';
 
 /**
  * Default responsive sizes for Next.js Image components with fill prop.
@@ -18,36 +18,66 @@ type GeoImageProps = Omit<ImageProps, 'src' | 'onError'> & {
   value: string;
 };
 
-/** Image component that resolves IPFS values via Pinata, with Lighthouse fallback for legacy CIDs. */
+// next/image throws synchronously if `src` isn't a valid URL or local path, so
+// skip values that don't resolve to something renderable — e.g. a bare CID or an
+// unresolved entity id that slipped through in place of an ipfs:// URL.
+function isRenderableSrc(src: string): boolean {
+  return src.startsWith('https://') || src.startsWith('http://') || src.startsWith('/') || src.startsWith('data:');
+}
+
+/** Image component that resolves IPFS values through the gateway fallback chain (Filebase → Pinata → Lighthouse). */
 export function GeoImage({ value, alt = '', unoptimized = false, ...props }: GeoImageProps) {
-  const [useFallback, setUseFallback] = useState(false);
+  const [level, setLevel] = useState(0);
 
   const handleError = useCallback(() => {
-    if (!useFallback && value.startsWith('ipfs://')) {
-      setUseFallback(true);
+    if (value.startsWith('ipfs://')) {
+      setLevel(prev => Math.min(prev + 1, IPFS_GATEWAY_COUNT - 1));
     }
-  }, [useFallback, value]);
+  }, [value]);
 
-  const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
+  const src = getImagePathAtLevel(value, level);
+  if (!isRenderableSrc(src)) return null;
+
   const imageProps = props.fill && !props.sizes ? { ...props, sizes: DEFAULT_IMAGE_SIZES } : props;
   return <Image {...imageProps} src={src} alt={alt} onError={handleError} unoptimized={unoptimized} />;
 }
 
 type NativeGeoImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'onError'> & {
   value: string;
+  /**
+   * Rendered instead of the image once it cannot be shown — an unrenderable value, or every
+   * gateway exhausted. Without one the caller gets the browser's broken-image icon, which is what
+   * a participant with an unresolvable avatar looked like in a call (GEO-2642).
+   */
+  fallback?: ReactNode;
 };
 
-/** Native img element with Pinata primary, Lighthouse fallback for legacy CIDs. */
-export function NativeGeoImage({ value, alt = '', ...props }: NativeGeoImageProps) {
-  const [useFallback, setUseFallback] = useState(false);
+/** Native img element resolving IPFS values through the gateway fallback chain (Filebase → Pinata → Lighthouse). */
+export function NativeGeoImage({ value, alt = '', fallback, ...props }: NativeGeoImageProps) {
+  const [attempt, setAttempt] = useState({ value, level: 0, failed: false });
+
+  // Reset when the value changes rather than in an effect: these render in recycled lists — a
+  // LiveKit participant strip reorders constantly — and carrying a previous participant's
+  // exhausted-gateway state across would show their fallback for someone whose avatar is fine.
+  const level = attempt.value === value ? attempt.level : 0;
+  const failed = attempt.value === value ? attempt.failed : false;
 
   const handleError = useCallback(() => {
-    if (!useFallback && value.startsWith('ipfs://')) {
-      setUseFallback(true);
-    }
-  }, [useFallback, value]);
+    setAttempt(previous => {
+      const current = previous.value === value ? previous : { value, level: 0, failed: false };
+      // Only IPFS values have anywhere else to look. Anything else has failed on its first and
+      // only attempt, and retrying the same URL would loop.
+      if (value.startsWith('ipfs://') && current.level < IPFS_GATEWAY_COUNT - 1) {
+        return { value, level: current.level + 1, failed: false };
+      }
+      return { value, level: current.level, failed: true };
+    });
+  }, [value]);
 
-  const src = useFallback ? getImagePathFallback(value) : getImagePath(value);
+  const src = getImagePathAtLevel(value, level);
+  // A bare CID or an entity id that slipped through resolves to something no browser can fetch.
+  if (failed || !isRenderableSrc(src)) return <>{fallback ?? null}</>;
+
   return <img {...props} src={src} alt={alt} onError={handleError} />;
 }
 
@@ -58,6 +88,7 @@ type ThumbGeoImageProps = {
   loading?: ImgHTMLAttributes<HTMLImageElement>['loading'];
   fetchPriority?: ImgHTMLAttributes<HTMLImageElement>['fetchPriority'];
   className?: string;
+  style?: ImgHTMLAttributes<HTMLImageElement>['style'];
   onLoad?: ImgHTMLAttributes<HTMLImageElement>['onLoad'];
 };
 
@@ -71,13 +102,15 @@ export function ThumbGeoImage({
   loading = 'lazy',
   fetchPriority,
   className,
+  style,
   onLoad,
 }: ThumbGeoImageProps) {
   return (
     <NativeGeoImage
       value={value}
       alt={alt}
-      className={cn('absolute inset-0 h-full w-full object-cover', className)}
+      className={cn('absolute inset-0', className)}
+      style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', ...style }}
       loading={loading}
       fetchPriority={fetchPriority}
       decoding="async"

@@ -6,12 +6,14 @@ import * as React from 'react';
 
 import { cx } from 'class-variance-authority';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { createPortal } from 'react-dom';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { FilterMode } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
+import { columnPropertyIdFromRelation, useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -22,6 +24,7 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { getRelations, getValues, useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Value } from '~/core/types';
 import { ColumnSortState } from '~/core/utils/column-sort';
+import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -64,6 +67,7 @@ import { PowerToolsRow } from './types';
 
 const PANEL_ENTITY_ID_PARAM = 'panelEntityId';
 const PANEL_SPACE_ID_PARAM = 'panelSpaceId';
+const POWER_TOOLS_NAVBAR_OFFSET_PX = 60;
 
 function PowerToolsEntityPanel({
   entityId,
@@ -95,9 +99,38 @@ function PowerToolsEntityPanel({
 
   const isPanelLoading = isLoading || isBlocksLoading;
 
-  return (
-    <div className="absolute inset-y-0 right-0 z-20 flex w-[520px] max-w-[60vw] flex-col border-l border-grey-02 bg-white shadow-card">
-      <div className="flex items-center justify-between border-b border-grey-02 px-4 py-2">
+  React.useLayoutEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+
+    html.setAttribute('data-power-tools-panel-open', '');
+    body.setAttribute('data-power-tools-panel-open', '');
+    let restoreScrollbars = hideMainPageScrollbars();
+    const rafId = requestAnimationFrame(() => {
+      restoreScrollbars();
+      restoreScrollbars = hideMainPageScrollbars();
+    });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      restoreScrollbars();
+      html.removeAttribute('data-power-tools-panel-open');
+      body.removeAttribute('data-power-tools-panel-open');
+    };
+  }, []);
+
+  if (typeof document === 'undefined' || !document.body) {
+    return null;
+  }
+
+  return createPortal(
+    <aside
+      data-power-tools-entity-panel
+      className="fixed right-0 bottom-0 z-[60] flex w-[min(520px,60vw)] flex-col border-l border-grey-02 bg-white shadow-card"
+      style={{ top: POWER_TOOLS_NAVBAR_OFFSET_PX }}
+      aria-label="Entity details"
+    >
+      <div className="flex shrink-0 items-center justify-between border-b border-grey-02 px-4 py-2">
         <Text variant="body">Entity</Text>
         <div className="flex items-center gap-1">
           <Link
@@ -118,7 +151,7 @@ function PowerToolsEntityPanel({
           </button>
         </div>
       </div>
-      <div className="h-full overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {isPanelLoading ? (
           <div className="flex h-full items-center justify-center">
             <Text variant="body" color="grey-04">
@@ -132,6 +165,7 @@ function PowerToolsEntityPanel({
               spaceId={spaceId}
               initialBlocks={blocks ?? []}
               initialBlockRelations={blockRelations}
+              activeTabId={null}
             >
               <EntityPageCover avatarUrl={null} coverUrl={null} />
               <div className="px-4">
@@ -145,7 +179,8 @@ function PowerToolsEntityPanel({
           </EntityStoreProvider>
         )}
       </div>
-    </div>
+    </aside>,
+    document.body
   );
 }
 
@@ -201,33 +236,78 @@ export function PowerToolsScreen() {
     sort: serverSort,
   });
 
+  const { orderedShownColumnRelations, setShownColumnOrder } = useView();
+
   const propertyIds = React.useMemo(() => data.properties.map(p => p.id), [data.properties]);
   const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);
+  // Once the user drags a column this session, their layout wins over the
+  // derived ordering until the persisted relations catch up.
+  const hasUserReorderedRef = React.useRef(false);
+
+  const persistedColumnIds = React.useMemo(
+    () => orderedShownColumnRelations.map(columnPropertyIdFromRelation),
+    [orderedShownColumnRelations]
+  );
 
   React.useEffect(() => {
     setOrderedPropertyIds(prev => {
       const idsSet = new Set(propertyIds);
+
+      if (!hasUserReorderedRef.current) {
+        // Columns persisted on the block-relation entity come first, in their
+        // stored position order; the rest keep the default (alphabetical) order.
+        // Compare ids hex-normalized — persisted relation ids may be dash-formatted.
+        const idByHex = new Map(propertyIds.map(id => [ID.uuidToHex(id), id]));
+        const persisted = persistedColumnIds
+          .map(id => idByHex.get(ID.uuidToHex(id)))
+          .filter((id): id is string => Boolean(id) && !ID.equals(id as string, SystemIds.NAME_PROPERTY));
+        const persistedSet = new Set(persisted);
+        const name = propertyIds.find(id => ID.equals(id, SystemIds.NAME_PROPERTY));
+        const rest = propertyIds.filter(id => id !== name && !persistedSet.has(id));
+        const next = [...(name ? [name] : []), ...persisted, ...rest];
+        const same = next.length === prev.length && next.every((id, i) => id === prev[i]);
+        return same ? prev : next;
+      }
+
       const ordered = prev.filter(id => idsSet.has(id));
       const appended = propertyIds.filter(id => !ordered.includes(id));
       if (appended.length === 0 && ordered.length === prev.length) return prev;
       return [...ordered, ...appended];
     });
-  }, [propertyIds]);
+  }, [propertyIds, persistedColumnIds]);
 
-  const { nextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
+  const { peekNextEntityId, onClick: createEntityWithTypes } = useCreateEntityWithFilters(spaceId);
+  const reservedEntityId = peekNextEntityId();
   const [hasPlaceholderRow, setHasPlaceholderRow] = React.useState(false);
   const [pendingEntityId, setPendingEntityId] = React.useState<string | null>(null);
   const [pinnedNewEntityId, setPinnedNewEntityId] = React.useState<string | null>(null);
   const [hiddenColumnIds, setHiddenColumnIds] = React.useState<Set<string>>(new Set([SystemIds.BLOCKS]));
   const [isColumnMenuOpen, setIsColumnMenuOpen] = React.useState(false);
+
+  // Editors (by permission) persist the layout on the block-relation entity,
+  // same as filters; non-editors keep a local, session-only order.
+  const handleReorderColumns = React.useCallback(
+    (ids: string[]) => {
+      hasUserReorderedRef.current = true;
+      // The persisted order treats Name as implicitly first, so keep it first
+      // locally too — otherwise it would snap back on remount.
+      const name = ids.find(id => ID.equals(id, SystemIds.NAME_PROPERTY));
+      const normalized = name ? [name, ...ids.filter(id => id !== name)] : ids;
+      setOrderedPropertyIds(normalized);
+      if (!canEdit) return;
+      const visible = normalized.filter(id => id !== name && !hiddenColumnIds.has(id));
+      setShownColumnOrder(visible.map(id => ({ id, name: data.propertiesById[id]?.name ?? null })));
+    },
+    [canEdit, hiddenColumnIds, data.propertiesById, setShownColumnOrder]
+  );
   const [valuesApplyVersion, setValuesApplyVersion] = React.useState(0);
 
   const shouldShowPlaceholder =
     isEditing &&
-    ((hasPlaceholderRow && !data.rows.find(r => r.entityId === nextEntityId)) ||
+    ((hasPlaceholderRow && !data.rows.find(r => r.entityId === reservedEntityId)) ||
       (pendingEntityId && !data.rows.find(r => r.entityId === pendingEntityId)));
 
-  const placeholderEntityId = pendingEntityId || nextEntityId;
+  const placeholderEntityId = pendingEntityId || reservedEntityId;
   const sourceValue = 'value' in source ? source.value : null;
   const panelEntityId = searchParams?.get(PANEL_ENTITY_ID_PARAM) ?? null;
   const panelSpaceId = searchParams?.get(PANEL_SPACE_ID_PARAM) ?? spaceId;
@@ -643,13 +723,13 @@ export function PowerToolsScreen() {
     () =>
       isEditing && selectableCount > 0
         ? {
-          selectedEntityIds,
-          onToggleRowSelection: toggleRowSelection,
-          onSetRowSelection: setRowSelection,
-          onMasterToggle,
-          selectableCount,
-          isAllSelected,
-        }
+            selectedEntityIds,
+            onToggleRowSelection: toggleRowSelection,
+            onSetRowSelection: setRowSelection,
+            onMasterToggle,
+            selectableCount,
+            isAllSelected,
+          }
         : undefined,
     [isEditing, selectableCount, selectedEntityIds, toggleRowSelection, setRowSelection, onMasterToggle, isAllSelected]
   );
@@ -702,7 +782,7 @@ export function PowerToolsScreen() {
           action.type === 'FIND_ENTITY'
             ? action.entity
             : action.type === 'CREATE_ENTITY'
-              ? { id: nextEntityId, name: action.name }
+              ? { id: entityId, name: action.name }
               : { id: entityId, name: null, space: actionSpaceId, verified: false };
 
         upsertCollectionItemRelation({
@@ -718,7 +798,7 @@ export function PowerToolsScreen() {
       }
     }
 
-    if (entityId === nextEntityId) {
+    if (entityId === reservedEntityId) {
       setHasPlaceholderRow(false);
       if (action.type !== 'FIND_ENTITY') {
         const maybeName = action.type === 'CREATE_ENTITY' ? action.name : undefined;
@@ -816,7 +896,7 @@ export function PowerToolsScreen() {
 
   if (data.sourceType === 'RELATIONS') {
     return (
-      <div className="fixed inset-0 z-50 bg-white" style={{ top: '60px' }}>
+      <div className="fixed inset-0 z-50 bg-white" style={{ top: '44px' }}>
         <div className="flex h-full items-center justify-center">
           <Text variant="body" color="grey-04">
             Power Tools does not yet support Relation-based data sources.
@@ -830,19 +910,11 @@ export function PowerToolsScreen() {
 
   const filterGroups = React.useMemo(() => groupFilters(effectiveFilterState), [effectiveFilterState]);
 
-  const serverFilterKeys = React.useMemo(() => {
-    const keys = new Set<string>();
-    for (const f of filterState) {
-      keys.add(`${f.columnId}:${f.value}`);
-    }
-    return keys;
-  }, [filterState]);
-
   return (
     <div
       className="fixed inset-0 z-50 bg-white"
       style={{
-        top: '60px',
+        top: '44px',
         display: 'grid',
         gridTemplateRows: ['auto', !isEditing ? 'auto' : null, hasActiveFilters ? 'auto' : null, '1fr']
           .filter(Boolean)
@@ -906,6 +978,7 @@ export function PowerToolsScreen() {
             open={isColumnMenuOpen}
             onOpenChange={setIsColumnMenuOpen}
             className="w-[200px]!"
+            viewportClassName="w-full min-h-0 min-w-0 max-h-[320px] overflow-y-auto overscroll-contain scroll-smooth bg-white py-1 [background-clip:padding-box]"
             trigger={
               <div
                 className="flex h-8 w-8 items-center justify-center rounded-sm hover:bg-grey-01"
@@ -915,21 +988,19 @@ export function PowerToolsScreen() {
               </div>
             }
           >
-            <div className="max-h-[320px] overflow-y-auto py-1">
-              {orderedPropertyIds.map(id => {
-                const property = data.propertiesById[id];
-                if (!property) return null;
-                const isHidden = hiddenColumnIds.has(id);
-                return (
-                  <MenuItem key={id} onClick={() => toggleColumnVisibility(id)}>
-                    <div className={cx('flex w-full items-center justify-between gap-2', isHidden && 'text-grey-03')}>
-                      <span>{property.name || id}</span>
-                      {isHidden ? <EyeHide /> : <Eye />}
-                    </div>
-                  </MenuItem>
-                );
-              })}
-            </div>
+            {orderedPropertyIds.map(id => {
+              const property = data.propertiesById[id];
+              if (!property) return null;
+              const isHidden = hiddenColumnIds.has(id);
+              return (
+                <MenuItem key={id} onClick={() => toggleColumnVisibility(id)}>
+                  <div className={cx('flex w-full items-center justify-between gap-2', isHidden && 'text-grey-03')}>
+                    <span>{property.name || id}</span>
+                    {isHidden ? <EyeHide /> : <Eye />}
+                  </div>
+                </MenuItem>
+              );
+            })}
           </Menu>
           {isEditing && (
             <button
@@ -967,8 +1038,10 @@ export function PowerToolsScreen() {
                   mode={activeFilterMode}
                   onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
                   onDeleteValue={originalIndex => handleDeleteFilter(originalIndex)}
+                  onClearGroup={() => {
+                    effectiveSetFilterState(effectiveFilterState.filter(f => f.columnId !== group.columnId));
+                  }}
                   isEditing={isEditing}
-                  serverFilterKeys={serverFilterKeys}
                 />
               </React.Fragment>
             ))}
@@ -1014,7 +1087,7 @@ export function PowerToolsScreen() {
               hiddenColumnIds={hiddenColumnIds}
               onHideColumn={toggleColumnVisibility}
               orderedPropertyIds={orderedPropertyIds}
-              onReorderColumns={setOrderedPropertyIds}
+              onReorderColumns={handleReorderColumns}
               selection={selectionProps}
               imageUploadingFor={imageUploadingFor}
               bulkApplyPendingPropertyIds={bulkApplyPendingPropertyIds}

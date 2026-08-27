@@ -4,6 +4,7 @@ import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
+import { columnPropertyIdFromRelation } from '../blocks/data/shown-column-relations';
 import {
   FORMAT_PROPERTY,
   RELATION_ENTITY_RELATIONSHIP_TYPE,
@@ -11,17 +12,96 @@ import {
   UNIT_PROPERTY,
 } from '../constants';
 import { readTypes } from '../database/entities';
+import { createValueId } from '../id/create-id';
 import { getStrictRenderableType } from '../io/dto/properties';
 import { DataType, Entity, Property, Relation, Value } from '../types';
 import { Entities } from '../utils/entity';
-import { getSpaceRank } from '../utils/space/space-ranking';
+import { getSpaceRank, scopeBySpacePrecedence } from '../utils/space/space-ranking';
 import { WhereCondition } from './experimental_query-layer';
 import { GeoEventStream } from './stream';
 
 type ReadOptions = { includeDeleted?: boolean; spaceId?: string };
 
-function relationKey(r: Relation): string {
+export function relationKey(r: Relation): string {
+  if (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) {
+    return `${r.fromEntity.id}:column:${columnPropertyIdFromRelation(r)}:${r.spaceId ?? ''}`;
+  }
+  if (r.type.id === SystemIds.VIEW_PROPERTY) {
+    return `${r.fromEntity.id}:view:${r.spaceId ?? ''}`;
+  }
   return `${r.fromEntity.id}:${r.type.id}:${r.toEntity.id}:${r.spaceId ?? ''}`;
+}
+
+function preferRelation(
+  existing: Relation,
+  candidate: Relation,
+  hasBlockConfig?: (relationEntityId: string) => boolean
+): Relation {
+  if (candidate.isLocal && !existing.isLocal) return candidate;
+  if (!candidate.isLocal && existing.isLocal) return existing;
+
+  const existingTs = existing.timestamp ?? '';
+  const candidateTs = candidate.timestamp ?? '';
+  if (candidateTs !== existingTs) {
+    return candidateTs > existingTs ? candidate : existing;
+  }
+
+  // Remote relations carry no timestamp, so duplicate published relations
+  // always tie. Each duplicate has its own relation entity (`entityId`) — for
+  // BLOCKS relations that entity holds the block's view/shown-columns config,
+  // so prefer the duplicate other config data hangs off of.
+  if (hasBlockConfig) {
+    const existingHasConfig = hasBlockConfig(existing.entityId);
+    const candidateHasConfig = hasBlockConfig(candidate.entityId);
+    if (existingHasConfig !== candidateHasConfig) {
+      return existingHasConfig ? existing : candidate;
+    }
+  }
+
+  // Deterministic tie-break. Hydration and mergeWith reads append incoming
+  // relations in fetch order, so "later in the array wins" flips the survivor
+  // (and its relation entity) across syncs, orphaning data hung off of it.
+  return candidate.id < existing.id ? candidate : existing;
+}
+
+const BLOCK_CONFIG_RELATION_TYPE_IDS: readonly string[] = [
+  SystemIds.VIEW_PROPERTY,
+  SystemIds.PROPERTIES,
+  SystemIds.SHOWN_COLUMNS,
+];
+
+export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
+  const byKey = new Map<string, Relation>();
+  const deleted: Relation[] = [];
+
+  // Lazily index which entities have data-block config relations hanging off
+  // them, so same-key collisions can keep the duplicate whose relation entity
+  // carries the block's saved view/columns. Built at most once per dedupe.
+  let configFromIds: Set<string> | null = null;
+  const hasBlockConfig = (relationEntityId: string): boolean => {
+    if (configFromIds === null) {
+      configFromIds = new Set(
+        relations
+          .filter(r => !r.isDeleted && BLOCK_CONFIG_RELATION_TYPE_IDS.includes(r.type.id))
+          .map(r => r.fromEntity.id)
+      );
+    }
+    return configFromIds.has(relationEntityId);
+  };
+
+  for (const relation of relations) {
+    // Locally-deleted relations never render and carry pending delete ops;
+    // collapsing one into a same-key replacement (e.g. a moved block's
+    // recreated BLOCKS relation) would drop the delete op from the publish.
+    if (relation.isDeleted) {
+      deleted.push(relation);
+      continue;
+    }
+    const key = relationKey(relation);
+    const existing = byKey.get(key);
+    byKey.set(key, existing ? preferRelation(existing, relation, hasBlockConfig) : relation);
+  }
+  return [...byKey.values(), ...deleted];
 }
 
 /**
@@ -222,8 +302,8 @@ export class GeoStore {
     return ['store', 'entity', id];
   }
 
-  static queryKeys(where: WhereCondition, first?: number, skip?: number) {
-    return ['store', 'entities', stableStringify(where), first, skip];
+  static queryKeys(where: WhereCondition, first?: number, after?: string, offset?: number) {
+    return ['store', 'entities', stableStringify(where), first, after ?? null, offset ?? 0];
   }
 
   clear() {
@@ -262,7 +342,9 @@ export class GeoStore {
     // Remove local relations for this space
     reactiveRelations.set(prev => prev.filter(r => !localRelationIds.has(r.id)));
 
-    // Re-hydrate affected entities to restore their server state
+    this.restoreSyncedBaselines(affectedEntityIds);
+
+    // Re-hydrate affected entities to refresh their server state
     if (affectedEntityIds.size > 0) {
       this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
     }
@@ -300,6 +382,8 @@ export class GeoStore {
     reactiveValues.set(prev => prev.filter(v => !(valueIdsSet.has(v.id) && v.isLocal === true)));
     reactiveRelations.set(prev => prev.filter(r => !(relationIdsSet.has(r.id) && r.isLocal === true)));
 
+    this.restoreSyncedBaselines(affectedEntityIds);
+
     if (affectedEntityIds.size > 0) {
       this.stream.emit({ type: GeoEventStream.HYDRATE, entities: [...affectedEntityIds] });
     }
@@ -319,6 +403,15 @@ export class GeoStore {
     this.hydrateReactiveState(entities);
   }
 
+  private restoreSyncedBaselines(entityIds: Set<string>) {
+    if (entityIds.size === 0) return;
+
+    const baselines = [...entityIds]
+      .map(id => syncedEntities.get(id))
+      .filter((entity): entity is Entity => entity != null);
+    this.hydrateReactiveState(baselines);
+  }
+
   private hydrateReactiveState(entities: Entity[]) {
     const newValues = entities.flatMap(e => e.values);
     const newRelations = entities.flatMap(e => e.relations);
@@ -326,7 +419,6 @@ export class GeoStore {
     if (newValues.length === 0 && newRelations.length === 0) return;
 
     const valueIdsToWrite = new Set(newValues.map(t => t.id));
-    const relationIdsToWrite = new Set(newRelations.map(t => t.id));
 
     if (newValues.length > 0) {
       reactiveValues.set(prev => {
@@ -350,8 +442,9 @@ export class GeoStore {
             const local = prevById.get(r.id);
             return local && local.isLocal && (!local.hasBeenPublished || local.isDeleted) ? local : r;
           });
+        const relationIdsToWrite = new Set(mergedIncoming.map(t => t.id));
         const unchangedRelations = prev.filter(t => !relationIdsToWrite.has(t.id));
-        return [...unchangedRelations, ...mergedIncoming];
+        return dedupeRelationsByKey([...unchangedRelations, ...mergedIncoming]);
       });
     }
   }
@@ -414,7 +507,10 @@ export class GeoStore {
    * Get multiple entities by ID with full resolution
    */
   public getEntities(options: ReadOptions = {}): Entity[] {
-    return [...syncedEntities.keys()].map(id => this.getEntity(id, options)).filter(entity => entity !== undefined);
+    // Include entity IDs that only exist locally — new/unpublished entities live in
+    // the value/relation indexes until a sync merges them into syncedEntities.
+    const ids = new Set([...syncedEntities.keys(), ...getValueIndex().keys(), ...getRelationIndex().keys()]);
+    return [...ids].map(id => this.getEntity(id, options)).filter(entity => entity !== undefined);
   }
 
   /**
@@ -444,7 +540,7 @@ export class GeoStore {
     this.stream.emit({ type: GeoEventStream.DATA_TYPE_CREATED, property: { id, dataType } });
   }
 
-  public getProperty(id: string): Property | null {
+  public getProperty(id: string, options: { spaceId?: string } = {}): Property | null {
     const entity = this.getEntity(id);
 
     const stableDataType = this.getStableDataType(id);
@@ -456,17 +552,23 @@ export class GeoStore {
       return null;
     }
 
-    const relationValueTypes = entity?.relations
-      .filter(t => t.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE)
-      .map(r => ({
+    const relationValueTypes =
+      entity &&
+      scopeBySpacePrecedence(
+        entity.relations.filter(t => t.type.id === SystemIds.RELATION_VALUE_RELATIONSHIP_TYPE),
+        options.spaceId
+      ).map(r => ({
         id: r.toEntity.id,
         name: r.toEntity.name,
         spaceId: r.toSpaceId,
       }));
 
-    const relationEntityTypes = entity?.relations
-      .filter(t => t.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE)
-      .map(r => ({
+    const relationEntityTypes =
+      entity &&
+      scopeBySpacePrecedence(
+        entity.relations.filter(t => t.type.id === RELATION_ENTITY_RELATIONSHIP_TYPE),
+        options.spaceId
+      ).map(r => ({
         id: r.toEntity.id,
         name: r.toEntity.name,
         spaceId: r.toSpaceId,
@@ -507,6 +609,36 @@ export class GeoStore {
     }
 
     return relations;
+  }
+
+  /**
+   * Get all locally-tracked active values that use `propertyId`. Internal —
+   * used by the assistant's changePropertyDataType safety check (refuse-if-values).
+   * Linear scan; only fires on a destructive op so the cost is acceptable.
+   */
+  public getValuesByProperty(propertyId: string, includeDeleted = false): Value[] {
+    return reactiveValues.get().filter(v => {
+      if (v.property.id !== propertyId) return false;
+      if (!includeDeleted && v.isDeleted) return false;
+      return true;
+    });
+  }
+
+  /**
+   * Get all relations whose toEntity points at `entityId` (i.e. backlinks).
+   * Optionally scope to a single space. Internal — used by deleteEntity's
+   * cascade so we can tombstone incoming references without exposing a
+   * backlinks read tool to the model. Linear scan over reactiveRelations;
+   * intentional, the cost is bounded by total local relation count and only
+   * fires during destructive ops.
+   */
+  public getRelationsToEntity(entityId: string, spaceId?: string, includeDeleted = false): Relation[] {
+    return reactiveRelations.get().filter(r => {
+      if (r.toEntity.id !== entityId) return false;
+      if (spaceId !== undefined && r.spaceId !== spaceId) return false;
+      if (!includeDeleted && r.isDeleted) return false;
+      return true;
+    });
   }
 
   /**
@@ -755,5 +887,55 @@ export class GeoStore {
     });
 
     this.stream.emit({ type: GeoEventStream.CHANGES_PUBLISHED, valueIds, relationIds });
+  }
+
+  /**
+   * Rewrite every local value/relation written under `fromSpaceId` to
+   * `toSpaceId`. Used when an optimistic personal space (`pending:<topicId>`)
+   * resolves to its real on-chain spaceId. Value ids embed the spaceId
+   * (`${spaceId}:${entityId}:${propertyId}`) so they're recomputed; relation
+   * ids are uuids so only their `spaceId`/`toSpaceId` change. The existing
+   * publish filter (`v.spaceId === realSpaceId`) then picks the edits up
+   * naturally. Mirrors the map-over-atom pattern of `setAsPublished`.
+   */
+  public remapSpaceId(fromSpaceId: string, toSpaceId: string) {
+    const oldValueIds: string[] = [];
+    const remappedValues: Value[] = [];
+
+    reactiveValues.set(prev =>
+      prev.map(v => {
+        if (v.spaceId !== fromSpaceId) return v;
+        const next = produce(v, draft => {
+          draft.spaceId = toSpaceId;
+          draft.id = createValueId({ entityId: draft.entity.id, propertyId: draft.property.id, spaceId: toSpaceId });
+        });
+        oldValueIds.push(v.id);
+        remappedValues.push(next);
+        return next;
+      })
+    );
+
+    const remappedRelations: Relation[] = [];
+
+    reactiveRelations.set(prev =>
+      prev.map(r => {
+        if (r.spaceId !== fromSpaceId && r.toSpaceId !== fromSpaceId) return r;
+        const next = produce(r, draft => {
+          if (draft.spaceId === fromSpaceId) draft.spaceId = toSpaceId;
+          if (draft.toSpaceId === fromSpaceId) draft.toSpaceId = toSpaceId;
+        });
+        remappedRelations.push(next);
+        return next;
+      })
+    );
+
+    if (remappedValues.length === 0 && remappedRelations.length === 0) return;
+
+    this.stream.emit({
+      type: GeoEventStream.SPACE_REMAPPED,
+      oldValueIds,
+      values: remappedValues,
+      relations: remappedRelations,
+    });
   }
 }

@@ -72,7 +72,7 @@ export function usePowerToolsData(options?: {
   const { resolvedFilterState, isFilterResolving, filterMode, filterState, setFilterState } = useFilters();
   const { source } = useSource({ filterState, setFilterState });
   const { blockEntity } = useDataBlock();
-  const { shownColumnRelations } = useView();
+  const { orderedShownColumnRelations } = useView();
 
   const effectiveFilterState = options?.filterStateOverride ?? resolvedFilterState;
   const effectiveFilterMode = options?.filterModeOverride ?? filterMode;
@@ -84,6 +84,11 @@ export function usePowerToolsData(options?: {
   const queryEntitiesAsync = useQueryEntitiesAsync();
 
   const [page, setPage] = React.useState(0);
+  // pageCursors[i] is the GraphQL `after` value used to fetch page i.
+  // Index 0 is always undefined (start of the connection); each successful
+  // SPACES/GEO fetch appends the returned endCursor so the next page can
+  // pick up where the prior one left off.
+  const [pageCursors, setPageCursors] = React.useState<(string | undefined)[]>([undefined]);
   const [loadedEntityPages, setLoadedEntityPages] = React.useState<
     Array<{
       page: number;
@@ -115,15 +120,25 @@ export function usePowerToolsData(options?: {
       type: source.type,
       value: sourceValue,
       where,
-      sort,
     });
-  }, [source.type, sourceValue, where, sort]);
+  }, [source.type, sourceValue, where]);
+
+  // Sorting only changes row order, so it resets the loaded pages but must not
+  // reset the accumulated columns — otherwise the column layout gets re-derived
+  // from whichever rows the sorted query returns first (GEO-2196).
+  const pageKey = React.useMemo(() => {
+    return JSON.stringify({ sourceKey, sort });
+  }, [sourceKey, sort]);
 
   React.useEffect(() => {
     setPage(0);
+    setPageCursors([undefined]);
     setLoadedEntityPages([]);
     setLastPageCount(0);
     setLoadedCollectionRelationPages([]);
+  }, [pageKey]);
+
+  React.useEffect(() => {
     setColumnIds([SystemIds.NAME_PROPERTY]);
   }, [sourceKey]);
 
@@ -182,22 +197,62 @@ export function usePowerToolsData(options?: {
     collectionRelations,
     isLoading: isCollectionLoading,
     collectionLength,
+    isPlaceholderData: isCollectionPlaceholder,
+    endCursor: collectionEndCursor,
+    hasNextPage: collectionHasNextPage,
   } = useCollection({
     source,
     first: pageSize,
-    skip: page * pageSize,
+    pageNumber: page,
+    after: pageCursors[page],
     where,
     sort,
   });
 
-  const { entities: queriedEntities, isLoading: isQueryLoading } = useQueryEntities({
+  const {
+    entities: queriedEntities,
+    isLoading: isQueryLoading,
+    isPlaceholderData: isQueryPlaceholder,
+    endCursor: queriedEndCursor,
+    hasNextPage: queriedHasNextPage,
+  } = useQueryEntities({
     where,
     first: pageSize,
-    skip: page * pageSize,
+    after: pageCursors[page],
     enabled: source.type === 'SPACES' || source.type === 'GEO',
     placeholderData: keepPreviousData,
+    includeUnpublishedLocal: true,
     sort,
   });
+
+  // Record the cursor for the next page so `setPage(prev => prev + 1)` can
+  // pick up the right `after` value. Skip while showing placeholder data —
+  // the endCursor reflects the previous page in that window and would seed
+  // the wrong cursor for `pageCursors[page + 1]`.
+  React.useEffect(() => {
+    if (source.type !== 'SPACES' && source.type !== 'GEO') return;
+    if (isQueryPlaceholder) return;
+    if (!queriedEndCursor) return;
+    setPageCursors(prev => {
+      if (prev[page + 1] === queriedEndCursor) return prev;
+      const next = prev.slice();
+      next[page + 1] = queriedEndCursor;
+      return next;
+    });
+  }, [source.type, isQueryPlaceholder, queriedEndCursor, page]);
+
+  React.useEffect(() => {
+    if (source.type !== 'COLLECTION') return;
+    if (!sort) return;
+    if (isCollectionPlaceholder) return;
+    if (!collectionEndCursor) return;
+    setPageCursors(prev => {
+      if (prev[page + 1] === collectionEndCursor) return prev;
+      const next = prev.slice();
+      next[page + 1] = collectionEndCursor;
+      return next;
+    });
+  }, [source.type, sort, isCollectionPlaceholder, collectionEndCursor, page]);
 
   React.useEffect(() => {
     if (source.type === 'COLLECTION') {
@@ -208,8 +263,8 @@ export function usePowerToolsData(options?: {
         setLoadedCollectionRelationPages(prev => upsertRelationPage(prev, page, collectionRelations));
       }
     }
-    // sourceKey: re-fire after reset clears pages
-  }, [collectionItems, collectionRelations, source.type, page, upsertEntityPage, upsertRelationPage, sourceKey]);
+    // pageKey: re-fire after reset clears pages
+  }, [collectionItems, collectionRelations, source.type, page, upsertEntityPage, upsertRelationPage, pageKey]);
 
   React.useEffect(() => {
     if (source.type === 'SPACES' || source.type === 'GEO') {
@@ -217,8 +272,8 @@ export function usePowerToolsData(options?: {
       setLoadedEntityPages(prev => upsertEntityPage(prev, page, queriedEntities));
       setLastPageCount(queriedEntities.length);
     }
-    // sourceKey: re-fire after reset clears pages
-  }, [queriedEntities, source.type, page, upsertEntityPage, sourceKey]);
+    // pageKey: re-fire after reset clears pages
+  }, [queriedEntities, source.type, page, upsertEntityPage, pageKey]);
 
   const rows = React.useMemo(() => {
     if (source.type === 'COLLECTION') {
@@ -255,15 +310,22 @@ export function usePowerToolsData(options?: {
 
   const hasMore = React.useMemo(() => {
     if (source.type === 'COLLECTION') {
+      if (sort) {
+        return collectionHasNextPage;
+      }
       return (page + 1) * pageSize < (collectionLength ?? 0);
     }
 
     if (source.type === 'SPACES' || source.type === 'GEO') {
-      return lastPageCount >= pageSize;
+      // Trust pageInfo.hasNextPage from the connection — comparing
+      // lastPageCount to pageSize would falsely say "more" when the total
+      // count is an exact multiple of pageSize, triggering an extra empty
+      // fetch.
+      return queriedHasNextPage;
     }
 
     return false;
-  }, [source.type, page, pageSize, collectionLength, lastPageCount]);
+  }, [source.type, sort, collectionHasNextPage, page, pageSize, collectionLength, queriedHasNextPage]);
 
   const allEntityIds = React.useMemo(() => rows.map(row => row.entityId), [rows]);
 
@@ -284,7 +346,8 @@ export function usePowerToolsData(options?: {
     const ids = new Set<string>();
     ids.add(SystemIds.NAME_PROPERTY);
 
-    for (const relation of shownColumnRelations) {
+    // Set insertion order becomes column order, so iterate position-sorted.
+    for (const relation of orderedShownColumnRelations) {
       ids.add(relation.toEntity.id);
     }
 
@@ -293,7 +356,7 @@ export function usePowerToolsData(options?: {
     }
 
     return ids;
-  }, [shownColumnRelations, discoveredPropertyIds]);
+  }, [orderedShownColumnRelations, discoveredPropertyIds]);
 
   const typeIds = React.useMemo(() => {
     const ids = new Map<string, { id: string; spaceId?: string }>();
@@ -370,7 +433,7 @@ export function usePowerToolsData(options?: {
     }
   }, [extraColumnIds, excludedColumnIdsSet, propertyIdSet, schemaProperties, columnIds, arraysEqual]);
 
-  const propertiesById = useProperties(columnIds);
+  const propertiesById = useProperties(columnIds, spaceId);
   const properties = React.useMemo(() => Object.values(propertiesById), [propertiesById]);
 
   const isLoading = source.type === 'COLLECTION' ? isCollectionLoading : isQueryLoading;
@@ -397,7 +460,6 @@ export function usePowerToolsData(options?: {
           ...where,
         },
         first: candidateIds.length,
-        skip: 0,
       });
 
       return matching.map(entity => entity.id);
@@ -407,7 +469,7 @@ export function usePowerToolsData(options?: {
       const pageResults = await queryEntitiesAsync({
         where,
         first: FETCH_ALL_IDS_FIRST,
-        skip: 0,
+        includeUnpublishedLocal: true,
       });
       return pageResults.map(entity => entity.id);
     }

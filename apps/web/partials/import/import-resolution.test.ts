@@ -1,4 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk';
+
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,7 +16,11 @@ vi.mock('~/core/io/queries', () => ({
 }));
 
 /** Helper: create a value row matching the NameValueMatch shape. */
-function valueRow(text: string, entityId: string, opts?: { spaceId?: string; typeIds?: string[]; backlinks?: number; relations?: number }) {
+function valueRow(
+  text: string,
+  entityId: string,
+  opts?: { spaceId?: string; typeIds?: string[]; backlinks?: number; relations?: number }
+) {
   return {
     id: `val-${entityId}-${text}`,
     text,
@@ -73,16 +78,19 @@ describe('import resolution helpers', () => {
 
   it('resolves relation entities by exact match via values', async () => {
     getNameValuesBatchMock.mockImplementation(() =>
-      Effect.succeed([
-        valueRow('Alice', 'entity-1', { typeIds: ['type-person'] }),
-      ])
+      Effect.succeed([valueRow('Alice', 'entity-1', { typeIds: ['type-person'] })])
     );
 
     const result = await resolveRelationEntities({
       relationProperties: [
         {
           propertyId: 'prop-1',
-          property: { id: 'prop-1', name: 'Founders', dataType: 'RELATION', relationValueTypes: [{ id: 'type-person', name: 'Person' }] },
+          property: {
+            id: 'prop-1',
+            name: 'Founders',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-person', name: 'Person' }],
+          },
           typeIds: ['type-person'],
           uniqueCellValues: new Set(['Alice']),
         },
@@ -111,7 +119,12 @@ describe('import resolution helpers', () => {
       relationProperties: [
         {
           propertyId: 'prop-1',
-          property: { id: 'prop-1', name: 'Founders', dataType: 'RELATION', relationValueTypes: [{ id: 'type-person', name: 'Person' }] },
+          property: {
+            id: 'prop-1',
+            name: 'Founders',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-person', name: 'Person' }],
+          },
           typeIds: ['type-person'],
           uniqueCellValues: new Set(['Alice']),
         },
@@ -145,7 +158,12 @@ describe('import resolution helpers', () => {
       relationProperties: [
         {
           propertyId: 'prop-1',
-          property: { id: 'prop-1', name: 'Founders', dataType: 'RELATION', relationValueTypes: [{ id: 'type-person', name: 'Person' }] },
+          property: {
+            id: 'prop-1',
+            name: 'Founders',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-person', name: 'Person' }],
+          },
           typeIds: ['type-person'],
           uniqueCellValues: new Set(['Alice']),
         },
@@ -179,7 +197,12 @@ describe('import resolution helpers', () => {
       relationProperties: [
         {
           propertyId: 'prop-1',
-          property: { id: 'prop-1', name: 'Founders', dataType: 'RELATION', relationValueTypes: [{ id: 'type-person', name: 'Person' }] },
+          property: {
+            id: 'prop-1',
+            name: 'Founders',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-person', name: 'Person' }],
+          },
           typeIds: ['type-person'],
           uniqueCellValues: new Set(['Alice']),
         },
@@ -213,7 +236,12 @@ describe('import resolution helpers', () => {
       relationProperties: [
         {
           propertyId: 'prop-1',
-          property: { id: 'prop-1', name: 'Founders', dataType: 'RELATION', relationValueTypes: [{ id: 'type-person', name: 'Person' }] },
+          property: {
+            id: 'prop-1',
+            name: 'Founders',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-person', name: 'Person' }],
+          },
           typeIds: ['type-person'],
           uniqueCellValues: new Set(['Alice']),
         },
@@ -247,7 +275,12 @@ describe('import resolution helpers', () => {
       relationProperties: [
         {
           propertyId: 'prop-1',
-          property: { id: 'prop-1', name: 'Founders', dataType: 'RELATION', relationValueTypes: [{ id: 'type-person', name: 'Person' }] },
+          property: {
+            id: 'prop-1',
+            name: 'Founders',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-person', name: 'Person' }],
+          },
           typeIds: ['type-person'],
           uniqueCellValues: new Set(['Alice']),
         },
@@ -271,17 +304,19 @@ describe('import resolution helpers', () => {
       ])
     );
     getEntityTiebreakerBatchMock.mockImplementation(() =>
-      Effect.succeed([
-        makeTiebreakerData('entity-1'),
-        makeTiebreakerData('entity-2'),
-      ])
+      Effect.succeed([makeTiebreakerData('entity-1'), makeTiebreakerData('entity-2')])
     );
 
     const result = await resolveRelationEntities({
       relationProperties: [
         {
           propertyId: 'prop-1',
-          property: { id: 'prop-1', name: 'Founders', dataType: 'RELATION', relationValueTypes: [{ id: 'type-person', name: 'Person' }] },
+          property: {
+            id: 'prop-1',
+            name: 'Founders',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-person', name: 'Person' }],
+          },
           typeIds: ['type-person'],
           uniqueCellValues: new Set(['Alice']),
         },
@@ -310,7 +345,12 @@ describe('import resolution helpers', () => {
       relationProperties: [
         {
           propertyId: 'prop-1',
-          property: { id: 'prop-1', name: 'Founders', dataType: 'RELATION', relationValueTypes: [{ id: 'type-person', name: 'Person' }] },
+          property: {
+            id: 'prop-1',
+            name: 'Founders',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-person', name: 'Person' }],
+          },
           typeIds: ['type-person'],
           uniqueCellValues: new Set(['Alice']),
         },
@@ -357,7 +397,12 @@ describe('import resolution helpers', () => {
       relationProperties: [
         {
           propertyId: 'prop-1',
-          property: { id: 'prop-1', name: 'Founders', dataType: 'RELATION', relationValueTypes: [{ id: 'type-person', name: 'Person' }] },
+          property: {
+            id: 'prop-1',
+            name: 'Founders',
+            dataType: 'RELATION',
+            relationValueTypes: [{ id: 'type-person', name: 'Person' }],
+          },
           typeIds: ['type-person'],
           uniqueCellValues: new Set(['New Person']),
         },
@@ -376,13 +421,14 @@ describe('import resolution helpers', () => {
 
   it('resolves types by exact match', async () => {
     getNameValuesBatchMock.mockImplementation(({ names }: { names: string[] }) =>
-      Effect.succeed(
-        names.map(name => valueRow(name, `${name}-id`, { typeIds: [SystemIds.SCHEMA_TYPE] }))
-      )
+      Effect.succeed(names.map(name => valueRow(name, `${name}-id`, { typeIds: [SystemIds.SCHEMA_TYPE] })))
     );
 
     const result = await resolveTypesForRows({
-      dataRows: [['Project A', 'Protocol'], ['Project B', 'Company']],
+      dataRows: [
+        ['Project A', 'Protocol'],
+        ['Project B', 'Company'],
+      ],
       typesColumnIndex: 1,
       guard: { isCurrent: () => true },
     });
@@ -444,9 +490,7 @@ describe('import resolution helpers', () => {
 
   it('resolves row when exactly one match exists', async () => {
     getNameValuesBatchMock.mockImplementation(() =>
-      Effect.succeed([
-        valueRow('Alpha', 'entity-only', { typeIds: ['type-project'] }),
-      ])
+      Effect.succeed([valueRow('Alpha', 'entity-only', { typeIds: ['type-project'] })])
     );
 
     const result = await resolveRowsByNameAndType({

@@ -30,13 +30,28 @@ export function SortableColumnHeader({
   const handleClick = (e: React.MouseEvent) => {
     // Don't intercept clicks on child interactive elements (rename input, nested buttons)
     const target = e.target as HTMLElement;
-    const closestInteractive = target.closest('input, button, [role=button]');
+    const closestInteractive = target.closest('a, input, button, [role=button]');
     if (closestInteractive && closestInteractive !== e.currentTarget) return;
     onSort(nextSortDirection(sort, columnId));
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const target = e.target as HTMLElement;
+    const closestInteractive = target.closest('a, input, button, [role=button]');
+    if (closestInteractive && closestInteractive !== e.currentTarget) return;
+    e.preventDefault();
+    onSort(nextSortDirection(sort, columnId));
+  };
+
   return (
-    <button type="button" onClick={handleClick} className="flex w-full items-center gap-1 text-left">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className="flex w-full items-center gap-1 text-left"
+    >
       {children ?? (
         <Text variant={variant} className="truncate">
           {label}
@@ -61,6 +76,6 @@ export function SortableColumnHeader({
           </span>
         )}
       </span>
-    </button>
+    </div>
   );
 }

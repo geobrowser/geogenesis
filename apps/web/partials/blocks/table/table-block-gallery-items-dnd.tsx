@@ -11,9 +11,11 @@ const renderItem = ({
   onChangeEntry,
   onLinkEntry,
   properties,
+  mainMedia,
   source,
   isPlaceholder,
   autoFocus,
+  placeholderFocusKey,
   collectionTypeFilters,
 }: RenderItemProps) => (
   <TableBlockGalleryItem
@@ -25,9 +27,11 @@ const renderItem = ({
     onChangeEntry={onChangeEntry}
     onLinkEntry={onLinkEntry}
     properties={properties}
+    mainMedia={mainMedia}
     relationId={row.columns[SystemIds.NAME_PROPERTY]?.relationId}
     source={source}
     autoFocus={autoFocus}
+    focusRequestKey={placeholderFocusKey}
     collectionTypeFilters={collectionTypeFilters}
   />
 );
@@ -40,7 +44,7 @@ const renderDragOverlay = (props: RenderItemProps) => (
 
 const galleryConfig: DndItemsConfig = {
   sortingStrategy: rectSortingStrategy,
-  itemsClassName: 'grid grid-cols-3 gap-x-4 gap-y-10 sm:grid-cols-2',
+  itemsClassName: 'grid grid-cols-3 gap-x-4 gap-y-6 sm:grid-cols-2',
   sortableItemClassName: 'relative inline-block',
   sortableItemInnerClassName: '',
   positionBoxClassName: '-right-[58px] top-4 z-50 flex-col-reverse items-center',

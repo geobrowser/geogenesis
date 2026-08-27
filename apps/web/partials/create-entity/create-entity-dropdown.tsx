@@ -4,27 +4,27 @@ import { useState } from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
-import { useAccessControl } from '~/core/hooks/use-access-control';
-import { useOnboardGuard } from '~/core/hooks/use-onboard-guard';
+// import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Create } from '~/design-system/icons/create';
 import { Menu, MenuItem } from '~/design-system/menu';
 
-import { CreateSpaceDialog } from '../create-space/create-space-dialog';
+import { useOpenCreateSpaceDialog } from '../create-space/create-space-dialog';
 
 export function CreateEntityDropdown() {
   const router = useRouter();
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const { shouldShowElement } = useOnboardGuard();
+  const openCreateSpaceDialog = useOpenCreateSpaceDialog();
 
   const spaceId = pathname?.startsWith('/space/') ? pathname.split('/space/')[1].split('/')[0] : null;
-  const { isEditor, isMember } = useAccessControl(spaceId ?? '');
+  // const { isEditor, isMember } = useAccessControl(spaceId ?? '');
+  const { smartAccount } = useSmartAccount();
 
-  if (!shouldShowElement) {
+  if (!smartAccount?.account.address) {
     return null;
   }
 
@@ -40,10 +40,8 @@ export function CreateEntityDropdown() {
       }
       className="max-w-[120px] bg-white"
     >
-      <MenuItem>
-        <p className="text-center text-button">
-          <CreateSpaceDialog />
-        </p>
+      <MenuItem onClick={() => openCreateSpaceDialog()}>
+        <p className="text-center text-button">New space</p>
       </MenuItem>
       {spaceId && (
         <>
@@ -64,6 +62,7 @@ export function CreateEntityDropdown() {
           >
             <p className="text-center text-button">New property</p>
           </MenuItem>
+          {/* Temporarily hidden while the import data feature is being improved.
           {(isEditor || isMember) && (
             <MenuItem
               onClick={() => {
@@ -72,7 +71,7 @@ export function CreateEntityDropdown() {
             >
               <p className="text-center text-button">Import data</p>
             </MenuItem>
-          )}
+          )} */}
         </>
       )}
     </Menu>

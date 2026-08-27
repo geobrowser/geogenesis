@@ -1,11 +1,11 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+
 import { parse } from 'graphql';
 
 /**
- * Mirrors the former `AllEntities` list query, but uses `entitiesConnection` so the API
- * does not reject `offset` values above 1000 (the `entities` field caps offset at 1000).
- * Callers must keep `first` (the `$limit` variable) at most 1000 per request; see
- * `getAllEntities`, which pages automatically for larger windows.
+ * Cursor-paginated entities query. Use `$after` (the prior page's `endCursor`)
+ * for forward navigation; `getAllEntities` loops on `pageInfo.hasNextPage`
+ * when callers ask for more than `ENTITIES_CONNECTION_MAX_FIRST` rows.
  *
  * Kept as a `parse()` document so it does not require updating the generated `gql.ts` map.
  */
@@ -27,12 +27,14 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
     $typeId: UUID
     $typeIds: UUIDFilter
     $limit: Int
+    $after: Cursor
     $offset: Int
     $filter: EntityFilter
     $orderBy: [EntitiesOrderBy!]
   ) {
     entitiesConnection(
       first: $limit
+      after: $after
       offset: $offset
       filter: $filter
       orderBy: $orderBy
@@ -41,11 +43,16 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
       typeId: $typeId
       typeIds: $typeIds
     ) {
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
       nodes {
         id
         name
         description
         spaceIds
+        createdAt
         updatedAt
 
         types {
@@ -53,7 +60,22 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
           name
         }
 
-        valuesList(filter: { spaceId: { is: $spaceId } }) {
+        # Lightweight cross-space view used to decide which spaces still hold
+        # real entity data. The main valuesList/relationsList below are scoped
+        # for display, so routing/search display needs this unscoped projection.
+        allValuesList: valuesList(first: 1000) {
+          spaceId
+          propertyId
+        }
+
+        allRelationsList: relationsList(first: 1000) {
+          spaceId
+        }
+
+        # Field selections mirror the EntityValueFields / RelationFields /
+        # RelationToEntity fragments in query-fragments.tsx. Kept inline because
+        # this is a standalone parse() document, not part of gql codegen.
+        valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           spaceId
           property {
             ...PropertyFragment
@@ -69,11 +91,10 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
           datetime
           date
           decimal
-          bytes
           schedule
         }
 
-        relationsList(filter: { spaceId: { is: $spaceId } }) {
+        relationsList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
           id
           spaceId
           position
@@ -88,22 +109,11 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
             name
             types {
               id
-              name
             }
             valuesList {
               spaceId
               propertyId
               text
-              integer
-              float
-              point
-              boolean
-              time
-              datetime
-              date
-              decimal
-              bytes
-              schedule
             }
           }
           toSpaceId
@@ -117,6 +127,4 @@ const ALL_ENTITIES_CONNECTION_SOURCE = /* GraphQL */ `
   }
 `;
 
-export const allEntitiesConnectionDocument = parse(
-  ALL_ENTITIES_CONNECTION_SOURCE
-) as TypedDocumentNode<any, any>;
+export const allEntitiesConnectionDocument = parse(ALL_ENTITIES_CONNECTION_SOURCE) as TypedDocumentNode<any, any>;

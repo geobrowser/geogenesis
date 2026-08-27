@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import { Metadata } from 'next';
 
+import cx from 'classnames';
 import 'katex/dist/katex.min.css';
 import localFont from 'next/font/local';
 import 'react-medium-image-zoom/dist/styles.css';
@@ -37,6 +38,14 @@ const calibre = localFont({
     },
   ],
   variable: '--font-calibre',
+});
+
+const geistMedium = localFont({
+  src: './fonts/Geist-Medium-v1.ttf',
+  weight: '500',
+  style: 'normal',
+  variable: '--font-geist-medium',
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -89,7 +98,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${calibre.variable}`} suppressHydrationWarning>
+    <html lang="en" className={cx(calibre.variable, geistMedium.variable)} suppressHydrationWarning>
       <body>
         <div className="relative">
           <Providers>

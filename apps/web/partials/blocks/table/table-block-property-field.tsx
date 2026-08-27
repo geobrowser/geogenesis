@@ -1,14 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
 import cx from 'classnames';
 
 import { Source } from '~/core/blocks/data/source';
+import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
+import { isUrlTemplate } from '~/core/utils/url-template';
 
 import { SquareButton } from '~/design-system/button';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
@@ -21,8 +23,6 @@ import { Create } from '~/design-system/icons/create';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
-import { isUrlTemplate } from '~/core/utils/url-template';
-
 import { createPropertyRelation, createTypeRelationForNewEntity, onChangeEntryFn, writeValue } from './change-entry';
 import { LIST_GALLERY_BROWSE_BODY_CLASS } from './table-block-browse-layout';
 
@@ -32,6 +32,10 @@ const BROWSE_LIST_VALUE_CLASS =
 
 const BROWSE_LIST_URL_CLASS =
   '!text-[length:var(--text-metadata)] !leading-[length:var(--text-metadata--line-height)] !font-normal !text-ctaPrimary hover:!text-ctaHover !text-left break-all';
+
+function BrowsePropertyLabel({ name }: { name: string }) {
+  return <div className="mb-0.5 text-footnote text-grey-04">{name}</div>;
+}
 
 export function TableBlockPropertyField(props: {
   spaceId: string;
@@ -99,15 +103,24 @@ type PropertyProps = {
   browseListBody?: boolean;
 };
 
-const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, browseListBody = false }: PropertyProps) => {
+const RenderedProperty = ({
+  entityId,
+  property,
+  spaceId,
+  disableLink = false,
+  browseListBody = false,
+}: PropertyProps) => {
   const [isHovered, setIsHovered] = useState<boolean>(false);
 
   const isRelation = property.dataType === 'RELATION';
 
-  if (property.renderableType === 'IMAGE') {
-    // We don't support rendering images in list or gallery views except the main image
+  if (property.renderableTypeStrict === 'IMAGE' || property.renderableTypeStrict === 'VIDEO') {
+    // Main media only — list/gallery render Image/Video.
     return null;
   }
+
+  // List/gallery browse shows an always-on label, so the hover tooltip is redundant there.
+  const browseLabel = browseListBody ? property.name : undefined;
 
   return (
     <div
@@ -126,16 +139,18 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, br
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="absolute top-0 right-0 -translate-y-full pb-1">
-        <div
-          className={cx(
-            'rounded-sm bg-black p-1 text-footnoteMedium text-white duration-300 ease-in-out',
-            isHovered ? 'opacity-100 delay-700' : 'opacity-0'
-          )}
-        >
-          {property.name}
+      {!browseListBody && (
+        <div className="absolute top-0 right-0 -translate-y-full pb-1">
+          <div
+            className={cx(
+              'rounded-sm bg-black p-1 text-footnoteMedium text-white duration-300 ease-in-out',
+              isHovered ? 'opacity-100 delay-700' : 'opacity-0'
+            )}
+          >
+            {property.name}
+          </div>
         </div>
-      </div>
+      )}
       {isRelation ? (
         <EditableRelationsGroup
           entityId={entityId}
@@ -143,6 +158,7 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, br
           property={property}
           disableLink={disableLink}
           isEditing={false}
+          browseLabel={browseLabel}
         />
       ) : (
         <EditableValueGroup
@@ -150,7 +166,9 @@ const RenderedProperty = ({ entityId, property, spaceId, disableLink = false, br
           property={property}
           spaceId={spaceId}
           isEditing={false}
+          disableLink={disableLink}
           browseListTypography={browseListBody}
+          browseLabel={browseLabel}
         />
       )}
     </div>
@@ -164,6 +182,8 @@ type EditableRelationsGroupProps = {
   disableLink?: boolean;
   entityName?: string | null;
   isEditing: boolean;
+  /** List/gallery browse: tiny label rendered above the relation chips. */
+  browseLabel?: string | null;
 };
 
 function EditableRelationsGroup({
@@ -173,12 +193,18 @@ function EditableRelationsGroup({
   disableLink = false,
   entityName,
   isEditing,
+  browseLabel,
 }: EditableRelationsGroupProps) {
   const { storage } = useMutate();
 
   const typeOfId = property.id;
-  const filterSearchByTypes = property?.relationValueTypes ? property?.relationValueTypes : [];
-  const firstRelationValueType = property?.relationValueTypes?.[0];
+  const { relationValueTypes, waitForFilterTypes } = useRelationTargetTypeIds({
+    propertyId: property.id,
+    spaceId,
+    relationValueTypes: property.relationValueTypes,
+  });
+  const filterSearchByTypes = relationValueTypes ?? [];
+  const firstRelationValueType = relationValueTypes?.[0];
 
   // We don't filter by space id as we want to render data from all spaces.
   const relations = useRelations({
@@ -210,6 +236,8 @@ function EditableRelationsGroup({
         <SelectEntity
           spaceId={spaceId}
           relationValueTypes={filterSearchByTypes}
+          waitForFilterTypes={waitForFilterTypes}
+          restrictToFilterTypes={Boolean(filterSearchByTypes.length)}
           onCreateEntity={result => {
             if (firstRelationValueType) {
               createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
@@ -225,57 +253,62 @@ function EditableRelationsGroup({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {relations.map(r => {
-        const relationId = r.id;
-        const relationName = r.toEntity.name;
-        const relationValue = r.toEntity.value;
+    <>
+      {browseLabel && <BrowsePropertyLabel name={browseLabel} />}
+      <div className="flex flex-wrap items-center gap-2">
+        {relations.map(r => {
+          const relationId = r.id;
+          const relationName = r.toEntity.name;
+          const relationValue = r.toEntity.value;
 
-        return (
-          <div key={`relation-${relationId}-${relationValue}`}>
-            <LinkableRelationChip
-              isEditing={isEditing}
-              onDelete={() => {
-                storage.relations.delete(r);
+          return (
+            <div key={`relation-${relationId}-${relationValue}`}>
+              <LinkableRelationChip
+                isEditing={isEditing}
+                onDelete={() => {
+                  storage.relations.delete(r);
+                }}
+                onDone={result => {
+                  storage.relations.update(r, draft => {
+                    draft.toSpaceId = result.space;
+                    draft.verified = result.verified;
+                  });
+                }}
+                currentSpaceId={spaceId}
+                entityId={relationValue}
+                relationId={relationId}
+                relationEntityId={r.entityId}
+                spaceId={r.toSpaceId}
+                verified={r.verified}
+                small
+                disableLink={disableLink}
+              >
+                {relationName ?? relationValue}
+              </LinkableRelationChip>
+            </div>
+          );
+        })}
+        {!isEmpty && isEditing && (
+          <div className="mt-2">
+            <SelectEntityAsPopover
+              trigger={<SquareButton icon={<Create />} />}
+              relationValueTypes={filterSearchByTypes}
+              waitForFilterTypes={waitForFilterTypes}
+              restrictToFilterTypes={Boolean(filterSearchByTypes.length)}
+              onCreateEntity={result => {
+                if (firstRelationValueType) {
+                  createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
+                }
               }}
               onDone={result => {
-                storage.relations.update(r, draft => {
-                  draft.toSpaceId = result.space;
-                  draft.verified = result.verified;
-                });
+                createPropertyRelation(storage, spaceId, entityId, property, result);
               }}
-              currentSpaceId={spaceId}
-              entityId={relationValue}
-              relationId={relationId}
-              relationEntityId={r.entityId}
-              spaceId={r.toSpaceId}
-              verified={r.verified}
-              small
-              disableLink={disableLink}
-            >
-              {relationName ?? relationValue}
-            </LinkableRelationChip>
+              spaceId={spaceId}
+            />
           </div>
-        );
-      })}
-      {!isEmpty && isEditing && (
-        <div className="mt-2">
-          <SelectEntityAsPopover
-            trigger={<SquareButton icon={<Create />} />}
-            relationValueTypes={filterSearchByTypes}
-            onCreateEntity={result => {
-              if (firstRelationValueType) {
-                createTypeRelationForNewEntity(storage, spaceId, result, firstRelationValueType);
-              }
-            }}
-            onDone={result => {
-              createPropertyRelation(storage, spaceId, entityId, property, result);
-            }}
-            spaceId={spaceId}
-          />
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -284,8 +317,12 @@ type EditableValueGroupProps = {
   property: Property;
   spaceId: string;
   isEditing: boolean;
+  /** Render URL values as plain text — the whole list item is already a link, and nested <a> is invalid HTML. */
+  disableLink?: boolean;
   /** List/gallery browse: match description (`text-metadata` / tableProperty) instead of table cell scale. */
   browseListTypography?: boolean;
+  /** List/gallery browse: tiny label rendered above the value (only when there's a value to show). */
+  browseLabel?: string | null;
 };
 
 function EditableValueGroup({
@@ -293,7 +330,9 @@ function EditableValueGroup({
   property,
   spaceId,
   isEditing,
+  disableLink = false,
   browseListTypography = false,
+  browseLabel,
 }: EditableValueGroupProps) {
   const { storage } = useMutate();
   const rawValue = useSpaceAwareValue({ entityId, propertyId: property.id, spaceId });
@@ -309,30 +348,44 @@ function EditableValueGroup({
 
   const compactBrowse = browseListTypography && !isEditing;
 
+  // Attach the browse label above the value, but only when there's content (`show`) so empty cells don't show orphan labels.
+  const withLabel = (node: ReactNode, show: boolean = Boolean(value)) =>
+    browseLabel && show ? (
+      <>
+        <BrowsePropertyLabel name={browseLabel} />
+        {node}
+      </>
+    ) : (
+      node
+    );
+
   // List/gallery browse: always key off `dataType` for TEXT so Summary/long text never hits `case 'URL'`
   // or other renderable branches with larger tableCell styles.
   if (compactBrowse && property.dataType === 'TEXT') {
     if (!value) return null;
     if (isUrlTemplate(property.format) || property.renderableTypeStrict === 'URL') {
-      return (
+      return withLabel(
         <WebUrlField
           variant="tableCell"
           isEditing={false}
           spaceId={spaceId}
           value={value}
           format={property.format}
+          disableLink={disableLink}
           className={BROWSE_LIST_URL_CLASS}
         />
       );
     }
-    return <p className={`${LIST_GALLERY_BROWSE_BODY_CLASS} wrap-break-word whitespace-pre-wrap`}>{value}</p>;
+    return withLabel(
+      <p className={cx(LIST_GALLERY_BROWSE_BODY_CLASS, 'wrap-break-word whitespace-pre-wrap')}>{value}</p>
+    );
   }
 
   switch (renderableType) {
     case 'INTEGER':
     case 'FLOAT':
     case 'DECIMAL':
-      return (
+      return withLabel(
         <NumberField
           variant="tableCell"
           value={value}
@@ -347,7 +400,7 @@ function EditableValueGroup({
     case 'TEXT':
       return <TableStringField variant="tableCell" placeholder="Add value..." value={value} onChange={onWriteValue} />;
     case 'URL':
-      return (
+      return withLabel(
         <WebUrlField
           variant="tableCell"
           isEditing={isEditing}
@@ -355,17 +408,18 @@ function EditableValueGroup({
           value={value}
           format={property.format}
           onBlur={isEditing ? e => onWriteValue(e.currentTarget.value) : undefined}
+          disableLink={disableLink}
           className={compactBrowse ? BROWSE_LIST_URL_CLASS : undefined}
         />
       );
     case 'BOOLEAN': {
       const checked = getChecked(value);
-      return <Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />;
+      return withLabel(<Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />, true);
     }
     case 'DATE':
     case 'DATETIME':
     case 'TIME':
-      return (
+      return withLabel(
         <DateField
           variant="tableCell"
           key={value || 'empty'}

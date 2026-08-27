@@ -1,21 +1,22 @@
 'use client';
 
-import { Ipfs, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import * as React from 'react';
-import { ChangeEvent, useCallback, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useRef } from 'react';
 
 import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
-import { useDeploySpace } from '~/core/hooks/use-deploy-space';
+import { type VotingSettingsInput } from '~/core/hooks/use-deploy-space';
 import { useImageWithFallback } from '~/core/hooks/use-image-with-fallback';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { uploadGeoImage } from '~/core/sdk/geo-client';
+import { pendingCreatedSpaceAtom } from '~/core/state/pending-created-space';
 import { SpaceGovernanceType, SpaceType } from '~/core/types';
-import { NavUtils, sleep } from '~/core/utils/utils';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Button, SmallButton, SquareButton } from '~/design-system/button';
 import { Dots } from '~/design-system/dots';
@@ -30,97 +31,196 @@ import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
+import {
+  DEFAULT_VOTING_SETTINGS_SNAPSHOT,
+  type VotingSettingsFormState,
+  parseVotingSettingsForm,
+  snapshotToFormState,
+  snapshotToHidden,
+  votingSettingsInputToSnapshot,
+  votingSettingsWarnings,
+} from '~/partials/governance/voting-settings';
+import { VotingSettingsFields } from '~/partials/governance/voting-settings-fields';
 import { Animation } from '~/partials/onboarding/dialog';
 
-const spaceTypeAtom = atom<SpaceType | null>(null);
-const governanceTypeAtom = atom<SpaceGovernanceType | null>(null);
-const nameAtom = atom<string>('');
-const topicIdAtom = atom<string>('');
-const imageAtom = atom<string>('');
+export const spaceTypeAtom = atom<SpaceType | null>('default');
+export const governanceTypeAtom = atom<SpaceGovernanceType | null>('DAO');
+export const nameAtom = atom<string>('');
+export const topicIdAtom = atom<string>('');
+export const imageAtom = atom<string>('');
+/** When non-null, overrides the deploy hook's default voting settings.
+ *  Only applies to DAO governance type. Reset when the dialog closes. */
+export const votingSettingsAtom = atom<VotingSettingsInput | null>(null);
 const spaceIdAtom = atom<string>('');
 
-type Step = 'select-type' | 'enter-profile' | 'create-space' | 'completed';
+type Step = 'enter-profile' | 'configure-governance' | 'create-space' | 'completed';
 
-const stepAtom = atom<Step>('select-type');
+export const stepAtom = atom<Step>('enter-profile');
+
+const DEFAULT_SPACE_TYPE: SpaceType = 'default';
+const DEFAULT_GOVERNANCE_TYPE: SpaceGovernanceType = 'DAO';
+
+/** Externally controllable open state so non-trigger callers (e.g. the navbar
+ * "+" dropdowns) can preset the atoms above and open the dialog. */
+export const createSpaceDialogOpenAtom = atom<boolean>(false);
+
+/** When true, the dialog auto-fires `createSpaces` as soon as it opens at
+ * step='create-space'. Used by the claim flow to skip the profile-entry
+ * step entirely. */
+const autoRunAtom = atom<boolean>(false);
 
 const workflowSteps: Array<Step> = ['create-space', 'completed'];
+
+// Module-level guard for the auto-run effect. A component-scoped `useRef`
+// would reset on React StrictMode's intentional double-mount in dev, firing
+// the deploy twice. Module scope persists across mounts; reset when the
+// dialog transitions to closed.
+let autoRunFired = false;
+
+type OpenDialogPreset = {
+  name?: string;
+  image?: string;
+  topicId?: string;
+  governanceType?: SpaceGovernanceType | null;
+  spaceType?: SpaceType | null;
+  step?: Step;
+  /** Skip the profile-entry step and fire the deploy as soon as the dialog
+   * mounts. Requires `spaceType` to be set. */
+  autoRun?: boolean;
+};
+
+/**
+ * Opens the (globally-mounted) CreateSpaceDialog with optional preset values.
+ * Without a preset, resets to the "New space" entry — the name/image form, with
+ * the space type and governance fixed to the defaults above.
+ */
+export function useOpenCreateSpaceDialog() {
+  const setName = useSetAtom(nameAtom);
+  const setImage = useSetAtom(imageAtom);
+  const setTopicId = useSetAtom(topicIdAtom);
+  const setGovernanceType = useSetAtom(governanceTypeAtom);
+  const setSpaceType = useSetAtom(spaceTypeAtom);
+  const setStep = useSetAtom(stepAtom);
+  const setOpen = useSetAtom(createSpaceDialogOpenAtom);
+  const setAutoRun = useSetAtom(autoRunAtom);
+  const setVotingSettings = useSetAtom(votingSettingsAtom);
+
+  return useCallback(
+    (preset?: OpenDialogPreset) => {
+      // Reset the auto-run latch so a second claim attempt on a different
+      // topic (without an intervening close) doesn't silently no-op.
+      autoRunFired = false;
+      setName(preset?.name ?? '');
+      setImage(preset?.image ?? '');
+      setTopicId(preset?.topicId ?? '');
+      setGovernanceType(preset?.governanceType ?? DEFAULT_GOVERNANCE_TYPE);
+      setSpaceType(preset?.spaceType ?? DEFAULT_SPACE_TYPE);
+      setStep(preset?.step ?? 'enter-profile');
+      setAutoRun(preset?.autoRun ?? false);
+      // Re-opening while already open skips the close-effect cleanup, so any
+      // custom voting settings from the previous session must be cleared here.
+      setVotingSettings(null);
+      setOpen(true);
+    },
+    [setName, setImage, setTopicId, setGovernanceType, setSpaceType, setStep, setOpen, setAutoRun, setVotingSettings]
+  );
+}
 
 export function CreateSpaceDialog() {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
-  const [open, onOpenChange] = useState(false);
-  const { deploy } = useDeploySpace();
+  const [open, onOpenChange] = useAtom(createSpaceDialogOpenAtom);
+  const setPendingCreatedSpace = useSetAtom(pendingCreatedSpaceAtom);
 
   const spaceType = useAtomValue(spaceTypeAtom);
-  const [name, setName] = useAtom(nameAtom);
-  const [topicId, setTopicId] = useAtom(topicIdAtom);
-  const [image, setImage] = useAtom(imageAtom);
-  const setSpaceId = useSetAtom(spaceIdAtom);
-  const [governanceType, setGovernanceType] = useAtom(governanceTypeAtom);
-  const [step, setStep] = useAtom(stepAtom);
+  const name = useAtomValue(nameAtom);
+  const topicId = useAtomValue(topicIdAtom);
+  const image = useAtomValue(imageAtom);
+  const governanceType = useAtomValue(governanceTypeAtom);
+  const step = useAtomValue(stepAtom);
+  const autoRun = useAtomValue(autoRunAtom);
+  const votingSettings = useAtomValue(votingSettingsAtom);
 
-  // Show retry immediately if workflow already started before initial render
-  const [showRetry, setShowRetry] = useState(() => workflowSteps.includes(step));
+  const setAutoRun = useSetAtom(autoRunAtom);
+  const setVotingSettings = useSetAtom(votingSettingsAtom);
+
+  // On close: clear the auto-run guard and the transient claim-flow atoms so
+  // a subsequent open from a non-claim caller (navbar "+") doesn't inherit
+  // stale values. The OpenDialogPreset always overwrites these on open, so
+  // this is hygiene more than correctness.
+  React.useEffect(() => {
+    if (!open) {
+      autoRunFired = false;
+      setAutoRun(false);
+      setVotingSettings(null);
+    }
+  }, [open, setAutoRun, setVotingSettings]);
+
+  // Auto-run path: when the dialog is opened directly at 'create-space' with
+  // autoRun, fire the deploy as soon as everything is in place. Guarded by a
+  // module-level flag so React StrictMode's dev double-mount, re-renders, and
+  // effect re-runs don't fire deploy twice. Declared above the early
+  // `return null` for !address so the hook count stays stable when the user
+  // signs in / out while the dialog is mounted.
+  //
+  // We require name + topicId to be non-empty before firing: the entity-page
+  // claim button sets name via the live entity store, which can be `''` on
+  // the first render before hydration completes. Without this check the
+  // deploy would go out with an empty space name.
+  React.useEffect(() => {
+    if (!open || !autoRun) return;
+    if (step !== 'create-space') return;
+    if (!spaceType || !address) return;
+    if (!name || !topicId) return;
+    if (autoRunFired) return;
+    autoRunFired = true;
+    createSpaces(spaceType);
+  }, [open, autoRun, step, spaceType, address, name, topicId, image, governanceType]);
 
   if (!address) return null;
 
-  async function createSpaces(spaceType: SpaceType) {
+  function createSpaces(spaceType: SpaceType) {
     if (!address || !spaceType) return;
 
-    try {
-      const spaceId = await deploy({
+    // Optimistic: snapshot the deploy args and hand the slow chain (IPFS publish
+    // + on-chain factory tx + receipt + up to ~120s index wait) to the
+    // always-mounted PendingCreatedSpaceRunner, then close the modal immediately
+    // instead of blocking on it. The runner routes the user into the space once
+    // it's indexed (the space page notFound()s before then), and surfaces a
+    // retryable error via the status bar on failure. Seeding the overview
+    // template outlives that navigation — deploy() fires it without awaiting.
+    // Refuse to start a second deploy while one is in flight. DAO deploy is NOT
+    // idempotent — a second job mints a SECOND space on-chain — and the runner's
+    // dedupe cannot catch this on its own: it keys on jobId, so a re-create looks
+    // like new work no matter what. Checked via the updater rather than a read of
+    // the atom so a stale render closure can't race past it. A 'failed' job is
+    // replaceable; only 'pending' blocks.
+    setPendingCreatedSpace(current => {
+      if (current?.status === 'pending') return current;
+
+      return {
+        jobId: crypto.randomUUID(),
         type: spaceType,
         spaceName: name,
-        spaceImage: image,
+        spaceImage: image || undefined,
         governanceType: governanceType ?? undefined,
-        topicId,
-      });
+        topicId: topicId || undefined,
+        votingSettings: votingSettings ?? undefined,
+        address,
+        status: 'pending',
+      };
+    });
 
-      if (!spaceId) {
-        throw new Error(`Creating space failed`);
-      }
-
-      setSpaceId(spaceId);
-      setStep('completed');
-    } catch (error) {
-      setShowRetry(true);
-      console.error(error);
-    }
+    onOpenChange(false);
   }
 
-  async function onRunOnboardingWorkflow() {
+  function onRunOnboardingWorkflow() {
     if (!address || !smartAccount || !spaceType) return;
-
-    setShowRetry(false);
-
-    switch (step) {
-      case 'enter-profile':
-        setStep('create-space');
-        await sleep(100);
-        createSpaces(spaceType);
-        break;
-      case 'create-space':
-        createSpaces(spaceType);
-        break;
-    }
+    createSpaces(spaceType);
   }
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Trigger asChild>
-        <span
-          role="button"
-          onClick={() => {
-            setName('');
-            setImage('');
-            setTopicId('');
-            setGovernanceType(null);
-            setStep('select-type');
-          }}
-        >
-          New space
-        </span>
-      </Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Content
           // Only allow closing the dialog by clicking the close button
@@ -136,7 +236,7 @@ export function CreateSpaceDialog() {
         >
           <Dialog.Title className="sr-only">Create a new space</Dialog.Title>
           <Dialog.Description className="sr-only">
-            Create a new space by selecting a template and configuring governance settings
+            Create a new space by naming it and configuring governance settings
           </Dialog.Description>
           <div className="pointer-events-none fixed inset-0 z-100 flex h-full w-full items-start justify-center bg-grey-04/50">
             <AnimatePresence mode="wait">
@@ -148,15 +248,9 @@ export function CreateSpaceDialog() {
               >
                 <ModalCard childKey="card">
                   <StepHeader />
-                  {step === 'select-type' && <StepSelectType />}
                   {step === 'enter-profile' && <StepEnterProfile onNext={onRunOnboardingWorkflow} address={address} />}
-                  {workflowSteps.includes(step) && (
-                    <StepComplete
-                      onRetry={onRunOnboardingWorkflow}
-                      showRetry={showRetry}
-                      onDone={() => onOpenChange(false)}
-                    />
-                  )}
+                  {step === 'configure-governance' && <StepConfigureGovernance />}
+                  {workflowSteps.includes(step) && <StepComplete onDone={() => onOpenChange(false)} />}
                 </ModalCard>
               </motion.div>
             </AnimatePresence>
@@ -188,25 +282,19 @@ const ModalCard = ({ childKey, children }: ModalCardProps) => {
 };
 
 const headerText: Record<Step, string> = {
-  'select-type': 'Select space template',
   'enter-profile': '',
+  'configure-governance': 'Advanced governance settings',
   'create-space': '',
   completed: '',
 };
 
 const StepHeader = () => {
   const [step, setStep] = useAtom(stepAtom);
-  const setName = useSetAtom(nameAtom);
-  const setTopicId = useSetAtom(topicIdAtom);
 
-  const showBack = step === 'enter-profile';
+  const showBack = step === 'configure-governance';
 
   const handleBack = () => {
-    setName('');
-    setTopicId('');
-    if (step === 'enter-profile') {
-      setStep('select-type');
-    }
+    setStep('enter-profile');
   };
 
   return (
@@ -219,7 +307,7 @@ const StepHeader = () => {
         )}
       </div>
       <h3 className="text-smallTitle">{headerText[step]}</h3>
-      {step !== 'create-space' && step !== 'completed' ? (
+      {step !== 'create-space' && step !== 'completed' && step !== 'configure-governance' ? (
         <Dialog.Close asChild>
           <SquareButton icon={<Close color="grey-04" />} className="border-none! bg-transparent!" />
         </Dialog.Close>
@@ -244,94 +332,16 @@ const StepContents = ({ childKey, children }: StepContentsProps) => {
       animate={{ opacity: 1, left: 0, right: 0 }}
       exit={{ opacity: 0, left: -20 }}
       transition={{ ease: 'easeInOut', duration: 0.225 }}
-      className="relative flex grow flex-col"
+      className="relative flex min-h-0 grow flex-col"
     >
       {children}
     </motion.div>
   );
 };
 
-function StepSelectType() {
-  const setSpaceType = useSetAtom(spaceTypeAtom);
-  const setGovernanceType = useSetAtom(governanceTypeAtom);
-  const setStep = useSetAtom(stepAtom);
-
-  return (
-    <>
-      <StepContents childKey="account-type">
-        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-          {spaceTypeOptions.map(spaceType => {
-            return (
-              <button
-                key={spaceType.value}
-                onClick={() => {
-                  setSpaceType(spaceType.value);
-
-                  if (spaceType.governance) {
-                    setGovernanceType(spaceType.governance);
-                  }
-                  setStep('enter-profile');
-                }}
-                className="flex items-center gap-3 rounded-lg border border-divider bg-white py-2 pr-3 pl-2 transition-colors duration-150 ease-in-out hover:bg-divider"
-              >
-                <div className="size-8 shrink-0 overflow-clip rounded">
-                  <img src={spaceType.image} alt="" className="block h-full w-full object-cover" />
-                </div>
-                <div className="text-button">{spaceType.label}</div>
-              </button>
-            );
-          })}
-        </div>
-      </StepContents>
-    </>
-  );
-}
-
-const spaceTypeOptions: { image: string; label: string; value: SpaceType; governance?: 'DAO' | 'PERSONAL' }[] = [
-  { image: '/images/onboarding/blank.png', label: 'Blank', value: 'default', governance: 'DAO' },
-  {
-    image: '/images/onboarding/academic-field.png',
-    label: 'Academic field',
-    value: 'academic-field',
-    governance: 'DAO',
-  },
-  { image: '/images/onboarding/company.png', label: 'Company', value: 'company', governance: 'DAO' },
-  { image: '/images/onboarding/dao.png', label: 'DAO', value: 'dao', governance: 'DAO' },
-  {
-    image: '/images/onboarding/gov-org.png',
-    label: 'Government org',
-    value: 'government-org',
-    governance: 'DAO',
-  },
-  { image: '/images/onboarding/industry.png', label: 'Industry', value: 'industry', governance: 'DAO' },
-  {
-    image: '/images/onboarding/interest-group.png',
-    label: 'Interest',
-    value: 'interest',
-    governance: 'DAO',
-  },
-  { image: '/images/onboarding/region.png', label: 'Region', value: 'region', governance: 'DAO' },
-  { image: '/images/onboarding/nonprofit.png', label: 'Nonprofit', value: 'nonprofit', governance: 'DAO' },
-  { image: '/images/onboarding/protocol.png', label: 'Protocol', value: 'protocol', governance: 'DAO' },
-];
-
 type StepEnterProfileProps = {
   onNext: () => void;
   address: string;
-};
-
-const allowedTypesBySpaceType: Record<SpaceType, string[]> = {
-  default: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE],
-  company: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.COMPANY_TYPE],
-  nonprofit: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.NONPROFIT_TYPE],
-  personal: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE],
-  'academic-field': [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.ACADEMIC_FIELD_TYPE],
-  region: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.REGION_TYPE],
-  industry: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.INDUSTRY_TYPE],
-  protocol: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PROTOCOL_TYPE],
-  dao: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.DAO_TYPE],
-  'government-org': [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.GOVERNMENT_ORG_TYPE],
-  interest: [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.INTEREST_TYPE],
 };
 
 function StepEnterProfile({ onNext }: StepEnterProfileProps) {
@@ -340,8 +350,9 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const spaceType = useAtomValue(spaceTypeAtom);
   const isCompany = spaceType === 'company';
   const [image, setImage] = useAtom(imageAtom);
+  const setStep = useSetAtom(stepAtom);
+  const customVotingSettings = useAtomValue(votingSettingsAtom);
 
-  const allowedTypes = spaceType ? allowedTypesBySpaceType[spaceType] : [];
   const validName = name.length > 0;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -355,7 +366,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
   const handleChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const file = e.target.files[0];
-      const { cid } = await Ipfs.uploadImage({ blob: file }, 'TESTNET', true);
+      const { cid } = await uploadGeoImage({ blob: file });
       setImage(cid);
     }
   };
@@ -410,7 +421,6 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
         <div className="relative z-100 w-full">
           <div className={cx(topicId && 'invisible')}>
             <FindEntity
-              allowedTypes={allowedTypes}
               onDone={entity => {
                 setName(entity.name ?? '');
                 setTopicId(entity.id);
@@ -438,7 +448,7 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
           )}
         </div>
       </div>
-      <div className="absolute inset-x-4 bottom-4 flex">
+      <div className="absolute inset-x-4 bottom-4 flex flex-col items-stretch gap-2">
         <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
           <Tooltip
             trigger={
@@ -458,8 +468,85 @@ function StepEnterProfile({ onNext }: StepEnterProfileProps) {
         <Button disabled={!validName} onClick={onNext} className="w-full">
           Create Space
         </Button>
+        {governanceType === 'DAO' && (
+          <button
+            type="button"
+            onClick={() => setStep('configure-governance')}
+            className="text-center text-metadataMedium text-grey-04 hover:text-text"
+          >
+            Advanced settings{customVotingSettings ? ' (customized)' : ''}
+          </button>
+        )}
       </div>
     </div>
+  );
+}
+
+function StepConfigureGovernance() {
+  const [customSettings, setCustomSettings] = useAtom(votingSettingsAtom);
+  const setStep = useSetAtom(stepAtom);
+
+  // The creator is the only initial editor, so the SDK validates flat/quorum against 1.
+  const NEW_SPACE_INITIAL_EDITOR_COUNT = 1;
+
+  // Prefill from the override atom if the user already customized settings, otherwise the
+  // create-time defaults — the same source of truth used at deploy time.
+  const initialSnapshot = customSettings
+    ? votingSettingsInputToSnapshot(customSettings)
+    : DEFAULT_VOTING_SETTINGS_SNAPSHOT;
+
+  const [state, setState] = React.useState<VotingSettingsFormState>(() => snapshotToFormState(initialSnapshot));
+  // Grace period and the new-member fast-path toggle aren't in the form; carry whatever
+  // the draft started with through unchanged. (Universal support is now an exposed field.)
+  const hidden = React.useMemo(() => snapshotToHidden(initialSnapshot), [initialSnapshot]);
+
+  const parsed = parseVotingSettingsForm(state, hidden, NEW_SPACE_INITIAL_EDITOR_COUNT);
+  const warnings = parsed.kind === 'ok' ? votingSettingsWarnings(state) : [];
+  const canSave = parsed.kind === 'ok';
+
+  const handleSave = () => {
+    if (parsed.kind !== 'ok') return;
+    setCustomSettings(parsed.value);
+    setStep('enter-profile');
+  };
+
+  const handleResetDefaults = () => {
+    setState(snapshotToFormState(DEFAULT_VOTING_SETTINGS_SNAPSHOT));
+    setCustomSettings(null);
+  };
+
+  return (
+    <StepContents childKey="configure-governance">
+      <div className="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 pb-28">
+        <Text variant="footnote" color="grey-04">
+          Defaults are sensible for most spaces. See the governance page later for what each setting does.
+        </Text>
+        <VotingSettingsFields state={state} onChange={setState} />
+        {parsed.kind === 'error' && (
+          <div className="rounded bg-errorTertiary px-3 py-2 text-metadataMedium text-red-01">{parsed.message}</div>
+        )}
+        {warnings.map(warning => (
+          <div key={warning} className="rounded border border-orange px-3 py-2 text-metadataMedium text-orange">
+            {warning}
+          </div>
+        ))}
+      </div>
+      {/* Sticky footer over the scrollable content — solid white so scrolling settings
+          don't show through, with a short gradient fade above so content doesn't hit the
+          buttons abruptly. */}
+      <div className="absolute inset-x-0 bottom-0 flex flex-col items-stretch gap-2 bg-white px-4 pt-4 pb-4 before:pointer-events-none before:absolute before:inset-x-0 before:-top-6 before:h-6 before:bg-gradient-to-t before:from-white before:to-transparent before:content-['']">
+        <Button disabled={!canSave} onClick={handleSave} className="w-full">
+          Save settings
+        </Button>
+        <button
+          type="button"
+          onClick={handleResetDefaults}
+          className="text-center text-metadataMedium text-grey-04 hover:text-text"
+        >
+          Reset to defaults
+        </button>
+      </div>
+    </StepContents>
   );
 }
 
@@ -474,12 +561,10 @@ const governanceLabel: Record<SpaceGovernanceType, string> = {
 };
 
 type StepCompleteProps = {
-  onRetry: () => void;
   onDone: () => void;
-  showRetry: boolean;
 };
 
-function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
+function StepComplete({ onDone }: StepCompleteProps) {
   const router = useRouter();
 
   const spaceId = useAtomValue(spaceIdAtom);
@@ -505,19 +590,7 @@ function StepComplete({ onRetry, showRetry, onDone }: StepCompleteProps) {
           <Text as="p" variant="body" className="mx-auto mt-2 px-4 text-center text-base!">
             Get ready to experience a new way of creating and sharing knowledge.
           </Text>
-          {step !== 'completed' && (
-            <>
-              <Spacer height={32} />
-              {showRetry && (
-                <p className="mt-4 text-center text-smallButton">
-                  Space creation failed
-                  <button onClick={onRetry} className="text-ctaPrimary">
-                    Retry
-                  </button>
-                </p>
-              )}
-            </>
-          )}
+          {step !== 'completed' && <Spacer height={32} />}
         </div>
       </StepContents>
       <div className="absolute inset-x-4 bottom-4">

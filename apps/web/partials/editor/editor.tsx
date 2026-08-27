@@ -1,29 +1,31 @@
 'use client';
 
-import { GraphUrl } from '@geoprotocol/geo-sdk/lite';
 import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 
 import * as React from 'react';
 
 import { LayoutGroup } from 'framer-motion';
-import { useAtomValue } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
+import { capture } from '~/core/analytics';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
-import { NavUtils } from '~/core/utils/utils';
+import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
+import { resolveGraphLinkHref } from '~/core/utils/graph-link';
 
 import { Spacer } from '~/design-system/spacer';
 
-import { NoContent } from '../space-tabs/no-content';
+import { BlockReorder } from './block-reorder';
 import { createCommandExtension } from './command-extension';
 import { createEntityMentionExtension, entityMentionPluginKey } from './entity-mention-extension';
 import { tiptapExtensions } from './extensions';
 import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
 import { createIdExtension } from './id-extension';
+import { normalizeEditorContent } from './normalize-editor-content';
 import { ServerContent } from './server-content';
-import { editorContentVersionAtom } from '~/atoms';
+import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
 
 // Constants for emoji image conversion patterns
 const EMOJI_CONVERSION_PATTERNS = [
@@ -41,15 +43,16 @@ interface Props {
   spaceId: string;
   placeholder?: React.ReactNode;
   shouldHandleOwnSpacing?: boolean;
-  spacePage?: boolean;
 }
 
-export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, spacePage = false }: Props) {
+export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: Props) {
   useSuppressFlushSyncWarning();
   const router = useRouter();
   const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
+  const sidePanelCtx = React.useContext(EntitySidePanelEditContext);
+  const setSidePanelPersist = useSetAtom(entitySidePanelPersistEditorAtom);
 
   // Also keep editableRef for callbacks and extensions
   const editableRef = React.useRef(editable);
@@ -80,6 +83,57 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
   // Ref keeps the blur handler fresh without requiring editor recreation.
   const upsertEditorStateRef = React.useRef(upsertEditorState);
   upsertEditorStateRef.current = upsertEditorState;
+  const knownDataBlockIdsRef = React.useRef<Set<string>>(new Set(blockIds));
+  const lastTrackedEditorSnapshotRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    lastTrackedEditorSnapshotRef.current = JSON.stringify(normalizeEditorContent(editorJson));
+
+    for (const blockId of blockIds) {
+      knownDataBlockIdsRef.current.add(blockId);
+    }
+  }, [activeEntityId, blockIds, editorContentVersion, editorJson]);
+
+  const trackEditorDocument = React.useCallback(
+    (json: JSONContent) => {
+      const snapshot = JSON.stringify(normalizeEditorContent(json));
+
+      if (snapshot === lastTrackedEditorSnapshotRef.current) {
+        return;
+      }
+
+      lastTrackedEditorSnapshotRef.current = snapshot;
+
+      const editorContent = json.content ?? [];
+
+      capture('content_created', {
+        content_id: activeEntityId,
+        content_type: 'editor_content_edit',
+        edit_surface: 'editor',
+        entity_id: activeEntityId,
+        space_id: spaceId,
+        block_count: editorContent.length,
+      });
+
+      for (const node of editorContent) {
+        if (node.type !== 'tableNode') continue;
+        const blockId = typeof node.attrs?.id === 'string' ? node.attrs.id : null;
+        if (!blockId || knownDataBlockIdsRef.current.has(blockId)) continue;
+
+        knownDataBlockIdsRef.current.add(blockId);
+        capture('content_created', {
+          content_id: blockId,
+          content_type: 'data_block',
+          edit_action: 'block_created',
+          creation_surface: 'editor',
+          data_source_type: node.attrs?.initialDataSource === 'QUERY' ? 'QUERY' : 'COLLECTION',
+          entity_id: activeEntityId,
+          space_id: spaceId,
+        });
+      }
+    },
+    [activeEntityId, spaceId]
+  );
 
   const onBlur = (params: { editor: TiptapEditor }) => {
     if (editable) {
@@ -94,7 +148,9 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       // the editor is potentially destroyed (e.g. on edit → view mode switch).
       // The content sync effect's `if (editable) return` guard prevents this
       // store write from triggering a setContent call back into the editor.
-      upsertEditorStateRef.current(params.editor.getJSON());
+      const json = params.editor.getJSON();
+      trackEditorDocument(json);
+      upsertEditorStateRef.current(json);
     }
   };
 
@@ -103,6 +159,24 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   // Track the previous editable state to detect transitions from edit → read mode
   const prevEditableRef = React.useRef(editable);
+
+  const persistPendingEdits = React.useCallback(() => {
+    if (!editableRef.current || !editorRef.current) return;
+    const isSuggestionActive = entityMentionPluginKey.getState(editorRef.current.state)?.active;
+    if (isSuggestionActive) return;
+    const json = editorRef.current.getJSON();
+    trackEditorDocument(json);
+    upsertEditorStateRef.current(json);
+  }, [trackEditorDocument]);
+
+  // A deliberate drop is an explicit document change, so persist it immediately
+  // even if a suggestion popup happened to be active before the drag began.
+  const persistReorderedBlocks = React.useCallback(() => {
+    if (!editableRef.current || !editorRef.current) return;
+    const json = editorRef.current.getJSON();
+    trackEditorDocument(json);
+    upsertEditorStateRef.current(json);
+  }, [trackEditorDocument]);
 
   // When transitioning from edit → view mode, persist the editor content to the
   // store BEFORE useEditor destroys and recreates the editor. Without this,
@@ -113,9 +187,21 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     prevEditableRef.current = editable;
 
     if (wasEditable && !editable && editorRef.current) {
-      upsertEditorStateRef.current(editorRef.current.getJSON());
+      persistPendingEdits();
     }
-  }, [editable]);
+  }, [editable, persistPendingEdits]);
+
+  const persistPendingEditsRef = React.useRef(persistPendingEdits);
+  persistPendingEditsRef.current = persistPendingEdits;
+
+  React.useLayoutEffect(() => {
+    if (!sidePanelCtx) return;
+    setSidePanelPersist(() => () => persistPendingEditsRef.current());
+    return () => {
+      setSidePanelPersist(null);
+      persistPendingEditsRef.current();
+    };
+  }, [setSidePanelPersist, sidePanelCtx]);
 
   const editor = useEditor(
     {
@@ -171,12 +257,16 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
       onBlur: onBlur,
       onUpdate: ({ editor }) => {
         if (editable) {
+          const editorContent = editor.getJSON().content ?? [];
           const hasContent =
             editor.getText().trim().length > 0 ||
-            (editor
-              .getJSON()
-              .content?.some(node => node.type === 'image' || node.type === 'tableNode' || node.type === 'codeBlock') ??
-              false);
+            editorContent.some(
+              node =>
+                node.type === 'image' ||
+                node.type === 'tableNode' ||
+                node.type === 'rankingNode' ||
+                node.type === 'codeBlock'
+            );
 
           // Update the state immediately to show/hide properties panel
           setHasContent(hasContent);
@@ -187,16 +277,26 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
     // recreates the editor on every block addition, wiping data block state.
     // `activeEntityId` handles tab switches; `editorContentVersion` handles
     // external resets (discard, IndexedDB restore).
-    [editable, activeEntityId, editorContentVersion]
+    // Do NOT include `editable` — recreating the editor on edit↔view remounts
+    // data blocks and clears optimistic rows for newly created entities.
+    [activeEntityId, editorContentVersion]
   );
 
   // Keep editorRef in sync so the edit→view transition effect can persist state
   editorRef.current = editor;
 
+  React.useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.setEditable(editable);
+  }, [editor, editable]);
+
   const editorWrapperRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
-    if (!editor) return;
+    // `destroy()` nulls the editor's internals but not the reference, so a closure
+    // over a destroyed instance passes a plain null check and then throws on
+    // `.commands`. Navigating between entities destroys the editor this effect holds.
+    if (!editor || editor.isDestroyed) return;
 
     // While in edit mode, the editor is the source of truth. Content is
     // persisted to the store via onBlur. Pushing store changes back into
@@ -222,7 +322,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   const handleGutterClick = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!editor || !editable) return;
+      if (!editor || editor.isDestroyed || !editable) return;
 
       // Only focus when clicking on the editor wrapper itself, not inner content.
       if (e.target === e.currentTarget) {
@@ -234,36 +334,31 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null, sp
 
   // We are in browse mode and there is no content.
   if (!editable && blockIds.length === 0) {
-    return (
-      <>
-        {spacePage && (
-          <NoContent
-            options={{
-              image: '/overview.png',
-              browse: {
-                title: 'There’s no content here yet',
-                description: 'Switch to edit mode to add content if you’re an editor of this space!',
-              },
-            }}
-            isEditing={false}
-          />
-        )}
-        <span>{placeholder}</span>
-      </>
-    );
+    return <>{placeholder}</>;
   }
 
   return (
     <LayoutGroup id="editor">
       <div
         ref={editorWrapperRef}
-        className={editable ? 'editable' : 'not-editable'}
+        className={editable ? 'editable relative' : 'not-editable'}
         onClick={handleGutterClick}
         style={editable ? { minHeight: '8rem' } : undefined}
       >
-        {editor ? <EditorContent editor={editor} /> : <ServerContent blocks={serverBlocks} />}
+        {editor ? (
+          <BlockReorder
+            editor={editor}
+            editorWrapperRef={editorWrapperRef}
+            enabled={editable}
+            onReorder={persistReorderedBlocks}
+          >
+            <EditorContent editor={editor} />
+          </BlockReorder>
+        ) : (
+          <ServerContent blocks={serverBlocks} />
+        )}
 
-        {shouldHandleOwnSpacing && <Spacer height={60} />}
+        {shouldHandleOwnSpacing && editable && <Spacer height={60} />}
       </div>
     </LayoutGroup>
   );
@@ -332,6 +427,10 @@ function useInterceptEditorLinks(spaceId: string) {
         return;
       }
 
+      if (target.closest('[data-entity-side-panel-opener], [data-entity-side-panel]')) {
+        return;
+      }
+
       const link = target.closest('a');
 
       if (!link) {
@@ -340,23 +439,22 @@ function useInterceptEditorLinks(spaceId: string) {
 
       // Check if the clicked element is a link
       if (link.tagName === 'A') {
-        const originalUrl = link.href;
+        const resolved = resolveGraphLinkHref(link.getAttribute('href'), spaceId);
 
-        if (originalUrl.startsWith('graph://')) {
+        if (resolved) {
           // Prevent the default link behavior
           event.stopPropagation();
           event.preventDefault();
-          const entityId = GraphUrl.toEntityId(originalUrl as `graph://${string}`);
-          router.prefetch(NavUtils.toEntity(spaceId, entityId));
-          router.push(NavUtils.toEntity(spaceId, entityId));
+          router.prefetch(resolved.href);
+          router.push(resolved.href);
         }
       }
     }
 
-    document.addEventListener('click', handleClick);
+    document.addEventListener('click', handleClick, { capture: true });
 
     return () => {
-      document.removeEventListener('click', handleClick);
+      document.removeEventListener('click', handleClick, { capture: true });
       observer.disconnect();
     };
   }, [router, spaceId]);
@@ -370,10 +468,7 @@ const useSuppressFlushSyncWarning = () => {
     const orig = console.error;
     console.error = (...args: unknown[]) => {
       // Only suppress the specific TipTap flushSync warning
-      if (
-        typeof args[0] === 'string' &&
-        args[0].includes('flushSync was called from inside a lifecycle method')
-      ) {
+      if (typeof args[0] === 'string' && args[0].includes('flushSync was called from inside a lifecycle method')) {
         return;
       }
       orig.apply(console, args);
@@ -383,25 +478,3 @@ const useSuppressFlushSyncWarning = () => {
     };
   }, []);
 };
-
-function normalizeEditorContent(content: JSONContent): JSONContent {
-  const normalizedAttrs = content.attrs
-    ? Object.fromEntries(
-      Object.entries(content.attrs).filter(([key, value]) => {
-        if (value === null || value === undefined) return false;
-        return key !== 'spaceId' && key !== 'relationId';
-      })
-    )
-    : undefined;
-
-  return {
-    ...content,
-    ...(normalizedAttrs && Object.keys(normalizedAttrs).length > 0 ? { attrs: normalizedAttrs } : {}),
-    ...(!normalizedAttrs || Object.keys(normalizedAttrs).length === 0 ? { attrs: undefined } : {}),
-    ...(content.content
-      ? {
-        content: content.content.map(child => normalizeEditorContent(child)),
-      }
-      : {}),
-  };
-}

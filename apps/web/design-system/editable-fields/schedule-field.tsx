@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { AnimatePresence, motion } from 'framer-motion';
 
 import {
@@ -132,7 +133,7 @@ function ScheduleFormEditor({ parsed, onUpdate }: { parsed: ParsedSchedule; onUp
           <input
             type="number"
             min={1}
-            className={`${fieldClass} w-20`}
+            className={cx(fieldClass, 'w-20')}
             value={parsed.interval}
             onChange={e => {
               const n = parseInt(e.target.value, 10);

@@ -39,6 +39,10 @@ export class PersistenceEngine {
       this.onPublished(event.valueIds, event.relationIds);
     });
 
+    stream.on(GeoEventStream.SPACE_REMAPPED, event => {
+      this.onRemapped(event.oldValueIds, event.values, event.relations);
+    });
+
     stream.on(GeoEventStream.LOCAL_CHANGES_CLEARED, event => {
       this.onCleared(event.spaceId);
     });
@@ -94,6 +98,33 @@ export class PersistenceEngine {
       }
     } catch (err) {
       console.warn('[PersistenceEngine] onPublished cleanup failed:', err);
+    }
+  }
+
+  /**
+   * A pending personal space resolved: value ids changed (spaceId is baked into
+   * the id), so delete the stale `pending:` rows and write the rewritten ones.
+   * Relations keep their id but their spaceId changed, so bulkPut overwrites in
+   * place. Old ids are also dropped from the pending flush queue so a late flush
+   * can't resurrect them.
+   */
+  private async onRemapped(oldValueIds: string[], values: Value[], relations: Relation[]) {
+    for (const id of oldValueIds) this.pendingValues.delete(id);
+
+    try {
+      if (oldValueIds.length > 0) {
+        await db.values.bulkDelete(oldValueIds);
+      }
+      const localValues = values.filter(v => v.isLocal && !v.hasBeenPublished);
+      if (localValues.length > 0) {
+        await db.values.bulkPut(localValues);
+      }
+      const localRelations = relations.filter(r => r.isLocal && !r.hasBeenPublished);
+      if (localRelations.length > 0) {
+        await db.relations.bulkPut(localRelations);
+      }
+    } catch (err) {
+      console.warn('[PersistenceEngine] onRemapped failed:', err);
     }
   }
 

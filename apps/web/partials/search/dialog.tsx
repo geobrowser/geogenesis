@@ -8,6 +8,7 @@ import { Command } from 'cmdk';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
+import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useKey } from '~/core/hooks/use-key';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
@@ -21,10 +22,12 @@ import { ResultContent, ResultsList, SpaceContent } from '~/design-system/autoco
 import { Dots } from '~/design-system/dots';
 import { GeoImage } from '~/design-system/geo-image';
 import { ArrowLeft } from '~/design-system/icons/arrow-left';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Search } from '~/design-system/icons/search';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
+import { Toggle } from '~/design-system/toggle';
 
 type Props = {
   open: boolean;
@@ -32,6 +35,12 @@ type Props = {
 };
 
 type View = 'selectEntity' | 'selectSpace' | 'createEntity';
+
+// Defaults to true (canonical graph only) unless the user has turned it off; persisted across sessions.
+const SEARCH_CANONICAL_ONLY_KEY = 'geo.search.canonicalOnly';
+
+const readCanonicalOnly = (): boolean =>
+  typeof window === 'undefined' || window.localStorage.getItem(SEARCH_CANONICAL_ONLY_KEY) !== 'false';
 
 export const SearchDialog = ({ open, onDone }: Props) => {
   if (!open) return null;
@@ -41,7 +50,21 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 
 const SearchDialogComponent = ({ open, onDone }: Props) => {
   const router = useRouter();
-  const autocomplete = useSearch();
+  const [canonicalOnly, setCanonicalOnly] = useState<boolean>(readCanonicalOnly);
+  const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
+  // Explicit `true` (not just omitted) when off — useSearch uses this to tell
+  // "user asked for unrestricted search" apart from "caller has no opinion",
+  // and drops the canonical-plus-scoped-spaces eligibility filter accordingly.
+  const autocomplete = useSearch({ enabled: open, includeNonCanonical: canonicalOnly ? false : true });
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
+
+  const toggleCanonicalOnly = useCallback(() => {
+    setCanonicalOnly(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') window.localStorage.setItem(SEARCH_CANONICAL_ONLY_KEY, String(next));
+      return next;
+    });
+  }, []);
   const { hydrate } = useSyncEngine();
 
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
@@ -65,7 +88,14 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     view = 'createEntity';
   }
 
-  const hasResults = autocomplete.query && autocomplete.results.length > 0;
+  const hasResults = autocomplete.results.length > 0;
+  const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
+  const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    scrollRef: resultsScrollRef,
+  });
 
   useKey('Enter', () => {
     if (!hasResults) return;
@@ -126,7 +156,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
             )}
             {view === 'selectEntity' && (
               <>
-                <div className={cx('relative p-1', autocomplete.results.length > 0 && 'border-b border-grey-02')}>
+                <div className="relative border-b border-grey-02 p-1">
                   <AnimatePresence mode="wait">
                     {autocomplete.isLoading ? (
                       <div className="absolute top-[50%] left-4 z-100">
@@ -160,8 +190,39 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                     value={autocomplete.query}
                   />
                 </div>
+                <div className="w-full">
+                  <button
+                    type="button"
+                    onClick={() => setIsShowingAdvanced(prev => !prev)}
+                    aria-expanded={isShowingAdvanced}
+                    className="flex w-full justify-end border-b border-grey-02 px-2 py-1"
+                  >
+                    <div className="inline-flex items-center gap-1">
+                      <span className="text-[0.6875rem] text-grey-04">Advanced</span>
+                      <span className={cx('transition duration-300 ease-in-out', isShowingAdvanced && 'scale-y-[-1]')}>
+                        <ChevronDownSmall color="grey-04" />
+                      </span>
+                    </div>
+                  </button>
+                  <ResizableContainer>
+                    {isShowingAdvanced && (
+                      <div className="border-b border-grey-02 px-4 py-2">
+                        <button
+                          type="button"
+                          onClick={toggleCanonicalOnly}
+                          aria-pressed={canonicalOnly}
+                          title="Limit results to the canonical graph plus your spaces. Turn off to search all entities."
+                          className="flex w-full items-center justify-between text-footnoteMedium text-grey-04 transition-colors hover:text-text"
+                        >
+                          <span className="whitespace-nowrap">Canonical only</span>
+                          <Toggle checked={canonicalOnly} />
+                        </button>
+                      </div>
+                    )}
+                  </ResizableContainer>
+                </div>
                 <ResizableContainer duration={0.15}>
-                  <ResultsList>
+                  <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
                     {autocomplete.isEmpty ? (
                       isValidEntityId ? (
                         <div className="px-2 pb-1">
@@ -204,6 +265,11 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         </div>
                       </motion.div>
                     ))}
+                    {autocomplete.isFetchingNextPage ? (
+                      <div className="flex items-center justify-center py-2 text-smallButton">
+                        <Dots />
+                      </div>
+                    ) : null}
                   </ResultsList>
                 </ResizableContainer>
               </>

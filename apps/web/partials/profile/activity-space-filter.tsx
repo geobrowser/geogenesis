@@ -58,14 +58,13 @@ export function ActivitySpaceFilter({ entityId, spaceId }: Props) {
     <Menu
       open={open}
       onOpenChange={onOpenChange}
-      align="start"
       asChild
       trigger={
         <SmallButton variant="secondary" icon={<ChevronDownSmall />}>
           {name}
         </SmallButton>
       }
-      className="flex max-h-[300px] max-w-[250px] flex-col overflow-y-auto"
+      className="flex max-w-[250px] flex-col"
     >
       {spacesWithAll.map(space => (
         <ActivitySpaceFilterItem

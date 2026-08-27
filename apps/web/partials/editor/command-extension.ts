@@ -33,62 +33,63 @@ const CommandExtension = Extension.create<{
 });
 
 // Inspired By https://github.com/wenerme/wode/blob/b66696f9ba60038e9b86b62e2624aa36e4e91524/apps/demo/src/contents/TipTap/TipTapPageContent.tsx
-export const createCommandExtension = (spaceId: string) => CommandExtension.configure({
-  suggestion: {
-    items: ({ query }) => {
-      // Allows us to filter the suggestion items by typing immediately after opening the command menu
-      return getCommandItems(spaceId)
-        .filter(v => v.command)
-        .filter(v => v.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-    },
-    render() {
-      let reactRenderer: ReactRenderer<any, any>;
-      let popup: HTMLDivElement;
+export const createCommandExtension = (spaceId: string) =>
+  CommandExtension.configure({
+    suggestion: {
+      items: ({ query }) => {
+        // Allows us to filter the suggestion items by typing immediately after opening the command menu
+        return getCommandItems(spaceId)
+          .filter(v => v.command)
+          .filter(v => v.title.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
+      },
+      render() {
+        let reactRenderer: ReactRenderer<any, any>;
+        let popup: HTMLDivElement;
 
-      return {
-        onStart: props => {
-          reactRenderer = new ReactRenderer(CommandList, {
-            props,
-            editor: props.editor,
-          });
-          if (!props.clientRect) {
-            return;
-          }
+        return {
+          onStart: props => {
+            reactRenderer = new ReactRenderer(CommandList, {
+              props,
+              editor: props.editor,
+            });
+            if (!props.clientRect) {
+              return;
+            }
 
-          popup = document.createElement('div');
-          popup.style.position = 'absolute';
-          popup.style.zIndex = '9999';
-          popup.appendChild(reactRenderer.element);
-          document.body.appendChild(popup);
+            popup = document.createElement('div');
+            popup.style.position = 'absolute';
+            popup.style.zIndex = '9999';
+            popup.appendChild(reactRenderer.element);
+            document.body.appendChild(popup);
 
-          updatePosition(popup, props.clientRect as () => DOMRect | null);
-        },
-
-        onUpdate(props) {
-          reactRenderer.updateProps(props);
-
-          if (props.clientRect) {
             updatePosition(popup, props.clientRect as () => DOMRect | null);
-          }
-        },
+          },
 
-        onKeyDown(props) {
-          if (props.event.key === 'Escape') {
-            popup.style.display = 'none';
-            return true;
-          }
+          onUpdate(props) {
+            reactRenderer.updateProps(props);
 
-          return reactRenderer?.ref?.onKeyDown(props) ?? false;
-        },
+            if (props.clientRect) {
+              updatePosition(popup, props.clientRect as () => DOMRect | null);
+            }
+          },
 
-        onExit() {
-          popup.remove();
-          reactRenderer.destroy();
-        },
-      };
+          onKeyDown(props) {
+            if (props.event.key === 'Escape') {
+              popup.style.display = 'none';
+              return true;
+            }
+
+            return reactRenderer?.ref?.onKeyDown(props) ?? false;
+          },
+
+          onExit() {
+            popup.remove();
+            reactRenderer.destroy();
+          },
+        };
+      },
     },
-  },
-});
+  });
 
 function updatePosition(popup: HTMLDivElement, clientRect: () => DOMRect | null) {
   const rect = clientRect();

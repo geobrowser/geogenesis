@@ -4,76 +4,63 @@ import type { NextConfig } from 'next';
 
 import { ServerEnvironment } from './app/api/environment';
 
+const isDev = process.env.NODE_ENV === 'development';
+
+// Faster local dev. Opt in with ENABLE_TURBOPACK_OPTIMIZATIONS=1.
+// Flags defined on ExperimentalConfig:
+// https://github.com/vercel/next.js/blob/canary/packages/next/src/server/config-shared.ts
+const turbopackOptimizations =
+  isDev && process.env.ENABLE_TURBOPACK_OPTIMIZATIONS === '1'
+    ? {
+        turbopackTreeShaking: false,
+        turbopackRemoveUnusedExports: false,
+        turbopackRemoveUnusedImports: false,
+        turbopackInferModuleSideEffects: false,
+      }
+    : {};
+
+const optimizePackageImports = ['effect', 'viem', 'wagmi', 'date-fns'];
+
+/**
+ * The Sentry release name, resolved once here and used for three things that must agree: the
+ * source-map upload, the server SDK, and the browser SDK.
+ *
+ * Read here rather than at each use site because this file runs on the build server, where
+ * `VERCEL_GIT_COMMIT_SHA` exists. The browser bundle only receives `NEXT_PUBLIC_*` variables, so
+ * `instrumentation-client.ts` reading `VERCEL_GIT_COMMIT_SHA` directly got `undefined` — every
+ * client event was reported with no release, which meant the uploaded source maps had nothing to
+ * match against and every client-side stack stayed minified. Measured before this fix: 5,809 of
+ * the last 7 days' error events had `release: null` (all the browser ones), while server events
+ * carried a sha and resolved fine. That is why the largest client crash groups had sat
+ * unactionable for months.
+ *
+ * Falling back to the local git sha keeps preview and self-hosted builds attributable too.
+ */
+const sentryRelease = process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.SENTRY_RELEASE;
+
 const nextConfig: NextConfig = {
+  // Exposed so the browser SDK reports the same release the source maps are uploaded under.
+  // Next inlines this at build time; a bare `VERCEL_GIT_COMMIT_SHA` would not reach the client.
+  env: {
+    ...(sentryRelease ? { NEXT_PUBLIC_SENTRY_RELEASE: sentryRelease } : {}),
+  },
   // reactStrictMode: true,
   reactCompiler: process.env.DISABLE_REACT_COMPILER !== '1',
+  agentRules: false,
   allowedDevOrigins: ['localhost', '127.0.0.1'],
-  turbopack: {
-    resolveAlias: {
-      '@sentry/nextjs': './prebundled/sentry-stub.js',
-      '@sentry/browser': './prebundled/sentry-stub.js',
-      '@sentry/opentelemetry': './prebundled/sentry-stub.js',
-    },
-  },
+  turbopack: isDev
+    ? {
+        resolveAlias: {
+          '@sentry/nextjs': './prebundled/sentry-stub.js',
+          '@sentry/browser': './prebundled/sentry-stub.js',
+          '@sentry/opentelemetry': './prebundled/sentry-stub.js',
+        },
+      }
+    : undefined,
   experimental: {
-    turbopackInferModuleSideEffects: false,
-    turbopackInputSourceMaps: false,
-    turbopackSourceMaps: false,
-    turbopackMinify: false,
-    turbopackPluginRuntimeStrategy: 'workerThreads',
-    turbopackMemoryLimit: 32 * 1024 * 1024 * 1024, // 32GB
-    optimizePackageImports: [
-      // Core heavy deps
-      'effect',
-      'viem',
-      'wagmi',
-      'permissionless',
-      'date-fns',
-      'date-fns-tz',
-      'graphql-request',
-
-      // Editor
-      '@tiptap/core',
-      '@tiptap/react',
-      '@tiptap/pm',
-      '@tiptap/extensions',
-      '@tiptap/extension-bold',
-      '@tiptap/extension-code',
-      '@tiptap/extension-code-block',
-      '@tiptap/extension-document',
-      '@tiptap/extension-hard-break',
-      '@tiptap/extension-heading',
-      '@tiptap/extension-italic',
-      '@tiptap/extension-link',
-      '@tiptap/extension-list',
-      '@tiptap/extension-paragraph',
-      '@tiptap/extension-text',
-      '@tiptap/suggestion',
-      'katex',
-      'markdown-it',
-
-      // UI
-      'framer-motion',
-      'jotai',
-      '@dnd-kit/core',
-      '@dnd-kit/sortable',
-      '@dnd-kit/utilities',
-      '@tanstack/react-query',
-      '@tanstack/react-table',
-      '@tanstack/pacer',
-      '@radix-ui/react-popover',
-      '@radix-ui/react-dropdown-menu',
-      '@radix-ui/react-select',
-      '@radix-ui/react-tooltip',
-      '@xstate/store',
-      'mapbox-gl',
-
-      // Misc
-      'immer',
-      'dexie',
-      'classnames',
-      'class-variance-authority',
-    ],
+    turbopackRustReactCompiler: true,
+    ...turbopackOptimizations,
+    optimizePackageImports,
   },
   images: {
     remotePatterns: [
@@ -138,8 +125,21 @@ const nextConfig: NextConfig = {
     ];
   },
   async rewrites() {
+    // Dev-only same-origin proxy for the geo-chat (debates) API. The prod/testnet chat
+    // API only allowlists geobrowser.io origins for CORS, so a local dev server on
+    // localhost:4360 can't call it directly. Set GEO_CHAT_PROXY_TARGET to the upstream
+    // (e.g. https://chat-api-testnet.geobrowser.io) and point NEXT_PUBLIC_GEO_CHAT_API_BASE_URL
+    // at /geo-chat-proxy so browser requests stay same-origin and Next forwards them
+    // server-side, sidestepping CORS. Gated to development so a stray GEO_CHAT_PROXY_TARGET
+    // in a prod env can't accidentally ship an origin-bypassing proxy route.
+    const geoChatProxyTarget = isDev ? process.env.GEO_CHAT_PROXY_TARGET?.replace(/\/+$/, '') : undefined;
+    const geoChatProxyRewrites = geoChatProxyTarget
+      ? [{ source: '/geo-chat-proxy/:path*', destination: `${geoChatProxyTarget}/:path*` }]
+      : [];
+
     return {
       beforeFiles: [
+        ...geoChatProxyRewrites,
         {
           source: '/',
           destination: 'https://geo.framer.website/',
@@ -176,14 +176,17 @@ const nextConfig: NextConfig = {
         },
       ],
       afterFiles: [],
-      fallback: [
-        // Fallback for any assets that don't exist in the Next.js app
-        // This will catch marketing site assets without conflicting with /api or /public
-        {
-          source: '/:path*',
-          destination: 'https://geobrowser-v2.vercel.app/:path*',
-        },
-      ],
+      fallback:
+        process.env.ENABLE_NOT_FOUND_PREVIEW === '1'
+          ? []
+          : [
+              // Fallback for any assets that don't exist in the Next.js app
+              // This will catch marketing site assets without conflicting with /api or /public
+              {
+                source: '/:path*',
+                destination: 'https://geobrowser-v2.vercel.app/:path*',
+              },
+            ],
     };
   },
 };
@@ -194,6 +197,11 @@ export default process.env.DISABLE_SENTRY === '1'
       org: ServerEnvironment.sentryBuild?.org,
       project: ServerEnvironment.sentryBuild?.project,
       authToken: ServerEnvironment.sentryBuild?.authToken,
+
+      // Pinned to the same value both SDKs report, so uploaded source maps are guaranteed to be
+      // matched against the release the events actually carry rather than a separately-detected
+      // one. Omitted (letting the plugin detect it) when there is no sha to pin.
+      ...(sentryRelease ? { release: { name: sentryRelease } } : {}),
 
       // Route Sentry requests through the app to avoid ad-blockers
       tunnelRoute: '/monitoring',

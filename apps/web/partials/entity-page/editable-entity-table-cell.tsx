@@ -7,6 +7,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Source } from '~/core/blocks/data/source';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
@@ -21,7 +22,8 @@ import { PageStringField, TableImageField, TableStringField } from '~/design-sys
 import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
-import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
+import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
@@ -32,6 +34,7 @@ import {
   writeValue,
 } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
+import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 
 type Props = {
   entityId: string;
@@ -50,7 +53,9 @@ type Props = {
   source: Source;
   imageUploadingFor?: Set<string>;
   autoFocus?: boolean;
+  focusRequestKey?: number;
   collectionTypeFilters?: { id: string; name: string | null }[];
+  openedWithMainViewEditing?: boolean;
 };
 
 export function EditableEntityTableCell({
@@ -70,7 +75,9 @@ export function EditableEntityTableCell({
   source,
   imageUploadingFor,
   autoFocus = false,
+  focusRequestKey,
   collectionTypeFilters,
+  openedWithMainViewEditing = false,
 }: Props) {
   const { storage } = useMutate();
   const isNameCell = property.id === SystemIds.NAME_PROPERTY;
@@ -98,6 +105,7 @@ export function EditableEntityTableCell({
           variant="tableCell"
           width="full"
           autoFocus={autoFocus}
+          focusRequestKey={focusRequestKey}
           relationValueTypes={collectionTypeFilters}
         />
       );
@@ -113,38 +121,51 @@ export function EditableEntityTableCell({
               value={name ?? ''}
               onEnterKey={onAddPlaceholder}
               onChange={value => {
-                onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
+                onChangeEntry(entityId, spaceId, { type: 'SET_NAME', name: value });
               }}
             />
-            <div className="absolute top-1/2 right-0 hidden -translate-y-1/2 group-hover/name-cell:block">
-              <NavigateButton spaceId={currentSpaceId} entityId={entityId} />
-            </div>
+            {!isPlaceholderRow && (
+              <div className="invisible flex shrink-0 flex-nowrap items-center gap-0.5 group-hover/name-cell:visible md:hidden">
+                <DataBlockOpenSidePanelButton
+                  entityId={entityId}
+                  entitySpaceId={spaceId}
+                  openedWithMainViewEditing={openedWithMainViewEditing}
+                />
+                <NavigateButton spaceId={currentSpaceId} entityId={entityId} />
+              </div>
+            )}
           </div>
         ) : (
-          <CollectionMetadata
-            view="TABLE"
-            isEditing={true}
-            name={name}
-            currentSpaceId={currentSpaceId}
-            entityId={entityId}
-            spaceId={toSpaceId}
-            collectionId={collectionId}
-            relationId={relationId}
-            verified={verified}
-            onLinkEntry={onLinkEntry}
-          >
-            <div className="pointer-events-auto">
-              <PageStringField
-                variant="tableCell"
-                placeholder="Entity name..."
-                value={name ?? ''}
-                onEnterKey={onAddPlaceholder}
-                onChange={value => {
-                  onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
-                }}
-              />
+          <div className="group/name-cell-collection-table flex w-full min-w-0 items-center gap-1">
+            <div className="relative min-w-0 flex-1">
+              <CollectionMetadata
+                view="TABLE"
+                isEditing={true}
+                name={name}
+                currentSpaceId={currentSpaceId}
+                entityId={entityId}
+                spaceId={toSpaceId}
+                collectionId={collectionId}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                showSidePanel={!isPlaceholderRow}
+                openedWithMainViewEditing={openedWithMainViewEditing}
+              >
+                <div className="pointer-events-auto">
+                  <PageStringField
+                    variant="tableCell"
+                    placeholder="Entity name..."
+                    value={name ?? ''}
+                    onEnterKey={onAddPlaceholder}
+                    onChange={value => {
+                      onChangeEntry(entityId, currentSpaceId, { type: 'SET_NAME', name: value });
+                    }}
+                  />
+                </div>
+              </CollectionMetadata>
             </div>
-          </CollectionMetadata>
+          </div>
         )}
       </>
     );
@@ -166,7 +187,7 @@ export function EditableEntityTableCell({
   }
 
   return (
-    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
       <ValueGroup entityId={entityId} property={property} spaceId={spaceId} />
     </div>
   );
@@ -257,10 +278,10 @@ function RelationsGroup({
   }
 
   return (
-    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
+    <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
       {dedupedRelations.map(r => {
         return (
-          <div key={`relation-${r.id}-${r.toEntity.value}`} className="min-w-0 max-w-full">
+          <div key={`relation-${r.id}-${r.toEntity.value}`} className="max-w-full min-w-0">
             <LinkableRelationChip
               small
               isEditing
@@ -326,11 +347,24 @@ function NavigateButton({ spaceId, entityId }: { spaceId: string; entityId: stri
   const router = useRouter();
 
   const handleClick = (e: MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     router.push(NavUtils.toEntity(spaceId, entityId, true));
   };
 
-  return <SquareButton icon={<RightArrowLongSmall />} onClick={handleClick} />;
+  return (
+    <Link
+      href={NavUtils.toEntity(spaceId, entityId, true)}
+      entityId={entityId}
+      spaceId={spaceId}
+      aria-label="Navigate to entity"
+      className="inline-flex shrink-0 items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+      onMouseDown={e => e.stopPropagation()}
+      onClick={handleClick}
+    >
+      <RightArrowLongChip />
+    </Link>
+  );
 }
 
 function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
@@ -344,9 +378,7 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
     writeValue(storage, entityId, spaceId, property, newValue, rawValue);
   };
 
-  const cellWrap = (node: ReactNode) => (
-    <div className="min-w-0 w-full max-w-full">{node}</div>
-  );
+  const cellWrap = (node: ReactNode) => <div className="w-full max-w-full min-w-0">{node}</div>;
 
   switch (renderableType) {
     case 'INTEGER':
@@ -388,9 +420,7 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
     case 'BOOLEAN': {
       const checked = getChecked(value);
 
-      return cellWrap(
-        <Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />
-      );
+      return cellWrap(<Checkbox checked={checked} onChange={() => onWriteValue(!checked ? '1' : '0')} />);
     }
     case 'DATE':
     case 'DATETIME':
@@ -399,7 +429,7 @@ function ValueGroup({ entityId, property, spaceId }: ValueGroupProps) {
         <DateField
           key={value || 'empty'}
           variant="tableCell"
-          className="min-w-0 max-w-full"
+          className="max-w-full min-w-0"
           isEditing={true}
           value={value}
           propertyId={property.id}

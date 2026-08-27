@@ -10,12 +10,15 @@ import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
+import { propertyForSort, shouldIncludeWithoutValueForPropertySort } from '~/core/utils/column-sort';
 import { sortRows } from '~/core/utils/utils';
 
 import { useProperties } from '../../hooks/use-properties';
+import { DEFAULT_DATA_BLOCK_PAGE_SIZE } from './block-ontology-ids';
 import { mapSelectorLexiconToSourceEntity, parseSelectorIntoLexicon } from './data-selectors';
 import { Filter, FilterMode } from './filters';
 import { Source } from './source';
+import { useBlockPageSize } from './use-block-page-size';
 import { useCollection } from './use-collection';
 import { useFilters } from './use-filters';
 import { mappingToCell, mappingToRows } from './use-mapping';
@@ -25,10 +28,8 @@ import { useSort } from './use-sort';
 import { useSource } from './use-source';
 import { useView } from './use-view';
 
-export const PAGE_SIZE = 9;
-
-/** Max entities to hydrate for filter value suggestions (names, text values, relations) beyond the current table page. */
-const FILTER_SUGGESTION_ENTITY_CAP = 5000;
+/** Default when no Page size is set on the block relation. Prefer `useDataBlock().pageSize`. */
+export const PAGE_SIZE = DEFAULT_DATA_BLOCK_PAGE_SIZE;
 
 interface RenderablesQueryKey {
   sourceType: Source['type'];
@@ -47,18 +48,34 @@ interface UseDataBlockOptions {
   filterState?: Filter[];
   filterMode?: FilterMode;
   canEdit?: boolean;
-  fetchFilterSuggestions?: boolean;
 }
 
 export function useDataBlock(options?: UseDataBlockOptions) {
-  const { entityId, spaceId, pageNumber, relationId, setPage } = useDataBlockInstance();
+  const {
+    entityId,
+    spaceId,
+    pageNumber,
+    currentAfter,
+    currentOffset,
+    relationId,
+    setPage,
+    recordEndCursor,
+    reset: resetPagination,
+    canJumpTo,
+    maxJumpPages,
+  } = useDataBlockInstance();
   const { storage } = useMutate();
-  const fetchFilterSuggestions = options?.fetchFilterSuggestions ?? false;
 
-  const { entity, isLoading: isBlockEntityLoading } = useQueryEntity({
+  const { entity, isLoading: isBlockEntityHydrating } = useQueryEntity({
     spaceId: spaceId,
     id: entityId,
   });
+
+  // `useQueryEntity` stays loading until its remote hydration settles, even when the
+  // entity already resolves from the local store. A block the user just created exists
+  // only locally, so that fetch comes back empty and the skeleton would show for the
+  // length of it.
+  const isBlockEntityLoading = isBlockEntityHydrating && !entity;
 
   const {
     filterState: dbFilterState,
@@ -74,7 +91,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     setTemporaryFilterMode,
   } = useFilters(options?.canEdit);
 
-  const { source, setSource } = useSource({ filterState: dbFilterState, setFilterState });
+  // Feed the resolved (names-included) state in so `setSource`'s produce()
+  // round-trip preserves columnName/valueName on the OTHER filters while the
+  // new filter list is being re-resolved.
+  const { source, setSource } = useSource({ filterState: dbResolvedFilterState, setFilterState });
   const { relationBlockSourceRelations } = useRelationsBlock({ source, filterState: dbFilterState });
 
   const activeFilterState = options?.canEdit ? dbResolvedFilterState : temporaryFilters;
@@ -91,10 +111,14 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     viewRelation,
     setView,
     shownColumnRelations,
+    orderedShownColumnRelations,
     toggleProperty,
+    hideAllShownPropertyColumns,
+    reorderShownPropertyRelations,
   } = useView();
 
   const { sortState, setSortState } = useSort(options?.canEdit);
+  const pageSize = useBlockPageSize();
 
   const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
   const where = React.useMemo(
@@ -103,7 +127,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   );
 
   // Use the mapping to get the potential renderable properties.
-  const propertiesSchema = useProperties(shownColumnIds);
+  const propertiesSchema = useProperties(shownColumnIds, spaceId);
 
   // Map sortState to server-side sort params — used by all source types.
   // dataType is required by the backend's entitiesOrderedByProperty SQL function
@@ -112,12 +136,15 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // (allows sorting by properties not currently visible in the table).
   const serverSort = React.useMemo(() => {
     if (!sortState) return undefined;
-    const property =
-      propertiesSchema?.[sortState.columnId] ?? filterableProperties.find(p => p.id === sortState.columnId);
+    const property = propertyForSort(sortState.columnId, [
+      ...(propertiesSchema ? Object.values(propertiesSchema) : []),
+      ...filterableProperties,
+    ]);
     return {
       propertyId: sortState.columnId,
       direction: sortState.direction,
       dataType: property?.dataType?.toLowerCase(),
+      includeWithoutValue: shouldIncludeWithoutValueForPropertySort(sortState.columnId),
     };
   }, [sortState, propertiesSchema, filterableProperties]);
 
@@ -129,55 +156,28 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isLoading: isCollectionLoading,
     collectionLength,
     filterSuggestionEntityIds: collectionFilterSuggestionEntityIds,
+    endCursor: collectionEndCursor,
+    hasNextPage: collectionHasNextPage,
+    isPlaceholderData: isCollectionPlaceholder,
   } = useCollection({
     source,
-    first: PAGE_SIZE,
-    skip: pageNumber * PAGE_SIZE,
+    first: pageSize,
+    pageNumber,
+    after: currentAfter,
+    offset: currentOffset !== undefined ? currentOffset * pageSize : undefined,
     where: where,
     sort: serverSort,
   });
 
-  const collectionSuggestionIdSlice = React.useMemo(() => {
-    if (source.type !== 'COLLECTION' || !collectionFilterSuggestionEntityIds?.length) return undefined;
-    return collectionFilterSuggestionEntityIds.slice(0, FILTER_SUGGESTION_ENTITY_CAP);
-  }, [source.type, collectionFilterSuggestionEntityIds]);
-
-  useQueryEntities({
-    where: { id: { in: collectionSuggestionIdSlice ?? [] } },
-    enabled: fetchFilterSuggestions && Boolean(collectionSuggestionIdSlice?.length),
-    first: collectionSuggestionIdSlice?.length ?? 0,
-    skip: 0,
-    placeholderData: keepPreviousData,
-    deferUntilFetched: true,
-  });
-
-  const {
-    entities: queryBlockSuggestionEntities,
-    isFetched: isQueryBlockSuggestionEntitiesFetched,
-  } = useQueryEntities({
-    where,
-    enabled: fetchFilterSuggestions && (source.type === 'SPACES' || source.type === 'GEO'),
-    first: FILTER_SUGGESTION_ENTITY_CAP,
-    skip: 0,
-    placeholderData: keepPreviousData,
-    deferUntilFetched: true,
-  });
-
-  const filterSuggestionEntityIds = React.useMemo(() => {
-    if (source.type === 'COLLECTION') {
-      return collectionFilterSuggestionEntityIds;
-    }
-    if (source.type === 'SPACES' || source.type === 'GEO') {
-      if (!isQueryBlockSuggestionEntitiesFetched) return undefined;
-      return queryBlockSuggestionEntities.map(e => e.id);
-    }
-    return undefined;
-  }, [
-    source.type,
-    collectionFilterSuggestionEntityIds,
-    isQueryBlockSuggestionEntitiesFetched,
-    queryBlockSuggestionEntities,
-  ]);
+  // For COLLECTION sources we already have the row ids locally (from
+  // collectionRelations), so we expose them without any network work. For
+  // SPACES/GEO sources we used to fire a massive entitiesConnection fetch
+  // here to seed filter-suggestion scoping; the filter dropdown has since
+  // been rewritten to paginate against the REST /search endpoint directly
+  // and no longer consumes these ids, so this hook intentionally returns
+  // undefined for non-COLLECTION sources. The field is kept for
+  // COLLECTION consumers that still use it downstream.
+  const filterSuggestionEntityIds = source.type === 'COLLECTION' ? collectionFilterSuggestionEntityIds : undefined;
 
   // For COLLECTION sources, server-side filtering is now applied in useCollection
   // We just need to organize the data here
@@ -193,15 +193,48 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     entities: queriedEntities,
     isLoading: isQueryEntitiesLoading,
     isFetched: isQueryEntitiesFetched,
+    isPlaceholderData: isQueryEntitiesPlaceholder,
+    endCursor: queriedEndCursor,
+    hasNextPage: queriedHasNextPage,
   } = useQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
-    first: PAGE_SIZE + 1,
-    skip: pageNumber * PAGE_SIZE,
+    first: pageSize,
+    after: currentAfter,
+    offset: currentOffset !== undefined ? currentOffset * pageSize : undefined,
     placeholderData: keepPreviousData,
     deferUntilFetched: true,
+    includeUnpublishedLocal: true,
     sort: serverSort,
   });
+
+  // Anchor the cursor of the page we just fetched so subsequent forward
+  // navigation (single steps or jumps) starts from the closest known anchor
+  // and keeps the SQL offset small. Skip while serving placeholder data —
+  // `queriedEndCursor` is still from the prior page in that window and
+  // would write a wrong-page anchor.
+  React.useEffect(() => {
+    if (source.type !== 'SPACES' && source.type !== 'GEO') return;
+    if (!isQueryEntitiesFetched) return;
+    if (isQueryEntitiesPlaceholder) return;
+    recordEndCursor(pageNumber, queriedEndCursor);
+  }, [source.type, isQueryEntitiesFetched, isQueryEntitiesPlaceholder, queriedEndCursor, pageNumber, recordEndCursor]);
+
+  React.useEffect(() => {
+    if (source.type !== 'COLLECTION') return;
+    if (!serverSort) return;
+    if (!isCollectionFetched) return;
+    if (isCollectionPlaceholder) return;
+    recordEndCursor(pageNumber, collectionEndCursor);
+  }, [
+    source.type,
+    serverSort,
+    isCollectionFetched,
+    isCollectionPlaceholder,
+    collectionEndCursor,
+    pageNumber,
+    recordEndCursor,
+  ]);
 
   const mappingKey = React.useMemo(() => stableStringify(mapping), [mapping]);
   const sourceKey = React.useMemo(() => {
@@ -329,12 +362,28 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     return [];
   }, [collectionData.items, collectionData.relations, queriedEntities, relationsMapping, shownColumnIds, source.type]);
 
-  const totalPages = Math.ceil(collectionData.totalCount / PAGE_SIZE);
+  // Reset to page 0 (and drop all cursor anchors) when the filter or sort
+  // signature changes — cursors are tied to a specific filter+sort combination
+  // and stop being meaningful when either changes.
+  const sortKey = React.useMemo(() => stableStringify(serverSort ?? null), [serverSort]);
+  const lastResetKeyRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    const key = `${filterStateKey}::${sortKey}::${pageSize}`;
+    if (lastResetKeyRef.current !== null && lastResetKeyRef.current !== key) {
+      resetPagination();
+    }
+    lastResetKeyRef.current = key;
+  }, [filterStateKey, sortKey, pageSize, resetPagination]);
+
+  const totalPages = Math.ceil(collectionData.totalCount / pageSize);
   const sortedRows = React.useMemo(
-    () => (sortState ? rows.slice(0, PAGE_SIZE) : (sortRows(rows)?.slice(0, PAGE_SIZE) ?? [])),
-    [rows, sortState]
+    () => (sortState ? rows.slice(0, pageSize) : (sortRows(rows)?.slice(0, pageSize) ?? [])),
+    [pageSize, rows, sortState]
   );
-  const properties = React.useMemo(() => (propertiesSchema ? Object.values(propertiesSchema) : []), [propertiesSchema]);
+  const properties = React.useMemo(() => {
+    if (!propertiesSchema) return [];
+    return shownColumnIds.map(id => propertiesSchema[id]).filter((p): p is Property => Boolean(p));
+  }, [propertiesSchema, shownColumnIds]);
 
   const setName = (newName: string) => {
     storage.entities.name.set(entityId, spaceId, newName);
@@ -365,12 +414,25 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   }
 
   // @TODO: Returned data type should be a FSM depending on the source.type
-  // For collections, check if there are more items beyond the current page
+  // For COLLECTION with a server-side sort, the response is a single page so
+  // count math is misleading (totalCount caps at pageSize when filter+sort
+  // are combined) — read hasNextPage off the connection. For unsorted
+  // COLLECTION we fetched every matching id, so count math is accurate.
+  // For SPACES/GEO we read the cursor signal directly off the GraphQL response.
   const hasNextPage =
     source.type === 'COLLECTION'
-      ? (pageNumber + 1) * PAGE_SIZE < collectionData.totalCount
-      : rows
-        ? rows.length > PAGE_SIZE
+      ? serverSort
+        ? collectionHasNextPage
+        : (pageNumber + 1) * pageSize < collectionData.totalCount
+      : source.type === 'GEO' || source.type === 'SPACES'
+        ? queriedHasNextPage
+        : false;
+
+  const isPlaceholderData =
+    source.type === 'COLLECTION'
+      ? isCollectionPlaceholder
+      : source.type === 'GEO' || source.type === 'SPACES'
+        ? isQueryEntitiesPlaceholder
         : false;
 
   const result = {
@@ -384,13 +446,16 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     propertiesSchema,
 
     pageNumber,
-    pageSize: PAGE_SIZE,
+    pageSize,
     hasNextPage,
     hasPreviousPage: pageNumber > 0,
     setPage,
+    canJumpTo,
+    maxJumpPages,
 
     isLoading,
     isFetched,
+    isPlaceholderData,
 
     name: entity?.name ?? null,
     setName,
@@ -408,7 +473,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     viewRelation,
     setView,
     shownColumnRelations,
+    orderedShownColumnRelations,
     toggleProperty,
+    hideAllShownPropertyColumns,
+    reorderShownPropertyRelations,
 
     // From useSource
     source,
@@ -441,8 +509,15 @@ const DataBlockContext = React.createContext<{
   entityId: string;
   spaceId: string;
   relationId: string;
+  knownSourceType: Source['type'] | undefined;
   pageNumber: number;
+  currentAfter: string | undefined;
+  currentOffset: number | undefined;
   setPage: (page: number | 'next' | 'previous') => void;
+  recordEndCursor: (fetchedPage: number, endCursor: string | null) => void;
+  reset: () => void;
+  canJumpTo: (target: number) => boolean;
+  maxJumpPages: number;
 } | null>(null);
 
 interface Props {
@@ -450,20 +525,43 @@ interface Props {
   children: React.ReactNode;
   entityId: string;
   relationId: string;
+  /** Lets `useSource` resolve a freshly inserted block before its source relation is written. */
+  knownSourceType?: Source['type'];
 }
 
-export function DataBlockProvider({ spaceId, children, entityId, relationId }: Props) {
-  const { pageNumber, setPage } = usePagination(entityId);
+export function DataBlockProvider({ spaceId, children, entityId, relationId, knownSourceType }: Props) {
+  const { pageNumber, currentAfter, currentOffset, setPage, recordEndCursor, reset, canJumpTo, maxJumpPages } =
+    usePagination(entityId);
 
   const store = React.useMemo(() => {
     return {
       spaceId,
       entityId,
       relationId,
+      knownSourceType,
       pageNumber,
+      currentAfter,
+      currentOffset,
       setPage,
+      recordEndCursor,
+      reset,
+      canJumpTo,
+      maxJumpPages,
     };
-  }, [spaceId, entityId, relationId, pageNumber, setPage]);
+  }, [
+    spaceId,
+    entityId,
+    relationId,
+    knownSourceType,
+    pageNumber,
+    currentAfter,
+    currentOffset,
+    setPage,
+    recordEndCursor,
+    reset,
+    canJumpTo,
+    maxJumpPages,
+  ]);
 
   return <DataBlockContext.Provider value={store}>{children}</DataBlockContext.Provider>;
 }
@@ -495,6 +593,8 @@ export function filterStateToWhere(filterState: Filter[], mode: FilterMode = 'AN
   for (const [, filters] of groups) {
     if (filters.length === 1) {
       groupConditions.push(buildSingleFilterWhere(filters[0]));
+    } else if (ID.equals(filters[0].columnId, SystemIds.SPACE_FILTER)) {
+      groupConditions.push(buildSpaceFiltersWhere(filters));
     } else if (mode === 'OR') {
       groupConditions.push(buildOrWhere(filters));
     } else {
@@ -560,6 +660,17 @@ function buildSingleFilterWhere(f: Filter): WhereCondition {
       return { spaces: [{ equals: f.value }] };
     }
     if (ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)) {
+      if (f.typesRelationSpaceId) {
+        return {
+          relations: [
+            {
+              typeOf: { id: { equals: SystemIds.TYPES_PROPERTY } },
+              toEntity: { id: { equals: f.value } },
+              space: { equals: f.typesRelationSpaceId },
+            },
+          ],
+        };
+      }
       return { types: [{ id: { equals: f.value } }] };
     }
     if (f.isBacklink || f.columnName === 'Backlink') {
@@ -573,6 +684,18 @@ function buildSingleFilterWhere(f: Filter): WhereCondition {
   }
 
   return {};
+}
+
+/** Multiple SPACE_FILTER */
+function buildSpaceFiltersWhere(filters: Filter[]): WhereCondition {
+  const ids = [...new Set(filters.map(f => f.value).filter((id): id is string => Boolean(id)))];
+  if (ids.length === 0) return {};
+  if (ids.length === 1) {
+    return buildSingleFilterWhere({ ...filters[0], value: ids[0] });
+  }
+  return {
+    spaces: ids.map(id => ({ equals: id })),
+  };
 }
 
 function buildOrWhere(filterState: Filter[]): WhereCondition {

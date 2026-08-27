@@ -1,6 +1,6 @@
 'use client';
 
-import { WagmiProvider, getGeoChain, useGeoLogin } from '@geogenesis/auth';
+import { WagmiProvider, useGeoLogin } from '@geogenesis/auth';
 import { createGeoWalletConfig, createMockConfig } from '@geogenesis/auth/wallet';
 
 import * as React from 'react';
@@ -11,9 +11,16 @@ import { Button } from '~/design-system/button';
 
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
+import { trackPrivyAuth } from '../analytics';
 import { Environment } from '../environment';
+import { GEOGENESIS } from './geo-chain';
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
-const CHAIN = getGeoChain('TESTNET');
+const isTestEnv = Environment.variables.isTestEnv;
+
+// Chain identity comes from the shared env-driven config (see
+// ~/core/wallet/geo-chain), never a hardcoded network literal.
+const CHAIN = GEOGENESIS;
 
 const realWalletConfig = createGeoWalletConfig({
   chain: CHAIN,
@@ -23,8 +30,9 @@ const realWalletConfig = createGeoWalletConfig({
 
 const mockConfig = createMockConfig(CHAIN);
 
-const isTestEnv = process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true';
-const config = isTestEnv ? mockConfig : realWalletConfig;
+const activeConfig = isTestEnv ? mockConfig : realWalletConfig;
+
+const config = activeConfig as unknown as React.ComponentProps<typeof WagmiProvider>['config'];
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
@@ -34,12 +42,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function GeoConnectButton() {
+function PrivyConnectButton() {
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
+  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
 
   const resetOnboarding = () => {
     setName('');
@@ -47,12 +56,15 @@ export function GeoConnectButton() {
     setAvatar('');
     setSpaceId('');
     setStep('start');
+    setPostOnboardingRedirect(null);
   };
 
+  // Reset is done on the explicit sign-in click below. Doing it here too
+  // would wipe the user's in-progress onboarding state if Privy fires
+  // onComplete on session restoration (e.g. when opening a new tab), which
+  // then syncs the cleared atoms back to the original tab via localStorage.
   const { login } = useGeoLogin({
-    onComplete: () => {
-      resetOnboarding();
-    },
+    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
   });
 
   const onLogin = () => {
@@ -60,5 +72,9 @@ export function GeoConnectButton() {
     login();
   };
 
-  return <Button onClick={onLogin}>Sign in</Button>;
+  return <Button onClick={onLogin}>Log in</Button>;
+}
+
+export function GeoConnectButton() {
+  return <PrivyConnectButton />;
 }

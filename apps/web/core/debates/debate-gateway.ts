@@ -1,0 +1,1079 @@
+'use client';
+
+import { CancelledError, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query';
+
+import * as React from 'react';
+
+import { isParticipantPositionsQueryKey } from '~/core/debates/participant-positions';
+import { isRematchClaimsQueryKey } from '~/core/debates/rematch-claims-query-key';
+import { queryClient } from '~/core/query-client';
+import {
+  claimResponseTargetKey,
+  isClaimResponseSummaryQueryKey,
+} from '~/core/responses/claim-response-summary-query-keys';
+
+import {
+  GeoChatRequestError,
+  type GeoChatSession,
+  type GetPrivyIdentityToken,
+  getGeoChatApiBaseUrl,
+  getGeoChatSession,
+  resetGeoChatSession,
+} from './api';
+
+export type DebateGatewaySession = GeoChatSession;
+
+export type DebateGatewayScope =
+  | { scope: 'space'; space_id: string }
+  | { scope: 'debate'; debate_id: string }
+  /** Subscribed only while the matchmaking hub is open, so presence fan-out stays narrow. */
+  | { scope: 'matchmaking' };
+
+export type MatchmakingSection = 'people' | 'claims' | 'matches';
+
+/**
+ * Why live updates are paused, when they are.
+ *
+ * Every pause used to collapse into the same `{ degraded, paused }`, so a client spending its
+ * command budget was indistinguishable from a dropped socket — and diagnosing GEO-2670 meant
+ * reading the subscription code rather than a log line. These are the distinctions that change what
+ * you would do about it:
+ *
+ * - `rate_limited` is a *client* fault. We sent more gateway commands than the session allows, so
+ *   the fix is to send fewer, not to wait.
+ * - `subscription_limit` is a ceiling we are sitting against; the account stream still works and
+ *   reconnecting would hit it again.
+ * - `disconnected` and `session` are ordinary transport trouble that a reconnect resolves.
+ * - `unsupported` means the server never advertised the debate capability, so nothing will recover
+ *   it without a deploy.
+ */
+export type DebateGatewayPauseReason =
+  | 'disconnected'
+  | 'session'
+  | 'rate_limited'
+  | 'subscription_limit'
+  | 'unsupported'
+  | 'error';
+
+export type DebateGatewaySnapshot = {
+  status: 'idle' | 'connecting' | 'ready' | 'degraded';
+  paused: boolean;
+  /** Set whenever `paused` is true, so a pause can be acted on rather than merely noticed. */
+  pauseReason: DebateGatewayPauseReason | null;
+  /** Capabilities advertised by the last READY. Used to detect `debate_matchmaking_v1`. */
+  capabilities: string[];
+};
+
+type DebateEventPayload = {
+  space_id?: string;
+  debate_id?: string;
+  rematch_session_id?: string;
+  claim_entity_ids?: string[];
+  sections?: MatchmakingSection[];
+};
+
+type DebateInvalidationEvent = {
+  event_id: string;
+  event_type: string;
+  payload: DebateEventPayload;
+};
+
+type GatewayEnvelope = {
+  v: number;
+  op: string;
+  seq?: number | null;
+  payload: unknown;
+};
+
+type ReadyPayload = {
+  capabilities?: string[];
+  subscriptions?: unknown[];
+};
+
+type WebSocketLike = {
+  readyState: number;
+  onopen: (() => void) | null;
+  onmessage: ((event: { data: unknown }) => void) | null;
+  onerror: (() => void) | null;
+  onclose: (() => void) | null;
+  send(value: string): void;
+  close(): void;
+};
+
+type DebateGatewayClientOptions = {
+  queryClient: QueryClient;
+  getSession: (getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string) => Promise<DebateGatewaySession>;
+  getApiBaseUrl: () => string;
+  createWebSocket?: (url: string) => WebSocketLike;
+  random?: () => number;
+};
+
+type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
+
+const OPEN = 1;
+const CAPABILITY = 'debate_invalidations_v1';
+export const MATCHMAKING_CAPABILITY = 'debate_matchmaking_v1';
+const EMPTY_CAPABILITIES: string[] = [];
+const MATCHMAKING_SECTIONS: MatchmakingSection[] = ['people', 'claims', 'matches'];
+const MAX_RECENT_EVENT_IDS = 256;
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
+const HANDSHAKE_TIMEOUT_MS = 10_000;
+const INVALIDATION_COALESCE_MS = 50;
+const INVALIDATION_RETRY_BASE_MS = 250;
+/**
+ * How long an unrecognised `ERROR` frame suppresses another reconnect. One recycle repairs a
+ * transient rejection; a second inside this window means it is reproducing, and spinning on it
+ * would be worse than running degraded.
+ */
+const ERROR_RECONNECT_COOLDOWN_MS = 60_000;
+/** Re-flushes after the first attempt fails transiently, so up to four attempts in all. */
+const MAX_INVALIDATION_RETRIES = 3;
+const BROAD_INVALIDATION_KEY = 'debates:all';
+
+export class DebateGatewayClient {
+  private readonly queryClient: QueryClient;
+  private readonly getSession: DebateGatewayClientOptions['getSession'];
+  private readonly getApiBaseUrl: DebateGatewayClientOptions['getApiBaseUrl'];
+  private readonly createWebSocket: NonNullable<DebateGatewayClientOptions['createWebSocket']>;
+  private readonly random: () => number;
+  private readonly listeners = new Set<() => void>();
+  private readonly scopes = new Map<string, { scope: DebateGatewayScope; count: number }>();
+  private readonly sentScopes = new Set<string>();
+  private readonly confirmedScopes = new Set<string>();
+  private readonly recentEventIds = new Set<string>();
+  private readonly recentEventIdOrder: string[] = [];
+  private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
+  private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
+
+  private snapshot: DebateGatewaySnapshot = {
+    status: 'idle',
+    paused: false,
+    pauseReason: null,
+    capabilities: EMPTY_CAPABILITIES,
+  };
+  private capabilities: string[] = EMPTY_CAPABILITIES;
+  private getPrivyIdentityToken: GetPrivyIdentityToken | null = null;
+  private accountKey: string | null = null;
+  private socket: WebSocketLike | null = null;
+  private enabled = false;
+  private hasReachedReady = false;
+  private readyForDebates = false;
+  private lastSequence: number | null = null;
+  private reconnectAttempt = 0;
+  private lastErrorReconnectAt: number | null = null;
+  private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
+  private heartbeatsAwaitingAck = 0;
+  private debatePresence = true;
+  private presenceTransitionPending = false;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  private handshakeTimer: ReturnType<typeof setTimeout> | null = null;
+  private tokenRotationTimer: ReturnType<typeof setTimeout> | null = null;
+  private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
+  private invalidationRetryTimers = new Set<ReturnType<typeof setTimeout>>();
+  private connectionGeneration = 0;
+
+  constructor(options: DebateGatewayClientOptions) {
+    this.queryClient = options.queryClient;
+    this.getSession = options.getSession;
+    this.getApiBaseUrl = options.getApiBaseUrl;
+    this.createWebSocket = options.createWebSocket ?? (url => new WebSocket(url) as unknown as WebSocketLike);
+    this.random = options.random ?? Math.random;
+  }
+
+  getSnapshot = () => this.snapshot;
+
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  start(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string, debatePresence?: boolean) {
+    if (this.enabled && this.accountKey !== accountKey) this.stop();
+    if (debatePresence !== undefined) this.setDebatePresence(debatePresence);
+    this.getPrivyIdentityToken = getPrivyIdentityToken;
+    this.accountKey = accountKey;
+    if (this.enabled) return;
+    this.enabled = true;
+    this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
+    void this.connect();
+  }
+
+  setDebatePresence(debatePresence: boolean) {
+    if (this.debatePresence === debatePresence) return;
+    this.debatePresence = debatePresence;
+    if (!this.socket || this.socket.readyState !== OPEN) return;
+    if (this.heartbeatsAwaitingAck > 0) {
+      this.presenceTransitionPending = true;
+      return;
+    }
+    this.sendHeartbeat();
+  }
+
+  stop() {
+    const accountKey = this.accountKey;
+    this.enabled = false;
+    this.getPrivyIdentityToken = null;
+    this.accountKey = null;
+    this.hasReachedReady = false;
+    this.lastSequence = null;
+    this.reconnectAttempt = 0;
+    this.lastErrorReconnectAt = null;
+    this.clearAllTimers();
+    this.disposeSocket();
+    this.sentScopes.clear();
+    this.confirmedScopes.clear();
+    this.pendingInvalidations.clear();
+    this.capabilities = EMPTY_CAPABILITIES;
+    this.pendingChangedClaimsBySpace.clear();
+    if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
+    this.setSnapshot({ status: 'idle', paused: false, pauseReason: null });
+  }
+
+  retainScope(scope: DebateGatewayScope) {
+    const key = scopeKey(scope);
+    const retained = this.scopes.get(key);
+    if (retained) {
+      retained.count += 1;
+    } else {
+      this.scopes.set(key, { scope, count: 1 });
+      this.sendSubscription(scope, 'SUBSCRIBE');
+    }
+
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const current = this.scopes.get(key);
+      if (!current) return;
+      current.count -= 1;
+      if (current.count > 0) return;
+      this.scopes.delete(key);
+      this.sentScopes.delete(key);
+      this.confirmedScopes.delete(key);
+      this.sendSubscription(scope, 'UNSUBSCRIBE');
+    };
+  }
+
+  private async connect() {
+    const getPrivyIdentityToken = this.getPrivyIdentityToken;
+    const accountKey = this.accountKey;
+    if (!this.enabled || !getPrivyIdentityToken || !accountKey || this.socket) return;
+    const generation = ++this.connectionGeneration;
+
+    try {
+      const session = await this.getSession(getPrivyIdentityToken, accountKey);
+      if (!this.enabled || generation !== this.connectionGeneration) return;
+
+      const socket = this.createWebSocket(gatewayWebSocketUrl(this.getApiBaseUrl(), session.access_token));
+      this.socket = socket;
+      this.readyForDebates = false;
+      this.sentScopes.clear();
+      this.confirmedScopes.clear();
+      this.scheduleTokenRotation(session);
+      this.handshakeTimer = setTimeout(() => this.forceReconnect(socket), HANDSHAKE_TIMEOUT_MS);
+
+      socket.onopen = () => undefined;
+      socket.onmessage = event => this.handleMessage(socket, event.data);
+      socket.onerror = () => this.forceReconnect(socket);
+      socket.onclose = () => this.handleClose(socket);
+    } catch {
+      if (!this.enabled || generation !== this.connectionGeneration) return;
+      this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'session' });
+      this.scheduleReconnect();
+    }
+  }
+
+  private handleMessage(socket: WebSocketLike, value: unknown) {
+    if (socket !== this.socket || typeof value !== 'string') return;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value) as unknown;
+    } catch {
+      return;
+    }
+    if (!isGatewayEnvelope(parsed)) return;
+    const envelope = parsed;
+    if (typeof envelope.seq === 'number') this.lastSequence = Math.max(this.lastSequence ?? 0, envelope.seq);
+
+    switch (envelope.op) {
+      case 'HELLO':
+        this.handleHello(envelope.payload);
+        break;
+      case 'READY':
+        this.handleReady(envelope.payload);
+        break;
+      case 'EVENT':
+        this.handleEvent(envelope.payload);
+        break;
+      case 'HEARTBEAT_ACK':
+        this.heartbeatsAwaitingAck = 0;
+        if (this.presenceTransitionPending) this.sendHeartbeat();
+        break;
+      case 'RESUME':
+        this.queueBroadReconcile();
+        break;
+      case 'ERROR':
+        if (isEventsLagged(envelope.payload)) {
+          this.queueBroadReconcile();
+        } else if (isRateLimited(envelope.payload)) {
+          const retryDelayMs = rateLimitRetryDelayMs(envelope.payload);
+          // Loud on purpose, and distinct from every other pause. This one is *our* fault: we sent
+          // more gateway commands than `gateway_commands_by_session` allows, so waiting does not fix
+          // it — sending fewer does. It reads as an ordinary reconnect to the viewer, which is how a
+          // subscription bug hid behind the generic banner until GEO-2670 was traced by hand.
+          console.error(
+            `Debate gateway rate limited; retrying in ${retryDelayMs}ms. This means the client sent ` +
+              'too many gateway commands, not that the connection is unhealthy.'
+          );
+          this.forceReconnect(socket, retryDelayMs, 'rate_limited');
+        } else if (isSubscriptionLimitReached(envelope.payload)) {
+          // A real ceiling, and reconnecting re-sends the same scopes and hits it again. The
+          // account-routed stream keeps working; only the scopes past the limit are lost.
+          this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'subscription_limit' });
+        } else if (this.canRecoverFromError()) {
+          // Anything else is not known to be permanent, and parking here was a dead end: nothing in
+          // this branch closes the socket, so heartbeats keep being acked, `heartbeatsAwaitingAck`
+          // never reaches two, and `forceReconnect` is never reached. The connection stayed up in a
+          // state the client had already declared dead, for the rest of the session, with no path
+          // back to `ready` — a scope-level rejection took the account-level stream down with it.
+          // Recycle the socket instead, on the usual backoff (GEO-2650).
+          this.lastErrorReconnectAt = Date.now();
+          this.forceReconnect(socket);
+        } else {
+          // Already tried that recently, so the error is reproducing rather than transient and
+          // another reconnect would spin: `reconnectAttempt` resets on a successful invalidation
+          // flush, which a fresh connection performs before the error recurs, so the backoff would
+          // never actually grow. Park, and let the degraded poll carry correctness.
+          this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'error' });
+        }
+        break;
+    }
+  }
+
+  private handleHello(payload: unknown) {
+    if (isRecord(payload) && typeof payload.heartbeat_interval_ms === 'number') {
+      this.heartbeatIntervalMs = Math.max(1_000, payload.heartbeat_interval_ms);
+    }
+    this.heartbeatsAwaitingAck = 0;
+    this.presenceTransitionPending = false;
+    this.sendHeartbeat();
+  }
+
+  private handleReady(payload: unknown) {
+    this.clearTimer('handshake');
+    const ready = isRecord(payload) ? (payload as ReadyPayload) : {};
+    this.capabilities = Array.isArray(ready.capabilities)
+      ? ready.capabilities.filter((capability): capability is string => typeof capability === 'string')
+      : EMPTY_CAPABILITIES;
+    const supportsDebates = this.capabilities.includes(CAPABILITY);
+    if (!supportsDebates) {
+      this.readyForDebates = false;
+      this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'unsupported' });
+      return;
+    }
+
+    const firstReadyForSocket = !this.readyForDebates;
+    this.readyForDebates = true;
+    this.setSnapshot({ status: 'ready', paused: false, pauseReason: null });
+
+    if (firstReadyForSocket) {
+      this.queueBroadReconcile();
+      if (this.hasReachedReady) {
+        if (this.lastSequence !== null) this.sendEnvelope('RESUME', {}, this.lastSequence);
+      }
+      this.hasReachedReady = true;
+    }
+
+    const readyScopes = new Map<string, DebateGatewayScope>();
+    for (const subscription of Array.isArray(ready.subscriptions) ? ready.subscriptions : []) {
+      const scope = parseScope(subscription);
+      if (!scope) continue;
+      const key = scopeKey(scope);
+      readyScopes.set(key, scope);
+    }
+
+    for (const key of this.confirmedScopes) {
+      if (!readyScopes.has(key)) this.confirmedScopes.delete(key);
+    }
+
+    for (const [key, scope] of readyScopes) {
+      if (!this.scopes.has(key) || this.confirmedScopes.has(key)) continue;
+      this.confirmedScopes.add(key);
+      this.queueScopeReconcile(scope);
+    }
+
+    for (const { scope } of this.scopes.values()) this.sendSubscription(scope, 'SUBSCRIBE');
+  }
+
+  private handleEvent(payload: unknown) {
+    if (!isDebateEvent(payload) || this.recentEventIds.has(payload.event_id)) return;
+    this.rememberEvent(payload.event_id);
+    const identifiers = payload.payload;
+
+    switch (payload.event_type) {
+      case 'debate.activity_changed':
+        this.queueAccountActivity();
+        break;
+      case 'debate.claims_changed':
+        if (identifiers.space_id) {
+          this.queueClaims(identifiers.space_id, identifiers.claim_entity_ids);
+        }
+        break;
+      case 'debate.state_changed':
+        if (identifiers.debate_id) this.queueQuery(['debates', 'detail', identifiers.debate_id]);
+        if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
+        this.queueAccountActivity();
+        break;
+      case 'debate.rematch_changed':
+        if (identifiers.rematch_session_id) {
+          this.queueAccountQuery('rematch', identifiers.rematch_session_id);
+        }
+        this.queueAccountActivity();
+        break;
+      case 'debate.media_changed':
+        if (identifiers.debate_id) {
+          this.queueQuery(['debates', 'media', identifiers.debate_id]);
+          this.queueQuery(['debates', 'detail', identifiers.debate_id]);
+          this.queueQuery(['debates', 'transcript', identifiers.debate_id]);
+        }
+        if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
+        break;
+      case 'debate.share_prompts_changed':
+        this.queueAccountQuery('share-prompts');
+        break;
+      case 'debate.requests_changed':
+        this.queueAccountQuery('requests');
+        this.queueAccountActivity();
+        break;
+      case 'debate.matchmaking_changed':
+        this.queueMatchmakingSections(identifiers.sections);
+        break;
+    }
+  }
+
+  private queueMatchmakingSections(sections?: MatchmakingSection[]) {
+    const changed = sections?.length ? sections : MATCHMAKING_SECTIONS;
+    for (const section of changed) {
+      if (section === 'people') this.queueAccountQuery('people');
+      if (section === 'claims') this.queueAccountQuery('matchmaking-claims');
+      if (section === 'matches') this.queueAccountQuery('matches');
+    }
+  }
+
+  private rememberEvent(eventId: string) {
+    this.recentEventIds.add(eventId);
+    this.recentEventIdOrder.push(eventId);
+    if (this.recentEventIdOrder.length <= MAX_RECENT_EVENT_IDS) return;
+    const expired = this.recentEventIdOrder.shift();
+    if (expired) this.recentEventIds.delete(expired);
+  }
+
+  private queueScopeReconcile(scope: DebateGatewayScope) {
+    if (scope.scope === 'space') {
+      this.queueQuery(['debates', 'claims', scope.space_id]);
+      this.queueQuery(['debates', 'space', scope.space_id]);
+      return;
+    }
+    if (scope.scope === 'matchmaking') {
+      this.queueMatchmakingSections();
+      return;
+    }
+    this.queueQuery(['debates', 'detail', scope.debate_id]);
+    this.queueQuery(['debates', 'media', scope.debate_id]);
+    this.queueQuery(['debates', 'transcript', scope.debate_id]);
+  }
+
+  private queueBroadReconcile() {
+    this.queueInvalidation(BROAD_INVALIDATION_KEY, {
+      predicate: query => {
+        const root = query.queryKey[0];
+        return (
+          root === 'debates' ||
+          isClaimResponseSummaryQueryKey(query.queryKey) ||
+          isParticipantPositionsQueryKey(query.queryKey)
+        );
+      },
+      refetchType: 'active',
+    });
+  }
+
+  /** A profile's `can_challenge` folds in the viewer's own activity, so it goes stale with it. */
+  private queueAccountActivity() {
+    this.queueAccountQuery('activity');
+    this.queueAccountQuery('profile');
+  }
+
+  private queueAccountQuery(
+    kind:
+      'activity' | 'rematch' | 'share-prompts' | 'profile' | 'people' | 'matchmaking-claims' | 'matches' | 'requests',
+    id?: string
+  ) {
+    if (!this.accountKey) return;
+    this.queueQuery(
+      id ? ['debates', 'account', this.accountKey, kind, id] : ['debates', 'account', this.accountKey, kind]
+    );
+  }
+
+  private queueClaims(spaceId: string, claimEntityIds?: string[]) {
+    if (!claimEntityIds?.length) {
+      this.queueQuery(['debates', 'claims', spaceId]);
+      return;
+    }
+    let changedClaims = this.pendingChangedClaimsBySpace.get(spaceId);
+    if (!changedClaims) {
+      changedClaims = new Set();
+      this.pendingChangedClaimsBySpace.set(spaceId, changedClaims);
+    }
+    for (const claimEntityId of claimEntityIds) changedClaims.add(claimEntityId);
+    const changedResponseTargets = new Set(
+      [...changedClaims].flatMap(entityId =>
+        (['stance', 'veracity'] as const).map(responseKind => claimResponseTargetKey({ entityId, responseKind }))
+      )
+    );
+    this.queueInvalidation(`claims:${spaceId}`, {
+      predicate: query => {
+        const [root, kind, querySpaceId, queryClaimIds] = query.queryKey;
+        const isDebateSpaceClaimQuery = root === 'debates' && kind === 'claims' && querySpaceId === spaceId;
+        const isDebateClaimQuery =
+          isDebateSpaceClaimQuery &&
+          // `'all'` is what `debateQueryKeys.claims` stores for a whole-space subscription — it
+          // covers every claim in the space, so any change in it lands. Requiring an array here
+          // left the browse panel's list stale until a reconnect.
+          (queryClaimIds === 'all' ||
+            (Array.isArray(queryClaimIds) &&
+              queryClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId))));
+        if (isDebateClaimQuery) return true;
+
+        // The rematch picker lists claims from many spaces and draws both participants' sides, so
+        // it has to refresh whenever *anyone's* response lands — its own subscription only covers
+        // the viewer's. Without this the opponent's choices appeared only after rejoining.
+        //
+        // Scoped to the batches that hold a changed claim, though. The picker keeps a batch per
+        // hundred ids across every space on screen; refreshing all of them for one response
+        // cancelled every in-flight batch on each event and, with round trips slower than the
+        // event rate, none of them ever landed. The id-less query is the session's own list —
+        // any response can add a row to it — so that one always refreshes.
+        const [, accountSegment, , rematchSegment, , claimsSegment, rematchClaimIds] = query.queryKey;
+        if (accountSegment === 'account' && rematchSegment === 'rematch' && claimsSegment === 'claims') {
+          return (
+            !Array.isArray(rematchClaimIds) ||
+            rematchClaimIds.length === 0 ||
+            rematchClaimIds.some(claimId => typeof claimId === 'string' && changedClaims.has(claimId))
+          );
+        }
+
+        // The rematch picker reads both participants' sides straight from the graph; any response
+        // landing in a space it watches may be one of theirs. One query, so no need to narrow.
+        if (isParticipantPositionsQueryKey(query.queryKey)) return true;
+
+        return isClaimResponseSummaryQueryKey(query.queryKey, {
+          spaceId,
+          targetKeys: changedResponseTargets,
+        });
+      },
+      refetchType: 'active',
+    });
+  }
+
+  private queueQuery(queryKey: QueryKey) {
+    this.queueInvalidation(`query:${JSON.stringify(queryKey)}`, { queryKey, refetchType: 'active' });
+  }
+
+  private queueInvalidation(key: string, filters: InvalidationFilters) {
+    if (key === BROAD_INVALIDATION_KEY) {
+      this.pendingInvalidations.clear();
+      this.pendingChangedClaimsBySpace.clear();
+    } else if (this.pendingInvalidations.has(BROAD_INVALIDATION_KEY)) {
+      return;
+    }
+    this.pendingInvalidations.set(key, filters);
+    if (this.invalidationTimer) return;
+    this.invalidationTimer = setTimeout(() => {
+      this.invalidationTimer = null;
+      const invalidations = [...this.pendingInvalidations.values()];
+      this.pendingInvalidations.clear();
+      this.pendingChangedClaimsBySpace.clear();
+      void this.flushInvalidations(invalidations);
+    }, INVALIDATION_COALESCE_MS);
+  }
+
+  private async flushInvalidations(invalidations: InvalidationFilters[], attempt = 0) {
+    const results = await Promise.allSettled(
+      invalidations.map(async queryFilters => {
+        const matches = (query: Query) => queryFilters.predicate === undefined || queryFilters.predicate(query);
+        // Cancelling stops a stale in-flight response from overwriting the fresh refetch — which
+        // only matters once there is data to overwrite. A query still on its first load has none;
+        // aborting it restarts a request that was about to land, and on a screen with slow round
+        // trips and frequent events that restart repeated until nothing ever landed.
+        //
+        // The rematch picker's positions batches are never cancelled, loaded or not. They are one
+        // request per page of claims on screen, and responses land on them faster than the round
+        // trips complete; restarting every batch on every event starved the list of updates for as
+        // long as the other side kept responding. A batch in flight is left to land and is then
+        // asked again, so the answer on screen is never older than the event that prompted it.
+        const inFlightRematchBatches = this.queryClient.getQueryCache().findAll({
+          ...queryFilters,
+          fetchStatus: 'fetching',
+          predicate: query => isRematchClaimsQueryKey(query.queryKey) && matches(query),
+        });
+        await this.queryClient.cancelQueries({
+          ...queryFilters,
+          predicate: query =>
+            query.state.data !== undefined && !isRematchClaimsQueryKey(query.queryKey) && matches(query),
+        });
+        // `cancelRefetch: false`: a refetch of a query still fetching joins that request instead
+        // of aborting it. Everything this flush meant to cancel has been cancelled above.
+        //
+        // The re-ask runs whether or not the invalidation settled cleanly: a hook-side refresh can
+        // cancel one joined batch, and that one batch's `CancelledError` must not cost every other
+        // batch in this flush the refetch that brings it past the event.
+        try {
+          await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true, cancelRefetch: false });
+        } finally {
+          if (inFlightRematchBatches.length > 0) {
+            await this.queryClient.refetchQueries(
+              {
+                type: 'active',
+                predicate: query => inFlightRematchBatches.some(batch => batch.queryHash === query.queryHash),
+              },
+              { throwOnError: true, cancelRefetch: false }
+            );
+          }
+        }
+      })
+    );
+
+    // `stop()` may have run while the refetches were in flight; a stopped client owns no socket to
+    // recycle and no queries to retry.
+    if (!this.enabled) return;
+
+    // `allSettled` preserves order, so a rejection at index i belongs to invalidations[i] — keep the
+    // pairing so only the filters that actually failed transiently get flushed again.
+    const retryable: InvalidationFilters[] = [];
+    const actions: InvalidationRecovery[] = [];
+    results.forEach((result, index) => {
+      if (result.status !== 'rejected') return;
+      const action = invalidationFailureRecovery(result.reason);
+      if (action === 'retry') retryable.push(invalidations[index]);
+      actions.push(action);
+    });
+    const recovery = actions.reduce<InvalidationRecovery>(
+      (worst, action) => (invalidationRecoveryPriority[action] > invalidationRecoveryPriority[worst] ? action : worst),
+      'ignore'
+    );
+
+    if (recovery === 'reauthenticate' || recovery === 'reconnect') {
+      // The socket authenticates with the same session the refetch just used, and
+      // `getGeoChatSession` hands back the stored session until it is close to expiry. Without an
+      // explicit reset the reconnect would re-present the very credentials the server rejected.
+      if (recovery === 'reauthenticate') resetGeoChatSession();
+      this.recentEventIds.clear();
+      this.recentEventIdOrder.length = 0;
+      if (this.socket) this.forceReconnect(this.socket);
+      return;
+    }
+
+    if (retryable.length > 0 && attempt < MAX_INVALIDATION_RETRIES) {
+      // Rate limits and request timeouts say nothing about the socket, so recycling it is the wrong
+      // repair. The affected queries are configured with `retry: false`, so if this flush gives up
+      // nothing else refetches them — back off and retry the invalidation itself instead.
+      this.scheduleInvalidationRetry(retryable, attempt + 1);
+      return;
+    }
+
+    this.reconnectAttempt = 0;
+  }
+
+  private scheduleInvalidationRetry(invalidations: InvalidationFilters[], attempt: number) {
+    // Each failed batch keeps its own backoff. Replacing a pending retry with a newer one would
+    // drop the older batch's filters, and with `retry: false` on these queries nothing else would
+    // ever refetch them. A retry may re-run filters a later flush has since refreshed; that costs
+    // one extra refetch of active queries and is accepted over the alternative of losing one.
+    const timer = setTimeout(
+      () => {
+        this.invalidationRetryTimers.delete(timer);
+        if (!this.enabled) return;
+        void this.flushInvalidations(invalidations, attempt);
+      },
+      INVALIDATION_RETRY_BASE_MS * 2 ** (attempt - 1)
+    );
+    this.invalidationRetryTimers.add(timer);
+  }
+
+  private sendSubscription(scope: DebateGatewayScope, op: 'SUBSCRIBE' | 'UNSUBSCRIBE') {
+    if (!this.readyForDebates || !this.socket || this.socket.readyState !== OPEN) return;
+    const key = scopeKey(scope);
+    if (op === 'SUBSCRIBE') {
+      if (this.sentScopes.has(key)) return;
+      this.sentScopes.add(key);
+    }
+    this.sendEnvelope(op, scope);
+  }
+
+  private sendHeartbeat() {
+    this.clearTimer('heartbeat');
+    if (!this.socket || this.socket.readyState !== OPEN) return;
+    if (this.heartbeatsAwaitingAck >= 2) {
+      this.forceReconnect(this.socket);
+      return;
+    }
+    this.heartbeatsAwaitingAck += 1;
+    this.presenceTransitionPending = false;
+    this.sendEnvelope('HEARTBEAT', { debate_presence: this.debatePresence }, this.lastSequence);
+    this.heartbeatTimer = setTimeout(() => this.sendHeartbeat(), this.heartbeatIntervalMs);
+  }
+
+  private sendEnvelope(op: string, payload: unknown, seq: number | null = null) {
+    if (!this.socket || this.socket.readyState !== OPEN) return;
+    this.socket.send(
+      JSON.stringify({
+        v: 1,
+        op,
+        seq,
+        request_id: null,
+        space_id: null,
+        room_id: null,
+        room_kind: null,
+        payload,
+      })
+    );
+  }
+
+  private scheduleTokenRotation(session: DebateGatewaySession) {
+    this.clearTimer('token');
+    const delay = Math.max(0, new Date(session.expires_at).getTime() - Date.now() - 30_000);
+    this.tokenRotationTimer = setTimeout(() => {
+      if (this.socket) this.forceReconnect(this.socket);
+    }, delay);
+  }
+
+  private handleClose(socket: WebSocketLike) {
+    if (socket !== this.socket) return;
+    this.socket = null;
+    this.readyForDebates = false;
+    this.clearConnectionTimers();
+    if (!this.enabled) return;
+    this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'disconnected' });
+    this.scheduleReconnect();
+  }
+
+  private forceReconnect(
+    socket: WebSocketLike,
+    minimumDelayMs = 0,
+    reason: DebateGatewayPauseReason = 'disconnected'
+  ) {
+    if (socket !== this.socket) return;
+    this.socket = null;
+    this.readyForDebates = false;
+    this.clearConnectionTimers();
+    socket.onclose = null;
+    socket.close();
+    if (!this.enabled) return;
+    this.setSnapshot({ status: 'degraded', paused: true, pauseReason: reason });
+    this.scheduleReconnect(minimumDelayMs);
+  }
+
+  private canRecoverFromError() {
+    return (
+      this.lastErrorReconnectAt === null || Date.now() - this.lastErrorReconnectAt >= ERROR_RECONNECT_COOLDOWN_MS
+    );
+  }
+
+  private scheduleReconnect(minimumDelayMs = 0) {
+    if (!this.enabled || this.reconnectTimer) return;
+    const baseDelay = Math.min(30_000, 1_000 * 2 ** this.reconnectAttempt);
+    const delay = Math.max(minimumDelayMs, Math.min(30_000, Math.round(baseDelay + baseDelay * 0.2 * this.random())));
+    this.reconnectAttempt += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      void this.connect();
+    }, delay);
+  }
+
+  private disposeSocket() {
+    const socket = this.socket;
+    this.socket = null;
+    this.readyForDebates = false;
+    if (!socket) return;
+    socket.onclose = null;
+    socket.close();
+  }
+
+  private clearConnectionTimers() {
+    this.clearTimer('heartbeat');
+    this.clearTimer('handshake');
+    this.clearTimer('token');
+    this.heartbeatsAwaitingAck = 0;
+    this.presenceTransitionPending = false;
+  }
+
+  private clearAllTimers() {
+    this.clearConnectionTimers();
+    this.clearTimer('reconnect');
+    if (this.invalidationTimer) clearTimeout(this.invalidationTimer);
+    this.invalidationTimer = null;
+    for (const timer of this.invalidationRetryTimers) clearTimeout(timer);
+    this.invalidationRetryTimers.clear();
+  }
+
+  private clearTimer(timer: 'handshake' | 'heartbeat' | 'reconnect' | 'token') {
+    const field =
+      timer === 'handshake'
+        ? 'handshakeTimer'
+        : timer === 'heartbeat'
+          ? 'heartbeatTimer'
+          : timer === 'reconnect'
+            ? 'reconnectTimer'
+            : 'tokenRotationTimer';
+    const current = this[field];
+    if (current) clearTimeout(current);
+    this[field] = null;
+  }
+
+  private setSnapshot(snapshot: Omit<DebateGatewaySnapshot, 'capabilities'>) {
+    const capabilities = this.capabilities;
+    if (
+      snapshot.status === this.snapshot.status &&
+      snapshot.paused === this.snapshot.paused &&
+      // Included deliberately: a pause whose reason changed is a different pause, and without this
+      // the reason would be written but never delivered to a listener.
+      snapshot.pauseReason === this.snapshot.pauseReason &&
+      capabilities === this.snapshot.capabilities
+    ) {
+      return;
+    }
+    this.snapshot = { ...snapshot, capabilities };
+    for (const listener of this.listeners) listener();
+  }
+}
+
+type InvalidationRecovery = 'ignore' | 'retry' | 'reconnect' | 'reauthenticate';
+
+/** Later entries win when a single flush produces a mix of failures. */
+const invalidationRecoveryPriority: Record<InvalidationRecovery, number> = {
+  ignore: 0,
+  retry: 1,
+  reconnect: 2,
+  reauthenticate: 3,
+};
+
+/**
+ * Deterministic request errors: the same call will fail the same way after any amount of
+ * reconnecting or backing off, so the only sane response is to leave the socket alone.
+ */
+const deterministicInvalidationErrorCodes = new Set(['too_many_claim_ids']);
+
+/**
+ * Refreshing an active query can expose an application error without saying anything about the
+ * gateway socket. Classify by the repair each failure actually needs — recycling a healthy socket
+ * for a deterministic query bug just turns it into an endless "live updates paused" loop, and
+ * recycling it for a 429 does nothing to refetch the query that was rate limited.
+ */
+function invalidationFailureRecovery(error: unknown): InvalidationRecovery {
+  // A refetch this flush started can be cancelled by the next flush's `cancelQueries` before it
+  // lands. That flush owns the refresh from here on; recycling the socket over it would be a
+  // spurious "live updates paused".
+  if (error instanceof CancelledError) return 'ignore';
+  if (error instanceof DOMException && error.name === 'AbortError') return 'ignore';
+  // The participants' positions are read from the knowledge graph, which this socket has nothing
+  // to do with. Its client has already retried; the query polls, so the next tick picks it up.
+  if (isGraphqlRequestError(error)) return 'ignore';
+  if (!(error instanceof GeoChatRequestError)) return 'reconnect';
+  if (error.code && deterministicInvalidationErrorCodes.has(error.code)) return 'ignore';
+  if (error.status === 401 || error.status === 403) return 'reauthenticate';
+  // 408 and 429 are the two 4xx statuses that clear on their own; every other 4xx is a request the
+  // server will keep rejecting.
+  if (error.status === 408 || error.status === 429 || error.status >= 500) return 'retry';
+  if (error.status >= 400 && error.status < 500) return 'ignore';
+  return 'reconnect';
+}
+
+function isGraphqlRequestError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    '_tag' in error &&
+    (error as { _tag?: unknown })._tag === 'GraphqlRequestError'
+  );
+}
+
+/**
+ * The one client every debate surface shares. `useDebateGateway` owns its lifecycle; everything
+ * else retains scopes on it.
+ *
+ * Exported so the scope hooks can be tested against the instance they actually use. Their bug was
+ * command *volume* (GEO-2670), which is only observable by counting what reaches this object — a
+ * separately constructed client would have tested the test's own wiring instead.
+ */
+export const debateGateway = new DebateGatewayClient({
+  queryClient,
+  getSession: getGeoChatSession,
+  getApiBaseUrl: getGeoChatApiBaseUrl,
+});
+
+export function useDebateGateway(
+  enabled: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  debatePresence: boolean
+) {
+  React.useEffect(() => {
+    debateGateway.setDebatePresence(debatePresence);
+  }, [debatePresence]);
+
+  React.useEffect(() => {
+    if (!enabled || !accountKey) {
+      debateGateway.stop();
+      return;
+    }
+    debateGateway.start(getPrivyIdentityToken, accountKey);
+    return () => debateGateway.stop();
+  }, [accountKey, enabled, getPrivyIdentityToken]);
+
+  return React.useSyncExternalStore(debateGateway.subscribe, debateGateway.getSnapshot, debateGateway.getSnapshot);
+}
+
+export function useDebateGatewayScope(scope: DebateGatewayScope, enabled: boolean) {
+  const scopeType = scope.scope;
+  const scopeId = scope.scope === 'space' ? scope.space_id : scope.scope === 'debate' ? scope.debate_id : null;
+
+  React.useEffect(() => {
+    if (!enabled) return;
+    if (scopeType === 'matchmaking') return debateGateway.retainScope({ scope: 'matchmaking' });
+    if (!scopeId) return;
+    return debateGateway.retainScope(
+      scopeType === 'space' ? { scope: 'space', space_id: scopeId } : { scope: 'debate', debate_id: scopeId }
+    );
+  }, [enabled, scopeId, scopeType]);
+}
+
+/**
+ * Retains a space scope for every id in the list. `debate.claims_changed` is space-scoped, so a
+ * surface showing claims from several spaces at once — the rematch picker — has to hold them all
+ * or it only hears about some of its own rows.
+ */
+/**
+ * Hold a space scope for each id, reconciling rather than rebuilding when the set changes.
+ *
+ * The set arrives in stages — the rematch picker adds spaces as the opponent's claims land, then
+ * the curated ones, then each browsed page — and it used to key one retain/release block on the
+ * whole joined list. Because retention is refcounted and React runs cleanup before the next
+ * effect, adding a single space released all N and re-retained all N: roughly `2N + 1` gateway
+ * commands where one was needed, every time the set grew.
+ *
+ * `gateway_commands_by_session` allows 120 per minute. A picker spanning fifteen spaces across a
+ * few arrival stages passes that on its own, and the server answers `rate_limited`, which the
+ * client turns into a reconnect — and on READY it re-subscribes every scope in one burst, spending
+ * the budget again. That is the reconnecting banner that would not go away in the debate-again
+ * flow (GEO-2670), and it is self-inflicted: the churn was almost entirely
+ * unsubscribe-then-resubscribe for spaces that never left the set.
+ *
+ * Reconciling makes a growing set cost one command per genuinely new space.
+ */
+export function useDebateGatewaySpaceScopes(spaceIds: string[], enabled: boolean) {
+  // Joined so the effect keys off the ids themselves rather than a fresh array each render.
+  const key = spaceIds.join(',');
+  const heldRef = React.useRef<Map<string, () => void>>(new Map());
+
+  React.useEffect(() => {
+    const held = heldRef.current;
+    const wanted = new Set(enabled && key ? key.split(',') : []);
+
+    // Copied before iterating: releasing mutates the map being walked.
+    for (const [spaceId, release] of [...held]) {
+      if (wanted.has(spaceId)) continue;
+      release();
+      held.delete(spaceId);
+    }
+    for (const spaceId of wanted) {
+      if (held.has(spaceId)) continue;
+      held.set(spaceId, debateGateway.retainScope({ scope: 'space', space_id: spaceId }));
+    }
+  }, [enabled, key]);
+
+  // Unmount only, deliberately. Putting this on the effect above is what caused the churn: its
+  // cleanup runs on every key change, not just when the caller goes away.
+  React.useEffect(
+    () => () => {
+      for (const release of heldRef.current.values()) release();
+      heldRef.current.clear();
+    },
+    []
+  );
+}
+
+/** Read-only view of the gateway snapshot. Unlike `useDebateGateway` this never starts a socket. */
+export function useDebateGatewaySnapshot() {
+  return React.useSyncExternalStore(debateGateway.subscribe, debateGateway.getSnapshot, debateGateway.getSnapshot);
+}
+
+/**
+ * `true` once geo-chat advertises the matchmaking capability. Lets surfaces keep the legacy
+ * debate-queue behavior until the backend ships GEO-2514.
+ */
+
+function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
+  const url = new URL(apiBaseUrl);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = `${url.pathname.replace(/\/+$/, '')}/gateway/ws`;
+  url.search = '';
+  url.searchParams.set('access_token', accessToken);
+  return url.toString();
+}
+
+function scopeKey(scope: DebateGatewayScope) {
+  if (scope.scope === 'space') return `space:${scope.space_id}`;
+  if (scope.scope === 'matchmaking') return 'matchmaking';
+  return `debate:${scope.debate_id}`;
+}
+
+function parseScope(value: unknown): DebateGatewayScope | null {
+  if (!isRecord(value)) return null;
+  if (value.scope === 'space' && typeof value.space_id === 'string') {
+    return { scope: 'space', space_id: value.space_id };
+  }
+  if (value.scope === 'debate' && typeof value.debate_id === 'string') {
+    return { scope: 'debate', debate_id: value.debate_id };
+  }
+  if (value.scope === 'matchmaking') {
+    return { scope: 'matchmaking' };
+  }
+  return null;
+}
+
+function isEventsLagged(payload: unknown) {
+  return isRecord(payload) && payload.code === 'events_lagged';
+}
+
+function isRateLimited(payload: unknown) {
+  return isRecord(payload) && payload.code === 'rate_limited';
+}
+
+function isSubscriptionLimitReached(payload: unknown) {
+  return isRecord(payload) && payload.code === 'subscription_limit_reached';
+}
+
+function rateLimitRetryDelayMs(payload: unknown) {
+  if (!isRecord(payload) || typeof payload.message !== 'string') return 1_000;
+  const seconds = payload.message.match(/retry after (\d+) seconds/)?.[1];
+  return seconds ? Number(seconds) * 1_000 : 1_000;
+}
+
+function isGatewayEnvelope(value: unknown): value is GatewayEnvelope {
+  return isRecord(value) && value.v === 1 && typeof value.op === 'string' && 'payload' in value;
+}
+
+function isDebateEvent(value: unknown): value is DebateInvalidationEvent {
+  return (
+    isRecord(value) &&
+    typeof value.event_id === 'string' &&
+    typeof value.event_type === 'string' &&
+    isRecord(value.payload)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}

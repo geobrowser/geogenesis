@@ -83,13 +83,7 @@ function NoRow({
 }
 
 /** Governance home: full-width stacked rows. Space governance: compact side-by-side bars. */
-export function GovernanceProposalVoteState({
-  yesPercentage,
-  noPercentage,
-  user,
-  userVote,
-  variant = 'home',
-}: Props) {
+export function GovernanceProposalVoteState({ yesPercentage, noPercentage, user, userVote, variant = 'home' }: Props) {
   if (variant === 'space') {
     // Matches prod Geo: two rows, w-[180px] tracks, gap-8 between them (parent adds flex-3 wrapper).
     return (

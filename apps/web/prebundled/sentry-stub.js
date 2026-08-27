@@ -19,6 +19,10 @@ export const Hub = class {};
 export const SentrySpanProcessor = class {
   onStart() {}
   onEnd() {}
-  shutdown() { return Promise.resolve(); }
-  forceFlush() { return Promise.resolve(); }
+  shutdown() {
+    return Promise.resolve();
+  }
+  forceFlush() {
+    return Promise.resolve();
+  }
 };

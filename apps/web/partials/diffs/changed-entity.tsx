@@ -8,7 +8,9 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Effect } from 'effect';
 
+import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { getBatchEntities } from '~/core/io/queries';
+import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
 import { hasMarkdownSyntax, renderMarkdownDocument, renderMarkdownInline } from '~/core/state/editor/markdown-render';
 import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -98,9 +100,10 @@ export function hasVisibleChanges(entity: EntityDiff): boolean {
 type ChangedEntityProps = {
   entity: EntityDiff;
   spaceId: string;
+  onOpenEntity?: (entityId: string) => void;
 };
 
-export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId }: ChangedEntityProps) {
+export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId, onOpenEntity }: ChangedEntityProps) {
   const typeRelations = entity.relations.filter(r => r.typeId === TYPES_PROPERTY_ID);
   const avatarRelations = entity.relations.filter(r => r.typeId === AVATAR_PROPERTY_ID);
   const coverRelations = entity.relations.filter(r => r.typeId === COVER_PROPERTY_ID);
@@ -144,15 +147,32 @@ export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId
 
   const resolvedAvatarUrl = avatarChangeImageUrl ?? coverChangeImageUrl ?? fetchedMediaUrl;
 
+  const entityHeader = (
+    <>
+      {resolvedAvatarUrl && (
+        <div className="h-8 w-8 shrink-0 overflow-hidden rounded">
+          <NativeGeoImage value={resolvedAvatarUrl} alt="" className="h-full w-full object-cover" />
+        </div>
+      )}
+      <h2 className="text-xl font-semibold">{entity.name}</h2>
+    </>
+  );
+
   return (
     <div>
       <div className="mb-4 flex items-center gap-3">
-        {resolvedAvatarUrl && (
-          <div className="h-8 w-8 shrink-0 overflow-hidden rounded">
-            <NativeGeoImage value={resolvedAvatarUrl} alt="" className="h-full w-full object-cover" />
-          </div>
+        {onOpenEntity ? (
+          <button
+            type="button"
+            data-entity-side-panel-opener
+            className="flex min-w-0 items-center gap-3 rounded-md text-left transition-colors hover:text-ctaPrimary focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ctaPrimary"
+            onClick={() => onOpenEntity(entity.entityId)}
+          >
+            {entityHeader}
+          </button>
+        ) : (
+          entityHeader
         )}
-        <h2 className="text-xl font-semibold">{entity.name}</h2>
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-20">
@@ -424,7 +444,7 @@ const VideoPropertyCell = ({ typeName, typeId, relations, spaceId, side }: Video
       <Text as="p" variant="bodySemibold">
         {typeName ?? typeId}
       </Text>
-      <div className={cx('mt-1 aspect-video w-full max-w-[240px] overflow-hidden rounded-lg', ringClass)}>
+      <div className={cx('mt-1 aspect-video w-full overflow-hidden rounded-lg', ringClass)}>
         <video src={videoSrc} controls className="h-full w-full object-cover" />
       </div>
     </div>
@@ -882,6 +902,8 @@ const VIEW_NAMES: Record<string, string> = {
   [SystemIds.LIST_VIEW]: 'List view',
   [SystemIds.GALLERY_VIEW]: 'Gallery view',
   [SystemIds.BULLETED_LIST_VIEW]: 'Bulleted List view',
+  [DATA_BLOCK_VIEW_EXPLORE_ID]: 'Explore view',
+  [RANKING_VIEW_PILL_ID]: 'Pill view',
 };
 
 function isUuidForEntityBatch(id: string): boolean {
@@ -1191,6 +1213,10 @@ const DataBlockCollectionItems = ({ relations, side, viewEntityId }: DataBlockCo
       return <CollectionListItems items={items} />;
     case SystemIds.BULLETED_LIST_VIEW:
       return <CollectionBulletedListItems items={items} />;
+    case DATA_BLOCK_VIEW_EXPLORE_ID:
+      return <CollectionExploreItems items={items} />;
+    case RANKING_VIEW_PILL_ID:
+      return <CollectionPillItems items={items} />;
     case SystemIds.TABLE_VIEW:
     default:
       return <CollectionTableItems items={items} />;
@@ -1271,6 +1297,43 @@ const CollectionBulletedListItems = ({ items }: { items: CollectionItem[] }) => 
       <div key={i} className="flex gap-2 rounded-md px-1 py-0.5">
         <div className="mt-0.5 shrink-0 text-xl leading-none text-text">&bull;</div>
         <span className={cx('rounded text-body text-text', item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType])}>
+          {item.entityName ?? item.entityId}
+        </span>
+      </div>
+    ))}
+  </div>
+);
+
+const CollectionExploreItems = ({ items }: { items: CollectionItem[] }) => (
+  <div className="flex flex-col">
+    {items.map((item, i) => (
+      <div
+        key={i}
+        className={cx(
+          'flex flex-col gap-2 border-b border-divider py-4 last:border-b-0',
+          item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType]
+        )}
+      >
+        <div className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text">
+          {item.entityName ?? item.entityId}
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+const CollectionPillItems = ({ items }: { items: CollectionItem[] }) => (
+  <div className="flex flex-wrap gap-2">
+    {items.map((item, i) => (
+      <div
+        key={i}
+        className={cx(
+          'inline-flex h-8 items-center gap-2 rounded-full border border-grey-02 bg-white p-2',
+          item.changeType && HIGHLIGHT_CLASS_NAMES[item.changeType]
+        )}
+      >
+        <div className="h-4 w-4 shrink-0 rounded-full bg-grey-02" />
+        <span className="text-[16px] leading-[13px] tracking-[-0.35px] text-text">
           {item.entityName ?? item.entityId}
         </span>
       </div>
@@ -1410,6 +1473,29 @@ const DataBlockViewSkeleton = ({ viewEntityId }: { viewEntityId: string | null }
             <div key={i} className="flex gap-2">
               <div className="mt-1 shrink-0 text-xl leading-none text-grey-03">&bull;</div>
               <div className="h-5 w-48 rounded-sm bg-grey-02" />
+            </div>
+          ))}
+        </div>
+      );
+    case RANKING_VIEW_PILL_ID:
+      return (
+        <div className="flex flex-wrap gap-2 opacity-60">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="inline-flex h-8 items-center gap-2 rounded-full border border-grey-02 bg-white p-2">
+              <div className="h-4 w-4 shrink-0 rounded-full bg-grey-02" />
+              <div className="h-3 w-14 rounded-sm bg-grey-02" />
+            </div>
+          ))}
+        </div>
+      );
+    case DATA_BLOCK_VIEW_EXPLORE_ID:
+      return (
+        <div className="flex flex-col opacity-60">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex flex-col gap-2 border-b border-grey-02 py-4 last:border-b-0">
+              <div className="h-3 w-24 rounded-sm bg-grey-02" />
+              <div className="h-5 w-3/4 rounded-sm bg-grey-02" />
+              <div className="h-3 w-full rounded-sm bg-grey-02" />
             </div>
           ))}
         </div>

@@ -22,6 +22,8 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { Source } from '~/core/blocks/data/source';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useSpaceAwareValue } from '~/core/sync/use-store';
@@ -177,12 +179,13 @@ function NameCell({
         relationId={row.relationId}
         verified={row.verified}
         onLinkEntry={onLinkEntry}
+        showSidePanel={false}
       >
         <Link
           entityId={row.entityId}
           spaceId={row.spaceId}
           href={href}
-          className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] border-t border-dotted border-ctaPrimary/30 pt-1 text-tableCell text-ctaPrimary hover:text-ctaHover hover:underline"
+          className="block max-w-full min-w-0 border-t border-dotted border-ctaPrimary/30 pt-1 text-tableCell [overflow-wrap:anywhere] break-words text-ctaPrimary hover:text-ctaHover hover:underline"
           onClick={handleOpen}
         >
           {name || row.entityId}
@@ -195,7 +198,7 @@ function NameCell({
     <Link
       entityId={row.entityId}
       href={href}
-      className="block min-w-0 max-w-full break-words [overflow-wrap:anywhere] border-t border-dotted border-ctaPrimary/30 pt-1 text-tableCell text-ctaPrimary hover:text-ctaHover hover:underline"
+      className="block max-w-full min-w-0 border-t border-dotted border-ctaPrimary/30 pt-1 text-tableCell [overflow-wrap:anywhere] break-words text-ctaPrimary hover:text-ctaHover hover:underline"
       onClick={handleOpen}
     >
       {name || row.entityId}
@@ -345,7 +348,7 @@ function SortableHeaderCell({
       <div
         {...attributes}
         {...listeners}
-        className="hover:text-grey-05 mr-2 flex cursor-grab touch-none items-center self-center rounded p-0.5 text-grey-04 opacity-0 transition-opacity duration-150 group-hover/header:opacity-100 hover:bg-grey-02 active:cursor-grabbing"
+        className="mr-2 flex cursor-grab touch-none items-center self-center rounded p-0.5 text-grey-04 opacity-0 transition-opacity duration-150 group-hover/header:opacity-100 hover:bg-grey-02 hover:text-grey-05 active:cursor-grabbing"
         title="Drag to reorder column"
       >
         <OrderDots color="currentColor" />
@@ -612,7 +615,7 @@ export function PowerToolsTable({
   }, [virtualRows, rows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   return (
-    <div ref={tableRef} className="h-full w-full overflow-auto">
+    <div ref={tableRef} data-power-tools-scroll className="h-full w-full overflow-auto">
       <div className="shadow-sm sticky top-0 z-10 bg-white">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleColumnReorder}>
           <SortableContext items={orderedPropertyIds} strategy={horizontalListSortingStrategy}>
@@ -754,7 +757,8 @@ export function PowerToolsTable({
                     }
                   : undefined
               }
-              className={`absolute top-0 left-0 border-b border-grey-02 ${
+              className={cx(
+                'absolute top-0 left-0 border-b border-grey-02',
                 row.placeholder
                   ? 'bg-grey-01'
                   : selection && selection.selectedEntityIds.has(row.entityId)
@@ -762,7 +766,7 @@ export function PowerToolsTable({
                     : !isEditing
                       ? 'bg-grey-01/50'
                       : 'cursor-pointer hover:bg-grey-01'
-              }`}
+              )}
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
                 width: '100%',
@@ -821,22 +825,25 @@ export function PowerToolsTable({
                   const isPlaceholderNameCell = row.placeholder && isEditing && isNameCell;
                   const isDeleteableNameCell = !row.placeholder && isEditing && isNameCell && onDeleteRow;
                   return (
-                    <div key={`${rowId}-${property.id}`} className="min-w-0 overflow-hidden border-r border-grey-02 px-4 py-2">
-                      <div className="flex min-w-0 w-full items-start gap-2">
+                    <div
+                      key={`${rowId}-${property.id}`}
+                      className="min-w-0 overflow-hidden border-r border-grey-02 px-4 py-2"
+                    >
+                      <div className="flex w-full min-w-0 items-start gap-2">
                         <div className="min-w-0 flex-1 overflow-hidden">
-                        <PowerToolsCell
-                          row={row}
-                          property={property}
-                          spaceId={spaceId}
-                          isEditing={isEditing}
-                          isRowEditable={isEditing}
-                          onChangeEntry={onChangeEntry}
-                          onLinkEntry={onLinkEntry}
-                          onOpenEntityPanel={onOpenEntityPanel}
-                          source={source}
-                          imageUploadingFor={imageUploadingFor}
-                          bulkApplyPendingPropertyIds={bulkApplyPendingPropertyIds}
-                        />
+                          <PowerToolsCell
+                            row={row}
+                            property={property}
+                            spaceId={spaceId}
+                            isEditing={isEditing}
+                            isRowEditable={isEditing}
+                            onChangeEntry={onChangeEntry}
+                            onLinkEntry={onLinkEntry}
+                            onOpenEntityPanel={onOpenEntityPanel}
+                            source={source}
+                            imageUploadingFor={imageUploadingFor}
+                            bulkApplyPendingPropertyIds={bulkApplyPendingPropertyIds}
+                          />
                         </div>
                         {isPlaceholderNameCell && onDismissPlaceholder && (
                           <button
