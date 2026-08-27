@@ -18,7 +18,11 @@ import { DataType, Relation, Value } from '../types';
 import { toHexId } from '../utils/hex-id';
 import { extractValueString } from '../utils/value';
 import { saveVideoKeyframe } from '../utils/video/save-keyframe';
-import { getRelationUpdateUnsetFields, isExistingRelationWithUnchangedIdentity } from './relation-update';
+import {
+  getRelationUpdateUnsetFields,
+  isExistingRelationWithUnchangedIdentity,
+  requiresRelationIdentityReplacement,
+} from './relation-update';
 import { GeoStore } from './store';
 import { store, useSyncEngine } from './use-sync-engine';
 
@@ -484,6 +488,20 @@ function createMutator(store: GeoStore): Mutator {
       },
       update: (base, recipe) => {
         const changedRelation = produce(base, recipe);
+
+        // The SDK cannot update relation endpoints or other identity fields.
+        // Replace an existing edge with a fresh relation ID so the backend does
+        // not ignore a createRelation operation that reuses the committed ID.
+        if (requiresRelationIdentityReplacement(base, changedRelation)) {
+          store.deleteRelation(base);
+          store.setRelation({
+            ...changedRelation,
+            id: ID.createEntityId(),
+            isRelationUpdate: undefined,
+            relationUpdateUnsetFields: undefined,
+          });
+          return;
+        }
 
         // Relations created in the current local edit still need createRelation.
         // Once a relation exists remotely and its identity is unchanged, retain

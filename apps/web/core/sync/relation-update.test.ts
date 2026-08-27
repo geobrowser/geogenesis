@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { Relation } from '../types';
-import { getRelationUpdateUnsetFields, isExistingRelationWithUnchangedIdentity } from './relation-update';
+import {
+  getRelationUpdateUnsetFields,
+  isExistingRelationWithUnchangedIdentity,
+  requiresRelationIdentityReplacement,
+} from './relation-update';
 
 const existingRelation: Relation = {
   id: 'existing-relation',
@@ -40,6 +44,34 @@ describe('isExistingRelationWithUnchangedIdentity', () => {
         toEntity: { id: 'different-block', name: 'Different block', value: 'different-block' },
       })
     ).toBe(false);
+  });
+});
+
+describe('requiresRelationIdentityReplacement', () => {
+  it('replaces an existing relation when an endpoint changes', () => {
+    expect(
+      requiresRelationIdentityReplacement(existingRelation, {
+        ...existingRelation,
+        fromEntity: { id: 'different-page', name: 'Different page' },
+      })
+    ).toBe(true);
+  });
+
+  it('allows an unpublished relation identity to change before its first create', () => {
+    const localRelation = { ...existingRelation, isLocal: true, hasBeenPublished: false };
+
+    expect(
+      requiresRelationIdentityReplacement(localRelation, {
+        ...localRelation,
+        fromEntity: { id: 'different-page', name: 'Different page' },
+      })
+    ).toBe(false);
+  });
+
+  it('keeps position-only changes on the existing relation', () => {
+    expect(requiresRelationIdentityReplacement(existingRelation, { ...existingRelation, position: 'a1' })).toBe(
+      false
+    );
   });
 });
 
