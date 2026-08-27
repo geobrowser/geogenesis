@@ -1400,9 +1400,9 @@ function RematchClaimCard({
   });
   const awaitingResponse = opposing && !responseSettled;
   // `delayed` is the machine's own signal that this is taking longer than it should. Worth saying
-  // out loud rather than leaving the viewer with a spinner that never changes.
+  // out loud rather than leaving the button reading the same thing for half a minute.
   const awaitingLabel =
-    responseIndexing.status === 'delayed' ? 'Still confirming your position…' : 'Confirming your position…';
+    responseIndexing.status === 'delayed' ? 'Still publishing your position…' : 'Publishing your position…';
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
 

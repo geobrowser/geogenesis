@@ -2345,7 +2345,7 @@ describe('DebateRematchPageClient', () => {
     // showing no claims satisfies for free.
     await showOpponentClaims();
 
-    const button = screen.getByRole('button', { name: 'Confirming your position…' });
+    const button = screen.getByRole('button', { name: 'Publishing your position…' });
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('aria-busy', 'true');
     // The old separate spinner line is gone: there is one element, not a message beside a gap.
@@ -2361,7 +2361,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    expect(screen.getByRole('status')).toHaveTextContent('Confirming your position…');
+    expect(screen.getByRole('status')).toHaveTextContent('Publishing your position…');
   });
 
   // The machine's own signal that this is running long. It matters more now that it is the
@@ -2373,8 +2373,8 @@ describe('DebateRematchPageClient', () => {
     mocks.responseIndexingDelayed = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.getByRole('button', { name: 'Still confirming your position…' })).toBeDisabled();
-    expect(screen.getByRole('status')).toHaveTextContent('Still confirming your position…');
+    expect(screen.getByRole('button', { name: 'Still publishing your position…' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Still publishing your position…');
   });
 
   // The point of the ticket: one element, not two. Once geo-chat agrees the same button becomes
@@ -2407,7 +2407,7 @@ describe('DebateRematchPageClient', () => {
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.queryByText('Confirming your position…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Publishing your position…')).not.toBeInTheDocument();
   });
 
   it('sends the request once geo-chat agrees with the side on screen', async () => {
@@ -2443,7 +2443,7 @@ describe('DebateRematchPageClient', () => {
     // Asserted on the disabled state rather than the button's absence: since GEO-2697 the control
     // is on screen throughout, and it is only *named* differently while it waits. Checking the
     // name alone would pass for a button that had become pressable under a new label.
-    const button = screen.getByRole('button', { name: 'Confirming your position…' });
+    const button = screen.getByRole('button', { name: 'Publishing your position…' });
     expect(button).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
   });
