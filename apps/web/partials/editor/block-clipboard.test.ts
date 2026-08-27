@@ -19,6 +19,7 @@ import {
   insertClonedBlock,
   parseBlockClipboardHtml,
   parseBlockClipboardPayload,
+  readBlockClipboard,
 } from './block-clipboard';
 import { createIdExtension } from './id-extension';
 
@@ -100,6 +101,15 @@ describe('Geo block clipboard', () => {
     const malformed = { ...copied, node: { ...copied.node, content: [{}] } };
 
     expect(parseBlockClipboardPayload(JSON.stringify(malformed))).toBeNull();
+  });
+
+  it('does not restore structured data from matching unmarked plain text', () => {
+    const copied = payload();
+    const clipboard = {
+      getData: (type: string) => (type === 'text/plain' ? copied.plainText : ''),
+    };
+
+    expect(readBlockClipboard(clipboard)).toBeNull();
   });
 
   it('separates descendant list items in the plain-text fallback', () => {

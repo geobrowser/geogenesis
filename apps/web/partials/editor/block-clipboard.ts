@@ -7,8 +7,6 @@ import type { Relation, Value } from '~/core/types';
 export const GEO_BLOCK_CLIPBOARD_MIME = 'application/x-geogenesis-block+json';
 
 const GEO_BLOCK_CLIPBOARD_ATTRIBUTE = 'data-geogenesis-block';
-const GEO_BLOCK_CLIPBOARD_STORAGE_KEY = 'geogenesis.copied-block.v1';
-const GEO_BLOCK_CLIPBOARD_MAX_AGE_MS = 30 * 60 * 1000;
 const DATA_TYPES = new Set([
   'TEXT',
   'INTEGER',
@@ -36,19 +34,12 @@ export type BlockClipboardPayload = {
   relations: Relation[];
 };
 
-type StoredBlockClipboard = {
-  copiedAt: number;
-  payload: BlockClipboardPayload;
-};
-
 type ClipboardReader = {
   getData: (type: string) => string;
 };
 
 /** Writes a portable text fallback plus the Geo block payload used by in-app paste. */
 export async function writeBlockClipboard(payload: BlockClipboardPayload): Promise<void> {
-  rememberBlockClipboard(payload);
-
   const clipboard = navigator.clipboard;
   if (typeof ClipboardItem !== 'undefined' && typeof clipboard?.write === 'function') {
     const html = blockClipboardHtml(payload);
@@ -73,7 +64,7 @@ export function blockClipboardHtml(payload: BlockClipboardPayload): string {
   return `<span ${GEO_BLOCK_CLIPBOARD_ATTRIBUTE}="${encodedPayload}">${escapeHtml(payload.plainText)}</span>`;
 }
 
-/** Reads structured Geo content first, then falls back to the recent same-browser copy. */
+/** Reads structured Geo content only when the clipboard carries a verifiable marker. */
 export function readBlockClipboard(data: ClipboardReader): BlockClipboardPayload | null {
   const customPayload = parseBlockClipboardPayload(data.getData(GEO_BLOCK_CLIPBOARD_MIME));
   if (customPayload) return customPayload;
@@ -81,8 +72,7 @@ export function readBlockClipboard(data: ClipboardReader): BlockClipboardPayload
   const htmlPayload = parseBlockClipboardHtml(data.getData('text/html'));
   if (htmlPayload) return htmlPayload;
 
-  const plainText = data.getData('text/plain');
-  return readRememberedBlockClipboard(plainText);
+  return null;
 }
 
 export function parseBlockClipboardHtml(html: string): BlockClipboardPayload | null {
@@ -295,40 +285,6 @@ export function buildBlockLink(currentHref: string, blockId: string): string {
   url.searchParams.set('source', 'copy_link');
   url.hash = blockId;
   return url.toString();
-}
-
-function rememberBlockClipboard(payload: BlockClipboardPayload) {
-  if (typeof window === 'undefined') return;
-
-  try {
-    const stored: StoredBlockClipboard = { copiedAt: Date.now(), payload };
-    window.localStorage.setItem(GEO_BLOCK_CLIPBOARD_STORAGE_KEY, JSON.stringify(stored));
-  } catch {
-    // Clipboard HTML remains the primary transport when storage is unavailable.
-  }
-}
-
-function readRememberedBlockClipboard(plainText: string): BlockClipboardPayload | null {
-  if (typeof window === 'undefined' || !plainText) return null;
-
-  try {
-    const raw = window.localStorage.getItem(GEO_BLOCK_CLIPBOARD_STORAGE_KEY);
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw) as Partial<StoredBlockClipboard>;
-    if (
-      typeof parsed.copiedAt !== 'number' ||
-      Date.now() - parsed.copiedAt > GEO_BLOCK_CLIPBOARD_MAX_AGE_MS ||
-      !isBlockClipboardPayload(parsed.payload) ||
-      parsed.payload.plainText !== plainText
-    ) {
-      return null;
-    }
-
-    return parsed.payload;
-  } catch {
-    return null;
-  }
 }
 
 function isBlockClipboardPayload(value: unknown): value is BlockClipboardPayload {
