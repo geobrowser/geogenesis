@@ -236,4 +236,37 @@ describe('hydrateEntityBatched', () => {
     expect(small.status).toBe('fulfilled');
     expect(small.status === 'fulfilled' && small.value?.id).toBe('small');
   });
+  it('settles rows that needed no top-up without waiting for a slow one', async () => {
+    // Awaiting every top-up before resolving anything holds back ids whose data has already
+    // arrived, so `useQueryEntity` keeps `isLoading` true on unrelated rows until the slowest
+    // capped entity finishes — and one stalled top-up stalls the whole batch. The singular queries
+    // this replaced settled independently.
+    const capped = { ...entity('big'), relations: Array.from({ length: 1000 }, (_, i) => ({ id: `r${i}` })) };
+    mocks.syncMany.mockResolvedValue({
+      merged: [entity('big'), entity('small')],
+      remote: [capped, entity('small')],
+    });
+
+    let releaseTopUp: (v: unknown) => void = () => {};
+    mocks.syncOne.mockImplementation(
+      () => new Promise(resolve => { releaseTopUp = () => resolve({ merged: entity('big'), remote: null }); })
+    );
+
+    let smallSettled = false;
+    const smallPromise = hydrateEntityBatched({ id: 'small', store, cache, stream }).then(v => {
+      smallSettled = true;
+      return v;
+    });
+    const bigPromise = hydrateEntityBatched({ id: 'big', store, cache, stream });
+
+    // Let the batch resolve and microtasks drain, with the top-up still outstanding.
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    expect(smallSettled).toBe(true);
+    expect((await smallPromise)?.id).toBe('small');
+
+    // Only now does the capped row finish.
+    releaseTopUp(null);
+    expect((await bigPromise)?.id).toBe('big');
+  });
 });

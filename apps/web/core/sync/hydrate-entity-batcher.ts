@@ -84,96 +84,21 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
   const ids = [...batch.waiters.keys()];
   if (ids.length === 0) return;
 
+  let merged: Entity[];
+  let remote: Entity[];
+
   try {
     /**
      * `spaceId` is deliberately omitted, matching the singular path this replaces: the sync engine
      * filters by space as it receives events, so hydrating space-scoped here would narrow what
      * lands in the store.
      */
-    const { merged, remote } = await E.syncMany({
+    ({ merged, remote } = await E.syncMany({
       store,
       cache,
       where: { id: { in: ids } },
       first: ids.length,
-    });
-
-    if (merged.length > 0) {
-      // One event for the batch rather than one per entity. The store's listener already takes an
-      // array, and `syncMany` returns the raw remotes alongside so the synced baseline stays clean.
-      stream.emit({
-        type: GeoEventStream.ENTITIES_SYNCED,
-        entities: merged,
-        remoteEntities: remote,
-      });
-    }
-
-    const mergedById = new Map(merged.map(entity => [entity.id, entity]));
-    const failedTopUps = new Map<string, unknown>();
-
-    // Anything at the cap may have had relations dropped. Re-read those through the singular path,
-    // which drains the paginated connection, and let its result win.
-    const truncated = remote.filter(entity => (entity.relations?.length ?? 0) >= BATCH_RELATIONS_CAP);
-    if (truncated.length > 0) {
-      const outcomes = await Promise.all(
-        truncated.map(async entity => {
-          try {
-            return { id: entity.id, result: await E.syncOne({ id: entity.id, store, cache }) };
-          } catch (error) {
-            return { id: entity.id, error };
-          }
-        })
-      );
-
-      /**
-       * A failed top-up is a failure, not a degraded success.
-       *
-       * Resolving with the batch result would mark the query successful, and React Query does not
-       * retry a success — so a transient failure would leave that entity truncated for as long as
-       * the entry stays cached, with nothing to signal it. The singular path this replaced threw,
-       * and the row's own retry repaired it. Rejecting keeps that.
-       *
-       * Only the ids whose top-up failed reject; every other id in the batch resolves normally.
-       */
-      for (const outcome of outcomes) {
-        if ('error' in outcome) failedTopUps.set(outcome.id, outcome.error);
-      }
-
-      const toppedUp = outcomes
-        .map(outcome => ('result' in outcome ? outcome.result : null))
-        .filter((result): result is { merged: Entity; remote: Entity | null } => Boolean(result?.merged));
-
-      if (toppedUp.length > 0) {
-        /**
-         * Emitted, not just returned. `syncOne` hands back the entity without writing it anywhere,
-         * and the store is only ever updated by this event — `useQueryEntity` reads
-         * `store.getEntity(...)` rather than the value this promise resolves with. Without a second
-         * emit the complete relation set would reach the caller and nothing else, leaving the store
-         * and its synced baseline holding the truncated version the batch emitted above.
-         *
-         * A second event rather than delaying the first: the batch result is what almost every row
-         * needs, and holding it back until a rare top-up finishes would slow the common case to fix
-         * the uncommon one.
-         */
-        stream.emit({
-          type: GeoEventStream.ENTITIES_SYNCED,
-          entities: toppedUp.map(result => result.merged),
-          remoteEntities: toppedUp.map(result => result.remote).filter((e): e is Entity => e !== null),
-        });
-
-        for (const result of toppedUp) mergedById.set(result.merged.id, result.merged);
-      }
-    }
-
-    for (const [entityId, waiters] of batch.waiters) {
-      if (failedTopUps.has(entityId)) {
-        const error = failedTopUps.get(entityId);
-        for (const waiter of waiters) waiter.reject(error);
-        continue;
-      }
-
-      const entity = mergedById.get(entityId) ?? null;
-      for (const waiter of waiters) waiter.resolve(entity);
-    }
+    }));
   } catch (error) {
     // Batching makes failure shared where it used to be per entity. Each waiter is rejected
     // separately so react-query still handles them independently — one row's retry and error state
@@ -181,5 +106,77 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
     for (const waiters of batch.waiters.values()) {
       for (const waiter of waiters) waiter.reject(error);
     }
+    return;
+  }
+
+  if (merged.length > 0) {
+    // One event for the batch rather than one per entity. The store's listener already takes an
+    // array, and `syncMany` returns the raw remotes alongside so the synced baseline stays clean.
+    stream.emit({
+      type: GeoEventStream.ENTITIES_SYNCED,
+      entities: merged,
+      remoteEntities: remote,
+    });
+  }
+
+  const mergedById = new Map(merged.map(entity => [entity.id, entity]));
+
+  // Anything at the cap may have had relations dropped and needs the draining singular read.
+  const truncatedIds = new Set(
+    remote.filter(entity => (entity.relations?.length ?? 0) >= BATCH_RELATIONS_CAP).map(entity => entity.id)
+  );
+
+  /**
+   * Settled now, not after the top-ups.
+   *
+   * Awaiting every top-up before resolving anything would hold back ids that needed nothing — their
+   * data has already arrived — so `useQueryEntity` would keep `isLoading` true on unrelated rows
+   * until the slowest capped entity finished, and one stalled top-up would stall the whole batch.
+   * The singular queries this replaced settled independently, and so do these.
+   */
+  for (const [entityId, waiters] of batch.waiters) {
+    if (truncatedIds.has(entityId)) continue;
+    const entity = mergedById.get(entityId) ?? null;
+    for (const waiter of waiters) waiter.resolve(entity);
+  }
+
+  // Each capped entity then settles on its own, as its own top-up finishes.
+  for (const entityId of truncatedIds) {
+    const waiters = batch.waiters.get(entityId) ?? [];
+
+    void E.syncOne({ id: entityId, store, cache })
+      .then(result => {
+        if (!result?.merged) {
+          // Nothing better came back; the batch result is still the best answer available.
+          for (const waiter of waiters) waiter.resolve(mergedById.get(entityId) ?? null);
+          return;
+        }
+
+        /**
+         * Emitted, not just returned. `syncOne` hands back the entity without writing it anywhere,
+         * and the store is only ever updated by this event — `useQueryEntity` reads
+         * `store.getEntity(...)` rather than the value this promise resolves with. Without the emit
+         * the complete relation set would reach the caller and nothing else, leaving the store and
+         * its synced baseline holding the truncated version emitted for the batch.
+         */
+        stream.emit({
+          type: GeoEventStream.ENTITIES_SYNCED,
+          entities: [result.merged],
+          remoteEntities: result.remote ? [result.remote] : [],
+        });
+
+        for (const waiter of waiters) waiter.resolve(result.merged);
+      })
+      .catch(error => {
+        /**
+         * A failed top-up is a failure, not a degraded success. Resolving with the known-truncated
+         * batch result would mark the query successful, and React Query does not retry a success —
+         * the entity would stay incomplete for as long as the entry is cached, with nothing to
+         * signal it. The singular path this replaced threw, and the row's own retry repaired it.
+         *
+         * Only this id is affected; the rest of the batch has already resolved above.
+         */
+        for (const waiter of waiters) waiter.reject(error);
+      });
   }
 }
