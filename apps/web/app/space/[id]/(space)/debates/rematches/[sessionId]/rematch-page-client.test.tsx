@@ -140,6 +140,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace, back: mocks.back }),
 }));
 
+// The voice channel has its own colocated suite (rematch-voice.test.tsx); rendering it here would
+// drag the LiveKit stack into every page test.
+vi.mock('./rematch-voice', () => ({
+  RematchVoicePill: () => null,
+}));
+
 vi.mock('~/core/debates/api', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/debates/api')>();
   return {

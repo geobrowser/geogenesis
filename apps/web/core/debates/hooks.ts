@@ -46,6 +46,7 @@ import {
   getDebateTranscript,
   getLiveKitToken,
   getRecordingUrl,
+  getRematchLiveKitToken,
   handleDebateSharePrompt,
   joinDebateQueue,
   leaveDebateQueue,
@@ -90,6 +91,11 @@ export const debateQueryKeys = {
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
+  // Deliberately NOT nested under `rematch(...)`: the gateway invalidates that prefix on every
+  // `debate.rematch_changed`, and refetching here would hand `<LiveKitRoom>` a new token and tear
+  // down the live voice connection.
+  rematchLiveKit: (accountKey: string | null, sessionId: string) =>
+    ['debates', 'account', accountKey, 'rematch-livekit', sessionId] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
@@ -622,6 +628,34 @@ export function useDebateRematch(sessionId: string, enabled = true) {
     queryKey: debateQueryKeys.rematch(accountKey, sessionId),
     queryFn: ({ signal }) => getDebateRematch(sessionId, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && Boolean(sessionId),
+  });
+}
+
+/**
+ * Mints the LiveKit token for the rematch voice channel. A query rather than a mutation because
+ * voice auto-joins with the picker — there is no user gesture to hang a mutation on.
+ *
+ * The token is minted once per mount and held forever (`staleTime: Infinity`): handing
+ * `<LiveKitRoom>` a fresh token mid-session tears the connection down. Recovery from a dead
+ * connection goes through invalidating this key and remounting the room instead.
+ */
+export function useRematchLiveKitJoin(sessionId: string, enabled: boolean) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    queryKey: debateQueryKeys.rematchLiveKit(accountKey, sessionId),
+    queryFn: () => getRematchLiveKitToken(sessionId, getPrivyIdentityToken, accountKey),
+    enabled: enabled && authenticated && Boolean(sessionId),
+    staleTime: Infinity,
+    // Fresh token on re-entry: a cached one may be near expiry or minted for a session state
+    // that has since changed.
+    gcTime: 0,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof GeoChatRequestError && [400, 403, 404, 503].includes(error.status)) return false;
+      return failureCount < 2;
+    },
   });
 }
 
