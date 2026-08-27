@@ -91,18 +91,38 @@ describe('debate query network ownership', () => {
       useDebateClaims('space-1', ['claim-1'], true);
       useSpaceDebates('space-1', true);
       useDebate('debate-1', true);
-      useDebateRematch('rematch-1');
       useDebateRematchClaims('rematch-1', ['claim-1']);
       useDebateSharePrompts();
       useDebateMedia('debate-1', true);
       useDebateTranscript('debate-1');
     });
 
-    expect(mocks.useQuery).toHaveBeenCalledTimes(8);
+    expect(mocks.useQuery).toHaveBeenCalledTimes(7);
     for (const [options] of mocks.useQuery.mock.calls) {
       expect(options).toMatchObject({ retry: false, refetchOnReconnect: false, refetchOnWindowFocus: false });
       expect(options).not.toHaveProperty('refetchInterval');
     }
+  });
+
+  // GEO-2650. The rematch session had no polling at all, so a push that never arrived meant the
+  // request never appeared — and the push has a 30-second failure budget, because a silently dead
+  // socket is not noticed until the next heartbeat. Every other link measures far below that: the
+  // outbox publishes rematch events in 1.28s average and 2.27s worst over the last week, and the
+  // client coalesces invalidations for 50ms.
+  //
+  // Gated on presence rather than attention for the reason the activity poll already learned: a
+  // visible tab behind the focused window is exactly where someone waits for an opponent.
+  it('polls the rematch session on a visible tab, including one that is not focused', () => {
+    mocks.attention = false;
+    mocks.presence = true;
+
+    const { rerender } = renderHook(() => useDebateRematch('rematch-1'));
+    expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: 5_000 });
+
+    // A hidden tab has nobody watching the picker.
+    mocks.presence = false;
+    rerender();
+    expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: false });
   });
 
   // Activity gates the incoming-request popup, and the socket has two ways to be deaf: reconnect
