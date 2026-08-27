@@ -63,15 +63,16 @@ import {
   updateDebateAvailability,
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
-import { useDebateAttention } from './debate-attention';
-import { markEnteringDebate } from './debate-entry-intent';
-import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
+import { useDebateAttention, useDebatePresence } from './debate-attention';
+import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
+import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
 import { hasProcessedVideo } from './playback-utils';
 import {
   isRematchClaimsQueryKey,
   refreshRematchClaimBatches,
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
+import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
 
 export const debateQueryNetworkOptions = {
   retry: false,
@@ -117,15 +118,27 @@ export function useGeoChatAuth() {
   };
 }
 
+/**
+ * Holds a query's own result open while the space type is still resolving.
+ *
+ * The gate can't just disable the query and leave it at that: a disabled react-query reports
+ * `isLoading: false` with no data, so consumers read the wait as a settled empty answer. See
+ * {@link SpaceDebateSupport}.
+ */
+function holdWhileSpaceResolves<T extends { isLoading: boolean }>(query: T, support: SpaceDebateSupport): T {
+  return support === 'unknown' ? { ...query, isLoading: true } : query;
+}
+
 // Pass a claim-id array to enrich a known set, or `null` to list every debatable
 // claim in the space. geo-chat indexes them, so this skips the KG scan over all
 // the space's Claim entities that 504s on large spaces.
 export function useDebateClaims(spaceId: string, claimIds: string[] | null, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  const shouldFetch = enabled && (claimIds === null || claimIds.length > 0);
+  const support = useSpaceDebateSupport(spaceId);
+  const shouldFetch = enabled && support === 'indexed' && (claimIds === null || claimIds.length > 0);
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated && shouldFetch);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.claims(spaceId, claimIds),
     queryFn: ({ signal }) =>
@@ -138,6 +151,8 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
       ),
     enabled: shouldFetch,
   });
+
+  return holdWhileSpaceResolves(query, support);
 }
 
 /**
@@ -151,6 +166,14 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
 export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
+  // Deliberately ungated on space type, unlike the single-space {@link useDebateClaims}. The
+  // rematch picker filters its claims by `isSpaceDebatePublishable` before they reach here, and it
+  // holds scopes on both participants' personal spaces on purpose — a debater's own claims live
+  // there, and the opponent's *first* position is exactly the case with no claim to derive the
+  // scope from yet. Narrowing this to indexed spaces would strip those, and since a scope-level
+  // rejection now recycles the socket rather than parking it (GEO-2650), there is nothing left for
+  // the narrowing to save.
+  //
   // Same subscription `useDebateClaims` makes for its one space: without it the gateway never
   // delivers this space's claim changes, so nothing here would refresh when someone responds.
   const spaceIds = React.useMemo(() => groups.map(group => group.spaceId), [groups]);
@@ -303,11 +326,51 @@ export function useLeaveDebateQueue(spaceId: string) {
   });
 }
 
+/** How often activity re-asks while this tab is on screen, with a live gateway behind it. */
+const ACTIVITY_POLL_MS = 30_000;
+/** And while the gateway is paused, when this is the only thing still asking. */
+const ACTIVITY_DEGRADED_POLL_MS = 10_000;
+
+/**
+ * The viewer's own debate state: the debate or rematch they are in, and the counts that gate the
+ * incoming-request popup.
+ *
+ * This is the entry point for anything that arrives unannounced. `DebateCoordinator` only fetches
+ * the request list once `incoming_request_count` says one exists, so a stale answer here is a
+ * request the recipient is never shown — and every other route to freshness is switched off:
+ * `debateQueryNetworkOptions` turns off `refetchOnWindowFocus` and `refetchOnReconnect`, which
+ * leaves the gateway's `debate.requests_changed` as the only thing that ever re-asked.
+ *
+ * That is fine until the socket is not listening, and it has two ways not to be. A dropped
+ * connection backs off for up to thirty seconds before `READY` triggers its reconcile. And an
+ * `ERROR` frame the gateway can't act on pauses live updates deliberately, without scheduling a
+ * reconnect — a scope-level rejection, but it takes the account-level stream down with it, and
+ * nothing recovers it. Either way the popup waited on a remount, which is how a request took
+ * "30-60 seconds" to appear (GEO-2638).
+ *
+ * So: poll while this tab is on screen, faster while the gateway is paused and this is the only
+ * thing still asking, and re-ask on return to the tab. The socket still does the fast path — a
+ * couple of seconds, of which the outbox relay is two — and this only bounds the bad case.
+ *
+ * The gate is *presence*, not attention. Attention additionally requires `document.hasFocus()`,
+ * and gating the poll on that meant a tab sitting open on screen — but behind the window the
+ * viewer happened to be typing in — did not poll at all, leaving the socket as the only delivery
+ * path for the exact case this poll exists to cover. An incoming request is by definition the
+ * thing that arrives while you are looking at something else, so focus is the wrong question to
+ * ask; that is why geo-chat keys reachability (`is_online`) on presence too. This is what was
+ * still reported as a ~36 second delivery after GEO-2638 (GEO-2650).
+ */
 export function useDebateActivity(enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const attentive = useDebateAttention();
+  const present = useDebatePresence();
+  const { paused } = useDebateGatewaySnapshot();
+  const queryEnabled = enabled && authenticated;
+  const wasPresent = React.useRef(present);
+  const wasAttentive = React.useRef(attentive);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.activity(accountKey),
     queryFn: async ({ signal }) => {
@@ -320,8 +383,24 @@ export function useDebateActivity(enabled = true) {
       }
       return activity;
     },
-    enabled: enabled && authenticated,
+    enabled: queryEnabled,
+    // Hidden tabs still don't poll: they have no popup to draw, and browsers throttle their timers
+    // anyway. On-screen is the bar, whether or not this is the frontmost window.
+    refetchInterval: present ? (paused ? ACTIVITY_DEGRADED_POLL_MS : ACTIVITY_POLL_MS) : false,
   });
+
+  // Coming back is the one moment a viewer expects to be shown what they missed, and the shared
+  // options switch off React Query's own focus refetch for every debate query. Both transitions
+  // count: becoming visible restarts the poll but not immediately, and regaining focus is when
+  // someone is most likely to be waiting on a popup.
+  React.useEffect(() => {
+    const returned = (present && !wasPresent.current) || (attentive && !wasAttentive.current);
+    wasPresent.current = present;
+    wasAttentive.current = attentive;
+    if (returned && queryEnabled) void query.refetch();
+  }, [attentive, present, query.refetch, queryEnabled]);
+
+  return query;
 }
 
 export function useUpdateDebateAvailability() {
@@ -391,9 +470,13 @@ export function useClearDebateActivity() {
 
 export function useSpaceDebates(spaceId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  useDebateGatewayScope({ scope: 'space', space_id: spaceId }, enabled && authenticated);
+  // The browse feed subscribes the same way `useDebateClaims` does, so it needs the same gate:
+  // opening the debate feed on a personal space raised the banner on its own.
+  const support = useSpaceDebateSupport(spaceId);
+  const shouldFetch = enabled && support === 'indexed';
+  useDebateGatewayScope({ scope: 'space', space_id: spaceId }, shouldFetch && authenticated);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.spaceDebates(spaceId),
     queryFn: ({ signal }) =>
@@ -403,8 +486,10 @@ export function useSpaceDebates(spaceId: string, enabled: boolean) {
         authenticated ? accountKey : null,
         signal
       ),
-    enabled,
+    enabled: shouldFetch,
   });
+
+  return holdWhileSpaceResolves(query, support);
 }
 
 export function useDebate(debateId: string, enabled: boolean) {
@@ -668,6 +753,11 @@ export function useAcceptDebateRematchRequest() {
 
   return useMutation({
     mutationFn: (requestId: string) => acceptDebateRematchRequest(requestId, getPrivyIdentityToken, accountKey),
+    // Same window as the hub's accept: the debate is created inside this round trip and announced to
+    // this tab over its own socket, so the id-keyed intent below is taken too late to stop the
+    // coordinator prompting us to join it (GEO-2604).
+    onMutate: () => ({ releaseEntry: markEnteringPendingDebate() }),
+    onSettled: (_result, _error, _variables, context) => context?.releaseEntry(),
     onSuccess: result => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, result.session.id) });

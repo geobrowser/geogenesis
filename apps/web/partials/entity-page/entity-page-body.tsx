@@ -13,7 +13,6 @@ import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { BacklinksClientContainer } from '~/partials/entity-page/backlinks-client-container';
-import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
@@ -82,17 +81,20 @@ function EntityTabsSection({
   );
 }
 
-function RouteBacklinks({ entityId }: { entityId: string }) {
-  return (
-    <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-      <React.Suspense fallback={<div />}>
-        <BacklinksServerContainer entityId={entityId} />
-      </React.Suspense>
-    </TrackedErrorBoundary>
-  );
-}
-
-function SidePanelBacklinks({ entityId }: { entityId: string }) {
+/**
+ * Both variants fetch through `BacklinksClientContainer`, which is the only one of the two
+ * containers that can run here.
+ *
+ * `BacklinksServerContainer` is an async component. This file is a client component, so React
+ * doesn't treat it as a Server Component — it re-invokes the function on every render, which fires
+ * its two requests again, suspends, resolves, renders, and invokes it again. The `Suspense` that
+ * used to wrap it hid that entirely: the backlinks looked fine while a single entity page load sent
+ * `EntityBacklinksPage` 82 times and `Spaces` 64 times, with identical variables (GEO-2666).
+ *
+ * The server container is still right for the three routes that render it from an actual server
+ * component; it just can't be reached from here.
+ */
+function EntityBacklinks({ entityId }: { entityId: string }) {
   return (
     <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
       <BacklinksClientContainer entityId={entityId} />
@@ -132,7 +134,7 @@ function EditorFooter({
         </>
       ) : null}
       <Spacer height={40} />
-      {variant === 'route' ? <RouteBacklinks entityId={entityId} /> : <SidePanelBacklinks entityId={entityId} />}
+      <EntityBacklinks entityId={entityId} />
       <CommentSection entityId={entityId} spaceId={spaceId} />
     </>
   );

@@ -112,6 +112,20 @@ describe('DebatesHubPanel', () => {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
 
+    // jsdom has no layout, so reachability at a narrow width can't be asserted directly. The
+    // scroll container is the thing that guarantees it, so pin that instead — without it the
+    // last tab is clipped by the panel's `overflow-hidden` with no way to get to it.
+    const row = screen.getByRole('button', { name: /^Claims/ }).closest('.overflow-x-auto');
+    expect(row).not.toBeNull();
+
+    // Order, not just presence: the labels alone stayed green through a reorder.
+    const order = ['Claims', 'People', 'Matches', 'Requests'];
+    const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
+    for (const [index, tab] of rendered.slice(0, -1).entries()) {
+      const next = rendered[index + 1];
+      expect(Boolean(tab.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    }
+
     fireEvent.click(screen.getByRole('button', { name: /^People/ }));
 
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.

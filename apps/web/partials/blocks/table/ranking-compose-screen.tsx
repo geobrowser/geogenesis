@@ -381,7 +381,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       hiddenGlobalIds.size === 0 ? filteredUnrankedIds : filteredUnrankedIds.filter(id => !hiddenGlobalIds.has(id)),
     [filteredUnrankedIds, hiddenGlobalIds]
   );
-  const visibleShowRankedUnrankedDivider = visibleFilteredRankedIds.length > 0 && visibleFilteredUnrankedIds.length > 0;
   const visibleHasVisibleRankableEntities =
     visibleFilteredRankedIds.length > 0 || visibleFilteredUnrankedIds.length > 0;
 
@@ -626,7 +625,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           rankableEntriesById={displayRankableEntriesById}
           searchResultsById={searchResultsById}
           rowsByEntityId={rowsByEntityId}
-          showRankedUnrankedDivider={visibleShowRankedUnrankedDivider}
           hasVisibleRankableEntities={visibleHasVisibleRankableEntities}
           isSearchActive={isSearchActive}
           isSearchSettled={isSearchSettled}

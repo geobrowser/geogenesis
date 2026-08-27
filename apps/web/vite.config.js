@@ -7,6 +7,9 @@ export default defineConfig({
       '~': path.resolve(__dirname, './'),
     },
     environment: 'jsdom',
+    // Refuses network by default. See vitest.setup.ts — the endpoints below are unreachable on
+    // purpose, and a *slow* failure is what made unmocked calls log after their test had finished.
+    setupFiles: ['./vitest.setup.ts'],
     env: {
       NEXT_PUBLIC_APP_ENV: 'production',
       NEXT_PUBLIC_PRIVY_APP_ID: 'clpsvsqpt005fl70fe775owo5',

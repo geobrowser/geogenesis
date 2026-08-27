@@ -18,6 +18,20 @@ export type RankingEntryDisplay = {
   spaceId?: string | null;
 };
 
+export function toRankingEntryDisplay(
+  entity: { id: string; values: Value[]; relations: Relation[] },
+  spaceId: string
+): RankingEntryDisplay {
+  const name = pickValueEntryBySpace(entity.values, SystemIds.NAME_PROPERTY, spaceId);
+  return {
+    entityId: entity.id,
+    name: name?.value ?? 'Untitled',
+    description: pickValueBySpace(entity.values, SystemIds.DESCRIPTION_PROPERTY, spaceId),
+    image: pickImage(entity.relations, spaceId),
+    spaceId: name?.spaceId ?? null,
+  };
+}
+
 export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
   const entityIdsKey = entityIds.filter(Boolean).join('|');
   const stableIds = React.useMemo(() => [...new Set(entityIdsKey ? entityIdsKey.split('|') : [])], [entityIdsKey]);
@@ -37,14 +51,7 @@ export function useRankingEntryEntities(spaceId: string, entityIds: string[]) {
         .map(id => {
           const entity = byId.get(id);
           if (!entity) return null;
-          const name = pickValueEntryBySpace(entity.values, SystemIds.NAME_PROPERTY, spaceId);
-          return {
-            entityId: id,
-            name: name?.value ?? 'Untitled',
-            description: pickValueBySpace(entity.values, SystemIds.DESCRIPTION_PROPERTY, spaceId),
-            image: pickImage(entity.relations, spaceId),
-            spaceId: name?.spaceId ?? null,
-          };
+          return toRankingEntryDisplay(entity, spaceId);
         })
         .filter((e): e is NonNullable<typeof e> => e != null),
     [byId, stableIds, spaceId]

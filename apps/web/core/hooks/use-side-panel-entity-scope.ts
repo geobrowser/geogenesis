@@ -1,11 +1,9 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
 import * as React from 'react';
 
 import { useQueryEntity } from '~/core/sync/use-store';
-import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
+import { entityHomeSpaceId } from '~/core/utils/space/entity-home-space';
 
 export function useSidePanelEntityScope(entityId: string, requestedSpaceId: string, preferRequestedSpace: boolean) {
   const { entity: unscopedEntity, isLoading: isLoadingHydration } = useQueryEntity({
@@ -13,23 +11,10 @@ export function useSidePanelEntityScope(entityId: string, requestedSpaceId: stri
     enabled: Boolean(entityId),
   });
 
-  const derivedSpaceId = React.useMemo(() => {
-    const namedSpaceIds = new Set<string>();
-    for (const value of unscopedEntity?.values ?? []) {
-      if (
-        !value.isDeleted &&
-        value.property.id === SystemIds.NAME_PROPERTY &&
-        typeof value.value === 'string' &&
-        value.value.trim().length > 0
-      ) {
-        namedSpaceIds.add(value.spaceId);
-      }
-    }
-
-    return (
-      getTopRankedSpaceId([...namedSpaceIds]) ?? getTopRankedSpaceId(unscopedEntity?.spaces ?? []) ?? requestedSpaceId
-    );
-  }, [unscopedEntity, requestedSpaceId]);
+  const derivedSpaceId = React.useMemo(
+    () => (unscopedEntity ? (entityHomeSpaceId(unscopedEntity) ?? requestedSpaceId) : requestedSpaceId),
+    [unscopedEntity, requestedSpaceId]
+  );
 
   const effectiveSpaceId = React.useMemo(() => {
     if (preferRequestedSpace && (unscopedEntity?.spaces ?? []).includes(requestedSpaceId)) {

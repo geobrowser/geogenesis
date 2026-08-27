@@ -134,6 +134,22 @@ afterEach(cleanup);
 const openFilter = (label: string) => fireEvent.click(screen.getByRole('button', { name: new RegExp(label) }));
 
 describe('RequestsTab', () => {
+  // GEO-2684. The shared helper's own test only proves it carries the sticky classes, so this is
+  // what would catch these filters being moved back into the scrolling body.
+  it('pins the status and space filters above the requests', () => {
+    render(<RequestsTab />);
+
+    const pinned = screen.getByRole('button', { name: /Any status/ }).closest('.sticky');
+    expect(pinned).not.toBeNull();
+    expect(pinned?.className).toContain('top-0');
+
+    // Both controls ride in the same pinned block rather than a second one that could overlap it.
+    expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).toBe(pinned);
+
+    // The requests themselves stay outside it, or they would be pinned too and never scroll.
+    expect(screen.getByRole('heading', { name: 'Received' }).closest('.sticky')).toBeNull();
+  });
+
   // The whole point of the popup's "Not now": the request is untouched, so it is still here with
   // its countdown for the rest of its 25-minute life.
   it('lists a request nobody has answered yet, with its countdown', () => {
@@ -228,7 +244,9 @@ describe('RequestsTab', () => {
     render(<RequestsTab />);
 
     expect(screen.getByRole('heading', { name: 'Sent' })).toBeInTheDocument();
-    expect(screen.getByText('Waiting for a reply')).toBeInTheDocument();
+    // The card carries its own state in the footer now, beside the action, rather than a header
+    // that repeated the "Sent" label above it.
+    expect(screen.getByText('Awaiting response')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Explore claims' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));

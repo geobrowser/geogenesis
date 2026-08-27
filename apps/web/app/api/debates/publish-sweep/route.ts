@@ -44,6 +44,9 @@ export async function GET(request: Request) {
   let notEditor = 0;
   let pending = 0;
   let skipped = 0;
+  // Debates whose media will never be publishable. Counted apart from `pending` because the two
+  // want opposite reactions: a backlog drains itself, this does not.
+  const mediaFailed: string[] = [];
 
   for (const spaceId of spaceIds) {
     let debateIds: string[];
@@ -67,7 +70,13 @@ export async function GET(request: Request) {
         else if (result.status === 'not_editor') notEditor += 1;
       } catch (error) {
         if (error instanceof DebateNotPublishableError) {
-          if (error.code === 'media_not_ready' || error.code === 'not_complete') {
+          if (error.code === 'media_failed') {
+            // Terminal: the worker has spent its retries, so no later tick will publish this.
+            // Collected rather than logged here — the sweep runs every five minutes and these
+            // debates never leave the list, so a line each would be a few hundred a day per stuck
+            // debate. One aggregate line below carries the same information without the noise.
+            mediaFailed.push(debateId);
+          } else if (error.code === 'media_not_ready' || error.code === 'not_complete') {
             // Media still processing or lifecycle state changed — retry next tick.
             pending += 1;
           } else {
@@ -84,5 +93,23 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, published, alreadyPublished, notEditor, pending, skipped, failed });
+  if (mediaFailed.length > 0) {
+    console.error('[debate-acceptor] debates permanently unpublishable this sweep', {
+      count: mediaFailed.length,
+      debateIds: mediaFailed,
+    });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    published,
+    alreadyPublished,
+    notEditor,
+    pending,
+    // Every unpublishable debate the sweep saw, by id, on every tick — so the answer to "how many
+    // debates are stuck?" is a number someone can read rather than an archaeology exercise.
+    mediaFailed,
+    skipped,
+    failed,
+  });
 }
