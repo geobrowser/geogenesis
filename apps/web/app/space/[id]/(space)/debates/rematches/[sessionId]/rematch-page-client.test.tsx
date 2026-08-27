@@ -865,6 +865,27 @@ describe('DebateRematchPageClient', () => {
       expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull();
     });
 
+    // The row spread all of its menus across the full width, which was fine while there were two of
+    // them. With the source menu leading it, that stranded the space menu in the middle rather than
+    // leaving it beside the source it narrows. Only the topic menu goes to the far end now.
+    it('groups the source and space menus, leaving the topic menu at the end', async () => {
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      const sourceMenu = screen.getByRole('button', { name: 'Featured' });
+      const spaceMenu = screen.getByRole('button', { name: /Any space/ });
+      const topicMenu = screen.getByRole('button', { name: /Any topic/ });
+      const row = sourceMenu.parentElement;
+
+      // The two that belong together share the row directly, in order, with nothing spreading them.
+      expect(row).toBe(spaceMenu.parentElement);
+      expect(row?.className).not.toContain('justify-between');
+      expect(sourceMenu.compareDocumentPosition(spaceMenu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+      // And the topic menu alone is pushed to the far end.
+      expect(topicMenu.parentElement?.className).toContain('ml-auto');
+      expect(topicMenu.parentElement?.parentElement).toBe(row);
+    });
+
     // A fixed order, so a source that appears doesn't reshuffle the ones already in the menu.
     it('offers the sources in a fixed order, Recommended first', async () => {
       curatedPage();
