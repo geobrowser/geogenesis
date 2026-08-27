@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 
+import * as React from 'react';
 import type { ReactElement, ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,7 +22,11 @@ const mocks = vi.hoisted(() => ({
   requestTakeover: vi.fn(() => Promise.resolve(false)),
   release: vi.fn(() => Promise.resolve()),
   close: vi.fn(),
-  coordinatorOptions: [] as Array<{ debateId: string; userId: string }>,
+  coordinatorOptions: [] as Array<{
+    debateId: string;
+    userId: string;
+    onTakeoverRequested?: () => Promise<boolean> | boolean;
+  }>,
   connectionState: 'connected',
   canPlayAudio: true,
   startAudio: vi.fn(() => Promise.resolve()),
@@ -40,11 +45,22 @@ const mocks = vi.hoisted(() => ({
   isMuted: false,
   /** Props of every `<LiveKitRoom>` mount, so tests can drive its callbacks. */
   livekitRoomProps: [] as Array<Record<string, unknown>>,
+  /** One entry per `<LiveKitRoom>` *mount*, holding the token it connected with. */
+  livekitRoomMounts: [] as string[],
+  /** Every `useMediaDeviceSelect` call, to prove the picker never re-prompts for the microphone. */
+  deviceSelectCalls: [] as Array<{ kind: string; requestPermissions?: boolean }>,
+  disconnect: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock('@livekit/components-react', () => ({
   LiveKitRoom: (props: Record<string, unknown>) => {
     mocks.livekitRoomProps.push(props);
+    // Mounts, not renders: recovery works by remounting the room around a fresh token, and only a
+    // mount count can tell that apart from a re-render of the same connection.
+    const token = props.token as string;
+    React.useEffect(() => {
+      mocks.livekitRoomMounts.push(token);
+    }, [token]);
     return <div data-testid="livekit-room">{props.children as ReactElement}</div>;
   },
   RoomAudioRenderer: () => null,
@@ -57,9 +73,10 @@ vi.mock('@livekit/components-react', () => ({
     isMicrophoneEnabled: mocks.isMicrophoneEnabled,
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
-  useRoomContext: () => ({ disconnect: vi.fn(() => Promise.resolve()) }),
-  useMediaDeviceSelect: ({ kind }: { kind: MediaDeviceKind }) =>
-    kind === 'audiooutput'
+  useRoomContext: () => ({ disconnect: mocks.disconnect }),
+  useMediaDeviceSelect: ({ kind, requestPermissions }: { kind: MediaDeviceKind; requestPermissions?: boolean }) => {
+    mocks.deviceSelectCalls.push({ kind, requestPermissions });
+    return kind === 'audiooutput'
       ? {
           devices: mocks.speakerDevices,
           activeDeviceId: mocks.activeSpeakerId,
@@ -69,7 +86,8 @@ vi.mock('@livekit/components-react', () => ({
           devices: mocks.audioDevices,
           activeDeviceId: mocks.activeDeviceId,
           setActiveMediaDevice: mocks.setActiveMediaDevice,
-        },
+        };
+  },
 }));
 
 vi.mock('@livekit/components-react/krisp', () => ({
@@ -83,6 +101,12 @@ vi.mock('livekit-client', () => ({
     Disconnected: 'disconnected',
     Reconnecting: 'reconnecting',
     SignalReconnecting: 'signalReconnecting',
+  },
+  MediaDeviceFailure: {
+    PermissionDenied: 'PermissionDenied',
+    NotFound: 'NotFound',
+    DeviceInUse: 'DeviceInUse',
+    Other: 'Other',
   },
   Track: { Source: { Microphone: 'microphone' } },
 }));
@@ -108,13 +132,18 @@ vi.mock('~/core/debates/media-session', () => ({
   systemDefaultAudioOutput: { deviceId: 'default', groupId: 'default', kind: 'audiooutput', label: 'System default' },
   useDebateMediaSession: () => ({
     selectedAudioInputId: '',
+    audioOutputError: null,
     changeAudioInput: mocks.changeAudioInput,
     changeAudioOutput: mocks.changeAudioOutput,
   }),
 }));
 
 vi.mock('~/core/debates/debate-room-ownership', () => ({
-  createDebateRoomOwnershipCoordinator: (options: { debateId: string; userId: string }) => {
+  createDebateRoomOwnershipCoordinator: (options: {
+    debateId: string;
+    userId: string;
+    onTakeoverRequested?: () => Promise<boolean> | boolean;
+  }) => {
     mocks.coordinatorOptions.push(options);
     return {
       instanceId: 'test-instance',
@@ -183,6 +212,10 @@ async function flushOwnership() {
   });
 }
 
+function setVisibility(state: DocumentVisibilityState) {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+}
+
 function setMobileLayout(matches: boolean) {
   vi.stubGlobal(
     'matchMedia',
@@ -241,12 +274,16 @@ beforeEach(() => {
   mocks.setActiveSpeaker.mockReset().mockResolvedValue(undefined);
   mocks.changeAudioInput.mockReset();
   mocks.changeAudioOutput.mockReset().mockResolvedValue(undefined);
+  mocks.deviceSelectCalls = [];
   mocks.remoteParticipants = [];
   mocks.setMicrophoneEnabled.mockReset();
   mocks.isMicrophoneEnabled = true;
   mocks.isSpeaking = false;
   mocks.isMuted = false;
   mocks.livekitRoomProps = [];
+  mocks.livekitRoomMounts = [];
+  mocks.disconnect.mockReset().mockResolvedValue(undefined);
+  setVisibility('visible');
 });
 
 afterEach(() => {
@@ -350,7 +387,76 @@ describe('RematchVoicePill', () => {
     expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
     const muteButton = screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ });
     expect(muteButton).toBeDisabled();
-    expect(muteButton).toHaveAttribute('title', 'Microphone unavailable — check browser permissions');
+
+    // A disabled button is out of the tab order and its tooltip is unreachable, so the reason and
+    // the way out have to be in the dock itself.
+    expect(screen.getByText(/Microphone blocked/).closest('[role="status"]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('explains which microphone problem it hit', async () => {
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
+
+    act(() => onMediaDeviceFailure('NotFound'));
+    expect(screen.getByText(/No microphone found/)).toBeInTheDocument();
+
+    act(() => onMediaDeviceFailure('DeviceInUse'));
+    expect(screen.getByText(/in use by another app/)).toBeInTheDocument();
+  });
+
+  it('recovers from a denied microphone without a page reload', async () => {
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
+    act(() => onMediaDeviceFailure('PermissionDenied'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeEnabled();
+    expect(mocks.livekitRoomMounts).toHaveLength(2);
+  });
+
+  // `room.connect()` rejecting is a console warning and nothing else — the connect effect never
+  // re-runs — so without this the dock claims it is connecting for as long as the page is open.
+  it('offers a retry when the room never manages to connect', async () => {
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    const onError = mocks.livekitRoomProps[0]?.onError as (error: Error) => void;
+
+    act(() => onError(new Error('could not establish signal connection')));
+
+    expect(screen.queryByTestId('livekit-room')).toBeNull();
+    expect(screen.getByText('Voice is unavailable')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.getByTestId('livekit-room')).toBeInTheDocument());
+    expect(mocks.livekitRoomMounts).toHaveLength(2);
+  });
+
+  // `onError` also fires when publishing the local track fails, which happens *after* the room is
+  // up. Tearing the call down over a microphone problem would take the opponent's audio with it.
+  it('keeps a connected room when publishing the microphone fails', async () => {
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    const props = mocks.livekitRoomProps[0] as Record<string, (arg?: unknown) => void>;
+
+    act(() => props.onConnected());
+    act(() => props.onError(new Error('could not acquire microphone')));
+
+    expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
+    expect(screen.queryByText('Voice is unavailable')).toBeNull();
+  });
+
+  // Enumerating devices with `requestPermissions` prompts again whenever a label is blank, which is
+  // exactly the state a denied microphone leaves them in — and the rejection empties the list.
+  it('never asks for the microphone a second time to fill the device picker', async () => {
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    fireEvent.click(screen.getByRole('button', { name: 'Audio settings' }));
+
+    expect(mocks.deviceSelectCalls.length).toBeGreaterThan(0);
+    expect(mocks.deviceSelectCalls.every(call => call.requestPermissions === false)).toBe(true);
   });
 
   // Auto-join gives the browser no user gesture to hang playback on, so a blocked room looks
@@ -424,7 +530,7 @@ describe('RematchVoicePill', () => {
   it('drops the cached token when retrying rather than reconnecting around it', async () => {
     mocks.joinError = new GeoChatRequestError('boom', null, 500);
     mocks.joinData = null;
-    const { client } = render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    const { client, rerender } = render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     const reset = vi.spyOn(client, 'resetQueries');
@@ -433,6 +539,17 @@ describe('RematchVoicePill', () => {
 
     expect(reset).toHaveBeenCalledWith({ queryKey: TOKEN_QUERY_KEY });
     expect(invalidate).not.toHaveBeenCalled();
+
+    // Clearing the token is only half of it — the room has to remount around the replacement.
+    mocks.joinError = null;
+    mocks.joinData = {
+      token: 'token-2',
+      url: 'wss://livekit.test',
+      room_name: 'geo-rematch-session-1',
+      participant_slot: 1,
+    };
+    rerender(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    expect(mocks.livekitRoomMounts).toEqual(['token-2']);
   });
 
   // A tab that yielded the mic is still holding the token it minted before it yielded, and five
@@ -450,9 +567,47 @@ describe('RematchVoicePill', () => {
     await waitFor(() => expect(reset).toHaveBeenCalledWith({ queryKey: TOKEN_QUERY_KEY }));
   });
 
+  // Two tabs publishing at once is the failure this whole coordinator exists to prevent: the
+  // yielding tab has to be off the air *before* it tells the other one to go ahead.
+  it('disconnects before handing the voice connection to another tab', async () => {
+    setVisibility('hidden');
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
+
+    const onTakeoverRequested = mocks.coordinatorOptions[0]?.onTakeoverRequested;
+    let yielded: boolean | undefined;
+    await act(async () => {
+      yielded = await onTakeoverRequested?.();
+    });
+
+    expect(yielded).toBe(true);
+    expect(mocks.disconnect).toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByTestId('livekit-room')).toBeNull());
+    expect(screen.getByText('Voice is active in another tab')).toBeInTheDocument();
+  });
+
+  // The tab the user is actually looking at keeps the microphone; only a background one steps aside.
+  it('refuses to yield the microphone while the user is looking at this tab', async () => {
+    setVisibility('visible');
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const onTakeoverRequested = mocks.coordinatorOptions[0]?.onTakeoverRequested;
+    let yielded: boolean | undefined;
+    await act(async () => {
+      yielded = await onTakeoverRequested?.();
+    });
+
+    expect(yielded).toBe(false);
+    expect(mocks.disconnect).not.toHaveBeenCalled();
+    expect(screen.getByTestId('livekit-room')).toBeInTheDocument();
+  });
+
   // `audio` is not a join-time flag: LiveKit replays `setMicrophoneEnabled(!!audio)` on every
-  // reconnect, so a hardcoded `true` puts a muted user back on air after a network blip.
-  it('keeps a muted microphone muted across a reconnect', async () => {
+  // reconnect, so a hardcoded `true` puts a muted user back on air after a network blip. The mock
+  // room cannot replay that, so what is asserted here is the input it would replay.
+  it('records mute intent on the room, not just on the local track', async () => {
     render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);

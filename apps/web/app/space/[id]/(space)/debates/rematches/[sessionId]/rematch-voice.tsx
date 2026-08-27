@@ -19,7 +19,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { ConnectionState, type MediaDeviceFailure, type Room, Track } from 'livekit-client';
+import { ConnectionState, MediaDeviceFailure, type Room, Track } from 'livekit-client';
 
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
 import type { DebateRematchParticipant, DebateRematchSession } from '~/core/debates/api';
@@ -77,7 +77,13 @@ export function RematchVoicePill({
   const coordinatorRef = React.useRef<ReturnType<typeof createDebateRoomOwnershipCoordinator> | null>(null);
 
   React.useEffect(() => {
-    if (!voiceActive) return;
+    if (!voiceActive) {
+      // Ownership outlives the coordinator that granted it otherwise, so a session that leaves a
+      // voice-capable status and comes back would let this tab connect on a cached token before the
+      // new lock is acquired.
+      setOwnership('pending');
+      return;
+    }
     let cancelled = false;
     const coordinator = createDebateRoomOwnershipCoordinator({
       debateId: `rematch:${session.id}`,
@@ -143,13 +149,37 @@ export function RematchVoicePill({
   // lands. A retry is also the user's second run at a denied microphone, so the failure latch has
   // to come off with it or the mute button stays disabled until a page reload.
   const [connectionEpoch, setConnectionEpoch] = React.useState(0);
+  const [connectFailed, setConnectFailed] = React.useState(false);
+  const connectedRef = React.useRef(false);
   const queryClient = useQueryClient();
   const { accountKey } = useGeoChatAuth();
   const retry = React.useCallback(() => {
     void queryClient.resetQueries({ queryKey: debateQueryKeys.rematchLiveKit(accountKey, session.id) });
     setMicFailure(null);
+    setConnectFailed(false);
+    connectedRef.current = false;
     setConnectionEpoch(epoch => epoch + 1);
   }, [accountKey, queryClient, session.id]);
+
+  // A rejected `room.connect()` is otherwise a console warning and nothing else: the connect effect
+  // never re-runs on its own, so the dock would sit on "Connecting voice…" forever while the
+  // Retry affordance stays out of reach behind a connection that never happened. `onError` also
+  // fires when publishing the local track fails after signal connect — that one is not fatal, the
+  // room is up and `onMediaDeviceFailure` already reports it, hence the connected guard.
+  //
+  // Both handlers have to be stable: they sit in the dependency arrays of the effects that connect
+  // the room and register its listeners, so an inline arrow reconnects on every render.
+  const handleConnected = React.useCallback(() => {
+    connectedRef.current = true;
+    setConnectFailed(false);
+  }, []);
+  const handleError = React.useCallback(() => {
+    if (connectedRef.current) return;
+    setConnectFailed(true);
+  }, []);
+  const handleMediaDeviceFailure = React.useCallback((failure?: MediaDeviceFailure) => {
+    setMicFailure(failure ?? null);
+  }, []);
 
   const takeOver = React.useCallback(async () => {
     const coordinator = coordinatorRef.current;
@@ -200,6 +230,10 @@ export function RematchVoicePill({
 
   if (!join.data) return null;
 
+  if (connectFailed) {
+    return <VoiceDockMessage message="Voice is unavailable" actionLabel="Retry" onAction={retry} />;
+  }
+
   return (
     <LiveKitRoom
       key={connectionEpoch}
@@ -209,7 +243,9 @@ export function RematchVoicePill({
       audio={micIntent && !micFailure}
       video={false}
       options={roomOptions}
-      onMediaDeviceFailure={failure => setMicFailure(failure ?? null)}
+      onConnected={handleConnected}
+      onError={handleError}
+      onMediaDeviceFailure={handleMediaDeviceFailure}
       className="contents"
     >
       <VoiceDockBody
@@ -261,7 +297,11 @@ function VoiceDockMessage({
   return (
     <VoiceDockShell>
       <div className="flex min-h-7 items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-metadata text-grey-04">{message}</span>
+        {/* Every one of these appears without the user doing anything — the call drops, the browser
+            refuses playback — so it has to announce itself rather than wait to be found. */}
+        <span role="status" className="min-w-0 truncate text-metadata text-grey-04">
+          {message}
+        </span>
         {actionLabel && onAction && (
           <button
             type="button"
@@ -347,6 +387,10 @@ function VoiceDockBody({
     </>
   );
   const opponentRow = <OpponentRow participant={opponentParticipant} opponent={opponent} name={opponentName} />;
+  // The mute button can only go dim and grow a tooltip, which says nothing to a keyboard or screen
+  // reader user — a disabled control is out of the tab order. The reason goes in the dock itself,
+  // along with the only way back: retrying remounts the room and asks for the microphone again.
+  const micNote = micFailure ? <MicFailureNote failure={micFailure} onRetry={onRetry} /> : null;
 
   if (isMobile) {
     return (
@@ -356,6 +400,7 @@ function VoiceDockBody({
           <span aria-hidden className="h-7 w-px shrink-0 rounded-xs bg-grey-02" />
           <div className="flex h-7 min-w-0 flex-1 items-center justify-between gap-2">{opponentRow}</div>
         </div>
+        {micNote}
       </VoiceDockShell>
     );
   }
@@ -366,8 +411,34 @@ function VoiceDockBody({
         <div className="flex h-7 items-center justify-between gap-2">{localRow}</div>
         <span aria-hidden className="h-px w-full bg-divider" />
         <div className="flex h-7 items-center justify-between gap-2">{opponentRow}</div>
+        {micNote}
       </div>
     </VoiceDockShell>
+  );
+}
+
+function micFailureMessage(failure: MediaDeviceFailure): string {
+  switch (failure) {
+    case MediaDeviceFailure.PermissionDenied:
+      return 'Microphone blocked. Allow it in your browser, then try again.';
+    case MediaDeviceFailure.NotFound:
+      return 'No microphone found. Connect one, then try again.';
+    case MediaDeviceFailure.DeviceInUse:
+      return 'Your microphone is in use by another app.';
+    default:
+      return 'Microphone unavailable.';
+  }
+}
+
+/** Why the mute button is dim, and the way out of listen-only. */
+function MicFailureNote({ failure, onRetry }: { failure: MediaDeviceFailure; onRetry: () => void }) {
+  return (
+    <p role="status" className="text-footnote text-grey-04">
+      <span className="text-red-01">{micFailureMessage(failure)}</span>{' '}
+      <button type="button" onClick={onRetry} className="text-footnoteMedium text-text underline">
+        Try again
+      </button>
+    </p>
   );
 }
 
@@ -386,15 +457,20 @@ function ParticipantIdentity({
 }) {
   return (
     <span className={cx('flex min-w-0 flex-1 items-center gap-2', dimmed && 'opacity-60')}>
+      {/* The size lives on the wrapper, not on `<Avatar>`: its `size` prop only reaches the
+          generated fallback, while a real avatar renders `h-full w-full` and takes whatever box it
+          is given. Without one it stretches to the image's intrinsic dimensions. */}
       <span
         className={cx(
-          'inline-flex shrink-0 overflow-hidden rounded-full',
+          'inline-flex size-4 shrink-0 overflow-hidden rounded-full',
           speaking && 'ring-1 ring-green ring-offset-1 ring-offset-white'
         )}
       >
         <Avatar avatarUrl={avatarUrl ?? null} value={avatarValue ?? name} size={16} alt="" />
       </span>
-      <span className="min-w-0 truncate text-metadata text-text">{name}</span>
+      <span title={name} className="min-w-0 truncate text-metadata text-text">
+        {name}
+      </span>
     </span>
   );
 }
@@ -454,19 +530,27 @@ function OpponentMicChip({ state, name }: { state: OpponentMicState; name: strin
     state === 'waiting' ? `Waiting for ${name} to join` : state === 'muted' ? `${name} is muted` : `${name} is unmuted`;
 
   return (
-    <span
-      role="img"
-      aria-label={label}
-      title={label}
-      className={cx(
-        'grid h-7 shrink-0 place-items-center rounded-full px-2 [&>svg]:size-3',
-        state === 'waiting' && 'bg-grey-01 text-grey-04',
-        state === 'muted' && 'bg-errorTertiary text-red-01',
-        state === 'live' && 'bg-successTertiary text-green'
-      )}
-    >
-      <MicrophoneIcon muted={state !== 'live'} />
-    </span>
+    <>
+      <span
+        role="img"
+        aria-label={label}
+        title={label}
+        className={cx(
+          'grid h-7 shrink-0 place-items-center rounded-full px-2 [&>svg]:size-3',
+          state === 'waiting' && 'bg-grey-01 text-grey-04',
+          state === 'muted' && 'bg-errorTertiary text-red-01',
+          state === 'live' && 'bg-successTertiary text-green'
+        )}
+      >
+        <MicrophoneIcon muted={state !== 'live'} />
+      </span>
+      {/* The chip's own label carries the state, but nothing announces it changing: the opponent
+          arrives and mutes on their own schedule, with no action here to hang an update on. A live
+          region whose text changes is the only reliable way to hear about it. */}
+      <span role="status" className="sr-only">
+        {label}
+      </span>
+    </>
   );
 }
 
@@ -486,7 +570,7 @@ function LocalAudioControls({
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
-  const settings = useVoiceAudioSettings(room);
+  const settings = useVoiceAudioSettings(room, micFailure);
 
   const muted = !isMicrophoneEnabled || Boolean(micFailure);
   const settingsTrigger = (
@@ -510,13 +594,7 @@ function LocalAudioControls({
       <button
         type="button"
         aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
-        title={
-          micFailure
-            ? 'Microphone unavailable — check browser permissions'
-            : isMicrophoneEnabled
-              ? 'Mute microphone'
-              : 'Unmute microphone'
-        }
+        title={micFailure ? micFailureMessage(micFailure) : isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
         onClick={() => {
           const next = !isMicrophoneEnabled;
           // Record the intent before publishing it, so a reconnect restores this choice rather
@@ -607,9 +685,15 @@ function DesktopSettingsPopover({
  * on while browsing claims is still selected when they walk into the debate. Writing the microphone
  * back cannot grab it a second time: `ensurePreview` bails unless a preview session is open.
  */
-function useVoiceAudioSettings(room: Room) {
-  const { changeAudioInput, changeAudioOutput } = useDebateMediaSession();
-  const microphones = useMediaDeviceSelect({ kind: 'audioinput', room });
+function useVoiceAudioSettings(room: Room, micFailure: MediaDeviceFailure | null) {
+  const { changeAudioInput, changeAudioOutput, audioOutputError } = useDebateMediaSession();
+  // `requestPermissions` defaults to true, and enumerating with it calls `getUserMedia` whenever a
+  // device label is blank — which is exactly the state a denied microphone leaves them in. That
+  // second prompt has no user gesture behind it, so it fails, and its rejection empties the list:
+  // the panel would offer no microphones at all precisely when the user came to fix their
+  // microphone. The room already holds permission whenever the mic did open, so the labels are real
+  // without asking again.
+  const microphones = useMediaDeviceSelect({ kind: 'audioinput', room, requestPermissions: false });
   const speakers = useMediaDeviceSelect({ kind: 'audiooutput', room, requestPermissions: false });
 
   const selectMicrophone = (deviceId: string) => {
@@ -634,7 +718,8 @@ function useVoiceAudioSettings(room: Room) {
     selectedAudioInputId: microphones.activeDeviceId,
     selectedAudioOutputId: speakers.activeDeviceId,
     audioOutputSupported,
-    error: null,
+    // The panel is where someone goes to fix their audio, so it is where the failures belong.
+    error: micFailure ? micFailureMessage(micFailure) : audioOutputError,
     onAudioInputChange: selectMicrophone,
     onAudioOutputChange: selectSpeaker,
   };
