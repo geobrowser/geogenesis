@@ -2367,11 +2367,12 @@ describe('DebateRematchPageClient', () => {
   // The machine's own signal that this is running long. It matters more now that it is the
   // button's label rather than a line of grey text: a control stuck reading the same thing for
   // thirty seconds is what GEO-2687 leaves the viewer looking at.
-  it('says the wait is running long on the button itself', () => {
+  it('says the wait is running long on the button itself', async () => {
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     mocks.responseIndexingDelayed = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
 
     expect(screen.getByRole('button', { name: 'Still publishing your position…' })).toBeDisabled();
     expect(screen.getByRole('status')).toHaveTextContent('Still publishing your position…');
@@ -2379,7 +2380,7 @@ describe('DebateRematchPageClient', () => {
 
   // The point of the ticket: one element, not two. Once geo-chat agrees the same button becomes
   // pressable, rather than a spinner disappearing and a button appearing somewhere else.
-  it('turns the same button pressable once the position settles', () => {
+  it('turns the same button pressable once the position settles', async () => {
     mocks.positions = [
       position('profile-local', CLAIM_SHARED, SPACE_1, true),
       position('profile-remote', CLAIM_SHARED, SPACE_1, false),
@@ -2394,6 +2395,7 @@ describe('DebateRematchPageClient', () => {
       },
     ];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
 
     const button = screen.getByRole('button', { name: 'Request debate' });
     expect(button).toBeEnabled();
@@ -2439,6 +2441,7 @@ describe('DebateRematchPageClient', () => {
     ];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
 
     // Asserted on the disabled state rather than the button's absence: since GEO-2697 the control
     // is on screen throughout, and it is only *named* differently while it waits. Checking the
