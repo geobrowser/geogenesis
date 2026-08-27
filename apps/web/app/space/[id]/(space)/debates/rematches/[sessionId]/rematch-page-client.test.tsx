@@ -368,7 +368,18 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
           .map(topic => [topic.id, topic])
       ).values(),
     ];
-    const spaceIds = [...new Set(corpus.flat().map(entry => entry.claim.space_id))];
+    // Narrowed by the topic filter and never by its own dimension — picking a space must not
+    // collapse the menu it came from, while picking a topic must narrow it. Built from the whole
+    // corpus, this returned a response the server can't produce, so a multi-topic test would have
+    // been checking the space menu against an impossible facet.
+    const spaceIds = [
+      ...new Set(
+        corpus
+          .flat()
+          .filter(entry => inTopicFilter(entry.topics))
+          .map(entry => entry.claim.space_id)
+      ),
+    ];
     // Narrowed by space, never by topic: picking a topic must not collapse its own menu.
     const facets = {
       space_ids: spaceIds,
