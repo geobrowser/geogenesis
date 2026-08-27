@@ -6,8 +6,8 @@ import type { BountyDetail } from '~/core/bounties/fetch-bounty-detail';
 import { isBountyEnded } from '~/core/bounties/payout';
 import { useBountyInterestActions } from '~/core/bounties/use-bounty-actions';
 import type { BountyRoles } from '~/core/bounties/use-bounty-roles';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { uuidToHex } from '~/core/id/normalize';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -41,7 +41,7 @@ type Props = {
 export function BountyInterestCard({ detail, roles }: Props) {
   const state = resolveInterestCardState(detail, roles);
   const actions = useBountyInterestActions(detail, roles);
-  const { open: openSignInPrompt } = useSignInPrompt();
+  const openPrivySignIn = usePrivySignIn();
 
   const copy: Record<InterestCardState, { title: string; body: string }> = {
     'signed-out': { title: 'Want to take on this bounty?', body: 'Express interest and an editor can allocate you.' },
@@ -81,9 +81,9 @@ export function BountyInterestCard({ detail, roles }: Props) {
           {actions.pending ? 'Saving…' : "I'm interested"}
         </Button>
       ) : state === 'signed-out' ? (
-        // Same affordance as upvote/downvote and the board cards: the button is always
-        // there, and a signed-out click opens the sign-in prompt instead of hiding the action.
-        <Button variant="primary" onClick={() => openSignInPrompt('bounty')}>
+        // Same affordance as upvote/downvote: the button is always there, and a
+        // signed-out click opens Privy sign-in directly.
+        <Button variant="primary" onClick={openPrivySignIn}>
           I&apos;m interested
         </Button>
       ) : state === 'interested' ? (

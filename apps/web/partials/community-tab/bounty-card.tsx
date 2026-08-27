@@ -4,8 +4,8 @@ import * as React from 'react';
 
 import type { BountyContributor, SpaceBounty } from '~/core/community/bounty-types';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -250,7 +250,7 @@ function InterestButton({
   onClick: () => void;
 }) {
   const { smartAccount } = useSmartAccount();
-  const { open: openSignInPrompt } = useSignInPrompt();
+  const openPrivySignIn = usePrivySignIn();
 
   const isLoggedIn = Boolean(smartAccount?.account.address);
 
@@ -265,7 +265,7 @@ function InterestButton({
         event.stopPropagation();
 
         if (!isLoggedIn) {
-          openSignInPrompt('bounty');
+          openPrivySignIn();
           return;
         }
 

@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const signIn = vi.hoisted(() => ({ open: vi.fn() }));
-vi.mock('~/core/state/sign-in-prompt-store', () => ({ useSignInPrompt: () => ({ open: signIn.open }) }));
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => signIn.open }));
 
 vi.mock('~/core/bounties/use-bounty-actions', () => ({
   useBountyInterestActions: () => mocks.actions,
@@ -110,10 +110,10 @@ describe('BountyInterestCard', () => {
     expect(mocks.actions.cancelInterest).toHaveBeenCalled();
   });
 
-  it('shows the button while signed out and opens the sign-in prompt on click', () => {
+  it('shows the button while signed out and opens Privy sign-in directly on click', () => {
     render(<BountyInterestCard detail={detail()} roles={roles({ isSignedIn: false })} />);
     fireEvent.click(screen.getByRole('button', { name: "I'm interested" }));
-    expect(signIn.open).toHaveBeenCalledWith('bounty');
+    expect(signIn.open).toHaveBeenCalledTimes(1);
     expect(mocks.actions.expressInterest).not.toHaveBeenCalled();
   });
 
