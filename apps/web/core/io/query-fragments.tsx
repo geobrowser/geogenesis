@@ -160,6 +160,14 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
       description
       spaceIds
 
+      # Carried because this query now hydrates the sync store, which the singular Entity query
+      # used to do. That one selects them, and a consumer reading a timestamp off the store treats
+      # their absence as not-loaded and falls back to a per-row Entity fetch - which is the N+1
+      # this batching exists to remove. Dropping them here would reintroduce it wherever such a
+      # consumer renders.
+      createdAt
+      updatedAt
+
       # Same lightweight cross-space projection the singular Entity query carries, for the same
       # reason: the lists below are space-scoped for display, and EntityDtoLive can only strip
       # hidden-only spaces out of link routing when it has an unscoped view. Without these it
