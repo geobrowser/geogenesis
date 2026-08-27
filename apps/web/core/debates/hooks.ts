@@ -46,6 +46,7 @@ import {
   getDebateTranscript,
   getLiveKitToken,
   getRecordingUrl,
+  getRematchLiveKitToken,
   handleDebateSharePrompt,
   joinDebateQueue,
   leaveDebateQueue,
@@ -90,6 +91,11 @@ export const debateQueryKeys = {
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
+  // Deliberately NOT nested under `rematch(...)`: the gateway invalidates that prefix on every
+  // `debate.rematch_changed`, and refetching here would hand `<LiveKitRoom>` a new token and tear
+  // down the live voice connection.
+  rematchLiveKit: (accountKey: string | null, sessionId: string) =>
+    ['debates', 'account', accountKey, 'rematch-livekit', sessionId] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
@@ -325,6 +331,25 @@ export function useLeaveDebateQueue(spaceId: string) {
     onSuccess: (_result, { claimId }) => invalidateAfterReadinessChange(queryClient, accountKey, claimId),
   });
 }
+
+/**
+ * How often the rematch session re-asks while its picker is on screen (GEO-2650).
+ *
+ * A backstop, not the delivery mechanism. `debate.rematch_changed` still arrives by push and is
+ * what normally updates this — measured at 1.28s average and 2.27s worst from emit to Kafka
+ * publish, across every rematch event in the last week.
+ *
+ * It exists because this query had no fallback at all, and the push has one failure mode with a
+ * 30-second budget: a socket that dies silently is not noticed until the next heartbeat
+ * (`DEFAULT_HEARTBEAT_INTERVAL_MS` in `debate-gateway`), and only then reconnects and refetches.
+ * Preston measured a request taking ~36 seconds to reach an opponent, which is that window plus a
+ * reconnect and handshake — and every other link in the chain measures well under it.
+ *
+ * Five seconds because both people are sitting there waiting for each other: this is the one flow
+ * where a stale list is the whole problem rather than a cosmetic lag. It only runs while the picker
+ * is foregrounded, so an idle tab still costs nothing.
+ */
+const REMATCH_POLL_MS = 5_000;
 
 /** How often activity re-asks while this tab is on screen, with a live gateway behind it. */
 const ACTIVITY_POLL_MS = 30_000;
@@ -616,12 +641,48 @@ export function useConsentToDebateRematch(debateId: string) {
 
 export function useDebateRematch(sessionId: string, enabled = true) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  // Presence, not attention. `useDebateAttention` also requires `document.hasFocus()`, so a tab
+  // sitting open on screen behind whatever window the viewer is typing in would not poll — and
+  // waiting for an opponent while looking elsewhere is exactly this flow. That distinction is the
+  // one GEO-2650 already cost once on the activity poll; see the note on `useDebateActivity`.
+  const present = useDebatePresence();
 
   return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.rematch(accountKey, sessionId),
     queryFn: ({ signal }) => getDebateRematch(sessionId, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && Boolean(sessionId),
+    // See REMATCH_POLL_MS. The push still does the work; this bounds the case where it never
+    // arrives, which this query previously had no answer to.
+    refetchInterval: present ? REMATCH_POLL_MS : false,
+  });
+}
+
+/**
+ * Mints the LiveKit token for the rematch voice channel. A query rather than a mutation because
+ * voice auto-joins with the picker — there is no user gesture to hang a mutation on.
+ *
+ * The token is minted once per mount and held forever (`staleTime: Infinity`): handing
+ * `<LiveKitRoom>` a fresh token mid-session tears the connection down. Recovery from a dead
+ * connection goes through invalidating this key and remounting the room instead.
+ */
+export function useRematchLiveKitJoin(sessionId: string, enabled: boolean) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    queryKey: debateQueryKeys.rematchLiveKit(accountKey, sessionId),
+    queryFn: () => getRematchLiveKitToken(sessionId, getPrivyIdentityToken, accountKey),
+    enabled: enabled && authenticated && Boolean(sessionId),
+    staleTime: Infinity,
+    // Fresh token on re-entry: a cached one may be near expiry or minted for a session state
+    // that has since changed.
+    gcTime: 0,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error) => {
+      if (error instanceof GeoChatRequestError && [400, 403, 404, 503].includes(error.status)) return false;
+      return failureCount < 2;
+    },
   });
 }
 

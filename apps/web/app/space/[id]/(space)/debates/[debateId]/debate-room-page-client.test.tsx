@@ -494,12 +494,11 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
   });
 
-  // The session is what keeps both sides "in a flow": it disables every Debate control and keeps
-  // DebateCoordinator routing back into the room the cancellation just emptied.
-  it('leaves the rematch the cancelled recording anchored', async () => {
+  // Declining to publish and wanting another debate are unrelated choices, so the session the
+  // debate anchored outlives the cancellation and the canceller stays where they can act on it.
+  it('keeps the rematch the cancelled recording anchored, and does not eject the canceller', async () => {
     setHistoryLength(2);
     mocks.rematch = rematchSession('deciding');
-    mocks.leaveRematchMutateAsync.mockResolvedValue(rematchSession('ended'));
     mocks.debate = {
       ...completedDebate(),
       rematch_session_id: 'rematch-1',
@@ -510,13 +509,17 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.clearDebateActivity).not.toHaveBeenCalled());
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('leaves the rematch on the opponent side too, and never blocks their exit on it', async () => {
+  // The opponent is told the recording is gone, then put back on the thank-you screen: the debate
+  // they already agreed to is still there to accept.
+  it('returns the opponent to the flow after they acknowledge the removal', async () => {
     setHistoryLength(2);
     mocks.rematch = rematchSession('deciding');
-    mocks.leaveRematchMutateAsync.mockRejectedValue(new Error('rematch already gone'));
     mocks.debate = {
       ...completedDebate(),
       rematch_session_id: 'rematch-1',
@@ -528,11 +531,84 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Your debate was removed')).toBeInTheDocument();
-    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    // The notice is a dialog over the debate, not a replacement for it. Returning it early
+    // unmounted the screen behind it and left the backdrop showing the app shell.
+    expect(screen.getByText('Debate complete.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Okay' }));
 
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
+    await waitFor(() => expect(screen.queryByText('Your debate was removed')).not.toBeInTheDocument());
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
+  });
+
+  // A cold load has no rematch data yet, so the teardown waits for the answer instead of reading
+  // "not loaded" as "still live" — which would leave the canceller sitting on a dead screen.
+  it('tears the room down once an unloaded rematch resolves to expired', async () => {
+    setHistoryLength(2);
+    mocks.rematch = null;
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // Nothing is decided while the session is unknown.
+    await waitFor(() => expect(screen.queryByText('Loading debate...')).not.toBeInTheDocument());
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    mocks.rematch = rematchSession('expired');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+  });
+
+  // Cancelling and then deciding against the rematch is the one exit left, and it was gated on
+  // saving a recording that had just been discarded — so it failed every time.
+  it('lets a canceller leave the surviving rematch without persisting a discarded recording', async () => {
+    setHistoryLength(2);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+    mocks.rematch = rematchSession('deciding');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    expect(screen.queryByText('Could not save the local recording. Please try leaving again.')).not.toBeInTheDocument();
+  });
+
+  // The exception that keeps the old teardown honest: there is nothing left to return to, so
+  // cancelling still ends the room rather than stranding the canceller on a dead screen.
+  it('still ends the room when the rematch has already expired', async () => {
+    setHistoryLength(2);
+    mocks.rematch = rematchSession('expired');
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
