@@ -203,12 +203,15 @@ export async function handoffPreparedSocialVideo({
         // Static causes were ruled out before adding this: the click reaches `share()` with no
         // intervening await, so transient activation is intact, and no `Permissions-Policy` header
         // is set anywhere (`web-share` is policy-gated, and a block reads as this same error). What
-        // remains is the browser refusing a file share it said it could do — which is not something
-        // the caller can detect in advance.
-        //
-        // Falling back to the download preserves what the person asked for. The alternative is what
-        // shipped: an error message and no video, on a click that could have worked.
+        // remains is the browser refusing a file share it said it could do.
         if (isAbortError(error)) throw error; // They closed the share sheet. Respect that.
+
+        // Only a refusal a retry cannot change falls back. This distinction is the whole of the
+        // change: the existing behaviour — surface the error, keep a retry that reuses the prepared
+        // file — is right for a transient failure and is deliberately left alone. It is wrong only
+        // where retrying reproduces the same refusal forever, which is what a capability rejection
+        // does: the retry button then looks like a remedy and is a dead end.
+        if (!isUnretryableShareError(error)) throw error;
 
         downloadPreparedVideo(downloadUrl, file.name);
         captureSocialVideoEvent('debate_social_video_handoff_resolved', {
@@ -328,6 +331,21 @@ export async function downloadSocialVideo(
 
 export function isAbortError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'name' in error && error.name === 'AbortError';
+}
+
+/**
+ * Share refusals that a retry cannot change.
+ *
+ * `NotAllowedError` is the browser declining the capability — a policy block, or a platform that
+ * cannot share files despite `canShare` saying it could. `NotSupportedError` is the same shape.
+ * Either way the next attempt refuses identically, so offering a retry offers nothing.
+ *
+ * Everything else keeps the existing retry path, because it might succeed.
+ */
+const UNRETRYABLE_SHARE_ERROR_NAMES = new Set(['NotAllowedError', 'NotSupportedError']);
+
+export function isUnretryableShareError(error: unknown): boolean {
+  return UNRETRYABLE_SHARE_ERROR_NAMES.has(errorName(error));
 }
 
 /**

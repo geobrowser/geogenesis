@@ -157,14 +157,10 @@ describe('handoffPreparedSocialVideo', () => {
     expect(mocks.capture).not.toHaveBeenCalledWith('debate_social_video_handoff_failed', expect.anything());
   });
 
-  // This asserted a rejection, on the reasoning that retry belonged to the caller. Changed
-  // deliberately: the button's contract is "hand off the video", not "open the share sheet" — which
-  // the code already showed, since a browser whose `canShare` says no downloads without asking. A
-  // browser that says yes and then refuses is the same situation discovered a moment later, so it
-  // gets the same answer rather than a dead end.
-  //
-  // Retry stays available: nothing here consumes the prepared file, so the button still works.
-  it('falls back for a non-cancellation share failure of any kind, not just a refusal', async () => {
+  // Deliberately unchanged by the fallback: a generic failure might succeed next time, so the
+  // error and the retry that reuses the prepared file are still the right answer. Only a refusal a
+  // retry cannot change falls back — see the NotAllowedError case above.
+  it('reports non-cancellation native share failures and leaves retry to the caller', async () => {
     const failure = new Error('Share service unavailable');
     mocks.canShare.mockReturnValue(true);
     mocks.share.mockRejectedValue(failure);
@@ -178,13 +174,11 @@ describe('handoffPreparedSocialVideo', () => {
         file: preparedFile,
         downloadUrl: 'blob:https://geo.test/social-video',
       })
-    ).resolves.toBe('download');
+    ).rejects.toBe(failure);
 
-    // Still visible in telemetry, tagged with what it fell back from and why.
-    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
+    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_failed', {
       debate_id: 'debate-1',
-      method: 'download',
-      fell_back_from: 'native_share',
+      method: 'native_share',
       error_name: 'Error',
     });
   });
