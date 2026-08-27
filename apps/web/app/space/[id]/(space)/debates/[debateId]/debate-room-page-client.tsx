@@ -325,6 +325,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   } | null>(null);
   const storagePersistenceRequestedRef = React.useRef(false);
   const recordingCancellationHandledRef = React.useRef<string | null>(null);
+  const recordingDiscardedRef = React.useRef<string | null>(null);
   const debate = debateQuery.data ?? null;
   const countdownDebate = debate ? debateWithPendingYield(debate, pendingTurnYield) : null;
   preflightEndsAtMsRef.current = timestampMs(debate?.preflight_ends_at ?? null);
@@ -353,8 +354,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // Declining to publish the recording and wanting another debate are unrelated choices, so a
   // rematch outlives the cancellation instead of being torn down with it. A session that has
   // already ended or expired is not worth holding the room open for.
+  //
+  // An unloaded session is neither alive nor dead, and the two readings fail in opposite
+  // directions: treating it as dead tears the room down under the viewer on every cold load,
+  // treating it as alive strands them on a dead screen when it resolves to expired. So rendering
+  // takes the optimistic read and keeps the room up, while `rematchOutcomeResolved` holds the
+  // teardown back until the answer is real.
+  const rematchSessionStatus = rematchQuery.data?.status ?? null;
+  const rematchQueryFailed = (rematchQuery.error ?? null) !== null;
+  const rematchOutcomeResolved =
+    !debate?.rematch_session_id || rematchSessionStatus !== null || rematchQueryFailed;
   const rematchSurvivesCancellation =
-    Boolean(debate?.rematch_session_id) && !['ended', 'expired'].includes(rematchQuery.data?.status ?? 'deciding');
+    Boolean(debate?.rematch_session_id) &&
+    !rematchQueryFailed &&
+    !['ended', 'expired'].includes(rematchSessionStatus ?? 'deciding');
 
   // Publish opt-out in the global upload banner is only offered while the user is on this
   // debate's thank-you screen, so tell the banner which debate that is.
@@ -1496,9 +1509,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         await finishLiveDebate();
         return;
       } else if (debate.status === 'thanking' && debate.rematch_session_id) {
-        const persisted = await persistStoppedLocalRecording();
-        if (!persisted) {
-          throw new Error('Could not save the local recording. Please try leaving again.');
+        // A cancelled recording was discarded the moment the cancellation landed, so there is
+        // nothing to persist. Insisting anyway fails every time and traps someone who cancelled
+        // and then decided against the rematch — the one exit they have left.
+        if (debate.recording_cancelled_at === null) {
+          const persisted = await persistStoppedLocalRecording();
+          if (!persisted) {
+            throw new Error('Could not save the local recording. Please try leaving again.');
+          }
         }
         await leaveRematch.mutateAsync();
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
@@ -1725,20 +1743,26 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!debate || recordingCancelledBy === null) return;
-    if (recordingCancellationHandledRef.current === debate.id) return;
-    recordingCancellationHandledRef.current = debate.id;
     // The recording is gone for both sides, so make sure nothing from this tab publishes the
-    // local blob.
-    if (currentUserId) {
-      void deleteDebateRecordingUpload(debateRecordingUploadId(currentUserId, debate.id)).catch(() => undefined);
+    // local blob. This half is unconditional and runs the moment the cancellation is seen.
+    if (recordingDiscardedRef.current !== debate.id) {
+      recordingDiscardedRef.current = debate.id;
+      if (currentUserId) {
+        void deleteDebateRecordingUpload(debateRecordingUploadId(currentUserId, debate.id)).catch(() => undefined);
+      }
+      void discardLocalRecorder();
     }
-    void discardLocalRecorder();
+    if (recordingCancellationHandledRef.current === debate.id) return;
+    // Whether the room comes down turns on the rematch, so decide nothing until it has loaded.
+    if (!rematchOutcomeResolved) return;
     // A live rematch survives the cancellation, so the thank-you screen stays up and either side
     // can still consent to another debate. `finishLiveDebate` carries them into the picker once
-    // the thank-you period ends.
+    // the thank-you period ends. Deliberately not marked handled: if the session later ends or
+    // expires, this runs again and takes the room down then.
     if (rematchSurvivesCancellation) return;
     // With no rematch to keep, the debate really is over: block the normal finalize/redirect path
     // and tear the room down.
+    recordingCancellationHandledRef.current = debate.id;
     finalizedDebateRef.current = debate.id;
     disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
     localMediaStreamRef.current = null;
@@ -1756,6 +1780,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     leaveCancelledDebate,
     opponentCancelledRecording,
     recordingCancelledBy,
+    rematchOutcomeResolved,
     rematchSurvivesCancellation,
   ]);
 
