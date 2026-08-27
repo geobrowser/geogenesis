@@ -219,8 +219,7 @@ export function BountyReviewDialog({
 
                 {state.pass && !PAYOUT_AUTHORING_ENABLED ? (
                   <Text variant="footnote" color="grey-04" data-testid="payout-authoring-note">
-                    Payouts are issued from the curator app for now — the points ledger doesn&apos;t read from the graph
-                    yet.
+                    Payouts are issued from the curator app for now.
                   </Text>
                 ) : null}
 
