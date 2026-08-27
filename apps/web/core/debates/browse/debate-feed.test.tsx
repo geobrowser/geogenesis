@@ -608,6 +608,17 @@ describe('DebatesBrowseFeed comments', () => {
     expect(mocks.hubOpen).not.toHaveBeenCalled();
   });
 
+  // The hub dismisses itself on outside pointerdown and exempts anything marked as an opener.
+  // Without the marker the pointerdown closed it and the click reopened it — a visible flicker,
+  // and a toggle that never appeared to work.
+  it('marks the button as a hub opener so the panel does not dismiss on pointerdown', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.getAllByRole('button', { name: 'Join a debate' })[0]).toHaveAttribute(
+      'data-debates-hub-opener'
+    );
+  });
+
   // Otherwise the button is a one-way door: pressing it again did nothing and the only way out was
   // the panel's own close control.
   it('closes the hub when the button is pressed a second time', () => {

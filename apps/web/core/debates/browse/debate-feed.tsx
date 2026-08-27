@@ -483,6 +483,10 @@ function DebateTitleHeader({
         </div>
         <Button
           type="button"
+          // Exempts this button from the hub's outside-pointerdown dismissal, the same way the
+          // navbar's opener is exempt. Without it the pointerdown closed the hub and the click
+          // that followed reopened it, which read as a flicker.
+          data-debates-hub-opener
           variant="secondary"
           small
           onClick={onOpenJoin}
