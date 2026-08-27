@@ -6,7 +6,7 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { graphql } from '~/core/io/graphql-client';
 
-import { buildGraphClaimsFilter, fetchGraphClaims } from './graph-claims';
+import { GRAPH_CLAIMS_MAX_EXCLUSIONS, buildGraphClaimsFilter, fetchGraphClaims } from './graph-claims';
 
 vi.mock('~/core/io/graphql-client', () => ({
   graphql: vi.fn(),
@@ -15,7 +15,6 @@ vi.mock('~/core/io/graphql-client', () => ({
 const graphqlMock = graphql as unknown as Mock;
 
 const SPACE = '019fedae72b67ab2927adf044d57c566';
-const TOPIC = '806d52bc27e94c9193c057978b093351';
 
 function node(id: string, name: string | null, overrides: Record<string, unknown> = {}) {
   return {
@@ -40,7 +39,7 @@ describe('buildGraphClaimsFilter', () => {
   // predicate per row, so nothing is sent when there is nothing to narrow by.
   it('sends no filter when nothing is being narrowed', () => {
     expect(buildGraphClaimsFilter({ spaceIds: [SPACE] })).toBeNull();
-    expect(buildGraphClaimsFilter({ spaceIds: [SPACE], topicId: null, search: '' })).toBeNull();
+    expect(buildGraphClaimsFilter({ spaceIds: [SPACE], topicId: null, excludeIds: [] })).toBeNull();
   });
 
   it('narrows to a topic through the claim’s Topics relation', () => {
@@ -49,21 +48,37 @@ describe('buildGraphClaimsFilter', () => {
     });
   });
 
-  it('searches claim names case-insensitively', () => {
-    expect(buildGraphClaimsFilter({ spaceIds: null, search: 'Caffeine' })).toEqual({
-      name: { includesInsensitive: 'Caffeine' },
+  // Server-side, not after the fetch: geo-chat orders by presence and this orders by ranking score,
+  // so the overlap is scattered through the graph's order rather than sitting at the front of it.
+  it('excludes the claims geo-chat already showed', () => {
+    expect(buildGraphClaimsFilter({ spaceIds: null, excludeIds: ['claim-1', 'claim-2'] })).toEqual({
+      id: { notIn: ['claim-1', 'claim-2'] },
     });
   });
 
-  // Both at once is the case the old server query handled and the reason this is a builder rather
-  // than a ternary: a topic and a search have to intersect, not replace each other.
-  it('intersects a topic and a search rather than dropping one', () => {
-    expect(buildGraphClaimsFilter({ spaceIds: null, topicId: 'topic-1', search: 'caffeine' })).toEqual({
+  it('intersects a topic with the exclusions rather than dropping one', () => {
+    expect(buildGraphClaimsFilter({ spaceIds: null, topicId: 'topic-1', excludeIds: ['claim-1'] })).toEqual({
       and: [
         { relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } } } },
-        { name: { includesInsensitive: 'caffeine' } },
+        { id: { notIn: ['claim-1'] } },
       ],
     });
+  });
+
+  // The ids ride in the query string, so the list they can grow to is bounded.
+  it('caps how many exclusions it will send', () => {
+    const ids = Array.from({ length: GRAPH_CLAIMS_MAX_EXCLUSIONS + 50 }, (_, index) => `claim-${index}`);
+
+    const filter = buildGraphClaimsFilter({ spaceIds: null, excludeIds: ids }) as {
+      id: { notIn: string[] };
+    };
+
+    expect(filter.id.notIn).toHaveLength(GRAPH_CLAIMS_MAX_EXCLUSIONS);
+    expect(filter.id.notIn[0]).toBe('claim-0');
+  });
+
+  it('treats an empty exclusion list as nothing to narrow by', () => {
+    expect(buildGraphClaimsFilter({ spaceIds: [SPACE], excludeIds: [] })).toBeNull();
   });
 });
 

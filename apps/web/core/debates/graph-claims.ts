@@ -10,21 +10,26 @@ import { graphql } from '~/core/io/graphql-client';
 import type { ClaimPickerEntity } from './claim-picker-page';
 
 /**
- * GEO-2704. Claim discovery, straight from the knowledge graph.
+ * GEO-2704. The tail of a claim list, from the knowledge graph.
  *
- * Both pickers used to get their lists from geo-chat's `/matchmaking/claims`, for a reason that was
- * true when it was written: a KG scan over every Claim entity in a space 504s, and geo-chat had
- * them indexed. What that traded away was coverage — a claim geo-chat has no row for cannot be
- * listed, however plainly it exists on Geo — and it left the two surfaces disagreeing, since
- * Featured reads the graph and everything else read geo-chat.
+ * Both pickers list claims from geo-chat's `/matchmaking/claims`, for a reason that was true when
+ * it was written: a KG scan over every Claim entity in a space 504s, and geo-chat had them indexed.
+ * What that traded away was coverage — a claim geo-chat has no row for cannot be listed, however
+ * plainly it exists on Geo.
  *
- * `entities_ranked_for_feed` is what makes the graph answer this now. It is the same function
- * behind Explore's "Best" sort: an index-ordered walk that stops once `first` rows are found,
- * rather than the scan that timed out. Space and type scoping are its own arguments, and a topic or
- * a name search rides along in `filter`.
+ * This does not replace that list. It continues it: once geo-chat has no next page, the graph is
+ * asked for claims matching the same filters, minus the ones already on screen. So the list is
+ * geo-chat's for as long as geo-chat has anything to say — its ordering, its readiness, its
+ * session exclusions all intact — and the graph only supplies what geo-chat never knew about.
  *
- * geo-chat is still asked about these claims — for sides, readiness and presence, which are its
- * data and nobody else's. This module answers only *which claims exist*.
+ * Appending rather than merging is deliberate. The two are ordered by different things (presence
+ * and positions there, ranking score here), and interleaving them would produce a sequence that
+ * answers to neither. A seam at the end of geo-chat's rows is easier to reason about than a
+ * shuffle throughout.
+ *
+ * `entities_ranked_for_feed` is what lets the graph answer at all: the function behind Explore's
+ * "Best" sort, an index-ordered walk that stops once the page is full rather than the scan that
+ * timed out.
  */
 const GRAPH_CLAIMS_SOURCE = /* GraphQL */ `
   query DebateGraphClaims(
@@ -106,13 +111,26 @@ const graphClaimsDocument = parse(GRAPH_CLAIMS_SOURCE) as TypedDocumentNode<
 >;
 
 /**
- * What the pickers ask for at a time.
+ * What the tail asks for at a time.
  *
- * Deliberately larger than geo-chat's page: a page here costs one indexed walk, and both surfaces
- * then drop rows that fail their space gates — so a small page can arrive empty and spend a round
- * trip saying nothing.
+ * Larger than geo-chat's page: a page here costs one indexed walk, and callers then drop rows that
+ * fail their space gates — so a small page can arrive empty and spend a round trip saying nothing.
  */
 export const GRAPH_CLAIMS_PAGE_SIZE = 50;
+
+/**
+ * How many already-shown claims are excluded server-side.
+ *
+ * Exclusion belongs in the query rather than after it: geo-chat orders by presence and this orders
+ * by ranking score, so the overlap is scattered through the graph's order rather than sitting at
+ * the front of it. Filtering a fetched page instead would leave pages that arrive mostly empty and
+ * no way to tell that from the end of the list.
+ *
+ * Bounded because the ids ride in the query string. Beyond this the caller filters what it gets,
+ * accepting the short pages — a list this long has already given the viewer far more than they
+ * are going to read.
+ */
+export const GRAPH_CLAIMS_MAX_EXCLUSIONS = 1_000;
 
 export type GraphClaimsQuery = {
   /**
@@ -122,7 +140,15 @@ export type GraphClaimsQuery = {
    */
   spaceIds: string[] | null;
   topicId?: string | null;
-  search?: string | null;
+  /**
+   * Claims already on screen from geo-chat, so the tail never repeats one.
+   *
+   * Note there is no `search` here. A substring filter over the ranking walk measured at ten
+   * seconds — it has to walk a very long way to find few rows — so a searching viewer gets
+   * geo-chat's answer alone for now. The indexed REST `/search` endpoint is the way in, and it is
+   * a separate fetch path rather than a parameter on this one.
+   */
+  excludeIds?: string[];
 };
 
 export type GraphClaimsPage = {
@@ -147,11 +173,9 @@ export function buildGraphClaimsFilter(query: GraphClaimsQuery): EntityFilter | 
     });
   }
 
-  // Substring rather than the fuzzy `/search` endpoint: that one ranks by its own relevance and
-  // returns entities, which would fight the ranking this list is ordered by. A claim is a sentence,
-  // and the box above it is filtering a list rather than searching the graph.
-  if (query.search) {
-    clauses.push({ name: { includesInsensitive: query.search } });
+  const excluded = (query.excludeIds ?? []).slice(0, GRAPH_CLAIMS_MAX_EXCLUSIONS);
+  if (excluded.length > 0) {
+    clauses.push({ id: { notIn: excluded } });
   }
 
   if (clauses.length === 0) return null;
@@ -219,6 +243,11 @@ export function fetchGraphClaims(
  * list's keys: that root is what the gateway reconciles and refetches on every (re)connect, and
  * these rows come from the knowledge graph rather than geo-chat, so a socket event says nothing
  * about them.
+ *
+ * The exclusions are deliberately *not* in the key. They grow as geo-chat's own list pages, and
+ * keying on them would throw the tail away and refetch it every time the head got longer — while
+ * the answer barely changes, since anything newly excluded was already filtered out of what the
+ * caller is showing.
  */
 export const graphClaimsQueryKey = (query: GraphClaimsQuery) =>
-  ['graph-claims', query.spaceIds?.join(',') ?? null, query.topicId ?? null, query.search ?? null] as const;
+  ['graph-claims', query.spaceIds?.join(',') ?? null, query.topicId ?? null] as const;
