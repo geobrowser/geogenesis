@@ -1142,7 +1142,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               onTopicChange={setTopicId}
               facetSpaceIds={facetSpaceIds}
               facetTopics={facetTopics}
-              className="justify-between"
+              topicAtEnd
               // Only on Claims: the opponent's tab is one fixed source — their own responses — and
               // a menu offering three others there would read as filtering a list it can't reach.
               leading={
