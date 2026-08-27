@@ -1759,15 +1759,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     rematchSurvivesCancellation,
   ]);
 
-  if (debate && opponentCancelledRecording && !recordingRemovalAcknowledged) {
-    return (
+  const recordingRemovalNotice =
+    debate && opponentCancelledRecording && !recordingRemovalAcknowledged ? (
       <DebateRecordingRemovedDialog
         cancellerName={recordingCanceller ? speakerName(recordingCanceller) : 'Your opponent'}
         claim={debate.claim.claim}
         onAcknowledge={rematchSurvivesCancellation ? acknowledgeRecordingRemoval : leaveCancelledDebate}
       />
-    );
-  }
+    ) : null;
+
+  // With no rematch the room behind this notice is already being torn down, so it stands alone.
+  // With one, it is a dialog over the thank-you screen the opponent is about to return to, and
+  // returning it here instead would unmount that screen and leave the backdrop on the app shell.
+  if (recordingRemovalNotice && !rematchSurvivesCancellation) return recordingRemovalNotice;
 
   if (shouldHideTerminalDebate) return null;
 
@@ -1942,6 +1946,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             )}
           </>
         ))}
+      {recordingRemovalNotice}
     </div>
   );
 }

@@ -531,6 +531,9 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Your debate was removed')).toBeInTheDocument();
+    // The notice is a dialog over the debate, not a replacement for it. Returning it early
+    // unmounted the screen behind it and left the backdrop showing the app shell.
+    expect(screen.getByText('Debate complete.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Okay' }));
 
