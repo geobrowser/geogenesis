@@ -8,12 +8,14 @@
 import React from 'react';
 
 import { Effect, Either, Schema } from 'effect';
+import { unstable_cache } from 'next/cache';
 import { cookies } from 'next/headers';
 
 import { WALLET_ADDRESS } from '~/core/cookie';
-import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
-import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import { Environment } from '~/core/environment';
+import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
+import { ORDERED_PROPOSALS_CACHE_SECONDS, governanceProposalsTag } from '~/core/governance/proposals-cache';
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
 import {
   type ApiProposalListItem,
   ApiProposalListResponseSchema,
@@ -26,10 +28,7 @@ import {
   restFetch,
 } from '~/core/io/rest';
 import { defaultProfile, fetchProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph';
-import {
-  fetchProposalSubmittedTimes,
-  getSubmittedTime,
-} from '~/core/io/subgraph/fetch-proposal-submitted-times';
+import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
@@ -374,6 +373,69 @@ async function fetchProposalsByStatus({
   return decoded.right.proposals;
 }
 
+/**
+ * A space's whole proposal list, ordered, before any type filter is applied.
+ */
+function loadOrderedProposals(spaceId: string, connectedAddress: string | undefined) {
+  return unstable_cache(
+    async () => {
+      const [executableProposals, activeProposals, completedProposals] = await Promise.all([
+        fetchProposalsByStatus({
+          spaceId,
+          connectedAddress,
+          statuses: ['EXECUTABLE'],
+          limit: 100,
+          orderBy: 'end_time',
+          orderDirection: 'asc',
+        }),
+        fetchProposalsByStatus({
+          spaceId,
+          connectedAddress,
+          statuses: ['PROPOSED'],
+          limit: 100,
+          orderBy: 'end_time',
+          orderDirection: 'asc',
+        }),
+        fetchProposalsByStatus({
+          spaceId,
+          connectedAddress,
+          statuses: ['ACCEPTED', 'REJECTED'],
+          limit: 100,
+          orderBy: 'end_time',
+          orderDirection: 'desc',
+        }),
+      ]);
+
+      // Requests whose target already belongs to the space (a duplicate request was
+      // accepted, or they were added another way) stay PROPOSED/EXECUTABLE forever —
+      // drop them from the open buckets. Completed history stays intact.
+      const openProposals = await filterGrantedMembershipRequests([...executableProposals, ...activeProposals]);
+
+      // Sort needs a submission time for every open proposal; completed ones get theirs
+      // later, only for the page being rendered.
+      const submittedTimes = await fetchProposalSubmittedTimes(openProposals.map(p => p.proposalId));
+
+      // Combine in priority order: executable > active > completed; within open phases, unvoted first.
+      const ordered = [
+        ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
+          openProposals.filter(p => p.status === 'EXECUTABLE'),
+          submittedTimes
+        ),
+        ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
+          openProposals.filter(p => p.status !== 'EXECUTABLE'),
+          submittedTimes
+        ),
+        ...completedProposals,
+      ];
+
+      // The rendered rows need these times too, so recomputing them outside would undo the saving.
+      return { ordered, submittedTimes: [...submittedTimes] };
+    },
+    ['governance-ordered-proposals', spaceId, connectedAddress ?? 'anonymous'],
+    { revalidate: ORDERED_PROPOSALS_CACHE_SECONDS, tags: [governanceProposalsTag(spaceId)] }
+  )();
+}
+
 type FetchGovernanceProposalsResult = {
   proposals: GovernanceProposal[];
   hasMore: boolean;
@@ -394,57 +456,10 @@ async function fetchGovernanceProposals({
 }): Promise<FetchGovernanceProposalsResult> {
   const effectiveType = proposalType ?? 'all';
 
-  const [executableProposals, activeProposals, completedProposals] = await Promise.all([
-    fetchProposalsByStatus({
-      spaceId,
-      connectedAddress,
-      statuses: ['EXECUTABLE'],
-      limit: 100,
-      orderBy: 'end_time',
-      orderDirection: 'asc',
-    }),
-    fetchProposalsByStatus({
-      spaceId,
-      connectedAddress,
-      statuses: ['PROPOSED'],
-      limit: 100,
-      orderBy: 'end_time',
-      orderDirection: 'asc',
-    }),
-    fetchProposalsByStatus({
-      spaceId,
-      connectedAddress,
-      statuses: ['ACCEPTED', 'REJECTED'],
-      limit: 100,
-      orderBy: 'end_time',
-      orderDirection: 'desc',
-    }),
-  ]);
+  const { ordered, submittedTimes: submittedTimeEntries } = await loadOrderedProposals(spaceId, connectedAddress);
+  const submittedTimes = new Map(submittedTimeEntries);
 
-  // Requests whose target already belongs to the space (a duplicate request was
-  // accepted, or they were added another way) stay PROPOSED/EXECUTABLE forever —
-  // drop them from the open buckets. Completed history stays intact.
-  const openProposals = await filterGrantedMembershipRequests([...executableProposals, ...activeProposals]);
-
-  // Resolved before sorting, not just for the rendered page: submission time is the
-  // tiebreaker for open proposals, so it has to be known for every candidate rather
-  // than the slice that survives pagination.
-  const submittedTimes = await fetchProposalSubmittedTimes(
-    [...openProposals, ...completedProposals].map(p => p.proposalId)
-  );
-
-  // Combine in priority order: executable > active > completed; within open phases, unvoted first.
-  let combinedProposals = [
-    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
-      openProposals.filter(p => p.status === 'EXECUTABLE'),
-      submittedTimes
-    ),
-    ...sortOpenProposalsUnvotedFirstByEndTimeAsc(
-      openProposals.filter(p => p.status !== 'EXECUTABLE'),
-      submittedTimes
-    ),
-    ...completedProposals,
-  ];
+  let combinedProposals = [...ordered];
 
   // Filter by proposal type
   if (effectiveType === 'proposals') {
@@ -460,6 +475,18 @@ async function fetchGovernanceProposals({
 
   // Check if there are more items beyond this page
   const hasMore = combinedProposals.length > endIndex;
+
+  // The cached pass covers open proposals, which need a time to sort. Completed ones need one only
+  // to render, so they are resolved here for the page rather than for the whole history.
+  const missingTimeIds = paginatedProposals
+    .map(p => p.proposalId)
+    .filter(proposalId => getSubmittedTime(submittedTimes, proposalId) === 0);
+
+  if (missingTimeIds.length > 0) {
+    for (const [id, seconds] of await fetchProposalSubmittedTimes(missingTimeIds)) {
+      submittedTimes.set(id, seconds);
+    }
+  }
 
   // Fetch profiles for creators
   const proposedByIds = paginatedProposals.map(p => p.proposedBy);
