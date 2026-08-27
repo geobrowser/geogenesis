@@ -108,14 +108,39 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
     }
 
     const mergedById = new Map(merged.map(entity => [entity.id, entity]));
+    const failedTopUps = new Map<string, unknown>();
 
     // Anything at the cap may have had relations dropped. Re-read those through the singular path,
     // which drains the paginated connection, and let its result win.
     const truncated = remote.filter(entity => (entity.relations?.length ?? 0) >= BATCH_RELATIONS_CAP);
     if (truncated.length > 0) {
-      const toppedUp = (
-        await Promise.all(truncated.map(entity => E.syncOne({ id: entity.id, store, cache }).catch(() => null)))
-      ).filter((result): result is { merged: Entity; remote: Entity | null } => Boolean(result?.merged));
+      const outcomes = await Promise.all(
+        truncated.map(async entity => {
+          try {
+            return { id: entity.id, result: await E.syncOne({ id: entity.id, store, cache }) };
+          } catch (error) {
+            return { id: entity.id, error };
+          }
+        })
+      );
+
+      /**
+       * A failed top-up is a failure, not a degraded success.
+       *
+       * Resolving with the batch result would mark the query successful, and React Query does not
+       * retry a success — so a transient failure would leave that entity truncated for as long as
+       * the entry stays cached, with nothing to signal it. The singular path this replaced threw,
+       * and the row's own retry repaired it. Rejecting keeps that.
+       *
+       * Only the ids whose top-up failed reject; every other id in the batch resolves normally.
+       */
+      for (const outcome of outcomes) {
+        if ('error' in outcome) failedTopUps.set(outcome.id, outcome.error);
+      }
+
+      const toppedUp = outcomes
+        .map(outcome => ('result' in outcome ? outcome.result : null))
+        .filter((result): result is { merged: Entity; remote: Entity | null } => Boolean(result?.merged));
 
       if (toppedUp.length > 0) {
         /**
@@ -140,6 +165,12 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
     }
 
     for (const [entityId, waiters] of batch.waiters) {
+      if (failedTopUps.has(entityId)) {
+        const error = failedTopUps.get(entityId);
+        for (const waiter of waiters) waiter.reject(error);
+        continue;
+      }
+
       const entity = mergedById.get(entityId) ?? null;
       for (const waiter of waiters) waiter.resolve(entity);
     }

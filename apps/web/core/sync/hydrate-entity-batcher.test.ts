@@ -213,14 +213,27 @@ describe('hydrateEntityBatched', () => {
     expect(mocks.syncOne).not.toHaveBeenCalled();
   });
 
-  it('still resolves the caller when a top-up fails', async () => {
-    // The top-up is a correctness improvement, not a new way for hydration to fail outright.
+  it('rejects only the entity whose top-up failed, not the rest of the batch', async () => {
+    // Resolving with the known-truncated batch result would mark the query successful, and React
+    // Query does not retry a success — the entity would stay incomplete for as long as the entry is
+    // cached, with nothing to signal it. The singular path this replaced threw and the row's own
+    // retry repaired it, so a failed top-up has to stay a failure.
     const capped = { ...entity('big'), relations: Array.from({ length: 1000 }, (_, i) => ({ id: `r${i}` })) };
-    mocks.syncMany.mockResolvedValue({ merged: [entity('big')], remote: [capped] });
+    mocks.syncMany.mockResolvedValue({
+      merged: [entity('big'), entity('small')],
+      remote: [capped, entity('small')],
+    });
     mocks.syncOne.mockRejectedValue(new Error('top-up failed'));
 
-    const big = await hydrateEntityBatched({ id: 'big', store, cache, stream });
+    const [big, small] = await Promise.allSettled([
+      hydrateEntityBatched({ id: 'big', store, cache, stream }),
+      hydrateEntityBatched({ id: 'small', store, cache, stream }),
+    ]);
 
-    expect(big?.id).toBe('big');
+    expect(big.status).toBe('rejected');
+    // The unaffected id in the same batch is unharmed — one capped entity failing must not take
+    // every other row down with it.
+    expect(small.status).toBe('fulfilled');
+    expect(small.status === 'fulfilled' && small.value?.id).toBe('small');
   });
 });
