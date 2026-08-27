@@ -210,9 +210,9 @@ vi.mock('../featured-claims', async importOriginal => ({
 // GEO-2704. The graph tail that continues geo-chat's list once it runs out. Records what it was
 // enabled with and asked for, so the suites can pin when it fires and under which filters.
 vi.mock('../use-graph-claim-tail', () => ({
-  useGraphClaimTail: ({ query, enabled }: { query: unknown; enabled: boolean }) => {
+  useGraphClaimTail: ({ query, search, enabled }: { query: unknown; search?: string | null; enabled: boolean }) => {
     mocks.tailEnabledWith.push(enabled);
-    if (enabled) mocks.tailQueries.push(query);
+    if (enabled) mocks.tailQueries.push({ ...(query as object), search: search ?? null });
     return {
       claims: enabled ? mocks.tailClaims : [],
       topicsByClaimId: new Map(enabled ? mocks.tailTopics.map(entry => [entry.claimEntityId, entry.topics]) : []),
@@ -1314,15 +1314,16 @@ describe('ClaimsTab -- the graph tail', () => {
     expect(mocks.tailEnabledWith.at(-1)).toBe(false);
   });
 
-  // A substring filter over the ranking walk measured at ten seconds, so a searching viewer gets
-  // geo-chat's answer alone until the indexed endpoint is wired in.
-  it('stays off while the viewer is searching', async () => {
+  // A search is answered too, but not by the ranking walk — a substring filter over that measured
+  // at ten seconds. The hook takes the term and picks the indexed endpoint instead.
+  it('hands a search term to the tail rather than switching it off', async () => {
     render(<ClaimsTab />);
     await showAllClaims();
 
     fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'chips' } });
 
-    await waitFor(() => expect(mocks.tailEnabledWith.at(-1)).toBe(false));
+    await waitFor(() => expect((mocks.tailQueries.at(-1) as { search: string | null }).search).toBe('chips'));
+    expect(mocks.tailEnabledWith.at(-1)).toBe(true);
   });
 
   // The same narrowing the index query gets, so the two halves answer the same question — and the

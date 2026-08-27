@@ -170,17 +170,15 @@ export function ClaimsTab() {
    * Once it does run out, the graph is asked for the rest under the same filters, and those rows
    * are appended.
    *
-   * Only under All claims, and only without a search term:
+   * Only under All claims: `mine` and `debate_now` are questions about the viewer's own state,
+   * which the graph cannot answer at all, and Featured is already graph-backed.
    *
-   * - `mine` and `debate_now` are questions about the viewer's own state, which the graph cannot
-   *   answer at all. Featured is already graph-backed.
-   * - a substring search over the ranking walk measured at ten seconds, so a searching viewer gets
-   *   geo-chat's answer alone until the indexed REST endpoint is wired in.
+   * A search is answered too, through the indexed endpoint rather than the ranking walk — see
+   * `useGraphClaimTailSources`, which picks the source.
    */
   const tailEnabled =
     !featured &&
     filter === 'all' &&
-    !debouncedSearch &&
     !spacesPending &&
     !claimsQuery.unusable &&
     !claimsQuery.isLoading &&
@@ -213,7 +211,12 @@ export function ClaimsTab() {
     [spaceShowsClaims]
   );
 
-  const tail = useGraphClaimTail({ query: tailQuery, enabled: tailEnabled, homeSpaceOf: tailHomeSpaceOf });
+  const tail = useGraphClaimTail({
+    query: tailQuery,
+    search: debouncedSearch || null,
+    enabled: tailEnabled,
+    homeSpaceOf: tailHomeSpaceOf,
+  });
 
   // GEO-2683. Featured is a curator's tag in the knowledge graph, and geo-chat doesn't index it —
   // so unlike the position filter this can't be a query param, and unlike the old client-side topic

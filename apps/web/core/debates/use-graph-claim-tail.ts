@@ -7,6 +7,7 @@ import * as React from 'react';
 import type { MatchmakingClaim, MatchmakingTopic } from './api';
 import { type ClaimPickerEntity } from './claim-picker-page';
 import { type GraphClaimSource, claimIdsBySpace, graphClaimRow, graphClaimTopics } from './graph-claim-rows';
+import { fetchGraphClaimSearch, graphClaimSearchQueryKey } from './graph-claim-search';
 import { type GraphClaimsQuery, fetchGraphClaims, graphClaimsQueryKey } from './graph-claims';
 import { useDebateClaimsBySpaces } from './hooks';
 
@@ -50,14 +51,26 @@ export type GraphClaimTail = TailPaging & {
  */
 export function useGraphClaimTailSources({
   query,
+  search,
   enabled,
   homeSpaceOf,
 }: {
   query: GraphClaimsQuery;
+  /** When set, the tail comes from the indexed search endpoint instead of the ranking walk. */
+  search?: string | null;
   enabled: boolean;
   homeSpaceOf: (entity: ClaimPickerEntity) => string | null;
 }): GraphClaimTailSources {
-  const pages = useInfiniteQuery({
+  const searching = Boolean(search);
+
+  // Two sources, one shape. The ranking walk cannot answer a search — a substring filter over it
+  // measured at ten seconds — so a search goes to the indexed REST endpoint instead, and the rows
+  // come back through the same projection either way.
+  //
+  // Two queries rather than one with a branch inside: their page params are different kinds
+  // (a cursor and an offset), and react-query keys them separately, so a viewer clearing a search
+  // returns to the walk's pages rather than refetching them.
+  const walk = useInfiniteQuery({
     queryKey: graphClaimsQueryKey(query),
     queryFn: ({ pageParam, signal }) => fetchGraphClaims(query, pageParam, signal),
     initialPageParam: null as string | null,
@@ -65,8 +78,24 @@ export function useGraphClaimTailSources({
     // Curation and publishing move at human speed, and this list is the tail of another one — a
     // refetch on every focus would re-walk the ranking for rows the viewer has already scrolled past.
     staleTime: 5 * 60_000,
-    enabled,
+    enabled: enabled && !searching,
   });
+
+  const searchQuery = React.useMemo(
+    () => ({ search: search ?? '', spaceIds: query.spaceIds, topicIds: query.topicIds, excludeIds: query.excludeIds }),
+    [query.excludeIds, query.spaceIds, query.topicIds, search]
+  );
+
+  const searched = useInfiniteQuery({
+    queryKey: graphClaimSearchQueryKey(searchQuery),
+    queryFn: ({ pageParam, signal }) => fetchGraphClaimSearch(searchQuery, pageParam, signal),
+    initialPageParam: 0,
+    getNextPageParam: page => page.nextOffset ?? undefined,
+    staleTime: 5 * 60_000,
+    enabled: enabled && searching,
+  });
+
+  const pages = searching ? searched : walk;
 
   const entities = React.useMemo(
     () => (enabled ? (pages.data?.pages.flatMap(page => page.claims) ?? NO_ENTITIES) : NO_ENTITIES),
@@ -112,6 +141,7 @@ export function useGraphClaimTailSources({
  */
 export function useGraphClaimTail(args: {
   query: GraphClaimsQuery;
+  search?: string | null;
   enabled: boolean;
   homeSpaceOf: (entity: ClaimPickerEntity) => string | null;
 }): GraphClaimTail {

@@ -410,12 +410,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    *
    * geo-chat can only list a claim it has a row for, and it has rows for far fewer claims than
    * exist — so the index running out of pages is not the corpus running out of claims. Off while it
-   * still has pages, off while searching (a substring filter over the ranking walk measured at ten
-   * seconds), and off on the other two sources, which are already graph-backed or a fixed set.
+   * still has pages, and off on the other two sources, which are already graph-backed or a fixed
+   * curated set.
+   *
+   * A search is answered through the indexed endpoint rather than the ranking walk — see
+   * `useGraphClaimTailSources`, which picks the source.
    */
   const tailEnabled =
     browsesPages &&
-    !debouncedSearch &&
     !allowlistPending &&
     !browsedClaimsQuery.unusable &&
     !browsedClaimsQuery.isLoading &&
@@ -802,6 +804,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const tail = useGraphClaimTailSources({
     query: tailQuery,
+    search: debouncedSearch || null,
     enabled: tailEnabled,
     homeSpaceOf: tailHomeSpaceOf,
   });

@@ -257,9 +257,17 @@ vi.mock('~/core/debates/debate-entry-intent', () => ({
 // these suites run under — so without this every case here would reach the graph for the tag.
 // GEO-2704. The graph tail that continues All claims once geo-chat runs out of pages.
 vi.mock('~/core/debates/use-graph-claim-tail', () => ({
-  useGraphClaimTailSources: ({ query, enabled }: { query: unknown; enabled: boolean }) => {
+  useGraphClaimTailSources: ({
+    query,
+    search,
+    enabled,
+  }: {
+    query: unknown;
+    search?: string | null;
+    enabled: boolean;
+  }) => {
     mocks.tailEnabledWith.push(enabled);
-    if (enabled) mocks.tailQueries.push(query);
+    if (enabled) mocks.tailQueries.push({ ...(query as object), search: search ?? null });
     return {
       sources: enabled ? mocks.tailSources : [],
       topicsByClaimId: new Map(enabled ? mocks.tailTopics.map(entry => [entry.claimEntityId, entry.topics]) : []),
@@ -2990,14 +2998,16 @@ describe('DebateRematchPageClient — the graph tail', () => {
     expect(mocks.tailEnabledWith.at(-1)).toBe(false);
   });
 
-  // A substring filter over the ranking walk measured at ten seconds.
-  it('stays off while the viewer is searching', async () => {
+  // A search is answered too, through the indexed endpoint rather than the ranking walk — a
+  // substring filter over that measured at ten seconds.
+  it('hands a search term to the tail rather than switching it off', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
     fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'newly' } });
 
-    await waitFor(() => expect(mocks.tailEnabledWith.at(-1)).toBe(false));
+    await waitFor(() => expect((mocks.tailQueries.at(-1) as { search: string | null }).search).toBe('newly'));
+    expect(mocks.tailEnabledWith.at(-1)).toBe(true);
   });
 
   // The other two sources are already graph-backed or a fixed curated set.
