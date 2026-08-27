@@ -6,7 +6,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { claimResponseKind } from '~/core/claims/response-kind';
 import { EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
 import {
   EXPLORE_TYPE_FILTER_STORAGE_KEY,
@@ -15,12 +14,14 @@ import {
 } from '~/core/explore/explore-type-filter';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { resolveEntityResponseKind } from '~/core/responses/entity-response';
 import {
   ClaimResponseBatchBoundary,
   type CrossSpaceClaimResponseTarget,
   useClaimResponseSummaryBatchAcrossSpaces,
 } from '~/core/responses/use-claim-response-summaries';
 import { useQueryEntities } from '~/core/sync/use-store';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Menu, MenuItem } from '~/design-system/menu';
@@ -255,11 +256,24 @@ export function EntityFeed({
   );
   const responseTargets = React.useMemo<CrossSpaceClaimResponseTarget[]>(
     () =>
-      items.map(item => ({
-        entityId: item.entityId,
-        spaceId: item.spaceId,
-        responseKind: claimResponseKind(feedEntitiesById.get(item.entityId) ?? {}, item.spaceId),
-      })),
+      items.flatMap(item => {
+        const entity = feedEntitiesById.get(item.entityId);
+        // Nothing is known about this row yet, so anything derived here would be a guess. Emitting
+        // no target leaves the row to its own fetch rather than writing a key it will not read.
+        if (!entity) return [];
+
+        /**
+         * Derived with the same two functions the button uses, not an approximation of them.
+         *
+         * `EntityVoteButtons` resolves its space with `resolveEntitySpaceId` — a row listing an
+         * entity that lives elsewhere reads that space's votes (GEO-2660) — and its kind with
+         * `resolveEntityResponseKind`, which returns `curation` for everything that is not a claim.
+         * Computing either differently writes cache keys the button never looks at, and because the
+         * boundary disables its own query, the row would render zero votes instead of falling back.
+         */
+        const spaceId = resolveEntitySpaceId(entity, item.spaceId);
+        return [{ entityId: item.entityId, spaceId, responseKind: resolveEntityResponseKind(entity, spaceId) }];
+      }),
     [items, feedEntitiesById]
   );
   const responseBatch = useClaimResponseSummaryBatchAcrossSpaces({
