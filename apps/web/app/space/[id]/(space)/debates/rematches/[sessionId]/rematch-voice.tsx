@@ -3,6 +3,7 @@
 import {
   LiveKitRoom,
   RoomAudioRenderer,
+  useAudioPlayback,
   useConnectionState,
   useIsMuted,
   useIsSpeaking,
@@ -20,7 +21,7 @@ import { ConnectionState, type MediaDeviceFailure, type Room, Track } from 'live
 
 import type { DebateRematchParticipant, DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
-import { MicrophoneIcon, RecordingCircleButton } from '~/core/debates/debate-room-controls';
+import { MicrophoneIcon, RecordingCircleButton, SpeakerIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { useDebateMediaSession } from '~/core/debates/media-session';
@@ -249,6 +250,13 @@ function VoicePillBody({
     void setNoiseFilterEnabled(true);
   }, [setNoiseFilterEnabled]);
 
+  // Auto-join means no click stands between arriving and connecting, so the browser's autoplay
+  // policy can refuse to play the opponent's audio — silently, with the room otherwise healthy
+  // (presence and mute state keep updating). The debate room never hits this because its pre-join
+  // screen supplies the gesture. `startAudio()` has to run from a real user event, so the pill
+  // asks for one.
+  const { canPlayAudio, startAudio } = useAudioPlayback(room);
+
   const connectionState = useConnectionState();
   // The room reports Disconnected both before the first connect and after the reconnect policy
   // gives up; only the second deserves a Retry.
@@ -281,6 +289,23 @@ function VoicePillBody({
   const connecting = connectionState !== ConnectionState.Connected;
   const reconnecting =
     connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting;
+
+  // Blocked playback outranks everything else the pill could say: the room is fine, the opponent
+  // may well be talking, and the viewer simply cannot hear it until they click.
+  if (!connecting && !canPlayAudio) {
+    return (
+      <VoicePillFrame>
+        <button
+          type="button"
+          onClick={() => void startAudio()}
+          className="flex items-center gap-2 rounded-full bg-text px-3 py-1.5 text-metadataMedium text-white transition-opacity hover:opacity-80"
+        >
+          <SpeakerIcon disabled={false} />
+          Enable audio
+        </button>
+      </VoicePillFrame>
+    );
+  }
 
   return (
     <VoicePillFrame>

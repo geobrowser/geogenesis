@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   close: vi.fn(),
   coordinatorOptions: [] as Array<{ debateId: string; userId: string }>,
   connectionState: 'connected',
+  canPlayAudio: true,
+  startAudio: vi.fn(() => Promise.resolve()),
   remoteParticipants: [] as Array<{ identity: string }>,
   setMicrophoneEnabled: vi.fn(),
   isMicrophoneEnabled: true,
@@ -38,6 +40,7 @@ vi.mock('@livekit/components-react', () => ({
     return <div data-testid="livekit-room">{props.children as ReactElement}</div>;
   },
   RoomAudioRenderer: () => null,
+  useAudioPlayback: () => ({ canPlayAudio: mocks.canPlayAudio, startAudio: mocks.startAudio }),
   useConnectionState: () => mocks.connectionState,
   useIsMuted: () => mocks.isMuted,
   useIsSpeaking: () => mocks.isSpeaking,
@@ -166,6 +169,8 @@ beforeEach(() => {
   mocks.close.mockReset();
   mocks.coordinatorOptions = [];
   mocks.connectionState = 'connected';
+  mocks.canPlayAudio = true;
+  mocks.startAudio.mockReset().mockResolvedValue(undefined);
   mocks.remoteParticipants = [];
   mocks.setMicrophoneEnabled.mockReset();
   mocks.isMicrophoneEnabled = true;
@@ -260,6 +265,26 @@ describe('RematchVoicePill', () => {
     const muteButton = screen.getByRole('button', { name: /microphone/i });
     expect(muteButton).toBeDisabled();
     expect(muteButton).toHaveAttribute('title', 'Microphone unavailable — check browser permissions');
+  });
+
+  // Auto-join gives the browser no user gesture to hang playback on, so a blocked room looks
+  // perfectly healthy — presence and mute state keep updating — while the viewer hears silence.
+  it('asks for a click when the browser blocks audio playback', async () => {
+    mocks.canPlayAudio = false;
+    mocks.remoteParticipants = [{ identity: 'them' }];
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const enable = screen.getByRole('button', { name: /enable audio/i });
+    fireEvent.click(enable);
+    expect(mocks.startAudio).toHaveBeenCalled();
+  });
+
+  it('does not ask for a click while audio plays normally', async () => {
+    mocks.remoteParticipants = [{ identity: 'them' }];
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    expect(screen.queryByRole('button', { name: /enable audio/i })).toBeNull();
   });
 
   it('yields to the tab that owns the voice connection', async () => {
