@@ -21,7 +21,7 @@ import {
   type MatchmakingTopic,
 } from '~/core/debates/api';
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '~/core/debates/claim-picker-page';
-import { eligibleClaimSpaceIds, isClaimSpaceAllowed, keepSelectableSpace } from '~/core/debates/claim-space-allowlist';
+import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
@@ -46,7 +46,6 @@ import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState, HubSkeleton } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import {
-  availableTopics,
   countBy,
   keepSelectableTopics,
   mergeFacetCounts,
