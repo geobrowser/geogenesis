@@ -15,10 +15,12 @@ import {
   type EntityExistsQuery,
   type EntityFilter,
   type EntitySpacesBatchQuery,
+  UserEntityVotesByTypeDocument,
   UserHasEntityVoteDocument,
   type UserVoteFilter,
   type UuidFilter,
 } from '~/core/gql/graphql';
+import { uuidToHex } from '~/core/id/normalize';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import {
   type ActiveResponseDirection,
@@ -73,6 +75,7 @@ import {
   userEntityResponseQuery,
 } from './query-fragments';
 import { restFetch } from './rest';
+import { capSearchQuery } from './search-query';
 import { type SortOrder } from './sort-order';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
@@ -1039,7 +1042,12 @@ export type SearchResultsPage = {
 
 export function buildSearchPath(args: ResultsArgs): string {
   const params = new URLSearchParams();
-  params.set('query', args.query);
+  // Every REST search in the app arrives here — the ten-odd `useSearch` surfaces through
+  // `E.findFuzzyPage`, plus chat, community calls and import auto-mapping calling `getResults`
+  // directly — so this is the one place the endpoint's length limit has to be respected. Capping
+  // here rather than at each input also leaves the caller's own state holding what the searcher
+  // actually typed, which is what gets echoed back to them.
+  params.set('query', capSearchQuery(args.query));
   params.set('limit', String(args.limit ?? 10));
   params.set('offset', String(args.offset ?? 0));
 
@@ -1337,6 +1345,60 @@ export function getEntityResponders(
     signal,
   });
 }
+
+export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
+
+type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string };
+
+export type UserEntityVoteObjectIdsPage = {
+  objectIds: string[];
+  voteKindByObjectId: Record<string, number>;
+  votedAtByObjectId: Record<string, string>;
+  nextOffset: number;
+  hasNextPage: boolean;
+};
+
+export function getUserEntityVoteObjectIdsPage(
+  userId: string,
+  voteType: 0 | 1,
+  objectType: 0 | 1 = 0,
+  offset = 0,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const rows: UserEntityVoteRow[] = yield* graphql({
+      query: UserEntityVotesByTypeDocument,
+      decoder: (data): UserEntityVoteRow[] =>
+        (data.userVotes ?? []).filter((row): row is UserEntityVoteRow => row != null),
+      variables: {
+        userId,
+        voteType,
+        objectType,
+        first: USER_ENTITY_VOTES_PAGE_SIZE,
+        offset,
+      },
+      signal,
+    });
+
+    const nodes = rows.filter(node => Boolean(node.objectId));
+    const objectIds = nodes.map(node => node.objectId);
+    const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
+    const votedAtByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.votedAt]));
+
+    return {
+      objectIds,
+      voteKindByObjectId,
+      votedAtByObjectId,
+      // Advance by what the server returned, not by what survived filtering, so a
+      // dropped row can't shift the window and skip the vote that follows it.
+      nextOffset: offset + rows.length,
+      // A short page is the last one. A page that lands exactly on the boundary
+      // costs one extra empty fetch, which is cheaper than a count query.
+      hasNextPage: rows.length === USER_ENTITY_VOTES_PAGE_SIZE,
+    } satisfies UserEntityVoteObjectIdsPage;
+  });
+}
+
 const EXCLUDED_BLOCK_TYPES = [
   SystemIds.TEXT_BLOCK,
   SystemIds.IMAGE_BLOCK,

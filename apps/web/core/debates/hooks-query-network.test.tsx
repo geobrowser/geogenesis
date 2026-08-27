@@ -20,6 +20,7 @@ import {
 const mocks = vi.hoisted(() => ({
   authenticated: true,
   attention: true,
+  presence: true,
   gatewayPaused: false,
   queryCache: { subscribe: vi.fn(() => vi.fn()) },
   queryClient: {
@@ -49,6 +50,11 @@ vi.mock('~/core/auth/identity-token', () => ({
   useIdentityTokenSync: vi.fn(),
 }));
 
+// geo-chat only indexes DAO spaces, and the debate hooks hold until they know the space is one.
+vi.mock('./space-debate-support', () => ({
+  useSpaceDebateSupport: () => 'indexed',
+}));
+
 vi.mock('./debate-gateway', () => ({
   useDebateGatewayScope: mocks.useScope,
   useDebateGatewaySnapshot: () => ({ status: mocks.gatewayPaused ? 'degraded' : 'ready', paused: mocks.gatewayPaused }),
@@ -56,11 +62,13 @@ vi.mock('./debate-gateway', () => ({
 
 vi.mock('./debate-attention', () => ({
   useDebateAttention: () => mocks.attention,
+  useDebatePresence: () => mocks.presence,
 }));
 
 beforeEach(() => {
   mocks.authenticated = true;
   mocks.attention = true;
+  mocks.presence = true;
   mocks.gatewayPaused = false;
   mocks.queryClient.invalidateQueries.mockClear();
   mocks.queryClient.getQueryCache.mockClear();
@@ -98,7 +106,7 @@ describe('debate query network ownership', () => {
   // backoff, and an ERROR frame that pauses live updates without scheduling a reconnect. Neither
   // recovers on its own, and the shared options switch off React Query's focus and reconnect
   // refetches — so without this a request waited on a remount to appear (GEO-2638).
-  it('polls activity while foregrounded, faster while the gateway is paused, and refetches on return', () => {
+  it('polls activity while on screen, faster while the gateway is paused, and refetches on return', () => {
     const { rerender } = renderHook(() => useDebateActivity());
     expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: 30_000 });
     expect(mocks.queryRefetch).not.toHaveBeenCalled();
@@ -108,13 +116,40 @@ describe('debate query network ownership', () => {
     rerender();
     expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: 10_000 });
 
-    // A tab nobody is looking at has no popup to draw, paused or not.
-    mocks.attention = false;
+    // A hidden tab has no popup to draw, paused or not.
+    mocks.presence = false;
     rerender();
     expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: false });
 
+    mocks.presence = true;
+    rerender();
+    expect(mocks.queryRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  // GEO-2650. The gate used to be attention, which additionally requires `document.hasFocus()`, so
+  // a tab sitting open on screen behind whatever window the viewer was typing in did not poll at
+  // all — and the incoming-request popup is by definition the thing that arrives while you are
+  // looking somewhere else. That left the socket as the sole delivery path for the exact case this
+  // poll exists to cover, which is how a request still took ~36 seconds after GEO-2638.
+  it('keeps polling activity on a visible tab that is not the focused window', () => {
+    mocks.attention = false;
+    mocks.presence = true;
+
+    renderHook(() => useDebateActivity());
+
+    expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({ refetchInterval: 30_000 });
+  });
+
+  // Regaining focus without a visibility change is its own return: the poll was already running, but
+  // someone who just clicked back in is the most likely person to be waiting on a popup.
+  it('refetches activity when focus returns to an already-visible tab', () => {
+    mocks.attention = false;
+    const { rerender } = renderHook(() => useDebateActivity());
+    expect(mocks.queryRefetch).not.toHaveBeenCalled();
+
     mocks.attention = true;
     rerender();
+
     expect(mocks.queryRefetch).toHaveBeenCalledTimes(1);
   });
 

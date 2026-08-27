@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { bucketOccurrences, getOccurrences } from './occurrences';
+import { bucketOccurrences, findOccurrenceByStart, getOccurrences } from './occurrences';
 
 // Fixed "now" so the windowed expansion is deterministic.
 const NOW = Date.UTC(2026, 2, 5, 17, 30); // 2026-03-05 17:30 UTC
@@ -69,5 +69,42 @@ describe('bucketOccurrences', () => {
     expect(live!.startMs).toBe(Date.UTC(2026, 2, 5, 17, 0));
     expect(upcoming.every(o => o.startMs > NOW)).toBe(true);
     expect(past.every(o => o.endMs < NOW)).toBe(true);
+  });
+});
+
+// Anything acting on the occurrence a user actually joined must resolve it from the
+// server's `occurrenceStart`, not from "what is live now". A page open across a boundary
+// disagrees, and acting on the wrong occurrence put the forced end-of-call cutoff in the
+// past — which disconnects the moment it is evaluated (GEO-2584).
+describe('findOccurrenceByStart', () => {
+  const WEEKLY = 'DTSTART:20260305T170000Z\nDTEND:20260305T180000Z\nRRULE:FREQ=WEEKLY;BYDAY=TH';
+
+  it('resolves the occurrence for an exact start', () => {
+    const start = Date.UTC(2026, 2, 12, 17, 0); // the following Thursday
+    expect(findOccurrenceByStart(WEEKLY, start)?.endMs).toBe(Date.UTC(2026, 2, 12, 18, 0));
+  });
+
+  it('resolves a start that is near-miss rather than identical', () => {
+    // The server's instant need not match the locally expanded one to the millisecond.
+    const start = Date.UTC(2026, 2, 12, 17, 0) + 60_000;
+    expect(findOccurrenceByStart(WEEKLY, start)?.startMs).toBe(Date.UTC(2026, 2, 12, 17, 0));
+  });
+
+  // The point of the helper: expansion is centred on the target, not on `now`. This start
+  // is deliberately outside the +180-day expansion window measured from NOW, so a version
+  // that expanded around `now` would miss it — as the assertion below asserts directly.
+  it('resolves an occurrence outside the window that `now` would expand', () => {
+    const farStart = Date.UTC(2027, 2, 4, 17, 0); // ~1 year on, still a Thursday
+    expect(getOccurrences(WEEKLY, NOW).some(o => o.startMs === farStart)).toBe(false);
+    expect(findOccurrenceByStart(WEEKLY, farStart)?.endMs).toBe(Date.UTC(2027, 2, 4, 18, 0));
+  });
+
+  it('returns null when nothing lands within tolerance', () => {
+    const notAnOccurrence = Date.UTC(2026, 2, 10, 3, 0); // a Tuesday at 03:00
+    expect(findOccurrenceByStart(WEEKLY, notAnOccurrence)).toBeNull();
+  });
+
+  it('returns null for an empty schedule rather than throwing', () => {
+    expect(findOccurrenceByStart('', Date.UTC(2026, 2, 12, 17, 0))).toBeNull();
   });
 });

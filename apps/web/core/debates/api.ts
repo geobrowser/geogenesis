@@ -1,5 +1,7 @@
 'use client';
 
+import { capSearchQuery } from '~/core/io/search-query';
+
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
@@ -389,11 +391,35 @@ export type DebatePeopleResponse = {
 export type DebateClaimPositionSummary = {
   position: boolean;
   position_label: string;
-  /** Everyone who set this position, online or not. */
+  /**
+   * Everyone geo-chat counts as holding this position — which is narrower than it sounds: the
+   * query only counts rows surviving `readiness.is_ready`, so someone who took the position
+   * without standing ready to debate it is excluded. Not shown on the claim card.
+   */
   total_count: number;
-  /** Online, available, not in a debate, not blocked either way. */
+  /**
+   * Eligible for *this viewer* to send a request to right now: excludes the viewer themselves and
+   * anyone they are already pair-blocked with on this claim. Drives the "Debate now" filter.
+   *
+   * Viewer-relative, so it is the wrong basis for anything presented as a fact about the claim.
+   * Using it for the avatar stack made a claim you had already debated show you an empty stack,
+   * because debating someone pair-blocks that pair on that claim (GEO-2691).
+   */
   available_now_count: number;
-  /** Capped list used for avatar stacks. */
+  /**
+   * Available to debate right now as a property of the *person* — online, reachable, not busy,
+   * not paused — including the viewer and anyone they have already debated here.
+   *
+   * This is the population `participants` is drawn from, so a `+N` overflow beside those faces
+   * must be computed against this and not against `available_now_count`.
+   *
+   * Optional because geo-chat only started sending it in geo-chat#74, and the two deploy
+   * separately. Read it through {@link presentCount}, never directly: a client that ships first
+   * would otherwise gate every avatar stack on `undefined > 0` and render no faces at all, which
+   * is the exact bug this field exists to fix. The fallback also covers a geo-chat rollback.
+   */
+  present_count?: number;
+  /** Capped list for the avatar stack, drawn from `present_count`'s population (GEO-2691). */
   participants: DebateParticipantSummary[];
 };
 
@@ -434,19 +460,70 @@ export type MatchmakingClaim = MatchmakingReadiness & {
 
 export type MatchmakingClaimsFilter = 'all' | 'mine' | 'debate_now';
 
-/** No topic facet: topics are Knowledge Graph data geo-chat doesn't model, so the Claims tab
- * resolves and filters them itself over the loaded pages. */
+/** Topics are Knowledge Graph data, which geo-chat replicates as of GEO-2659 — so `topicId`
+ * filters server-side and the response carries a topic facet. Before that the server returned
+ * `topics: []` and ignored the parameter, and both pickers resolved and filtered topics
+ * themselves over whatever pages they had loaded. */
 export type MatchmakingClaimsQuery = {
   search?: string | null;
   spaceId?: string | null;
+  /**
+   * The spaces this viewer may see claims from at all, sent when they haven't picked one.
+   *
+   * Both this and `spaceId` are OR-ed together server-side rather than one overriding the other,
+   * so only ever send one of them: sending both would widen the query back out to every space in
+   * either list.
+   */
+  spaceIds?: string[] | null;
+  topicId?: string | null;
+  /**
+   * Topics to narrow by, OR-ed together. Merged with `topicId` the same way `spaceIds` is with
+   * `spaceId`, so send one or the other rather than both.
+   */
+  topicIds?: string[] | null;
+  /**
+   * Narrows rows *and* facets to what a debate-again session can still offer: geo-chat drops the
+   * claim the source debate was about, and any this pairing has blocked (GEO-2674).
+   *
+   * The session id rather than the ids themselves — that set is geo-chat's own, and the client
+   * would be handing back a value it isn't the authority on.
+   */
+  rematchSessionId?: string | null;
   filter?: MatchmakingClaimsFilter;
   cursor?: string | null;
   limit?: number;
 };
 
+/** One dropdown option and how many claims the current filters leave behind it. */
+export type MatchmakingFacetCount = {
+  id: string;
+  /** Topics carry a replicated name; spaces don't — the client resolves those from the sidebar. */
+  name: string | null;
+  count: number;
+};
+
+/**
+ * The two menus, counted over the whole candidate set rather than the page being returned.
+ *
+ * Each dimension is narrowed by *the other* and never by itself — standard faceted counting, and
+ * what makes a count answer "how many of the claims matching everything else I have chosen are in
+ * here". Picking a space therefore doesn't collapse the space menu, and picking a topic doesn't
+ * collapse the topic menu, but each does narrow its counterpart.
+ *
+ * The half that is easy to miss is that this cuts both ways: a space can disappear from
+ * `space_facets` because the selected *topic* has nothing in it. That is "this combination is
+ * empty", not "this space is no longer yours to pick", and the two must not be confused — see the
+ * space effect in `claims-tab.tsx`.
+ */
 export type MatchmakingFacets = {
+  /** Superseded by `space_facets`, and derived from it — so it inherits the topic narrowing too. */
   space_ids: string[];
+  /** Superseded by `topic_facets`. Empty on every response until GEO-2659 made it real. */
   topics: MatchmakingTopic[];
+  /** Count descending. Narrowed by the topic filter, not by the space filter. */
+  space_facets: MatchmakingFacetCount[];
+  /** Count descending. Narrowed by the space filter, not by the topic filter. */
+  topic_facets: MatchmakingFacetCount[];
 };
 
 export type MatchmakingClaimsResponse = {
@@ -1027,8 +1104,22 @@ export async function listMatchmakingClaims(
   signal?: AbortSignal
 ) {
   const params = new URLSearchParams();
-  if (query.search) params.set('search', query.search);
+  // GEO-2658. Capped for consistency, not to stay inside a limit: `/matchmaking/claims` has no
+  // ceiling on `search` — it trims, escapes the LIKE wildcards and binds, so an over-long query is
+  // answered rather than rejected. This is the only search box in debates, and the same typed
+  // string shouldn't behave differently depending on which box it went into.
+  //
+  // `capSearchQuery` also does the work that matters more than the length: it slices by code point,
+  // so a cut never lands inside a surrogate pair and hands `URLSearchParams` a lone surrogate.
+  if (query.search) params.set('search', capSearchQuery(query.search));
   if (query.spaceId) params.set('space_id', query.spaceId);
+  // Only when no single space is picked — see the note on the type. An empty list is left off
+  // entirely: the server reads "no ids" as "no filter", which is the opposite of what an empty
+  // eligible set means.
+  else if (query.spaceIds?.length) params.set('space_ids', query.spaceIds.join(','));
+  if (query.topicId) params.set('topic_id', query.topicId);
+  else if (query.topicIds?.length) params.set('topic_ids', query.topicIds.join(','));
+  if (query.rematchSessionId) params.set('rematch_session_id', query.rematchSessionId);
   if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
   if (query.cursor) params.set('cursor', query.cursor);
   if (query.limit) params.set('limit', String(query.limit));

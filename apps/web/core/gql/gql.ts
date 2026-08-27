@@ -56,6 +56,7 @@ type Documents = {
     "\n  query EntityResponders($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {\n    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId, voteKind: $voteKind }) {\n      userId\n      voteType\n    }\n  }\n": typeof types.EntityRespondersDocument,
     "\n  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {\n    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {\n      userId\n      objectId\n      voteType\n      voteKind\n    }\n  }\n": typeof types.ClaimResponseSummariesDocument,
     "\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n": typeof types.UserHasEntityVoteDocument,
+    "\n  query UserEntityVotesByType($userId: UUID!, $voteType: Int!, $objectType: Int!, $first: Int!, $offset: Int!) {\n    userVotes(\n      condition: { userId: $userId, voteType: $voteType, objectType: $objectType }\n      first: $first\n      offset: $offset\n      orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]\n    ) {\n      objectId\n      voteKind\n      votedAt\n    }\n  }\n": typeof types.UserEntityVotesByTypeDocument,
 };
 const documents: Documents = {
     "\n  fragment RelationToEntity on Entity {\n    id\n    name\n    types {\n      id\n    }\n    # Bounded like every sibling list in this file. This one rides on each relation of each\n    # entity in a batch, so it is the most multiplied list here and the only one that was\n    # left open — an entity with a heavily-valued neighbour could pull far more than the\n    # three fields below suggest.\n    valuesList(first: 1000) {\n      spaceId\n      propertyId\n      text\n    }\n  }\n": types.RelationToEntityFragmentDoc,
@@ -100,6 +101,7 @@ const documents: Documents = {
     "\n  query EntityResponders($objectId: UUID!, $objectType: Int!, $spaceId: UUID!, $voteKind: Int!) {\n    userVotes(condition: { objectId: $objectId, objectType: $objectType, spaceId: $spaceId, voteKind: $voteKind }) {\n      userId\n      voteType\n    }\n  }\n": types.EntityRespondersDocument,
     "\n  query ClaimResponseSummaries($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {\n    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {\n      userId\n      objectId\n      voteType\n      voteKind\n    }\n  }\n": types.ClaimResponseSummariesDocument,
     "\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n": types.UserHasEntityVoteDocument,
+    "\n  query UserEntityVotesByType($userId: UUID!, $voteType: Int!, $objectType: Int!, $first: Int!, $offset: Int!) {\n    userVotes(\n      condition: { userId: $userId, voteType: $voteType, objectType: $objectType }\n      first: $first\n      offset: $offset\n      orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]\n    ) {\n      objectId\n      voteKind\n      votedAt\n    }\n  }\n": types.UserEntityVotesByTypeDocument,
 };
 
 /**
@@ -284,6 +286,10 @@ export function graphql(source: "\n  query ClaimResponseSummaries($filter: UserV
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n"): (typeof documents)["\n  query UserHasEntityVote($userId: UUID!) {\n    userVotes(condition: { userId: $userId }, first: 1) {\n      userId\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query UserEntityVotesByType($userId: UUID!, $voteType: Int!, $objectType: Int!, $first: Int!, $offset: Int!) {\n    userVotes(\n      condition: { userId: $userId, voteType: $voteType, objectType: $objectType }\n      first: $first\n      offset: $offset\n      orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]\n    ) {\n      objectId\n      voteKind\n      votedAt\n    }\n  }\n"): (typeof documents)["\n  query UserEntityVotesByType($userId: UUID!, $voteType: Int!, $objectType: Int!, $first: Int!, $offset: Int!) {\n    userVotes(\n      condition: { userId: $userId, voteType: $voteType, objectType: $objectType }\n      first: $first\n      offset: $offset\n      orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]\n    ) {\n      objectId\n      voteKind\n      votedAt\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

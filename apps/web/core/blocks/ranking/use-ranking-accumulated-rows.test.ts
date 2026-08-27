@@ -21,6 +21,16 @@ describe('upsertRowPage', () => {
     pages = upsertRowPage(pages, 1, [row('b')]);
     expect(flattenRowPages(pages).map(r => r.entityId)).toEqual(['b']);
   });
+
+  it('returns the same array when a page is re-upserted unchanged', () => {
+    const pages = upsertRowPage([], 0, [row('a'), row('b')]);
+    expect(upsertRowPage(pages, 0, [row('a'), row('b')])).toBe(pages);
+  });
+
+  it('keeps pages in page order when they arrive out of order', () => {
+    const pages = upsertRowPage(upsertRowPage([], 1, [row('c')]), 0, [row('a'), row('b')]);
+    expect(flattenRowPages(pages).map(r => r.entityId)).toEqual(['a', 'b', 'c']);
+  });
 });
 
 describe('flattenRowPages', () => {

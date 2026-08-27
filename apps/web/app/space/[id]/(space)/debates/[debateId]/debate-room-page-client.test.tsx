@@ -13,6 +13,7 @@ import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-polic
 import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
+  prefetchAllowlist: vi.fn(),
   back: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
@@ -251,7 +252,14 @@ class FakeBroadcastChannel {
   }
 }
 
+// The warm-up reaches for a QueryClient and this suite renders without a provider. Mocked to the
+// question the room is responsible for: does entering a debate ask for the allowlist to be warmed?
+vi.mock('~/core/debates/use-prefetch-claim-space-allowlist', () => ({
+  usePrefetchClaimSpaceAllowlist: (enabled: boolean) => mocks.prefetchAllowlist(enabled),
+}));
+
 beforeEach(() => {
+  mocks.prefetchAllowlist.mockReset();
   clearDebateReturnDestination();
   setHistoryLength(1);
   mocks.back.mockReset();
@@ -431,6 +439,16 @@ describe('isDebateInThankYouPeriod', () => {
 });
 
 describe('DebateRoomPageClient', () => {
+  // GEO-2599. The debate-again picker's All tab waits on the claim-space allowlist, which walks the
+  // Root space's topic tree — about thirteen sequential round trips cold, and the tab stays empty
+  // until it lands. Entering the room says the picker is minutes away, so the traversal is started
+  // against a viewer who is watching a debate rather than one waiting on a list.
+  it('warms the claim-space allowlist on entering a debate', () => {
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.prefetchAllowlist).toHaveBeenCalledWith(true);
+  });
+
   it('returns through browser history without rendering an already-completed room', async () => {
     setHistoryLength(2);
 
