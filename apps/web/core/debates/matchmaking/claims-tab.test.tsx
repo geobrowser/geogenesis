@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 
 import type { ReactElement } from 'react';
 
@@ -12,10 +12,13 @@ import { ClaimsTab } from './claims-tab';
 const mocks = vi.hoisted(() => ({
   claims: [] as MatchmakingClaim[],
   facetSpaceIds: [] as string[],
+  pageSize: null as number | null,
+  lastEnabledData: undefined as unknown,
   spaceAllowlist: null as Set<string> | null,
   allowlistLoading: false,
   publishableSpaceIds: null as Set<string> | null,
   publishableLoading: false,
+  scopeHeldOver: false,
   sidebarData: null as unknown,
   fetchedSpaceIds: [] as string[][],
   spacesLoading: false,
@@ -24,6 +27,19 @@ const mocks = vi.hoisted(() => ({
   fetchNextPage: vi.fn(),
   observed: [] as Element[],
   trigger: null as null | (() => void),
+}));
+
+// `pending-personal-space` reads localStorage at module scope (`atomWithStorage` with
+// `getOnInit`), and the storage jsdom hands back here has no `getItem`. The throw happens while
+// the module graph is still being built, so it takes this whole file down at collection — every
+// test in it, on master and in CI alike. Reached through the claim card.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+  pendingPersonalSpaceAtom: { toString: () => 'pendingPersonalSpaceAtom' },
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: (spaceId: string | null | undefined) =>
+    typeof spaceId === 'string' && spaceId.startsWith('pending:'),
+  usePendingPersonalSpace: () => ({ isPending: false }),
 }));
 
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
@@ -40,14 +56,80 @@ vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => 
 }));
 
 vi.mock('./hooks', () => ({
-  useMatchmakingClaims: (query: unknown) => {
+  useMatchmakingClaims: (query: unknown, enabled: boolean) => {
     mocks.lastQuery = query;
+    // `placeholderData: keepPreviousData` outlives `enabled: false`, so a disabled query still
+    // hands back the last key's pages — facets included. Modelled, because a mock that returns
+    // nothing here makes masking look unnecessary.
+    if (!enabled) {
+      return {
+        data: mocks.lastEnabledData,
+        isLoading: false,
+        error: null,
+        hasNextPage: true,
+        isFetchingNextPage: false,
+        fetchNextPage: mocks.fetchNextPage,
+        refetch: vi.fn(),
+      };
+    }
+    // A scope change is a key change like any other, so `keepPreviousData` answers it with the
+    // previous scope's pages while the new request is in flight. Modelled, because that hold is
+    // the whole of what the mask downstream is for.
+    if (mocks.scopeHeldOver) {
+      return {
+        data: mocks.lastEnabledData,
+        isLoading: false,
+        error: null,
+        hasNextPage: mocks.hasNextPage,
+        isFetchingNextPage: false,
+        isPlaceholderData: true,
+        fetchNextPage: mocks.fetchNextPage,
+        refetch: vi.fn(),
+      };
+    }
+    const { spaceId, topicId } = query as { spaceId?: string | null; topicId?: string | null };
+    // `space_id` and `topic_id` are both query parameters as of GEO-2659, so the endpoint
+    // returns only the rows that match. Mirrored here, because what the tab renders and what
+    // its menus describe both hang off that.
+    const inSpace = mocks.claims.filter(entry => !spaceId || entry.claim.space_id === spaceId);
+    const claims = inSpace.filter(entry => !topicId || entry.topics.some(topic => topic.id === topicId));
+    // Each dimension is counted without narrowing itself, and *is* narrowed by the other — what
+    // `MATCHMAKING_CLAIMS_FACETS_QUERY` does, and what a facet count is for. So the topic facet is
+    // cut by the space filter and the space facet by the topic filter; neither is cut by its own.
+    // Computed over the whole filtered set rather than the returned page, which is the point of a
+    // server-side facet.
+    const topicFacets = [...new Map(inSpace.flatMap(entry => entry.topics).map(topic => [topic.id, topic])).values()];
+    const spacesCarryingTopic = new Set(
+      mocks.claims
+        .filter(entry => !topicId || entry.topics.some(topic => topic.id === topicId))
+        .map(entry => entry.claim.space_id)
+    );
+    const spaceFacetIds = topicId ? mocks.facetSpaceIds.filter(id => spacesCarryingTopic.has(id)) : mocks.facetSpaceIds;
+    // Facets are computed over the whole filtered set while the page is a slice of it — the
+    // shape that matters here, since the menu must not depend on how far the viewer has scrolled.
+    const page = mocks.pageSize === null ? claims : claims.slice(0, mocks.pageSize);
+    const data = {
+      pages: [
+        {
+          claims: page,
+          next_cursor: null,
+          facets: {
+            space_ids: spaceFacetIds,
+            topics: topicFacets,
+            space_facets: spaceFacetIds.map(id => ({ id, name: null, count: 1 })),
+            topic_facets: topicFacets.map(topic => ({ ...topic, count: 1 })),
+          },
+        },
+      ],
+    };
+    mocks.lastEnabledData = data;
     return {
-      data: { pages: [{ claims: mocks.claims, next_cursor: null, facets: { space_ids: mocks.facetSpaceIds } }] },
+      data,
       isLoading: false,
       error: null,
-      hasNextPage: mocks.hasNextPage,
+      hasNextPage: mocks.hasNextPage || page.length < claims.length,
       isFetchingNextPage: false,
+      isPlaceholderData: false,
       fetchNextPage: mocks.fetchNextPage,
       refetch: vi.fn(),
     };
@@ -103,7 +185,12 @@ vi.mock('~/core/sync/use-store', () => ({
 
 function render(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+  const wrap = (node: ReactElement) => <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>;
+  const view = rtlRender(wrap(ui));
+  // Testing Library's own `rerender` replaces the whole tree with what it is handed, which drops
+  // the provider — so a re-render of the same component crashes on a missing QueryClient rather
+  // than showing what changed. Re-wrapped here so a test can move the world and render again.
+  return { ...view, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
 }
 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
@@ -125,11 +212,12 @@ function claim(
   text: string,
   viewerResponded: boolean,
   debateReady = false,
-  spaceId = SPACE_ID
+  spaceId = SPACE_ID,
+  topics: { id: string; name: string }[] = []
 ): MatchmakingClaim {
   return {
     claim: { id: `row-${entityId}`, space_id: spaceId, claim_entity_id: entityId, claim: text, description: null },
-    topics: [],
+    topics,
     response_kind: 'stance',
     viewer_position: viewerResponded ? true : null,
     viewer_response: viewerResponded ? { position: true, position_label: 'Agree' } : null,
@@ -147,6 +235,9 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 beforeEach(() => {
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
+  mocks.pageSize = null;
+  mocks.lastEnabledData = undefined;
+  mocks.scopeHeldOver = false;
   // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
   // unfiltered list — what every pre-existing case here runs under.
   mocks.spaceAllowlist = null;
@@ -539,4 +630,209 @@ it('asks the server for the filter the viewer picked', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
 
   expect(mocks.lastQuery).toMatchObject({ filter: 'debate_now' });
+});
+
+// GEO-2653. The menu is the server's topic facet, which describes every claim the current
+// filters allow rather than the pages this client has walked — the client-side version grew as
+// the viewer scrolled, so a space whose first page carried no topics looked like a space with
+// none at all.
+describe('topic menu', () => {
+  const AI = { id: 'topic-ai', name: 'AI' };
+  const HEALTH = { id: 'topic-health', name: 'Health' };
+
+  beforeEach(() => {
+    mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
+    mocks.sidebarData = sidebarData();
+    mocks.claims = [
+      claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI]),
+      claim('claim-health', 'Sleep is underrated', false, false, OTHER_SPACE_ID, [HEALTH]),
+    ];
+  });
+
+  it('offers every topic while no space is picked', () => {
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Health' })).toBeInTheDocument();
+  });
+
+  it('drops the topics that have no claims in the picked space', () => {
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+    // The reported bug: Health stayed on the menu, and picking it showed nothing at all.
+    expect(screen.queryByRole('button', { name: 'Health' })).toBeNull();
+  });
+
+  // The report that reopened this: filter to a space, and topics appeared only as you scrolled,
+  // because the menu was built from the claims paged in so far.
+  it('offers a topic no claim on the loaded page carries', () => {
+    mocks.claims = [
+      claim('claim-plain', 'A claim with no topics', false, false, SPACE_ID),
+      claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI]),
+    ];
+    mocks.pageSize = 1;
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('A claim with no topics')).toBeInTheDocument();
+    expect(screen.queryByText('Models are getting cheaper')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+  });
+
+  // Without this the facet describes every space geo-chat knows, so a topic living only in a
+  // space this viewer can't be shown claims from is offered over a list the client then empties.
+  it('scopes the query to the spaces the viewer can be shown claims from', () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] });
+  });
+
+  // The allowlist settling without an answer stops it narrowing, deliberately — a list that is too
+  // wide beats a panel that never fills. That is a reason to stop narrowing by the allowlist, not
+  // to stop narrowing: the publishable set is a different question, and the rows are still cut by
+  // it. Left unscoped, the facets would name every space geo-chat knows while the list showed only
+  // the publishable ones.
+  it('falls back to the publishable spaces when the allowlist settles with nothing', () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = false;
+    mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] });
+  });
+
+  // Both unknown is the only case with nothing left to narrow by.
+  it('asks unscoped only when neither lookup has an answer', () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = false;
+    mocks.publishableSpaceIds = null;
+    render(<ClaimsTab />);
+
+    expect(mocks.lastQuery).toMatchObject({ spaceIds: null });
+  });
+
+  // "No eligible spaces" and "no space filter" are the same request on the wire, so the query
+  // has to be skipped rather than sent unscoped: the rows would all be dropped here, but the
+  // facets would not, leaving a menu whose every option leads to an empty list.
+  it('asks for nothing at all when no space is eligible', () => {
+    mocks.spaceAllowlist = new Set();
+    mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI])];
+    render(<ClaimsTab />);
+
+    expect(screen.queryByText('Models are getting cheaper')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    expect(screen.queryByRole('button', { name: 'AI' })).toBeNull();
+  });
+
+  // Disabling the query is not the same as having no data: it keeps the previous key's pages,
+  // facets included. Narrowing from a populated scope to an empty one therefore left the last
+  // scope's topic menu on screen over a list this tab had emptied.
+  it("drops the previous scope's menu when the eligible set narrows to nothing", async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI])];
+    const view = render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    mocks.spaceAllowlist = new Set();
+    view.rerender(<ClaimsTab />);
+
+    // The list animates its rows out, so the card outlives the render that dropped it.
+    await waitFor(() => expect(screen.queryByText('Models are getting cheaper')).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    expect(screen.queryByRole('button', { name: 'AI' })).toBeNull();
+  });
+
+  it('sends the picked space alone, never alongside the eligible list', () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, ''), OTHER_SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+
+    // geo-chat ORs the two together, so sending both would widen the query straight back out.
+    expect((mocks.lastQuery as { spaceId?: string | null }).spaceId).toBeTruthy();
+  });
+
+  it('asks the server to do the topic filtering', () => {
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI' }));
+
+    // Filtering here would only ever narrow the pages already loaded, which is the same bug in
+    // the list that the menu had.
+    expect(mocks.lastQuery).toMatchObject({ topicId: AI.id });
+  });
+
+  // The scope goes out as `spaceIds`, and it isn't known until the allowlist and the publishable
+  // lookup have both landed. Asked before then, the endpoint answers about the whole corpus — rows
+  // the gates then drop, and a topic facet spanning spaces this viewer is never shown. The rows
+  // being discarded is what made it look harmless: `keepPreviousData` hands the same facets back
+  // when the scope settles and the key changes, and nothing gates a topic by space, so the menu
+  // offers options over a list with nothing to put under them.
+  it('does not ask for a corpus wider than the scope it is about to apply', () => {
+    mocks.spaceAllowlist = null;
+    mocks.allowlistLoading = true;
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.queryByRole('button', { name: 'AI' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Health' })).toBeNull();
+  });
+
+  // Not reachable by picking one and then the other — each menu is narrowed by the other, so a
+  // topic with no claims in the picked space is never on offer to pick. It is reachable by the
+  // corpus moving underneath a selection that was valid when it was made.
+  it('lets go of a selected topic once the space stops having claims for it', () => {
+    const view = render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI' }));
+    expect(screen.getByRole('button', { name: /AI/ })).toBeInTheDocument();
+
+    // The one AI claim in Crypto is answered, published elsewhere, or otherwise leaves the
+    // candidate set. Crypto now carries no AI claim, so the topic facet drops it.
+    mocks.claims = [claim('claim-health', 'Sleep is underrated', false, false, OTHER_SPACE_ID, [HEALTH])];
+    view.rerender(<ClaimsTab />);
+
+    // Left held, it would filter the list from a chip no longer in the menu to unpick.
+    expect(screen.getByRole('button', { name: /Any topic/ })).toBeInTheDocument();
+  });
+
+  // The other dimension, which must behave differently. `space_facets` is narrowed by the topic
+  // selection — each dimension is counted without narrowing itself, so it is narrowed by the other
+  // — which means a space can drop out of the facet merely because *this combination* is empty.
+  // That is a reason to show an empty list, not to revise a choice the viewer made. Clearing it
+  // would silently discard the space the moment a topic, or a search, emptied the pair.
+  it('keeps a selected space when the current combination has nothing in it', () => {
+    const view = render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'AI' }));
+
+    // The AI claim moves out of Crypto, so the AI-narrowed space facet no longer names it.
+    mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, OTHER_SPACE_ID, [AI])];
+    view.rerender(<ClaimsTab />);
+
+    expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument();
+  });
 });
