@@ -132,8 +132,11 @@ export function BountyReviewDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-100 bg-text/20" />
-        <Dialog.Content className="fixed inset-0 z-101 flex items-start justify-center overflow-y-auto p-4 focus:outline-hidden">
+        {/* Above the entity side panel (z-[200]) — the dialog opens from inside it, and the
+            panel would otherwise paint over the dialog's right edge (same layer the ranking
+            compose panel uses for the same reason). */}
+        <Dialog.Overlay className="fixed inset-0 z-[201] bg-text/20" />
+        <Dialog.Content className="fixed inset-0 z-[202] flex items-start justify-center overflow-y-auto p-4 focus:outline-hidden">
           <div
             className="mt-20 flex w-full max-w-[560px] flex-col gap-4 rounded-lg bg-white p-5 shadow-dropdown"
             data-testid="bounty-review-dialog"
