@@ -37,8 +37,8 @@ vi.mock('./hooks', () => ({
 
 const QUERY = { search: null, spaceId: null, topicId: null } as const;
 
-function scoped(scope: { spaceIds: string[] | null; pending: boolean }, alsoUnusable = false) {
-  return renderHook(() => useScopedMatchmakingClaims(QUERY, scope, alsoUnusable));
+function scoped(scope: { spaceIds: string[] | null; pending: boolean }, alsoUnusable = false, selected: string[] = []) {
+  return renderHook(() => useScopedMatchmakingClaims(QUERY, scope, selected, alsoUnusable));
 }
 
 beforeEach(() => {
@@ -84,7 +84,7 @@ describe('useScopedMatchmakingClaims', () => {
     const { result, rerender } = renderHook(
       ({ spaceIds, placeholder }) => {
         mocks.isPlaceholderData = placeholder;
-        return useScopedMatchmakingClaims(QUERY, { spaceIds, pending: false });
+        return useScopedMatchmakingClaims(QUERY, { spaceIds, pending: false }, []);
       },
       { initialProps: { spaceIds: ['space-1'] as string[] | null, placeholder: false } }
     );
@@ -101,6 +101,20 @@ describe('useScopedMatchmakingClaims', () => {
     scoped({ spaceIds: [], pending: false });
 
     expect(mocks.enabled).toBe(false);
+  });
+
+  // The picked spaces replace the scope rather than joining it: geo-chat ORs the space parameters,
+  // so sending both would ask about every space in the scope alongside the one that was picked.
+  it('asks about the picked spaces rather than the whole scope', () => {
+    scoped({ spaceIds: ['space-1', 'space-2', 'space-3'], pending: false }, false, ['space-2']);
+
+    expect(mocks.query).toMatchObject({ spaceIds: ['space-2'] });
+  });
+
+  it('falls back to the scope when nothing is picked', () => {
+    scoped({ spaceIds: ['space-1', 'space-2'], pending: false }, false, []);
+
+    expect(mocks.query).toMatchObject({ spaceIds: ['space-1', 'space-2'] });
   });
 
   // A scope that can show nothing is a finished answer about the menu: empty. Read as "not known

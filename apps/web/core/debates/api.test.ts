@@ -242,6 +242,34 @@ describe('matchmaking', () => {
     expect(url.searchParams.get('rematch_session_id')).toBe('rematch-1');
   });
 
+  // Same shape as the space pair, and the same reason to send only one.
+  it('sends multiple topics as a joined list', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ topicIds: ['topic-ai', 'topic-health'] }, vi.fn(), 'user-a');
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('topic_ids')).toBe('topic-ai,topic-health');
+  });
+
+  it('sends the single topic instead of the list, never both', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ topicId: 'topic-ai', topicIds: ['topic-ai', 'topic-health'] }, vi.fn(), 'user-a');
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('topic_id')).toBe('topic-ai');
+    expect(url.searchParams.has('topic_ids')).toBe(false);
+  });
+
+  it('omits an empty topic list rather than sending it as no filter', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ topicIds: [] }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/matchmaking/claims', expect.anything());
+  });
+
   // The two space parameters are OR-merged server-side, so sending both would widen the corpus to
   // the whole eligible set the moment the viewer picked one space out of it.
   it('sends the picked space instead of the scope, never both', async () => {
