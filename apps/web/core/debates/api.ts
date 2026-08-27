@@ -397,13 +397,24 @@ export type DebateClaimPositionSummary = {
    * without standing ready to debate it is excluded. Not shown on the claim card.
    */
   total_count: number;
-  /** Online, available, not in a debate, not blocked either way. */
+  /**
+   * Eligible for *this viewer* to send a request to right now: excludes the viewer themselves and
+   * anyone they are already pair-blocked with on this claim. Drives the "Debate now" filter.
+   *
+   * Viewer-relative, so it is the wrong basis for anything presented as a fact about the claim.
+   * Using it for the avatar stack made a claim you had already debated show you an empty stack,
+   * because debating someone pair-blocks that pair on that claim (GEO-2691).
+   */
   available_now_count: number;
   /**
-   * Capped list for the avatar stack, drawn only from available people (GEO-2691). Any count
-   * rendered beside it has to come from `available_now_count`, not `total_count`, or the overflow
-   * describes a different population than the faces.
+   * Available to debate right now as a property of the *person* — online, reachable, not busy,
+   * not paused — including the viewer and anyone they have already debated here.
+   *
+   * This is the population `participants` is drawn from, so a `+N` overflow beside those faces
+   * must be computed against this and not against `available_now_count`.
    */
+  present_count: number;
+  /** Capped list for the avatar stack, drawn from `present_count`'s population (GEO-2691). */
   participants: DebateParticipantSummary[];
 };
 

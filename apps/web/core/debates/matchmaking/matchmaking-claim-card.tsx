@@ -358,22 +358,19 @@ export function withViewerPosition({
   // Counts follow `serverPosition`, but the participant lists are rebuilt from scratch on every
   // side. Removing the viewer only from the side the server reports assumed those two agree about
   // who the viewer is; where they don't, the viewer ends up on two sides at once.
+  // `present_count` and `total_count` both already include the viewer once geo-chat reports their
+  // position, so both are adjusted only while it does not. `available_now_count` is never adjusted:
+  // it means "people this viewer could request", which the viewer is not and never becomes.
   const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
     ...side,
     total_count: side.total_count + (serverPosition === side.position ? 0 : 1),
-    // Unconditionally +1, unlike `total_count`. geo-chat computes availability as
-    // `readiness.user_id <> $viewer`, so the viewer is *never* in `available_now_count` even once
-    // the server knows their position — there is nothing to avoid double-counting. Their face is
-    // shown, so for the stack's purposes they are one of the people it is drawn from; without this
-    // the viewer occupies a slot the overflow does not know about and it undercounts by one.
-    available_now_count: side.available_now_count + 1,
+    present_count: side.present_count + (serverPosition === side.position ? 0 : 1),
     participants: [viewer, ...side.participants.filter(participant => !heldByViewer(participant))],
   });
   const withoutViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
     ...side,
     total_count: Math.max(0, side.total_count - (serverPosition === side.position ? 1 : 0)),
-    // `available_now_count` needs no adjustment here, for the same reason: the viewer was never
-    // counted in it, so there is nothing to take out.
+    present_count: Math.max(0, side.present_count - (serverPosition === side.position ? 1 : 0)),
     participants: side.participants.filter(participant => !heldByViewer(participant)),
   });
 
@@ -387,6 +384,7 @@ export function withViewerPosition({
       position_label: viewerPosition ? copy.positiveAction : copy.negativeAction,
       total_count: 1,
       available_now_count: 0,
+      present_count: 1,
       participants: [viewer],
     });
   }
@@ -545,7 +543,7 @@ function PositionButton({
           {selected ? <span className="sr-only"> — your response</span> : null}
         </span>
       </span>
-      {summary && summary.available_now_count > 0 ? <PositionAvatars summary={summary} /> : null}
+      {summary && summary.present_count > 0 ? <PositionAvatars summary={summary} /> : null}
     </>
   );
 
@@ -566,20 +564,21 @@ function PositionButton({
 }
 
 /**
- * The stack answers one question: who could I debate about this, right now.
+ * The stack answers one question: who is here on this position, available to debate, right now.
  *
- * GEO-2691. The overflow was `total_count - shown`, which counted every holder of the position
- * including people who are offline — under a control whose whole meaning is availability. Once
- * geo-chat narrowed the preview to available people the mismatch became visible rather than merely
- * wrong: a side with nobody available returned no faces while `total_count` still said two, so the
- * card rendered a bare "+2" and no avatars.
+ * GEO-2691, and the count is the half that kept going wrong. It was `total_count - shown`, which
+ * counted offline holders under a control whose whole meaning is availability — a side with nobody
+ * available rendered a bare "+2" and no avatars. Then it was `available_now_count - shown`, which
+ * is viewer-relative: it excludes the viewer and anyone they have already debated on this claim, so
+ * a claim you had actually argued showed you an empty stack.
  *
- * Both halves now come from the same population. `total_count` is left alone — it answers "who
- * holds this position", which the card does not show here.
+ * `present_count` is the population geo-chat draws `participants` from, so the faces and the count
+ * beside them describe the same people, and describe the same people for every viewer.
+ * `total_count` is left alone — it answers "who holds this position", which the card does not show.
  */
 function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
   const participants = summary.participants.slice(0, 2);
-  const overflow = Math.max(0, summary.available_now_count - participants.length);
+  const overflow = Math.max(0, summary.present_count - participants.length);
 
   return (
     <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
