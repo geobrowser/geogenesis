@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -166,9 +166,14 @@ function makeSession(status: DebateRematchSession['status']): DebateRematchSessi
   };
 }
 
+const TOKEN_QUERY_KEY = ['rematch-livekit', 'account-1', 'session-1'];
+
 function render(element: ReactElement) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return rtlRender(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return { ...rtlRender(element, { wrapper }), client };
 }
 
 async function flushOwnership() {
@@ -411,6 +416,74 @@ describe('RematchVoicePill', () => {
     const sheet = await screen.findByRole('dialog', { name: 'Audio settings' });
     expect(sheet).toHaveAttribute('data-layout', 'bottom-sheet');
     expect(screen.getByRole('button', { name: 'Close Audio settings' })).toBeInTheDocument();
+  });
+
+  // Rematch tokens live five minutes. An invalidated query keeps serving its old data while the
+  // refetch is in flight, and the epoch bump is synchronous — so the room would remount around the
+  // token that just failed. Resetting leaves nothing to remount around.
+  it('drops the cached token when retrying rather than reconnecting around it', async () => {
+    mocks.joinError = new GeoChatRequestError('boom', null, 500);
+    mocks.joinData = null;
+    const { client } = render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const reset = vi.spyOn(client, 'resetQueries');
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(reset).toHaveBeenCalledWith({ queryKey: TOKEN_QUERY_KEY });
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  // A tab that yielded the mic is still holding the token it minted before it yielded, and five
+  // minutes is a very reachable gap between handing the connection over and asking for it back.
+  it('re-mints the token when taking the voice connection back from another tab', async () => {
+    mocks.acquireResult = { acquired: false, waitedForLocalRelease: false };
+    mocks.requestTakeover.mockResolvedValue(false);
+    const { client } = render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await waitFor(() => expect(screen.getByText('Voice is active in another tab')).toBeInTheDocument());
+
+    const reset = vi.spyOn(client, 'resetQueries');
+    mocks.requestTakeover.mockResolvedValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Use voice here' }));
+
+    await waitFor(() => expect(reset).toHaveBeenCalledWith({ queryKey: TOKEN_QUERY_KEY }));
+  });
+
+  // `audio` is not a join-time flag: LiveKit replays `setMicrophoneEnabled(!!audio)` on every
+  // reconnect, so a hardcoded `true` puts a muted user back on air after a network blip.
+  it('keeps a muted microphone muted across a reconnect', async () => {
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
+
+    expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(false);
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(false);
+  });
+
+  // Nothing else clears the failure, so without this a denied microphone means listen-only with a
+  // dead mute button until the page is reloaded.
+  it('clears the microphone failure when the user retries', async () => {
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
+    act(() => onMediaDeviceFailure('PermissionDenied'));
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeDisabled();
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(false);
+
+    // Retry is only reachable once the room has connected and then dropped.
+    mocks.connectionState = 'disconnected';
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    mocks.connectionState = 'connected';
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeEnabled();
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
   });
 
   it('yields to the tab that owns the voice connection', async () => {

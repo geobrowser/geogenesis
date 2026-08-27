@@ -124,26 +124,43 @@ export function RematchVoicePill({
     };
   }, [currentUserId, session.id, voiceActive]);
 
-  const takeOver = React.useCallback(async () => {
-    const coordinator = coordinatorRef.current;
-    if (!coordinator) return;
-    const released = await coordinator.requestTakeover();
-    if (released) setOwnership('owned');
-  }, []);
-
   const join = useRematchLiveKitJoin(session.id, voiceActive && ownership === 'owned');
+
+  const [micFailure, setMicFailure] = React.useState<MediaDeviceFailure | null>(null);
+
+  // `<LiveKitRoom audio>` is not a one-time "publish on join" flag: its `SignalConnected` handler
+  // re-runs `setMicrophoneEnabled(!!audio)` on every reconnect, so a hardcoded `true` quietly puts
+  // a muted user back on air after a network blip. The prop has to track what the user wants.
+  const [micIntent, setMicIntent] = React.useState(JOIN_UNMUTED);
 
   // Recovery from a dead connection: mint a fresh token and remount the room. Handing a mounted
   // `<LiveKitRoom>` a new token would tear it down mid-flight, so the epoch key remounts instead.
+  //
+  // `resetQueries`, not `invalidateQueries`: rematch tokens live five minutes, and an invalidated
+  // query keeps serving its old data while the refetch is in flight. The epoch bump is synchronous,
+  // so the room would remount around the token that just failed — by now almost certainly the
+  // expired one. Resetting clears `join.data`, and the dock renders nothing until the new token
+  // lands. A retry is also the user's second run at a denied microphone, so the failure latch has
+  // to come off with it or the mute button stays disabled until a page reload.
   const [connectionEpoch, setConnectionEpoch] = React.useState(0);
   const queryClient = useQueryClient();
   const { accountKey } = useGeoChatAuth();
   const retry = React.useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematchLiveKit(accountKey, session.id) });
+    void queryClient.resetQueries({ queryKey: debateQueryKeys.rematchLiveKit(accountKey, session.id) });
+    setMicFailure(null);
     setConnectionEpoch(epoch => epoch + 1);
   }, [accountKey, queryClient, session.id]);
 
-  const [micFailure, setMicFailure] = React.useState<MediaDeviceFailure | null>(null);
+  const takeOver = React.useCallback(async () => {
+    const coordinator = coordinatorRef.current;
+    if (!coordinator) return;
+    const released = await coordinator.requestTakeover();
+    if (!released) return;
+    setOwnership('owned');
+    // This tab may have been sitting on a cached token since before it yielded, and five minutes
+    // is a very reachable gap between handing the mic over and asking for it back.
+    retry();
+  }, [retry]);
 
   // The device the user last picked in the debate surfaces, frozen at mount: a changed room
   // options identity makes `<LiveKitRoom>` rebuild its Room, dropping the live call.
@@ -189,7 +206,7 @@ export function RematchVoicePill({
       token={join.data.token}
       serverUrl={join.data.url}
       connect
-      audio={JOIN_UNMUTED && !micFailure}
+      audio={micIntent && !micFailure}
       video={false}
       options={roomOptions}
       onMediaDeviceFailure={failure => setMicFailure(failure ?? null)}
@@ -199,6 +216,7 @@ export function RematchVoicePill({
         local={local}
         opponent={opponent}
         micFailure={micFailure}
+        onMicIntentChange={setMicIntent}
         onRetry={retry}
         roomRef={roomRef}
       />
@@ -262,12 +280,14 @@ function VoiceDockBody({
   local,
   opponent,
   micFailure,
+  onMicIntentChange,
   onRetry,
   roomRef,
 }: {
   local: DebateRematchParticipant | null;
   opponent: DebateRematchParticipant;
   micFailure: MediaDeviceFailure | null;
+  onMicIntentChange: (enabled: boolean) => void;
   onRetry: () => void;
   roomRef: React.MutableRefObject<Room | null>;
 }) {
@@ -323,7 +343,7 @@ function VoiceDockBody({
   const localRow = (
     <>
       <ParticipantIdentity name="You" avatarUrl={local?.avatar_cid} avatarValue={local?.profile_space_id} />
-      <LocalAudioControls room={room} micFailure={micFailure} />
+      <LocalAudioControls room={room} micFailure={micFailure} onMicIntentChange={onMicIntentChange} />
     </>
   );
   const opponentRow = <OpponentRow participant={opponentParticipant} opponent={opponent} name={opponentName} />;
@@ -453,7 +473,15 @@ function OpponentMicChip({ state, name }: { state: OpponentMicState; name: strin
 /**
  * The user's own control: mute toggle and audio settings, joined into one pill by a hairline.
  */
-function LocalAudioControls({ room, micFailure }: { room: Room; micFailure: MediaDeviceFailure | null }) {
+function LocalAudioControls({
+  room,
+  micFailure,
+  onMicIntentChange,
+}: {
+  room: Room;
+  micFailure: MediaDeviceFailure | null;
+  onMicIntentChange: (enabled: boolean) => void;
+}) {
   const isMobile = useIsMobileCallLayout();
   const [open, setOpen] = React.useState(false);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
@@ -489,7 +517,13 @@ function LocalAudioControls({ room, micFailure }: { room: Room; micFailure: Medi
               ? 'Mute microphone'
               : 'Unmute microphone'
         }
-        onClick={() => void localParticipant.setMicrophoneEnabled(!isMicrophoneEnabled)}
+        onClick={() => {
+          const next = !isMicrophoneEnabled;
+          // Record the intent before publishing it, so a reconnect restores this choice rather
+          // than the join-time default.
+          onMicIntentChange(next);
+          void localParticipant.setMicrophoneEnabled(next);
+        }}
         disabled={Boolean(micFailure)}
         className={cx(
           'grid h-full shrink-0 place-items-center px-2 transition-colors [&>svg]:size-3',
