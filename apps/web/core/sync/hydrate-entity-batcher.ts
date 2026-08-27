@@ -1,9 +1,9 @@
 import { QueryClient } from '@tanstack/react-query';
 
+import type { Entity } from '../types';
 import { E } from './orm';
 import { GeoStore } from './store';
 import { GeoEventStream } from './stream';
-import type { Entity } from '../types';
 
 /**
  * Coalesces `useHydrateEntity` into the batched read that already exists.
@@ -21,6 +21,17 @@ import type { Entity } from '../types';
  * added as a feed pages in — still share a request. Hoisting would have meant changing each parent
  * and would not have helped rows that mount late.
  */
+
+/**
+ * Mirrors `relationsList(first: 1000)` in `entitiesBatchQuery`. The batched read caps there and
+ * does not paginate, while the singular `getEntity` drains its paginated `relations` connection to
+ * completion — deliberately, so hydration is correct for entities with any number of relations.
+ *
+ * Batching without accounting for that would silently drop relations past the cap. An entity that
+ * comes back at the cap is therefore topped up through the draining path, so the common case costs
+ * one request and only genuinely large entities pay for themselves.
+ */
+const BATCH_RELATIONS_CAP = 1000;
 
 type Waiter = {
   resolve: (entity: Entity | null) => void;
@@ -97,6 +108,19 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
     }
 
     const mergedById = new Map(merged.map(entity => [entity.id, entity]));
+
+    // Anything at the cap may have had relations dropped. Re-read those through the singular path,
+    // which drains the paginated connection, and let its result win.
+    const truncated = remote.filter(entity => (entity.relations?.length ?? 0) >= BATCH_RELATIONS_CAP);
+    if (truncated.length > 0) {
+      const toppedUp = await Promise.all(
+        truncated.map(entity => E.syncOne({ id: entity.id, store, cache }).catch(() => null))
+      );
+      for (const result of toppedUp) {
+        if (result?.merged) mergedById.set(result.merged.id, result.merged);
+      }
+    }
+
     for (const [entityId, waiters] of batch.waiters) {
       const entity = mergedById.get(entityId) ?? null;
       for (const waiter of waiters) waiter.resolve(entity);

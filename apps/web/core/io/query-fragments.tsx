@@ -160,6 +160,20 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
       description
       spaceIds
 
+      # Same lightweight cross-space projection the singular Entity query carries, for the same
+      # reason: the lists below are space-scoped for display, and EntityDtoLive can only strip
+      # hidden-only spaces out of link routing when it has an unscoped view. Without these it
+      # falls back to the raw spaceIds and can route a link at a space holding nothing visible.
+      # Two scalars per row, and it brings every batch consumer up to the singular contract.
+      allValuesList: valuesList(first: 1000) {
+        spaceId
+        propertyId
+      }
+
+      allRelationsList: relationsList(first: 1000) {
+        spaceId
+      }
+
       types {
         id
         name

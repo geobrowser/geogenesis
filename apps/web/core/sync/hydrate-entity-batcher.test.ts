@@ -4,9 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoEventStream } from './stream';
 
-const mocks = vi.hoisted(() => ({ syncMany: vi.fn() }));
+const mocks = vi.hoisted(() => ({ syncMany: vi.fn(), syncOne: vi.fn() }));
 
-vi.mock('./orm', () => ({ E: { syncMany: (...args: unknown[]) => mocks.syncMany(...args) } }));
+vi.mock('./orm', () => ({
+  E: {
+    syncMany: (...args: unknown[]) => mocks.syncMany(...args),
+    syncOne: (...args: unknown[]) => mocks.syncOne(...args),
+  },
+}));
 vi.mock('./use-sync-engine.tsx', () => ({}));
 vi.mock('./use-store.tsx', () => ({}));
 vi.mock('../database/entities', () => ({ readTypes: () => [] }));
@@ -147,5 +152,47 @@ describe('hydrateEntityBatched', () => {
 
     // Rows that mount later — a virtualised list scrolling, a feed paging in — must still hydrate.
     expect(mocks.syncMany).toHaveBeenCalledTimes(2);
+  });
+  it('tops up an entity whose relations the batch truncated', async () => {
+    // `EntitiesBatch` caps relationsList at 1000 and does not paginate, while the singular
+    // `getEntity` drains its connection to completion. Batching without accounting for that drops
+    // relations past the cap silently — nothing errors, the entity is just missing some.
+    const capped = { ...entity('big'), relations: Array.from({ length: 1000 }, (_, i) => ({ id: `r${i}` })) };
+    mocks.syncMany.mockResolvedValue({ merged: [entity('big'), entity('small')], remote: [capped, entity('small')] });
+    mocks.syncOne.mockResolvedValue({
+      merged: { ...entity('big'), relations: Array.from({ length: 2500 }, (_, i) => ({ id: `r${i}` })) },
+      remote: null,
+    });
+
+    const [big, small] = await Promise.all([
+      hydrateEntityBatched({ id: 'big', store, cache, stream }),
+      hydrateEntityBatched({ id: 'small', store, cache, stream }),
+    ]);
+
+    // Only the capped entity pays for a second read.
+    expect(mocks.syncOne).toHaveBeenCalledTimes(1);
+    expect(mocks.syncOne.mock.calls[0][0].id).toBe('big');
+    // And the drained result is what the caller gets, not the truncated one.
+    expect(big?.relations).toHaveLength(2500);
+    expect(small?.id).toBe('small');
+  });
+
+  it('does not top up entities that came back under the cap', async () => {
+    mocks.syncMany.mockResolvedValue({ merged: [entity('a')], remote: [{ ...entity('a'), relations: [{ id: 'r1' }] }] });
+
+    await hydrateEntityBatched({ id: 'a', store, cache, stream });
+
+    expect(mocks.syncOne).not.toHaveBeenCalled();
+  });
+
+  it('still resolves the caller when a top-up fails', async () => {
+    // The top-up is a correctness improvement, not a new way for hydration to fail outright.
+    const capped = { ...entity('big'), relations: Array.from({ length: 1000 }, (_, i) => ({ id: `r${i}` })) };
+    mocks.syncMany.mockResolvedValue({ merged: [entity('big')], remote: [capped] });
+    mocks.syncOne.mockRejectedValue(new Error('top-up failed'));
+
+    const big = await hydrateEntityBatched({ id: 'big', store, cache, stream });
+
+    expect(big?.id).toBe('big');
   });
 });
