@@ -751,9 +751,9 @@ const ConfiguredTableBlock = ({
 
   React.useEffect(() => {
     setRowPages(prev => (prev.length === 0 ? prev : []));
-    if (!isInfiniteScroll) return;
+    if (!infiniteScrollProperty) return;
     setPage(0);
-  }, [accumulationResetKey, isInfiniteScroll, setPage]);
+  }, [accumulationResetKey, infiniteScrollProperty, setPage]);
 
   // Depending on the `entries` array reference (rather than a content signature)
   // is safe here: `upsertRowPage` returns the previous `pages` reference when the
