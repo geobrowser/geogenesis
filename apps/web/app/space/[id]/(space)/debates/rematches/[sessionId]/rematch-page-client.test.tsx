@@ -13,21 +13,35 @@ import type { ParticipantPosition } from '~/core/debates/participant-positions';
 
 import { DebateRematchPageClient } from './rematch-page-client';
 
-const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CRYPTO_SPACE, PODCASTS_SPACE, NAME_PROPERTY } =
-  vi.hoisted(() => ({
-    SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
-    SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
-    // Real ids from the hard-coded ranking table, so the ordering under test is the real one.
-    CRYPTO_SPACE: 'c9f267dcb0d270718c2a3c45a64afd32',
-    PODCASTS_SPACE: 'b5a31f8182b042437ede0f84ee02f104',
-    NAME_PROPERTY: 'a126ca530c8e48d5b88882c734c38935',
-    CLAIM_SHARED: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419',
-    CLAIM_MORE: '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520',
-    CLAIM_SOURCE: '019fedb3-2e63-7b50-9c33-4e9f7a0d6621',
-  }));
+const {
+  SPACE_1,
+  SPACE_2,
+  CLAIM_SHARED,
+  CLAIM_MORE,
+  CLAIM_SOURCE,
+  CLAIM_FRESH,
+  CRYPTO_SPACE,
+  PODCASTS_SPACE,
+  NAME_PROPERTY,
+} = vi.hoisted(() => ({
+  SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
+  SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
+  // Real ids from the hard-coded ranking table, so the ordering under test is the real one.
+  CRYPTO_SPACE: 'c9f267dcb0d270718c2a3c45a64afd32',
+  PODCASTS_SPACE: 'b5a31f8182b042437ede0f84ee02f104',
+  NAME_PROPERTY: 'a126ca530c8e48d5b88882c734c38935',
+  CLAIM_SHARED: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419',
+  CLAIM_MORE: '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520',
+  CLAIM_SOURCE: '019fedb3-2e63-7b50-9c33-4e9f7a0d6621',
+  // A claim the opponent answers mid-session. Not CLAIM_SOURCE: that is the session's own
+  // claim, which the picker excludes.
+  CLAIM_FRESH: '019fedb4-3f74-7c61-8d44-5fa08b1e7722',
+}));
 
 const mocks = vi.hoisted(() => ({
   session: null as DebateRematchSession | null,
+  /** The session lookup itself is in flight — everything below it is keyed on what it returns. */
+  sessionLoading: false,
   claims: [] as DebateRematchClaim[],
   replace: vi.fn(),
   back: vi.fn(),
@@ -37,6 +51,8 @@ const mocks = vi.hoisted(() => ({
   rejectMutate: vi.fn(),
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
+  /** Drives the indexing machine's own "taking longer than it should" signal. */
+  responseIndexingDelayed: false,
   setReadiness: vi.fn(),
   joinQueue: vi.fn((_variables: { spaceId: string; claimId: string }) => Promise.resolve({ claim: null, match: null })),
   /** Which space each card wired its readiness machine to, in mount order. */
@@ -134,7 +150,7 @@ vi.mock('~/core/debates/api', async importOriginal => {
 });
 
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateRematch: () => ({ data: mocks.session, isLoading: false, error: null }),
+  useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
   // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
   // arrive through the id lookup.
   useDebateRematchClaims: () => ({
@@ -279,7 +295,11 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: ({ entityId }: { entityId: string }) => {
     const expectedResponse = mocks.optimisticResponses.get(entityId);
     if (expectedResponse === undefined) return { status: 'idle', pending: null, runId: null };
-    return { status: 'reconciling', pending: { entityId, expectedResponse }, runId: `run-${entityId}` };
+    return {
+      status: mocks.responseIndexingDelayed ? 'delayed' : 'reconciling',
+      pending: { entityId, expectedResponse },
+      runId: `run-${entityId}`,
+    };
   },
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
@@ -436,6 +456,7 @@ beforeEach(() => {
   mocks.rejectMutate.mockReset();
   mocks.submitResponse.mockReset();
   mocks.optimisticResponses.clear();
+  mocks.responseIndexingDelayed = false;
   mocks.claimReadiness = [];
   mocks.claimReadinessLoading = false;
   mocks.claimReadinessError = false;
@@ -504,6 +525,7 @@ beforeEach(() => {
     disconnect() {}
   } as unknown as typeof ResizeObserver;
   mocks.session = session();
+  mocks.sessionLoading = false;
   mocks.claims = [sharedClaim()];
   mocks.perSpaceReadinessGroups = [];
   mocks.gatewaySpaceScopes = [];
@@ -1225,6 +1247,141 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.queryByLabelText('Counting positions')).toBeNull();
     expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+  });
+
+  /**
+   * GEO-2698. `shared_preference` is read off the session row, so taking a side on a claim the
+   * opponent has already answered flips it — and the tab sorted matches to the top on every
+   * recompute. The row the viewer had just acted on jumped out from under them, taking the rest of
+   * the list with it.
+   *
+   * The sort is a load-time arrangement. It still decides where things start, and where a claim the
+   * opponent answers next arrives; what it no longer does is rearrange rows the viewer is working.
+   */
+  describe('opponent tab ordering', () => {
+    const FIRST_CLAIM = 'A claim both participants chose';
+    const SECOND_CLAIM = 'A second claim they answered';
+    const THIRD_CLAIM = 'A claim they answered just now';
+
+    /**
+     * A second claim of the opponent's, named in the same space they answered it in — `sidesOf`
+     * keys on claim *and* space, so a row whose home space differs from its position's has no
+     * participants and never reaches the tab.
+     */
+    function opponentEntity(id: string, name: string) {
+      return {
+        id,
+        name,
+        description: null,
+        spaces: [SPACE_1],
+        values: [{ property: { id: NAME_PROPERTY }, spaceId: SPACE_1, value: name }],
+        relations: [],
+      };
+    }
+
+    /** A session row for a claim the opponent answered, matched or not. */
+    function sessionRow(id: string, claim: string, sharedPreference: boolean) {
+      return { ...sharedClaim(), claim: claimSummary(id, claim), shared_preference: sharedPreference };
+    }
+
+    /** The opponent's two positions, neither a match yet, in the order the graph returns them. */
+    function twoUnmatchedPositions() {
+      mocks.positions = [
+        position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        position('profile-remote', CLAIM_MORE, SPACE_1, false),
+      ];
+      mocks.entities = [sharedEntity(), opponentEntity(CLAIM_MORE, SECOND_CLAIM)];
+      mocks.claims = [sessionRow(CLAIM_SHARED, FIRST_CLAIM, false)];
+    }
+
+    const positionsTab = () => screen.getByRole('button', { name: /positions/ });
+
+    it('holds the order it loaded with when a position becomes a match', async () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
+
+      // The viewer takes a side on the second one: geo-chat's row comes back a match.
+      mocks.claims = [sessionRow(CLAIM_SHARED, FIRST_CLAIM, false), sessionRow(CLAIM_MORE, SECOND_CLAIM, true)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
+    });
+
+    // The hold is on rows already shown, not on the arrangement itself: a claim the opponent
+    // answers next has never been under the viewer's cursor, so the sort still places it.
+    it('still puts a newly arrived match at the top', async () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
+
+      mocks.positions = [
+        position('profile-remote', CLAIM_FRESH, SPACE_1, false),
+        position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        position('profile-remote', CLAIM_MORE, SPACE_1, false),
+      ];
+      mocks.entities = [
+        opponentEntity(CLAIM_FRESH, THIRD_CLAIM),
+        sharedEntity(),
+        opponentEntity(CLAIM_MORE, SECOND_CLAIM),
+      ];
+      mocks.claims = [sessionRow(CLAIM_SHARED, FIRST_CLAIM, false), sessionRow(CLAIM_FRESH, THIRD_CLAIM, true)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      expect(appearsBefore(THIRD_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
+    /**
+     * The route keeps this component when it moves from one rematch to another — nothing keys it on
+     * the session — so the hold that carries a list through a refetch would otherwise carry it
+     * across a session change too. That is the wrong list twice over: the previous rematch's claims
+     * on screen while the new one loads, and their order seeding the new session's.
+     */
+    it('does not carry the previous session’s claims into a new one', async () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(within(positionsTab()).getByText('2')).toBeInTheDocument();
+
+      // The new session's lookups are in flight: nothing of its own to show yet.
+      mocks.entityHydrationLoading = true;
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+      // Asserted on the tab's own count rather than on the claims: the same rows also reach the
+      // Claims tab, so searching the document would find them whichever list they came from. And on
+      // the skeleton specifically — "not 2" would be satisfied by a confident `0`, which is the
+      // wrong answer rather than an absent one.
+      expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+      expect(within(positionsTab()).queryByText('2')).not.toBeInTheDocument();
+    });
+
+    /**
+     * The window the session change opens: participants come from the session, positions from
+     * participants, the claim lookups from positions. While the session is in flight the whole
+     * chain is disabled rather than loading, so nothing downstream says "pending" — and the badge
+     * would answer `0` for a session it has not read yet. Zero is a claim about the opponent, not a
+     * placeholder.
+     */
+    it('does not answer zero positions for a session it has not read yet', async () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(within(positionsTab()).getByText('2')).toBeInTheDocument();
+
+      // Only the session is loading, and it has not returned yet — so everything keyed on what it
+      // returns is disabled, reporting `isLoading: false` while having nothing to say.
+      mocks.sessionLoading = true;
+      mocks.session = null;
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+      expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+      expect(screen.queryByText('0')).not.toBeInTheDocument();
+    });
   });
 
   // Until the curated lookup settles there is no telling "no curator page" from "not yet", and the
@@ -2380,27 +2537,86 @@ describe('DebateRematchPageClient', () => {
   });
 
   // geo-chat rejects a request for a claim it has no position for — "respond to this claim before
-  // requesting a rematch" — so the button waits for geo-chat's copy, not the optimistic one. It
-  // stays hidden rather than disabled: an unpressable button reads as broken.
-  it('withholds the request until the graph has the position it will be validated against', async () => {
+  // requesting a rematch" — so the request waits for geo-chat's copy, not the optimistic one.
+  // GEO-2697: it waits as a pending button rather than by hiding, so the wait sits on the control
+  // it is blocking instead of beside a button that isn't on screen.
+  it('holds the request unpressable until the graph has the position it will be validated against', async () => {
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    // Needed since the Featured tab landed: this asserts the control is *present*, so the claim
+    // has to actually render. The version this replaces only checked for absence, which a tab
+    // showing no claims satisfies for free.
+    await showOpponentClaims();
 
+    const button = screen.getByRole('button', { name: 'Publishing your position…' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    // The old separate spinner line is gone: there is one element, not a message beside a gap.
     expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
   });
 
-  // GEO-2652. The wait above is real — a publish, an index and a notification — and rendering
-  // nothing while it runs is what Preston reported: no idea what he was waiting on. The button still
-  // waits, because geo-chat would reject an early request; what changes is that the wait is named.
-  it('says what it is waiting for while the position is being confirmed', async () => {
+  // GEO-2652. The wait is real — a publish, an index and a notification — so it is named rather
+  // than left as an inert control. A disabled button nobody is focused on announces nothing, so the
+  // wait is still a `status` for screen readers even though it is no longer drawn as one.
+  it('announces what it is waiting for while the position is being confirmed', async () => {
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    expect(screen.getByRole('status')).toHaveTextContent('Confirming your position…');
-    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Publishing your position…');
+  });
+
+  // The machine's own signal that this is running long, and a different phase: `delayed` is only
+  // reached after the publish succeeded, so the label stops claiming to be publishing. It matters
+  // more now that it is the button's own text — under GEO-2687 it can sit there for half a minute.
+  it('says the wait is running long on the button itself', async () => {
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    mocks.responseIndexingDelayed = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(screen.getByRole('button', { name: 'Still confirming your position…' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Still confirming your position…');
+  });
+
+  // The point of the ticket: one element, not two. Asserted across the transition rather than on
+  // a settled render — the same DOM node has to go from pending to pressable, which is what
+  // distinguishes this from a spinner disappearing and a button appearing somewhere else.
+  it('turns the same button pressable once the position settles', async () => {
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const pending = screen.getByRole('button', { name: 'Publishing your position…' });
+    expect(pending).toBeDisabled();
+
+    // geo-chat catches up with the side already on screen.
+    mocks.optimisticResponses.delete(CLAIM_SHARED);
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+    ];
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    const settled = screen.getByRole('button', { name: 'Request debate' });
+    expect(settled).toBeEnabled();
+    expect(settled).not.toHaveAttribute('aria-busy');
+    expect(screen.queryByRole('status')).toBeNull();
+    // Same node — not a second control that replaced the first.
+    expect(settled).toBe(pending);
   });
 
   // And nothing is said before the viewer has taken a side — there is nothing being confirmed, so a
@@ -2409,7 +2625,7 @@ describe('DebateRematchPageClient', () => {
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.queryByText('Confirming your position…')).not.toBeInTheDocument();
+    expect(screen.queryByText('Publishing your position…')).not.toBeInTheDocument();
   });
 
   it('sends the request once geo-chat agrees with the side on screen', async () => {
@@ -2441,7 +2657,13 @@ describe('DebateRematchPageClient', () => {
     ];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
 
+    // Asserted on the disabled state rather than the button's absence: since GEO-2697 the control
+    // is on screen throughout, and it is only *named* differently while it waits. Checking the
+    // name alone would pass for a button that had become pressable under a new label.
+    const button = screen.getByRole('button', { name: 'Publishing your position…' });
+    expect(button).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
   });
 
