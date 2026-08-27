@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { Entity, Relation } from '~/core/types';
 
-import { VOTE_DEBATES_PROPERTY_ID, VOTE_WINNER_PROPERTY_ID } from './ontology';
+import { TYPES_PROPERTY_ID, VOTE_DEBATES_PROPERTY_ID, VOTE_WINNER_PROPERTY_ID } from './ontology';
 import { useDebateVotes } from './use-debate-votes';
 
 const VOTER_SPACE = 'voterspace0000000000000000000001';
@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   // Fails the publish at the one step that isn't wrapped in a retry schedule. Rejecting
   // `publishEdit` instead would sit in Effect.retry for a minute before surfacing.
   prepareFails: false,
+  gate: null as null | Promise<'ok' | 'fail'>,
 }));
 
 vi.mock('@geoprotocol/geo-sdk', () => ({
@@ -47,6 +48,17 @@ vi.mock('~/core/utils/publish', () => ({
   Publish: {
     prepareLocalDataForPublishing: (_values: unknown, relations: unknown[]) => {
       mocks.publishedRelations.push(relations);
+      const gate = mocks.gate;
+      if (gate) {
+        mocks.gate = null;
+        return Effect.tryPromise({
+          try: async () => {
+            if ((await gate) === 'fail') throw new Error('publish failed');
+            return [{ op: 'noop' }];
+          },
+          catch: error => error,
+        });
+      }
       return mocks.prepareFails ? Effect.fail(new Error('publish failed')) : Effect.succeed([{ op: 'noop' }]);
     },
   },
@@ -118,6 +130,18 @@ function publishAt(index: number) {
   };
 }
 
+/** Two hooks on one debate under one QueryClient — the feed and its claims panel. */
+async function renderTwoSurfaces() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const view = renderHook(() => ({ feed: useDebateVotes(debate), panel: useDebateVotes(debate) }), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  await waitFor(() => expect(view.result.current.feed).toBeDefined());
+  return view;
+}
+
 async function renderVotes() {
   const view = renderHook(() => useDebateVotes(debate), { wrapper });
   await waitFor(() => expect(view.result.current).toBeDefined());
@@ -129,6 +153,7 @@ beforeEach(() => {
   mocks.publishedRelations = [];
   mocks.idCounter = 0;
   mocks.prepareFails = false;
+  mocks.gate = null;
   mocks.publishEdit.mockReset();
   mocks.publishEdit.mockResolvedValue({ to: '0xto', calldata: '0xdata' });
   mocks.sendUserOperation.mockReset();
@@ -150,7 +175,7 @@ describe('useDebateVotes castVote', () => {
     expect(winnerCreates[0]?.toEntity.id).toBe(ALICE_SPACE);
   });
 
-  it('swaps only the winner relation when changing a pick', async () => {
+  it('re-emits anchor relations and swaps the winner when changing a pick', async () => {
     mocks.voteEntities = [voteEntity('vote-1', ALICE_SPACE, 'winner-rel-1')];
     const view = await renderVotes();
     await waitFor(() => expect(view.result.current.hasVoted).toBe(true));
@@ -160,11 +185,47 @@ describe('useDebateVotes castVote', () => {
     });
 
     const { all, deleted, winnerCreates } = publishAt(0);
-    // The old winner goes and the new one arrives in the same edit — Types and Debates are
-    // already on the entity, so re-creating them would duplicate them.
-    expect(all).toHaveLength(2);
+    const created = all.filter(relation => !relation.isDeleted);
+    // Anchors are emitted on every path so the entity can never land unreachable.
+    expect(all).toHaveLength(4);
     expect(deleted.map(relation => relation.id)).toEqual(['winner-rel-1']);
+    expect(created.map(relation => relation.type?.id)).toEqual([
+      TYPES_PROPERTY_ID,
+      VOTE_DEBATES_PROPERTY_ID,
+      VOTE_WINNER_PROPERTY_ID,
+    ]);
     expect(winnerCreates[0]?.toEntity.id).toBe(BOB_SPACE);
+  });
+
+  it('keeps a later pick when an earlier, still-in-flight publish fails', async () => {
+    const view = await renderTwoSurfaces();
+
+    let settleFeedVote: (outcome: 'ok' | 'fail') => void = () => {};
+    mocks.gate = new Promise(resolve => {
+      settleFeedVote = resolve;
+    });
+
+    let feedVote: Promise<void>;
+    await act(async () => {
+      feedVote = view.result.current.feed.castVote(ALICE);
+      await Promise.resolve();
+    });
+
+    // The panel has its own `isVoting`, so it can vote while the feed's write is unsettled.
+    await act(async () => {
+      await view.result.current.panel.castVote(BOB);
+    });
+    await waitFor(() => expect(view.result.current.feed.isMyPick(BOB)).toBe(true));
+
+    // Rolling back on the entity id alone would delete the row the
+    // panel wrote, so the viewer's second pick would vanish because their first failed.
+    await act(async () => {
+      settleFeedVote('fail');
+      await feedVote;
+    });
+
+    await waitFor(() => expect(view.result.current.feed.isMyPick(BOB)).toBe(true));
+    expect(view.result.current.panel.isMyPick(ALICE)).toBe(false);
   });
 
   it('reuses the existing Vote entity rather than minting a second one', async () => {

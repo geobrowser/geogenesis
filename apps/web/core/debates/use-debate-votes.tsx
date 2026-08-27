@@ -205,23 +205,22 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         hasBeenPublished: false,
       });
 
+      const anchorRelations: Relation[] = [
+        relate(TYPES_PROPERTY_ID, 'Types', VOTE_TYPE_ID, 'Vote'),
+        relate(VOTE_DEBATES_PROPERTY_ID, 'Debates', debateEntityId, debateName),
+      ];
+
       const newWinnerRelation = relate(VOTE_WINNER_PROPERTY_ID, 'Vote', participant.profile_space_id, winnerName);
 
-      const relations: Relation[] =
-        previousVote && previousWinnerRelationId
-          ? [
-              {
-                ...relate(VOTE_WINNER_PROPERTY_ID, 'Vote', previousVote.winnerSpaceEntityId, previousVote.winnerName),
-                id: previousWinnerRelationId,
-                isDeleted: true,
-              },
-              newWinnerRelation,
-            ]
-          : [
-              relate(TYPES_PROPERTY_ID, 'Types', VOTE_TYPE_ID, 'Vote'),
-              relate(VOTE_DEBATES_PROPERTY_ID, 'Debates', debateEntityId, debateName),
-              newWinnerRelation,
-            ];
+      const relations: Relation[] = [...anchorRelations];
+      if (previousVote) {
+        relations.push({
+          ...relate(VOTE_WINNER_PROPERTY_ID, 'Vote', previousVote.winnerSpaceEntityId, previousVote.winnerName),
+          id: previousWinnerRelationId!,
+          isDeleted: true,
+        });
+      }
+      relations.push(newWinnerRelation);
 
       // Keep the new relation id on the optimistic row so a switch during the indexer lag can
       // still delete it.
@@ -276,6 +275,9 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         if (Either.isLeft(result)) {
           // Publish failed — restore the previous pick, or clear on a failed first vote.
           queryClient.setQueryData<DebateVoteRecord[]>(votesQueryKey(debateEntityId), (old = []) => {
+            const live = old.find(vote => vote.id === voteEntityId);
+            if (live && live.winnerRelationId !== optimisticVote.winnerRelationId) return old;
+
             const withoutOptimistic = old.filter(vote => vote.id !== voteEntityId);
             return previousVote ? [...withoutOptimistic, previousVote] : withoutOptimistic;
           });
