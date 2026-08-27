@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   authReady: true,
   reportError: vi.fn(),
+  enqueuePendingAction: vi.fn(),
 }));
 
 vi.mock('@geoprotocol/geo-sdk', () => ({
@@ -93,6 +94,10 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
     isLoading: mocks.accountLoading,
     error: mocks.accountError,
   }),
+}));
+
+vi.mock('~/core/state/pending-actions', () => ({
+  useEnqueuePendingAction: () => mocks.enqueuePendingAction,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -179,6 +184,7 @@ beforeEach(() => {
   mocks.authReady = true;
   mocks.openPrivySignIn.mockClear();
   mocks.reportError.mockClear();
+  mocks.enqueuePendingAction.mockClear();
   mocks.voteEntities = [];
   mocks.publishedRelations = [];
   mocks.idCounter = 0;
@@ -204,6 +210,37 @@ describe('useDebateVotes castVote', () => {
 
     expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
     expect(mocks.publishEdit).not.toHaveBeenCalled();
+  });
+
+  // The pick is real work. Coming back from a login to an unchanged debate, with nothing said, is
+  // worse than the toast this replaced — so it is queued for the runner to replay.
+  it('queues the pick so signing in does not lose it', async () => {
+    mocks.signedIn = false;
+    mocks.authenticated = false;
+    const view = await renderVotes();
+
+    await act(async () => {
+      await view.result.current.castVote(ALICE);
+    });
+
+    expect(mocks.enqueuePendingAction).toHaveBeenCalledOnce();
+    const action = mocks.enqueuePendingAction.mock.calls[0]![0] as {
+      id: string;
+      requires: string;
+      run: () => Promise<void>;
+    };
+    // A personal space, not just auth: the vote is published from it.
+    expect(action.requires).toBe('personalSpace');
+
+    // Replaying once the account exists publishes the vote it was queued for.
+    mocks.signedIn = true;
+    mocks.authenticated = true;
+    view.rerender();
+    await act(async () => {
+      await action.run();
+    });
+
+    await waitFor(() => expect(mocks.publishEdit).toHaveBeenCalled());
   });
 
   // `smartAccount` is null while the account restores too, and a login there would clear the

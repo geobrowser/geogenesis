@@ -134,7 +134,12 @@ export function DebatesBrowseFeed({
   // "Join a debate" opens the shared hub rather than a panel of this space's claims: the hub is
   // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
   const debatesHub = useDebatesHub();
-  const openPrivySignIn = usePrivySignIn();
+  // Carry the intent across the login: signing in is a detour the viewer did not ask for, so
+  // finish what they pressed rather than returning them to the feed to press it again.
+  const openPrivySignIn = usePrivySignIn(() => {
+    setOpenPanel(null);
+    debatesHub.open('claims');
+  });
   // Privy, not the smart account: `useSmartAccount` reports null while the account is restoring
   // and after an initialization failure as well as when nobody is signed in, and sending a
   // signed-in viewer back through login would wipe their half-finished onboarding.

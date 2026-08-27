@@ -22,6 +22,7 @@ import { TransactionWriteFailedError } from '~/core/errors';
 import { ID } from '~/core/id';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { checkEntityExists, getDebateVoteEntities } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -151,6 +152,11 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   const { smartAccount, isLoading: isAccountLoading, error: accountError } = useSmartAccount();
   const openPrivySignIn = usePrivySignIn();
   const { ready: authReady, authenticated } = useGeoChatAuth();
+  const enqueuePendingAction = useEnqueuePendingAction();
+  // Lets the queued replay reach the current `castVote` without making the callback depend on
+  // itself. The runner only fires it once a personal space exists, so the replay lands past the
+  // branch that queued it.
+  const castVoteRef = React.useRef<(participant: DebateParticipant) => Promise<void>>(async () => {});
   const { personalSpaceId } = usePersonalSpaceId();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
@@ -207,6 +213,16 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         // on which one this is, and sending a signed-in viewer through login would clear their
         // half-finished onboarding.
         if (authReady && !authenticated) {
+          // Keep the pick. Signing in is a detour, and coming back to an unchanged debate with
+          // the vote silently dropped is worse than the toast this replaced. The runner replays
+          // it once there is a personal space to write from, which is what the vote needs and
+          // what finishing onboarding produces.
+          enqueuePendingAction({
+            id: `debate-winner-vote:${debateEntityId}`,
+            label: 'your winner vote',
+            requires: 'personalSpace',
+            run: () => castVoteRef.current(participant),
+          });
           // Signed out is a step, not an error: open the login the upvote control opens rather
           // than a toast that names the problem and leaves them to find the way in.
           openPrivySignIn();
@@ -387,6 +403,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       debateEntityId,
       queryClient,
       openPrivySignIn,
+      enqueuePendingAction,
       authReady,
       authenticated,
       isAccountLoading,
@@ -395,6 +412,8 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       reportError,
     ]
   );
+
+  castVoteRef.current = castVote;
 
   return { sharePercentFor, isMyPick, hasVoted, isVoting, castVote };
 }

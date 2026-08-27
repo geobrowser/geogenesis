@@ -31,6 +31,8 @@ const mocks = vi.hoisted(() => ({
   /** Whether the debates hub is already showing. */
   hubIsOpen: false,
   openPrivySignIn: vi.fn(),
+  /** What the feed asked to happen once Privy finishes. */
+  privyOnComplete: undefined as undefined | (() => void),
   /** Privy's answer, which is the authority on whether anyone is signed in. */
   authenticated: true,
   /** False while Privy is still restoring the session. */
@@ -130,7 +132,10 @@ vi.mock('~/core/hooks/use-comments', () => ({
 
 // Reaches for next-navigation and Privy context the feed's tests do not stand up.
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: () => mocks.openPrivySignIn,
+  usePrivySignIn: (onComplete?: () => void) => {
+    mocks.privyOnComplete = onComplete;
+    return mocks.openPrivySignIn;
+  },
 }));
 
 beforeEach(() => {
@@ -623,6 +628,21 @@ describe('DebatesBrowseFeed comments', () => {
   // `useSmartAccount` reads null while the account restores and after an init failure as well as
   // when signed out, so gating on it sent a signed-in viewer back through a login that clears
   // their half-finished onboarding. Privy is asked instead, and it is not asked until it is ready.
+  // Signing in is a detour the viewer did not ask for, so the press survives it rather than
+  // returning them to the feed to press the same button again.
+  it('opens the hub once sign-in completes, without a second press', () => {
+    mocks.authenticated = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+    expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
+
+    act(() => mocks.privyOnComplete?.());
+
+    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+  });
+
   it('does nothing until Privy has restored the session', () => {
     mocks.authReady = false;
     mocks.authenticated = false;
