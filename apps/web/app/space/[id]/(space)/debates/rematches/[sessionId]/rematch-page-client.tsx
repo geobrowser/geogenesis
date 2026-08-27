@@ -83,8 +83,19 @@ function sameId(left: string, right: string) {
  * first settle there is nothing to hold, and the (empty) unsettled value comes through — which is
  * what lets the first load show a loading state instead of an empty list.
  */
-function useLastSettled<T>(value: T, settling: boolean): T {
+function useLastSettled<T>(value: T, settling: boolean, resetKey: string): T {
   const lastSettledRef = React.useRef<{ value: T } | null>(null);
+  const resetRef = React.useRef(resetKey);
+
+  // Holding across a change of key would be holding the wrong thing. The page keeps its instance
+  // when the route moves from one rematch to another — nothing keys it on the session — so without
+  // this the previous session's claims stay on screen while the new one loads, and the order they
+  // were in seeds the new session's.
+  if (resetRef.current !== resetKey) {
+    resetRef.current = resetKey;
+    lastSettledRef.current = null;
+  }
+
   if (!settling) lastSettledRef.current = { value };
   return settling && lastSettledRef.current ? lastSettledRef.current.value : value;
 }
@@ -569,7 +580,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // A new response from the opponent adds an id, and the lookups keyed on the id list start over.
   // The list they were drawn from is still right for every claim already on it, so it stays up
   // until the new one lands rather than dropping to nothing in between.
-  const opponentClaims = useLastSettled(opponentClaimsNow, opponentClaimsSettling);
+  const opponentClaimsHeld = useLastSettled(opponentClaimsNow, opponentClaimsSettling, sessionId);
+  // The sort above is a load-time arrangement, not a live one (GEO-2698). `shared_preference` is
+  // read off the session row, so taking a side on a claim the opponent has already answered flips
+  // it — and re-sorting sent the row the viewer had just acted on to the top, carrying the rest of
+  // the list with it. Held so that arrangement survives the viewer acting on it; a claim the
+  // opponent answers next is new rather than moved, and still lands at the top where the sort puts
+  // it. Keyed on the session, so reopening the flow arranges it afresh.
+  //
+  // Applied after `useLastSettled` rather than before it: the hold remembers the rows it has been
+  // shown, and `opponentClaimsNow` empties on every refetch. Stabilising that would hand it an
+  // empty list mid-flight and lose the order at the moment it is needed.
+  const opponentClaims = useStableListOrder(
+    opponentClaimsHeld,
+    row => `${row.claim.space_id}:${row.claim.claim_entity_id}`,
+    sessionId
+  );
 
   // The curated tab, in the curator's order. Held the same way, and likewise not narrowed by the
   // space allowlist.
@@ -593,7 +619,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       rowFromEntity,
     ]
   );
-  const curatedClaims = useLastSettled(curatedClaimsNow, curatedClaimsSettling);
+  const curatedClaims = useLastSettled(curatedClaimsNow, curatedClaimsSettling, sessionId);
 
   // Featured, in the order the tag query ranked it. Built exactly as the curated list is — the
   // entities are the same projection and the rows carry the same session flags — and held the same
@@ -631,7 +657,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       spaceAllowlist,
     ]
   );
-  const featuredClaims = useLastSettled(featuredClaimsNow, featuredClaimsSettling);
+  const featuredClaims = useLastSettled(featuredClaimsNow, featuredClaimsSettling, sessionId);
 
   // The All tab: geo-chat's rows, the graph's sides. Held while the allowlist resolves (see above).
   // It is still every claim the picker knows: the session's own rows — what both have answered,
@@ -771,12 +797,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * *from* positions, so while positions is still in flight the id list is empty, those queries
    * are disabled rather than loading, and nothing downstream reports as pending.
    *
+   * `sessionQuery.isLoading` for the same reason, one step further up. Participants come from the
+   * session, positions are keyed on participants, and the claim lookups are keyed on positions — so
+   * while the session is in flight the whole chain below it is disabled rather than loading and
+   * reports nothing. That window is reachable: the route keeps this component when it moves between
+   * rematches, and the held list is dropped on the way (see `useLastSettled`), so without this the
+   * badge answers `0` for a session it has not read yet.
+   *
    * Once a settled list exists the number is shown even while a refetch is in flight: a new
    * response from the opponent restarts the lookups, and `useLastSettled` is still holding a list
    * that is correct for every claim already on it. Going back to a skeleton there would flicker
    * the badge on exactly the event that ought to be invisible.
    */
-  const opponentCountPending = opponentClaims.length === 0 && (positions.isLoading || opponentClaimsSettling);
+  const opponentCountPending =
+    opponentClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling);
 
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu.

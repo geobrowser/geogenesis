@@ -13,21 +13,35 @@ import type { ParticipantPosition } from '~/core/debates/participant-positions';
 
 import { DebateRematchPageClient } from './rematch-page-client';
 
-const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CRYPTO_SPACE, PODCASTS_SPACE, NAME_PROPERTY } =
-  vi.hoisted(() => ({
-    SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
-    SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
-    // Real ids from the hard-coded ranking table, so the ordering under test is the real one.
-    CRYPTO_SPACE: 'c9f267dcb0d270718c2a3c45a64afd32',
-    PODCASTS_SPACE: 'b5a31f8182b042437ede0f84ee02f104',
-    NAME_PROPERTY: 'a126ca530c8e48d5b88882c734c38935',
-    CLAIM_SHARED: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419',
-    CLAIM_MORE: '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520',
-    CLAIM_SOURCE: '019fedb3-2e63-7b50-9c33-4e9f7a0d6621',
-  }));
+const {
+  SPACE_1,
+  SPACE_2,
+  CLAIM_SHARED,
+  CLAIM_MORE,
+  CLAIM_SOURCE,
+  CLAIM_FRESH,
+  CRYPTO_SPACE,
+  PODCASTS_SPACE,
+  NAME_PROPERTY,
+} = vi.hoisted(() => ({
+  SPACE_1: '019fedae-72b6-7ab2-927a-df044d57c566',
+  SPACE_2: '019fedae-72b6-7ab2-927a-df044d57c567',
+  // Real ids from the hard-coded ranking table, so the ordering under test is the real one.
+  CRYPTO_SPACE: 'c9f267dcb0d270718c2a3c45a64afd32',
+  PODCASTS_SPACE: 'b5a31f8182b042437ede0f84ee02f104',
+  NAME_PROPERTY: 'a126ca530c8e48d5b88882c734c38935',
+  CLAIM_SHARED: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419',
+  CLAIM_MORE: '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520',
+  CLAIM_SOURCE: '019fedb3-2e63-7b50-9c33-4e9f7a0d6621',
+  // A claim the opponent answers mid-session. Not CLAIM_SOURCE: that is the session's own
+  // claim, which the picker excludes.
+  CLAIM_FRESH: '019fedb4-3f74-7c61-8d44-5fa08b1e7722',
+}));
 
 const mocks = vi.hoisted(() => ({
   session: null as DebateRematchSession | null,
+  /** The session lookup itself is in flight — everything below it is keyed on what it returns. */
+  sessionLoading: false,
   claims: [] as DebateRematchClaim[],
   replace: vi.fn(),
   back: vi.fn(),
@@ -136,7 +150,7 @@ vi.mock('~/core/debates/api', async importOriginal => {
 });
 
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateRematch: () => ({ data: mocks.session, isLoading: false, error: null }),
+  useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
   // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
   // arrive through the id lookup.
   useDebateRematchClaims: () => ({
@@ -506,6 +520,7 @@ beforeEach(() => {
     disconnect() {}
   } as unknown as typeof ResizeObserver;
   mocks.session = session();
+  mocks.sessionLoading = false;
   mocks.claims = [sharedClaim()];
   mocks.perSpaceReadinessGroups = [];
   mocks.gatewaySpaceScopes = [];
@@ -1227,6 +1242,141 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.queryByLabelText('Counting positions')).toBeNull();
     expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('1');
+  });
+
+  /**
+   * GEO-2698. `shared_preference` is read off the session row, so taking a side on a claim the
+   * opponent has already answered flips it — and the tab sorted matches to the top on every
+   * recompute. The row the viewer had just acted on jumped out from under them, taking the rest of
+   * the list with it.
+   *
+   * The sort is a load-time arrangement. It still decides where things start, and where a claim the
+   * opponent answers next arrives; what it no longer does is rearrange rows the viewer is working.
+   */
+  describe('opponent tab ordering', () => {
+    const FIRST_CLAIM = 'A claim both participants chose';
+    const SECOND_CLAIM = 'A second claim they answered';
+    const THIRD_CLAIM = 'A claim they answered just now';
+
+    /**
+     * A second claim of the opponent's, named in the same space they answered it in — `sidesOf`
+     * keys on claim *and* space, so a row whose home space differs from its position's has no
+     * participants and never reaches the tab.
+     */
+    function opponentEntity(id: string, name: string) {
+      return {
+        id,
+        name,
+        description: null,
+        spaces: [SPACE_1],
+        values: [{ property: { id: NAME_PROPERTY }, spaceId: SPACE_1, value: name }],
+        relations: [],
+      };
+    }
+
+    /** A session row for a claim the opponent answered, matched or not. */
+    function sessionRow(id: string, claim: string, sharedPreference: boolean) {
+      return { ...sharedClaim(), claim: claimSummary(id, claim), shared_preference: sharedPreference };
+    }
+
+    /** The opponent's two positions, neither a match yet, in the order the graph returns them. */
+    function twoUnmatchedPositions() {
+      mocks.positions = [
+        position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        position('profile-remote', CLAIM_MORE, SPACE_1, false),
+      ];
+      mocks.entities = [sharedEntity(), opponentEntity(CLAIM_MORE, SECOND_CLAIM)];
+      mocks.claims = [sessionRow(CLAIM_SHARED, FIRST_CLAIM, false)];
+    }
+
+    const positionsTab = () => screen.getByRole('button', { name: /positions/ });
+
+    it('holds the order it loaded with when a position becomes a match', async () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
+
+      // The viewer takes a side on the second one: geo-chat's row comes back a match.
+      mocks.claims = [sessionRow(CLAIM_SHARED, FIRST_CLAIM, false), sessionRow(CLAIM_MORE, SECOND_CLAIM, true)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
+    });
+
+    // The hold is on rows already shown, not on the arrangement itself: a claim the opponent
+    // answers next has never been under the viewer's cursor, so the sort still places it.
+    it('still puts a newly arrived match at the top', async () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
+
+      mocks.positions = [
+        position('profile-remote', CLAIM_FRESH, SPACE_1, false),
+        position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        position('profile-remote', CLAIM_MORE, SPACE_1, false),
+      ];
+      mocks.entities = [
+        opponentEntity(CLAIM_FRESH, THIRD_CLAIM),
+        sharedEntity(),
+        opponentEntity(CLAIM_MORE, SECOND_CLAIM),
+      ];
+      mocks.claims = [sessionRow(CLAIM_SHARED, FIRST_CLAIM, false), sessionRow(CLAIM_FRESH, THIRD_CLAIM, true)];
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
+
+      expect(appearsBefore(THIRD_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
+    /**
+     * The route keeps this component when it moves from one rematch to another — nothing keys it on
+     * the session — so the hold that carries a list through a refetch would otherwise carry it
+     * across a session change too. That is the wrong list twice over: the previous rematch's claims
+     * on screen while the new one loads, and their order seeding the new session's.
+     */
+    it('does not carry the previous session’s claims into a new one', async () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(within(positionsTab()).getByText('2')).toBeInTheDocument();
+
+      // The new session's lookups are in flight: nothing of its own to show yet.
+      mocks.entityHydrationLoading = true;
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+      // Asserted on the tab's own count rather than on the claims: the same rows also reach the
+      // Claims tab, so searching the document would find them whichever list they came from. And on
+      // the skeleton specifically — "not 2" would be satisfied by a confident `0`, which is the
+      // wrong answer rather than an absent one.
+      expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+      expect(within(positionsTab()).queryByText('2')).not.toBeInTheDocument();
+    });
+
+    /**
+     * The window the session change opens: participants come from the session, positions from
+     * participants, the claim lookups from positions. While the session is in flight the whole
+     * chain is disabled rather than loading, so nothing downstream says "pending" — and the badge
+     * would answer `0` for a session it has not read yet. Zero is a claim about the opponent, not a
+     * placeholder.
+     */
+    it('does not answer zero positions for a session it has not read yet', async () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(within(positionsTab()).getByText('2')).toBeInTheDocument();
+
+      // Only the session is loading, and it has not returned yet — so everything keyed on what it
+      // returns is disabled, reporting `isLoading: false` while having nothing to say.
+      mocks.sessionLoading = true;
+      mocks.session = null;
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+      expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+      expect(screen.queryByText('0')).not.toBeInTheDocument();
+    });
   });
 
   // Until the curated lookup settles there is no telling "no curator page" from "not yet", and the
