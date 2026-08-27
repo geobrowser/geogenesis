@@ -23,7 +23,7 @@ type FieldNode = {
   selectionSet?: { selections: FieldNode[] };
 };
 
-/** Field names selected directly on the entity in a query, ignoring nesting and fragments. */
+/** Field names selected directly on the entity, keyed to what a consumer sees (alias wins). */
 function entityFieldNames(document: unknown): Set<string> {
   const names = new Set<string>();
 
@@ -49,9 +49,51 @@ function entityFieldNames(document: unknown): Set<string> {
   return names;
 }
 
+/** Leaf fields at depth 1 — the entity's own scalars, excluding anything with a sub-selection. */
+function entityScalarNames(document: unknown): Set<string> {
+  const names = new Set<string>();
+
+  const walk = (node: FieldNode, depth: number) => {
+    for (const selection of node.selectionSet?.selections ?? []) {
+      if (selection.kind !== 'Field' || !selection.name) continue;
+      if (depth === 1 && !selection.selectionSet) names.add(selection.alias?.value ?? selection.name.value);
+      walk(selection, depth + 1);
+    }
+  };
+
+  for (const definition of (document as { definitions: FieldNode[] }).definitions) {
+    if (definition.kind === 'OperationDefinition') walk(definition, 0);
+  }
+
+  return names;
+}
+
+/** Whether a direct entity field selects a given sub-field, e.g. `relations { totalCount }`. */
+function selectsNested(document: unknown, parent: string, child: string): boolean {
+  let found = false;
+
+  const walk = (node: FieldNode, depth: number) => {
+    for (const selection of node.selectionSet?.selections ?? []) {
+      if (selection.kind !== 'Field' || !selection.name) continue;
+      const name = selection.alias?.value ?? selection.name.value;
+      if (depth === 1 && name === parent) {
+        for (const sub of selection.selectionSet?.selections ?? []) {
+          if (sub.kind === 'Field' && (sub.alias?.value ?? sub.name?.value) === child) found = true;
+        }
+      }
+      walk(selection, depth + 1);
+    }
+  };
+
+  for (const definition of (document as { definitions: FieldNode[] }).definitions) {
+    if (definition.kind === 'OperationDefinition') walk(definition, 0);
+  }
+
+  return found;
+}
+
 describe('EntitiesBatch carries what store consumers read', () => {
   const batchFields = entityFieldNames(entitiesBatchQuery);
-  const singularFields = entityFieldNames(entityQuery);
 
   it('selects the timestamps, so nothing falls back to a per-row fetch for one', () => {
     // Dropping these is silent: the store just has no timestamp, and consumers refetch per row.
@@ -69,14 +111,22 @@ describe('EntitiesBatch carries what store consumers read', () => {
   it('selects the relation count, so truncation past the page cap is detectable', () => {
     // Without it `relationsTotalCount` is undefined, no entity ever looks truncated, and the
     // top-up never runs. That shipped once already.
-    expect(batchFields.has('relations')).toBe(true);
+    // The nested field, not just the parent: leaving `relations` while dropping `totalCount` would
+    // keep a `has('relations')` assertion green while every top-up silently stopped running.
+    expect(selectsNested(entitiesBatchQuery, 'relations', 'totalCount')).toBe(true);
   });
 
   it('is not missing a scalar the singular query supplies', () => {
-    // A drift check rather than a fixed list: if the singular Entity query gains a scalar the store
-    // might read, this fails and someone decides deliberately whether the batch needs it too.
-    const singularScalars = ['id', 'name', 'description', 'spaceIds', 'createdAt', 'updatedAt'];
-    const missing = singularScalars.filter(field => singularFields.has(field) && !batchFields.has(field));
+    /**
+     * Derived from the singular query's own AST rather than a hard-coded list. A fixed list only
+     * covers the fields someone thought to write down: add a scalar to `entityQuery` and it would
+     * be absent from the list, so `missing` stays empty and the drift goes unnoticed — which is the
+     * failure this check exists to prevent.
+     */
+    const singularScalars = [...entityScalarNames(entityQuery)];
+    expect(singularScalars.length).toBeGreaterThan(3);
+
+    const missing = singularScalars.filter(field => !batchFields.has(field));
 
     expect(missing).toEqual([]);
   });

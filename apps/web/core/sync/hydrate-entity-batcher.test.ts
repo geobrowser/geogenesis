@@ -337,7 +337,9 @@ describe('hydrateEntityBatched', () => {
       merged: [entity('big')],
       remote: [{ ...entity('big'), relationsTotalCount: 4000 }],
     });
-    mocks.syncOne.mockResolvedValue({ merged: entity('big'), remote: null });
+    // A *successful* top-up: non-null remote, so the no-remote guard doesn't fire first and
+    // execution actually reaches the second emit this test is named for.
+    mocks.syncOne.mockResolvedValue({ merged: entity('big'), remote: entity('big') });
 
     const outcome = await Promise.race([
       hydrateEntityBatched({ id: 'big', store, cache, stream: throwOnSecondEmit }).then(
@@ -348,6 +350,9 @@ describe('hydrateEntityBatched', () => {
     ]);
 
     expect(outcome).toBe('rejected');
+    // Proves the throwing emit was the cause: it was reached, rather than the waiter rejecting
+    // earlier for want of a remote.
+    expect(emitCount).toBe(2);
   });
   it('rejects a top-up that produced no remote entity', async () => {
     // `E.syncOne` falls back to `store.getEntity(id)` when the singular read returns nothing — which
