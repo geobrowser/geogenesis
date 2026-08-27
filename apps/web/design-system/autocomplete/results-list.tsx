@@ -99,8 +99,6 @@ function ResultRow({
       onClick={event => {
         // A row standing in for something already taken does not travel, by any means of asking.
         // Checked before the modifier branch, which returns without preventing the default.
-        // A row standing in for something already taken does not travel, by any means of asking.
-        // Checked before the modifier branch, which returns without preventing the default.
         if (disabled) {
           event.preventDefault();
           return;
