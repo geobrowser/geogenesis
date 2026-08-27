@@ -62,7 +62,7 @@ const mocks = vi.hoisted(() => ({
   ),
   openSidePanel: vi.fn(),
   /** Every query the All tab handed the hub's claims lookup, in render order. */
-  entityQueries: [] as Array<{ search: string | null; spaceId: string | null }>,
+  entityQueries: [] as Array<{ search: string | null; spaceIds?: string[] | null; topicIds?: string[] | null }>,
   /** Every id list the opponent's claims were hydrated with, in render order. */
   entityIdLookups: [] as string[][],
   featuredClaims: [] as Array<{
@@ -309,7 +309,7 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
   useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
   // The All tab is the hub's Claims query. Its arguments are what the tests below inspect.
   useMatchmakingClaims: (
-    query: { search: string | null; spaceId: string | null; topicId?: string | null },
+    query: { search: string | null; spaceIds?: string[] | null; topicIds?: string[] | null },
     enabled: boolean
   ) => {
     // A disabled query is not a silent one: `placeholderData: keepPreviousData` outlives
@@ -343,7 +343,14 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
     // `space_id` and `topic_id` both filter server-side as of GEO-2659, and every page carries
     // facets computed over the whole candidate set rather than the page being returned.
     const corpus = mocks.entityQueryPages ?? [mocks.matchmakingClaims];
-    const inSpace = corpus.flat().filter(entry => !query.spaceId || entry.claim.space_id === query.spaceId);
+    // Both sides normalized, as geo-chat does: the scope carries dash-less ids while the fixtures
+    // carry the dashed spelling, so comparing them raw would filter everything out.
+    const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
+    const inSpaceFilter = (spaceId: string) =>
+      !query.spaceIds?.length || query.spaceIds.some(id => norm(id) === norm(spaceId));
+    const inTopicFilter = (topics: { id: string }[]) =>
+      !query.topicIds?.length || topics.some(topic => (query.topicIds ?? []).includes(topic.id));
+    const inSpace = corpus.flat().filter(entry => inSpaceFilter(entry.claim.space_id));
     const topicFacets = [...new Map(inSpace.flatMap(entry => entry.topics).map(topic => [topic.id, topic])).values()];
     const spaceIds = [...new Set(corpus.flat().map(entry => entry.claim.space_id))];
     // Narrowed by space, never by topic: picking a topic must not collapse its own menu.
@@ -355,9 +362,7 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
     };
     const data = {
       pages: corpus.map(page => ({
-        claims: page
-          .filter(entry => !query.spaceId || entry.claim.space_id === query.spaceId)
-          .filter(entry => !query.topicId || entry.topics.some(topic => topic.id === query.topicId)),
+        claims: page.filter(entry => inSpaceFilter(entry.claim.space_id)).filter(entry => inTopicFilter(entry.topics)),
         next_cursor: null,
         facets,
       })),
@@ -1435,7 +1440,7 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
 
     selectFilter('Any space', 'Crypto');
-    await waitFor(() => expect(browsedClaimsQueryOptions()?.spaceId).toBe(SPACE_1));
+    await waitFor(() => expect(browsedClaimsQueryOptions()?.spaceIds).toEqual([SPACE_1]));
   });
 
   // On a phone the three tabs are wider than the screen. They were laid out in a row that could
@@ -1712,7 +1717,7 @@ describe('DebateRematchPageClient', () => {
     selectFilter('Any topic', 'Governance');
 
     // Filtering only here would narrow the pages already loaded and nothing beyond them.
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ topicId: 'topic-gov' }));
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ topicIds: ['topic-gov'] }));
   });
 
   // Reported after the facet landed: pick a space, pick a topic it lists, get nothing. The space
@@ -1871,20 +1876,46 @@ describe('DebateRematchPageClient', () => {
     fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
 
     expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
   });
 
-  it('lets go of a selected topic once the space no longer has claims for it', async () => {
+  // A space can be on the menu without being in the allowlist — the graph-backed sources aren't
+  // narrowed by it, so their rows put their spaces there. Picking one alongside an allowed space
+  // used to send both: `browsedRows` dropped the disallowed rows, but the facets riding with them
+  // still named their topics and counted their claims.
+  it('sends geo-chat only the picked spaces it can answer for', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    selectFilter('Any topic', 'Governance');
-    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    selectFilter('Any space', 'Governance space');
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ spaceIds: [SPACE_2] }));
 
-    selectFilter('Any space', 'Crypto');
+    // Crypto reaches the menu through a pinned row, not through the allowlist. The trigger now
+    // reads the picked space's own name, so that is what opens the menu again.
+    selectFilter('Governance space', 'Crypto');
+
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ spaceIds: [SPACE_2] }));
+  });
+
+  // Not reachable by picking a topic and then a space it has nothing in: each menu is narrowed by
+  // the other, so such a space is never on offer. It is reachable by the corpus moving under a
+  // selection that was valid when it was made.
+  it('lets go of a selected topic once the space no longer has claims for it', async () => {
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    selectFilter('Any space', 'Governance space');
+    selectFilter('Any topic', 'Ethics');
+    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ topicIds: ['topic-eth'] }));
+
+    // The one Ethics claim in that space is answered, published elsewhere, or otherwise leaves the
+    // candidate set, so the facet stops naming the topic.
+    mocks.matchmakingClaims = [{ ...matchmakingClaim(), topics: [{ id: 'topic-gov', name: 'Governance' }] }];
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
     // Held, it would filter the list by a chip that is no longer in the menu to unpick.
     await waitFor(() => expect(screen.getByRole('button', { name: /Any topic/ })).toBeInTheDocument());
-    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 
   it('narrows the list to the selected space', async () => {
@@ -2773,6 +2804,9 @@ function appearsBefore(first: string, second: string) {
 function selectFilter(trigger: string, option: string) {
   fireEvent.click(screen.getByRole('button', { name: new RegExp(trigger) }));
   fireEvent.click(screen.getByRole('button', { name: new RegExp(option) }));
+  // Multi-select menus stay open across a tick, so the trigger and the row would both answer to
+  // the same name until this closes it.
+  fireEvent.keyDown(document, { key: 'Escape' });
 }
 
 function session(overrides: Partial<DebateRematchSession> = {}): DebateRematchSession {

@@ -107,12 +107,19 @@ vi.mock('./hooks', () => ({
         refetch: vi.fn(),
       };
     }
-    const { spaceId, topicId } = query as { spaceId?: string | null; topicId?: string | null };
+    const { spaceIds, topicIds } = query as { spaceIds?: string[] | null; topicIds?: string[] | null };
+    // geo-chat normalizes both sides before comparing; the fixtures carry the dashed spelling while
+    // the allowlist carries the dash-less one, so a mock that compared them raw would filter
+    // everything out and look like a broken query.
+    const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
+    const inSpaceFilter = (spaceId: string) => !spaceIds?.length || spaceIds.some(id => norm(id) === norm(spaceId));
+    const inTopicFilter = (topics: { id: string }[]) =>
+      !topicIds?.length || topics.some(topic => topicIds.includes(topic.id));
     // `space_id` and `topic_id` are both query parameters as of GEO-2659, so the endpoint
     // returns only the rows that match. Mirrored here, because what the tab renders and what
     // its menus describe both hang off that.
-    const inSpace = mocks.claims.filter(entry => !spaceId || entry.claim.space_id === spaceId);
-    const claims = inSpace.filter(entry => !topicId || entry.topics.some(topic => topic.id === topicId));
+    const inSpace = mocks.claims.filter(entry => inSpaceFilter(entry.claim.space_id));
+    const claims = inSpace.filter(entry => inTopicFilter(entry.topics));
     // Each dimension is counted without narrowing itself, and *is* narrowed by the other — what
     // `MATCHMAKING_CLAIMS_FACETS_QUERY` does, and what a facet count is for. So the topic facet is
     // cut by the space filter and the space facet by the topic filter; neither is cut by its own.
@@ -120,11 +127,11 @@ vi.mock('./hooks', () => ({
     // server-side facet.
     const topicFacets = [...new Map(inSpace.flatMap(entry => entry.topics).map(topic => [topic.id, topic])).values()];
     const spacesCarryingTopic = new Set(
-      mocks.claims
-        .filter(entry => !topicId || entry.topics.some(topic => topic.id === topicId))
-        .map(entry => entry.claim.space_id)
+      mocks.claims.filter(entry => inTopicFilter(entry.topics)).map(entry => norm(entry.claim.space_id))
     );
-    const spaceFacetIds = topicId ? mocks.facetSpaceIds.filter(id => spacesCarryingTopic.has(id)) : mocks.facetSpaceIds;
+    const spaceFacetIds = topicIds?.length
+      ? mocks.facetSpaceIds.filter(id => spacesCarryingTopic.has(norm(id)))
+      : mocks.facetSpaceIds;
     // Facets are computed over the whole filtered set while the page is a slice of it — the
     // shape that matters here, since the menu must not depend on how far the viewer has scrolled.
     const page = mocks.pageSize === null ? claims : claims.slice(0, mocks.pageSize);
@@ -505,7 +512,7 @@ describe('ClaimsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
 
     // Names resolve through useSpacesByIds, mocked empty here, so each offered space reads "Space".
-    expect(screen.getAllByRole('button', { name: /Space$/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /Space/ })).toHaveLength(1);
   });
 
   // Same trimming-under-the-viewer problem the allowlist has, and the same answer: `null` does not
@@ -598,7 +605,7 @@ describe('ClaimsTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
 
     // Names resolve through useSpacesByIds, mocked empty here, so every allowed space reads "Space".
-    expect(screen.getAllByRole('button', { name: /Space$/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /Space/ })).toHaveLength(1);
   });
 
   // The allowlist runs over the loaded page, so a page can arrive with nothing left in it. With
@@ -674,7 +681,7 @@ describe('ClaimsTab', () => {
 
     fireEvent.click(option!);
 
-    expect(mocks.lastQuery).toMatchObject({ spaceId: null });
+    expect(mocks.lastQuery).toMatchObject({ spaceIds: null });
   });
 
   // A settled lookup that still can't name the space really does leave "Space" as the best label
@@ -690,7 +697,7 @@ describe('ClaimsTab', () => {
 
     expect(screen.queryByLabelText('Loading space name')).toBeNull();
     // The option's accessible name picks up its avatar initial, so it reads "SSpace".
-    expect(screen.getByRole('button', { name: /Space$/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Space/ })).toBeEnabled();
   });
 
   // The same placeholder ran down every card in the list.
@@ -721,7 +728,7 @@ it('asks the server for the filter the viewer picked', async () => {
   render(<ClaimsTab />);
   await showAllClaims();
 
-  expect(mocks.lastQuery).toMatchObject({ filter: 'all', spaceId: null });
+  expect(mocks.lastQuery).toMatchObject({ filter: 'all', spaceIds: null });
 
   fireEvent.click(screen.getByRole('button', { name: 'All claims' }));
   fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
@@ -752,8 +759,8 @@ describe('topic menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
-    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Health' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^AI/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Health/ })).toBeInTheDocument();
   });
 
   it('drops the topics that have no claims in the picked space', async () => {
@@ -765,9 +772,9 @@ describe('topic menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
-    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^AI/ })).toBeInTheDocument();
     // The reported bug: Health stayed on the menu, and picking it showed nothing at all.
-    expect(screen.queryByRole('button', { name: 'Health' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Health/ })).toBeNull();
   });
 
   // The report that reopened this: filter to a space, and topics appeared only as you scrolled,
@@ -786,7 +793,7 @@ describe('topic menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
-    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^AI/ })).toBeInTheDocument();
   });
 
   // Without this the facet describes every space geo-chat knows, so a topic living only in a
@@ -836,7 +843,7 @@ describe('topic menu', () => {
 
     expect(screen.queryByText('Models are getting cheaper')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-    expect(screen.queryByRole('button', { name: 'AI' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^AI/ })).toBeNull();
   });
 
   // Disabling the query is not the same as having no data: it keeps the previous key's pages,
@@ -849,7 +856,7 @@ describe('topic menu', () => {
     await showAllClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-    expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^AI/ })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
 
     mocks.spaceAllowlist = new Set();
@@ -858,7 +865,7 @@ describe('topic menu', () => {
     // The list animates its rows out, so the card outlives the render that dropped it.
     await waitFor(() => expect(screen.queryByText('Models are getting cheaper')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-    expect(screen.queryByRole('button', { name: 'AI' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^AI/ })).toBeNull();
   });
 
   it('sends the picked space alone, never alongside the eligible list', async () => {
@@ -869,8 +876,10 @@ describe('topic menu', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
 
-    // geo-chat ORs the two together, so sending both would widen the query straight back out.
-    expect((mocks.lastQuery as { spaceId?: string | null }).spaceId).toBeTruthy();
+    // geo-chat ORs the space parameters together, so sending the scope alongside the pick would
+    // widen the query straight back out to every eligible space.
+    // The menu's option values are the facet's own ids, which is what goes back out.
+    expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] });
   });
 
   it('asks the server to do the topic filtering', async () => {
@@ -878,11 +887,11 @@ describe('topic menu', () => {
     await showAllClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'AI' }));
+    fireEvent.click(screen.getByRole('button', { name: /^AI/ }));
 
     // Filtering here would only ever narrow the pages already loaded, which is the same bug in
     // the list that the menu had.
-    expect(mocks.lastQuery).toMatchObject({ topicId: AI.id });
+    expect(mocks.lastQuery).toMatchObject({ topicIds: [AI.id] });
   });
 
   // The scope goes out as `spaceIds`, and it isn't known until the allowlist and the publishable
@@ -899,8 +908,8 @@ describe('topic menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
-    expect(screen.queryByRole('button', { name: 'AI' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Health' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^AI/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Health/ })).toBeNull();
   });
 
   // Not reachable by picking one and then the other — each menu is narrowed by the other, so a
@@ -913,7 +922,9 @@ describe('topic menu', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'AI' }));
+    fireEvent.click(screen.getByRole('button', { name: /^AI/ }));
+    // The menu stays open across a tick, so the trigger and the row both read "AI" until it closes.
+    fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.getByRole('button', { name: /AI/ })).toBeInTheDocument();
 
     // The one AI claim in Crypto is answered, published elsewhere, or otherwise leaves the
@@ -937,7 +948,7 @@ describe('topic menu', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'AI' }));
+    fireEvent.click(screen.getByRole('button', { name: /^AI/ }));
 
     // The AI claim moves out of Crypto, so the AI-narrowed space facet no longer names it.
     mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, OTHER_SPACE_ID, [AI])];
@@ -968,6 +979,49 @@ describe('ClaimsTab -- Featured', () => {
     expect(screen.getByRole('button', { name: 'Featured' })).toBeInTheDocument();
     expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
     expect(screen.queryByText('Chips are better than fries')).toBeNull();
+  });
+
+  // Featured has no server facet, so its counts are computed here — and a count still has to say
+  // what picking the option would leave. Reported: pick a topic that only exists in one space, and
+  // the other space kept its full count over a list that would come back empty.
+  it('narrows its space counts by the picked topic', async () => {
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy', SPACE_ID),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown', OTHER_SPACE_ID),
+    ];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
+      },
+      {
+        id: FEATURED_B,
+        name: 'Cities should ban cars downtown',
+        description: null,
+        spaces: [OTHER_SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    // Both spaces carry a featured claim, so both are offered before any topic narrows them.
+    expect(screen.getAllByRole('button', { name: /Space/ })).toHaveLength(2);
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    // Only the Energy claim's space is left to pick, and the other is gone rather than offered
+    // over a list it could not fill.
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /Space/ })).toHaveLength(1));
   });
 
   // The panel is narrow enough that three menus fill the row on their own. Pushing the topic one to
@@ -1083,7 +1137,7 @@ describe('ClaimsTab -- Featured', () => {
     render(<ClaimsTab />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Any topic' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Energy' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
 
     await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
     expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();

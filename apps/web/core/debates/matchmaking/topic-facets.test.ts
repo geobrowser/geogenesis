@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { MatchmakingTopic } from '~/core/debates/api';
 
-import { availableTopics, keepSelectableTopic } from './topic-facets';
+import {
+  availableTopics,
+  formatFacetCount,
+  keepSelectableTopic,
+  keepSelectableTopics,
+  keepSelectedVisible,
+  orderFacetOptions,
+} from './topic-facets';
 
 const ai: MatchmakingTopic = { id: 'topic-ai', name: 'AI' };
 const health: MatchmakingTopic = { id: 'topic-health', name: 'Health' };
@@ -69,5 +76,84 @@ describe('keepSelectableTopic', () => {
 
   it('leaves an empty selection alone', () => {
     expect(keepSelectableTopic(null, [ai], true)).toBeNull();
+  });
+});
+
+describe('keepSelectableTopics', () => {
+  const AI = { id: 'ai', name: 'AI' };
+  const HEALTH = { id: 'health', name: 'Health' };
+
+  it('drops only the selections the menu no longer offers', () => {
+    expect(keepSelectableTopics(['ai', 'health'], [AI], true)).toEqual(['ai']);
+  });
+
+  it('holds every selection while the menu is unresolved', () => {
+    expect(keepSelectableTopics(['ai', 'health'], [], false)).toEqual(['ai', 'health']);
+  });
+
+  // Returned by identity when nothing is dropped, so feeding the result back into state can't
+  // loop on a fresh array every render.
+  it('returns the same array when everything is still offered', () => {
+    const selected = ['ai', 'health'];
+    expect(keepSelectableTopics(selected, [AI, HEALTH], true)).toBe(selected);
+  });
+});
+
+describe('orderFacetOptions', () => {
+  const options = [
+    { id: 'a', count: 1 },
+    { id: 'b', count: 9 },
+    { id: 'c', count: 5 },
+  ];
+
+  it('orders by count, descending', () => {
+    expect(orderFacetOptions(options, []).map(o => o.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  // Otherwise ticking one re-sorts the list under the cursor, and the row just clicked moves
+  // before the next click lands.
+  it('holds selected options at the top, whatever their count', () => {
+    expect(orderFacetOptions(options, ['a']).map(o => o.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps equal counts in a stable order rather than whatever order they arrived in', () => {
+    const tied = [
+      { id: 'z', count: 3 },
+      { id: 'y', count: 3 },
+    ];
+    expect(orderFacetOptions(tied, []).map(o => o.id)).toEqual(['y', 'z']);
+  });
+});
+
+describe('formatFacetCount', () => {
+  it('shows small counts exactly', () => {
+    expect(formatFacetCount(7)).toBe('7');
+    expect(formatFacetCount(99)).toBe('99');
+  });
+
+  // A narrow panel sizes every row to the widest number in it.
+  it('caps anything past two digits', () => {
+    expect(formatFacetCount(100)).toBe('99+');
+    expect(formatFacetCount(4210)).toBe('99+');
+  });
+});
+
+describe('keepSelectedVisible', () => {
+  const options = [{ id: 'a', name: 'A', count: 2 }];
+
+  it('leaves options that were never selected absent', () => {
+    expect(keepSelectedVisible(options, []).map(o => o.id)).toEqual(['a']);
+  });
+
+  // Without this the checkbox vanishes while the trigger goes on counting the selection, and the
+  // only way to remove it is to clear every space.
+  it('brings a selection that fell out of the facet back at zero', () => {
+    const kept = keepSelectedVisible(options, ['a', 'b']);
+    expect(kept.map(o => o.id)).toEqual(['a', 'b']);
+    expect(kept.find(o => o.id === 'b')?.count).toBe(0);
+  });
+
+  it('returns the same array when nothing is missing', () => {
+    expect(keepSelectedVisible(options, ['a'])).toBe(options);
   });
 });
