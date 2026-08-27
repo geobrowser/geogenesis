@@ -299,4 +299,56 @@ describe('hydrateEntityBatched', () => {
 
     expect(mocks.syncOne).not.toHaveBeenCalled();
   });
+  it('settles every waiter when a sync listener throws', async () => {
+    // `flush` runs from a bare `setTimeout` — nothing awaits it and nothing catches it — and
+    // `GeoEventStream.emit` runs listeners without a try/catch of its own. Unguarded, one throwing
+    // consumer leaves every waiter pending forever: `isLoading` stays true with no error for React
+    // Query to see and nothing to retry. On the singular path this replaced, the emit sat inside
+    // the queryFn, so a throwing listener rejected that row and it retried.
+    const throwingStream = {
+      emit: () => {
+        throw new Error('a listener threw');
+      },
+      on: vi.fn(),
+    } as unknown as GeoEventStream;
+    mocks.syncMany.mockResolvedValue({ merged: [entity('a'), entity('b'), entity('c')], remote: [] });
+
+    const waiters = ['a', 'b', 'c'].map(id => hydrateEntityBatched({ id, store, cache, stream: throwingStream }));
+
+    const outcome = await Promise.race([
+      Promise.allSettled(waiters).then(results => results.map(r => r.status)),
+      new Promise<string>(resolve => setTimeout(() => resolve('hung'), 250)),
+    ]);
+
+    // Rejected, not resolved: matches what the singular path did, so the row can retry.
+    expect(outcome).toEqual(['rejected', 'rejected', 'rejected']);
+  });
+
+  it('settles a capped waiter when the top-up emit throws', async () => {
+    // The same hazard on the other emit. This one is inside a promise chain, so its own catch has
+    // to be what keeps the waiter settled.
+    let emitCount = 0;
+    const throwOnSecondEmit = {
+      emit: () => {
+        emitCount += 1;
+        if (emitCount > 1) throw new Error('a listener threw');
+      },
+      on: vi.fn(),
+    } as unknown as GeoEventStream;
+    mocks.syncMany.mockResolvedValue({
+      merged: [entity('big')],
+      remote: [{ ...entity('big'), relationsTotalCount: 4000 }],
+    });
+    mocks.syncOne.mockResolvedValue({ merged: entity('big'), remote: null });
+
+    const outcome = await Promise.race([
+      hydrateEntityBatched({ id: 'big', store, cache, stream: throwOnSecondEmit }).then(
+        () => 'resolved',
+        () => 'rejected'
+      ),
+      new Promise<string>(resolve => setTimeout(() => resolve('hung'), 250)),
+    ]);
+
+    expect(outcome).toBe('rejected');
+  });
 });
