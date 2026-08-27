@@ -113,11 +113,29 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
     // which drains the paginated connection, and let its result win.
     const truncated = remote.filter(entity => (entity.relations?.length ?? 0) >= BATCH_RELATIONS_CAP);
     if (truncated.length > 0) {
-      const toppedUp = await Promise.all(
-        truncated.map(entity => E.syncOne({ id: entity.id, store, cache }).catch(() => null))
-      );
-      for (const result of toppedUp) {
-        if (result?.merged) mergedById.set(result.merged.id, result.merged);
+      const toppedUp = (
+        await Promise.all(truncated.map(entity => E.syncOne({ id: entity.id, store, cache }).catch(() => null)))
+      ).filter((result): result is { merged: Entity; remote: Entity | null } => Boolean(result?.merged));
+
+      if (toppedUp.length > 0) {
+        /**
+         * Emitted, not just returned. `syncOne` hands back the entity without writing it anywhere,
+         * and the store is only ever updated by this event — `useQueryEntity` reads
+         * `store.getEntity(...)` rather than the value this promise resolves with. Without a second
+         * emit the complete relation set would reach the caller and nothing else, leaving the store
+         * and its synced baseline holding the truncated version the batch emitted above.
+         *
+         * A second event rather than delaying the first: the batch result is what almost every row
+         * needs, and holding it back until a rare top-up finishes would slow the common case to fix
+         * the uncommon one.
+         */
+        stream.emit({
+          type: GeoEventStream.ENTITIES_SYNCED,
+          entities: toppedUp.map(result => result.merged),
+          remoteEntities: toppedUp.map(result => result.remote).filter((e): e is Entity => e !== null),
+        });
+
+        for (const result of toppedUp) mergedById.set(result.merged.id, result.merged);
       }
     }
 

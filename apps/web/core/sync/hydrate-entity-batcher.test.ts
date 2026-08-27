@@ -177,6 +177,34 @@ describe('hydrateEntityBatched', () => {
     expect(small?.id).toBe('small');
   });
 
+  it('emits the topped-up entity so the store gets the complete relation set', async () => {
+    // `syncOne` hands the entity back without writing it anywhere, and the store is only updated by
+    // this event — `useQueryEntity` reads `store.getEntity(...)`, not the resolved promise. Without
+    // the emit the complete relations reach the caller and nothing else, and the store keeps the
+    // truncated version the batch already emitted.
+    const capped = { ...entity('big'), relations: Array.from({ length: 1000 }, (_, i) => ({ id: `r${i}` })) };
+    const drained = { ...entity('big'), relations: Array.from({ length: 2500 }, (_, i) => ({ id: `r${i}` })) };
+    mocks.syncMany.mockResolvedValue({ merged: [entity('big')], remote: [capped] });
+    mocks.syncOne.mockResolvedValue({ merged: drained, remote: drained });
+
+    await hydrateEntityBatched({ id: 'big', store, cache, stream });
+
+    // Two events: the batch, then the correction.
+    expect(emitted).toHaveLength(2);
+    const correction = emitted[1] as { entities: { relations: unknown[] }[]; remoteEntities: unknown[] };
+    expect(correction.entities[0].relations).toHaveLength(2500);
+    // The raw remote goes too, so the synced baseline is not left truncated either.
+    expect(correction.remoteEntities).toHaveLength(1);
+  });
+
+  it('does not emit a correction when nothing was topped up', async () => {
+    mocks.syncMany.mockResolvedValue({ merged: [entity('a')], remote: [entity('a')] });
+
+    await hydrateEntityBatched({ id: 'a', store, cache, stream });
+
+    expect(emitted).toHaveLength(1);
+  });
+
   it('does not top up entities that came back under the cap', async () => {
     mocks.syncMany.mockResolvedValue({ merged: [entity('a')], remote: [{ ...entity('a'), relations: [{ id: 'r1' }] }] });
 
