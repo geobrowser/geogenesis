@@ -15,6 +15,7 @@ import {
   AUTHORS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
+  DEBATE_PARTICIPANTS_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TYPE_ID,
   IMAGE_TYPE_ID,
@@ -76,6 +77,36 @@ describe('buildDebatePublishDraft', () => {
       { createEntityId: idFactory(), createPosition: () => 'a0' }
     );
     expect(draft.debateName).toBe('Arturas vs. Preston on The US should have attacked Iran');
+  });
+
+  // Preston: "Can we also add a participants relation to both participants. This will be useful for
+  // creating a data block with all the debates that I have participated in."
+  //
+  // Supported by / Opposed by already name everyone, but they encode which side — so that data
+  // block would have to union two relations and know which one to look on. This is the
+  // side-agnostic membership, and it uses the canonical `SystemIds.PARTICIPANTS_PROPERTY` so the
+  // query is the same one any other participant-bearing entity answers to.
+  it('relates both participants side-agnostically, as well as by side', () => {
+    const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
+
+    const participants = draft.relations.filter(r => r.type.id === DEBATE_PARTICIPANTS_PROPERTY_ID);
+    expect(participants).toHaveLength(2);
+
+    // Both sides, one relation. Sorted so the assertion does not depend on slot order.
+    const supported = draft.relations.find(r => r.type.id === DEBATE_SUPPORTED_BY_PROPERTY_ID);
+    const opposed = draft.relations.find(r => r.type.id === DEBATE_OPPOSED_BY_PROPERTY_ID);
+    expect([...participants.map(r => r.toEntity.id)].sort()).toEqual(
+      [supported!.toEntity.id, opposed!.toEntity.id].sort()
+    );
+
+    // And it does not replace them — a debate still records who argued which way.
+    expect(supported).toBeDefined();
+    expect(opposed).toBeDefined();
+
+    // Every Participants relation hangs off the debate itself, not off a block or the claim.
+    for (const relation of participants) {
+      expect(relation.fromEntity.id).toBe(draft.debateEntityId);
+    }
   });
 
   it('links Supported by to the yes participant and Opposed by to the no participant', () => {
