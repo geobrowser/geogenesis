@@ -37,6 +37,8 @@ const mocks = vi.hoisted(() => ({
   rejectMutate: vi.fn(),
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
+  /** Drives the indexing machine's own "taking longer than it should" signal. */
+  responseIndexingDelayed: false,
   setReadiness: vi.fn(),
   joinQueue: vi.fn((_variables: { spaceId: string; claimId: string }) => Promise.resolve({ claim: null, match: null })),
   /** Which space each card wired its readiness machine to, in mount order. */
@@ -2364,9 +2366,9 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Publishing your position…');
   });
 
-  // The machine's own signal that this is running long. It matters more now that it is the
-  // button's label rather than a line of grey text: a control stuck reading the same thing for
-  // thirty seconds is what GEO-2687 leaves the viewer looking at.
+  // The machine's own signal that this is running long, and a different phase: `delayed` is only
+  // reached after the publish succeeded, so the label stops claiming to be publishing. It matters
+  // more now that it is the button's own text — under GEO-2687 it can sit there for half a minute.
   it('says the wait is running long on the button itself', async () => {
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
@@ -2374,13 +2376,24 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    expect(screen.getByRole('button', { name: 'Still publishing your position…' })).toBeDisabled();
-    expect(screen.getByRole('status')).toHaveTextContent('Still publishing your position…');
+    expect(screen.getByRole('button', { name: 'Still confirming your position…' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('Still confirming your position…');
   });
 
-  // The point of the ticket: one element, not two. Once geo-chat agrees the same button becomes
-  // pressable, rather than a spinner disappearing and a button appearing somewhere else.
+  // The point of the ticket: one element, not two. Asserted across the transition rather than on
+  // a settled render — the same DOM node has to go from pending to pressable, which is what
+  // distinguishes this from a spinner disappearing and a button appearing somewhere else.
   it('turns the same button pressable once the position settles', async () => {
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const pending = screen.getByRole('button', { name: 'Publishing your position…' });
+    expect(pending).toBeDisabled();
+
+    // geo-chat catches up with the side already on screen.
+    mocks.optimisticResponses.delete(CLAIM_SHARED);
     mocks.positions = [
       position('profile-local', CLAIM_SHARED, SPACE_1, true),
       position('profile-remote', CLAIM_SHARED, SPACE_1, false),
@@ -2394,13 +2407,14 @@ describe('DebateRematchPageClient', () => {
         ],
       },
     ];
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showOpponentClaims();
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    const button = screen.getByRole('button', { name: 'Request debate' });
-    expect(button).toBeEnabled();
-    expect(button).not.toHaveAttribute('aria-busy');
+    const settled = screen.getByRole('button', { name: 'Request debate' });
+    expect(settled).toBeEnabled();
+    expect(settled).not.toHaveAttribute('aria-busy');
     expect(screen.queryByRole('status')).toBeNull();
+    // Same node — not a second control that replaced the first.
+    expect(settled).toBe(pending);
   });
 
   // And nothing is said before the viewer has taken a side — there is nothing being confirmed, so a

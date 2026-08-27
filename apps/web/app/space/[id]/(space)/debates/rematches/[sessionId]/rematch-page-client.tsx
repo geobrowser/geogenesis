@@ -1399,10 +1399,13 @@ function RematchClaimCard({
     responseKind,
   });
   const awaitingResponse = opposing && !responseSettled;
-  // `delayed` is the machine's own signal that this is taking longer than it should. Worth saying
-  // out loud rather than leaving the button reading the same thing for half a minute.
+  // Two phases, named for what is actually happening in each. `delayed` is only reachable from the
+  // response mutation's `onSuccess` — `reconcileResponseIndexing` runs after `run.status =
+  // 'success'` and sets it when the indexer hasn't confirmed in time — so by then the publish has
+  // landed and the wait is the index. Saying "still publishing" there would point the viewer at a
+  // transaction that already succeeded.
   const awaitingLabel =
-    responseIndexing.status === 'delayed' ? 'Still publishing your position…' : 'Publishing your position…';
+    responseIndexing.status === 'delayed' ? 'Still confirming your position…' : 'Publishing your position…';
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
 
