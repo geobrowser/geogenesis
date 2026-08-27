@@ -22,7 +22,8 @@ import type {
   MatchmakingClaimsQuery,
   MatchmakingTopic,
 } from '../api';
-import { useClaimEntitiesByIds } from '../claim-picker-page';
+import { claimHomeSpaceId } from '../claim-home-space';
+import { type ClaimPickerEntity, useClaimEntitiesByIds } from '../claim-picker-page';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
 import {
   type FeaturedClaim,
@@ -33,6 +34,7 @@ import {
 import { useDebateClaimsBySpaces } from '../hooks';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { useGraphClaimTail } from '../use-graph-claim-tail';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
@@ -159,6 +161,59 @@ export function ClaimsTab() {
     () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
     [pages, spaceShowsClaims]
   );
+
+  /**
+   * GEO-2704. What geo-chat doesn't know about.
+   *
+   * geo-chat can only list a claim it has a row for, and it has a row for far fewer claims than
+   * exist — so the index running out of pages is not the same as the corpus running out of claims.
+   * Once it does run out, the graph is asked for the rest under the same filters, and those rows
+   * are appended.
+   *
+   * Only under All claims, and only without a search term:
+   *
+   * - `mine` and `debate_now` are questions about the viewer's own state, which the graph cannot
+   *   answer at all. Featured is already graph-backed.
+   * - a substring search over the ranking walk measured at ten seconds, so a searching viewer gets
+   *   geo-chat's answer alone until the indexed REST endpoint is wired in.
+   */
+  const tailEnabled =
+    !featured &&
+    filter === 'all' &&
+    !debouncedSearch &&
+    !spacesPending &&
+    !claimsQuery.unusable &&
+    !claimsQuery.isLoading &&
+    !claimsQuery.hasNextPage;
+
+  // The viewer's picked spaces where they have picked any, the eligible set otherwise — the same
+  // narrowing the index query gets, so the two halves of the list answer the same question.
+  const tailSpaceIds = React.useMemo(
+    () => (spaceIds.length > 0 ? spaceIds : eligibleSpaceIds),
+    [eligibleSpaceIds, spaceIds]
+  );
+
+  const tailQuery = React.useMemo(
+    () => ({
+      spaceIds: tailSpaceIds,
+      topicIds,
+      excludeIds: serverClaims.map(entry => entry.claim.claim_entity_id),
+    }),
+    [serverClaims, tailSpaceIds, topicIds]
+  );
+
+  // The home space decides where a debate would be published and which space's "Is factual" value
+  // labels the sides, so a claim whose home lands outside the gates is dropped rather than shown
+  // against a space this tab would not have listed.
+  const tailHomeSpaceOf = React.useCallback(
+    (entity: ClaimPickerEntity) => {
+      const homeSpaceId = claimHomeSpaceId(entity, spaceShowsClaims);
+      return homeSpaceId && spaceShowsClaims(homeSpaceId) ? homeSpaceId : null;
+    },
+    [spaceShowsClaims]
+  );
+
+  const tail = useGraphClaimTail({ query: tailQuery, enabled: tailEnabled, homeSpaceOf: tailHomeSpaceOf });
 
   // GEO-2683. Featured is a curator's tag in the knowledge graph, and geo-chat doesn't index it —
   // so unlike the position filter this can't be a query param, and unlike the old client-side topic
@@ -303,14 +358,27 @@ export function ClaimsTab() {
             .filter(claim => carriesPickedTopic(claim.claimEntityId))
             .map(claim => ({ id: claim.spaceId, name: null }))
         )
-      : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id));
+      : // The tail's spaces join the facet's for the same reason its topics do: a space whose only
+        // claims are ones geo-chat never indexed would otherwise be missing from the menu.
+        [
+          ...(facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id)),
+          ...countBy(tail.claims.map(entry => ({ id: entry.claim.space_id, name: null }))),
+        ];
     return orderFacetOptions(keepSelectedVisible(source, spaceIds), spaceIds);
-  }, [carriesPickedTopic, facets?.space_facets, featured, featuredSearched, spaceIds, spaceShowsClaims]);
+  }, [carriesPickedTopic, facets?.space_facets, featured, featuredSearched, spaceIds, spaceShowsClaims, tail.claims]);
+
+  // Appended, not merged. geo-chat orders by presence and readiness; the tail by ranking score.
+  // Interleaving them would produce a sequence answering to neither, so the seam sits at the end of
+  // what geo-chat had to say.
+  const tailClaims = React.useMemo(
+    () => (tail.claims.length > 0 ? [...serverClaims, ...tail.claims] : serverClaims),
+    [serverClaims, tail.claims]
+  );
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
   const claims = useStableListOrder(
-    featured ? featuredEntries : serverClaims,
+    featured ? featuredEntries : tailClaims,
     entry => `${entry.claim.space_id}:${entry.claim.claim_entity_id}`,
     `${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}|${filter}`
   );
@@ -337,22 +405,41 @@ export function ClaimsTab() {
   const facetTopics = React.useMemo(() => {
     // Counting the featured claims per topic rather than deduping them: a count is the point of
     // the menu now, and the claims in hand are the whole featured list.
-    const source = featured
-      ? countBy(
-          featuredMatching.flatMap(claim =>
-            (featuredTopicsByClaimId.get(claim.claimEntityId) ?? []).map(topic => ({
-              id: topic.id,
-              name: topic.name,
-            }))
-          )
+    if (featured) {
+      const source = countBy(
+        featuredMatching.flatMap(claim =>
+          (featuredTopicsByClaimId.get(claim.claimEntityId) ?? []).map(topic => ({
+            id: topic.id,
+            name: topic.name,
+          }))
         )
-      : (facets?.topic_facets ?? []);
-    return orderFacetOptions(source, topicIds);
-  }, [facets?.topic_facets, featured, featuredMatching, featuredTopicsByClaimId, topicIds]);
+      );
+      return orderFacetOptions(source, topicIds);
+    }
+
+    // GEO-2704. Both, because neither is the whole answer. The facet describes the claims geo-chat
+    // has rows for, which is what the server can count; the tail carries topics off claims geo-chat
+    // has never heard of, which is how a topic came to be offered under Featured and missing under
+    // All claims for the same space.
+    //
+    // The tail's half grows as the viewer pages it — the behaviour GEO-2653 moved away from — but it
+    // applies only to topics that are otherwise unreachable, which is the better of the two failures.
+    const merged = new Map((facets?.topic_facets ?? []).map(facet => [facet.id, { ...facet }]));
+    for (const topic of countBy([...tail.topicsByClaimId.values()].flat())) {
+      const existing = merged.get(topic.id);
+      if (existing) existing.count += topic.count;
+      else merged.set(topic.id, topic);
+    }
+    return orderFacetOptions([...merged.values()], topicIds);
+  }, [facets?.topic_facets, featured, featuredMatching, featuredTopicsByClaimId, tail.topicsByClaimId, topicIds]);
 
   // Featured's menu settles with its entity lookup, which is where its topics come from — the
   // server facets it would otherwise read never arrive, since the query is never made.
-  const facetsSettled = featured ? !featuredLoading && !featuredEntitiesLoading : claimsQuery.facetsSettled;
+  // The tail contributes to the menu, so a topic it is about to add is not yet absent — clearing a
+  // selection against a half-built menu would drop a chip the viewer had every right to.
+  const facetsSettled = featured
+    ? !featuredLoading && !featuredEntitiesLoading
+    : claimsQuery.facetsSettled && !tail.isLoading;
 
   // The space is let go on the condition that actually means "not yours to pick" — the gates
   // stopped admitting it — rather than on its absence from the facet.
@@ -388,10 +475,17 @@ export function ClaimsTab() {
   // "Clear filters" should leave the viewer on the tab they picked.
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length || (!featured && filter !== 'all'));
 
+  // geo-chat's pages first, then the tail's — one sentinel, two sources, in that order.
+  const hasNextPage = claimsQuery.hasNextPage || tail.hasNextPage;
+  const fetchNextPage = React.useCallback(() => {
+    if (claimsQuery.hasNextPage) claimsQuery.fetchNextPage();
+    else tail.fetchNextPage();
+  }, [claimsQuery, tail]);
+
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: claimsQuery.hasNextPage,
-    isFetchingNextPage: claimsQuery.isFetchingNextPage,
-    fetchNextPage: claimsQuery.fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage: claimsQuery.isFetchingNextPage || tail.isFetchingNextPage,
+    fetchNextPage,
   });
 
   return (
@@ -485,9 +579,7 @@ export function ClaimsTab() {
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-        {claimsQuery.hasNextPage ? (
-          <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
-        ) : null}
+        {hasNextPage ? <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" /> : null}
       </div>
     </div>
   );

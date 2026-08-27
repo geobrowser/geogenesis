@@ -139,7 +139,8 @@ export type GraphClaimsQuery = {
    * whole corpus instead. Callers with an empty eligible set should not ask at all.
    */
   spaceIds: string[] | null;
-  topicId?: string | null;
+  /** Any of them, matching how the menus narrow — a claim needs one of the picked topics, not all. */
+  topicIds?: string[];
   /**
    * Claims already on screen from geo-chat, so the tail never repeats one.
    *
@@ -167,9 +168,9 @@ export type GraphClaimsPage = {
 export function buildGraphClaimsFilter(query: GraphClaimsQuery): EntityFilter | null {
   const clauses: EntityFilter[] = [];
 
-  if (query.topicId) {
+  if (query.topicIds?.length) {
     clauses.push({
-      relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: query.topicId } } },
+      relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { in: query.topicIds } } },
     });
   }
 
@@ -250,4 +251,4 @@ export function fetchGraphClaims(
  * caller is showing.
  */
 export const graphClaimsQueryKey = (query: GraphClaimsQuery) =>
-  ['graph-claims', query.spaceIds?.join(',') ?? null, query.topicId ?? null] as const;
+  ['graph-claims', query.spaceIds?.join(',') ?? null, (query.topicIds ?? []).join(',')] as const;

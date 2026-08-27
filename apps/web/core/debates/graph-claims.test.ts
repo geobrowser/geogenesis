@@ -39,12 +39,12 @@ describe('buildGraphClaimsFilter', () => {
   // predicate per row, so nothing is sent when there is nothing to narrow by.
   it('sends no filter when nothing is being narrowed', () => {
     expect(buildGraphClaimsFilter({ spaceIds: [SPACE] })).toBeNull();
-    expect(buildGraphClaimsFilter({ spaceIds: [SPACE], topicId: null, excludeIds: [] })).toBeNull();
+    expect(buildGraphClaimsFilter({ spaceIds: [SPACE], topicIds: [], excludeIds: [] })).toBeNull();
   });
 
-  it('narrows to a topic through the claim’s Topics relation', () => {
-    expect(buildGraphClaimsFilter({ spaceIds: null, topicId: 'topic-1' })).toEqual({
-      relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } } },
+  it('narrows to any of the picked topics through the claim’s Topics relation', () => {
+    expect(buildGraphClaimsFilter({ spaceIds: null, topicIds: ['topic-1'] })).toEqual({
+      relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { in: ['topic-1'] } } },
     });
   });
 
@@ -57,9 +57,9 @@ describe('buildGraphClaimsFilter', () => {
   });
 
   it('intersects a topic with the exclusions rather than dropping one', () => {
-    expect(buildGraphClaimsFilter({ spaceIds: null, topicId: 'topic-1', excludeIds: ['claim-1'] })).toEqual({
+    expect(buildGraphClaimsFilter({ spaceIds: null, topicIds: ['topic-1'], excludeIds: ['claim-1'] })).toEqual({
       and: [
-        { relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } } } },
+        { relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { in: ['topic-1'] } } } },
         { id: { notIn: ['claim-1'] } },
       ],
     });
@@ -90,7 +90,7 @@ describe('fetchGraphClaims', () => {
   it('asks for claims in the given spaces, with the fields the pickers read', async () => {
     respondWith([]);
 
-    await fetchGraphClaims({ spaceIds: [SPACE], topicId: 'topic-1' }, null);
+    await fetchGraphClaims({ spaceIds: [SPACE], topicIds: ['topic-1'] }, null);
 
     expect(graphqlMock.mock.calls.at(-1)?.[0]?.variables).toMatchObject({
       claimTypeId: CLAIM_TYPE_ID,
@@ -98,7 +98,7 @@ describe('fetchGraphClaims', () => {
       after: null,
       propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
       topicsPropertyId: TOPICS_PROPERTY_ID,
-      filter: { relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: 'topic-1' } } } },
+      filter: { relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { in: ['topic-1'] } } } },
     });
   });
 
