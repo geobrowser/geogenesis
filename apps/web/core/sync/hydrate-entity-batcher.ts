@@ -186,10 +186,17 @@ async function flush(cache: QueryClient, store: GeoStore, stream: GeoEventStream
     for (const entityId of truncatedIds) {
       void E.syncOne({ id: entityId, store, cache })
         .then(result => {
-          if (!result?.merged) {
-            // Nothing better came back; the batch result is still the best answer available.
-            resolveId(entityId, mergedById.get(entityId) ?? null);
-            return;
+          /**
+           * Both, not just `merged`. When the singular read returns nothing, `E.merge` falls back
+           * to `store.getEntity(id)` — which is the truncated entity the batch just wrote. Checking
+           * `merged` alone therefore passes, and the waiter resolves successfully with the very
+           * data the top-up exists to replace: React Query sees a success, does not retry, and the
+           * relation set stays incomplete with nothing to signal it.
+           *
+           * Throwing hands this to the per-id rejection below, so the row can retry.
+           */
+          if (!result?.merged || !result.remote) {
+            throw new Error(`Top-up for ${entityId} returned no remote entity`);
           }
 
           /**

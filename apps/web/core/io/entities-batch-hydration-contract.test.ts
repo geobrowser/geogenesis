@@ -30,10 +30,13 @@ function entityFieldNames(document: unknown): Set<string> {
   const walk = (node: FieldNode, depth: number) => {
     for (const selection of node.selectionSet?.selections ?? []) {
       if (selection.kind === 'Field' && selection.name) {
-        // Depth 2 is the entity's own fields: query -> entities/entity -> here.
+        // Exactly depth 1 — the entity's own fields: query -> entities/entity -> here. `>= 1` also
+        // swept in nested selections, so `types { id }` could stand in for a missing top-level
+        // `id` and the drift check below would pass while the field was gone.
+        //
         // Alias first: the routing projections are selected as `allValuesList: valuesList(...)`,
         // so the underlying field name is not what a consumer sees.
-        if (depth >= 1) names.add(selection.alias?.value ?? selection.name.value);
+        if (depth === 1) names.add(selection.alias?.value ?? selection.name.value);
         walk(selection, depth + 1);
       }
     }

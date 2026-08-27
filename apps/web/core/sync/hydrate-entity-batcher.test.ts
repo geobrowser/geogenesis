@@ -159,10 +159,8 @@ describe('hydrateEntityBatched', () => {
     // relations past the cap silently — nothing errors, the entity is just missing some.
     const capped = { ...entity('big'), relationsTotalCount: 2500 };
     mocks.syncMany.mockResolvedValue({ merged: [entity('big'), entity('small')], remote: [capped, entity('small')] });
-    mocks.syncOne.mockResolvedValue({
-      merged: { ...entity('big'), relations: Array.from({ length: 2500 }, (_, i) => ({ id: `r${i}` })) },
-      remote: null,
-    });
+    const drainedBig = { ...entity('big'), relations: Array.from({ length: 2500 }, (_, i) => ({ id: `r${i}` })) };
+    mocks.syncOne.mockResolvedValue({ merged: drainedBig, remote: drainedBig });
 
     const [big, small] = await Promise.all([
       hydrateEntityBatched({ id: 'big', store, cache, stream }),
@@ -249,7 +247,7 @@ describe('hydrateEntityBatched', () => {
 
     let releaseTopUp: (v: unknown) => void = () => {};
     mocks.syncOne.mockImplementation(
-      () => new Promise(resolve => { releaseTopUp = () => resolve({ merged: entity('big'), remote: null }); })
+      () => new Promise(resolve => { releaseTopUp = () => resolve({ merged: entity('big'), remote: entity('big') }); })
     );
 
     let smallSettled = false;
@@ -279,7 +277,7 @@ describe('hydrateEntityBatched', () => {
       relationsTotalCount: 4000,
     };
     mocks.syncMany.mockResolvedValue({ merged: [entity('big')], remote: [cappedButFiltered] });
-    mocks.syncOne.mockResolvedValue({ merged: entity('big'), remote: null });
+    mocks.syncOne.mockResolvedValue({ merged: entity('big'), remote: entity('big') });
 
     await hydrateEntityBatched({ id: 'big', store, cache, stream });
 
@@ -348,6 +346,22 @@ describe('hydrateEntityBatched', () => {
       ),
       new Promise<string>(resolve => setTimeout(() => resolve('hung'), 250)),
     ]);
+
+    expect(outcome).toBe('rejected');
+  });
+  it('rejects a top-up that produced no remote entity', async () => {
+    // `E.syncOne` falls back to `store.getEntity(id)` when the singular read returns nothing — which
+    // is the truncated entity the batch just wrote. Checking `merged` alone passes, and the waiter
+    // resolves successfully with exactly the data the top-up exists to replace: React Query sees a
+    // success, never retries, and the relation set stays incomplete.
+    const capped = { ...entity('big'), relationsTotalCount: 4000 };
+    mocks.syncMany.mockResolvedValue({ merged: [entity('big')], remote: [capped] });
+    mocks.syncOne.mockResolvedValue({ merged: entity('big'), remote: null });
+
+    const outcome = await hydrateEntityBatched({ id: 'big', store, cache, stream }).then(
+      () => 'resolved',
+      () => 'rejected'
+    );
 
     expect(outcome).toBe('rejected');
   });
