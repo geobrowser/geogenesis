@@ -16,7 +16,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import type { KeyboardCoordinateGetter } from '@dnd-kit/core';
+import type { KeyboardCodes, KeyboardCoordinateGetter } from '@dnd-kit/core';
 import type { Editor } from '@tiptap/react';
 
 import * as React from 'react';
@@ -47,6 +47,13 @@ type DropZoneLayout = {
 };
 
 const GUTTER_HOVER_WIDTH = 60;
+export const blockKeyboardCodes: KeyboardCodes = {
+  // Keep Enter available for the Radix menu trigger. Space remains the
+  // conventional dnd-kit keyboard gesture for pick up and drop.
+  start: [KeyboardCode.Space],
+  cancel: [KeyboardCode.Esc],
+  end: [KeyboardCode.Space, KeyboardCode.Tab],
+};
 const BLOCK_LINK_HIGHLIGHT_CLASSES = [
   'rounded',
   'ring-2',
@@ -83,6 +90,7 @@ export function BlockReorder({
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: blockKeyboardCoordinates,
+      keyboardCodes: blockKeyboardCodes,
     })
   );
   const [blockLayout, setBlockLayout] = React.useState<BlockLayout[]>([]);

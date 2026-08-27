@@ -1,4 +1,5 @@
 import Document from '@tiptap/extension-document';
+import { BulletList, ListItem } from '@tiptap/extension-list';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import { Editor } from '@tiptap/react';
@@ -10,12 +11,14 @@ import type { Relation, Value } from '~/core/types';
 import type { BlockClipboardPayload } from './block-clipboard';
 import {
   blockClipboardHtml,
+  blockPlainText,
   buildBlockLink,
   cloneBlockEntityData,
   cloneBlockNode,
   collectBlockEntityData,
   insertClonedBlock,
   parseBlockClipboardHtml,
+  parseBlockClipboardPayload,
 } from './block-clipboard';
 import { createIdExtension } from './id-extension';
 
@@ -83,6 +86,41 @@ describe('Geo block clipboard', () => {
 
     expect(html).toContain('Hello 🌍 &lt;Geo&gt;');
     expect(parseBlockClipboardHtml(html)).toEqual(copied);
+  });
+
+  it('rejects clipboard relations without the fields cloning dereferences', () => {
+    const copied = payload();
+    const malformed = { ...copied, relations: [{}] };
+
+    expect(parseBlockClipboardPayload(JSON.stringify(malformed))).toBeNull();
+  });
+
+  it('rejects malformed nested editor nodes before insertion', () => {
+    const copied = payload();
+    const malformed = { ...copied, node: { ...copied.node, content: [{}] } };
+
+    expect(parseBlockClipboardPayload(JSON.stringify(malformed))).toBeNull();
+  });
+
+  it('separates descendant list items in the plain-text fallback', () => {
+    const editor = new Editor({
+      extensions: [Document, Paragraph, Text, BulletList, ListItem],
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'bulletList',
+            content: [
+              { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'one' }] }] },
+              { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'two' }] }] },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(blockPlainText(editor.state.doc.child(0))).toBe('one\ntwo');
+    editor.destroy();
   });
 
   it('clones the editor node with destination IDs and space', () => {

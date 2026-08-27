@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BlockDragHandle,
   BlockGutterHoverArea,
+  blockKeyboardCodes,
   findTopLevelBlockElement,
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
@@ -24,6 +25,13 @@ import {
   moveTopLevelBlock,
   releasePointerDragFocus,
 } from './block-reorder';
+
+describe('blockKeyboardCodes', () => {
+  it('leaves Enter available to open the drag-handle actions menu', () => {
+    expect(blockKeyboardCodes.start).toEqual(['Space']);
+    expect(blockKeyboardCodes.end).toEqual(['Space', 'Tab']);
+  });
+});
 
 const editors: Editor[] = [];
 

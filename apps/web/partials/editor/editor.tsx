@@ -23,6 +23,7 @@ import { Spacer } from '~/design-system/spacer';
 
 import type { BlockClipboardPayload } from './block-clipboard';
 import {
+  blockPlainText,
   buildBlockLink,
   cloneBlockEntityData,
   collectBlockEntityData,
@@ -377,7 +378,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
       return {
         version: 1,
         node: node.toJSON(),
-        plainText: blockPlainText(node.type.name, node.textContent),
+        plainText: blockPlainText(node),
         sourceBlockId,
         sourceRelationEntityId,
         values: copiedData.values,
@@ -394,7 +395,9 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
 
       const json = currentEditor.getJSON();
       trackEditorDocument(json);
-      upsertEditorStateRef.current(json);
+      upsertEditorStateRef.current(json, {
+        skipDefaultInitializationForBlockIds: new Set([blockId]),
+      });
 
       const destinationBlockRelation = getRelations({
         selector: relation =>
@@ -430,6 +433,9 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
 
         if (existingRelation) {
           storage.relations.update(existingRelation, draft => {
+            // Dependent values and relations in the cloned payload already point
+            // at this cloned relation entity, so retain that identity on a collision.
+            draft.entityId = relation.entityId;
             draft.position = relation.position;
             draft.verified = relation.verified;
             if (relation.toSpaceId === undefined) {
@@ -468,6 +474,13 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
       const blockId = currentEditor.state.doc.child(childIndex)?.attrs.id;
       if (typeof blockId !== 'string') return;
 
+      // ID assignment is normally persisted on blur, but the editor may not have
+      // been focused before the handle was used. Persist before sharing the URL so
+      // another visitor can resolve the target immediately.
+      const json = currentEditor.getJSON();
+      trackEditorDocument(json);
+      upsertEditorStateRef.current(json);
+
       try {
         await navigator.clipboard.writeText(buildBlockLink(window.location.href, blockId));
         setToast(<div className="text-button">Link copied</div>);
@@ -475,7 +488,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
         setToast(<div className="text-button">Unable to copy link</div>);
       }
     },
-    [setToast]
+    [setToast, trackEditorDocument]
   );
 
   const copyBlock = React.useCallback(
@@ -565,24 +578,6 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
       </div>
     </LayoutGroup>
   );
-}
-
-function blockPlainText(nodeType: string, textContent: string) {
-  const text = textContent.trim();
-  if (text) return text;
-
-  switch (nodeType) {
-    case 'tableNode':
-      return 'Geo data block';
-    case 'rankingNode':
-      return 'Geo ranking block';
-    case 'image':
-      return 'Geo image block';
-    case 'video':
-      return 'Geo video block';
-    default:
-      return 'Geo block';
-  }
 }
 
 function positionBeforeTopLevelChild(editor: TiptapEditor, childIndex: number) {

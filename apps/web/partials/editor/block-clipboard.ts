@@ -1,3 +1,4 @@
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor, JSONContent } from '@tiptap/react';
 
 import { ID } from '~/core/id';
@@ -8,6 +9,22 @@ export const GEO_BLOCK_CLIPBOARD_MIME = 'application/x-geogenesis-block+json';
 const GEO_BLOCK_CLIPBOARD_ATTRIBUTE = 'data-geogenesis-block';
 const GEO_BLOCK_CLIPBOARD_STORAGE_KEY = 'geogenesis.copied-block.v1';
 const GEO_BLOCK_CLIPBOARD_MAX_AGE_MS = 30 * 60 * 1000;
+const DATA_TYPES = new Set([
+  'TEXT',
+  'INTEGER',
+  'FLOAT',
+  'DECIMAL',
+  'BOOLEAN',
+  'DATE',
+  'DATETIME',
+  'TIME',
+  'POINT',
+  'RELATION',
+  'BYTES',
+  'SCHEDULE',
+  'EMBEDDING',
+]);
+const RENDERABLE_ENTITY_TYPES = new Set(['IMAGE', 'VIDEO', 'RELATION', 'DATA', 'TEXT', 'POINT']);
 
 export type BlockClipboardPayload = {
   version: 1;
@@ -252,6 +269,24 @@ export function cloneBlockEntityData({
   return { values, relations };
 }
 
+export function blockPlainText(node: ProseMirrorNode) {
+  const text = node.textBetween(0, node.content.size, '\n').trim();
+  if (text) return text;
+
+  switch (node.type.name) {
+    case 'tableNode':
+      return 'Geo data block';
+    case 'rankingNode':
+      return 'Geo ranking block';
+    case 'image':
+      return 'Geo image block';
+    case 'video':
+      return 'Geo video block';
+    default:
+      return 'Geo block';
+  }
+}
+
 export function buildBlockLink(currentHref: string, blockId: string): string {
   const url = new URL(currentHref);
   url.searchParams.set('source', 'copy_link');
@@ -302,10 +337,89 @@ function isBlockClipboardPayload(value: unknown): value is BlockClipboardPayload
     typeof payload.sourceBlockId === 'string' &&
     (payload.sourceRelationEntityId === null || typeof payload.sourceRelationEntityId === 'string') &&
     typeof payload.plainText === 'string' &&
-    Boolean(payload.node && typeof payload.node === 'object' && typeof payload.node.type === 'string') &&
+    isJsonContent(payload.node) &&
     Array.isArray(payload.values) &&
-    Array.isArray(payload.relations)
+    payload.values.every(isClipboardValue) &&
+    Array.isArray(payload.relations) &&
+    payload.relations.every(isClipboardRelation)
   );
+}
+
+function isJsonContent(value: unknown): value is JSONContent {
+  if (!isRecord(value) || typeof value.type !== 'string') return false;
+  if (value.text !== undefined && typeof value.text !== 'string') return false;
+  if (value.attrs !== undefined && !isRecord(value.attrs)) return false;
+  if (value.content !== undefined && (!Array.isArray(value.content) || !value.content.every(isJsonContent))) {
+    return false;
+  }
+  if (
+    value.marks !== undefined &&
+    (!Array.isArray(value.marks) ||
+      !value.marks.every(mark => isRecord(mark) && typeof mark.type === 'string' && isOptionalRecord(mark.attrs)))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function isClipboardValue(value: unknown): value is Value {
+  if (!isRecord(value) || !isEntityRef(value.entity) || !isRecord(value.property)) return false;
+
+  const options = value.options;
+  return (
+    typeof value.id === 'string' &&
+    typeof value.spaceId === 'string' &&
+    typeof value.value === 'string' &&
+    typeof value.property.id === 'string' &&
+    isNullableString(value.property.name) &&
+    typeof value.property.dataType === 'string' &&
+    DATA_TYPES.has(value.property.dataType) &&
+    (options === undefined ||
+      options === null ||
+      (isRecord(options) && isOptionalString(options.unit) && isOptionalString(options.language)))
+  );
+}
+
+function isClipboardRelation(value: unknown): value is Relation {
+  if (!isRecord(value) || !isEntityRef(value.fromEntity) || !isRecord(value.toEntity) || !isRecord(value.type)) {
+    return false;
+  }
+
+  return (
+    typeof value.id === 'string' &&
+    typeof value.entityId === 'string' &&
+    typeof value.spaceId === 'string' &&
+    typeof value.type.id === 'string' &&
+    isNullableString(value.type.name) &&
+    typeof value.toEntity.id === 'string' &&
+    isNullableString(value.toEntity.name) &&
+    typeof value.toEntity.value === 'string' &&
+    typeof value.renderableType === 'string' &&
+    RENDERABLE_ENTITY_TYPES.has(value.renderableType) &&
+    isOptionalString(value.position) &&
+    (value.verified === undefined || typeof value.verified === 'boolean') &&
+    isOptionalString(value.toSpaceId)
+  );
+}
+
+function isEntityRef(value: unknown): value is { id: string; name: string | null } {
+  return isRecord(value) && typeof value.id === 'string' && isNullableString(value.name);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isOptionalRecord(value: unknown) {
+  return value === undefined || isRecord(value);
+}
+
+function isNullableString(value: unknown) {
+  return value === null || typeof value === 'string';
+}
+
+function isOptionalString(value: unknown) {
+  return value === undefined || typeof value === 'string';
 }
 
 function escapeHtml(value: string) {
