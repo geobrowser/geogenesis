@@ -49,6 +49,14 @@ vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
   useDebateShareAction: () => ({ state: 'ready', method: 'share', tooltipMessage: undefined, onActivate: vi.fn() }),
 }));
 
+vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
+  useDebateTranscriptClaims: () => ({
+    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: 3 },
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 vi.mock('~/core/debates/browse/debate-claims-panel', () => ({
   DebateClaimsPanel: ({ onClose }: { onClose: () => void }) => (
     <aside data-testid="claims-panel">

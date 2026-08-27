@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   /** Debate entity ids in "Best" order. Empty = the ranking covers nothing, so recency stands. */
   bestOrderIds: [] as string[],
   bestOrderLoading: false,
+  /** Claims extracted from the transcript, as the count badge sees them. */
+  claimsCount: 0,
 }));
 
 type ObserverRecord = {
@@ -109,6 +111,14 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 7, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
+vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
+  useDebateTranscriptClaims: () => ({
+    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: mocks.claimsCount },
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.resetAllMocks();
@@ -118,6 +128,7 @@ beforeEach(() => {
   mocks.processedIds = null;
   mocks.bestOrderIds = [];
   mocks.bestOrderLoading = false;
+  mocks.claimsCount = 0;
   mocks.mediaLoading = false;
   mocks.mediaError = false;
   mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');

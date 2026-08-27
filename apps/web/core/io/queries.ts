@@ -3,7 +3,15 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
-import { VOTE_DEBATES_PROPERTY_ID, VOTE_TYPE_ID } from '~/core/debates/ontology';
+import {
+  AUTHORS_PROPERTY_ID,
+  BLOCKS_PROPERTY_ID,
+  DEBATE_CLAIMS_PROPERTY_ID,
+  DEBATE_TRANSCRIPTS_PROPERTY_ID,
+  VOTE_DEBATES_PROPERTY_ID,
+  VOTE_TYPE_ID,
+} from '~/core/debates/ontology';
+import { groupTranscriptClaims } from '~/core/debates/transcript-claims';
 import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
@@ -34,6 +42,7 @@ import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import { debateTranscriptClaimsDocument } from './debate-transcript-claims-document';
 import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
@@ -646,6 +655,27 @@ export function getDebateVoteEntities(debateEntityId: string, signal?: AbortCont
 
     if (ids.length === 0) return [] as Entity[];
     return yield* getBatchEntitiesForComments(ids, signal);
+  });
+}
+
+/**
+ * Every claim extracted from a debate's transcript, grouped by the speaker it's attributed to.
+ *
+ * Walks Debate → Transcripts → Blocks → (Authors, Claims) in one request. Attribution comes from
+ * the text block rather than the claim; see `debate-transcript-claims-document.ts` for why.
+ */
+export function getDebateTranscriptClaims(debateEntityId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: debateTranscriptClaimsDocument,
+    decoder: groupTranscriptClaims,
+    variables: {
+      id: debateEntityId,
+      transcriptsPropertyId: DEBATE_TRANSCRIPTS_PROPERTY_ID,
+      blocksPropertyId: BLOCKS_PROPERTY_ID,
+      authorsPropertyId: AUTHORS_PROPERTY_ID,
+      claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
+    },
+    signal,
   });
 }
 
