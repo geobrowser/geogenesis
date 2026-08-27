@@ -25,6 +25,7 @@ import {
   makeDropZones,
   moveTopLevelBlock,
   releasePointerDragFocus,
+  shouldUseNativeContextMenu,
 } from './block-reorder';
 
 describe('blockKeyboardCodes', () => {
@@ -313,6 +314,27 @@ describe('getTopLevelBlockChildIndexFromTarget', () => {
     editorElement.remove();
 
     expect(childIndex).toBe(3);
+  });
+});
+
+describe('shouldUseNativeContextMenu', () => {
+  it('preserves native menus for links and media inside a block', () => {
+    const link = document.createElement('a');
+    link.href = '/target';
+    const linkChild = document.createElement('span');
+    link.appendChild(linkChild);
+
+    expect(shouldUseNativeContextMenu(linkChild, null)).toBe(true);
+    expect(shouldUseNativeContextMenu(document.createElement('img'), null)).toBe(true);
+    expect(shouldUseNativeContextMenu(document.createElement('video'), null)).toBe(true);
+  });
+
+  it('preserves the native menu for a live text selection', () => {
+    expect(shouldUseNativeContextMenu(document.createElement('p'), { isCollapsed: false } as Selection)).toBe(true);
+  });
+
+  it('uses the block menu for an unselected plain block target', () => {
+    expect(shouldUseNativeContextMenu(document.createElement('p'), { isCollapsed: true } as Selection)).toBe(false);
   });
 });
 

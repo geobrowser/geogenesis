@@ -1,3 +1,4 @@
+import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { Editor, JSONContent } from '@tiptap/react';
 
@@ -76,6 +77,9 @@ export function readBlockClipboard(data: ClipboardReader): BlockClipboardPayload
 }
 
 export function parseBlockClipboardHtml(html: string): BlockClipboardPayload | null {
+  // Clipboard HTML represents one copied block. If hostile or malformed HTML
+  // contains multiple markers, first-wins is deterministic and the selected
+  // payload still has to pass the complete runtime validator below.
   const match = html.match(new RegExp(`${GEO_BLOCK_CLIPBOARD_ATTRIBUTE}="([^"]+)"`));
   if (!match?.[1]) return null;
 
@@ -293,8 +297,8 @@ function isBlockClipboardPayload(value: unknown): value is BlockClipboardPayload
   const payload = value as Partial<BlockClipboardPayload>;
   return (
     payload.version === 1 &&
-    typeof payload.sourceBlockId === 'string' &&
-    (payload.sourceRelationEntityId === null || typeof payload.sourceRelationEntityId === 'string') &&
+    isGraphId(payload.sourceBlockId) &&
+    (payload.sourceRelationEntityId === null || isGraphId(payload.sourceRelationEntityId)) &&
     typeof payload.plainText === 'string' &&
     isJsonContent(payload.node) &&
     Array.isArray(payload.values) &&
@@ -325,11 +329,13 @@ function isClipboardValue(value: unknown): value is Value {
   if (!isRecord(value) || !isEntityRef(value.entity) || !isRecord(value.property)) return false;
 
   const options = value.options;
+  // Value.id is a local composite cache key (`space:entity:property`), not a
+  // UUID sent to the graph. storage.values.set recomputes it after cloning.
   return (
     typeof value.id === 'string' &&
-    typeof value.spaceId === 'string' &&
+    isGraphId(value.spaceId) &&
     typeof value.value === 'string' &&
-    typeof value.property.id === 'string' &&
+    isGraphId(value.property.id) &&
     isNullableString(value.property.name) &&
     typeof value.property.dataType === 'string' &&
     DATA_TYPES.has(value.property.dataType) &&
@@ -345,24 +351,32 @@ function isClipboardRelation(value: unknown): value is Relation {
   }
 
   return (
-    typeof value.id === 'string' &&
-    typeof value.entityId === 'string' &&
-    typeof value.spaceId === 'string' &&
-    typeof value.type.id === 'string' &&
+    isGraphId(value.id) &&
+    isGraphId(value.entityId) &&
+    isGraphId(value.spaceId) &&
+    isGraphId(value.type.id) &&
     isNullableString(value.type.name) &&
-    typeof value.toEntity.id === 'string' &&
+    isGraphId(value.toEntity.id) &&
     isNullableString(value.toEntity.name) &&
-    typeof value.toEntity.value === 'string' &&
+    isGraphId(value.toEntity.value) &&
     typeof value.renderableType === 'string' &&
     RENDERABLE_ENTITY_TYPES.has(value.renderableType) &&
     isOptionalString(value.position) &&
     (value.verified === undefined || typeof value.verified === 'boolean') &&
-    isOptionalString(value.toSpaceId)
+    isOptionalGraphId(value.toSpaceId)
   );
 }
 
 function isEntityRef(value: unknown): value is { id: string; name: string | null } {
-  return isRecord(value) && typeof value.id === 'string' && isNullableString(value.name);
+  return isRecord(value) && isGraphId(value.id) && isNullableString(value.name);
+}
+
+function isGraphId(value: unknown): value is string {
+  return typeof value === 'string' && IdUtils.isValid(value);
+}
+
+function isOptionalGraphId(value: unknown) {
+  return value === undefined || isGraphId(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

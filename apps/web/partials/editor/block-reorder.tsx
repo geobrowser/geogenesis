@@ -200,6 +200,7 @@ export function BlockReorder({
 
     const handleContextMenu = (event: MouseEvent) => {
       if (activeChildIndex !== null) return;
+      if (shouldUseNativeContextMenu(event.target, window.getSelection())) return;
 
       const childIndex = getTopLevelBlockChildIndexFromTarget(blockLayoutRef.current, event.target);
       if (childIndex === null) return;
@@ -776,6 +777,15 @@ export function getTopLevelBlockChildIndexFromTarget(blocks: BlockLayout[], targ
 
   const blockElement = target.closest<HTMLElement>('.ProseMirror > *');
   return blocks.find(block => block.element === blockElement)?.childIndex ?? null;
+}
+
+export function shouldUseNativeContextMenu(target: EventTarget | null, selection: Selection | null) {
+  if (!(target instanceof Element)) return true;
+
+  return (
+    target.closest('a[href], img, video, [contenteditable="false"] a') !== null ||
+    Boolean(selection && !selection.isCollapsed)
+  );
 }
 
 export function findTopLevelBlockElement(editor: Editor, blockId: string): HTMLElement | null {

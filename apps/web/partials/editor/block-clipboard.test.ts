@@ -23,16 +23,30 @@ import {
 } from './block-clipboard';
 import { createIdExtension } from './id-extension';
 
-const sourceBlockId = 'source-block';
-const sourceRelationEntityId = 'source-relation-entity';
+const testId = (number: number) => number.toString(16).padStart(32, '0');
+const sourceBlockId = testId(1);
+const sourceRelationEntityId = testId(2);
+const sourceSpaceId = testId(3);
+const markdownPropertyId = testId(4);
+const viewPropertyId = testId(5);
+const unrelatedEntityId = testId(6);
+const ignoredPropertyId = testId(7);
+const sharedTypeId = testId(8);
+const relationTypeId = testId(9);
+const ignoredTargetId = testId(10);
+const sharedPropertyId = testId(11);
+const sharedRelationTypeId = testId(12);
+const selectorPropertyId = testId(13);
+const namePropertyId = testId(14);
+let relationIdSequence = 100;
 
 function makeValue(entityId: string, propertyId: string, value: string): Value {
   return {
-    id: `${entityId}:${propertyId}:source-space`,
+    id: `${sourceSpaceId}:${entityId}:${propertyId}`,
     entity: { id: entityId, name: 'Old entity' },
     property: { id: propertyId, name: 'Property', dataType: 'TEXT' },
     value,
-    spaceId: 'source-space',
+    spaceId: sourceSpaceId,
     timestamp: 'old',
     isLocal: false,
     hasBeenPublished: true,
@@ -41,15 +55,15 @@ function makeValue(entityId: string, propertyId: string, value: string): Value {
 
 function makeRelation(fromEntityId: string, toEntityId: string): Relation {
   return {
-    id: `relation-${fromEntityId}-${toEntityId}`,
-    entityId: `relation-entity-${fromEntityId}-${toEntityId}`,
-    type: { id: 'property-id', name: 'Property' },
+    id: testId(relationIdSequence++),
+    entityId: testId(relationIdSequence++),
+    type: { id: relationTypeId, name: 'Property' },
     fromEntity: { id: fromEntityId, name: 'Old from' },
     toEntity: { id: toEntityId, name: 'Old to', value: toEntityId },
     renderableType: 'RELATION',
     position: 'a0',
     verified: true,
-    spaceId: 'source-space',
+    spaceId: sourceSpaceId,
     timestamp: 'old',
     isLocal: false,
     hasBeenPublished: true,
@@ -61,21 +75,21 @@ function payload(): BlockClipboardPayload {
     version: 1,
     node: {
       type: 'paragraph',
-      attrs: { id: sourceBlockId, relationId: 'old-relation', spaceId: 'source-space' },
+      attrs: { id: sourceBlockId, relationId: testId(15), spaceId: sourceSpaceId },
       content: [{ type: 'text', text: 'Hello 🌍' }],
     },
     plainText: 'Hello 🌍 <Geo>',
     sourceBlockId,
     sourceRelationEntityId,
     values: [
-      makeValue(sourceBlockId, 'markdown-property', 'Hello 🌍'),
-      makeValue(sourceRelationEntityId, 'view-property', 'TABLE'),
-      makeValue('unrelated', 'ignored-property', 'ignore me'),
+      makeValue(sourceBlockId, markdownPropertyId, 'Hello 🌍'),
+      makeValue(sourceRelationEntityId, viewPropertyId, 'TABLE'),
+      makeValue(unrelatedEntityId, ignoredPropertyId, 'ignore me'),
     ],
     relations: [
-      makeRelation(sourceBlockId, 'shared-type'),
+      makeRelation(sourceBlockId, sharedTypeId),
       makeRelation(sourceRelationEntityId, sourceBlockId),
-      makeRelation('unrelated', 'ignored-target'),
+      makeRelation(unrelatedEntityId, ignoredTargetId),
     ],
   };
 }
@@ -99,6 +113,16 @@ describe('Geo block clipboard', () => {
   it('rejects malformed nested editor nodes before insertion', () => {
     const copied = payload();
     const malformed = { ...copied, node: { ...copied.node, content: [{}] } };
+
+    expect(parseBlockClipboardPayload(JSON.stringify(malformed))).toBeNull();
+  });
+
+  it('rejects invalid shared ontology IDs before they reach graph writes', () => {
+    const copied = payload();
+    const malformed = {
+      ...copied,
+      values: [{ ...copied.values[0], property: { ...copied.values[0].property, id: 'not-a-uuid' } }],
+    };
 
     expect(parseBlockClipboardPayload(JSON.stringify(malformed))).toBeNull();
   });
@@ -228,7 +252,7 @@ describe('Geo block clipboard', () => {
       id: 'new-id-3',
       entityId: 'new-id-1',
       fromEntity: { id: 'new-block', name: null },
-      toEntity: { id: 'shared-type', name: 'Old to', value: 'shared-type' },
+      toEntity: { id: sharedTypeId, name: 'Old to', value: sharedTypeId },
       spaceId: 'destination-space',
     });
     expect(cloned.relations[1]).toMatchObject({
@@ -241,16 +265,16 @@ describe('Geo block clipboard', () => {
   });
 
   it('collects values on owned relation entities without copying shared targets', () => {
-    const shownColumn = makeRelation(sourceRelationEntityId, 'shared-property');
-    const relationEntityType = makeRelation(shownColumn.entityId, 'shared-relation-type');
+    const shownColumn = makeRelation(sourceRelationEntityId, sharedPropertyId);
+    const relationEntityType = makeRelation(shownColumn.entityId, sharedRelationTypeId);
     const collected = collectBlockEntityData({
       rootEntityIds: [sourceRelationEntityId],
       values: [
-        makeValue(sourceRelationEntityId, 'view', 'TABLE'),
-        makeValue(shownColumn.entityId, 'selector', 'name'),
-        makeValue('shared-property', 'name', 'Shared property'),
+        makeValue(sourceRelationEntityId, viewPropertyId, 'TABLE'),
+        makeValue(shownColumn.entityId, selectorPropertyId, 'name'),
+        makeValue(sharedPropertyId, namePropertyId, 'Shared property'),
       ],
-      relations: [shownColumn, relationEntityType, makeRelation('shared-property', 'unrelated')],
+      relations: [shownColumn, relationEntityType, makeRelation(sharedPropertyId, unrelatedEntityId)],
     });
 
     expect(collected.relations).toEqual([shownColumn, relationEntityType]);
