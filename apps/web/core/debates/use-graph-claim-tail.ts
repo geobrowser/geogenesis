@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import type { MatchmakingClaim, MatchmakingTopic } from './api';
 import { type ClaimPickerEntity } from './claim-picker-page';
-import { claimIdsBySpace, graphClaimRow, graphClaimTopics } from './graph-claim-rows';
+import { type GraphClaimSource, claimIdsBySpace, graphClaimRow, graphClaimTopics } from './graph-claim-rows';
 import { type GraphClaimsQuery, fetchGraphClaims, graphClaimsQueryKey } from './graph-claims';
 import { useDebateClaimsBySpaces } from './hooks';
 
@@ -15,16 +15,25 @@ const NO_ENTITIES: ClaimPickerEntity[] = [];
 const NO_GROUPS: Array<{ spaceId: string; claimIds: string[] }> = [];
 const NO_TOPICS = new Map<string, MatchmakingTopic[]>();
 
-export type GraphClaimTail = {
-  /** Rows in the shape the hub's cards speak, ready to append after geo-chat's. */
-  claims: MatchmakingClaim[];
-  /** Topics of those claims, for the menus to union with geo-chat's facet. */
-  topicsByClaimId: Map<string, MatchmakingTopic[]>;
+type TailPaging = {
   isLoading: boolean;
   isFetchingNextPage: boolean;
   hasNextPage: boolean;
   fetchNextPage: () => void;
   error: unknown;
+};
+
+export type GraphClaimTailSources = TailPaging & {
+  /** Each claim with the space it belongs to decided, ready to be built into a row. */
+  sources: GraphClaimSource[];
+  /** Topics of those claims, for the menus to union with geo-chat's facet. */
+  topicsByClaimId: Map<string, MatchmakingTopic[]>;
+};
+
+export type GraphClaimTail = TailPaging & {
+  /** Rows in the shape the hub's cards speak, ready to append after geo-chat's. */
+  claims: MatchmakingClaim[];
+  topicsByClaimId: Map<string, MatchmakingTopic[]>;
 };
 
 /**
@@ -39,7 +48,7 @@ export type GraphClaimTail = {
  * claim's spaces the row belongs to, and returning `null` drops the claim — which is how a caller
  * refuses one whose only spaces it may not show.
  */
-export function useGraphClaimTail({
+export function useGraphClaimTailSources({
   query,
   enabled,
   homeSpaceOf,
@@ -47,7 +56,7 @@ export function useGraphClaimTail({
   query: GraphClaimsQuery;
   enabled: boolean;
   homeSpaceOf: (entity: ClaimPickerEntity) => string | null;
-}): GraphClaimTail {
+}): GraphClaimTailSources {
   const pages = useInfiniteQuery({
     queryKey: graphClaimsQueryKey(query),
     queryFn: ({ pageParam, signal }) => fetchGraphClaims(query, pageParam, signal),
@@ -76,24 +85,13 @@ export function useGraphClaimTail({
     [entities, homeSpaceOf]
   );
 
-  // Sides and readiness are geo-chat's and nobody else's, and its only lookup for claims it hasn't
-  // ranked is the per-space one — so these are asked for by id, grouped by the space they landed in.
-  const groups = React.useMemo(() => (placed.length > 0 ? claimIdsBySpace(placed) : NO_GROUPS), [placed]);
-  const rows = useDebateClaimsBySpaces(groups);
-
-  const claims = React.useMemo(() => {
-    if (!enabled || placed.length === 0) return NO_CLAIMS;
-    const rowsByClaimId = new Map(rows.claims.map(row => [row.claim_entity_id, row]));
-    return placed.map(source => graphClaimRow(source, rowsByClaimId.get(source.claimEntityId)));
-  }, [enabled, placed, rows.claims]);
-
   const topicsByClaimId = React.useMemo(
     () => (enabled && entities.length > 0 ? graphClaimTopics(entities) : NO_TOPICS),
     [enabled, entities]
   );
 
   return {
-    claims,
+    sources: placed,
     topicsByClaimId,
     // `enabled: false` leaves react-query pending forever, which a caller folding this into its own
     // loading state would read as "still looking" and never settle.
@@ -103,4 +101,32 @@ export function useGraphClaimTail({
     fetchNextPage: pages.fetchNextPage,
     error: enabled ? pages.error : null,
   };
+}
+
+/**
+ * The same tail, built into the rows the hub's cards speak.
+ *
+ * The rematch picker takes {@link useGraphClaimTailSources} instead: its rows carry session flags
+ * and both debaters' sides, so it builds them itself and asks geo-chat through the session's own
+ * lookup rather than the per-space one below.
+ */
+export function useGraphClaimTail(args: {
+  query: GraphClaimsQuery;
+  enabled: boolean;
+  homeSpaceOf: (entity: ClaimPickerEntity) => string | null;
+}): GraphClaimTail {
+  const { sources, topicsByClaimId, ...paging } = useGraphClaimTailSources(args);
+
+  // Sides and readiness are geo-chat's and nobody else's, and its only lookup for claims it hasn't
+  // ranked is the per-space one — so these are asked for by id, grouped by the space they landed in.
+  const groups = React.useMemo(() => (sources.length > 0 ? claimIdsBySpace(sources) : NO_GROUPS), [sources]);
+  const rows = useDebateClaimsBySpaces(groups);
+
+  const claims = React.useMemo(() => {
+    if (sources.length === 0) return NO_CLAIMS;
+    const rowsByClaimId = new Map(rows.claims.map(row => [row.claim_entity_id, row]));
+    return sources.map(source => graphClaimRow(source, rowsByClaimId.get(source.claimEntityId)));
+  }, [rows.claims, sources]);
+
+  return { claims, topicsByClaimId, ...paging };
 }
