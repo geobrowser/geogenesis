@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { useEntity } from '~/core/database/entities';
 import { SearchResult, SpaceEntity } from '~/core/types';
+import { isModifiedClick } from '~/core/utils/is-modified-click';
 
 import { Breadcrumb } from '~/design-system/breadcrumb';
 import { CheckboxVisual } from '~/design-system/checkbox';
@@ -57,6 +58,57 @@ export const ResultItem = ({ existsOnEntity = false, className = '', ...rest }: 
   />
 );
 
+/**
+ * A result row: a link where the row goes somewhere, a button where it picks something.
+ *
+ * Search results are links, and a link the browser cannot act on is a link with most of its
+ * behaviour missing — no cmd-click, no middle click, nothing under right click (GEO-2701). Pickers
+ * choose a value rather than navigate, so they pass no `href` and keep the button they had.
+ */
+function ResultRow({
+  href,
+  onActivate,
+  className,
+  children,
+  ...rest
+}: {
+  href?: string;
+  /** Named away from `onSelect`, which is a DOM prop and collides with the spread row props. */
+  onActivate: () => void;
+  className: string;
+  children: React.ReactNode;
+} & Record<string, unknown>) {
+  if (!href) {
+    return (
+      <button onClick={onActivate} className={className} {...rest}>
+        {children}
+      </button>
+    );
+  }
+
+  return (
+    <a
+      href={href}
+      className={className}
+      onClick={event => {
+        // The browser has been asked for a new tab or window. Let it, and stop the event here so
+        // the list around this row does not navigate the current one as well.
+        if (isModifiedClick(event)) {
+          event.stopPropagation();
+          return;
+        }
+        // An ordinary click belongs to whatever already handled selection — cmdk's `onSelect` in
+        // the search dialog. Following the href too would navigate twice.
+        event.preventDefault();
+        onActivate();
+      }}
+      {...rest}
+    >
+      {children}
+    </a>
+  );
+}
+
 type ResultContentProps = {
   onClick: () => void;
   result: SearchResult;
@@ -66,6 +118,11 @@ type ResultContentProps = {
   active?: boolean;
   /** When set, renders a multi-select checkbox (empty/checked) on the row instead of the single-select indicator. */
   multiSelectChecked?: boolean;
+  /**
+   * Where this row goes, when it goes somewhere. Set by surfaces that navigate; left unset by the
+   * pickers, which select a value instead.
+   */
+  href?: string;
 } & React.ComponentPropsWithoutRef<'button'>;
 
 export const ResultContent = ({
@@ -76,6 +133,7 @@ export const ResultContent = ({
   withDescription = true,
   onChooseSpace,
   multiSelectChecked,
+  href,
   ...rest
 }: ResultContentProps) => {
   const [space, ...otherSpaces] = result.spaces;
@@ -99,8 +157,9 @@ export const ResultContent = ({
 
   return (
     <div>
-      <button
-        onClick={onSelect}
+      <ResultRow
+        href={href}
+        onActivate={onSelect}
         className={cx(
           active && 'bg-grey-01',
           alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
@@ -148,7 +207,7 @@ export const ResultContent = ({
             </Truncate>
           </>
         )}
-      </button>
+      </ResultRow>
       {hasOtherSpaces && !!onChooseSpace && (
         <button
           onClick={e => {
@@ -185,6 +244,8 @@ type SpaceContentProps = {
   space: SpaceEntity;
   alreadySelected?: boolean;
   withDescription?: boolean;
+  /** Where this row goes. Same reasoning as `ResultContentProps['href']`. */
+  href?: string;
 };
 
 export const SpaceContent = ({
@@ -193,6 +254,7 @@ export const SpaceContent = ({
   space,
   alreadySelected,
   withDescription = true,
+  href,
 }: SpaceContentProps) => {
   const entity = useEntity({ id: entityId, spaceId: space.spaceId });
 
@@ -209,8 +271,9 @@ export const SpaceContent = ({
 
   return (
     <div>
-      <button
-        onClick={onSelect}
+      <ResultRow
+        href={href}
+        onActivate={onSelect}
         className={cx(
           alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
           'flex w-full flex-col p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden'
@@ -252,7 +315,7 @@ export const SpaceContent = ({
             </Truncate>
           </>
         )}
-      </button>
+      </ResultRow>
     </div>
   );
 };
