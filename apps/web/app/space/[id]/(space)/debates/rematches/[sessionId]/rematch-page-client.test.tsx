@@ -40,6 +40,8 @@ const {
 
 const mocks = vi.hoisted(() => ({
   session: null as DebateRematchSession | null,
+  /** The session lookup itself is in flight — everything below it is keyed on what it returns. */
+  sessionLoading: false,
   claims: [] as DebateRematchClaim[],
   replace: vi.fn(),
   back: vi.fn(),
@@ -148,7 +150,7 @@ vi.mock('~/core/debates/api', async importOriginal => {
 });
 
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateRematch: () => ({ data: mocks.session, isLoading: false, error: null }),
+  useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
   // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
   // arrive through the id lookup.
   useDebateRematchClaims: () => ({
@@ -518,6 +520,7 @@ beforeEach(() => {
     disconnect() {}
   } as unknown as typeof ResizeObserver;
   mocks.session = session();
+  mocks.sessionLoading = false;
   mocks.claims = [sharedClaim()];
   mocks.perSpaceReadinessGroups = [];
   mocks.gatewaySpaceScopes = [];
@@ -1332,8 +1335,35 @@ describe('DebateRematchPageClient', () => {
       rerender(<DebateRematchPageClient sessionId="rematch-2" />);
 
       // Asserted on the tab's own count rather than on the claims: the same rows also reach the All
-      // tab, so searching the document would find them whichever list they came from.
+      // tab, so searching the document would find them whichever list they came from. And on the
+      // skeleton specifically — "not 2" would be satisfied by a confident `0`, which is the wrong
+      // answer rather than an absent one.
+      expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
       expect(positionsTab()).not.toHaveTextContent('2');
+    });
+
+    /**
+     * The window the session change opens: participants come from the session, positions from
+     * participants, the claim lookups from positions. While the session is in flight the whole
+     * chain is disabled rather than loading, so nothing downstream says "pending" — and the badge
+     * would answer `0` for a session it has not read yet. Zero is a claim about the opponent, not a
+     * placeholder.
+     */
+    it('does not answer zero positions for a session it has not read yet', () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('2');
+
+      // Only the session is loading, and it has not returned yet — so everything keyed on what it
+      // returns is disabled, reporting `isLoading: false` while having nothing to say.
+      mocks.sessionLoading = true;
+      mocks.session = null;
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+      expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+      // The tab is named from a fallback while the session is unknown, so the skeleton — not the
+      // tab's name — is what identifies the badge here.
+      expect(screen.queryByText('0')).not.toBeInTheDocument();
     });
 
     // The hold is on rows already shown, not on the arrangement itself: a claim the opponent

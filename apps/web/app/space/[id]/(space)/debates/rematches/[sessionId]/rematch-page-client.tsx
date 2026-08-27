@@ -797,12 +797,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * *from* positions, so while positions is still in flight the id list is empty, those queries
    * are disabled rather than loading, and nothing downstream reports as pending.
    *
+   * `sessionQuery.isLoading` for the same reason, one step further up. Participants come from the
+   * session, positions are keyed on participants, and the claim lookups are keyed on positions — so
+   * while the session is in flight the whole chain below it is disabled rather than loading and
+   * reports nothing. That window is reachable: the route keeps this component when it moves between
+   * rematches, and the held list is dropped on the way (see `useLastSettled`), so without this the
+   * badge answers `0` for a session it has not read yet.
+   *
    * Once a settled list exists the number is shown even while a refetch is in flight: a new
    * response from the opponent restarts the lookups, and `useLastSettled` is still holding a list
    * that is correct for every claim already on it. Going back to a skeleton there would flicker
    * the badge on exactly the event that ought to be invisible.
    */
-  const opponentCountPending = opponentClaims.length === 0 && (positions.isLoading || opponentClaimsSettling);
+  const opponentCountPending =
+    opponentClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling);
 
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu.
