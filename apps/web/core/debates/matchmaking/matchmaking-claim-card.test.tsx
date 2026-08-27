@@ -197,12 +197,44 @@ describe('position avatar stack', () => {
     );
 
     const agree = screen.getByRole('button', { name: /^Agree/ });
-    // 4 available, 2 shown -> +2. Not 9 - 2 = +7, which counted five people who are offline.
-    expect(within(agree).getByText('+2')).toBeInTheDocument();
+    // `readiness()` has the viewer holding Agree, so the population is the viewer plus the 4
+    // available others = 5, of which 2 faces fit -> +3. Not +7 (9 holders - 2), which counted five
+    // offline people.
+    //
+    // This asserted +2 until the viewer's own face was restored to the side they hold. That number
+    // came from the server's `available_now_count` alone, which excludes the viewer — so it was one
+    // short of the faces actually being drawn from.
+    expect(within(agree).getByText('+3')).toBeInTheDocument();
     expect(within(agree).queryByText('+7')).toBeNull();
   });
 
   it('shows no overflow when every available person is already on screen', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={withCounts([
+          {
+            total_count: 6,
+            available_now_count: 2,
+            participants: [participant('one'), participant('two')],
+          },
+          { total_count: 0, available_now_count: 0, participants: [] },
+        ])}
+        // The viewer holds neither side here, so the two available faces are the whole population
+        // and nothing is hidden. With the viewer on Agree there would be three people for two
+        // slots — which is the case the test below covers.
+        readiness={readiness({ viewer_response: null })}
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(within(agree).queryByText(/^\+/)).toBeNull();
+  });
+
+  // Same data, but the viewer holds the side. Their face takes one of the two slots, so the person
+  // it displaces has to be counted — the assertion above cannot cover this because a viewer who
+  // holds no position is never drawn.
+  it('overflows by one when the viewer takes a slot on a full stack', () => {
     renderCard(
       <MatchmakingClaimCard
         claim={claim}
@@ -219,7 +251,8 @@ describe('position avatar stack', () => {
     );
 
     const agree = screen.getByRole('button', { name: /^Agree/ });
-    expect(within(agree).queryByText(/^\+/)).toBeNull();
+    expect(within(agree).getAllByTestId('avatar')).toHaveLength(2);
+    expect(within(agree).getByText('+1')).toBeInTheDocument();
   });
 });
 
@@ -284,6 +317,60 @@ describe('MatchmakingClaimCard', () => {
     const agree = screen.getByRole('button', { name: /^Agree/ });
     expect(within(agree).queryByTestId('avatar')).not.toBeInTheDocument();
     expect(within(agree).getByText('+1')).toBeInTheDocument();
+  });
+
+  // The steady state, which every test around this one skips by having the client and server
+  // disagree. Preston, holding a position on a claim while online and available: "my avatar is not
+  // showing up".
+  //
+  // Once geo-chat's preview became unconditionally available-only (geo-chat#71) the server stopped
+  // reporting the viewer at all — `available_now` is `readiness.user_id <> $viewer`, since you
+  // cannot request yourself. `withViewerPosition` was still returning early whenever the server
+  // agreed about the viewer's position, on the old assumption that agreement meant the server had
+  // it covered. Nobody drew the face.
+  it('draws the viewer on the side they hold once geo-chat agrees about it', () => {
+    // The viewer is the only holder of Agree and nobody else is available there: exactly the
+    // "debating myself" case, and the one where every count the server sends is zero.
+    const soleHolder: DebateClaimPositionSummary[] = [
+      { position: true, position_label: 'Agree', total_count: 1, available_now_count: 0, participants: [] },
+      { position: false, position_label: 'Disagree', total_count: 0, available_now_count: 0, participants: [] },
+    ];
+    // No pending response: the server already reports Agree, so client and server agree.
+    mocks.indexing = { status: 'idle', pending: null, runId: null };
+    renderCard(<MatchmakingClaimCard claim={claim} positions={soleHolder} readiness={readiness()} />);
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(within(agree).getByTestId('avatar')).toHaveTextContent('https://example.com/you.png');
+    // Their own face is the whole stack — no "+N" for people who aren't there.
+    expect(within(agree).queryByText(/^\+/)).not.toBeInTheDocument();
+
+    // And they are not drawn on the side they don't hold.
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(within(disagree).queryByTestId('avatar')).not.toBeInTheDocument();
+  });
+
+  // The same steady state with other available people behind the viewer, because the overflow is
+  // the half that silently goes wrong: `available_now_count` excludes the viewer, so the +N has to
+  // be computed against a population that includes them or it undercounts by one.
+  it('counts the viewer in the overflow they are drawn into', () => {
+    const shared: DebateClaimPositionSummary[] = [
+      {
+        position: true,
+        position_label: 'Agree',
+        total_count: 4,
+        available_now_count: 3,
+        participants: [participant('available-one'), participant('available-two')],
+      },
+      { position: false, position_label: 'Disagree', total_count: 0, available_now_count: 0, participants: [] },
+    ];
+    mocks.indexing = { status: 'idle', pending: null, runId: null };
+    renderCard(<MatchmakingClaimCard claim={claim} positions={shared} readiness={readiness()} />);
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    // Two faces are drawn (the viewer plus the first available person) out of a population of four:
+    // the viewer and the three the server counted. So +2, not +1.
+    expect(within(agree).getAllByTestId('avatar')).toHaveLength(2);
+    expect(within(agree).getByText('+2')).toBeInTheDocument();
   });
 
   // The switch of sides, which the test above doesn't reach: it starts from no server position, so

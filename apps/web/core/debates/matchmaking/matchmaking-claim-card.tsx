@@ -310,12 +310,23 @@ function RespondableControls({
 }
 
 /**
- * Move the viewer between the two sides to match the response they just gave, before geo-chat has
- * indexed it and can report them itself.
+ * Draw the viewer on the side they hold. This is the *only* source of the viewer's own face.
  *
- * geo-chat's summaries are the only source of the avatar stacks, and they trail the viewer's own
- * response by a publish, an index and a notification — so without this the side you just took
- * fills in with your colour but not your face, which reads as the response not having counted.
+ * It began as a pre-indexing patch — geo-chat's summaries trail the viewer's own response by a
+ * publish, an index and a notification, so the side you just took filled in with your colour but
+ * not your face. It is now permanent, because geo-chat never reports the viewer at all: the preview
+ * is drawn from `available_now`, and `available_now` is `readiness.user_id <> $viewer` — you cannot
+ * send a debate request to yourself.
+ *
+ * That is the right definition for "who could I request", and the wrong one for "whose faces belong
+ * on this stack". The two questions were conflated when the preview became unconditionally
+ * available-only (geo-chat#71): the viewer's face vanished from the side they hold as soon as their
+ * position was indexed, because this function used to return early once the server agreed with it.
+ * Preston, holding a position on a claim while online: "my avatar is not showing up".
+ *
+ * So there is no early return on agreement any more. `total_count` is still adjusted conditionally —
+ * the server does count the viewer there — while the participant list and `available_now_count` are
+ * unconditional, since the server counts the viewer in neither.
  */
 export function withViewerPosition({
   positions,
@@ -336,7 +347,10 @@ export function withViewerPosition({
   viewerName: string | null;
   viewerAvatarUrl: string | null;
 }): DebateClaimPositionSummary[] {
-  if (!viewerSpaceId || viewerPosition === serverPosition) return positions;
+  // Deliberately *not* `|| viewerPosition === serverPosition`. Agreement used to mean "the server
+  // has it, leave it alone"; it now means "the server counts them but will never draw them", which
+  // is exactly the case that needs the face added.
+  if (!viewerSpaceId) return positions;
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const viewer = {
