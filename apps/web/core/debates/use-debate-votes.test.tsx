@@ -10,7 +10,7 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { Entity, Relation } from '~/core/types';
 
 import { TYPES_PROPERTY_ID, VOTE_DEBATES_PROPERTY_ID, VOTE_WINNER_PROPERTY_ID } from './ontology';
-import { useDebateVotes } from './use-debate-votes';
+import { resetDebateVotePublishStateForTests, useDebateVotes } from './use-debate-votes';
 
 const VOTER_SPACE = 'voterspace0000000000000000000001';
 const ALICE_SPACE = 'alicespace0000000000000000000001';
@@ -149,6 +149,7 @@ async function renderVotes() {
 }
 
 beforeEach(() => {
+  resetDebateVotePublishStateForTests();
   mocks.voteEntities = [];
   mocks.publishedRelations = [];
   mocks.idCounter = 0;
@@ -197,7 +198,7 @@ describe('useDebateVotes castVote', () => {
     expect(winnerCreates[0]?.toEntity.id).toBe(BOB_SPACE);
   });
 
-  it('keeps a later pick when an earlier, still-in-flight publish fails', async () => {
+  it('shares in-flight state across surfaces so a second vote cannot start mid-publish', async () => {
     const view = await renderTwoSurfaces();
 
     let settleFeedVote: (outcome: 'ok' | 'fail') => void = () => {};
@@ -211,21 +212,30 @@ describe('useDebateVotes castVote', () => {
       await Promise.resolve();
     });
 
-    // The panel has its own `isVoting`, so it can vote while the feed's write is unsettled.
+    // Both mounts read the same registry, so the panel's pills disable with the feed's.
+    await waitFor(() => {
+      expect(view.result.current.feed.isVoting).toBe(true);
+      expect(view.result.current.panel.isVoting).toBe(true);
+    });
+
     await act(async () => {
       await view.result.current.panel.castVote(BOB);
     });
-    await waitFor(() => expect(view.result.current.feed.isMyPick(BOB)).toBe(true));
 
-    // Rolling back on the entity id alone would delete the row the
-    // panel wrote, so the viewer's second pick would vanish because their first failed.
+    // The panel no-ops rather than publishing a second edit off the optimistic row.
+    expect(mocks.publishedRelations).toHaveLength(1);
+    expect(view.result.current.feed.isMyPick(ALICE)).toBe(true);
+    expect(view.result.current.panel.isMyPick(BOB)).toBe(false);
+
     await act(async () => {
-      settleFeedVote('fail');
+      settleFeedVote('ok');
       await feedVote;
     });
 
-    await waitFor(() => expect(view.result.current.feed.isMyPick(BOB)).toBe(true));
-    expect(view.result.current.panel.isMyPick(ALICE)).toBe(false);
+    await waitFor(() => {
+      expect(view.result.current.feed.isVoting).toBe(false);
+      expect(view.result.current.panel.isVoting).toBe(false);
+    });
   });
 
   it('reuses the existing Vote entity rather than minting a second one', async () => {

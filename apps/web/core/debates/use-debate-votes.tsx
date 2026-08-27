@@ -34,6 +34,39 @@ import { useToast } from '../hooks/use-toast';
 
 const votesQueryKey = (debateEntityId: string) => ['debate-votes', debateEntityId] as const;
 
+/**
+ * Shared across every mounted copy of the hook: the feed and claims panel both mount
+ * `useDebateVotes` for the same debate, so a local `useState` would leave the other surface's
+ * pills enabled mid-publish.
+ */
+const debatesWithVoteInFlight = new Set<string>();
+const voteInFlightListeners = new Set<() => void>();
+
+export function resetDebateVotePublishStateForTests() {
+  debatesWithVoteInFlight.clear();
+}
+
+function setVoteInFlight(debateEntityId: string, inFlight: boolean) {
+  if (inFlight) debatesWithVoteInFlight.add(debateEntityId);
+  else debatesWithVoteInFlight.delete(debateEntityId);
+  for (const listener of voteInFlightListeners) listener();
+}
+
+function subscribeToVoteInFlight(listener: () => void) {
+  voteInFlightListeners.add(listener);
+  return () => {
+    voteInFlightListeners.delete(listener);
+  };
+}
+
+function useVoteInFlight(debateEntityId: string): boolean {
+  return React.useSyncExternalStore(
+    subscribeToVoteInFlight,
+    () => debatesWithVoteInFlight.has(debateEntityId),
+    () => false
+  );
+}
+
 function retrySchedule(maxDuration: Duration.DurationInput) {
   return Schedule.exponential('100 millis').pipe(
     Schedule.jittered,
@@ -118,11 +151,11 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
   const reportError = useReportError();
-  const [isVoting, setIsVoting] = React.useState(false);
   const pollGenerationRef = React.useRef(0);
 
   // A Debate entity's id is its geo-chat debate id, so votes hang off it without a lookup.
   const debateEntityId = ID.uuidToHex(debate.id);
+  const isVoting = useVoteInFlight(debateEntityId);
   const { profile } = useGeoProfile(smartAccount?.account.address);
 
   const { data: votes } = useQuery({
@@ -158,7 +191,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
   const castVote = React.useCallback(
     async (participant: DebateParticipant) => {
-      if (isVoting) return;
+      if (debatesWithVoteInFlight.has(debateEntityId)) return;
 
       const previousVote = tally.myVote;
       if (previousVote && ID.equals(previousVote.winnerSpaceEntityId, participant.profile_space_id)) return;
@@ -239,7 +272,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         optimisticVote,
       ]);
 
-      setIsVoting(true);
+      setVoteInFlight(debateEntityId, true);
 
       const publish = Effect.gen(function* () {
         const ops = yield* Publish.prepareLocalDataForPublishing(values, relations, personalSpaceId);
@@ -293,7 +326,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
         setToast(<span>Vote published!</span>);
       } finally {
-        setIsVoting(false);
+        setVoteInFlight(debateEntityId, false);
       }
 
       // The indexer lags the chain. Invalidating now would drop the optimistic row and flash
@@ -326,7 +359,6 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
     },
     [
       tally.myVote,
-      isVoting,
       smartAccount,
       personalSpaceId,
       profile?.name,
