@@ -37,7 +37,7 @@ import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu } from './hub-f
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
-import { countBy, keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
+import { countBy, keepSelectableTopics, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useStableListOrder } from './use-stable-list-order';
 
@@ -281,7 +281,7 @@ export function ClaimsTab() {
     const source = featured
       ? countBy(featuredAllowed.map(claim => ({ id: claim.spaceId, name: null })))
       : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id));
-    return orderFacetOptions(source, spaceIds);
+    return orderFacetOptions(keepSelectedVisible(source, spaceIds), spaceIds);
   }, [facets?.space_facets, featured, featuredAllowed, spaceIds, spaceShowsClaims]);
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until

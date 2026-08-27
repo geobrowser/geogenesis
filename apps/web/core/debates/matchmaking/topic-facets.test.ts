@@ -7,6 +7,7 @@ import {
   formatFacetCount,
   keepSelectableTopic,
   keepSelectableTopics,
+  keepSelectedVisible,
   orderFacetOptions,
 } from './topic-facets';
 
@@ -134,5 +135,25 @@ describe('formatFacetCount', () => {
   it('caps anything past two digits', () => {
     expect(formatFacetCount(100)).toBe('99+');
     expect(formatFacetCount(4210)).toBe('99+');
+  });
+});
+
+describe('keepSelectedVisible', () => {
+  const options = [{ id: 'a', name: 'A', count: 2 }];
+
+  it('leaves options that were never selected absent', () => {
+    expect(keepSelectedVisible(options, []).map(o => o.id)).toEqual(['a']);
+  });
+
+  // Without this the checkbox vanishes while the trigger goes on counting the selection, and the
+  // only way to remove it is to clear every space.
+  it('brings a selection that fell out of the facet back at zero', () => {
+    const kept = keepSelectedVisible(options, ['a', 'b']);
+    expect(kept.map(o => o.id)).toEqual(['a', 'b']);
+    expect(kept.find(o => o.id === 'b')?.count).toBe(0);
+  });
+
+  it('returns the same array when nothing is missing', () => {
+    expect(keepSelectedVisible(options, ['a'])).toBe(options);
   });
 });

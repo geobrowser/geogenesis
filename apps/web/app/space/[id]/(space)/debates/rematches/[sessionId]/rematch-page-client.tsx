@@ -51,6 +51,7 @@ import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-cla
 import {
   countBy,
   keepSelectableTopics,
+  keepSelectedVisible,
   mergeFacetCounts,
   orderFacetOptions,
   toggleId,
@@ -897,10 +898,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     );
     const fromServer = (browsedFacets?.space_facets ?? []).filter(facet => offered.has(facet.id));
     const merged = mergeFacetCounts(browsesPages ? fromServer : [], fromRows);
-    // No zero-count backfill. A space the other filters leave empty is an option that can only ever
-    // produce an empty list, which is the thing this menu exists not to do — and the way back is
-    // already safe without it, since the space facet is never narrowed by the space selection.
-    return orderFacetOptions(merged, spaceIds);
+    // Absent options stay absent — one the other filters leave empty could only ever produce an
+    // empty list. An absent *selection* comes back at zero, or its checkbox disappears while the
+    // trigger goes on counting it, and it can't be unticked without clearing every space.
+    return orderFacetOptions(keepSelectedVisible(merged, spaceIds), spaceIds);
   }, [browsedFacets?.space_facets, claims, debouncedSearch, facetSpaceIds, spaceIds, tab, topicIds, topicsByClaimId]);
 
   // A space picked while the gates were still passing everything has to be let go once they

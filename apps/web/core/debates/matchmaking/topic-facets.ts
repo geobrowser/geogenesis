@@ -151,3 +151,27 @@ export function countBy(
   }
   return [...counts.values()];
 }
+
+/**
+ * Facet options with any *selected* id that has fallen out of them added back at zero.
+ *
+ * The two halves of this look contradictory and aren't. An unselected option with nothing behind it
+ * has no business in the menu — picking it could only ever produce an empty list. A *selected* one
+ * has the opposite problem: a space facet is narrowed by the topic and the search, so a space the
+ * viewer picked can drop out of it the moment those leave the combination empty. Gone from the
+ * menu, its checkbox goes with it — and the trigger still counts it, so the viewer is told they
+ * have two spaces picked while only one row is checked, with no way to remove the other short of
+ * clearing them all.
+ *
+ * So: absent options stay absent, and absent *selections* come back at zero, where they can be
+ * unticked. A count of zero is honest here — it says what the list would hold, which is why the
+ * viewer wants it gone.
+ */
+export function keepSelectedVisible<T extends { id: string; name: string | null; count: number }>(
+  options: T[],
+  selected: string[]
+): (T | { id: string; name: string | null; count: number })[] {
+  const present = new Set(options.map(option => option.id));
+  const missing = selected.filter(id => !present.has(id)).map(id => ({ id, name: null, count: 0 }));
+  return missing.length === 0 ? options : [...options, ...missing];
+}
