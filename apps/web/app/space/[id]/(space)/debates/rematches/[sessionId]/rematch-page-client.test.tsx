@@ -858,6 +858,22 @@ describe('DebateRematchPageClient', () => {
       expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull();
     });
 
+    // The row spread its two menus across the full width, which was fine while there were two of
+    // them. With the source menu leading it, that pushed the space menu into the middle of the row
+    // instead of leaving it beside the source it belongs next to.
+    it('keeps the filter row left-aligned rather than spreading it', async () => {
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      const sourceMenu = screen.getByRole('button', { name: 'Featured' });
+      const spaceMenu = screen.getByRole('button', { name: /Any space/ });
+      const row = sourceMenu.parentElement;
+
+      expect(row).toBe(spaceMenu.parentElement);
+      expect(row?.className).not.toContain('justify-between');
+      // And the source leads the row, so the space menu sits directly after it.
+      expect(sourceMenu.compareDocumentPosition(spaceMenu) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     // A fixed order, so a source that appears doesn't reshuffle the ones already in the menu.
     it('offers the sources in a fixed order, Recommended first', async () => {
       curatedPage();

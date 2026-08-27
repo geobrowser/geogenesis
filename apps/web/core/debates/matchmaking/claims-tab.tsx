@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
@@ -501,8 +499,6 @@ type SpaceTopicFiltersProps = {
   facetTopics?: { id: string; name: string | null }[];
   /** Rendered before the space filter — the Claims tab puts its position filter here. */
   leading?: React.ReactNode;
-  /** Overrides the row layout — the rematch picker spreads the two menus across its width. */
-  className?: string;
 };
 
 /**
@@ -519,7 +515,6 @@ export function SpaceTopicFilters({
   facetSpaceIds,
   facetTopics,
   leading,
-  className,
 }: SpaceTopicFiltersProps) {
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(facetSpaceIds);
 
@@ -554,7 +549,7 @@ export function SpaceTopicFilters({
   const topicLabel = topicId ? (facetTopics?.find(topic => topic.id === topicId)?.name ?? 'Topic') : 'Any topic';
 
   return (
-    <div className={cx('flex flex-wrap items-center gap-2', className)}>
+    <div className="flex flex-wrap items-center gap-2">
       {leading}
       <HubFilterMenu
         label={selectedSpaceLabel}
