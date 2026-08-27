@@ -13,6 +13,7 @@ import { getMembershipProposalDisplayName } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
 import { ActiveProposal } from '~/partials/active-proposal/active-proposal';
+import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EditGovernanceSettings } from '~/partials/governance/edit-governance-settings';
 import {
   type GovernanceProposalType,
@@ -115,7 +116,9 @@ export default async function GovernancePage(props: Props) {
   // The four settings the governance design surfaces (design 62569-13445).
   const votingPeriod = votingSettings ? formatDuration(votingSettings.duration) : '24h';
   const passThreshold = votingSettings ? formatThreshold(votingSettings.partialPercentageSupportThreshold) : '51%';
-  const universalThreshold = votingSettings ? formatThreshold(votingSettings.universalPercentageSupportThreshold) : '100%';
+  const universalThreshold = votingSettings
+    ? formatThreshold(votingSettings.universalPercentageSupportThreshold)
+    : '100%';
   const fastPassThreshold = votingSettings ? String(Number(votingSettings.flatSupportThreshold)) : '—';
   const quorum = votingSettings ? String(Number(votingSettings.quorum)) : '—';
 
@@ -140,41 +143,43 @@ export default async function GovernancePage(props: Props) {
 
   return (
     <>
-      <div className="space-y-4">
-        <div className="flex items-stretch gap-5">
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Vote duration</h2>
-            <p className="text-mediumTitle">{votingPeriod}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Pass threshold</h2>
-            <p className="text-mediumTitle">{passThreshold}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Universal threshold</h2>
-            <p className="text-mediumTitle">{universalThreshold}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Fast pass threshold</h2>
-            <p className="text-mediumTitle">{fastPassThreshold}</p>
-          </GovernanceMetadataBox>
-          <GovernanceMetadataBox>
-            <h2 className="text-metadata text-grey-04">Quorum</h2>
-            <p className="text-mediumTitle">{quorum}</p>
-          </GovernanceMetadataBox>
+      <EntityPageContentContainer>
+        <div className="space-y-4">
+          <div className="flex items-stretch gap-5">
+            <GovernanceMetadataBox>
+              <h2 className="text-metadata text-grey-04">Vote duration</h2>
+              <p className="text-mediumTitle">{votingPeriod}</p>
+            </GovernanceMetadataBox>
+            <GovernanceMetadataBox>
+              <h2 className="text-metadata text-grey-04">Pass threshold</h2>
+              <p className="text-mediumTitle">{passThreshold}</p>
+            </GovernanceMetadataBox>
+            <GovernanceMetadataBox>
+              <h2 className="text-metadata text-grey-04">Universal threshold</h2>
+              <p className="text-mediumTitle">{universalThreshold}</p>
+            </GovernanceMetadataBox>
+            <GovernanceMetadataBox>
+              <h2 className="text-metadata text-grey-04">Fast pass threshold</h2>
+              <p className="text-mediumTitle">{fastPassThreshold}</p>
+            </GovernanceMetadataBox>
+            <GovernanceMetadataBox>
+              <h2 className="text-metadata text-grey-04">Quorum</h2>
+              <p className="text-mediumTitle">{quorum}</p>
+            </GovernanceMetadataBox>
+          </div>
+          <div className="flex items-center justify-between">
+            <GovernanceProposalTypeFilter spaceId={params.id} />
+            {/* space.address gates on the space being a deployed DAO — the proposal no longer
+                carries the address, but a space without one can't be governed. */}
+            {canEditGovernance && space?.address && votingSettingsSnapshot && (
+              <EditGovernanceSettings spaceId={params.id} snapshot={votingSettingsSnapshot} />
+            )}
+          </div>
+          <React.Suspense fallback="Loading initial...">
+            <InitialGovernanceProposals spaceId={params.id} proposalType={proposalType} />
+          </React.Suspense>
         </div>
-        <div className="flex items-center justify-between">
-          <GovernanceProposalTypeFilter spaceId={params.id} />
-          {/* space.address gates on the space being a deployed DAO — the proposal no longer
-              carries the address, but a space without one can't be governed. */}
-          {canEditGovernance && space?.address && votingSettingsSnapshot && (
-            <EditGovernanceSettings spaceId={params.id} snapshot={votingSettingsSnapshot} />
-          )}
-        </div>
-        <React.Suspense fallback="Loading initial...">
-          <InitialGovernanceProposals spaceId={params.id} proposalType={proposalType} />
-        </React.Suspense>
-      </div>
+      </EntityPageContentContainer>
 
       <ActiveProposal spaceId={params.id} proposalId={searchParams.proposalId} />
     </>
