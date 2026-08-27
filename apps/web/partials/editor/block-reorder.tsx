@@ -21,6 +21,8 @@ import type { Editor } from '@tiptap/react';
 
 import * as React from 'react';
 
+import { ID } from '~/core/id';
+
 import { Copy } from '~/design-system/icons/copy';
 import { Link } from '~/design-system/icons/link';
 import { OrderDots } from '~/design-system/icons/order-dots';
@@ -710,7 +712,8 @@ export function getTopLevelBlockChildIndexFromTarget(blocks: BlockLayout[], targ
 export function findTopLevelBlockElement(editor: Editor, blockId: string): HTMLElement | null {
   const editorElement = editor.view.dom;
   const block = getTopLevelBlockElements(editor, editorElement).find(({ childIndex }) => {
-    return editor.state.doc.child(childIndex).attrs.id === blockId;
+    const nodeId = editor.state.doc.child(childIndex).attrs.id;
+    return typeof nodeId === 'string' && ID.equals(nodeId, blockId);
   });
 
   return block?.element ?? null;

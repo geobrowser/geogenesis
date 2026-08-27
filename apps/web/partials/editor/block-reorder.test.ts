@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BlockDragHandle,
   BlockGutterHoverArea,
+  findTopLevelBlockElement,
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
   getTopLevelBlockChildIndexFromTarget,
@@ -388,9 +389,24 @@ describe('getTopLevelBlockElements', () => {
   });
 });
 
+describe('findTopLevelBlockElement', () => {
+  it('matches compact copied-link IDs to hyphenated block UUIDs', () => {
+    const editor = makeEditor(['Linked block']);
+    const hyphenatedId = 'c5f21322-4693-42a9-9fc6-1e387be82c2a';
+    editor.view.dispatch(
+      editor.state.tr.setNodeMarkup(0, undefined, {
+        ...editor.state.doc.child(0).attrs,
+        id: hyphenatedId,
+      })
+    );
+
+    expect(findTopLevelBlockElement(editor, 'c5f21322469342a99fc61e387be82c2a')).toBe(editor.view.nodeDOM(0));
+  });
+});
+
 function makeEditor(labels: string[]) {
   const editor = new Editor({
-    extensions: [Document, Paragraph, Text],
+    extensions: [Document, Paragraph.extend({ addAttributes: () => ({ id: { default: null } }) }), Text],
     content: {
       type: 'doc',
       content: labels.map(label => ({ type: 'paragraph', content: [{ type: 'text', text: label }] })),
