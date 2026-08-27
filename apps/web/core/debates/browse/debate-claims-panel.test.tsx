@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,8 +18,7 @@ const mocks = vi.hoisted(() => ({
   error: null as Error | null,
   /** Props every rendered response control received, in render order. */
   responseControlProps: [] as Array<Record<string, unknown>>,
-  batchTargets: [] as Array<Record<string, unknown>>,
-  batchSpaceIds: [] as string[],
+  rankByClaimId: new Map<string, number>(),
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -40,25 +39,18 @@ vi.mock('~/core/debates/use-debate-votes', () => ({
   }),
 }));
 
-vi.mock('~/core/responses/use-claim-response-summaries', () => ({
-  ClaimResponseBatchBoundary: ({ children }: { children: React.ReactNode }) => children,
-  useClaimResponseSummaryBatch: ({
-    spaceId,
-    targets,
-  }: {
-    spaceId: string;
-    targets: Array<Record<string, unknown>>;
-  }) => {
-    mocks.batchSpaceIds.push(spaceId);
-    mocks.batchTargets = targets;
-    return { isSuccess: true, isError: false, refetch: vi.fn() };
-  },
-}));
+vi.mock('~/core/debates/claims-best-order', async () => {
+  const actual = await vi.importActual<typeof import('~/core/debates/claims-best-order')>(
+    '~/core/debates/claims-best-order'
+  );
+  // The real sort is under test through the panel; only the network lookup is stubbed.
+  return { ...actual, useClaimsBestOrder: () => ({ rankByClaimId: mocks.rankByClaimId, isLoading: false }) };
+});
 
-vi.mock('../debate-entity-response-controls', () => ({
-  DebateEntityResponseControls: (props: Record<string, unknown>) => {
+vi.mock('~/partials/entity-page/entity-row-actions', () => ({
+  EntityRowActions: (props: Record<string, unknown>) => {
     mocks.responseControlProps.push(props);
-    return <div data-testid={`response-controls-${String(props.entityId)}`} data-kind={String(props.responseKind)} />;
+    return <div data-testid={`row-actions-${String(props.entityId)}`} />;
   },
 }));
 
@@ -71,7 +63,7 @@ vi.mock('~/design-system/avatar', () => ({ Avatar: () => <div data-testid="avata
 vi.mock('./winner-vote-button', () => ({ WinnerVoteButton: () => <button type="button">Winner?</button> }));
 
 function claim(id: string, text: string, overrides: Partial<TranscriptClaim> = {}): TranscriptClaim {
-  return { id, text, spaceId: CLAIM_SPACE, responseKind: 'stance', ...overrides };
+  return { id, text, spaceId: CLAIM_SPACE, ...overrides };
 }
 
 function grouped(byAuthor: Record<string, TranscriptClaim[]>, unattributed: TranscriptClaim[] = []) {
@@ -119,8 +111,7 @@ beforeEach(() => {
   mocks.isLoading = false;
   mocks.error = null;
   mocks.responseControlProps.length = 0;
-  mocks.batchTargets = [];
-  mocks.batchSpaceIds.length = 0;
+  mocks.rankByClaimId = new Map();
 });
 
 afterEach(cleanup);
@@ -148,28 +139,32 @@ describe('DebateClaimsPanel', () => {
     expect(link).toHaveAttribute('href', expect.stringContaining(CLAIM_SPACE));
   });
 
-  it('renders position controls under every claim, scoped to that claim', () => {
+  // EntityRowActions is the whole set a data block's bulleted-list row renders — the response
+  // control *and* the Debate toggle. Reaching past it for the response control alone is what left
+  // the toggle off these rows.
+  it('renders the full row actions under every claim, scoped to that claim', () => {
     mocks.claims = grouped({
       [PRESTON_SPACE]: [claim('claim-1', 'One.'), claim('claim-2', 'Two.')],
     });
 
     render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
 
-    expect(screen.getByTestId('response-controls-claim-1')).toBeInTheDocument();
-    expect(screen.getByTestId('response-controls-claim-2')).toBeInTheDocument();
+    expect(screen.getByTestId('row-actions-claim-1')).toBeInTheDocument();
+    expect(screen.getByTestId('row-actions-claim-2')).toBeInTheDocument();
     expect(mocks.responseControlProps.map(props => props.entityId)).toEqual(['claim-1', 'claim-2']);
     expect(mocks.responseControlProps.every(props => props.spaceId === CLAIM_SPACE)).toBe(true);
   });
 
-  it('passes each claim’s own response kind, so a factual claim reads Verify/Dispute', () => {
+  it('orders each debater\u2019s claims by the best ranking, unranked keeping transcript order', () => {
+    // Lowercase, dash-free ids: ranks match through `uuidToHex`, which strips dashes and lowercases.
+    mocks.rankByClaimId = new Map([['cccc', 0]]);
     mocks.claims = grouped({
-      [PRESTON_SPACE]: [claim('claim-1', 'Opinion.'), claim('claim-2', 'Fact.', { responseKind: 'veracity' })],
+      [PRESTON_SPACE]: [claim('aaaa', 'A.'), claim('bbbb', 'B.'), claim('cccc', 'C.')],
     });
 
     render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
 
-    expect(screen.getByTestId('response-controls-claim-1')).toHaveAttribute('data-kind', 'stance');
-    expect(screen.getByTestId('response-controls-claim-2')).toHaveAttribute('data-kind', 'veracity');
+    expect(mocks.responseControlProps.map(props => props.entityId)).toEqual(['cccc', 'aaaa', 'bbbb']);
   });
 
   // Both the link and the response target are space-scoped, so a claim with no space has nothing
@@ -181,23 +176,50 @@ describe('DebateClaimsPanel', () => {
 
     expect(screen.getByText('Homeless claim.')).toBeInTheDocument();
     expect(screen.getByText('Homeless claim.').closest('a')).toBeNull();
-    expect(screen.queryByTestId('response-controls-claim-1')).not.toBeInTheDocument();
-    expect(mocks.batchTargets).toHaveLength(0);
+    expect(screen.queryByTestId('row-actions-claim-1')).not.toBeInTheDocument();
   });
 
-  it('batches every claim’s responses into one request against the claims’ space', () => {
+  it('shows only the first three claims, then reveals the rest on Show more', async () => {
     mocks.claims = grouped({
-      [PRESTON_SPACE]: [claim('claim-1', 'One.')],
-      [ARTURAS_SPACE]: [claim('claim-2', 'Two.')],
+      [PRESTON_SPACE]: [1, 2, 3, 4, 5].map(n => claim(`claim-${n}`, `Claim ${n}.`)),
     });
 
     render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
 
-    expect(mocks.batchTargets).toEqual([
-      { entityId: 'claim-1', responseKind: 'stance' },
-      { entityId: 'claim-2', responseKind: 'stance' },
-    ]);
-    expect(new Set(mocks.batchSpaceIds)).toEqual(new Set([CLAIM_SPACE]));
+    expect(screen.getByText('Claim 3.')).toBeInTheDocument();
+    expect(screen.queryByText('Claim 4.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show 2 more' }));
+
+    expect(screen.getByText('Claim 4.')).toBeInTheDocument();
+    expect(screen.getByText('Claim 5.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+
+    expect(screen.queryByText('Claim 4.')).not.toBeInTheDocument();
+  });
+
+  it('offers no Show more when a debater has three claims or fewer', () => {
+    mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'One.'), claim('claim-2', 'Two.')] });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: /Show/ })).not.toBeInTheDocument();
+  });
+
+  // Each debater's list collapses on its own, so expanding one must not expand the other.
+  it('expands one debater\u2019s list without expanding the other', () => {
+    mocks.claims = grouped({
+      [PRESTON_SPACE]: [1, 2, 3, 4].map(n => claim(`p-${n}`, `Preston ${n}.`)),
+      [ARTURAS_SPACE]: [1, 2, 3, 4].map(n => claim(`a-${n}`, `Arturas ${n}.`)),
+    });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    fireEvent.click(within(cardFor('Preston Mantel')).getByRole('button', { name: 'Show 1 more' }));
+
+    expect(screen.getByText('Preston 4.')).toBeInTheDocument();
+    expect(screen.queryByText('Arturas 4.')).not.toBeInTheDocument();
   });
 
   it('shows the total in the header and surfaces unattributed claims', () => {

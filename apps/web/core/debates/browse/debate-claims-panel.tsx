@@ -3,14 +3,11 @@
 import * as React from 'react';
 
 import type { Debate } from '~/core/debates/api';
+import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/core/debates/transcript-claims';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
-import {
-  ClaimResponseBatchBoundary,
-  useClaimResponseSummaryBatch,
-} from '~/core/responses/use-claim-response-summaries';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -18,8 +15,12 @@ import { Close } from '~/design-system/icons/close';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-import { DebateEntityResponseControls } from '../debate-entity-response-controls';
+import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
+
 import { WinnerVoteButton } from './winner-vote-button';
+
+/** How many of a debater's claims show before "Show more". */
+const COLLAPSED_CLAIM_COUNT = 3;
 
 /**
  * "Claims" side panel opened from the browse feed's Claims button. Groups the claims extracted
@@ -35,40 +36,26 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
   const votes = useDebateVotes(debate);
   // Same query key as the feed's count badge, so opening the panel doesn't refetch.
   const { claims, isLoading, error } = useDebateTranscriptClaims(debate.id);
-  const allClaims = claims.all;
+
+  // Every claim a debate publishes lands in the debate's own space, so one lookup covers the panel.
+  const claimsSpaceId = React.useMemo(
+    () => claims.all.find(claim => claim.spaceId !== null)?.spaceId ?? debate.claim.space_id,
+    [claims.all, debate.claim.space_id]
+  );
+  const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);
+  const { rankByClaimId } = useClaimsBestOrder(claimIds, claimsSpaceId);
 
   const orphaned = React.useMemo(
     () =>
-      unmatchedClaims(
-        claims,
-        participants.map(participant => participant.profile_space_id)
+      sortClaimsByBest(
+        unmatchedClaims(
+          claims,
+          participants.map(participant => participant.profile_space_id)
+        ),
+        rankByClaimId
       ),
-    [claims, participants]
+    [claims, participants, rankByClaimId]
   );
-
-  // Every claim a debate publishes lands in the debate's own space, so one batch covers the panel.
-  // A claim that somehow lives elsewhere still renders: `EntityVoteButtons` re-resolves the space
-  // per entity, so it just misses this prewarm and fetches its own counts.
-  const responsesSpaceId = React.useMemo(
-    () => allClaims.find(claim => claim.spaceId !== null)?.spaceId ?? debate.claim.space_id,
-    [allClaims, debate.claim.space_id]
-  );
-
-  // One request for every claim's counts and responders, instead of two per control. Same pairing
-  // the space's own Claims page uses.
-  const responseTargets = React.useMemo(
-    () =>
-      allClaims
-        .filter(claim => claim.spaceId !== null)
-        .map(claim => ({ entityId: claim.id, responseKind: claim.responseKind })),
-    [allClaims]
-  );
-  const responseBatch = useClaimResponseSummaryBatch({
-    spaceId: responsesSpaceId,
-    targets: responseTargets,
-    enabled: responseTargets.length > 0,
-  });
-  const responseBatchReady = responseTargets.length === 0 || responseBatch.isSuccess;
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -88,46 +75,44 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
           <Close />
         </button>
       </header>
-      <ClaimResponseBatchBoundary ready={responseBatchReady}>
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6">
-          {participants.map(participant => (
-            <article key={participant.user_id} className="rounded-lg border border-grey-02 bg-white p-5">
-              <div className="flex items-center gap-3">
-                <span className="block size-10 shrink-0 overflow-hidden rounded-full bg-grey-02">
-                  <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={40} />
-                </span>
-                <Text as="span" variant="smallTitle" color="text">
-                  {speakerLabel(participant)}
-                </Text>
-                <WinnerVoteButton
-                  className="ml-auto"
-                  surface="panel"
-                  debaterName={speakerLabel(participant)}
-                  sharePercent={votes.sharePercentFor(participant)}
-                  isMyPick={votes.isMyPick(participant)}
-                  disabled={votes.isVoting}
-                  onVote={() => votes.castVote(participant)}
-                />
-              </div>
-              <ClaimList
-                claims={claimsForParticipant(claims, participant.profile_space_id)}
-                isLoading={isLoading}
-                error={error}
-              />
-            </article>
-          ))}
-          {/* Attribution comes from the graph and the participant list from geo-chat, so the two can
-            disagree. Surfacing the leftovers beats a list that silently reads as complete. */}
-          {orphaned.length > 0 && (
-            <article className="rounded-lg border border-grey-02 bg-white p-5">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 pb-6">
+        {participants.map(participant => (
+          <article key={participant.user_id} className="rounded-lg border border-grey-02 bg-white p-5">
+            <div className="flex items-center gap-3">
+              <span className="block size-10 shrink-0 overflow-hidden rounded-full bg-grey-02">
+                <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={40} />
+              </span>
               <Text as="span" variant="smallTitle" color="text">
-                Other claims
+                {speakerLabel(participant)}
               </Text>
-              <ClaimList claims={orphaned} isLoading={false} error={null} />
-            </article>
-          )}
-        </div>
-      </ClaimResponseBatchBoundary>
+              <WinnerVoteButton
+                className="ml-auto"
+                surface="panel"
+                debaterName={speakerLabel(participant)}
+                sharePercent={votes.sharePercentFor(participant)}
+                isMyPick={votes.isMyPick(participant)}
+                disabled={votes.isVoting}
+                onVote={() => votes.castVote(participant)}
+              />
+            </div>
+            <ClaimList
+              claims={sortClaimsByBest(claimsForParticipant(claims, participant.profile_space_id), rankByClaimId)}
+              isLoading={isLoading}
+              error={error}
+            />
+          </article>
+        ))}
+        {/* Attribution comes from the graph and the participant list from geo-chat, so the two can
+            disagree. Surfacing the leftovers beats a list that silently reads as complete. */}
+        {orphaned.length > 0 && (
+          <article className="rounded-lg border border-grey-02 bg-white p-5">
+            <Text as="span" variant="smallTitle" color="text">
+              Other claims
+            </Text>
+            <ClaimList claims={orphaned} isLoading={false} error={null} />
+          </article>
+        )}
+      </div>
     </aside>
   );
 }
@@ -141,6 +126,8 @@ function ClaimList({
   isLoading: boolean;
   error: Error | null;
 }) {
+  const [expanded, setExpanded] = React.useState(false);
+
   if (claims.length === 0) {
     // A debate recorded before claim extraction shipped has a transcript but no claims, which is
     // indistinguishable here from a speaker who simply made none — so the copy covers both.
@@ -157,27 +144,43 @@ function ClaimList({
     );
   }
 
-  // `list-disc pl-4` is the app's bulleted list, copied off `.prose-chat ul` in `styles/chat.css`
-  // — the editor's own lists land on the same disc-plus-1rem-indent in `styles/tiptap.css`. Both
-  // are CSS attached to a container class rather than a component, so there is nothing to import;
-  // matching the utilities is the reuse.
+  const hidden = claims.length - COLLAPSED_CLAIM_COUNT;
+  const visible = expanded ? claims : claims.slice(0, COLLAPSED_CLAIM_COUNT);
+
   return (
-    <ul className="mt-5 list-disc space-y-4 pl-4">
-      {claims.map(claim => (
-        <li key={claim.id}>
-          <ClaimRow claim={claim} />
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="mt-5 space-y-4">
+        {visible.map(claim => (
+          <li key={claim.id}>
+            <ClaimRow claim={claim} />
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(current => !current)}
+          className="mt-4 text-metadata text-grey-04 transition-colors hover:text-text"
+        >
+          {expanded ? 'Show less' : `Show ${hidden} more`}
+        </button>
+      )}
+    </>
   );
 }
 
 /**
- * One claim: its text linking to the claim entity, with the viewer's position beneath it.
+ * One claim: its text linking to the claim entity, with the row's actions beneath it.
+ *
+ * `EntityRowActions` is what a data block's bulleted-list row renders, and it is the whole set —
+ * the response control *and* the Debate toggle. Reaching past it for the response control alone
+ * (which this did) is what left the toggle off these rows. It also resolves the response kind from
+ * the entity itself, so a factual claim gets Verify/Dispute here the same way it does everywhere
+ * else, including while a change to that flag is still an unpublished edit.
  *
  * A claim the graph reports no space for is rendered as plain text. Both the link target and the
- * response target are space-scoped, so there is nothing correct to point either one at — better a
- * dead row than one that navigates somewhere wrong or publishes a response into the wrong space.
+ * actions are space-scoped, so there is nothing correct to point either one at — better a dead row
+ * than one that navigates somewhere wrong or publishes a response into the wrong space.
  */
 function ClaimRow({ claim }: { claim: TranscriptClaim }) {
   if (claim.spaceId === null) {
@@ -195,8 +198,10 @@ function ClaimRow({ claim }: { claim: TranscriptClaim }) {
           {claim.text}
         </Text>
       </Link>
-      <div className="mt-2">
-        <DebateEntityResponseControls entityId={claim.id} spaceId={claim.spaceId} responseKind={claim.responseKind} />
+      {/* Beneath the claim rather than beside it, the way the list, gallery and bulleted-list
+          data block rows lay their actions out. */}
+      <div className="mt-1">
+        <EntityRowActions entityId={claim.id} spaceId={claim.spaceId} />
       </div>
     </>
   );

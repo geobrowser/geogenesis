@@ -7,7 +7,6 @@ const PRESTON = 'f3dab79cb5a3d9d1759656dd5361d1c6';
 const ARTURAS = 'cc31e40f74231d530f1b5d0fc1cd94d8';
 
 const SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
-const IS_FACTUAL = 'da4a6c1f9d4446f9832ff3b49a4400ef';
 
 type Claim = {
   id: string;
@@ -15,8 +14,6 @@ type Claim = {
   position?: string;
   /** null models a claim the graph reports no space for. */
   spaceId?: string | null;
-  /** How the graph actually stores the "Is factual" checkbox: the boolean column. */
-  isFactual?: boolean;
 };
 
 type Block = {
@@ -47,18 +44,6 @@ function response(blocks: Block[], transcriptPosition = 'a0'): DebateTranscriptC
                       id: claim.id,
                       name: claim.name === undefined ? `Claim ${claim.id}` : claim.name,
                       spaceIds: spaceId === null ? [] : [spaceId],
-                      valuesList:
-                        claim.isFactual === undefined
-                          ? []
-                          : [
-                              {
-                                spaceId: spaceId ?? SPACE,
-                                propertyId: IS_FACTUAL,
-                                // A checkbox has no text; the value is in the boolean column.
-                                text: null,
-                                boolean: claim.isFactual,
-                              },
-                            ],
                     },
                   };
                 }),
@@ -197,75 +182,15 @@ describe('unmatchedClaims', () => {
   });
 });
 
-describe('claim space and response kind', () => {
+describe('claim space', () => {
   it('carries the claim’s own space, which is where its responses are published', () => {
     const grouped = groupTranscriptClaims(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));
 
     expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(SPACE);
   });
 
-  it('labels an ordinary claim as a stance, so the controls read Agree/Disagree', () => {
-    const grouped = groupTranscriptClaims(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));
-
-    expect(claimsForParticipant(grouped, PRESTON)[0].responseKind).toBe('stance');
-  });
-
-  // Regression: "Is factual" is a checkbox, so it arrives in the `boolean` column with `text`
-  // null. Reading only `text` resolved every claim to a stance and put Agree/Disagree on claims
-  // that should read Verify/Dispute — which is every claim on the debate this was built against.
-  it('labels a claim whose Is-factual boolean is set as veracity, so the controls read Verify/Dispute', () => {
-    const grouped = groupTranscriptClaims(
-      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', isFactual: true }] }])
-    );
-
-    expect(claimsForParticipant(grouped, PRESTON)[0].responseKind).toBe('veracity');
-  });
-
-  it('labels a claim whose Is-factual boolean is explicitly false as a stance', () => {
-    const grouped = groupTranscriptClaims(
-      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', isFactual: false }] }])
-    );
-
-    expect(claimsForParticipant(grouped, PRESTON)[0].responseKind).toBe('stance');
-  });
-
-  it('ignores an Is-factual value set in a different space than the claim lives in', () => {
-    const grouped = groupTranscriptClaims({
-      entity: {
-        transcripts: [
-          {
-            position: 'a0',
-            toEntity: {
-              id: 'transcript-1',
-              blocks: [
-                {
-                  position: 'a0',
-                  toEntity: {
-                    id: 'block-1',
-                    authors: [{ position: 'a0', toEntity: { id: PRESTON } }],
-                    claims: [
-                      {
-                        position: 'a0',
-                        toEntity: {
-                          id: 'claim-1',
-                          name: 'Claim one',
-                          spaceIds: [SPACE],
-                          valuesList: [{ spaceId: ARTURAS, propertyId: IS_FACTUAL, text: null, boolean: true }],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    });
-
-    expect(claimsForParticipant(grouped, PRESTON)[0].responseKind).toBe('stance');
-  });
-
+  // Both the link target and the row's actions are space-scoped, so a claim the graph reports no
+  // space for has nothing correct to point at and the panel renders it as inert text.
   it('leaves a claim with no space unlinkable rather than guessing one', () => {
     const grouped = groupTranscriptClaims(
       response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', spaceId: null }] }])

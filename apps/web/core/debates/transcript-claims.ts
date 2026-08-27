@@ -1,6 +1,5 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
-import { claimResponseKind } from '~/core/claims/response-kind';
 import { uuidToHex } from '~/core/id/normalize';
 
 import type { DebateTranscriptClaimsQuery } from '../io/debate-transcript-claims-document';
@@ -16,8 +15,6 @@ export type TranscriptClaim = {
    * claim unlinkable and unrespondable rather than pointing it at the wrong space.
    */
   spaceId: string | null;
-  /** Which vocabulary labels the two sides: Agree/Disagree, or Verify/Dispute for a factual claim. */
-  responseKind: 'stance' | 'veracity';
 };
 
 export type DebateTranscriptClaims = {
@@ -54,29 +51,6 @@ function presentRelations<T>(
   }
 
   return present.sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
-}
-
-type RemoteClaimValue = { spaceId: string; propertyId: string; text?: string | null; boolean?: boolean | null };
-
-/**
- * Put raw value rows into the shape `claimResponseKind` reads, matching `Entity`'s own decoding:
- * booleans land as '1' / '0', text as itself.
- *
- * "Is factual" is a checkbox, so it arrives in the `boolean` column with `text` null. Reading only
- * `text` made every claim resolve to a stance, which put Agree/Disagree on claims that should read
- * Verify/Dispute. Same conversion `claim-picker-page.ts` does for the same reason.
- */
-function decodeValues(values: Array<RemoteClaimValue | null> | null | undefined) {
-  const decoded: Array<{ property: { id: string }; spaceId: string; value: string }> = [];
-
-  for (const value of values ?? []) {
-    if (!value) continue;
-    const raw = value.boolean != null ? (value.boolean ? '1' : '0') : value.text;
-    if (raw == null) continue;
-    decoded.push({ property: { id: value.propertyId }, spaceId: value.spaceId, value: raw });
-  }
-
-  return decoded;
 }
 
 /**
@@ -117,16 +91,7 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery): Debate
 
         const spaceId = (claimEntity.spaceIds ?? []).find((id): id is string => typeof id === 'string') ?? null;
 
-        const row: TranscriptClaim = {
-          id: claimEntity.id,
-          text,
-          spaceId,
-          // Read against the claim's own space, since "Is factual" is a per-space value and the
-          // side labels have to match the space the response is published against.
-          responseKind: spaceId
-            ? claimResponseKind({ values: decodeValues(claimEntity.valuesList) }, spaceId)
-            : 'stance',
-        };
+        const row: TranscriptClaim = { id: claimEntity.id, text, spaceId };
 
         all.push(row);
 
