@@ -4,7 +4,10 @@ import { normId } from '~/core/utils/norm-id';
 
 export type RequestedMembershipSpace = {
   id: string;
-  /** Personal space id of the requester — scopes the entry so it never leaks across accounts. */
+  /**
+   * Account identity that made the request — scopes the entry so it never leaks across
+   * accounts.
+   */
   ownerId: string;
   /** Epoch ms when the request was made — the bridge is ignored past {@link REQUEST_BRIDGE_TTL_MS}. */
   requestedAt: number;
@@ -71,26 +74,36 @@ export function removeRequestedMembershipSpace(
   return next.length === current.length ? current : next;
 }
 
-/** This account's still-active (non-expired) optimistic entries. Empty when signed out. */
+/**
+ * This account's still-active (non-expired) optimistic entries. Empty when signed out.
+ */
 export function activeRequestedSpacesForOwner(
   current: RequestedMembershipSpace[],
   ownerId: string | null | undefined,
-  now: number
+  now: number,
+  accountAddress?: string | null
 ): RequestedMembershipSpace[] {
-  if (!ownerId) return [];
-  return current.filter(s => s.ownerId === ownerId && now - s.requestedAt < REQUEST_BRIDGE_TTL_MS);
+  if (!ownerId && !accountAddress) return [];
+  return current.filter(
+    s =>
+      now - s.requestedAt < REQUEST_BRIDGE_TTL_MS &&
+      ((ownerId != null && s.ownerId === ownerId) || (accountAddress != null && s.ownerId === accountAddress))
+  );
 }
 
-/** Drop entries that are expired, or belong to `ownerId` and are now server-tracked. Returns `current` if unchanged. */
+/** Drop entries that are expired, or belong to this account and are now server-tracked. Returns `current` if unchanged. */
 export function reconcileRequestedSpaces(
   current: RequestedMembershipSpace[],
   ownerId: string | null | undefined,
   serverTrackedIds: Set<string>,
-  now: number
+  now: number,
+  accountAddress?: string | null
 ): RequestedMembershipSpace[] {
   const next = current.filter(s => {
     if (now - s.requestedAt >= REQUEST_BRIDGE_TTL_MS) return false;
-    if (ownerId && s.ownerId === ownerId && serverTrackedIds.has(normId(s.id))) return false;
+    const isThisAccount =
+      (ownerId != null && s.ownerId === ownerId) || (accountAddress != null && s.ownerId === accountAddress);
+    if (isThisAccount && serverTrackedIds.has(normId(s.id))) return false;
     return true;
   });
   return next.length === current.length ? current : next;

@@ -82,10 +82,10 @@ export async function requestSpaceMembership({
   // Provider in `core/providers.tsx` renders with — so background callers get the
   // same optimistic update as the components that set it through `useSetAtom`.
   //
-  // Callers that already wrote the bridge ahead of the tx (onboarding flips every pick to
-  // pending before firing) still want this: the upsert merges on owner+space, so it re-stamps
-  // `requestedAt` and the REQUEST_BRIDGE_TTL_MS window runs from the tx landing rather than
-  // from whenever the caller guessed.
+  // Callers that already wrote the bridge ahead of the tx (onboarding seeds under the
+  // wallet address before the personal space id exists) still want this: it writes a
+  // personalSpaceId-scoped entry and re-stamps requestedAt so REQUEST_BRIDGE_TTL_MS
+  // runs from the tx landing. Onboarding then drops its address-scoped row.
   store.set(requestedMembershipSpacesAtom, prev =>
     upsertRequestedMembershipSpace(prev, {
       id: spaceId,

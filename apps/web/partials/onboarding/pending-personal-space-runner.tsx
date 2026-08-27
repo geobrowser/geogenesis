@@ -68,8 +68,7 @@ function createGeoRoleRelation(spaceId: string, fromEntityId: string, roleEntity
  *
  * On resolve it remaps the user's local `pending:` edits to the real spaceId,
  * seeds the `usePersonalSpaceId` cache (so `isRegistered` flips true with no
- * indexer-refetch race), and silently swaps the URL if the user is sitting on
- * the optimistic page.
+ * indexer-refetch race), and clears pending so the optimistic page can redirect.
  */
 export function PendingPersonalSpaceRunner() {
   const [pending, setPending] = useAtom(pendingPersonalSpaceAtom);
@@ -126,7 +125,11 @@ export function PendingPersonalSpaceRunner() {
     // unregistered until a reload. runningRef alone is the dedupe, released in a
     // finally. Re-entry is safe because creation is idempotent — it returns the
     // existing id when registration already landed.
+    let resolved = false;
     const resolve = (spaceId: string) => {
+      if (resolved) return;
+      resolved = true;
+
       // Flip every signal in one synchronous batch so the user never sees an
       // in-between frame (registered but still "pending"). The pending page
       // redirects itself onto the real space the moment `setPending(null)`
@@ -144,6 +147,122 @@ export function PendingPersonalSpaceRunner() {
       void queryClient.invalidateQueries({ queryKey: ['profile', address] });
     };
 
+    type MembershipTarget = { id: string; name?: string; image?: string | null };
+
+    let flipped = false;
+    let seededIds: string[] = [];
+    const flipPendingOptimistically = async (): Promise<MembershipTarget[]> => {
+      if (flipped) return [];
+      flipped = true;
+
+      const { topicIds } = onboardingPicksRef.current;
+      if (topicIds.length === 0) return [];
+
+      seededIds = [...topicIds];
+      const requestedAt = Date.now();
+      jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+        topicIds.reduce(
+          (next, id) =>
+            upsertRequestedMembershipSpace(next, {
+              id,
+              ownerId: address,
+              requestedAt,
+            }),
+          prev
+        )
+      );
+      void queryClient.invalidateQueries({ queryKey: ['browse-sidebar-data'] });
+
+      const targets = (
+        await Promise.all(
+          topicIds.map(async targetSpaceId => {
+            try {
+              const targetSpace = await Effect.runPromise(getSpace(targetSpaceId));
+              if (!targetSpace?.address) {
+                jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+                  removeRequestedMembershipSpace(prev, targetSpaceId, address)
+                );
+                return null;
+              }
+              const target: MembershipTarget = {
+                id: targetSpaceId,
+                name: targetSpace.entity.name ?? undefined,
+                image: targetSpace.entity.image,
+              };
+              jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+                upsertRequestedMembershipSpace(prev, {
+                  id: target.id,
+                  ownerId: address,
+                  requestedAt,
+                  name: target.name,
+                  image: target.image,
+                })
+              );
+              return target;
+            } catch (error) {
+              console.error('[PendingPersonalSpace] failed to load target space', targetSpaceId, error);
+              jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+                removeRequestedMembershipSpace(prev, targetSpaceId, address)
+              );
+              return null;
+            }
+          })
+        )
+      ).filter((t): t is NonNullable<typeof t> => t !== null);
+
+      return targets;
+    };
+
+    // Fire the actual membership request txs once the personal space is on-chain. The
+    // pending rows already show (address-scoped, above); drop that row whether the
+    // request succeeds (personalSpaceId-scoped bridge takes over) or fails.
+    let requestsFired = false;
+    const fireMembershipRequests = async (spaceId: string, targets: MembershipTarget[]) => {
+      if (requestsFired) return;
+      requestsFired = true;
+
+      await Promise.all(
+        targets.map(async target => {
+          try {
+            await requestSpaceMembership({
+              spaceId: target.id,
+              personalSpaceId: spaceId,
+              tx,
+              queryClient,
+              space: { name: target.name, image: target.image },
+            });
+          } catch (error) {
+            console.error('[PendingPersonalSpace] membership proposal failed for', target.id, error);
+          } finally {
+            jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+              removeRequestedMembershipSpace(prev, target.id, address)
+            );
+          }
+        })
+      );
+    };
+
+    // Drop every row we seeded — creation failed.
+    const rollbackPending = () => {
+      if (seededIds.length === 0) return;
+      jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+        seededIds.reduce((next, id) => removeRequestedMembershipSpace(next, id, address), prev)
+      );
+    };
+
+    const targetsPromise = flipPendingOptimistically();
+
+    // Once the space is on-chain, turn the seeded pending rows into real requests — or
+    // roll them back if enrich failed.
+    const settleMembership = (spaceId: string) =>
+      void targetsPromise.then(
+        targets => fireMembershipRequests(spaceId, targets),
+        error => {
+          console.error('[PendingPersonalSpace] interest-space enrich failed', error);
+          rollbackPending();
+        }
+      );
+
     void (async () => {
       try {
         devLog('[onboarding] background space creation started, topicId=%s', topicId);
@@ -151,96 +270,34 @@ export function PendingPersonalSpaceRunner() {
           spaceName: name,
           spaceImage: avatar || undefined,
           topicId,
+          onRegistered: registeredSpaceId => {
+            resolve(registeredSpaceId);
+            settleMembership(registeredSpaceId);
+          },
         });
 
         if (!spaceId) throw new Error('Creating space failed');
 
-        resolve(spaceId);
         devLog('[onboarding] space created: %s — remapped pending edits, seeded personal-space cache', spaceId);
 
-        // The onboarding role/interest picks need a real spaceId to attach to, so
-        // they're applied here rather than in the dialog. Failures are logged and
-        // swallowed: the account is already usable, and neither is worth blocking on.
-        const { roleIds, topicIds } = onboardingPicksRef.current;
-
-        if (roleIds.length > 0 || topicIds.length > 0) {
+        // Role relations need the new personal space indexed (getSpace reads it), so unlike
+        // the membership picks they run here, after creation resolves.
+        const { roleIds } = onboardingPicksRef.current;
+        if (roleIds.length > 0) {
           try {
-            if (roleIds.length > 0) {
-              try {
-                const space = await Effect.runPromise(getSpace(spaceId));
-                if (space) {
-                  for (const roleId of roleIds) {
-                    createGeoRoleRelation(spaceId, space.entity.id, roleId);
-                  }
-                }
-              } catch (error) {
-                console.error('[PendingPersonalSpace] applying role relations failed', error);
+            const space = await Effect.runPromise(getSpace(spaceId));
+            if (space) {
+              for (const roleId of roleIds) {
+                createGeoRoleRelation(spaceId, space.entity.id, roleId);
               }
             }
-
-            // Prefetch targets in parallel, flip Join → pending immediately.
-            const targets = (
-              await Promise.all(
-                topicIds.map(async targetSpaceId => {
-                  try {
-                    const targetSpace = await Effect.runPromise(getSpace(targetSpaceId));
-                    if (!targetSpace?.address) return null;
-                    return {
-                      id: targetSpaceId,
-                      name: targetSpace.entity.name ?? undefined,
-                      image: targetSpace.entity.image,
-                    };
-                  } catch (error) {
-                    console.error('[PendingPersonalSpace] failed to load target space', targetSpaceId, error);
-                    return null;
-                  }
-                })
-              )
-            ).filter((t): t is NonNullable<typeof t> => t !== null);
-
-            if (targets.length > 0) {
-              const requestedAt = Date.now();
-              jotaiStore.set(requestedMembershipSpacesAtom, prev =>
-                targets.reduce(
-                  (next, target) =>
-                    upsertRequestedMembershipSpace(next, {
-                      id: target.id,
-                      ownerId: spaceId,
-                      requestedAt,
-                      name: target.name,
-                      image: target.image,
-                    }),
-                  prev
-                )
-              );
-              void queryClient.invalidateQueries({ queryKey: ['browse-sidebar-data'] });
-
-              await Promise.all(
-                targets.map(async target => {
-                  try {
-                    await requestSpaceMembership({
-                      spaceId: target.id,
-                      personalSpaceId: spaceId,
-                      tx,
-                      queryClient,
-                      space: { name: target.name, image: target.image },
-                    });
-                  } catch (error) {
-                    console.error('[PendingPersonalSpace] membership proposal failed for', target.id, error);
-                    jotaiStore.set(requestedMembershipSpacesAtom, prev =>
-                      removeRequestedMembershipSpace(prev, target.id, spaceId)
-                    );
-                  }
-                })
-              );
-            }
           } catch (error) {
-            console.error('[PendingPersonalSpace] applying onboarding selections failed', error);
-          } finally {
-            setSelectedRoleIds([]);
-            setSelectedTopicIds([]);
+            console.error('[PendingPersonalSpace] applying role relations failed', error);
           }
         }
+
+        setSelectedRoleIds([]);
+        setSelectedTopicIds([]);
       } catch (error) {
         // The registry is the authority on whether the account has a space, and
         // several failures land *after* registration succeeds (a publish retry
@@ -252,12 +309,16 @@ export function PendingPersonalSpaceRunner() {
           if (registered) {
             console.warn('[PendingPersonalSpace] creation reported an error but the space is registered', error);
             resolve(registered);
+            settleMembership(registered);
             return;
           }
         } catch {
           // Fall through to the real failure path below.
         }
 
+        // Creation genuinely failed: drop every optimistic pending row we seeded, even if
+        // enrich is still in flight or rejected (seededIds, not enrich results).
+        void targetsPromise.then(rollbackPending, rollbackPending);
         console.error('[PendingPersonalSpace] creation failed', error);
         setPending({ topicId, address, status: 'failed' });
         reportError(`Account setup failed: ${describeError(error)}`, () => {
