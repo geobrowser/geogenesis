@@ -1,6 +1,6 @@
 import { DndContext } from '@dnd-kit/core';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
@@ -16,6 +16,7 @@ import {
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
   getTopLevelBlockElements,
+  insertTextBlockBelow,
   isBlockDropNoOp,
   makeDropZones,
   moveTopLevelBlock,
@@ -26,12 +27,16 @@ const editors: Editor[] = [];
 
 afterEach(() => {
   cleanup();
-  for (const editor of editors.splice(0)) editor.destroy();
+  for (const editor of editors.splice(0)) {
+    editor.view.dom.remove();
+    editor.destroy();
+  }
   vi.unstubAllGlobals();
 });
 
 describe('BlockDragHandle', () => {
-  it('bridges the gap between the visible handle and the hovered block', () => {
+  it('renders the plus button to the left of the drag handle', () => {
+    const onInsertBelow = vi.fn();
     render(
       React.createElement(
         DndContext,
@@ -42,16 +47,21 @@ describe('BlockDragHandle', () => {
           left: -32,
           isDragging: false,
           visible: true,
+          onInsertBelow,
         })
       )
     );
 
-    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
-    const hoverBridge = button.parentElement;
+    const addButton = screen.getByRole('button', { name: 'Add block below block 1' });
+    const dragButton = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    const hoverCluster = dragButton.parentElement;
 
-    expect(button).toHaveClass('size-6');
-    expect(hoverBridge).toHaveAttribute('data-block-drag-handle');
-    expect(hoverBridge).toHaveClass('w-8');
+    expect(addButton.compareDocumentPosition(dragButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(hoverCluster).toHaveAttribute('data-block-drag-handle');
+    expect(hoverCluster).toHaveClass('w-[60px]');
+
+    fireEvent.click(addButton);
+    expect(onInsertBelow).toHaveBeenCalledOnce();
   });
 
   it('reveals a hidden handle when it receives keyboard focus', () => {
@@ -153,10 +163,37 @@ describe('BlockGutterHoverArea', () => {
 
     expect(container.querySelector('[data-block-drag-gutter]')).toHaveStyle({
       top: '10px',
-      left: '52px',
-      width: '48px',
+      left: '40px',
+      width: '60px',
       height: '60px',
     });
+  });
+});
+
+describe('insertTextBlockBelow', () => {
+  it('inserts an empty paragraph directly below the selected block and focuses it', async () => {
+    const editor = makeEditor(['A', 'B']);
+    document.body.appendChild(editor.view.dom);
+
+    expect(insertTextBlockBelow(editor, 0)).toBe(true);
+
+    expect(blockText(editor)).toEqual(['A', '', 'B']);
+    expect(editor.state.selection.from).toBe(editor.state.doc.child(0).nodeSize + 1);
+    await waitFor(() => expect(editor.isFocused).toBe(true));
+  });
+
+  it('inserts below the final block', () => {
+    const editor = makeEditor(['A', 'B']);
+
+    expect(insertTextBlockBelow(editor, 1)).toBe(true);
+    expect(blockText(editor)).toEqual(['A', 'B', '']);
+  });
+
+  it('does not change the document for an invalid block index', () => {
+    const editor = makeEditor(['A']);
+
+    expect(insertTextBlockBelow(editor, 1)).toBe(false);
+    expect(blockText(editor)).toEqual(['A']);
   });
 });
 
@@ -203,7 +240,7 @@ describe('getGutterHoveredChildIndex', () => {
   });
 
   it('ignores pointers outside the left gutter', () => {
-    expect(getGutterHoveredChildIndex(blocks, 51, 20, 100)).toBeNull();
+    expect(getGutterHoveredChildIndex(blocks, 39, 20, 100)).toBeNull();
     expect(getGutterHoveredChildIndex(blocks, 101, 20, 100)).toBeNull();
   });
 });
