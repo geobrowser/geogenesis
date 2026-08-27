@@ -22,9 +22,15 @@ import {
   EXPLORE_PAGE_SIZE,
 } from './explore-constants';
 import { exploreBestConnectionDocument } from './explore-best-document';
+import {
+  EXPLORE_DIVERSITY_WINDOW_SIZE,
+  applyDiversityCap,
+  exploreItemTypeKey,
+} from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
 
 /**
  * `best` is the Phase A ranked feed (quality + structure + recency, server-side).
@@ -448,16 +454,46 @@ export async function fetchExploreFeed(args: {
     return out;
   };
 
+  // "Best" is the only sort that reorders (GEO-2690). "New" is reverse-chronological and
+  // an activity log that shuffles is simply wrong; "Top" is an explicit "rank by score"
+  // request, and the crowding-out was measured on Best, which is also the default tab.
+  if (args.sort === 'best') {
+    const { after, offset } = decodeExploreWindowCursor(args.cursor);
+
+    // A single type cannot be diversified against anything, so don't pay for a wide
+    // window: `applyDiversityCap` would return the list untouched. The offset paging
+    // below still applies, which is what stops the tail of the scan being dropped.
+    const windowSize = (args.typeIds?.length ?? 0) === 1 ? scanChunk : EXPLORE_DIVERSITY_WINDOW_SIZE;
+
+    const scanned = await fetchBestEntitiesPage({
+      spaceIds: baseIds,
+      time: args.time,
+      limit: windowSize,
+      after,
+      typeIds: args.typeIds,
+    });
+
+    const ordered = applyDiversityCap(
+      buildItems(scanned.entities, allowed, memberOrEditorSet),
+      exploreItemTypeKey
+    );
+    const slice = ordered.slice(offset, offset + pageSize);
+
+    return {
+      items: await attachMeta(slice),
+      nextCursor: nextExploreWindowCursor({
+        after,
+        offset,
+        served: slice.length,
+        windowLength: ordered.length,
+        hasNextPage: scanned.hasNextPage,
+        endCursor: scanned.endCursor,
+      }),
+    };
+  }
+
   const page =
-    args.sort === 'best'
-      ? await fetchBestEntitiesPage({
-          spaceIds: baseIds,
-          time: args.time,
-          limit: scanChunk,
-          after: args.cursor,
-          typeIds: args.typeIds,
-        })
-      : args.sort === 'top'
+    args.sort === 'top'
       ? await fetchTopEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
