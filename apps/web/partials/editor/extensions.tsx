@@ -57,15 +57,22 @@ export const tiptapExtensions = [
   RankingNode,
   ImageNode,
   VideoNode,
+  // showOnlyCurrent stays false because the profile bio tail is a standing
+  // invite — it has to render while the caret is elsewhere. The slash hint is
+  // gated on `hasAnchor` instead, so only the block the caret sits in shows it.
+  // Every empty block showing it would repeat a long line down the document and,
+  // since the placeholder `::before` is `height: 0`, overlap the block below
+  // once it wraps at narrow widths.
   Placeholder.configure({
     showOnlyCurrent: false,
-    placeholder: ({ node }) => {
+    placeholder: ({ node, hasAnchor }) => {
       if (node.type.name === 'heading') return 'Heading...';
       if (node.type.name === 'bulletList') return '';
       if (node.type.name === 'codeBlock') return '';
       if (node.type.name === 'paragraph' && node.attrs?.tailPlaceholder) {
         return PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT;
       }
+      if (!hasAnchor) return '';
       return 'Write some content or use / to select block type...';
     },
   }),
