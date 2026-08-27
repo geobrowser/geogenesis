@@ -14,6 +14,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
+import { countBy, orderFacetOptions, toggleId } from './topic-facets';
 import { useUnexpiredRequests } from './use-request-countdown';
 
 type RequestStatusFilter = 'all' | 'sent' | 'received';
@@ -35,7 +36,7 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * concern, so the design's third menu has nothing to offer here.)
  */
 export function RequestsTab() {
-  const [spaceId, setSpaceId] = React.useState<string | null>(null);
+  const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
   const requestsQuery = useDebateRequests(true);
@@ -44,7 +45,10 @@ export function RequestsTab() {
   const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
 
-  const inSpace = React.useCallback((requestSpaceId: string) => !spaceId || requestSpaceId === spaceId, [spaceId]);
+  const inSpace = React.useCallback(
+    (requestSpaceId: string) => spaceIds.length === 0 || spaceIds.includes(requestSpaceId),
+    [spaceIds]
+  );
 
   const received = React.useMemo(
     () => (status === 'sent' ? [] : incoming.filter(request => inSpace(request.claim.space_id))),
@@ -52,9 +56,19 @@ export function RequestsTab() {
   );
   const sent = status === 'received' || !outbound || !inSpace(outbound.claim.space_id) ? null : outbound;
 
-  const facetSpaceIds = React.useMemo(
-    () => [...new Set([...(outbound ? [outbound.claim.space_id] : []), ...incoming.map(r => r.claim.space_id)])],
-    [incoming, outbound]
+  // No server facet here either: the requests in hand are the whole list.
+  const facetSpaces = React.useMemo(
+    () =>
+      orderFacetOptions(
+        countBy(
+          [...(outbound ? [outbound.claim.space_id] : []), ...incoming.map(r => r.claim.space_id)].map(id => ({
+            id,
+            name: null,
+          }))
+        ),
+        spaceIds
+      ),
+    [incoming, outbound, spaceIds]
   );
 
   // The claimless challenge sits alongside claim requests: it expires the same way, and "Not now"
@@ -69,7 +83,7 @@ export function RequestsTab() {
   // undecided until the viewer's id is known — guessing files an incoming challenge under Sent,
   // where it reads as something the viewer sent and offers them "Cancel request" for it.
   const challengeRole =
-    !challenge || spaceId || !currentUserId
+    !challenge || spaceIds.length > 0 || !currentUserId
       ? null
       : challenge.recipient.user_id === currentUserId
         ? 'recipient'
@@ -77,16 +91,17 @@ export function RequestsTab() {
   const incomingChallenge = challengeRole === 'recipient' && status !== 'sent' ? challenge : null;
   const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
 
-  const hasFilters = Boolean(spaceId) || status !== 'all';
+  const hasFilters = spaceIds.length > 0 || status !== 'all';
   const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge;
 
   return (
     <div className="flex flex-col">
       <HubStickyControls>
         <SpaceTopicFilters
-          spaceId={spaceId}
-          onSpaceChange={setSpaceId}
-          facetSpaceIds={facetSpaceIds}
+          spaceIds={spaceIds}
+          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+          onSpacesClear={() => setSpaceIds([])}
+          facetSpaces={facetSpaces}
           leading={
             <HubFilterMenu
               label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
@@ -100,48 +115,48 @@ export function RequestsTab() {
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
-        isLoading={requestsQuery.isLoading}
-        error={requestsQuery.error}
-        onRetry={() => void requestsQuery.refetch()}
-        isEmpty={isEmpty}
-        emptyMessage={
-          hasFilters ? 'No requests match these filters.' : 'Any debate requests you’ll receive will appear here.'
-        }
-        emptyAction={
-          hasFilters
-            ? {
-                label: 'Clear filters',
-                onClick: () => {
-                  setSpaceId(null);
-                  setStatus('all');
-                },
-              }
-            : undefined
-        }
-      >
-        <div className="flex flex-col gap-4">
-          {sent || outgoingChallenge ? (
-            <RequestSection label="Sent">
-              <div className="flex flex-col gap-2">
-                {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
-                <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
-              </div>
-            </RequestSection>
-          ) : null}
+          isLoading={requestsQuery.isLoading}
+          error={requestsQuery.error}
+          onRetry={() => void requestsQuery.refetch()}
+          isEmpty={isEmpty}
+          emptyMessage={
+            hasFilters ? 'No requests match these filters.' : 'Any debate requests you’ll receive will appear here.'
+          }
+          emptyAction={
+            hasFilters
+              ? {
+                  label: 'Clear filters',
+                  onClick: () => {
+                    setSpaceIds([]);
+                    setStatus('all');
+                  },
+                }
+              : undefined
+          }
+        >
+          <div className="flex flex-col gap-4">
+            {sent || outgoingChallenge ? (
+              <RequestSection label="Sent">
+                <div className="flex flex-col gap-2">
+                  {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
+                  <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
+                </div>
+              </RequestSection>
+            ) : null}
 
-          {incomingChallenge || received.length > 0 ? (
-            <RequestSection label="Received">
-              <div className="flex flex-col gap-2">
-                {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
-                <HubCardList>
-                  {received.map(request => (
-                    <IncomingRequestCard key={request.id} request={request} />
-                  ))}
-                </HubCardList>
-              </div>
-            </RequestSection>
-          ) : null}
-        </div>
+            {incomingChallenge || received.length > 0 ? (
+              <RequestSection label="Received">
+                <div className="flex flex-col gap-2">
+                  {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
+                  <HubCardList>
+                    {received.map(request => (
+                      <IncomingRequestCard key={request.id} request={request} />
+                    ))}
+                  </HubCardList>
+                </div>
+              </RequestSection>
+            ) : null}
+          </div>
         </HubQueryState>
       </div>
     </div>

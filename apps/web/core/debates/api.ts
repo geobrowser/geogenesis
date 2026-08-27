@@ -461,6 +461,11 @@ export type MatchmakingClaimsQuery = {
   spaceIds?: string[] | null;
   topicId?: string | null;
   /**
+   * Topics to narrow by, OR-ed together. Merged with `topicId` the same way `spaceIds` is with
+   * `spaceId`, so send one or the other rather than both.
+   */
+  topicIds?: string[] | null;
+  /**
    * Narrows rows *and* facets to what a debate-again session can still offer: geo-chat drops the
    * claim the source debate was about, and any this pairing has blocked (GEO-2674).
    *
@@ -1097,6 +1102,7 @@ export async function listMatchmakingClaims(
   // eligible set means.
   else if (query.spaceIds?.length) params.set('space_ids', query.spaceIds.join(','));
   if (query.topicId) params.set('topic_id', query.topicId);
+  else if (query.topicIds?.length) params.set('topic_ids', query.topicIds.join(','));
   if (query.rematchSessionId) params.set('rematch_session_id', query.rematchSessionId);
   if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
   if (query.cursor) params.set('cursor', query.cursor);

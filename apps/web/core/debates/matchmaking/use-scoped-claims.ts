@@ -59,8 +59,9 @@ export type ScopedClaims = {
  * there is nothing worth asking for.
  */
 export function useScopedMatchmakingClaims(
-  query: Omit<MatchmakingClaimsQuery, 'spaceIds'>,
+  query: Omit<MatchmakingClaimsQuery, 'spaceIds' | 'spaceId'>,
   scope: ClaimSpaceScope,
+  selectedSpaceIds: string[],
   alsoUnusable = false
 ): ScopedClaims {
   // A known-empty scope is not the same as no scope: omitting the ids would fetch the unfiltered
@@ -69,10 +70,14 @@ export function useScopedMatchmakingClaims(
 
   // `query` is expected memoized by the caller — it is the react-query key, so a fresh object every
   // render would refetch on every render.
-  const scopedQuery = React.useMemo<MatchmakingClaimsQuery>(
-    () => ({ ...query, spaceIds: scope.spaceIds }),
-    [query, scope.spaceIds]
-  );
+  // The viewer's picked spaces stand in for the scope rather than joining it. They are always a
+  // subset of it — the menu offers nothing the scope doesn't admit — so sending them alone is both
+  // correct and narrower. Sending both would *widen*: geo-chat ORs the space parameters together
+  // rather than intersecting them, so a scope of ten spaces alongside a pick of one asks about all
+  // ten. With nothing picked the scope is the filter, which is what bounds the facets.
+  const spaceIds = selectedSpaceIds.length > 0 ? selectedSpaceIds : scope.spaceIds;
+
+  const scopedQuery = React.useMemo<MatchmakingClaimsQuery>(() => ({ ...query, spaceIds }), [query, spaceIds]);
 
   const claimsQuery = useMatchmakingClaims(scopedQuery, !unusable && !scope.pending);
 
