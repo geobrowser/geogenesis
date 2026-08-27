@@ -16,6 +16,7 @@ import {
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
   getTopLevelBlockElements,
+  isBlockDropNoOp,
   makeDropZones,
   moveTopLevelBlock,
   releasePointerDragFocus,
@@ -191,6 +192,26 @@ describe('getNextKeyboardDropBoundary', () => {
 
     expect(getNextKeyboardDropBoundary(0, null, 1, boundariesWithExcludedNode)).toBe(3);
     expect(getNextKeyboardDropBoundary(2, null, -1, boundariesWithExcludedNode)).toBe(0);
+  });
+});
+
+describe('isBlockDropNoOp', () => {
+  it('recognizes both slots beside the source in a contiguous document', () => {
+    const boundaries = [0, 1, 2, 3];
+
+    expect(isBlockDropNoOp(1, 1, boundaries)).toBe(true);
+    expect(isBlockDropNoOp(1, 2, boundaries)).toBe(true);
+    expect(isBlockDropNoOp(1, 0, boundaries)).toBe(false);
+    expect(isBlockDropNoOp(1, 3, boundaries)).toBe(false);
+  });
+
+  it('uses draggable rank when excluded nodes make child indexes sparse', () => {
+    const boundariesWithExcludedNode = [0, 2, 3];
+
+    expect(isBlockDropNoOp(0, 2, boundariesWithExcludedNode)).toBe(true);
+    expect(isBlockDropNoOp(2, 2, boundariesWithExcludedNode)).toBe(true);
+    expect(isBlockDropNoOp(0, 3, boundariesWithExcludedNode)).toBe(false);
+    expect(isBlockDropNoOp(2, 0, boundariesWithExcludedNode)).toBe(false);
   });
 });
 

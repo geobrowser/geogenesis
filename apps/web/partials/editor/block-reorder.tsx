@@ -218,10 +218,12 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
   const handleDragEnd = (event: DragEndEvent) => {
     const sourceIndex = event.active.data.current?.childIndex;
     const dropBoundary = event.over?.data.current?.boundary;
+    const boundaries = makeDropZones(blockLayoutRef.current).map(zone => zone.boundary);
 
     if (
       typeof sourceIndex === 'number' &&
       typeof dropBoundary === 'number' &&
+      !isBlockDropNoOp(sourceIndex, dropBoundary, boundaries) &&
       moveTopLevelBlock(editor, sourceIndex, dropBoundary)
     ) {
       onReorder();
@@ -418,14 +420,30 @@ export function getNextKeyboardDropBoundary(
   const sourceRank = boundaries.indexOf(sourceIndex);
   if (sourceRank === -1) return null;
 
-  const currentBoundaryRank = currentBoundary === null ? sourceRank : boundaries.indexOf(currentBoundary);
-  if (currentBoundaryRank === -1) return null;
+  const currentRank =
+    currentBoundary === null ? sourceRank : getBlockRankAtBoundary(sourceIndex, currentBoundary, boundaries);
+  if (currentRank === null) return null;
 
-  const currentRank = currentBoundaryRank > sourceRank ? currentBoundaryRank - 1 : currentBoundaryRank;
   const targetRank = currentRank + direction;
   const targetBoundaryRank = targetRank > sourceRank ? targetRank + 1 : targetRank;
 
   return boundaries[targetBoundaryRank] ?? null;
+}
+
+/** Whether a drop boundary leaves the source in the same draggable-block slot. */
+export function isBlockDropNoOp(sourceIndex: number, dropBoundary: number, boundaries: number[]) {
+  const sourceRank = boundaries.indexOf(sourceIndex);
+  const dropRank = getBlockRankAtBoundary(sourceIndex, dropBoundary, boundaries);
+
+  return sourceRank !== -1 && dropRank === sourceRank;
+}
+
+function getBlockRankAtBoundary(sourceIndex: number, boundary: number, boundaries: number[]) {
+  const sourceRank = boundaries.indexOf(sourceIndex);
+  const boundaryRank = boundaries.indexOf(boundary);
+  if (sourceRank === -1 || boundaryRank === -1) return null;
+
+  return boundaryRank > sourceRank ? boundaryRank - 1 : boundaryRank;
 }
 
 function BlockDropZone({ zone, left, width }: { zone: DropZoneLayout; left: number; width: number }) {
