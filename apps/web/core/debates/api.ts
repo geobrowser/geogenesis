@@ -548,6 +548,13 @@ export type LiveKitJoinResponse = {
   position_label: string;
 };
 
+export type RematchLiveKitJoinResponse = {
+  token: string;
+  url: string;
+  room_name: string;
+  participant_slot: ParticipantSlot;
+};
+
 export type LocalRecordingUploadRequest = {
   mime_type: string;
   started_at_ms: number;
@@ -779,6 +786,19 @@ export async function getLiveKitToken(
   accountKey: string | null
 ) {
   return geoChatRequest<LiveKitJoinResponse>(`/debates/${debateId}/livekit-token`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function getRematchLiveKitToken(
+  sessionId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<RematchLiveKitJoinResponse>(`/debate-rematches/${sessionId}/livekit-token`, {
     method: 'POST',
     auth: true,
     getPrivyIdentityToken,

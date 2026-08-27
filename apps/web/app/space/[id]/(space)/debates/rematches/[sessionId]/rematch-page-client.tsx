@@ -54,6 +54,8 @@ import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+
+import { RematchVoicePill } from './rematch-voice';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
@@ -872,6 +874,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         ) : null}
       </main>
+
+      {session && currentUserId && <RematchVoicePill session={session} currentUserId={currentUserId} />}
 
       {incomingRequest && session && currentUserId && (
         <DebateRequestDialog
