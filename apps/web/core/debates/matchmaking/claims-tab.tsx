@@ -185,14 +185,24 @@ export function ClaimsTab() {
 
   // Search and the space menu run over the loaded list. The server-side versions belong to
   // geo-chat's index, which knows nothing about this list.
-  const featuredMatching = React.useMemo(() => {
+  // Search only, deliberately. The space facet counts claims *outside* the picked spaces — no facet
+  // is narrowed by its own dimension — and to narrow it by topic instead, those claims' topics have
+  // to be resolvable. So the entity lookup below runs over this set rather than the space-filtered
+  // one, and picking a space no longer decides which topics the client can see.
+  const featuredSearched = React.useMemo(() => {
     const needle = debouncedSearch.toLowerCase();
-    return featuredAllowed.filter(
-      claim =>
-        (spaceIds.length === 0 || spaceIds.some(id => ID.equals(claim.spaceId, id))) &&
-        (needle === '' || claim.name.toLowerCase().includes(needle))
-    );
-  }, [debouncedSearch, featuredAllowed, spaceIds]);
+    return needle === '' ? featuredAllowed : featuredAllowed.filter(claim => claim.name.toLowerCase().includes(needle));
+  }, [debouncedSearch, featuredAllowed]);
+
+  const inPickedSpace = React.useCallback(
+    (spaceId: string) => spaceIds.length === 0 || spaceIds.some(id => ID.equals(spaceId, id)),
+    [spaceIds]
+  );
+
+  const featuredMatching = React.useMemo(
+    () => featuredSearched.filter(claim => inPickedSpace(claim.spaceId)),
+    [featuredSearched, inPickedSpace]
+  );
 
   // The sides and readiness the cards draw are geo-chat's, and its only lookup for claims it hasn't
   // ranked is the per-space one — so the tagged claims are asked for by id, grouped by the space
@@ -212,8 +222,8 @@ export function ClaimsTab() {
   // and slices to them. It asks in batches of a hundred and pulls six fields instead of every value
   // and relation on the entity.
   const featuredEntityIds = React.useMemo(
-    () => [...new Set(featuredMatching.map(claim => claim.claimEntityId).filter(validateEntityId))],
-    [featuredMatching]
+    () => [...new Set(featuredSearched.map(claim => claim.claimEntityId).filter(validateEntityId))],
+    [featuredSearched]
   );
   const { entities: featuredEntities, isLoading: featuredEntitiesLoading } = useClaimEntitiesByIds(featuredEntityIds);
 
@@ -269,6 +279,15 @@ export function ClaimsTab() {
     return map;
   }, [featured, featuredEntities]);
 
+  // Whether a claim survives the topic filter, by the same rule the rows use. Defined here because
+  // the space facet needs it over claims the rows have already dropped.
+  const carriesPickedTopic = React.useCallback(
+    (claimEntityId: string) =>
+      topicIds.length === 0 ||
+      (featuredTopicsByClaimId.get(claimEntityId) ?? []).some(topic => topicIds.includes(topic.id)),
+    [featuredTopicsByClaimId, topicIds]
+  );
+
   // The space menu offers only what the list can actually show, so picking an option never lands
   // the viewer on an empty list they can't explain.
   // Ordered by count with the picked ones held at the top, so ticking one doesn't re-sort the list
@@ -279,10 +298,14 @@ export function ClaimsTab() {
   // would leave that one option in the menu.
   const facetSpaces = React.useMemo(() => {
     const source = featured
-      ? countBy(featuredAllowed.map(claim => ({ id: claim.spaceId, name: null })))
+      ? countBy(
+          featuredSearched
+            .filter(claim => carriesPickedTopic(claim.claimEntityId))
+            .map(claim => ({ id: claim.spaceId, name: null }))
+        )
       : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id));
     return orderFacetOptions(keepSelectedVisible(source, spaceIds), spaceIds);
-  }, [facets?.space_facets, featured, featuredAllowed, spaceIds, spaceShowsClaims]);
+  }, [carriesPickedTopic, facets?.space_facets, featured, featuredSearched, spaceIds, spaceShowsClaims]);
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
@@ -315,10 +338,17 @@ export function ClaimsTab() {
     // Counting the featured claims per topic rather than deduping them: a count is the point of
     // the menu now, and the claims in hand are the whole featured list.
     const source = featured
-      ? countBy([...featuredTopicsByClaimId.values()].flat().map(topic => ({ id: topic.id, name: topic.name })))
+      ? countBy(
+          featuredMatching.flatMap(claim =>
+            (featuredTopicsByClaimId.get(claim.claimEntityId) ?? []).map(topic => ({
+              id: topic.id,
+              name: topic.name,
+            }))
+          )
+        )
       : (facets?.topic_facets ?? []);
     return orderFacetOptions(source, topicIds);
-  }, [facets?.topic_facets, featured, featuredTopicsByClaimId, topicIds]);
+  }, [facets?.topic_facets, featured, featuredMatching, featuredTopicsByClaimId, topicIds]);
 
   // Featured's menu settles with its entity lookup, which is where its topics come from — the
   // server facets it would otherwise read never arrive, since the query is never made.

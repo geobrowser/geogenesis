@@ -981,6 +981,49 @@ describe('ClaimsTab -- Featured', () => {
     expect(screen.queryByText('Chips are better than fries')).toBeNull();
   });
 
+  // Featured has no server facet, so its counts are computed here — and a count still has to say
+  // what picking the option would leave. Reported: pick a topic that only exists in one space, and
+  // the other space kept its full count over a list that would come back empty.
+  it('narrows its space counts by the picked topic', async () => {
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy', SPACE_ID),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown', OTHER_SPACE_ID),
+    ];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
+      },
+      {
+        id: FEATURED_B,
+        name: 'Cities should ban cars downtown',
+        description: null,
+        spaces: [OTHER_SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    // Both spaces carry a featured claim, so both are offered before any topic narrows them.
+    expect(screen.getAllByRole('button', { name: /Space/ })).toHaveLength(2);
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    // Only the Energy claim's space is left to pick, and the other is gone rather than offered
+    // over a list it could not fill.
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /Space/ })).toHaveLength(1));
+  });
+
   // The panel is narrow enough that three menus fill the row on their own. Pushing the topic one to
   // the far end there — as the rematch picker does, where there is width to spare — would only
   // separate it from the two it sits with.
