@@ -569,7 +569,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // A new response from the opponent adds an id, and the lookups keyed on the id list start over.
   // The list they were drawn from is still right for every claim already on it, so it stays up
   // until the new one lands rather than dropping to nothing in between.
-  const opponentClaims = useLastSettled(opponentClaimsNow, opponentClaimsSettling);
+  const opponentClaimsHeld = useLastSettled(opponentClaimsNow, opponentClaimsSettling);
+  // The sort above is a load-time arrangement, not a live one (GEO-2698). `shared_preference` is
+  // read off the session row, so taking a side on a claim the opponent has already answered flips
+  // it — and re-sorting sent the row the viewer had just acted on to the top, carrying the rest of
+  // the list with it. Held so that arrangement survives the viewer acting on it; a claim the
+  // opponent answers next is new rather than moved, and still lands at the top where the sort puts
+  // it. Keyed on the session, so reopening the flow arranges it afresh.
+  //
+  // Applied after `useLastSettled` rather than before it: the hold remembers the rows it has been
+  // shown, and `opponentClaimsNow` empties on every refetch. Stabilising that would hand it an
+  // empty list mid-flight and lose the order at the moment it is needed.
+  const opponentClaims = useStableListOrder(
+    opponentClaimsHeld,
+    row => `${row.claim.space_id}:${row.claim.claim_entity_id}`,
+    sessionId
+  );
 
   // The curated tab, in the curator's order. Held the same way, and likewise not narrowed by the
   // space allowlist.
