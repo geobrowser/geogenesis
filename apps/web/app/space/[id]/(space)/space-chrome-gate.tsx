@@ -20,7 +20,15 @@ export function SpaceChromeGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function useIsSidebarRoute() {
+/**
+ * Routes that render a space rail on the server today (Overview + Community, for a
+ * space or `/root`). This is used ONLY to seed the header width before the rail has
+ * reported its content on the client — so a hard load of a rail route paints at the
+ * right width instead of flashing narrow → wide, and a non-rail tab (which never
+ * renders a rail on the server) is never seeded wide. Once the rail reports via the
+ * atom, that takes over for whatever tab is showing — see SpaceHeaderContentGate.
+ */
+function useIsSidebarSeedRoute() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   if (searchParams.get('tabId')) return false;
@@ -33,12 +41,8 @@ type SpaceHeaderContentContainerProps = {
 };
 
 export function SpaceHeaderContentContainer({ children, hasSidebar }: SpaceHeaderContentContainerProps) {
-  const isSidebarRoute = useIsSidebarRoute();
-
   return (
-    <EntityPageContentContainer variant={hasSidebar && isSidebarRoute ? 'with-sidebar' : 'content'}>
-      {children}
-    </EntityPageContentContainer>
+    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>{children}</EntityPageContentContainer>
   );
 }
 
@@ -50,7 +54,15 @@ type SpaceHeaderContentGateProps = {
 
 export function SpaceHeaderContentGate({ children, serverHasSidebar, isExternalTopic }: SpaceHeaderContentGateProps) {
   const sidebarContent = useAtomValue(spaceSidebarHasContentAtom);
-  const hasSidebar = !isExternalTopic && (sidebarContent !== null ? sidebarContent : serverHasSidebar);
+  const isSeedRoute = useIsSidebarSeedRoute();
+
+  // Content-driven on every tab: once the rail reports whether it has content (via
+  // the atom, after hydration), that alone decides the header width for whichever
+  // tab is showing — no hardcoded per-tab list, so any tab that grows a rail widens
+  // the header automatically. Before the atom is set (SSR / first paint) fall back
+  // to the server's per-space signal, but only on routes that actually render a rail,
+  // so a non-rail tab is never seeded wide and a rail route never flashes.
+  const hasSidebar = !isExternalTopic && (sidebarContent !== null ? sidebarContent : serverHasSidebar && isSeedRoute);
 
   return <SpaceHeaderContentContainer hasSidebar={hasSidebar}>{children}</SpaceHeaderContentContainer>;
 }

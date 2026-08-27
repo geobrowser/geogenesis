@@ -24,40 +24,40 @@ describe('space chrome layout', () => {
 
   afterEach(cleanup);
 
-  it('aligns the header with the sidebar layout on the space home page', () => {
+  it('renders the wide layout when a rail is present, regardless of route', () => {
     render(<SpaceHeaderContentContainer hasSidebar>Header</SpaceHeaderContentContainer>);
 
     expect(screen.getByText('Header').dataset.entityPageContentVariant).toBe('with-sidebar');
   });
 
-  it('aligns the header with the sidebar layout on /root', () => {
-    navigation.pathname = '/root';
-
-    render(<SpaceHeaderContentContainer hasSidebar>Header</SpaceHeaderContentContainer>);
-
-    expect(screen.getByText('Header').dataset.entityPageContentVariant).toBe('with-sidebar');
-  });
-
-  it('aligns the header with the sidebar layout on the community tab', () => {
-    navigation.pathname = '/space/test-space/community';
-
-    render(<SpaceHeaderContentContainer hasSidebar>Header</SpaceHeaderContentContainer>);
-
-    expect(screen.getByText('Header').dataset.entityPageContentVariant).toBe('with-sidebar');
-  });
-
-  it('drops the sidebar width on nested space routes, which render no rail', () => {
+  it('does not seed the sidebar width on nested space routes, which render no rail', () => {
     navigation.pathname = '/space/test-space/activity';
+    const store = createStore();
+    store.set(spaceSidebarHasContentAtom, null);
 
-    render(<SpaceHeaderContentContainer hasSidebar>Header</SpaceHeaderContentContainer>);
+    render(
+      <Provider store={store}>
+        <SpaceHeaderContentGate serverHasSidebar isExternalTopic={false}>
+          Header
+        </SpaceHeaderContentGate>
+      </Provider>
+    );
 
     expect(screen.getByText('Header').dataset.entityPageContentVariant).toBe('content');
   });
 
-  it('drops the sidebar width on authored content tabs, which share the overview URL', () => {
+  it('does not seed the sidebar width on authored content tabs, which share the overview URL', () => {
     navigation.search = 'tabId=team-tab';
+    const store = createStore();
+    store.set(spaceSidebarHasContentAtom, null);
 
-    render(<SpaceHeaderContentContainer hasSidebar>Header</SpaceHeaderContentContainer>);
+    render(
+      <Provider store={store}>
+        <SpaceHeaderContentGate serverHasSidebar isExternalTopic={false}>
+          Header
+        </SpaceHeaderContentGate>
+      </Provider>
+    );
 
     expect(screen.getByText('Header').dataset.entityPageContentVariant).toBe('content');
   });
@@ -132,6 +132,24 @@ describe('space chrome layout', () => {
     render(
       <Provider store={store}>
         <SpaceHeaderContentGate serverHasSidebar isExternalTopic={false}>
+          Header
+        </SpaceHeaderContentGate>
+      </Provider>
+    );
+
+    expect(screen.getByText('Header').dataset.entityPageContentVariant).toBe('with-sidebar');
+  });
+
+  it('widens any tab once its rail reports content, not just the overview routes', () => {
+    // A nested route that is not a seed route: the header still widens because the
+    // rail itself reported content, so header width follows content on every tab.
+    navigation.pathname = '/space/test-space/activity';
+    const store = createStore();
+    store.set(spaceSidebarHasContentAtom, true);
+
+    render(
+      <Provider store={store}>
+        <SpaceHeaderContentGate serverHasSidebar={false} isExternalTopic={false}>
           Header
         </SpaceHeaderContentGate>
       </Provider>
