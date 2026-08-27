@@ -11,6 +11,7 @@ import {
   endDebateTurn,
   getDebateActivity,
   getGeoChatSession,
+  getRematchLiveKitToken,
   joinDebateQueue,
   listDebateClaims,
   listMatchmakingClaims,
@@ -400,6 +401,56 @@ describe('debate claim hydration authentication', () => {
       'http://localhost:8080/spaces/space-1/debate-claims?claim_ids=claim-1',
       expect.objectContaining({ headers: {} })
     );
+  });
+});
+
+describe('rematch voice tokens', () => {
+  it('mints a token for the session with an authenticated bodyless POST', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          token: 'jwt',
+          url: 'wss://livekit.test',
+          room_name: 'geo-rematch-session-1',
+          participant_slot: 2,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(getRematchLiveKitToken('session-1', vi.fn(), 'user-a')).resolves.toEqual({
+      token: 'jwt',
+      url: 'wss://livekit.test',
+      room_name: 'geo-rematch-session-1',
+      participant_slot: 2,
+    });
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/debate-rematches/session-1/livekit-token', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer access-token' },
+      body: undefined,
+      signal: undefined,
+    });
+  });
+
+  // The dock reads the code to decide between rendering nothing and offering a retry, so it has to
+  // survive the request layer intact.
+  it('surfaces the backend refusal code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'livekit_not_configured', message: 'No LiveKit' } }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    await expect(getRematchLiveKitToken('session-1', vi.fn(), 'user-a')).rejects.toMatchObject({
+      status: 503,
+      code: 'livekit_not_configured',
+    });
   });
 });
 

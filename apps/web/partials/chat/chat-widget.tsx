@@ -57,8 +57,15 @@ type AssistantMessageSource = 'typed' | 'option_click';
 
 const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose'] as const;
 
+// The claim-exploration picker is its own full-screen overlay, and it parks a voice dock in the
+// bottom-right corner — exactly where the assistant's launcher floats.
+const FULLSCREEN_CHILD_ROUTE_PATTERNS = [/\/debates\/rematches\/[^/]+$/] as const;
+
 function isFullscreenChildRoute(pathname: string): boolean {
-  return FULLSCREEN_CHILD_ROUTE_SUFFIXES.some(suffix => pathname.endsWith(suffix));
+  return (
+    FULLSCREEN_CHILD_ROUTE_SUFFIXES.some(suffix => pathname.endsWith(suffix)) ||
+    FULLSCREEN_CHILD_ROUTE_PATTERNS.some(pattern => pattern.test(pathname))
+  );
 }
 
 // Guard router.push against hallucinated id shapes.
