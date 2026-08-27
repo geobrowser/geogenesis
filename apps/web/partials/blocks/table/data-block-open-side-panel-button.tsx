@@ -6,8 +6,9 @@ import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 
 import { SidePanel } from '~/design-system/icons/side-panel';
 
-const sidePanelOpenerClassName =
-  'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border-none bg-transparent p-0 text-grey-03 transition duration-300 ease-in-out hover:text-text focus:outline-hidden';
+import { rowOpenerClassName } from '~/partials/blocks/table/row-control-styles';
+
+const sidePanelOpenerClassName = rowOpenerClassName;
 
 export function DataBlockOpenSidePanelButton({
   entityId,
