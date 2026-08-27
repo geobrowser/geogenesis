@@ -332,6 +332,25 @@ export function useLeaveDebateQueue(spaceId: string) {
   });
 }
 
+/**
+ * How often the rematch session re-asks while its picker is on screen (GEO-2650).
+ *
+ * A backstop, not the delivery mechanism. `debate.rematch_changed` still arrives by push and is
+ * what normally updates this — measured at 1.28s average and 2.27s worst from emit to Kafka
+ * publish, across every rematch event in the last week.
+ *
+ * It exists because this query had no fallback at all, and the push has one failure mode with a
+ * 30-second budget: a socket that dies silently is not noticed until the next heartbeat
+ * (`DEFAULT_HEARTBEAT_INTERVAL_MS` in `debate-gateway`), and only then reconnects and refetches.
+ * Preston measured a request taking ~36 seconds to reach an opponent, which is that window plus a
+ * reconnect and handshake — and every other link in the chain measures well under it.
+ *
+ * Five seconds because both people are sitting there waiting for each other: this is the one flow
+ * where a stale list is the whole problem rather than a cosmetic lag. It only runs while the picker
+ * is foregrounded, so an idle tab still costs nothing.
+ */
+const REMATCH_POLL_MS = 5_000;
+
 /** How often activity re-asks while this tab is on screen, with a live gateway behind it. */
 const ACTIVITY_POLL_MS = 30_000;
 /** And while the gateway is paused, when this is the only thing still asking. */
@@ -622,12 +641,20 @@ export function useConsentToDebateRematch(debateId: string) {
 
 export function useDebateRematch(sessionId: string, enabled = true) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  // Presence, not attention. `useDebateAttention` also requires `document.hasFocus()`, so a tab
+  // sitting open on screen behind whatever window the viewer is typing in would not poll — and
+  // waiting for an opponent while looking elsewhere is exactly this flow. That distinction is the
+  // one GEO-2650 already cost once on the activity poll; see the note on `useDebateActivity`.
+  const present = useDebatePresence();
 
   return useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.rematch(accountKey, sessionId),
     queryFn: ({ signal }) => getDebateRematch(sessionId, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && Boolean(sessionId),
+    // See REMATCH_POLL_MS. The push still does the work; this bounds the case where it never
+    // arrives, which this query previously had no answer to.
+    refetchInterval: present ? REMATCH_POLL_MS : false,
   });
 }
 
