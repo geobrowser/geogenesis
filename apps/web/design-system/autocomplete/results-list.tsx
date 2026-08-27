@@ -68,6 +68,7 @@ export const ResultItem = ({ existsOnEntity = false, className = '', ...rest }: 
 function ResultRow({
   href,
   onActivate,
+  disabled = false,
   className,
   children,
   ...rest
@@ -75,9 +76,14 @@ function ResultRow({
   href?: string;
   /** Named away from `onSelect`, which is a DOM prop and collides with the spread row props. */
   onActivate: () => void;
+  /** The row is showing something the caller has already taken; it renders but does not act. */
+  disabled?: boolean;
   className: string;
   children: React.ReactNode;
-} & Record<string, unknown>) {
+  // Attributes both elements understand. Deliberately not the button's own props: `disabled`,
+  // `type` and `form` mean nothing on an anchor, and a wider type here would let a caller pass one
+  // and have it quietly do nothing on whichever branch it landed in.
+} & React.HTMLAttributes<HTMLElement>) {
   if (!href) {
     return (
       <button onClick={onActivate} className={className} {...rest}>
@@ -91,6 +97,14 @@ function ResultRow({
       href={href}
       className={className}
       onClick={event => {
+        // A row standing in for something already taken does not travel, by any means of asking.
+        // Checked before the modifier branch, which returns without preventing the default.
+        // A row standing in for something already taken does not travel, by any means of asking.
+        // Checked before the modifier branch, which returns without preventing the default.
+        if (disabled) {
+          event.preventDefault();
+          return;
+        }
         // The browser has been asked for a new tab or window. Let it, and stop the event here so
         // the list around this row does not navigate the current one as well.
         if (isModifiedClick(event)) {
@@ -123,7 +137,9 @@ type ResultContentProps = {
    * pickers, which select a value instead.
    */
   href?: string;
-} & React.ComponentPropsWithoutRef<'button'>;
+  // Attributes shared by the button and the anchor this row can be. It used to promise the
+  // button's own props, which no caller used and the anchor branch could not honour.
+} & React.HTMLAttributes<HTMLElement>;
 
 export const ResultContent = ({
   onClick,
@@ -160,6 +176,7 @@ export const ResultContent = ({
       <ResultRow
         href={href}
         onActivate={onSelect}
+        disabled={alreadySelected}
         className={cx(
           active && 'bg-grey-01',
           alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
@@ -274,6 +291,7 @@ export const SpaceContent = ({
       <ResultRow
         href={href}
         onActivate={onSelect}
+        disabled={alreadySelected}
         className={cx(
           alreadySelected ? 'cursor-not-allowed bg-grey-01' : 'cursor-pointer',
           'flex w-full flex-col p-2 transition-colors duration-150 hover:bg-grey-01 focus:bg-grey-01 focus:outline-hidden'

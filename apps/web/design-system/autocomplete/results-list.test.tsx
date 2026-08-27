@@ -52,13 +52,30 @@ describe('ResultContent', () => {
       ['cmd', { metaKey: true }],
       ['ctrl', { ctrlKey: true }],
       ['shift', { shiftKey: true }],
-      ['middle click', { button: 1 }],
     ])('leaves a %s click to the browser', (_name, modifier) => {
       const { onClick } = renderRow({ href: HREF });
 
       const event = fireEvent.click(screen.getByRole('link', { name: /Ethereum/ }), modifier);
 
       // Not prevented: the browser still gets to open its new tab.
+      expect(event).toBe(true);
+      expect(onClick).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Middle click arrives as `auxclick`, which no `onClick` handler sees — so what carries it is
+     * the anchor itself: nothing runs, nothing prevents the default, the browser opens its
+     * background tab. Dispatched as the real event rather than a `click` with `button: 1`, which
+     * would pass against a plain button and prove nothing.
+     */
+    it('leaves a middle click to the browser', () => {
+      const { onClick } = renderRow({ href: HREF });
+
+      const event = fireEvent(
+        screen.getByRole('link', { name: /Ethereum/ }),
+        new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 })
+      );
+
       expect(event).toBe(true);
       expect(onClick).not.toHaveBeenCalled();
     });
@@ -72,6 +89,21 @@ describe('ResultContent', () => {
 
       expect(event).toBe(false);
       expect(onClick).toHaveBeenCalledTimes(1);
+    });
+    /**
+     * A row standing in for something already taken does not travel, by any means of asking. The
+     * modifier branch returns without preventing the default, so without a check ahead of it a
+     * cmd-click would open a row the surface is showing as unavailable.
+     */
+    it('goes nowhere when the row is already taken', () => {
+      const { onClick } = renderRow({ href: HREF, alreadySelected: true });
+
+      const plain = fireEvent.click(screen.getByRole('link', { name: /Ethereum/ }));
+      const modified = fireEvent.click(screen.getByRole('link', { name: /Ethereum/ }), { metaKey: true });
+
+      expect(plain).toBe(false);
+      expect(modified).toBe(false);
+      expect(onClick).not.toHaveBeenCalled();
     });
   });
 

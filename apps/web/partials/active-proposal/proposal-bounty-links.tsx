@@ -810,15 +810,23 @@ function BountyReadOnly({ bounty }: { bounty: Bounty }) {
       {/* An anchor rather than a button that calls `window.open`: the destination is a real one, so
           the browser can offer its own ways of opening it — new tab, new window, the context menu —
           instead of one hard-coded choice (GEO-2701). `target` keeps the previous behaviour of
-          opening away from the proposal being reviewed. */}
-      <a
-        href={bounty.spaceId ? NavUtils.toEntity(bounty.spaceId, bounty.id) : undefined}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-left text-[15px] font-semibold text-text hover:underline"
-      >
-        {bounty.name}
-      </a>
+          opening away from the proposal being reviewed.
+
+          A bounty with no space has nowhere to go, and an `<a>` without an href is not a link: it
+          takes no focus and carries no role, so it would read as text to a keyboard while still
+          underlining on hover. The name renders as what it is instead. */}
+      {bounty.spaceId ? (
+        <a
+          href={NavUtils.toEntity(bounty.spaceId, bounty.id)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-left text-[15px] font-semibold text-text hover:underline"
+        >
+          {bounty.name}
+        </a>
+      ) : (
+        <span className="text-left text-[15px] font-semibold text-text">{bounty.name}</span>
+      )}
     </div>
   );
 }

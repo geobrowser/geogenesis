@@ -8,8 +8,10 @@
  * nothing at all. Fanning research out across tabs is a core way to read a knowledge graph, so this
  * is a question of function rather than polish (GEO-2701).
  *
- * `button === 1` is the middle button. It arrives as `auxclick` rather than `click` in modern
- * browsers, but React's `onClick` still sees it in some paths, and checking costs nothing.
+ * `button === 1` is the middle button, which browsers deliver as `auxclick` rather than `click` —
+ * so an `onClick` handler never sees one. It is checked here for handlers wired to `onAuxClick` or
+ * to a raw listener, which do. An anchor needs none of this for middle click: nothing runs, nothing
+ * prevents the default, and the browser opens its background tab.
  */
 export function isModifiedClick(event: {
   metaKey?: boolean;
