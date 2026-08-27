@@ -33,6 +33,7 @@ import {
   renderPreloadedEntitySection,
 } from './chat-system-prompt';
 import { type CostStage, formatTurnCost } from './cost';
+import { buildFollowUpCapabilityNote } from './follow-up-capabilities';
 import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
 import { requestedItemCount } from './requested-item-count';
@@ -524,7 +525,8 @@ export async function POST(req: Request) {
             items: { type: 'string' },
             minItems: 1,
             maxItems: 3,
-            description: 'Short (≤6 words each) next-step options relevant to the response just given.',
+            description:
+              'Short (≤6 words each) next-step options relevant to the response just given, each written in the user\'s voice as a command to the assistant ("Add a bio"), never in the assistant\'s own voice.',
           },
         },
         required: ['suggestions'],
@@ -544,6 +546,8 @@ export async function POST(req: Request) {
   // Members-only, schema-only here; dispatchers handle auth + execution.
   const memberWriteTools: ToolSet = isLoggedIn ? writeTools : {};
   const memberResearchTools: ToolSet = isLoggedIn ? memberReadTools : {};
+
+  const executorTools: ToolSet = { ...readTools, ...navTools, ...memberWriteTools, ...memberResearchTools };
 
   // `debug` → one tight line per stage/step (default in dev).
   // `verbose` → also dump per-chunk and full message/state objects.
@@ -700,7 +704,7 @@ export async function POST(req: Request) {
         messages,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         abortSignal: req.signal,
-        tools: { ...readTools, ...navTools, ...memberWriteTools, ...memberResearchTools },
+        tools: executorTools,
         toolChoice: 'auto',
         // Serial tool use matches the prompt's "searchGraph first, then
         // research / writes" ordering and avoids client-tool resubmit races.
@@ -830,10 +834,12 @@ export async function POST(req: Request) {
       await recordCost('closer', CLOSER_MODEL, closerResult);
 
       // Stage D: follow-ups (Haiku, forced tool).
-      const followUpInstruction =
+      const followUpInstruction = [
+        buildFollowUpCapabilityNote(executorTools),
         turnKind === 'edit'
-          ? "You just edited the graph on the user's behalf. Call suggestFollowUps with 1–3 short options for further edits they're likely to want next — more fields to fill, related blocks to add, filters to tune, or an undo. Don't suggest navigation, \"learn more\", or open questions."
-          : 'Now call suggestFollowUps with 1–3 short clickable next-step options relevant to your answer above.';
+          ? "You just edited the graph on the user's behalf. Call suggestFollowUps with 1–3 short options for further edits they're likely to want next — more fields to fill, related blocks to add, filters to tune, or removing what you just added. Don't suggest navigation, \"learn more\", or open questions."
+          : 'Now call suggestFollowUps with 1–3 short clickable next-step options relevant to your answer above.',
+      ].join('\n\n');
 
       const followUpResult = streamText({
         model: anthropic(FOLLOW_UPS_MODEL),
