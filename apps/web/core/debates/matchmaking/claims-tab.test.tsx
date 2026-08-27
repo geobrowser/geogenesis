@@ -113,19 +113,27 @@ vi.mock('./hooks', () => ({
     // everything out and look like a broken query.
     const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
     const inSpaceFilter = (spaceId: string) => !spaceIds?.length || spaceIds.some(id => norm(id) === norm(spaceId));
+    // AND since GEO-2696: a claim has to carry every selected topic, not any of them.
     const inTopicFilter = (topics: { id: string }[]) =>
-      !topicIds?.length || topics.some(topic => topicIds.includes(topic.id));
+      !topicIds?.length || topicIds.every(id => topics.some(topic => topic.id === id));
     // `space_id` and `topic_id` are both query parameters as of GEO-2659, so the endpoint
     // returns only the rows that match. Mirrored here, because what the tab renders and what
     // its menus describe both hang off that.
     const inSpace = mocks.claims.filter(entry => inSpaceFilter(entry.claim.space_id));
     const claims = inSpace.filter(entry => inTopicFilter(entry.topics));
-    // Each dimension is counted without narrowing itself, and *is* narrowed by the other — what
-    // `MATCHMAKING_CLAIMS_FACETS_QUERY` does, and what a facet count is for. So the topic facet is
-    // cut by the space filter and the space facet by the topic filter; neither is cut by its own.
-    // Computed over the whole filtered set rather than the returned page, which is the point of a
-    // server-side facet.
-    const topicFacets = [...new Map(inSpace.flatMap(entry => entry.topics).map(topic => [topic.id, topic])).values()];
+    // The space facet is cut by the topic filter and never by its own — spaces are still OR. The
+    // topic facet is co-occurrence since GEO-2696: computed over the claims that already carry
+    // every selected topic, so what it offers is what appears *alongside* the selection, and the
+    // selected topics come back with the current result count. Computed over the whole filtered
+    // set rather than the returned page, which is the point of a server-side facet.
+    const topicFacets = [
+      ...new Map(
+        inSpace
+          .filter(entry => inTopicFilter(entry.topics))
+          .flatMap(entry => entry.topics)
+          .map(topic => [topic.id, topic])
+      ).values(),
+    ];
     const spacesCarryingTopic = new Set(
       mocks.claims.filter(entry => inTopicFilter(entry.topics)).map(entry => norm(entry.claim.space_id))
     );
@@ -1022,6 +1030,93 @@ describe('ClaimsTab -- Featured', () => {
     // over a list it could not fill.
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     await waitFor(() => expect(screen.getAllByRole('button', { name: /Space/ })).toHaveLength(1));
+  });
+
+  // GEO-2696 made topics intersect rather than union, server-side. Featured is the one source
+  // geo-chat has no facet for, so the same rule has to be applied here — two halves of one menu
+  // disagreeing about what a second topic does would be worse than either answer on its own.
+  //
+  // Built so OR and AND disagree: under union both claims would survive, under intersection only
+  // the one carrying both does.
+  it('needs every picked topic on Featured, not any of them', async () => {
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } },
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-cities', name: 'Cities' } },
+        ],
+      },
+      {
+        id: FEATURED_B,
+        name: 'Cities should ban cars downtown',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-cities', name: 'Cities' } }],
+      },
+    ];
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Cities/ }));
+    // Both carry Cities, so both are still listed with one topic picked.
+    expect(screen.getByText('Cities should ban cars downtown')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    // Only the claim carrying both survives. Under the old union rule this one would have stayed.
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+    expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+  });
+
+  // The other half of GEO-2696: the menu answers "what appears alongside what I have picked".
+  it('offers only the topics that co-occur with the picked one', async () => {
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
+      },
+      {
+        id: FEATURED_B,
+        name: 'Cities should ban cars downtown',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-cities', name: 'Cities' } }],
+      },
+    ];
+    render(<ClaimsTab />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    expect(screen.getByRole('button', { name: /^Cities/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+
+    // Cities appears on no claim that carries Energy, so it can no longer be added — picking it
+    // could only ever empty the list.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Cities/ })).toBeNull());
+
+    // Energy stays on the menu, which is what lets it be un-picked. Checked with the menu closed,
+    // since open the trigger answers to the same name as the row.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.getByRole('button', { name: /^Energy/ })).toBeInTheDocument();
   });
 
   // The panel is narrow enough that three menus fill the row on their own. Pushing the topic one to

@@ -49,6 +49,7 @@ import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState, HubSkeleton } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import {
+  carriesEveryTopic,
   countBy,
   keepSelectableTopics,
   keepSelectedVisible,
@@ -65,8 +66,6 @@ import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
-
-import { RematchVoicePill } from './rematch-voice';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
@@ -78,6 +77,8 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
+
+import { RematchVoicePill } from './rematch-voice';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -916,11 +917,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       claims
         .filter(claim => {
           if (!offered.has(claim.claim.space_id)) return false;
-          if (
-            topicIds.length > 0 &&
-            !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(topic => topicIds.includes(topic.id))
-          )
-            return false;
+          if (!carriesEveryTopic(topicsByClaimId.get(claim.claim.claim_entity_id), topicIds)) return false;
           if (
             !browsesPages &&
             debouncedSearch &&
@@ -977,17 +974,26 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // than the pages this client has walked — the difference GEO-2653 was about. The other two
   // tabs are built from graph entities geo-chat has never heard of, so they still derive theirs.
   //
-  // Ordered by count with the picked ones pinned, the same as the Claims tab.
-  // Counted from the rows the tab would show, which is the only count available for a claim
-  // geo-chat has never seen.
+  // Ordered by count with the picked ones pinned, the same as the Claims tab. Counted from the rows
+  // the tab would show, which is the only count available for a claim geo-chat has never seen.
+  //
+  // Co-occurrence, now that topics intersect (GEO-2696): counted over the claims that already carry
+  // every picked topic, so what's left on the menu is what appears *alongside* the selection. The
+  // picked topics come back with the current result count, which is what lets them be un-picked —
+  // and nothing here can offer a dead end, since every option came off a claim that survived.
   const rowTopicCounts = React.useMemo(
     () =>
       countBy(
-        topicFacetClaims.flatMap(claim =>
-          (topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).map(topic => ({ id: topic.id, name: topic.name }))
-        )
+        topicFacetClaims
+          .filter(claim => carriesEveryTopic(topicsByClaimId.get(claim.claim.claim_entity_id), topicIds))
+          .flatMap(claim =>
+            (topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).map(topic => ({
+              id: topic.id,
+              name: topic.name,
+            }))
+          )
       ),
-    [topicFacetClaims, topicsByClaimId]
+    [topicFacetClaims, topicIds, topicsByClaimId]
   );
 
   const facetTopics = React.useMemo(() => {
@@ -1014,11 +1020,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         // browsed rows *plus* this session's claims pinned in front of them, and the pinned ones
         // never went through the query — without this they survive a topic filter they don't
         // match. A no-op for the rows the server did filter, which match by construction.
-        if (
-          topicIds.length > 0 &&
-          !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(t => topicIds.includes(t.id))
-        )
-          return false;
+        if (!carriesEveryTopic(topicsByClaimId.get(claim.claim.claim_entity_id), topicIds)) return false;
         if (
           !browsesPages &&
           debouncedSearch &&

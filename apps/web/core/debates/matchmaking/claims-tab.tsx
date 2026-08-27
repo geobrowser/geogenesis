@@ -37,7 +37,14 @@ import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu } from './hub-f
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
-import { countBy, keepSelectableTopics, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
+import {
+  carriesEveryTopic,
+  countBy,
+  keepSelectableTopics,
+  keepSelectedVisible,
+  orderFacetOptions,
+  toggleId,
+} from './topic-facets';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useStableListOrder } from './use-stable-list-order';
 
@@ -282,9 +289,7 @@ export function ClaimsTab() {
   // Whether a claim survives the topic filter, by the same rule the rows use. Defined here because
   // the space facet needs it over claims the rows have already dropped.
   const carriesPickedTopic = React.useCallback(
-    (claimEntityId: string) =>
-      topicIds.length === 0 ||
-      (featuredTopicsByClaimId.get(claimEntityId) ?? []).some(topic => topicIds.includes(topic.id)),
+    (claimEntityId: string) => carriesEveryTopic(featuredTopicsByClaimId.get(claimEntityId), topicIds),
     [featuredTopicsByClaimId, topicIds]
   );
 
@@ -319,9 +324,7 @@ export function ClaimsTab() {
   const visibleClaims = React.useMemo(
     () =>
       featured && topicIds.length > 0
-        ? claims.filter(entry =>
-            featuredTopicsByClaimId.get(entry.claim.claim_entity_id)?.some(topic => topicIds.includes(topic.id))
-          )
+        ? claims.filter(entry => carriesEveryTopic(featuredTopicsByClaimId.get(entry.claim.claim_entity_id), topicIds))
         : claims,
     [claims, featured, featuredTopicsByClaimId, topicIds]
   );
@@ -331,24 +334,30 @@ export function ClaimsTab() {
   // it read topics off the loaded claims, so the menu grew as the viewer scrolled and a space
   // whose first page happened to carry none looked like a space with no topics (GEO-2653).
   //
-  // Already narrowed by the space filter, and already ordered — by count, descending. Kept in
-  // name order here so this change is about which options exist rather than how they are
-  // arranged; the count order and the counts themselves belong to GEO-2654.
+  // Already narrowed by the space filter, and already ordered by count descending.
+  //
+  // Both sources are co-occurrence now that topics intersect (GEO-2696). The server's facet is
+  // narrowed by the selected topics on its side; Featured is narrowed here, over the claims that
+  // already carry every picked one — so the menu answers "what else do these claims carry", and
+  // the picked topics come back with the current result count, which is what lets them be
+  // un-picked. Nothing here can lead to an empty list: every option came off a surviving claim.
   const facetTopics = React.useMemo(() => {
     // Counting the featured claims per topic rather than deduping them: a count is the point of
     // the menu now, and the claims in hand are the whole featured list.
     const source = featured
       ? countBy(
-          featuredMatching.flatMap(claim =>
-            (featuredTopicsByClaimId.get(claim.claimEntityId) ?? []).map(topic => ({
-              id: topic.id,
-              name: topic.name,
-            }))
-          )
+          featuredMatching
+            .filter(claim => carriesPickedTopic(claim.claimEntityId))
+            .flatMap(claim =>
+              (featuredTopicsByClaimId.get(claim.claimEntityId) ?? []).map(topic => ({
+                id: topic.id,
+                name: topic.name,
+              }))
+            )
         )
       : (facets?.topic_facets ?? []);
     return orderFacetOptions(source, topicIds);
-  }, [facets?.topic_facets, featured, featuredMatching, featuredTopicsByClaimId, topicIds]);
+  }, [carriesPickedTopic, facets?.topic_facets, featured, featuredMatching, featuredTopicsByClaimId, topicIds]);
 
   // Featured's menu settles with its entity lookup, which is where its topics come from — the
   // server facets it would otherwise read never arrive, since the query is never made.

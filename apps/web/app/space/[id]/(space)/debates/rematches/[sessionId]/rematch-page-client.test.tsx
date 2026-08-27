@@ -354,10 +354,20 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
     const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
     const inSpaceFilter = (spaceId: string) =>
       !query.spaceIds?.length || query.spaceIds.some(id => norm(id) === norm(spaceId));
+    // AND since GEO-2696: every selected topic has to be on the claim, not just one of them.
     const inTopicFilter = (topics: { id: string }[]) =>
-      !query.topicIds?.length || topics.some(topic => (query.topicIds ?? []).includes(topic.id));
+      !query.topicIds?.length || query.topicIds.every(id => topics.some(topic => topic.id === id));
     const inSpace = corpus.flat().filter(entry => inSpaceFilter(entry.claim.space_id));
-    const topicFacets = [...new Map(inSpace.flatMap(entry => entry.topics).map(topic => [topic.id, topic])).values()];
+    // Co-occurrence: over the claims already carrying every selected topic, so the menu offers
+    // what appears alongside the selection and the selection itself.
+    const topicFacets = [
+      ...new Map(
+        inSpace
+          .filter(entry => inTopicFilter(entry.topics))
+          .flatMap(entry => entry.topics)
+          .map(topic => [topic.id, topic])
+      ).values(),
+    ];
     const spaceIds = [...new Set(corpus.flat().map(entry => entry.claim.space_id))];
     // Narrowed by space, never by topic: picking a topic must not collapse its own menu.
     const facets = {
@@ -1902,6 +1912,37 @@ describe('DebateRematchPageClient', () => {
     selectFilter('Governance space', 'Crypto');
 
     await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ spaceIds: [SPACE_2] }));
+  });
+
+  // GEO-2696: topics intersect now, and the menu answers "what appears alongside what I picked".
+  // The pinned rows are the half geo-chat has no facet for, so the rule is applied here — the two
+  // halves of one menu must not disagree about what a second topic does.
+  //
+  // Built so the old union rule and the new one differ: `Pinned only` shares no claim with Ethics,
+  // so under union it stayed on offer and led to an empty list.
+  it('offers only the topics that co-occur with the picked one', async () => {
+    // The default browsed claim carries Governance and Ethics; this adds a pinned row carrying a
+    // topic that appears on nothing else.
+    mocks.entities = [
+      {
+        ...sharedEntity(),
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-pinned', name: 'Pinned only' }, isDeleted: false },
+        ],
+      },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    expect(screen.getByRole('button', { name: /Pinned only/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Ethics/ }));
+
+    // No claim carries both, so adding it could only ever empty the list.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Pinned only/ })).toBeNull());
+    // Governance does co-occur with Ethics on the published claim, so it stays addable.
+    expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument();
   });
 
   // Not reachable by picking a topic and then a space it has nothing in: each menu is narrowed by

@@ -4,6 +4,7 @@ import type { MatchmakingTopic } from '~/core/debates/api';
 
 import {
   availableTopics,
+  carriesEveryTopic,
   formatFacetCount,
   keepSelectableTopic,
   keepSelectableTopics,
@@ -155,5 +156,30 @@ describe('keepSelectedVisible', () => {
 
   it('returns the same array when nothing is missing', () => {
     expect(keepSelectedVisible(options, ['a'])).toBe(options);
+  });
+});
+
+describe('carriesEveryTopic', () => {
+  const topics = [{ id: 'ai' }, { id: 'energy' }];
+
+  it('keeps everything when nothing is picked', () => {
+    expect(carriesEveryTopic(undefined, [])).toBe(true);
+    expect(carriesEveryTopic(topics, [])).toBe(true);
+  });
+
+  it('keeps a claim carrying the one picked topic', () => {
+    expect(carriesEveryTopic(topics, ['ai'])).toBe(true);
+  });
+
+  // The case that separates AND from OR. Under the old union rule this claim matched either topic
+  // alone and so matched both; under intersection it has to carry every one of them.
+  it('needs every picked topic, not any of them', () => {
+    expect(carriesEveryTopic(topics, ['ai', 'energy'])).toBe(true);
+    expect(carriesEveryTopic([{ id: 'ai' }], ['ai', 'energy'])).toBe(false);
+  });
+
+  it('drops a claim with no topics as soon as one is picked', () => {
+    expect(carriesEveryTopic(undefined, ['ai'])).toBe(false);
+    expect(carriesEveryTopic([], ['ai'])).toBe(false);
   });
 });
