@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   /** Debate entity ids in "Best" order. Empty = the ranking covers nothing, so recency stands. */
   bestOrderIds: [] as string[],
   bestOrderLoading: false,
+  hubOpen: vi.fn(),
 }));
 
 type ObserverRecord = {
@@ -100,7 +101,16 @@ vi.mock('./debate-scroll-hint', () => ({
 vi.mock('./debate-claims-panel', () => ({
   DebateClaimsPanel: ({ debate }: { debate: Debate }) => <div>Claims panel for {debate.id}</div>,
 }));
-vi.mock('./join-debate-panel', () => ({ JoinDebatePanel: () => <div>Join panel</div> }));
+vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
+  useDebatesHub: () => ({
+    isOpen: false,
+    activeTab: 'claims' as const,
+    open: mocks.hubOpen,
+    close: vi.fn(),
+    toggle: vi.fn(),
+    setTab: vi.fn(),
+  }),
+}));
 vi.mock('~/partials/comments/entity-comments-panel', () => ({
   EntityCommentsPanel: ({ entityId }: { entityId: string }) => <div>Comments panel for {entityId}</div>,
 }));
@@ -554,6 +564,32 @@ describe('DebatesBrowseFeed comments', () => {
 
     fireEvent.click(commentButtons[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+  });
+
+  // "Join a debate" is no longer one of the feed's own panels: it opens the shared hub, which is
+  // cross-space and carries the filters, counts and ranking the feed's panel never had.
+  it('opens the debates hub on the claims tab instead of a feed panel', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+    // The hub is a portal of its own, so nothing lands in the feed's in-flow panel slot.
+    expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Comments panel for/)).not.toBeInTheDocument();
+  });
+
+  // Both would otherwise stack over the same feed, the hub on top of a panel nobody can see past.
+  it('closes an open feed panel when the hub takes over', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+    expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
   });
 
   it('closes the claims panel when comments open, and vice versa', () => {

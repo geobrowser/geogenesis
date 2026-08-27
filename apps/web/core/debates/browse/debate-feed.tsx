@@ -24,11 +24,12 @@ import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 
+import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
+
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
-import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -127,7 +128,10 @@ export function DebatesBrowseFeed({
   // Which panel is open, not which debate it was opened from: the claims and
   // comments panels describe the debate you're watching, so they follow the feed
   // as you scroll rather than staying pinned to the one whose button you pressed.
-  const [openPanel, setOpenPanel] = React.useState<'join' | 'claims' | 'comments' | null>(null);
+  const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
+  // "Join a debate" opens the shared hub rather than a panel of this space's claims: the hub is
+  // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
+  const debatesHub = useDebatesHub();
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
@@ -234,7 +238,10 @@ export function DebatesBrowseFeed({
           // otherwise open on the debate being scrolled away from.
           onOpenJoin={() => {
             setActiveId(debate.id);
-            setOpenPanel('join');
+            // The hub is its own portal, so the feed's panel state stays out of it. Closing the
+            // in-flow panel first keeps the two from stacking over the same feed.
+            setOpenPanel(null);
+            debatesHub.open('claims');
           }}
           onOpenClaims={() => {
             setActiveId(debate.id);
@@ -256,9 +263,7 @@ export function DebatesBrowseFeed({
   const closePanel = () => setOpenPanel(null);
 
   const sidePanel =
-    openPanel === 'join' ? (
-      <JoinDebatePanel spaceId={spaceId} onClose={closePanel} />
-    ) : openPanel === 'claims' && activeDebate ? (
+    openPanel === 'claims' && activeDebate ? (
       <DebateClaimsPanel debate={activeDebate} count={0} onClose={closePanel} />
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
