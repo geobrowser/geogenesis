@@ -48,6 +48,59 @@ describe('handoffPreparedSocialVideo', () => {
     });
   });
 
+  // Preston, on production: "Failed to execute 'share' on 'Navigator': Permission denied".
+  //
+  // `canShare` said yes and `share` refused anyway, which it is allowed to do — the probe answers
+  // whether the payload is shareable in principle, not whether this browser will accept it. The
+  // click should still hand over the video rather than surfacing a dead end.
+  it('falls back to the download when the browser refuses a share it said it could do', async () => {
+    mocks.canShare.mockReturnValue(true);
+    mocks.share.mockRejectedValue(
+      new DOMException("Failed to execute 'share' on 'Navigator': Permission denied", 'NotAllowedError')
+    );
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
+
+    await expect(
+      handoffPreparedSocialVideo({
+        debateId: 'debate-1',
+        title: 'Debates are useful',
+        file: preparedFile,
+        downloadUrl: 'blob:https://geo.test/social-video',
+      })
+    ).resolves.toBe('download');
+
+    // Reported as a resolved handoff, tagged so the rate of it is visible rather than inferred.
+    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
+      debate_id: 'debate-1',
+      method: 'download',
+      fell_back_from: 'native_share',
+      error_name: 'NotAllowedError',
+    });
+  });
+
+  // The one refusal that must not fall back: closing the share sheet is a decision, and quietly
+  // downloading the file instead would override it.
+  it('does not download when the person cancels the share sheet', async () => {
+    mocks.canShare.mockReturnValue(true);
+    mocks.share.mockRejectedValue(new DOMException('Share canceled', 'AbortError'));
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
+
+    await expect(
+      handoffPreparedSocialVideo({
+        debateId: 'debate-1',
+        title: 'Debates are useful',
+        file: preparedFile,
+        downloadUrl: 'blob:https://geo.test/social-video',
+      })
+    ).rejects.toThrow('Share canceled');
+    expect(mocks.capture).not.toHaveBeenCalledWith(
+      'debate_social_video_handoff_resolved',
+      expect.objectContaining({ method: 'download' })
+    );
+  });
+
   it.each([
     ['unsupported', () => false],
     [
@@ -104,7 +157,14 @@ describe('handoffPreparedSocialVideo', () => {
     expect(mocks.capture).not.toHaveBeenCalledWith('debate_social_video_handoff_failed', expect.anything());
   });
 
-  it('reports non-cancellation native share failures and leaves retry to the caller', async () => {
+  // This asserted a rejection, on the reasoning that retry belonged to the caller. Changed
+  // deliberately: the button's contract is "hand off the video", not "open the share sheet" — which
+  // the code already showed, since a browser whose `canShare` says no downloads without asking. A
+  // browser that says yes and then refuses is the same situation discovered a moment later, so it
+  // gets the same answer rather than a dead end.
+  //
+  // Retry stays available: nothing here consumes the prepared file, so the button still works.
+  it('falls back for a non-cancellation share failure of any kind, not just a refusal', async () => {
     const failure = new Error('Share service unavailable');
     mocks.canShare.mockReturnValue(true);
     mocks.share.mockRejectedValue(failure);
@@ -118,11 +178,13 @@ describe('handoffPreparedSocialVideo', () => {
         file: preparedFile,
         downloadUrl: 'blob:https://geo.test/social-video',
       })
-    ).rejects.toBe(failure);
+    ).resolves.toBe('download');
 
-    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_failed', {
+    // Still visible in telemetry, tagged with what it fell back from and why.
+    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
       debate_id: 'debate-1',
-      method: 'native_share',
+      method: 'download',
+      fell_back_from: 'native_share',
       error_name: 'Error',
     });
   });
