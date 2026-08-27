@@ -17,6 +17,7 @@ import { resolveGraphLinkHref } from '~/core/utils/graph-link';
 
 import { Spacer } from '~/design-system/spacer';
 
+import { BlockReorder } from './block-reorder';
 import { createCommandExtension } from './command-extension';
 import { createEntityMentionExtension, entityMentionPluginKey } from './entity-mention-extension';
 import { tiptapExtensions } from './extensions';
@@ -163,6 +164,15 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
     if (!editableRef.current || !editorRef.current) return;
     const isSuggestionActive = entityMentionPluginKey.getState(editorRef.current.state)?.active;
     if (isSuggestionActive) return;
+    const json = editorRef.current.getJSON();
+    trackEditorDocument(json);
+    upsertEditorStateRef.current(json);
+  }, [trackEditorDocument]);
+
+  // A deliberate drop is an explicit document change, so persist it immediately
+  // even if a suggestion popup happened to be active before the drag began.
+  const persistReorderedBlocks = React.useCallback(() => {
+    if (!editableRef.current || !editorRef.current) return;
     const json = editorRef.current.getJSON();
     trackEditorDocument(json);
     upsertEditorStateRef.current(json);
@@ -331,11 +341,22 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
     <LayoutGroup id="editor">
       <div
         ref={editorWrapperRef}
-        className={editable ? 'editable' : 'not-editable'}
+        className={editable ? 'editable relative' : 'not-editable'}
         onClick={handleGutterClick}
         style={editable ? { minHeight: '8rem' } : undefined}
       >
-        {editor ? <EditorContent editor={editor} /> : <ServerContent blocks={serverBlocks} />}
+        {editor ? (
+          <BlockReorder
+            editor={editor}
+            editorWrapperRef={editorWrapperRef}
+            enabled={editable}
+            onReorder={persistReorderedBlocks}
+          >
+            <EditorContent editor={editor} />
+          </BlockReorder>
+        ) : (
+          <ServerContent blocks={serverBlocks} />
+        )}
 
         {shouldHandleOwnSpacing && editable && <Spacer height={60} />}
       </div>
