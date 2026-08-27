@@ -31,8 +31,10 @@ const mocks = vi.hoisted(() => ({
   /** Whether the debates hub is already showing. */
   hubIsOpen: false,
   openPrivySignIn: vi.fn(),
-  /** Whether a smart account exists, i.e. the viewer is signed in. */
-  signedIn: true,
+  /** Privy's answer, which is the authority on whether anyone is signed in. */
+  authenticated: true,
+  /** False while Privy is still restoring the session. */
+  authReady: true,
 }));
 
 type ObserverRecord = {
@@ -44,6 +46,7 @@ type ObserverRecord = {
 let observers: ObserverRecord[] = [];
 
 vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: 'user-a' }),
   useSpaceDebates: () => ({ data: { debates: mocks.debates }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => ({
     processedIds: mocks.processedIds ?? mocks.debates.map(debate => debate.id),
@@ -125,10 +128,7 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 7, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
-// Both reach for wagmi/next-navigation context the feed's tests do not stand up.
-vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: mocks.signedIn ? { account: { address: '0xfeed' } } : null }),
-}));
+// Reaches for next-navigation and Privy context the feed's tests do not stand up.
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => mocks.openPrivySignIn,
 }));
@@ -137,7 +137,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.resetAllMocks();
   // Not mock fns, so `resetAllMocks` does not restore them.
-  mocks.signedIn = true;
+  mocks.authenticated = true;
+  mocks.authReady = true;
   mocks.hubIsOpen = false;
   observers = [];
   mocks.entityVoteProps.length = 0;
@@ -599,7 +600,7 @@ describe('DebatesBrowseFeed comments', () => {
   // Every control in the hub needs an account, so a signed-out viewer goes straight to the login
   // rather than a panel that refuses them at each step.
   it('sends a signed-out viewer to sign in instead of opening the hub', () => {
-    mocks.signedIn = false;
+    mocks.authenticated = false;
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
@@ -617,6 +618,20 @@ describe('DebatesBrowseFeed comments', () => {
     expect(screen.getAllByRole('button', { name: 'Join a debate' })[0]).toHaveAttribute(
       'data-debates-hub-opener'
     );
+  });
+
+  // `useSmartAccount` reads null while the account restores and after an init failure as well as
+  // when signed out, so gating on it sent a signed-in viewer back through a login that clears
+  // their half-finished onboarding. Privy is asked instead, and it is not asked until it is ready.
+  it('does nothing until Privy has restored the session', () => {
+    mocks.authReady = false;
+    mocks.authenticated = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.openPrivySignIn).not.toHaveBeenCalled();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
   });
 
   // Otherwise the button is a one-way door: pressing it again did nothing and the only way out was

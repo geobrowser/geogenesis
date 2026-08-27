@@ -45,6 +45,7 @@ vi.mock('~/core/state/feature-flags', () => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a' }),
   useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => mocks.media,
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
@@ -61,11 +62,8 @@ vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
   useDebatesBestOrder: () => ({ rankByDebateId: new Map(), isLoading: false, isError: false }),
 }));
 
-// The feed's "Join a debate" button gates on a smart account and opens the shared sign-in prompt,
-// and neither hook has the wagmi/next-navigation context this suite stands up.
-vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: { account: { address: '0xfeed' } } }),
-}));
+// The feed's "Join a debate" button opens the login when signed out, and that hook reaches for
+// next-navigation and Privy context this suite does not stand up.
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => vi.fn(),
 }));

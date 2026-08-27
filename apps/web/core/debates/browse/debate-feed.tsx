@@ -25,8 +25,8 @@ import { Text } from '~/design-system/text';
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
+import { useGeoChatAuth } from '~/core/debates/hooks';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useSmartAccount } from '~/core/hooks/use-smart-account';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
@@ -134,9 +134,11 @@ export function DebatesBrowseFeed({
   // "Join a debate" opens the shared hub rather than a panel of this space's claims: the hub is
   // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
   const debatesHub = useDebatesHub();
-  const { smartAccount } = useSmartAccount();
   const openPrivySignIn = usePrivySignIn();
-  const isSignedIn = Boolean(smartAccount?.account.address);
+  // Privy, not the smart account: `useSmartAccount` reports null while the account is restoring
+  // and after an initialization failure as well as when nobody is signed in, and sending a
+  // signed-in viewer back through login would wipe their half-finished onboarding.
+  const { ready: authReady, authenticated } = useGeoChatAuth();
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
@@ -243,10 +245,13 @@ export function DebatesBrowseFeed({
           // otherwise open on the debate being scrolled away from.
           onOpenJoin={() => {
             setActiveId(debate.id);
+            // Decide nothing until Privy has restored the session: a press in that window is a
+            // no-op rather than a wrong answer in either direction.
+            if (!authReady) return;
             // Everything the hub offers — taking a position, standing ready, requesting a debate —
-            // needs an account, so a signed-out viewer gets the same prompt voting gives them
+            // needs an account, so a signed-out viewer gets the same login voting gives them
             // rather than a panel whose every control refuses them.
-            if (!isSignedIn) {
+            if (!authenticated) {
               openPrivySignIn();
               return;
             }

@@ -20,6 +20,7 @@ import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils
 import { type DebateVoteRecord, tallyDebateVotes, voteSharePercentages } from '~/core/debates/vote-tally';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { ID } from '~/core/id';
+import { useGeoChatAuth } from '~/core/debates/hooks';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { checkEntityExists, getDebateVoteEntities } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
@@ -147,8 +148,9 @@ export type DebateVotesResult = {
  * voter's space rather than from geo-chat.
  */
 export function useDebateVotes(debate: Debate): DebateVotesResult {
-  const { smartAccount } = useSmartAccount();
+  const { smartAccount, isLoading: isAccountLoading, error: accountError } = useSmartAccount();
   const openPrivySignIn = usePrivySignIn();
+  const { ready: authReady, authenticated } = useGeoChatAuth();
   const { personalSpaceId } = usePersonalSpaceId();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
@@ -200,10 +202,24 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       if (previousVote && previousVote.winnerRelationId == null) return;
 
       if (!smartAccount) {
-        // A toast telling someone to connect their wallet leaves them to find the way in
-        // themselves. Signed out is not an error here, it is a step — so open the login the way
-        // the upvote control does.
-        openPrivySignIn();
+        // Null covers three different situations — signed out, still restoring, and a failed
+        // initialization — and only the first is an invitation to log in. Privy is the authority
+        // on which one this is, and sending a signed-in viewer through login would clear their
+        // half-finished onboarding.
+        if (authReady && !authenticated) {
+          // Signed out is a step, not an error: open the login the upvote control opens rather
+          // than a toast that names the problem and leaves them to find the way in.
+          openPrivySignIn();
+          return;
+        }
+        if (accountError) {
+          reportError('Your account could not be loaded, so the vote was not sent. Please reload and try again.');
+          return;
+        }
+        if (isAccountLoading || !authReady) return;
+        // Signed in with no usable account and nothing reporting why. Better a toast than a login
+        // that cannot help.
+        setToast(<span>Your account is not ready to vote yet. Please try again in a moment.</span>);
         return;
       }
       if (!personalSpaceId) {
@@ -371,6 +387,10 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       debateEntityId,
       queryClient,
       openPrivySignIn,
+      authReady,
+      authenticated,
+      isAccountLoading,
+      accountError,
       setToast,
       reportError,
     ]
