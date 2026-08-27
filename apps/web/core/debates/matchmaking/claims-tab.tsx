@@ -33,11 +33,11 @@ import {
 import { useDebateClaimsBySpaces } from '../hooks';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
-import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
+import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
-import { keepSelectableTopic } from './topic-facets';
+import { countBy, keepSelectableTopics, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useStableListOrder } from './use-stable-list-order';
 
@@ -79,8 +79,8 @@ export function ClaimsTab() {
   // curator's pick is a better first thing to put in front of someone than whatever the index
   // ranked highest, and All claims is one option below.
   const [filter, setFilter] = React.useState<ClaimsTabFilter>('featured');
-  const [spaceId, setSpaceId] = React.useState<string | null>(null);
-  const [topicId, setTopicId] = React.useState<string | null>(null);
+  const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
+  const [topicIds, setTopicIds] = React.useState<string[]>([]);
 
   React.useEffect(() => {
     const timeout = setTimeout(() => setDebouncedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
@@ -138,9 +138,9 @@ export function ClaimsTab() {
   // Featured draws its own list, so the index isn't asked for one. The query keeps saying `all`
   // rather than going undefined: switching to Featured and back then lands on the pages already
   // cached instead of paging the corpus again from the top.
-  const query = React.useMemo<Omit<MatchmakingClaimsQuery, 'spaceIds'>>(
-    () => ({ search: debouncedSearch || null, spaceId, topicId, filter: featured ? 'all' : filter }),
-    [debouncedSearch, featured, filter, spaceId, topicId]
+  const query = React.useMemo<Omit<MatchmakingClaimsQuery, 'spaceIds' | 'spaceId'>>(
+    () => ({ search: debouncedSearch || null, topicIds, filter: featured ? 'all' : filter }),
+    [debouncedSearch, featured, filter, topicIds]
   );
 
   const scope = React.useMemo(
@@ -152,7 +152,7 @@ export function ClaimsTab() {
   // once, for both pickers — see `useScopedMatchmakingClaims`. Featured passes `unusable`: it draws
   // its own list, so there is nothing worth asking the index for, and the masking that comes with
   // it also keeps the paging sentinel off a list that has no next page.
-  const claimsQuery = useScopedMatchmakingClaims(query, scope, featured);
+  const claimsQuery = useScopedMatchmakingClaims(query, scope, spaceIds, featured);
   const { pages, facets } = claimsQuery;
 
   const serverClaims = React.useMemo(
@@ -185,14 +185,24 @@ export function ClaimsTab() {
 
   // Search and the space menu run over the loaded list. The server-side versions belong to
   // geo-chat's index, which knows nothing about this list.
-  const featuredMatching = React.useMemo(() => {
+  // Search only, deliberately. The space facet counts claims *outside* the picked spaces — no facet
+  // is narrowed by its own dimension — and to narrow it by topic instead, those claims' topics have
+  // to be resolvable. So the entity lookup below runs over this set rather than the space-filtered
+  // one, and picking a space no longer decides which topics the client can see.
+  const featuredSearched = React.useMemo(() => {
     const needle = debouncedSearch.toLowerCase();
-    return featuredAllowed.filter(
-      claim =>
-        (spaceId === null || ID.equals(claim.spaceId, spaceId)) &&
-        (needle === '' || claim.name.toLowerCase().includes(needle))
-    );
-  }, [debouncedSearch, featuredAllowed, spaceId]);
+    return needle === '' ? featuredAllowed : featuredAllowed.filter(claim => claim.name.toLowerCase().includes(needle));
+  }, [debouncedSearch, featuredAllowed]);
+
+  const inPickedSpace = React.useCallback(
+    (spaceId: string) => spaceIds.length === 0 || spaceIds.some(id => ID.equals(spaceId, id)),
+    [spaceIds]
+  );
+
+  const featuredMatching = React.useMemo(
+    () => featuredSearched.filter(claim => inPickedSpace(claim.spaceId)),
+    [featuredSearched, inPickedSpace]
+  );
 
   // The sides and readiness the cards draw are geo-chat's, and its only lookup for claims it hasn't
   // ranked is the per-space one — so the tagged claims are asked for by id, grouped by the space
@@ -212,8 +222,8 @@ export function ClaimsTab() {
   // and slices to them. It asks in batches of a hundred and pulls six fields instead of every value
   // and relation on the entity.
   const featuredEntityIds = React.useMemo(
-    () => [...new Set(featuredMatching.map(claim => claim.claimEntityId).filter(validateEntityId))],
-    [featuredMatching]
+    () => [...new Set(featuredSearched.map(claim => claim.claimEntityId).filter(validateEntityId))],
+    [featuredSearched]
   );
   const { entities: featuredEntities, isLoading: featuredEntitiesLoading } = useClaimEntitiesByIds(featuredEntityIds);
 
@@ -269,33 +279,51 @@ export function ClaimsTab() {
     return map;
   }, [featured, featuredEntities]);
 
+  // Whether a claim survives the topic filter, by the same rule the rows use. Defined here because
+  // the space facet needs it over claims the rows have already dropped.
+  const carriesPickedTopic = React.useCallback(
+    (claimEntityId: string) =>
+      topicIds.length === 0 ||
+      (featuredTopicsByClaimId.get(claimEntityId) ?? []).some(topic => topicIds.includes(topic.id)),
+    [featuredTopicsByClaimId, topicIds]
+  );
+
   // The space menu offers only what the list can actually show, so picking an option never lands
   // the viewer on an empty list they can't explain.
-  // Featured has no server facets — its spaces are wherever the tagged claims live — and they are
-  // read before its own space selection is applied, or picking one would leave that one option in
-  // the menu.
-  const facetSpaceIds = React.useMemo(() => {
-    if (featured) return [...new Set(featuredAllowed.map(claim => claim.spaceId))];
-    return (facets?.space_ids ?? []).filter(spaceShowsClaims);
-  }, [facets?.space_ids, featured, featuredAllowed, spaceShowsClaims]);
+  // Ordered by count with the picked ones held at the top, so ticking one doesn't re-sort the list
+  // under the cursor. Zero-count options need no decision on the indexed tabs: both facets are a
+  // `GROUP BY` over the candidate set, so an option with nothing behind it is absent rather than
+  // present at zero. Featured has no server facet — its spaces are wherever the tagged claims live,
+  // counted from those claims, and read before its own space selection is applied, or picking one
+  // would leave that one option in the menu.
+  const facetSpaces = React.useMemo(() => {
+    const source = featured
+      ? countBy(
+          featuredSearched
+            .filter(claim => carriesPickedTopic(claim.claimEntityId))
+            .map(claim => ({ id: claim.spaceId, name: null }))
+        )
+      : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id));
+    return orderFacetOptions(keepSelectedVisible(source, spaceIds), spaceIds);
+  }, [carriesPickedTopic, facets?.space_facets, featured, featuredSearched, spaceIds, spaceShowsClaims]);
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
   const claims = useStableListOrder(
     featured ? featuredEntries : serverClaims,
     entry => `${entry.claim.space_id}:${entry.claim.claim_entity_id}`,
-    `${debouncedSearch}|${spaceId ?? ''}|${topicId ?? ''}|${filter}`
+    `${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}|${filter}`
   );
 
   // The paged list is narrowed by the server, which has no opinion about the featured one.
   const visibleClaims = React.useMemo(
     () =>
-      featured && topicId
+      featured && topicIds.length > 0
         ? claims.filter(entry =>
-            featuredTopicsByClaimId.get(entry.claim.claim_entity_id)?.some(topic => topic.id === topicId)
+            featuredTopicsByClaimId.get(entry.claim.claim_entity_id)?.some(topic => topicIds.includes(topic.id))
           )
         : claims,
-    [claims, featured, featuredTopicsByClaimId, topicId]
+    [claims, featured, featuredTopicsByClaimId, topicIds]
   );
 
   // The topic menu, straight from the server. It describes every claim the current filters
@@ -307,11 +335,20 @@ export function ClaimsTab() {
   // name order here so this change is about which options exist rather than how they are
   // arranged; the count order and the counts themselves belong to GEO-2654.
   const facetTopics = React.useMemo(() => {
+    // Counting the featured claims per topic rather than deduping them: a count is the point of
+    // the menu now, and the claims in hand are the whole featured list.
     const source = featured
-      ? [...new Map([...featuredTopicsByClaimId.values()].flat().map(topic => [topic.id, topic])).values()]
-      : (facets?.topic_facets ?? []).map(facet => ({ id: facet.id, name: facet.name }));
-    return source.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
-  }, [facets?.topic_facets, featured, featuredTopicsByClaimId]);
+      ? countBy(
+          featuredMatching.flatMap(claim =>
+            (featuredTopicsByClaimId.get(claim.claimEntityId) ?? []).map(topic => ({
+              id: topic.id,
+              name: topic.name,
+            }))
+          )
+        )
+      : (facets?.topic_facets ?? []);
+    return orderFacetOptions(source, topicIds);
+  }, [facets?.topic_facets, featured, featuredMatching, featuredTopicsByClaimId, topicIds]);
 
   // Featured's menu settles with its entity lookup, which is where its topics come from — the
   // server facets it would otherwise read never arrive, since the query is never made.
@@ -334,19 +371,22 @@ export function ClaimsTab() {
   // cleared against them would be cleared on nothing.
   React.useEffect(() => {
     if (spacesPending) return;
-    setSpaceId(current => (current !== null && !spaceShowsClaims(current) ? null : current));
+    setSpaceIds(current => {
+      const kept = current.filter(spaceShowsClaims);
+      return kept.length === current.length ? current : kept;
+    });
   }, [spaceShowsClaims, spacesPending]);
 
   // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
   // no longer in the menu to unpick.
   React.useEffect(() => {
-    setTopicId(current => keepSelectableTopic(current, facetTopics, facetsSettled));
+    setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsSettled));
   }, [facetTopics, facetsSettled]);
 
   // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
   // empty Featured tab should say nothing is featured — not that filters are hiding things — and
   // "Clear filters" should leave the viewer on the tab they picked.
-  const hasFilters = Boolean(debouncedSearch || spaceId || topicId || (!featured && filter !== 'all'));
+  const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length || (!featured && filter !== 'all'));
 
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: claimsQuery.hasNextPage,
@@ -366,11 +406,13 @@ export function ClaimsTab() {
         />
 
         <SpaceTopicFilters
-          spaceId={spaceId}
-          onSpaceChange={setSpaceId}
-          topicId={topicId}
-          onTopicChange={setTopicId}
-          facetSpaceIds={facetSpaceIds}
+          spaceIds={spaceIds}
+          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+          onSpacesClear={() => setSpaceIds([])}
+          topicIds={topicIds}
+          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+          onTopicsClear={() => setTopicIds([])}
+          facetSpaces={facetSpaces}
           facetTopics={facetTopics}
           leading={
             <HubFilterMenu
@@ -405,8 +447,8 @@ export function ClaimsTab() {
                   onClick: () => {
                     setSearch('');
                     if (!featured) setFilter('all');
-                    setSpaceId(null);
-                    setTopicId(null);
+                    setSpaceIds([]);
+                    setTopicIds([]);
                   },
                 }
               : undefined
@@ -497,13 +539,16 @@ function featuredPositionSummaries(
 }
 
 type SpaceTopicFiltersProps = {
-  spaceId: string | null;
-  onSpaceChange: (spaceId: string | null) => void;
+  spaceIds: string[];
+  onSpaceToggle: (spaceId: string) => void;
+  onSpacesClear: () => void;
   /** Omit the topic props to hide the topic menu — requests carry no topics to facet on. */
-  topicId?: string | null;
-  onTopicChange?: (topicId: string | null) => void;
-  facetSpaceIds: string[];
-  facetTopics?: { id: string; name: string | null }[];
+  topicIds?: string[];
+  onTopicToggle?: (topicId: string) => void;
+  onTopicsClear?: () => void;
+  /** Ordered as they should be shown, and carrying the counts the rows display. */
+  facetSpaces: { id: string; count: number }[];
+  facetTopics?: { id: string; name: string | null; count: number }[];
   /** Rendered before the space filter — the Claims tab puts its position filter here. */
   leading?: React.ReactNode;
   /**
@@ -522,71 +567,94 @@ type SpaceTopicFiltersProps = {
  * narrowed to the viewer's own spaces, which is exactly what the sidebar is holding.
  */
 export function SpaceTopicFilters({
-  spaceId,
-  onSpaceChange,
-  topicId,
-  onTopicChange,
-  facetSpaceIds,
+  spaceIds,
+  onSpaceToggle,
+  onSpacesClear,
+  topicIds,
+  onTopicToggle,
+  onTopicsClear,
+  facetSpaces,
   facetTopics,
   leading,
   topicAtEnd,
 }: SpaceTopicFiltersProps) {
+  const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(facetSpaceIds);
 
   const spaceOptions = React.useMemo<HubFilterOption<string>[]>(
-    () => [
-      { value: '', label: 'Any space', showImage: false },
-      ...facetSpaceIds.map(id => {
-        const label = spaceLabel(labelsById, id);
+    () =>
+      facetSpaces.map(space => {
+        const label = spaceLabel(labelsById, space.id);
         return {
-          value: id,
+          value: space.id,
           // A settled lookup that still can't name the space really does leave "Space" as the best
           // label there is; only a name still on its way draws as a skeleton.
           label: label?.name ?? 'Space',
           image: label?.image ?? null,
           pending: !label && labelsLoading,
+          count: space.count,
         };
       }),
-    ],
-    [facetSpaceIds, labelsById, labelsLoading]
+    [facetSpaces, labelsById, labelsLoading]
   );
 
   const topicOptions = React.useMemo<HubFilterOption<string>[]>(
-    () => [
-      { value: '', label: 'Any topic' },
-      ...(facetTopics ?? []).map(topic => ({ value: topic.id, label: topic.name ?? 'Topic' })),
-    ],
+    () => (facetTopics ?? []).map(topic => ({ value: topic.id, label: topic.name ?? 'Topic', count: topic.count })),
     [facetTopics]
   );
 
-  const selectedSpace = spaceId ? spaceLabel(labelsById, spaceId) : undefined;
-  const selectedSpaceLabel = spaceId ? (selectedSpace?.name ?? 'Space') : 'Any space';
-  const topicLabel = topicId ? (facetTopics?.find(topic => topic.id === topicId)?.name ?? 'Topic') : 'Any topic';
+  const onlySpace = spaceIds.length === 1 ? spaceLabel(labelsById, spaceIds[0]) : undefined;
+  const spaceMenuLabel = pickerLabel(
+    spaceIds.length,
+    'Any space',
+    () => onlySpace?.name ?? 'Space',
+    count => `${count} spaces`
+  );
+  const topicMenuLabel = pickerLabel(
+    topicIds?.length ?? 0,
+    'Any topic',
+    () => facetTopics?.find(topic => topic.id === topicIds?.[0])?.name ?? 'Topic',
+    count => `${count} topics`
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {leading}
-      <HubFilterMenu
-        label={selectedSpaceLabel}
-        labelPending={Boolean(spaceId) && !selectedSpace && labelsLoading}
+      <HubMultiFilterMenu
+        label={spaceMenuLabel}
+        labelPending={spaceIds.length === 1 && !onlySpace && labelsLoading}
         options={spaceOptions}
-        value={spaceId ?? ''}
-        onChange={value => onSpaceChange(value || null)}
+        values={spaceIds}
+        onToggle={onSpaceToggle}
+        onClear={onSpacesClear}
+        clearLabel="Any space"
         showImages
       />
-      {facetTopics && onTopicChange ? (
+      {facetTopics && topicIds && onTopicToggle && onTopicsClear ? (
         // `ml-auto` on the menu itself rather than `justify-between` on the row: with three items
         // that spread all of them, which stranded the space menu in the middle instead of leaving
         // it beside the source it narrows.
         <div className={cx(topicAtEnd && 'ml-auto')}>
-          <HubFilterMenu
-            label={topicLabel}
+          <HubMultiFilterMenu
+            label={topicMenuLabel}
             options={topicOptions}
-            value={topicId ?? ''}
-            onChange={value => onTopicChange(value || null)}
+            values={topicIds}
+            onToggle={onTopicToggle}
+            onClear={onTopicsClear}
+            clearLabel="Any topic"
           />
         </div>
       ) : null}
     </div>
   );
+}
+
+/**
+ * What the trigger pill says. One selection reads as its own name — the useful case, and the one
+ * the viewer is most often in — while several collapse to a count, because two names rarely fit
+ * and a truncated pair reads as one bad name.
+ */
+function pickerLabel(count: number, empty: string, single: () => string, many: (count: number) => string) {
+  if (count === 0) return empty;
+  return count === 1 ? single() : many(count);
 }

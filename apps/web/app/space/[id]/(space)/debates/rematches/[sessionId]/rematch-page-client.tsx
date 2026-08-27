@@ -22,7 +22,7 @@ import {
   type MatchmakingTopic,
 } from '~/core/debates/api';
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '~/core/debates/claim-picker-page';
-import { eligibleClaimSpaceIds, isClaimSpaceAllowed, keepSelectableSpace } from '~/core/debates/claim-space-allowlist';
+import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
@@ -48,7 +48,14 @@ import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState, HubSkeleton } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { availableTopics, keepSelectableTopic } from '~/core/debates/matchmaking/topic-facets';
+import {
+  countBy,
+  keepSelectableTopics,
+  keepSelectedVisible,
+  mergeFacetCounts,
+  orderFacetOptions,
+  toggleId,
+} from '~/core/debates/matchmaking/topic-facets';
 import { useScopedMatchmakingClaims } from '~/core/debates/matchmaking/use-scoped-claims';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
@@ -68,7 +75,6 @@ import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
-import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -84,8 +90,19 @@ function sameId(left: string, right: string) {
  * first settle there is nothing to hold, and the (empty) unsettled value comes through — which is
  * what lets the first load show a loading state instead of an empty list.
  */
-function useLastSettled<T>(value: T, settling: boolean): T {
+function useLastSettled<T>(value: T, settling: boolean, resetKey: string): T {
   const lastSettledRef = React.useRef<{ value: T } | null>(null);
+  const resetRef = React.useRef(resetKey);
+
+  // Holding across a change of key would be holding the wrong thing. The page keeps its instance
+  // when the route moves from one rematch to another — nothing keys it on the session — so without
+  // this the previous session's claims stay on screen while the new one loads, and the order they
+  // were in seeds the new session's.
+  if (resetRef.current !== resetKey) {
+    resetRef.current = resetKey;
+    lastSettledRef.current = null;
+  }
+
   if (!settling) lastSettledRef.current = { value };
   return settling && lastSettledRef.current ? lastSettledRef.current.value : value;
 }
@@ -130,8 +147,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return () => clearTimeout(timeout);
   }, [search]);
 
-  const [spaceId, setSpaceId] = React.useState<string | null>(null);
-  const [topicId, setTopicId] = React.useState<string | null>(null);
+  const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
+  const [topicIds, setTopicIds] = React.useState<string[]>([]);
   // Left unset until the viewer picks one: Recommended is the best landing tab when a curator has
   // put something together for this pairing, and it doesn't exist otherwise. Deciding in state
   // would fix the default before that lookup settles.
@@ -273,7 +290,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // aren't narrowed by it, so their rows put their spaces there — but `browsedRows` still drops
   // every *browsed* row from a disallowed space. Selecting one leaves the server answering with
   // rows that cannot be shown, and a facet describing them, while only the pinned rows survive.
-  const selectedSpaceShowsNothing = spaceId !== null && !isClaimSpaceAllowed(spaceId, spaceAllowlist);
+  // Every picked space, not any: with one allowed space picked alongside a disallowed one, the
+  // browsed corpus still has rows to give.
+  // The graph-backed sources deliberately offer spaces outside the viewer's allowlist, so a
+  // selection can hold both kinds at once. Only the allowed ones may reach geo-chat: `browsedRows`
+  // drops the rest anyway, but the facets riding with them would still name their topics and count
+  // their claims. The full selection stays in `spaceIds` for the pinned rows, which come from the
+  // graph and are not narrowed by the allowlist.
+  const browsableSpaceIds = React.useMemo(
+    () => spaceIds.filter(id => isClaimSpaceAllowed(id, spaceAllowlist)),
+    [spaceAllowlist, spaceIds]
+  );
+
+  // Nothing left to ask about once every pick is one geo-chat cannot answer for.
+  const selectedSpaceShowsNothing = spaceIds.length > 0 && browsableSpaceIds.length === 0;
 
   // Every lookup the scope is built from. Until they have all landed the scope is `null`, which
   // geo-chat reads as "no filter" — so asking now buys an answer about the whole corpus, whose
@@ -344,22 +374,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // graph query.
   const browsesPages = tab === 'claims' && source === 'all';
 
-  const matchmakingQuery = React.useMemo<Omit<MatchmakingClaimsQuery, 'spaceIds'>>(
+  const matchmakingQuery = React.useMemo<Omit<MatchmakingClaimsQuery, 'spaceIds' | 'spaceId'>>(
     // `topicId` is sent whichever tab is showing. It only filters *these* rows, which back the
     // All tab, and the server's topic facet is narrowed by spaces rather than by topics — so a
     // topic selection can never collapse the menu it came from. The other two tabs are built
     // from graph entities geo-chat has never seen, so their topic filter stays client-side.
     () => ({
       search: debouncedSearch || null,
-      spaceId,
-      topicId,
+      topicIds,
       // What `excludedClaimIds` removes below, removed by the endpoint instead — so the facets
       // describe the same corpus the rows do. Without it a topic whose every claim in the space
       // was one this session had dropped stayed on the menu over an empty list.
       rematchSessionId: sessionId,
       filter: 'all',
     }),
-    [debouncedSearch, sessionId, spaceId, topicId]
+    [debouncedSearch, sessionId, topicIds]
   );
   // Every way the pages can outlive the scope that fetched them is handled in there, once, for
   // both pickers — see `useScopedMatchmakingClaims`.
@@ -367,7 +396,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // also feed the space menu and their spaces the gateway scopes this page holds — both of which
   // have to describe every list, not the one in front of the viewer. Only the sentinel is gated,
   // below: paging a corpus that isn't on screen is the part that would be waste.
-  const browsedClaimsQuery = useScopedMatchmakingClaims(matchmakingQuery, scope, selectedSpaceShowsNothing);
+  const browsedClaimsQuery = useScopedMatchmakingClaims(
+    matchmakingQuery,
+    scope,
+    browsableSpaceIds,
+    selectedSpaceShowsNothing
+  );
   const { pages: browsedPages, facets: browsedFacets } = browsedClaimsQuery;
 
   // What geo-chat knows about this session's claims — readiness, the shared-preference and
@@ -570,7 +604,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // A new response from the opponent adds an id, and the lookups keyed on the id list start over.
   // The list they were drawn from is still right for every claim already on it, so it stays up
   // until the new one lands rather than dropping to nothing in between.
-  const opponentClaims = useLastSettled(opponentClaimsNow, opponentClaimsSettling);
+  const opponentClaimsHeld = useLastSettled(opponentClaimsNow, opponentClaimsSettling, sessionId);
+  // The sort above is a load-time arrangement, not a live one (GEO-2698). `shared_preference` is
+  // read off the session row, so taking a side on a claim the opponent has already answered flips
+  // it — and re-sorting sent the row the viewer had just acted on to the top, carrying the rest of
+  // the list with it. Held so that arrangement survives the viewer acting on it; a claim the
+  // opponent answers next is new rather than moved, and still lands at the top where the sort puts
+  // it. Keyed on the session, so reopening the flow arranges it afresh.
+  //
+  // Applied after `useLastSettled` rather than before it: the hold remembers the rows it has been
+  // shown, and `opponentClaimsNow` empties on every refetch. Stabilising that would hand it an
+  // empty list mid-flight and lose the order at the moment it is needed.
+  const opponentClaims = useStableListOrder(
+    opponentClaimsHeld,
+    row => `${row.claim.space_id}:${row.claim.claim_entity_id}`,
+    sessionId
+  );
 
   // The curated tab, in the curator's order. Held the same way, and likewise not narrowed by the
   // space allowlist.
@@ -594,7 +643,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       rowFromEntity,
     ]
   );
-  const curatedClaims = useLastSettled(curatedClaimsNow, curatedClaimsSettling);
+  const curatedClaims = useLastSettled(curatedClaimsNow, curatedClaimsSettling, sessionId);
 
   // Featured, in the order the tag query ranked it. Built exactly as the curated list is — the
   // entities are the same projection and the rows carry the same session flags — and held the same
@@ -632,7 +681,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       spaceAllowlist,
     ]
   );
-  const featuredClaims = useLastSettled(featuredClaimsNow, featuredClaimsSettling);
+  const featuredClaims = useLastSettled(featuredClaimsNow, featuredClaimsSettling, sessionId);
 
   // The All tab: geo-chat's rows, the graph's sides. Held while the allowlist resolves (see above).
   // It is still every claim the picker knows: the session's own rows — what both have answered,
@@ -712,7 +761,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // Topic belongs in the key for the same reason space does: it goes out as `topic_id`, so the
     // server ranks a different list under it, and holding the previous order would arrange the
     // new one by a ranking the viewer has already moved on from.
-    `${debouncedSearch}|${spaceId ?? ''}|${topicId ?? ''}`
+    `${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}`
   );
 
   // The opponent is whichever participant isn't the local user; with no local user there is none.
@@ -772,12 +821,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * *from* positions, so while positions is still in flight the id list is empty, those queries
    * are disabled rather than loading, and nothing downstream reports as pending.
    *
+   * `sessionQuery.isLoading` for the same reason, one step further up. Participants come from the
+   * session, positions are keyed on participants, and the claim lookups are keyed on positions — so
+   * while the session is in flight the whole chain below it is disabled rather than loading and
+   * reports nothing. That window is reachable: the route keeps this component when it moves between
+   * rematches, and the held list is dropped on the way (see `useLastSettled`), so without this the
+   * badge answers `0` for a session it has not read yet.
+   *
    * Once a settled list exists the number is shown even while a refetch is in flight: a new
    * response from the opponent restarts the lookups, and `useLastSettled` is still holding a list
    * that is correct for every claim already on it. Going back to a skeleton there would flicker
    * the badge on exactly the event that ought to be invisible.
    */
-  const opponentCountPending = opponentClaims.length === 0 && (positions.isLoading || opponentClaimsSettling);
+  const opponentCountPending =
+    opponentClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling);
 
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu.
@@ -845,10 +902,50 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     spaceAllowlist,
   ]);
 
+  // The menu's ids with counts against them. The server counts the browsed corpus; anything only
+  // the rows know about is counted from the rows, which is all there is to count — see
+  // `mergeFacetCounts` for why the two are not summed.
+  const facetSpaces = React.useMemo(() => {
+    const offered = new Set(facetSpaceIds);
+    // Narrowed by the topic and the search, never by the space selection — the mirror of
+    // `topicFacetClaims`, and the rule the server counts by: a dimension is never narrowed by
+    // itself, or picking one space would empty the menu it was picked from.
+    const fromRows = countBy(
+      claims
+        .filter(claim => {
+          if (!offered.has(claim.claim.space_id)) return false;
+          if (
+            topicIds.length > 0 &&
+            !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(topic => topicIds.includes(topic.id))
+          )
+            return false;
+          if (
+            !browsesPages &&
+            debouncedSearch &&
+            !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())
+          )
+            return false;
+          return true;
+        })
+        .map(claim => ({ id: claim.claim.space_id, name: null }))
+    );
+    const fromServer = (browsedFacets?.space_facets ?? []).filter(facet => offered.has(facet.id));
+    const merged = mergeFacetCounts(browsesPages ? fromServer : [], fromRows);
+    // Absent options stay absent — one the other filters leave empty could only ever produce an
+    // empty list. An absent *selection* comes back at zero, or its checkbox disappears while the
+    // trigger goes on counting it, and it can't be unticked without clearing every space.
+    return orderFacetOptions(keepSelectedVisible(merged, spaceIds), spaceIds);
+  }, [browsedFacets?.space_facets, claims, debouncedSearch, facetSpaceIds, spaceIds, tab, topicIds, topicsByClaimId]);
+
   // A space picked while the gates were still passing everything has to be let go once they
   // reject it, or it keeps going out as `space_id` on every request while its rows are dropped.
   React.useEffect(() => {
-    setSpaceId(current => keepSelectableSpace(current, facetSpaceIds, !allowlistPending));
+    if (allowlistPending) return;
+    setSpaceIds(current => {
+      const offered = new Set(facetSpaceIds);
+      const kept = current.filter(id => offered.has(id));
+      return kept.length === current.length ? current : kept;
+    });
   }, [allowlistPending, facetSpaceIds]);
 
   // The claims the topic menu describes on the graph-backed tabs: everything the other filters
@@ -858,7 +955,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const topicFacetClaims = React.useMemo(
     () =>
       claims.filter(claim => {
-        if (spaceId && claim.claim.space_id !== spaceId) return false;
+        if (spaceIds.length > 0 && !spaceIds.includes(claim.claim.space_id)) return false;
         // Cut on the same terms `visibleClaims` is, or the menu stops describing the list. On the
         // All tab the search runs server-side over the browsed rows, and the pinned ones are
         // merged in whether they match it or not — so cutting them here left a row on screen with
@@ -871,21 +968,29 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           return false;
         return true;
       }),
-    [browsesPages, claims, debouncedSearch, spaceId]
+    [browsesPages, claims, debouncedSearch, spaceIds]
   );
 
   // The All tab takes its menu from the server, which knows the whole filtered corpus rather
   // than the pages this client has walked — the difference GEO-2653 was about. The other two
   // tabs are built from graph entities geo-chat has never heard of, so they still derive theirs.
   //
-  // The server orders by count; kept in name order to match the other tabs and to leave the
-  // count ordering, with the counts themselves, to GEO-2654.
+  // Ordered by count with the picked ones pinned, the same as the Claims tab.
+  // Counted from the rows the tab would show, which is the only count available for a claim
+  // geo-chat has never seen.
+  const rowTopicCounts = React.useMemo(
+    () =>
+      countBy(
+        topicFacetClaims.flatMap(claim =>
+          (topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).map(topic => ({ id: topic.id, name: topic.name }))
+        )
+      ),
+    [topicFacetClaims, topicsByClaimId]
+  );
+
   const facetTopics = React.useMemo(() => {
-    const fromRows = availableTopics(
-      topicFacetClaims.map(claim => claim.claim.claim_entity_id),
-      topicsByClaimId
-    );
-    if (!browsesPages) return fromRows;
+    const rowCounts = rowTopicCounts;
+    if (!browsesPages) return orderFacetOptions(rowCounts, topicIds);
 
     // Both, because neither is the whole answer. The facet covers claims no page has reached,
     // which the rows cannot; the rows cover this session's saved, opponent and curated claims,
@@ -894,23 +999,23 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     //
     // Adding rows can't reintroduce an empty option: every topic here comes from a claim the
     // other filters already allow, so picking it leaves at least that one behind.
-    const merged = new Map<string, MatchmakingTopic>();
-    for (const facet of browsedFacets?.topic_facets ?? []) merged.set(facet.id, { id: facet.id, name: facet.name });
-    for (const topic of fromRows) if (!merged.has(topic.id)) merged.set(topic.id, topic);
-    return [...merged.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
-  }, [browsedFacets?.topic_facets, browsesPages, topicFacetClaims, topicsByClaimId]);
+    return orderFacetOptions(mergeFacetCounts(browsedFacets?.topic_facets ?? [], rowCounts), topicIds);
+  }, [browsedFacets?.topic_facets, browsesPages, rowTopicCounts, topicIds]);
 
   // Search and space reach the browsed query; on the other tabs, and for the topic everywhere
   // (geo-chat doesn't model topics), they are applied here.
   const visibleClaims = React.useMemo(
     () =>
       claims.filter(claim => {
-        if (spaceId && claim.claim.space_id !== spaceId) return false;
+        if (spaceIds.length > 0 && !spaceIds.includes(claim.claim.space_id)) return false;
         // Kept even on the All tab, where the query has already applied it. That tab is the
         // browsed rows *plus* this session's claims pinned in front of them, and the pinned ones
         // never went through the query — without this they survive a topic filter they don't
         // match. A no-op for the rows the server did filter, which match by construction.
-        if (topicId && !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(t => t.id === topicId))
+        if (
+          topicIds.length > 0 &&
+          !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(t => topicIds.includes(t.id))
+        )
           return false;
         if (
           !browsesPages &&
@@ -920,10 +1025,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           return false;
         return true;
       }),
-    [browsesPages, claims, debouncedSearch, spaceId, topicId, topicsByClaimId]
+    [browsesPages, claims, debouncedSearch, spaceIds, topicIds, topicsByClaimId]
   );
 
-  const hasFilters = Boolean(debouncedSearch || spaceId || topicId);
+  const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
   // Only All claims pages, so the sentinel exists only under it.
   const hasNextPage = browsesPages && browsedClaimsQuery.hasNextPage;
@@ -958,7 +1063,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // The All tab's menu is only as settled as the facets behind it; the other two have no facet
     // to wait on, so their own loading state is the whole answer.
     const resolved = browsesPages ? browsedClaimsQuery.facetsSettled && !tabIsLoading : !tabIsLoading;
-    setTopicId(current => keepSelectableTopic(current, facetTopics, resolved));
+    setTopicIds(current => keepSelectableTopics(current, facetTopics, resolved));
   }, [browsedClaimsQuery.facetsSettled, browsesPages, facetTopics, tabIsLoading]);
 
   const tabError =
@@ -1136,11 +1241,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
           <div className="flex flex-col gap-3">
             <SpaceTopicFilters
-              spaceId={spaceId}
-              onSpaceChange={setSpaceId}
-              topicId={topicId}
-              onTopicChange={setTopicId}
-              facetSpaceIds={facetSpaceIds}
+              spaceIds={spaceIds}
+              onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+              onSpacesClear={() => setSpaceIds([])}
+              topicIds={topicIds}
+              onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+              onTopicsClear={() => setTopicIds([])}
+              facetSpaces={facetSpaces}
               facetTopics={facetTopics}
               topicAtEnd
               // Only on Claims: the opponent's tab is one fixed source — their own responses — and
@@ -1205,8 +1312,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   label: 'Clear filters',
                   onClick: () => {
                     setSearch('');
-                    setSpaceId(null);
-                    setTopicId(null);
+                    setSpaceIds([]);
+                    setTopicIds([]);
                   },
                 }
               : undefined
@@ -1400,10 +1507,13 @@ function RematchClaimCard({
     responseKind,
   });
   const awaitingResponse = opposing && !responseSettled;
-  // `delayed` is the machine's own signal that this is taking longer than it should. Worth saying
-  // out loud rather than leaving the viewer with a spinner that never changes.
+  // Two phases, named for what is actually happening in each. `delayed` is only reachable from the
+  // response mutation's `onSuccess` — `reconcileResponseIndexing` runs after `run.status =
+  // 'success'` and sets it when the indexer hasn't confirmed in time — so by then the publish has
+  // landed and the wait is the index. Saying "still publishing" there would point the viewer at a
+  // transaction that already succeeded.
   const awaitingLabel =
-    responseIndexing.status === 'delayed' ? 'Still confirming your position…' : 'Confirming your position…';
+    responseIndexing.status === 'delayed' ? 'Still confirming your position…' : 'Publishing your position…';
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
 
@@ -1465,24 +1575,30 @@ function RematchClaimCard({
       // unknown — a settled lookup that simply has no row for it really does mean "not ready".
       hideReadinessToggle={claimReadiness === null && readinessUnresolved}
       footer={
-        awaitingResponse && !requesting ? (
-          <div className="mt-3 flex items-center gap-2" role="status" aria-live="polite">
-            <Spinner />
-            <Text as="span" variant="footnote" color="grey-04">
-              {awaitingLabel}
-            </Text>
-          </div>
-        ) : canRequest || requesting ? (
+        awaitingResponse || canRequest || requesting ? (
           <div className="mt-3">
+            {/* GEO-2697. The wait lives on the control it is blocking. This used to be a separate
+                spinner line rendered *instead* of the button, which left the viewer watching a
+                message in one place for a button that wasn't on screen yet — nothing connected the
+                two. `HubPillButton` already disables and sets `aria-busy` while pending, so the
+                button carries the whole state: named while it waits, pressable when it doesn't. */}
             <HubPillButton
               onClick={onRequest}
               disabled={!canRequest || busy || requesting || claim.recently_rejected}
-              pending={requesting}
-              pendingLabel="Requesting…"
+              pending={requesting || awaitingResponse}
+              pendingLabel={requesting ? 'Requesting…' : awaitingLabel}
               className="w-full"
             >
               Request debate
             </HubPillButton>
+            {/* The button's own label changes, but a disabled control nobody is focused on
+                announces nothing. This is what actually reaches a screen reader, and it is why the
+                wait is still a `status` even though it is no longer drawn as one. */}
+            {awaitingResponse && !requesting ? (
+              <span role="status" aria-live="polite" className="sr-only">
+                {awaitingLabel}
+              </span>
+            ) : null}
             {claim.recently_rejected ? (
               <Text as="p" variant="footnote" color="grey-04" className="mt-1">
                 Recently rejected
