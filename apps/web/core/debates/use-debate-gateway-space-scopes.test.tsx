@@ -9,16 +9,22 @@ const mocks = vi.hoisted(() => ({
 
 // No module mock: the hook and the gateway singleton are the pair under test, and the singleton
 // opens no socket until `start()`. Spying on `retainScope` is enough to count commands.
+//
+// Imported statically rather than with `await import` inside `beforeEach`, which is what GEO-2645
+// was: `beforeEach` counts against the *test's* timeout, so the first test in this file paid the
+// whole cold-import cost of `debate-gateway` and its dependency graph — 5.6 seconds on an idle
+// machine against a 10s limit, while every other test here runs in under 10ms. Under a full suite,
+// with workers competing for CPU, that crossed the limit and the file failed on a timeout rather
+// than an assertion. The dynamic import bought nothing either way: `await import` returns the
+// cached module after the first call, so every `beforeEach` was already re-spying the same
+// singleton.
+import { debateGateway, useDebateGatewaySpaceScopes } from './debate-gateway';
 
 describe('useDebateGatewaySpaceScopes', () => {
-  let useDebateGatewaySpaceScopes: typeof import('./debate-gateway').useDebateGatewaySpaceScopes;
-
-  beforeEach(async () => {
+  beforeEach(() => {
     mocks.retain.mockReset();
     mocks.release.mockReset();
-    const mod = await import('./debate-gateway');
-    useDebateGatewaySpaceScopes = mod.useDebateGatewaySpaceScopes;
-    vi.spyOn(mod.debateGateway, 'retainScope').mockImplementation(scope => {
+    vi.spyOn(debateGateway, 'retainScope').mockImplementation(scope => {
       mocks.retain(scope);
       return () => mocks.release(scope);
     });
