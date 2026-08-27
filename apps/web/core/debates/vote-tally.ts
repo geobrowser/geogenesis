@@ -10,6 +10,8 @@ export type DebateVoteRecord = {
   winnerSpaceEntityId: string;
   /** Display name of the pick, for the badge on that voter's comments. */
   winnerName: string | null;
+  /** Winner relation id — deleted and replaced when changing a pick. */
+  winnerRelationId: string | null;
 };
 
 export type DebateVoteTally = {
