@@ -486,6 +486,11 @@ function featuredPositionSummaries(
       position_label: choice?.position_label ?? responsePositionLabel(responseKind, position),
       total_count: choice?.participant_count ?? 0,
       available_now_count: choice?.participant_count ?? 0,
+      // These are `online_choices`, so the count already *is* the present population — the same
+      // number, but it has to be set explicitly. `present_count` is what the avatar stack and its
+      // `+N` read (GEO-2691), and leaving it unset would fall back to the length of the capped
+      // preview and silently drop the overflow: 5 people behind 2 faces would render no "+3".
+      present_count: choice?.participant_count ?? 0,
       participants: choice?.participants ?? [],
     };
   });
