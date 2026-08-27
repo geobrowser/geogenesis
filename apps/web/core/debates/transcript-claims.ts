@@ -56,6 +56,29 @@ function presentRelations<T>(
   return present.sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
 }
 
+type RemoteClaimValue = { spaceId: string; propertyId: string; text?: string | null; boolean?: boolean | null };
+
+/**
+ * Put raw value rows into the shape `claimResponseKind` reads, matching `Entity`'s own decoding:
+ * booleans land as '1' / '0', text as itself.
+ *
+ * "Is factual" is a checkbox, so it arrives in the `boolean` column with `text` null. Reading only
+ * `text` made every claim resolve to a stance, which put Agree/Disagree on claims that should read
+ * Verify/Dispute. Same conversion `claim-picker-page.ts` does for the same reason.
+ */
+function decodeValues(values: Array<RemoteClaimValue | null> | null | undefined) {
+  const decoded: Array<{ property: { id: string }; spaceId: string; value: string }> = [];
+
+  for (const value of values ?? []) {
+    if (!value) continue;
+    const raw = value.boolean != null ? (value.boolean ? '1' : '0') : value.text;
+    if (raw == null) continue;
+    decoded.push({ property: { id: value.propertyId }, spaceId: value.spaceId, value: raw });
+  }
+
+  return decoded;
+}
+
 /**
  * Flatten the transcript traversal into claims grouped by the speaker who made them.
  *
@@ -101,18 +124,7 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery): Debate
           // Read against the claim's own space, since "Is factual" is a per-space value and the
           // side labels have to match the space the response is published against.
           responseKind: spaceId
-            ? claimResponseKind(
-                {
-                  values: (claimEntity.valuesList ?? [])
-                    .filter(value => value != null)
-                    .map(value => ({
-                      property: { id: value!.propertyId },
-                      spaceId: value!.spaceId,
-                      value: value!.text ?? '',
-                    })),
-                },
-                spaceId
-              )
+            ? claimResponseKind({ values: decodeValues(claimEntity.valuesList) }, spaceId)
             : 'stance',
         };
 

@@ -157,8 +157,12 @@ function ClaimList({
     );
   }
 
+  // `list-disc pl-4` is the app's bulleted list, copied off `.prose-chat ul` in `styles/chat.css`
+  // — the editor's own lists land on the same disc-plus-1rem-indent in `styles/tiptap.css`. Both
+  // are CSS attached to a container class rather than a component, so there is nothing to import;
+  // matching the utilities is the reuse.
   return (
-    <ul className="mt-5 space-y-4">
+    <ul className="mt-5 list-disc space-y-4 pl-4">
       {claims.map(claim => (
         <li key={claim.id}>
           <ClaimRow claim={claim} />

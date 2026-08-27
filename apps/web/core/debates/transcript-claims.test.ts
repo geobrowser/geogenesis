@@ -15,8 +15,8 @@ type Claim = {
   position?: string;
   /** null models a claim the graph reports no space for. */
   spaceId?: string | null;
-  /** '1' = factual (Verify/Dispute), anything else = stance (Agree/Disagree). */
-  isFactual?: string;
+  /** How the graph actually stores the "Is factual" checkbox: the boolean column. */
+  isFactual?: boolean;
 };
 
 type Block = {
@@ -50,7 +50,15 @@ function response(blocks: Block[], transcriptPosition = 'a0'): DebateTranscriptC
                       valuesList:
                         claim.isFactual === undefined
                           ? []
-                          : [{ spaceId: spaceId ?? SPACE, propertyId: IS_FACTUAL, text: claim.isFactual }],
+                          : [
+                              {
+                                spaceId: spaceId ?? SPACE,
+                                propertyId: IS_FACTUAL,
+                                // A checkbox has no text; the value is in the boolean column.
+                                text: null,
+                                boolean: claim.isFactual,
+                              },
+                            ],
                     },
                   };
                 }),
@@ -202,12 +210,23 @@ describe('claim space and response kind', () => {
     expect(claimsForParticipant(grouped, PRESTON)[0].responseKind).toBe('stance');
   });
 
-  it('labels a claim marked factual as veracity, so the controls read Verify/Dispute', () => {
+  // Regression: "Is factual" is a checkbox, so it arrives in the `boolean` column with `text`
+  // null. Reading only `text` resolved every claim to a stance and put Agree/Disagree on claims
+  // that should read Verify/Dispute — which is every claim on the debate this was built against.
+  it('labels a claim whose Is-factual boolean is set as veracity, so the controls read Verify/Dispute', () => {
     const grouped = groupTranscriptClaims(
-      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', isFactual: '1' }] }])
+      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', isFactual: true }] }])
     );
 
     expect(claimsForParticipant(grouped, PRESTON)[0].responseKind).toBe('veracity');
+  });
+
+  it('labels a claim whose Is-factual boolean is explicitly false as a stance', () => {
+    const grouped = groupTranscriptClaims(
+      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', isFactual: false }] }])
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].responseKind).toBe('stance');
   });
 
   it('ignores an Is-factual value set in a different space than the claim lives in', () => {
@@ -231,7 +250,7 @@ describe('claim space and response kind', () => {
                           id: 'claim-1',
                           name: 'Claim one',
                           spaceIds: [SPACE],
-                          valuesList: [{ spaceId: ARTURAS, propertyId: IS_FACTUAL, text: '1' }],
+                          valuesList: [{ spaceId: ARTURAS, propertyId: IS_FACTUAL, text: null, boolean: true }],
                         },
                       },
                     ],

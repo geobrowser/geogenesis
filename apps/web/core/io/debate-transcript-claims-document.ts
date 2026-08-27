@@ -56,6 +56,9 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
                     spaceId
                     propertyId
                     text
+                    # "Is factual" is a checkbox, so it lands in the boolean column and the text
+                    # column is null. Reading only text made every claim look non-factual.
+                    boolean
                   }
                 }
               }
@@ -73,7 +76,12 @@ type ClaimEntity = {
   id: string;
   name?: string | null;
   spaceIds?: Array<string | null> | null;
-  valuesList?: Array<{ spaceId: string; propertyId: string; text?: string | null } | null> | null;
+  valuesList?: Array<{
+    spaceId: string;
+    propertyId: string;
+    text?: string | null;
+    boolean?: boolean | null;
+  } | null> | null;
 };
 
 export type DebateTranscriptClaimsQuery = {
