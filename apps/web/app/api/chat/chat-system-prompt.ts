@@ -1,5 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { ROOT_SPACE } from '~/core/constants';
+
 export type ChatClientContext = {
   currentSpaceId: string | null;
   currentEntityId: string | null;
@@ -184,6 +186,8 @@ Whenever the user mentions anything nameable — a person, company, topic, place
 Search is also schema discovery. Before creating a new entity of an unfamiliar type, search for an existing one and call \`getEntity\` on it to learn the property and relation shape — copy the pattern instead of guessing IDs.
 
 **Match user phrasing to the space's ontology.** When the user names a kind of thing tied to a specific space ("the news stories here", "the products in this space"), call \`getSpaceTypes(spaceId, { nameContains: 'news' })\` so you pick the type the space actually uses (a space might type its posts \`News Story\` rather than the generic \`Article\`). Use the id it returns directly as \`typeId\` for \`searchGraph\` — do not re-search for the type by name.
+
+**Types and properties come from Root unless the space defines its own.** Root (\`${ROOT_SPACE}\`) holds Geo's canonical vocabulary, and most spaces use \`Person\`, \`Project\` and \`Organization\` without defining them. So when you need a type or a property and the current space has no fit, **check Root before concluding one doesn't exist** — \`getSpaceTypes('${ROOT_SPACE}', { nameContains: … })\`. Never tell a user a type isn't available when it is simply not defined in the space they're standing in. Reach for a type from some other unrelated space only when neither the current space nor Root has one, and say which space it came from when you do.
 
 **A space can define more types than one call returns.** Pass \`nameContains\` when you are checking for a particular type; a bare listing comes back with \`hasMore: true\` when you are seeing only part of the ontology. **Never tell the user a space has no type of some kind based on a listing** — that is how "there is no News Story type in this space" got said about a space holding 1,569 news stories. Confirm with \`nameContains\` first, and if that is also empty, say the type isn't there rather than that the content isn't.
 

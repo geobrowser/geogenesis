@@ -9,13 +9,15 @@ import { type UIMessage, isToolUIPart } from 'ai';
 import * as Effect from 'effect/Effect';
 
 import { DEFAULT_ENTITY_SCHEMA } from '~/core/database/entities';
+import { selectSearchAdditionalSpaceIds } from '~/core/hooks/search-additional-space-ids';
 import { getEntity, getEntityNames, getResults, getSpace, getSpaces } from '~/core/io/queries';
 import { queryClient } from '~/core/query-client';
 import { E } from '~/core/sync/orm';
 import { GeoStore } from '~/core/sync/store';
 import { store as geoStore } from '~/core/sync/use-sync-engine';
 import type { Entity, Property, Relation, SearchResult } from '~/core/types';
-import { getSpaceRank } from '~/core/utils/space/space-ranking';
+import { isTrustedSpace, rankBySpace, trustedSpaceSet } from '~/core/utils/space/search-trust';
+import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import { enqueue } from './apply-queue';
 import {
@@ -55,10 +57,18 @@ function limitEntries<T>(items: readonly T[], max = MAX_RESULT_ENTRIES): T[] {
   return items.slice(0, max);
 }
 
-export type ReadCtx = {
+export type EntityCtx = {
   store: GeoStore;
   cache: QueryClient;
 };
+
+export type ReadCtx = EntityCtx & {
+  searchSpaceIds: string[];
+};
+
+const SCHEMA_TYPE_IDS = new Set([normalizeEntityId(SystemIds.PROPERTY), normalizeEntityId(SystemIds.SCHEMA_TYPE)]);
+
+const SCHEMA_SEARCH_FETCH_LIMIT = 25;
 
 function renderableTypeToBlockKind(
   renderable: string | null | undefined
@@ -97,7 +107,7 @@ function dedupeTypes<T extends { id: string }>(items: T[]): T[] {
 async function fetchEntitySchema(
   entityRelations: Relation[],
   filledPropertyIds: Set<string>,
-  ctx: ReadCtx
+  ctx: EntityCtx
 ): Promise<SchemaEntry[]> {
   try {
     const typesWithSpace: Array<{ id: string; spaceId?: string }> = [];
@@ -198,7 +208,7 @@ async function fetchEntitySchema(
 }
 
 // Local store first so a locally-renamed space surfaces under its new name.
-async function resolveSpaceName(spaceId: string, ctx: ReadCtx): Promise<string | null> {
+async function resolveSpaceName(spaceId: string, ctx: EntityCtx): Promise<string | null> {
   const localSpaceEntity = ctx.store.getEntity(spaceId);
   if (localSpaceEntity?.name) return localSpaceEntity.name;
   try {
@@ -212,7 +222,7 @@ async function resolveSpaceName(spaceId: string, ctx: ReadCtx): Promise<string |
   }
 }
 
-export async function executeGetEntity(input: GetEntityInput, ctx: ReadCtx): Promise<GetEntityOutput> {
+export async function executeGetEntity(input: GetEntityInput, ctx: EntityCtx): Promise<GetEntityOutput> {
   if (!isEntityId(input.entityId)) {
     return { error: 'invalid_id' };
   }
@@ -390,7 +400,7 @@ function toTypeEntries(types: readonly { id: string; name?: string | null }[]) {
  * A name we still can't resolve is dropped, exactly as before: a type the user
  * can't be shown by name is nothing the agent can reason with.
  */
-async function withResolvedTypeNames(results: PendingSearchResult[], ctx: ReadCtx): Promise<SearchGraphResult[]> {
+async function withResolvedTypeNames(results: PendingSearchResult[], ctx: EntityCtx): Promise<SearchGraphResult[]> {
   const unresolvedIds = [...new Set(results.flatMap(r => r.types.filter(t => !t.name).map(t => t.id)))].sort();
 
   const resolved = new Map<string, string>();
@@ -418,7 +428,7 @@ async function withResolvedTypeNames(results: PendingSearchResult[], ctx: ReadCt
   }));
 }
 
-async function localEntityToSearchResult(entity: Entity, ctx: ReadCtx): Promise<PendingSearchResult | null> {
+async function localEntityToSearchResult(entity: Entity, ctx: EntityCtx): Promise<PendingSearchResult | null> {
   const firstSpace = entity.spaces[0];
   if (!firstSpace) return null;
   const spaceName = await resolveSpaceName(firstSpace, ctx);
@@ -432,14 +442,19 @@ async function localEntityToSearchResult(entity: Entity, ctx: ReadCtx): Promise<
   };
 }
 
-function remoteSearchResultToOutput(entity: SearchResult): PendingSearchResult | null {
-  const firstSpace = entity.spaces[0];
-  if (!firstSpace) return null;
+function remoteSearchResultToOutput(entity: SearchResult, preferredSpaceId?: string): PendingSearchResult | null {
+  if (entity.spaces.length === 0) return null;
+  const spaceIds = entity.spaces.map(space => normalizeEntityId(space.spaceId));
+  const spaceId =
+    preferredSpaceId && spaceIds.includes(preferredSpaceId)
+      ? preferredSpaceId
+      : (getTopRankedSpaceId(spaceIds) ?? spaceIds[0]);
+  const space = entity.spaces.find(candidate => normalizeEntityId(candidate.spaceId) === spaceId);
   return {
     id: normalizeEntityId(entity.id),
     name: entity.name,
-    spaceId: normalizeEntityId(firstSpace.spaceId),
-    spaceName: firstSpace.name ?? null,
+    spaceId,
+    spaceName: space?.name ?? null,
     types: toTypeEntries(entity.types),
   };
 }
@@ -449,12 +464,28 @@ export async function executeSearchGraph(input: SearchGraphInput, ctx: ReadCtx):
   const scopedSpaceId = input.spaceId && isEntityId(input.spaceId) ? normalizeEntityId(input.spaceId) : undefined;
   const scopedTypeId = input.typeId && isEntityId(input.typeId) ? normalizeEntityId(input.typeId) : undefined;
 
+  const additionalSpaceIds = selectSearchAdditionalSpaceIds({
+    filterBySpace: scopedSpaceId,
+    includeNonCanonical: false,
+    globalAdditionalSpaceIds: ctx.searchSpaceIds,
+  });
+  const isSchemaSearch = scopedTypeId !== undefined && SCHEMA_TYPE_IDS.has(scopedTypeId);
+  const fetchLimit = isSchemaSearch ? Math.max(effectiveLimit, SCHEMA_SEARCH_FETCH_LIMIT) : effectiveLimit;
+
   try {
     const [localMatches, remoteRaw] = await Promise.all([
       Promise.resolve(localSearch(input.query, ctx.store, scopedSpaceId, scopedTypeId)),
       ctx.cache
         .fetchQuery({
-          queryKey: ['chat', 'searchGraph', input.query, scopedSpaceId ?? null, scopedTypeId ?? null, effectiveLimit],
+          queryKey: [
+            'chat',
+            'searchGraph',
+            input.query,
+            scopedSpaceId ?? null,
+            scopedTypeId ?? null,
+            fetchLimit,
+            additionalSpaceIds ?? null,
+          ],
           queryFn: ({ signal }) =>
             Effect.runPromise(
               getResults(
@@ -462,7 +493,9 @@ export async function executeSearchGraph(input: SearchGraphInput, ctx: ReadCtx):
                   query: input.query,
                   spaceId: scopedSpaceId,
                   typeIds: scopedTypeId ? [scopedTypeId] : undefined,
-                  limit: effectiveLimit,
+                  limit: fetchLimit,
+                  additionalSpaceIds,
+                  includeNonCanonical: false,
                 },
                 signal
               )
@@ -473,6 +506,14 @@ export async function executeSearchGraph(input: SearchGraphInput, ctx: ReadCtx):
           return [] as SearchResult[];
         }),
     ]);
+
+    const allowedSpaces = trustedSpaceSet(ctx.searchSpaceIds);
+    const rankedRemote = rankBySpace(
+      isSchemaSearch
+        ? remoteRaw.filter(result => result.spaces.some(space => isTrustedSpace(space.spaceId, allowedSpaces)))
+        : remoteRaw,
+      scopedSpaceId
+    );
 
     const seen = new Set<string>();
     const merged: PendingSearchResult[] = [];
@@ -487,8 +528,8 @@ export async function executeSearchGraph(input: SearchGraphInput, ctx: ReadCtx):
     }
 
     if (merged.length < effectiveLimit) {
-      for (const remote of remoteRaw) {
-        const result = remoteSearchResultToOutput(remote);
+      for (const remote of rankedRemote) {
+        const result = remoteSearchResultToOutput(remote, scopedSpaceId);
         if (!result) continue;
         if (seen.has(result.id)) continue;
         seen.add(result.id);
@@ -683,9 +724,18 @@ function readToolNameFromPart(type: string): ReadToolName | null {
 // so any edit emitted in the same render lands in the apply-queue first and
 // the read observes post-apply state. `onToolCall` runs before React commits,
 // so reads would race ahead of edits — that's why we wait for the effect.
-export function useReadDispatcher(messages: UIMessage[], addToolResultRef: React.RefObject<AddToolResultFn | null>) {
+export function useReadDispatcher(
+  messages: UIMessage[],
+  addToolResultRef: React.RefObject<AddToolResultFn | null>,
+  searchSpaceIds: string[]
+) {
   const dispatchedRef = React.useRef(new Set<string>());
   const cancelledRef = React.useRef(false);
+  const searchSpaceIdsRef = React.useRef(searchSpaceIds);
+
+  React.useEffect(() => {
+    searchSpaceIdsRef.current = searchSpaceIds;
+  }, [searchSpaceIds]);
 
   React.useEffect(() => {
     cancelledRef.current = false;
@@ -711,7 +761,7 @@ export function useReadDispatcher(messages: UIMessage[], addToolResultRef: React
 
         enqueue(async () => {
           if (cancelledRef.current) return;
-          const ctx: ReadCtx = { store: geoStore, cache: queryClient };
+          const ctx: ReadCtx = { store: geoStore, cache: queryClient, searchSpaceIds: searchSpaceIdsRef.current };
           try {
             const result = await executeReadTool(
               {

@@ -41,6 +41,7 @@ function ctx() {
       fetchQuery: ({ queryFn }: { queryKey: unknown[]; queryFn: (c: { signal: undefined }) => Promise<unknown> }) =>
         queryFn({ signal: undefined }),
     },
+    searchSpaceIds: [],
   } as unknown as Parameters<typeof executeSearchGraph>[1];
 }
 

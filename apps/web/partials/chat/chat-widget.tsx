@@ -30,6 +30,7 @@ import { useResearchDispatcher } from '~/core/chat/research-dispatcher';
 import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher';
 import { useWebFetchDispatcher } from '~/core/chat/web-fetch-dispatcher';
 import { ROOT_SPACE } from '~/core/constants';
+import { useGlobalSearchSpaceIds } from '~/core/hooks/use-global-search-space-ids';
 import { useInjectJob } from '~/core/hooks/use-inject-job';
 import { useSpace } from '~/core/hooks/use-space';
 import { completeDailyUploadActivity } from '~/core/space/use-space-daily-activities';
@@ -236,6 +237,7 @@ export function ChatWidget() {
   // explicitly here so inject jobs and other context know which space we're on.
   const currentSpaceId = typeof params?.['id'] === 'string' ? params['id'] : pathname === '/root' ? ROOT_SPACE : null;
   const routeEntityId = typeof params?.['entityId'] === 'string' ? params['entityId'] : null;
+  const globalSearchSpaceIds = useGlobalSearchSpaceIds();
 
   // Space home page has no `entityId` route param; resolve to the home
   // entity (or topicId for topic spaces) so "this entity" works there.
@@ -530,7 +532,7 @@ export function ChatWidget() {
   // Order matters: edits must enqueue before reads so same-step reads see
   // post-apply state.
   useEditDispatcher(messages, addToolResultRef);
-  useReadDispatcher(messages, addToolResultRef);
+  useReadDispatcher(messages, addToolResultRef, globalSearchSpaceIds);
   useResearchDispatcher(messages, addToolResultRef);
   useGeoQueryDispatcher(messages, addToolResultRef);
   useWebFetchDispatcher(messages, addToolResultRef);
