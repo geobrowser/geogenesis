@@ -107,8 +107,22 @@ const claim: DebateClaimSummary = {
 };
 
 const positions: DebateClaimPositionSummary[] = [
-  { position: true, position_label: 'Agree', total_count: 2, available_now_count: 1, participants: [] },
-  { position: false, position_label: 'Disagree', total_count: 3, available_now_count: 2, participants: [] },
+  {
+    position: true,
+    position_label: 'Agree',
+    total_count: 2,
+    available_now_count: 1,
+    present_count: 1,
+    participants: [],
+  },
+  {
+    position: false,
+    position_label: 'Disagree',
+    total_count: 3,
+    available_now_count: 2,
+    present_count: 2,
+    participants: [],
+  },
 ];
 
 function readiness(overrides: Partial<MatchmakingReadiness> = {}): MatchmakingReadiness {
@@ -119,6 +133,15 @@ function readiness(overrides: Partial<MatchmakingReadiness> = {}): MatchmakingRe
     readiness_disabled_reason: null,
     ...overrides,
   };
+}
+
+function participant(id: string) {
+  return {
+    user_id: id,
+    profile_space_id: `${id}-space`,
+    display_name: id,
+    avatar_cid: null,
+  } as DebateClaimPositionSummary['participants'][number];
 }
 
 const toggleName = 'Ready to debate this claim';
@@ -140,6 +163,150 @@ beforeEach(() => {
 });
 
 afterEach(cleanup);
+
+/**
+ * GEO-2691. The avatar stack means "who could I debate about this, right now". geo-chat narrowed
+ * the preview to available people; the overflow was still `total_count - shown`, which counts
+ * every holder including offline ones. So a side with nobody available rendered a bare "+2" and no
+ * faces, and a side with one available person out of three said "+2" when only one was reachable.
+ */
+describe('position avatar stack', () => {
+  const withCounts = (overrides: Array<Partial<DebateClaimPositionSummary>>): DebateClaimPositionSummary[] => [
+    { ...positions[0], ...overrides[0] },
+    { ...positions[1], ...overrides[1] },
+  ];
+
+  it('draws no stack at all for a side with nobody available', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={withCounts([
+          { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('available-one')] },
+          { total_count: 2, available_now_count: 0, present_count: 0, participants: [] },
+        ])}
+        readiness={readiness()}
+      />
+    );
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    // No faces and no count: two offline holders are not "+2" people you could debate.
+    expect(within(disagree).queryByText('+2')).toBeNull();
+    expect(within(disagree).queryByText(/^\+/)).toBeNull();
+  });
+
+  // The regression that caused the revert. Drawing the stack from `available_now_count` looked
+  // right until you noticed it is viewer-relative: it excludes the viewer and anyone they have
+  // already debated on this claim. So a claim you had actually argued showed an empty stack — to
+  // you and to nobody else. Preston: "Im talking about my opponent's face."
+  //
+  // geo-chat now sends `present_count` for exactly this: who is on the position, regardless of
+  // whether this particular viewer could send them a request.
+  it('draws people the viewer cannot request, and still reports that they cannot', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={withCounts([
+          { total_count: 1, available_now_count: 0, present_count: 1, participants: [] },
+          {
+            // A pair-blocked opponent: present on the position, not requestable by this viewer.
+            total_count: 1,
+            available_now_count: 0,
+            present_count: 1,
+            participants: [participant('already-debated')],
+          },
+        ])}
+        readiness={readiness()}
+      />
+    );
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(within(disagree).getAllByTestId('avatar')).toHaveLength(1);
+    // One face, one person present, so no overflow claiming anybody else is there.
+    expect(within(disagree).queryByText(/^\+/)).toBeNull();
+  });
+
+  // The deploy window, which is the state production was actually in: geo-chat reverted so it
+  // sends every holder, geogenesis still gating the stack on `available_now_count`. On a claim
+  // whose only opponent is pair-blocked that count is 0, so the whole stack rendered nothing.
+  // Preston: "The images still arent there."
+  //
+  // A client that ships before geo-chat#74 sees no `present_count` at all, and must draw the faces
+  // it was sent rather than gating on an undefined number.
+  it('draws the faces geo-chat sent even when it sends no present_count', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={[
+          {
+            position: true,
+            position_label: 'Agree',
+            total_count: 1,
+            available_now_count: 0,
+            participants: [],
+          },
+          {
+            position: false,
+            position_label: 'Disagree',
+            total_count: 1,
+            // Pair-blocked, so not requestable — and an older geo-chat offers no present_count.
+            available_now_count: 0,
+            participants: [participant('already-debated')],
+          },
+        ]}
+        readiness={readiness()}
+      />
+    );
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(within(disagree).getAllByTestId('avatar')).toHaveLength(1);
+    // The face count is all we know, so no overflow claiming anyone else is there.
+    expect(within(disagree).queryByText(/^\+/)).toBeNull();
+  });
+
+  it('counts the overflow from available people, not from every holder', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={withCounts([
+          {
+            total_count: 9,
+            available_now_count: 4,
+            present_count: 4,
+            participants: [participant('one'), participant('two')],
+          },
+          { total_count: 3, available_now_count: 0, present_count: 0, participants: [] },
+        ])}
+        readiness={readiness()}
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    // 4 available, 2 shown -> +2. Not 9 - 2 = +7, which counted five people who are offline.
+    expect(within(agree).getByText('+2')).toBeInTheDocument();
+    expect(within(agree).queryByText('+7')).toBeNull();
+  });
+
+  it('shows no overflow when every available person is already on screen', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={withCounts([
+          {
+            total_count: 6,
+            available_now_count: 2,
+            present_count: 2,
+            participants: [participant('one'), participant('two')],
+          },
+          { total_count: 0, available_now_count: 0, present_count: 0, participants: [] },
+        ])}
+        readiness={readiness()}
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(within(agree).queryByText(/^\+/)).toBeNull();
+  });
+});
 
 describe('MatchmakingClaimCard', () => {
   it('puts the debate toggle in the card header beside the space name', () => {
@@ -191,15 +358,17 @@ describe('MatchmakingClaimCard', () => {
       />
     );
 
-    // Three on the server plus the viewer: their face is shown, the other three counted over.
+    // Disagree has 3 holders but only 2 available. The viewer's face is shown and the count is of
+    // the *available* others behind it, so +2 — not +3, which used to include the offline holder
+    // (GEO-2691).
     const disagree = screen.getByRole('button', { name: /^Disagree/ });
     expect(within(disagree).getByTestId('avatar')).toHaveTextContent('https://example.com/you.png');
-    expect(within(disagree).getByText('+3')).toBeInTheDocument();
+    expect(within(disagree).getByText('+2')).toBeInTheDocument();
 
-    // The side they didn't take is left exactly as the server reported it.
+    // The side they didn't take is left as the server reported it: 2 holders, 1 available.
     const agree = screen.getByRole('button', { name: /^Agree/ });
     expect(within(agree).queryByTestId('avatar')).not.toBeInTheDocument();
-    expect(within(agree).getByText('+2')).toBeInTheDocument();
+    expect(within(agree).getByText('+1')).toBeInTheDocument();
   });
 
   // The switch of sides, which the test above doesn't reach: it starts from no server position, so
@@ -216,9 +385,17 @@ describe('MatchmakingClaimCard', () => {
         position_label: 'Agree',
         total_count: 2,
         available_now_count: 1,
+        present_count: 1,
         participants: [{ user_id: 'geo-chat-user', profile_space_id: storedId, display_name: 'You', avatar_cid: null }],
       },
-      { position: false, position_label: 'Disagree', total_count: 3, available_now_count: 2, participants: [] },
+      {
+        position: false,
+        position_label: 'Disagree',
+        total_count: 3,
+        available_now_count: 2,
+        present_count: 2,
+        participants: [],
+      },
     ];
     mocks.viewerSpaceId = '019fedb10c417f3e9a112c7d5e8b4419';
     mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
@@ -229,7 +406,10 @@ describe('MatchmakingClaimCard', () => {
     // One avatar, on the new side only — not one on each.
     expect(within(disagree).getAllByTestId('avatar')).toHaveLength(1);
     expect(within(agree).queryAllByTestId('avatar')).toHaveLength(0);
-    expect(within(agree).getByText('+1')).toBeInTheDocument();
+    // And no "+1" left behind on the side they left. The viewer was that side's only present
+    // person, so once they move it is empty — the count follows the faces off the side rather
+    // than claiming somebody is still standing there. It asserted "+1" while the overflow came
+    // from `available_now_count`, which `withoutViewer` had no reason to decrement.
   });
 
   // The rematch picker locates the viewer in `positions` by geo-chat user id, which is null until
@@ -242,6 +422,7 @@ describe('MatchmakingClaimCard', () => {
         position_label: 'Agree',
         total_count: 2,
         available_now_count: 1,
+        present_count: 1,
         participants: [
           {
             user_id: 'geo-chat-user',
@@ -251,7 +432,14 @@ describe('MatchmakingClaimCard', () => {
           },
         ],
       },
-      { position: false, position_label: 'Disagree', total_count: 3, available_now_count: 2, participants: [] },
+      {
+        position: false,
+        position_label: 'Disagree',
+        total_count: 3,
+        available_now_count: 2,
+        present_count: 2,
+        participants: [],
+      },
     ];
     mocks.viewerSpaceId = '019fedb10c417f3e9a112c7d5e8b4419';
     mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };

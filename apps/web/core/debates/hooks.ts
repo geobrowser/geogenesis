@@ -72,6 +72,7 @@ import {
   refreshRematchClaimBatches,
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
+import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
 
 export const debateQueryNetworkOptions = {
   retry: false,
@@ -117,15 +118,27 @@ export function useGeoChatAuth() {
   };
 }
 
+/**
+ * Holds a query's own result open while the space type is still resolving.
+ *
+ * The gate can't just disable the query and leave it at that: a disabled react-query reports
+ * `isLoading: false` with no data, so consumers read the wait as a settled empty answer. See
+ * {@link SpaceDebateSupport}.
+ */
+function holdWhileSpaceResolves<T extends { isLoading: boolean }>(query: T, support: SpaceDebateSupport): T {
+  return support === 'unknown' ? { ...query, isLoading: true } : query;
+}
+
 // Pass a claim-id array to enrich a known set, or `null` to list every debatable
 // claim in the space. geo-chat indexes them, so this skips the KG scan over all
 // the space's Claim entities that 504s on large spaces.
 export function useDebateClaims(spaceId: string, claimIds: string[] | null, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  const shouldFetch = enabled && (claimIds === null || claimIds.length > 0);
+  const support = useSpaceDebateSupport(spaceId);
+  const shouldFetch = enabled && support === 'indexed' && (claimIds === null || claimIds.length > 0);
   useDebateGatewayScope({ scope: 'space', space_id: spaceId }, authenticated && shouldFetch);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.claims(spaceId, claimIds),
     queryFn: ({ signal }) =>
@@ -138,6 +151,8 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
       ),
     enabled: shouldFetch,
   });
+
+  return holdWhileSpaceResolves(query, support);
 }
 
 /**
@@ -151,6 +166,14 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
 export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimIds: string[] }>) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
 
+  // Deliberately ungated on space type, unlike the single-space {@link useDebateClaims}. The
+  // rematch picker filters its claims by `isSpaceDebatePublishable` before they reach here, and it
+  // holds scopes on both participants' personal spaces on purpose — a debater's own claims live
+  // there, and the opponent's *first* position is exactly the case with no claim to derive the
+  // scope from yet. Narrowing this to indexed spaces would strip those, and since a scope-level
+  // rejection now recycles the socket rather than parking it (GEO-2650), there is nothing left for
+  // the narrowing to save.
+  //
   // Same subscription `useDebateClaims` makes for its one space: without it the gateway never
   // delivers this space's claim changes, so nothing here would refresh when someone responds.
   const spaceIds = React.useMemo(() => groups.map(group => group.spaceId), [groups]);
@@ -447,9 +470,13 @@ export function useClearDebateActivity() {
 
 export function useSpaceDebates(spaceId: string, enabled: boolean) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
-  useDebateGatewayScope({ scope: 'space', space_id: spaceId }, enabled && authenticated);
+  // The browse feed subscribes the same way `useDebateClaims` does, so it needs the same gate:
+  // opening the debate feed on a personal space raised the banner on its own.
+  const support = useSpaceDebateSupport(spaceId);
+  const shouldFetch = enabled && support === 'indexed';
+  useDebateGatewayScope({ scope: 'space', space_id: spaceId }, shouldFetch && authenticated);
 
-  return useQuery({
+  const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.spaceDebates(spaceId),
     queryFn: ({ signal }) =>
@@ -459,8 +486,10 @@ export function useSpaceDebates(spaceId: string, enabled: boolean) {
         authenticated ? accountKey : null,
         signal
       ),
-    enabled,
+    enabled: shouldFetch,
   });
+
+  return holdWhileSpaceResolves(query, support);
 }
 
 export function useDebate(debateId: string, enabled: boolean) {

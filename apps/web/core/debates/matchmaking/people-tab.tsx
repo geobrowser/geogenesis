@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { Avatar } from '~/design-system/avatar';
+import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
 
 import { activeDebate } from '../activity-state';
@@ -11,6 +12,7 @@ import { useCreateDebateChallenge, useDebateActivity } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
+import { HubStickyControls } from './claims-tab';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
@@ -25,7 +27,17 @@ export function PeopleTab() {
   const { data: activity } = useDebateActivity(true);
   const { data: requests } = useDebateRequests(true);
   const currentUserId = useCurrentGeoChatUserId();
-  const people = peopleQuery.data?.people ?? [];
+  const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
+
+  // Filtered here rather than through the query: this endpoint has no search parameter and returns
+  // whoever is available right now in one unpaginated list, so there is nothing to page back for.
+  // Matching the same label the row renders keeps "search for what you can see" true.
+  const [search, setSearch] = React.useState('');
+  const people = React.useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return allPeople;
+    return allPeople.filter(person => speakerLabel(person).toLowerCase().includes(term));
+  }, [allPeople, search]);
 
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
   // A challenge stays `pending` in the activity payload until the server says otherwise, so its own
@@ -62,13 +74,20 @@ export function PeopleTab() {
 
   return (
     <div className="flex flex-col">
-      {/* Sticky above the list, the way Matches keeps a sent claim request in view — a request you
-          are waiting on shouldn't scroll away behind the people you can no longer ask. */}
-      {outboundChallenge ? (
-        <div className="sticky top-0 z-10 border-b border-grey-02 bg-white px-4 py-3">
-          <DebateChallengeCard challenge={outboundChallenge} role="requester" />
-        </div>
-      ) : null}
+      {/* One pinned block, like Matches: a request you are waiting on shouldn't scroll away behind
+          the people you can no longer ask, and search shouldn't either. Two stickies would both
+          claim `top-0` and overlap, and the card is conditional so search couldn't be offset by a
+          known height. */}
+      <HubStickyControls>
+        {outboundChallenge ? <DebateChallengeCard challenge={outboundChallenge} role="requester" /> : null}
+        <Input
+          withSearchIcon
+          value={search}
+          onChange={event => setSearch(event.currentTarget.value)}
+          placeholder="Search people"
+          aria-label="Search people"
+        />
+      </HubStickyControls>
 
       {/* Matches the other tabs' inset so content doesn't shift when switching between them. */}
       <div className="px-4 py-3">
@@ -76,7 +95,10 @@ export function PeopleTab() {
           isLoading={peopleQuery.isLoading}
           error={peopleQuery.error}
           isEmpty={people.length === 0}
-          emptyMessage="Nobody is available to debate right now."
+          emptyMessage={
+            search.trim() ? 'Nobody available matches that search.' : 'Nobody is available to debate right now.'
+          }
+          emptyAction={search.trim() ? { label: 'Clear search', onClick: () => setSearch('') } : undefined}
         >
           <>
             {blockedReason ? (

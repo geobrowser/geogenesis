@@ -6,7 +6,7 @@ import { Text } from '~/design-system/text';
 
 import type { MatchmakingMatch } from '../api';
 import { useDebateActivity } from '../hooks';
-import { SpaceTopicFilters } from './claims-tab';
+import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
@@ -53,15 +53,15 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
 
   return (
     <div className="flex flex-col">
-      {outbound ? (
-        <div className="sticky top-0 z-10 border-b border-grey-02 bg-white px-4 py-3">
-          <OutboundRequestCard request={outbound} />
-        </div>
-      ) : null}
+      {/* One pinned header rather than a pinned card above scrolling filters: two stickies would
+          both claim `top-0` and overlap, and the outbound card is conditional so the filters
+          couldn't be offset by a known height. */}
+      <HubStickyControls>
+        {outbound ? <OutboundRequestCard request={outbound} /> : null}
+        <SpaceTopicFilters spaceId={spaceId} onSpaceChange={setSpaceId} facetSpaceIds={facetSpaceIds} />
+      </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">
-        <SpaceTopicFilters spaceId={spaceId} onSpaceChange={setSpaceId} facetSpaceIds={facetSpaceIds} />
-
         <HubQueryState
           isLoading={matchesQuery.isLoading}
           error={matchesQuery.error}
