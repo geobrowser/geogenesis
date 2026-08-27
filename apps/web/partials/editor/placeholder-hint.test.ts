@@ -42,6 +42,12 @@ describe('resolveBlockPlaceholder', () => {
     );
   });
 
+  // `editor.isEmpty` is true of a document made only of blank paragraphs, so the
+  // resting copy has to be scoped to the selection too or every blank line gets it.
+  it('keeps the resting copy off the other blank lines of an all-empty document', () => {
+    expect(resolveBlockPlaceholder({ ...paragraph, hasAnchor: false, isFocused: false, isEmpty: true })).toBe('');
+  });
+
   it('prefers the hint over the resting copy once that empty document is focused', () => {
     expect(resolveBlockPlaceholder({ ...paragraph, hasAnchor: true, isFocused: true, isEmpty: true })).toBe(
       EMPTY_BLOCK_SLASH_HINT
@@ -91,5 +97,14 @@ describe('placeholder decorations on a blurred editor', () => {
 
   it('still invites input on an empty document', () => {
     expect(renderPlaceholders([emptyParagraph], 1)).toEqual([EMPTY_BLOCK_RESTING_TEXT]);
+  });
+
+  it('invites input once, not on every blank line of an all-empty document', () => {
+    // The whole document is blank, so `editor.isEmpty` is true for all three.
+    expect(renderPlaceholders([emptyParagraph, emptyParagraph, emptyParagraph], 1)).toEqual([
+      EMPTY_BLOCK_RESTING_TEXT,
+      '',
+      '',
+    ]);
   });
 });

@@ -64,8 +64,11 @@ export function resolveBlockPlaceholder({
 
   // Nothing is being edited, so an otherwise empty document would render with no
   // affordance at all. Keep the short resting copy for that one case; it is too
-  // short to wrap, so it cannot overlap the way the hint would.
-  if (isEmpty) return EMPTY_BLOCK_RESTING_TEXT;
+  // short to wrap, so it cannot overlap the way the hint would. Still scoped to
+  // the block holding the selection: `isEmpty` is true of a document made of
+  // several empty paragraphs, so without `hasAnchor` this would label every
+  // blank line.
+  if (isEmpty && hasAnchor) return EMPTY_BLOCK_RESTING_TEXT;
 
   return '';
 }
