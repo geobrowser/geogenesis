@@ -128,13 +128,16 @@ export function insertClonedBlock(
   options: { blockId?: string; position?: number } = {}
 ): string | null {
   const { blockId, node } = cloneBlockNode(payload, spaceId, options.blockId);
-  const command = editor.chain();
-  const inserted =
-    options.position === undefined
-      ? command.insertContent(node).focus().scrollIntoView().run()
-      : command.insertContentAt(options.position, node).focus().scrollIntoView().run();
+  const position = options.position ?? topLevelInsertionPosition(editor);
+  const inserted = editor.chain().insertContentAt(position, node).focus().scrollIntoView().run();
 
   return inserted ? blockId : null;
+}
+
+/** Places a pasted block after the selection's containing top-level block. */
+export function topLevelInsertionPosition(editor: Editor) {
+  const { $from, to } = editor.state.selection;
+  return $from.depth > 0 ? $from.after(1) : to;
 }
 
 /** Collects the block-owned graph, following relation entities but not shared targets. */

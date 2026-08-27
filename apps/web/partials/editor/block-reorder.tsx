@@ -555,7 +555,7 @@ export function BlockDragHandle({
           <button
             ref={setNodeRef}
             type="button"
-            aria-label={`Drag block ${childIndex + 1} to reorder`}
+            aria-label={`Drag block ${childIndex + 1} to reorder or open block actions`}
             title="Drag to reorder or click for actions"
             className="flex size-6 cursor-grab touch-none items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01 active:cursor-grabbing"
             onContextMenu={event => {

@@ -164,6 +164,38 @@ describe('Geo block clipboard', () => {
     editor.destroy();
   });
 
+  it('pastes after the containing top-level list instead of nesting at the cursor', () => {
+    const editor = new Editor({
+      extensions: [Document, Paragraph, Text, BulletList, ListItem, createIdExtension('destination-space')],
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'bulletList',
+            attrs: { id: 'existing-list' },
+            content: [
+              {
+                type: 'listItem',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Existing item' }] }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    document.body.appendChild(editor.view.dom);
+    editor.commands.setTextSelection(3);
+
+    expect(insertClonedBlock(editor, payload(), 'destination-space', { blockId: 'new-block' })).toBe('new-block');
+    expect(editor.state.doc.childCount).toBe(2);
+    expect(editor.state.doc.child(0).type.name).toBe('bulletList');
+    expect(editor.state.doc.child(1).type.name).toBe('paragraph');
+    expect(editor.state.doc.child(1).textContent).toBe('Hello 🌍');
+
+    editor.view.dom.remove();
+    editor.destroy();
+  });
+
   it('remaps copied block entities while preserving shared relation targets', () => {
     let nextId = 0;
     const cloned = cloneBlockEntityData({

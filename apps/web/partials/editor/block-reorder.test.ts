@@ -63,7 +63,7 @@ describe('BlockDragHandle', () => {
     );
 
     const addButton = screen.getByRole('button', { name: 'Add block below block 1' });
-    const dragButton = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    const dragButton = screen.getByRole('button', { name: 'Drag block 1 to reorder or open block actions' });
     const hoverCluster = dragButton.parentElement;
 
     expect(addButton.compareDocumentPosition(dragButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
@@ -89,7 +89,7 @@ describe('BlockDragHandle', () => {
       )
     );
 
-    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder or open block actions' });
     const handle = button.parentElement;
     expect(handle).toHaveStyle({ opacity: '0', pointerEvents: 'none' });
 
@@ -127,7 +127,7 @@ describe('BlockDragHandle', () => {
       )
     );
 
-    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder or open block actions' });
     expect(button.parentElement).toHaveStyle({ opacity: '1', pointerEvents: 'auto' });
     expect(button).toHaveClass('touch-none');
   });
@@ -147,7 +147,7 @@ describe('BlockDragHandle', () => {
       )
     );
 
-    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder' });
+    const button = screen.getByRole('button', { name: 'Drag block 1 to reorder or open block actions' });
     button.focus();
     const pointerDown = new MouseEvent('pointerdown', { bubbles: true });
     button.dispatchEvent(pointerDown);

@@ -457,10 +457,12 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
   const insertCopiedBlock = React.useCallback(
     (payload: BlockClipboardPayload, insertPosition?: number) => {
       const currentEditor = editorRef.current;
-      if (!currentEditor || currentEditor.isDestroyed) return false;
+      if (!currentEditor || currentEditor.isDestroyed) return { inserted: false, persisted: false };
 
       const blockId = insertClonedBlock(currentEditor, payload, spaceId, { position: insertPosition });
-      return blockId !== null && persistCopiedBlock(payload, blockId);
+      if (blockId === null) return { inserted: false, persisted: false };
+
+      return { inserted: true, persisted: persistCopiedBlock(payload, blockId) };
     },
     [persistCopiedBlock, spaceId]
   );
@@ -513,8 +515,9 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
       if (!currentEditor || currentEditor.isDestroyed || !payload) return;
 
       const insertPosition = positionBeforeTopLevelChild(currentEditor, childIndex + 1);
-      if (!insertCopiedBlock(payload, insertPosition)) {
-        setToast(<div className="text-button">Unable to duplicate block</div>);
+      const result = insertCopiedBlock(payload, insertPosition);
+      if (!result.persisted) {
+        setToast(<div className="text-button">Unable to save duplicated block</div>);
       }
     },
     [insertCopiedBlock, makeBlockClipboardPayload, setToast]
@@ -522,11 +525,14 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
 
   const pasteCopiedBlock = React.useCallback(
     (payload: BlockClipboardPayload) => {
-      const inserted = insertCopiedBlock(payload);
-      if (!inserted) {
-        setToast(<div className="text-button">Unable to paste block</div>);
+      const result = insertCopiedBlock(payload);
+      if (!result.persisted) {
+        setToast(<div className="text-button">Unable to save pasted block</div>);
       }
-      return inserted;
+      // If insertion succeeded, the paste event is handled even when graph
+      // persistence reports a failure. Falling through would insert the plain
+      // text a second time after the document has already changed.
+      return result.inserted;
     },
     [insertCopiedBlock, setToast]
   );
