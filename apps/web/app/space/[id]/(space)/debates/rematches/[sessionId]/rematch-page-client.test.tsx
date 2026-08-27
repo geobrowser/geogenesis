@@ -1313,6 +1313,29 @@ describe('DebateRematchPageClient', () => {
       expect(listedClaims()).toEqual(loaded);
     });
 
+    /**
+     * The route keeps this component when it moves from one rematch to another — nothing keys it on
+     * the session — so the hold that carries a list through a refetch would otherwise carry it
+     * across a session change too. That is the wrong list twice over: the previous rematch's claims
+     * on screen while the new one loads, and their order seeding the new session's.
+     */
+    it('does not carry the previous session’s claims into a new one', () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      expect(listedClaims()).toHaveLength(2);
+
+      const positionsTab = () => screen.getByRole('button', { name: /Salina’s positions/ });
+      expect(positionsTab()).toHaveTextContent('2');
+
+      // The new session's lookups are in flight: nothing of its own to show yet.
+      mocks.entityHydrationLoading = true;
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+      // Asserted on the tab's own count rather than on the claims: the same rows also reach the All
+      // tab, so searching the document would find them whichever list they came from.
+      expect(positionsTab()).not.toHaveTextContent('2');
+    });
+
     // The hold is on rows already shown, not on the arrangement itself: a claim the opponent
     // answers next has never been under the viewer's cursor, so the sort still places it.
     it('still puts a newly arrived match at the top', () => {

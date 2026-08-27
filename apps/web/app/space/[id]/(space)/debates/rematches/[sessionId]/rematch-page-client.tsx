@@ -83,8 +83,19 @@ function sameId(left: string, right: string) {
  * first settle there is nothing to hold, and the (empty) unsettled value comes through — which is
  * what lets the first load show a loading state instead of an empty list.
  */
-function useLastSettled<T>(value: T, settling: boolean): T {
+function useLastSettled<T>(value: T, settling: boolean, resetKey: string): T {
   const lastSettledRef = React.useRef<{ value: T } | null>(null);
+  const resetRef = React.useRef(resetKey);
+
+  // Holding across a change of key would be holding the wrong thing. The page keeps its instance
+  // when the route moves from one rematch to another — nothing keys it on the session — so without
+  // this the previous session's claims stay on screen while the new one loads, and the order they
+  // were in seeds the new session's.
+  if (resetRef.current !== resetKey) {
+    resetRef.current = resetKey;
+    lastSettledRef.current = null;
+  }
+
   if (!settling) lastSettledRef.current = { value };
   return settling && lastSettledRef.current ? lastSettledRef.current.value : value;
 }
@@ -569,7 +580,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // A new response from the opponent adds an id, and the lookups keyed on the id list start over.
   // The list they were drawn from is still right for every claim already on it, so it stays up
   // until the new one lands rather than dropping to nothing in between.
-  const opponentClaimsHeld = useLastSettled(opponentClaimsNow, opponentClaimsSettling);
+  const opponentClaimsHeld = useLastSettled(opponentClaimsNow, opponentClaimsSettling, sessionId);
   // The sort above is a load-time arrangement, not a live one (GEO-2698). `shared_preference` is
   // read off the session row, so taking a side on a claim the opponent has already answered flips
   // it — and re-sorting sent the row the viewer had just acted on to the top, carrying the rest of
@@ -608,7 +619,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       rowFromEntity,
     ]
   );
-  const curatedClaims = useLastSettled(curatedClaimsNow, curatedClaimsSettling);
+  const curatedClaims = useLastSettled(curatedClaimsNow, curatedClaimsSettling, sessionId);
 
   // Featured, in the order the tag query ranked it. Built exactly as the curated list is — the
   // entities are the same projection and the rows carry the same session flags — and held the same
