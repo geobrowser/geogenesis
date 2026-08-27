@@ -1286,92 +1286,33 @@ describe('DebateRematchPageClient', () => {
         position('profile-remote', CLAIM_MORE, SPACE_1, false),
       ];
       mocks.entities = [sharedEntity(), opponentEntity(CLAIM_MORE, SECOND_CLAIM)];
-      mocks.claims = [sessionRow(CLAIM_SHARED, 'A claim both participants chose', false)];
+      mocks.claims = [sessionRow(CLAIM_SHARED, FIRST_CLAIM, false)];
     }
 
-    /** The claims on the opponent's tab, top to bottom, read off the rendered document. */
-    function listedClaims() {
-      return [FIRST_CLAIM, SECOND_CLAIM, THIRD_CLAIM]
-        .map(text => ({ text, node: screen.queryByText(text) }))
-        .filter((entry): entry is { text: string; node: HTMLElement } => entry.node !== null)
-        .sort((a, b) =>
-          // eslint-disable-next-line no-bitwise
-          a.node.compareDocumentPosition(b.node) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
-        )
-        .map(entry => entry.text);
-    }
+    const positionsTab = () => screen.getByRole('button', { name: /positions/ });
 
-    it('holds the order it loaded with when a position becomes a match', () => {
+    it('holds the order it loaded with when a position becomes a match', async () => {
       twoUnmatchedPositions();
       const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
 
-      const loaded = listedClaims();
-      expect(loaded).toHaveLength(2);
-      expect(loaded[1]).toBe(SECOND_CLAIM);
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
 
       // The viewer takes a side on the second one: geo-chat's row comes back a match.
       mocks.claims = [sessionRow(CLAIM_SHARED, FIRST_CLAIM, false), sessionRow(CLAIM_MORE, SECOND_CLAIM, true)];
       rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
 
-      expect(listedClaims()).toEqual(loaded);
-    });
-
-    /**
-     * The route keeps this component when it moves from one rematch to another — nothing keys it on
-     * the session — so the hold that carries a list through a refetch would otherwise carry it
-     * across a session change too. That is the wrong list twice over: the previous rematch's claims
-     * on screen while the new one loads, and their order seeding the new session's.
-     */
-    it('does not carry the previous session’s claims into a new one', () => {
-      twoUnmatchedPositions();
-      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
-      expect(listedClaims()).toHaveLength(2);
-
-      const positionsTab = () => screen.getByRole('button', { name: /Salina’s positions/ });
-      expect(positionsTab()).toHaveTextContent('2');
-
-      // The new session's lookups are in flight: nothing of its own to show yet.
-      mocks.entityHydrationLoading = true;
-      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
-
-      // Asserted on the tab's own count rather than on the claims: the same rows also reach the All
-      // tab, so searching the document would find them whichever list they came from. And on the
-      // skeleton specifically — "not 2" would be satisfied by a confident `0`, which is the wrong
-      // answer rather than an absent one.
-      expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
-      expect(positionsTab()).not.toHaveTextContent('2');
-    });
-
-    /**
-     * The window the session change opens: participants come from the session, positions from
-     * participants, the claim lookups from positions. While the session is in flight the whole
-     * chain is disabled rather than loading, so nothing downstream says "pending" — and the badge
-     * would answer `0` for a session it has not read yet. Zero is a claim about the opponent, not a
-     * placeholder.
-     */
-    it('does not answer zero positions for a session it has not read yet', () => {
-      twoUnmatchedPositions();
-      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
-      expect(screen.getByRole('button', { name: /Salina’s positions/ })).toHaveTextContent('2');
-
-      // Only the session is loading, and it has not returned yet — so everything keyed on what it
-      // returns is disabled, reporting `isLoading: false` while having nothing to say.
-      mocks.sessionLoading = true;
-      mocks.session = null;
-      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
-
-      expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
-      // The tab is named from a fallback while the session is unknown, so the skeleton — not the
-      // tab's name — is what identifies the badge here.
-      expect(screen.queryByText('0')).not.toBeInTheDocument();
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
     });
 
     // The hold is on rows already shown, not on the arrangement itself: a claim the opponent
     // answers next has never been under the viewer's cursor, so the sort still places it.
-    it('still puts a newly arrived match at the top', () => {
+    it('still puts a newly arrived match at the top', async () => {
       twoUnmatchedPositions();
       const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
-      expect(listedClaims()).toHaveLength(2);
+      await showOpponentClaims();
+      expect(appearsBefore(FIRST_CLAIM, SECOND_CLAIM)).toBe(true);
 
       mocks.positions = [
         position('profile-remote', CLAIM_FRESH, SPACE_1, false),
@@ -1385,8 +1326,56 @@ describe('DebateRematchPageClient', () => {
       ];
       mocks.claims = [sessionRow(CLAIM_SHARED, FIRST_CLAIM, false), sessionRow(CLAIM_FRESH, THIRD_CLAIM, true)];
       rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await settleTabSwap();
 
-      expect(listedClaims()[0]).toBe(THIRD_CLAIM);
+      expect(appearsBefore(THIRD_CLAIM, FIRST_CLAIM)).toBe(true);
+    });
+
+    /**
+     * The route keeps this component when it moves from one rematch to another — nothing keys it on
+     * the session — so the hold that carries a list through a refetch would otherwise carry it
+     * across a session change too. That is the wrong list twice over: the previous rematch's claims
+     * on screen while the new one loads, and their order seeding the new session's.
+     */
+    it('does not carry the previous session’s claims into a new one', async () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(within(positionsTab()).getByText('2')).toBeInTheDocument();
+
+      // The new session's lookups are in flight: nothing of its own to show yet.
+      mocks.entityHydrationLoading = true;
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+      // Asserted on the tab's own count rather than on the claims: the same rows also reach the
+      // Claims tab, so searching the document would find them whichever list they came from. And on
+      // the skeleton specifically — "not 2" would be satisfied by a confident `0`, which is the
+      // wrong answer rather than an absent one.
+      expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+      expect(within(positionsTab()).queryByText('2')).not.toBeInTheDocument();
+    });
+
+    /**
+     * The window the session change opens: participants come from the session, positions from
+     * participants, the claim lookups from positions. While the session is in flight the whole
+     * chain is disabled rather than loading, so nothing downstream says "pending" — and the badge
+     * would answer `0` for a session it has not read yet. Zero is a claim about the opponent, not a
+     * placeholder.
+     */
+    it('does not answer zero positions for a session it has not read yet', async () => {
+      twoUnmatchedPositions();
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+      expect(within(positionsTab()).getByText('2')).toBeInTheDocument();
+
+      // Only the session is loading, and it has not returned yet — so everything keyed on what it
+      // returns is disabled, reporting `isLoading: false` while having nothing to say.
+      mocks.sessionLoading = true;
+      mocks.session = null;
+      rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+
+      expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+      expect(screen.queryByText('0')).not.toBeInTheDocument();
     });
   });
 

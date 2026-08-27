@@ -657,7 +657,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       spaceAllowlist,
     ]
   );
-  const featuredClaims = useLastSettled(featuredClaimsNow, featuredClaimsSettling);
+  const featuredClaims = useLastSettled(featuredClaimsNow, featuredClaimsSettling, sessionId);
 
   // The All tab: geo-chat's rows, the graph's sides. Held while the allowlist resolves (see above).
   // It is still every claim the picker knows: the session's own rows — what both have answered,
