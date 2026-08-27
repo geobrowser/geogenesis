@@ -1,10 +1,5 @@
 export type OnboardingStep =
-  | 'start'
-  | 'enter-profile'
-  | 'existing-entity-match'
-  | 'create-space'
-  | 'completed'
-  | 'done';
+  'start' | 'enter-profile' | 'existing-entity-match' | 'create-space' | 'completed' | 'done';
 
 /**
  * The completion screen intentionally stays mounted after optimistic setup hides

@@ -35,6 +35,7 @@ import {
 import { Mutator, useMutate } from '~/core/sync/use-mutate';
 import { useQueryProperty, useRelations, useValue } from '~/core/sync/use-store';
 import { Property, Relation, ValueOptions } from '~/core/types';
+
 import { mapPropertyType } from '~/core/utils/property/properties';
 import { isUrlTemplate, resolveUrlTemplate } from '~/core/utils/url-template';
 import { useImageUrlFromEntity, useVideoUrlFromEntity } from '~/core/utils/use-entity-media';
@@ -304,7 +305,6 @@ export function EditableEntityPage({ id, spaceId }: EditableEntityPageProps) {
   );
 }
 
-export const EditableEntityProperties = EditableEntityPage;
 function InlinePropertyRow({
   entityId,
   propertyId,
@@ -1372,7 +1372,7 @@ function useVisiblePropertySections(
         id: 'ungrouped',
         isGroup: true,
         groupId: 'ungrouped',
-        label: 'Ungrouped properties',
+        label: 'Other properties',
         defaultCollapsed: false,
         collapsible: false,
         entries: ungroupedEntries,

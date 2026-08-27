@@ -6,7 +6,6 @@ import cx from 'classnames';
 import { usePathname } from 'next/navigation';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
-import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -74,14 +73,19 @@ export function EditableSpaceHeading({
   spaceId,
   entityId,
   addSubspaceComponent,
+  nameAccessoryComponent,
+  actionsComponent,
 }: {
   spaceId: string;
   entityId: string;
   addSubspaceComponent?: React.ReactElement<any>;
+  /** Rendered directly after the name in browse mode, e.g. the verification state. */
+  nameAccessoryComponent?: React.ReactNode;
+  /** Rendered at the end of the name row, e.g. the profile "Debate" button. */
+  actionsComponent?: React.ReactNode;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
-  const { isEditor, isMember } = useAccessControl(spaceId);
   const { space } = useSpace(spaceId);
 
   const path = usePathname();
@@ -146,128 +150,131 @@ export function EditableSpaceHeading({
             <Spacer height={3.5} />
           </div>
         ) : (
-          <div>
-            <div className="flex items-center justify-between">
-              <Truncate maxLines={3} shouldTruncate>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <Truncate maxLines={3} shouldTruncate className="w-auto! min-w-0">
                 <Text as="h1" variant="mainPage">
                   {name ?? ZERO_WIDTH_SPACE}
                 </Text>
               </Truncate>
+              {nameAccessoryComponent ? (
+                <span className="mt-[9px] inline-flex shrink-0">{nameAccessoryComponent}</span>
+              ) : null}
             </div>
             <Spacer height={12} />
           </div>
         )}
-        {isSpacePage && (
+        {(actionsComponent || isSpacePage) && (
           <div className="inline-flex items-center gap-4">
-            {isEditing && (
-              <Link
-                href={NavUtils.toEntity(spaceId, ID.createEntityId())}
-                className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
-              >
-                <Create />
-              </Link>
-            )}
-            <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
-              {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
-              {allVersions.map((v, index) => (
-                <EntityVersionItem
-                  key={v.editId}
-                  createdAt={v.createdAt}
-                  name={v.name}
-                  createdById={v.createdById}
-                  createdBy={v.createdBy}
-                  onClick={() => {
-                    onVersionClick(v, index);
-                    setIsHistoryOpen(false);
-                  }}
-                />
-              ))}
-              {isFetching && allVersions.length === 0 && (
-                <div className="flex h-12 w-full items-center justify-center bg-white">
-                  <Dots />
-                </div>
-              )}
-              {hasNextPage && (
-                <div className="flex h-12 w-full shrink-0 items-center justify-center bg-white">
-                  {isFetchingNextPage ? (
-                    <Dots />
-                  ) : (
-                    <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
-                      Show more
-                    </SmallButton>
-                  )}
-                </div>
-              )}
-            </HistoryPanel>
-            <Menu
-              open={isContextMenuOpen}
-              onOpenChange={open => dispatch({ type: 'SET_MENU_OPEN', open })}
-              trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-              className={cx('min-w-0', !isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
-            >
-              {isCreatingNewVersion && (
-                <CreateNewVersionInSpace
-                  entityId={entityId as EntityId}
-                  entityName={name ?? ''}
-                  sourceSpaceId={spaceId}
-                  setIsCreatingNewVersion={value =>
-                    dispatch({ type: value ? 'OPEN_CREATE_IN_SPACE' : 'CLOSE_OVERLAYS' })
-                  }
-                  onDone={() => {
-                    dispatch({ type: 'CLOSE_OVERLAYS' });
-                  }}
-                />
-              )}
-              {!isCreatingNewVersion && (
-                <>
-                  <MenuItem onClick={onCopySpaceId}>
-                    <p>Copy Space ID</p>
-                  </MenuItem>
-                  <MenuItem onClick={onCopyEntityId}>
-                    <p>Copy Entity ID</p>
-                  </MenuItem>
-                  <MenuItem onClick={() => dispatch({ type: 'OPEN_CREATE_IN_SPACE' })}>
-                    <p>Create in space</p>
-                  </MenuItem>
-                  {(isEditor || isMember) && (
-                    <MenuItem href={NavUtils.toImport(spaceId)}>
-                      <p>Import data</p>
-                    </MenuItem>
-                  )}
-                  {isEditing && Spaces.hasExternalTopic(space) && (
-                    <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
-                      <p>Edit space config</p>
-                    </MenuItem>
-                  )}
-                  <MenuItem
-                    onClick={() => {
-                      dispatch({ type: 'OPEN_SUBTOPICS' });
-                    }}
+            {actionsComponent}
+            {isSpacePage && (
+              <>
+                {isEditing && (
+                  <Link
+                    href={NavUtils.toEntity(spaceId, ID.createEntityId())}
+                    className="stroke-grey-04 transition-colors duration-75 hover:stroke-text sm:hidden"
                   >
-                    <p>Subtopics</p>
-                  </MenuItem>
-                  {isEditing && (
+                    <Create />
+                  </Link>
+                )}
+                <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+                  {!isFetching && allVersions.length === 0 && <HistoryEmpty />}
+                  {allVersions.map((v, index) => (
+                    <EntityVersionItem
+                      key={v.editId}
+                      createdAt={v.createdAt}
+                      name={v.name}
+                      createdById={v.createdById}
+                      createdBy={v.createdBy}
+                      onClick={() => {
+                        onVersionClick(v, index);
+                        setIsHistoryOpen(false);
+                      }}
+                    />
+                  ))}
+                  {isFetching && allVersions.length === 0 && (
+                    <div className="flex h-12 w-full items-center justify-center bg-white">
+                      <Dots />
+                    </div>
+                  )}
+                  {hasNextPage && (
+                    <div className="flex h-12 w-full shrink-0 items-center justify-center bg-white">
+                      {isFetchingNextPage ? (
+                        <Dots />
+                      ) : (
+                        <SmallButton variant="secondary" onClick={() => fetchNextPage()}>
+                          Show more
+                        </SmallButton>
+                      )}
+                    </div>
+                  )}
+                </HistoryPanel>
+                <Menu
+                  open={isContextMenuOpen}
+                  onOpenChange={open => dispatch({ type: 'SET_MENU_OPEN', open })}
+                  trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
+                  className={cx('min-w-0', !isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
+                >
+                  {isCreatingNewVersion && (
+                    <CreateNewVersionInSpace
+                      entityId={entityId as EntityId}
+                      entityName={name ?? ''}
+                      sourceSpaceId={spaceId}
+                      setIsCreatingNewVersion={value =>
+                        dispatch({ type: value ? 'OPEN_CREATE_IN_SPACE' : 'CLOSE_OVERLAYS' })
+                      }
+                      onDone={() => {
+                        dispatch({ type: 'CLOSE_OVERLAYS' });
+                      }}
+                    />
+                  )}
+                  {!isCreatingNewVersion && (
                     <>
+                      <MenuItem onClick={onCopySpaceId}>
+                        <p>Copy Space ID</p>
+                      </MenuItem>
+                      <MenuItem onClick={onCopyEntityId}>
+                        <p>Copy Entity ID</p>
+                      </MenuItem>
+                      <MenuItem onClick={() => dispatch({ type: 'OPEN_CREATE_IN_SPACE' })}>
+                        <p>Create in space</p>
+                      </MenuItem>
+                      {isEditing && Spaces.hasExternalTopic(space) && (
+                        <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
+                          <p>Edit space config</p>
+                        </MenuItem>
+                      )}
                       <MenuItem
                         onClick={() => {
-                          dispatch({ type: 'OPEN_SPACE_TOPIC' });
+                          dispatch({ type: 'OPEN_SUBTOPICS' });
                         }}
                       >
-                        <p>Set topic</p>
+                        <p>Subtopics</p>
                       </MenuItem>
-                      <MenuItem
-                        onClick={() => {
-                          dispatch({ type: 'OPEN_SPACE_RELATIONSHIPS' });
-                        }}
-                      >
-                        <p>Space relationships</p>
-                      </MenuItem>
+                      {isEditing && (
+                        <>
+                          <MenuItem
+                            onClick={() => {
+                              dispatch({ type: 'OPEN_SPACE_TOPIC' });
+                            }}
+                          >
+                            <p>Set topic</p>
+                          </MenuItem>
+                          <MenuItem
+                            onClick={() => {
+                              dispatch({ type: 'OPEN_SPACE_RELATIONSHIPS' });
+                            }}
+                          >
+                            <p>Space relationships</p>
+                          </MenuItem>
+                        </>
+                      )}
+                      {addSubspaceComponent}
                     </>
                   )}
-                  {addSubspaceComponent}
-                </>
-              )}
-            </Menu>
+                </Menu>
+              </>
+            )}
           </div>
         )}
       </div>

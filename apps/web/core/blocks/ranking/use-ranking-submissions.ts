@@ -1,6 +1,7 @@
 'use client';
 
-import { Ops, personalSpace } from '@geoprotocol/geo-sdk';
+import { Ops } from '@geoprotocol/geo-sdk';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -8,6 +9,7 @@ import { Duration, Effect, Either, Schedule } from 'effect';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
+import { readCachedPersonalSpace, readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -21,13 +23,12 @@ import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { clearLocalMyRankingDraft } from './local-ranking-my-draft';
 import { getMyRankingOrderedEntityIds } from './my-ranking-entity';
-import { isRollingSubmissionLive, parseTimestampMs } from './ranking-rolling';
+import { parseTimestampMs, shouldMintNewRankEntity } from './ranking-rolling';
 import type { RankingSubmissionRecord } from './ranking-submission-types';
 import type { RankingSubmissionSlot } from './ranking-submission-types';
 import { rankingVoteWeightFromIndex } from './ranking-vote-weights';
-import { useMyRanking } from './use-my-ranking';
+import { recordPublishedRank, useMyRanking } from './use-my-ranking';
 import { useRankingBlockConfig } from './use-ranking-block-config';
-import { useRankingBlockRelations } from './use-ranking-block-relations';
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -37,6 +38,10 @@ export type RankingSubmissionPublishResult = {
   orderedEntityIds: string[];
   authorName: string | null;
   authorAvatarUrl: string | null;
+  /** Resolves once the indexer reflects the published order (or the poll budget
+   *  lapses). OG-image generation reads indexed data, so callers should chain it
+   *  on this — but never block navigation on it. Never rejects. */
+  indexingSettled: Promise<void>;
 };
 
 function createdAtToEpochMillis(value: string): number {
@@ -67,6 +72,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const walletAddress = smartAccount?.account.address;
+  const queryClient = useQueryClient();
   const { profile } = useGeoProfile(walletAddress);
   const [, setToast] = useToast();
   const reportError = useReportError();
@@ -114,39 +120,47 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
   ]);
 
   const { isRolling, submissionFrequencyHours } = useRankingBlockConfig({ blockId, spaceId });
-  const { aggregatedSubmitterRefs } = useRankingBlockRelations({ blockId, spaceId });
 
+  // The submission clock runs from the rank entity's creation time, mirroring
+  // the indexer's `submitted_at` (frozen at the edit that created the entity).
+  // `updatedAt` is only a fallback for older entities indexed without a
+  // `createdAt` — it drifts later whenever the ballot is edited.
   const submittedAtMs = React.useMemo(
-    () => (myRankEntity ? parseTimestampMs(myRankEntity.updatedAt) : 0),
+    () => (myRankEntity ? parseTimestampMs(myRankEntity.createdAt ?? myRankEntity.updatedAt) : 0),
     [myRankEntity]
   );
 
+  // Purely clock-based: the ballot is live until the block's submission window
+  // has elapsed since it was created. The block's Aggregated rankings relations
+  // are no help here — they retain every past ballot indefinitely.
   const isSubmissionLive = React.useMemo(() => {
     if (!isRolling || !myRankEntity) return true;
-    const windowElapsed =
-      submissionFrequencyHours != null &&
-      submittedAtMs > 0 &&
-      Date.now() >= submittedAtMs + submissionFrequencyHours * MS_PER_HOUR;
-    if (!windowElapsed) return true;
-    return isRollingSubmissionLive({
-      personalSpaceId,
-      myRankEntityId: myRankEntity.id,
-      aggregatedSubmitterRefs,
-    });
-  }, [aggregatedSubmitterRefs, isRolling, myRankEntity, personalSpaceId, submissionFrequencyHours, submittedAtMs]);
+    if (submissionFrequencyHours == null || submittedAtMs === 0) return true;
+    return Date.now() < submittedAtMs + submissionFrequencyHours * MS_PER_HOUR;
+  }, [isRolling, myRankEntity, submissionFrequencyHours, submittedAtMs]);
 
   const hasRolledOff = isRolling && Boolean(myRankEntity) && !isSubmissionLive;
 
+  // A rolled-off ballot is treated as absent everywhere: the block's views and
+  // the compose flow open fresh, as if the author hadn't ranked yet. (An earlier
+  // iteration retained the expired ballot because the indexer kept only the
+  // newest rank per author, so a rebuilt-from-scratch short ballot permanently
+  // superseded the fuller one — see #2122. The indexer now retains every ballot
+  // in the aggregate, so a fresh submission adds to it instead of replacing.)
+  // `hasRolledOff` still drives the "Rank" call to action, and publishing still
+  // mints a fresh rank entity below (keyed off myRankEntity, not mySubmission).
   const mySubmission = hasRolledOff ? null : apiMySubmission;
   const hasMySubmission = (mySubmission?.orderedEntityIds.length ?? 0) > 0;
 
   const saveMySubmission = React.useCallback(
     async (slots: RankingSubmissionSlot[]): Promise<RankingSubmissionPublishResult | null> => {
-      if (!personalSpaceId) return null;
-      if (!smartAccount) {
+      const account = readCachedSmartAccount(queryClient, smartAccount);
+      if (!account) {
         setToast(React.createElement('span', null, 'Please connect your wallet to publish your ranking'));
         return null;
       }
+      const { personalSpaceId } = readCachedPersonalSpace(queryClient, account.account.address);
+      if (!personalSpaceId) return null;
 
       const filteredSlots = slots.filter(slot => Boolean(slot.id));
       const votes = filteredSlots.map((slot, index) => ({
@@ -174,7 +188,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
       try {
         const rankName = blockName.trim() || 'My ranking';
 
-        const reuseExistingRank = Boolean(myRankEntity) && !hasRolledOff;
+        const reuseExistingRank = !shouldMintNewRankEntity({
+          isRolling,
+          hasExistingBallot: Boolean(myRankEntity),
+          isSubmissionLive,
+        });
 
         let ops;
         let rankId: string;
@@ -208,12 +226,11 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           const result = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                personalSpace.publishEdit({
+                geo.personalSpaces.publishEdit({
                   name: `Ranking: ${rankName}`,
                   spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
-                  network: 'TESTNET',
                 }),
               catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
             }),
@@ -223,7 +240,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           const txHash = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                smartAccount.sendUserOperation({
+                account.sendUserOperation({
                   calls: [{ to: result.to, value: 0n, data: result.calldata }],
                 }),
               catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
@@ -255,36 +272,56 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
         clearLocalMyRankingDraft(spaceId, blockId);
         setToast(React.createElement('span', null, 'Ranking published!'));
 
-        // Poll until the indexer reflects the exact order we just submitted, then
-        // return so the OG image generates against indexed data. A short upfront
-        // settle plus a dense interval detects indexing close to when it lands; the
-        // extra polls are light indexed reads. Bounded by an overall time budget.
-        const INITIAL_DELAY_MS = 500;
-        const POLL_INTERVAL_MS = 750;
-        const MAX_POLL_DURATION_MS = 60_000;
+        // The published ballot is fully known client-side, so surface it now:
+        // pin it for useMyRanking and nudge the query. The Share button and My
+        // ranking views flip immediately instead of waiting out the indexer.
+        recordPublishedRank(
+          personalSpaceId,
+          blockId,
+          rankId,
+          votes.map(vote => vote.entityId)
+        );
+        void refetchMyRanking().catch(e => {
+          console.error('[useRankingSubmissions] Refetch after pinning published rank failed:', e);
+        });
 
-        const expectedOrderKey = votes.map(vote => ID.uuidToHex(vote.entityId)).join('|');
-        const matchesExpectedOrder = (ids: string[]) => ids.map(id => ID.uuidToHex(id)).join('|') === expectedOrderKey;
+        // Everything past this point is index convergence: the published ballot
+        // is already live in the UI via the pin, so the caller (and its
+        // post-publish redirect) must not wait on it. `indexingSettled` polls
+        // until the indexer reflects the exact order we just submitted (bounded
+        // by a time budget) — the earliest point OG images can be generated from
+        // indexed data — then refetches so the pinned query converges onto
+        // indexed truth. It never rejects.
+        const indexingSettled = (async () => {
+          const INITIAL_DELAY_MS = 500;
+          const POLL_INTERVAL_MS = 750;
+          const MAX_POLL_DURATION_MS = 60_000;
 
-        const pollStartedAt = Date.now();
-        await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS));
-        while (Date.now() - pollStartedAt < MAX_POLL_DURATION_MS) {
-          try {
-            const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
-            if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
-              break;
+          const expectedOrderKey = votes.map(vote => ID.uuidToHex(vote.entityId)).join('|');
+          const matchesExpectedOrder = (ids: string[]) =>
+            ids.map(id => ID.uuidToHex(id)).join('|') === expectedOrderKey;
+
+          const pollStartedAt = Date.now();
+          await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS));
+          while (Date.now() - pollStartedAt < MAX_POLL_DURATION_MS) {
+            try {
+              const rankEntity = await Effect.runPromise(getEntity(rankId, personalSpaceId));
+              if (rankEntity && matchesExpectedOrder(getMyRankingOrderedEntityIds(rankEntity, personalSpaceId))) {
+                break;
+              }
+            } catch (e) {
+              console.error('[useRankingSubmissions] Poll for indexed ranking order failed:', e);
             }
-          } catch (e) {
-            console.error('[useRankingSubmissions] Poll for indexed ranking order failed:', e);
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
           }
-          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
-        }
 
-        try {
-          await refetchMyRanking();
-        } catch (e) {
-          console.error('[useRankingSubmissions] Refetch after publish failed:', e);
-        }
+          try {
+            await refetchMyRanking();
+          } catch (e) {
+            console.error('[useRankingSubmissions] Refetch after publish failed:', e);
+          }
+        })();
+
         const authorAvatarUrl =
           profile?.avatarUrl && profile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? profile.avatarUrl : null;
 
@@ -294,6 +331,7 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
           orderedEntityIds: votes.map(vote => vote.entityId),
           authorName: profile?.name ?? null,
           authorAvatarUrl,
+          indexingSettled,
         };
       } finally {
         setIsSaving(false);
@@ -302,9 +340,10 @@ export function useRankingSubmissions(blockId: string, spaceId: string, blockNam
     [
       blockId,
       blockName,
-      hasRolledOff,
+      isRolling,
+      isSubmissionLive,
       myRankEntity,
-      personalSpaceId,
+      queryClient,
       profile?.avatarUrl,
       profile?.name,
       refetchMyRanking,

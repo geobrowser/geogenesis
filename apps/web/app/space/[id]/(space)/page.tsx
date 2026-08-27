@@ -6,11 +6,11 @@ import type { Metadata } from 'next';
 
 import { notFound } from 'next/navigation';
 
+import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
 import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
-import { EditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
+import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import { Entities } from '~/core/utils/entity';
@@ -21,18 +21,22 @@ import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Skeleton } from '~/design-system/skeleton';
 import { Spacer } from '~/design-system/spacer';
 
-import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
+import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
+import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
+import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
 import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
+import { resolveSpaceSidebar } from './space-sidebar';
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ tabId?: string | string[] }>;
 }
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
@@ -64,7 +68,9 @@ export async function generateMetadata(props: Props): Promise<Metadata> {
 
 export default async function SpacePage(props0: Props) {
   const params = await props0.params;
+  const searchParams = (await props0.searchParams) ?? {};
   const spaceId = params.id;
+  const tabId = typeof searchParams.tabId === 'string' ? searchParams.tabId : undefined;
 
   if (!IdUtils.isValid(spaceId)) {
     notFound();
@@ -76,37 +82,46 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const props = await getSpaceFrontPage(space);
+  const [props, { isRootSpace, communityCalls }] = await Promise.all([
+    getSpaceFrontPage(space),
+    resolveSpaceSidebar(spaceId),
+  ]);
+
+  let sidebar: React.ReactNode = null;
+  if (!tabId) {
+    if (isRootSpace) {
+      sidebar = (
+        <React.Suspense fallback={null}>
+          <RootExploreSidePanelContainer />
+        </React.Suspense>
+      );
+    } else {
+      sidebar = <SpaceOverviewSidePanel spaceId={spaceId} dailyActivities communityCalls={communityCalls} />;
+    }
+  }
 
   return (
-    <EntityPageContentContainer>
-      <div className="flex items-start">
-        <div className="min-w-0 flex-1">
-          <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-            <SubtopicGalleryContainer spaceId={params.id} />
-          </React.Suspense>
-          <React.Suspense fallback={null}>
-            <Editor spaceId={spaceId} shouldHandleOwnSpacing />
-          </React.Suspense>
-          <Spacer height={24} />
-          <ToggleEntityPage id={props.id} spaceId={spaceId} />
-          <Spacer height={40} />
-          {/*
-            Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-            boundary. We don't want to show any referenced by loading states but do want to
-            stream it in
-          */}
-          <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-            <React.Suspense fallback={<div />}>
-              <BacklinksServerContainer entityId={props.id} />
-            </React.Suspense>
-          </TrackedErrorBoundary>
-        </div>
-        <React.Suspense fallback={null}>
-          <SpaceCommunityCallsContainer spaceId={spaceId} />
+    <EntityPageSidebarLayout sidebar={sidebar}>
+      <React.Suspense fallback={<SubtopicGallerySkeleton />}>
+        <SubtopicGalleryContainer spaceId={params.id} />
+      </React.Suspense>
+      <React.Suspense fallback={null}>
+        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
+      </React.Suspense>
+      <Spacer height={24} />
+      <ToggleEntityPage id={props.id} spaceId={spaceId} />
+      <Spacer height={40} />
+      {/*
+        Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
+        boundary. We don't want to show any referenced by loading states but do want to
+        stream it in
+      */}
+      <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
+        <React.Suspense fallback={<div />}>
+          <BacklinksServerContainer entityId={props.id} />
         </React.Suspense>
-      </div>
-    </EntityPageContentContainer>
+      </TrackedErrorBoundary>
+    </EntityPageSidebarLayout>
   );
 }
 
@@ -115,7 +130,7 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
 
   return (
     <EntityStoreProvider id={topicEntityId} spaceId={spaceId}>
-      <EditorProvider
+      <RouteEditorProvider
         id={topicEntityId}
         spaceId={spaceId}
         initialBlocks={topic.blocks}
@@ -139,7 +154,7 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
             </React.Suspense>
           </TrackedErrorBoundary>
         </EntityPageContentContainer>
-      </EditorProvider>
+      </RouteEditorProvider>
     </EntityStoreProvider>
   );
 }
@@ -189,14 +204,14 @@ async function getTopicEntityData(spaceId: string, topicEntityId: string) {
     ...blockRelations,
     ...tabEntities.flatMap(tabEntity => tabEntity.relations.filter(r => r.type.id === SystemIds.BLOCKS)),
   ];
-  const initialCollectionItems = await fetchCollectionItemsForBlocks(
-    allBlocks,
-    cachedFetchEntitiesBatch,
-    spaceId,
-    allBlockRelations
-  );
+  const [initialCollectionItems, shownPropertyEntities] = await Promise.all([
+    fetchCollectionItemsForBlocks(allBlocks, cachedFetchEntitiesBatch, spaceId, allBlockRelations),
+    fetchShownPropertyEntitiesForBlocks(allBlocks, cachedFetchEntitiesBatch),
+  ]);
 
-  return { blocks, blockRelations, tabs, initialCollectionItems };
+  // Shown-column properties ride along with the blocks so the editor hydrates them in the same
+  // pass — a gallery needs the dimensions on them to size its cards on the first paint.
+  return { blocks: [...blocks, ...shownPropertyEntities], blockRelations, tabs, initialCollectionItems };
 }
 
 const SubtopicGallerySkeleton = () => {
@@ -238,11 +253,6 @@ const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerPro
   return <SubtopicGallery spaceId={spaceId} subtopics={subtopics} />;
 };
 
-const SpaceCommunityCallsContainer = async ({ spaceId }: { spaceId: string }) => {
-  const series = await fetchCommunityCalls(spaceId);
-  return <SpaceCommunityCallsSection spaceId={spaceId} series={series} />;
-};
-
 const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {
   const entity = space?.entity;
 
@@ -253,6 +263,23 @@ const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpa
       values: [],
       relations: [],
       spaceTypes: [],
+    };
+  }
+
+  // See layout.tsx getSpaceFrontPage for the rationale (incl. why this is gated
+  // to the test env). When the indexer's space record has no home entity id,
+  // treat spaceId as the synthetic home-entity id AND fetch the entity at that
+  // id so published values surface here (not just space.entity which is empty
+  // in that case).
+  if (!entity.id && space?.id && process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true') {
+    const synthetic = await cachedFetchEntityPage(space.id, space.id);
+    const syntheticEntity = synthetic?.entity ?? null;
+    return {
+      id: space.id,
+      name: syntheticEntity?.name ?? null,
+      values: syntheticEntity?.values ?? [],
+      spaceTypes: syntheticEntity?.types ?? [],
+      relationsOut: syntheticEntity?.relations ?? [],
     };
   }
 

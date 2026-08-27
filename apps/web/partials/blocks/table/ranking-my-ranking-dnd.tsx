@@ -16,6 +16,8 @@ import { CSS } from '@dnd-kit/utilities';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 const MOUSE_ACTIVATION = { distance: 10 };
 const TOUCH_ACTIVATION = { delay: 450, tolerance: 12 };
 
@@ -40,9 +42,18 @@ type Props = {
   className?: string;
   disabled?: boolean;
   renderItem: (entityId: string, index: number, isDragActive?: boolean, overlayImageUrl?: string) => React.ReactNode;
+  renderTrailing?: (entityId: string, index: number, isDragActive?: boolean) => React.ReactNode;
 };
 
-function RankingMyRankingSortableItem({ id, children }: { id: string; children: React.ReactNode }) {
+function RankingMyRankingSortableItem({
+  id,
+  children,
+  trailing,
+}: {
+  id: string;
+  children: React.ReactNode;
+  trailing?: React.ReactNode;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
   });
@@ -72,18 +83,24 @@ function RankingMyRankingSortableItem({ id, children }: { id: string; children: 
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="relative cursor-grab touch-manipulation active:cursor-grabbing"
-      {...attributes}
-      {...listeners}
-      onClick={suppressClickAfterDrag}
-      onClickCapture={suppressClickAfterDrag}
-      onMouseDown={event => event.stopPropagation()}
-    >
-      <div data-ranking-sortable-id={id} className={isDragging ? 'invisible' : undefined} aria-hidden={isDragging}>
-        {children}
+    <div ref={setNodeRef} style={style} className="relative">
+      <div
+        data-ranking-sortable-id={id}
+        className={cx('flex w-full min-w-0 items-center gap-4', isDragging && 'invisible')}
+        aria-hidden={isDragging}
+      >
+        <div
+          className="min-w-0 flex-1 cursor-grab touch-manipulation active:cursor-grabbing"
+          data-ranking-drag-activator
+          {...attributes}
+          {...listeners}
+          onClick={suppressClickAfterDrag}
+          onClickCapture={suppressClickAfterDrag}
+          onMouseDown={event => event.stopPropagation()}
+        >
+          {children}
+        </div>
+        {trailing ? <div className="shrink-0">{trailing}</div> : null}
       </div>
     </div>
   );
@@ -97,6 +114,7 @@ export function RankingMyRankingDndList({
   className,
   disabled = false,
   renderItem,
+  renderTrailing,
 }: Props) {
   const [activeDragOrder, setActiveDragOrder] = React.useState<string[] | null>(null);
   const onReorderRef = React.useRef(onReorder);
@@ -172,9 +190,15 @@ export function RankingMyRankingDndList({
   if (disabled || items.length < 2) {
     return (
       <div className={className}>
-        {items.map((entityId, index) => (
-          <React.Fragment key={entityId}>{renderItem(entityId, index, false)}</React.Fragment>
-        ))}
+        {items.map((entityId, index) => {
+          const trailing = renderTrailing?.(entityId, index, false);
+          return (
+            <div key={entityId} className="flex w-full min-w-0 items-center gap-4">
+              <div className="min-w-0 flex-1">{renderItem(entityId, index, false)}</div>
+              {trailing ? <div className="shrink-0">{trailing}</div> : null}
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -190,7 +214,11 @@ export function RankingMyRankingDndList({
       <SortableContext items={items} strategy={verticalListSortingStrategy}>
         <div className={className}>
           {items.map((entityId, index) => (
-            <RankingMyRankingSortableItem key={entityId} id={entityId}>
+            <RankingMyRankingSortableItem
+              key={entityId}
+              id={entityId}
+              trailing={renderTrailing?.(entityId, index, activeId !== null)}
+            >
               {renderItem(entityId, index, activeId !== null)}
             </RankingMyRankingSortableItem>
           ))}

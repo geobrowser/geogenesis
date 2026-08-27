@@ -5,7 +5,7 @@ import { Duration, Effect } from 'effect';
 
 import { getBatchEntities } from '../io/queries';
 import { Entity } from '../types';
-import { E } from './orm';
+import { E, syncFetchQuery } from './orm';
 import { GeoStore } from './store';
 import { GeoEvent, GeoEventStream } from './stream';
 
@@ -248,7 +248,7 @@ export class SyncEngine {
     let entities: Record<string, Entity>;
 
     try {
-      entities = await this.cache.fetchQuery({
+      entities = await syncFetchQuery(this.cache, {
         queryKey: ['entities-batch-sync', uniqueEntityIds],
         queryFn: async () => {
           const entities = await Effect.runPromise(getBatchEntities(uniqueEntityIds));

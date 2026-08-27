@@ -1,6 +1,6 @@
 'use client';
 
-import { personalSpace } from '@geoprotocol/geo-sdk';
+import { isRevertedUserOperationError } from '@geogenesis/auth/account';
 import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -20,7 +20,7 @@ import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { createValueId } from '~/core/id/create-id';
 import { checkEntityExists } from '~/core/io/queries';
-import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
 import type { Relation, Value } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
@@ -28,11 +28,14 @@ import { Publish } from '~/core/utils/publish';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
 
+import { readCachedPersonalSpace, readCachedSmartAccount } from './cached-write-identity';
 import { fetchCommentEntitiesForTarget, mergePendingWithServer } from './use-comments';
 import { useGeoProfile } from './use-geo-profile';
 import { usePersonalSpaceId } from './use-personal-space-id';
 import { useSmartAccount } from './use-smart-account';
 import { useToast } from './use-toast';
+
+type CreateCommentResult = { id: string; published: boolean };
 
 /** Generate a short name from the first ~20 chars of markdown text, stripping formatting. */
 function getCommentName(markdown: string): string {
@@ -44,18 +47,21 @@ function getCommentName(markdown: string): string {
   return plain.slice(0, 20).trimEnd() + '...';
 }
 
+// A reverted UserOperation short-circuits the schedule: it was included and had
+// no effect, so re-sending the identical calldata reverts identically and only
+// burns more sponsored operations.
 function retrySchedule(label: string, maxDuration: Duration.DurationInput) {
   return Schedule.exponential('100 millis').pipe(
     Schedule.jittered,
     Schedule.compose(Schedule.elapsed),
-    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration)))
+    Schedule.whileOutput(Duration.lessThanOrEqualTo(Duration.decode(maxDuration))),
+    Schedule.whileInput((error: unknown) => !isRevertedUserOperationError(error))
   );
 }
 
 export function useCreateComment(targetEntityId: string) {
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId } = usePersonalSpaceId();
-  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
   const reportError = useReportError();
@@ -104,7 +110,8 @@ export function useCreateComment(targetEntityId: string) {
   // so they render with the real name + avatar instead of staying Anonymous until the
   // indexer takes over.
   React.useEffect(() => {
-    if (!cachedProfile || !personalSpaceId) return;
+    if (!cachedProfile) return;
+    const pendingSpaceId = walletAddress ? `pending:${walletAddress}` : null;
     const avatarUrl =
       cachedProfile.avatarUrl && cachedProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? cachedProfile.avatarUrl : null;
     queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], old => {
@@ -112,13 +119,24 @@ export function useCreateComment(targetEntityId: string) {
       let changed = false;
       const next = old.map(c => {
         if (!c.isPendingPublish) return c;
-        if (c.author.spaceId !== personalSpaceId) return c;
-        if (c.author.name === cachedProfile.name && c.author.avatarUrl === avatarUrl) return c;
+        const isOurs =
+          (personalSpaceId != null && c.author.spaceId === personalSpaceId) ||
+          (pendingSpaceId != null && c.author.spaceId === pendingSpaceId);
+        if (!isOurs) return c;
+        const nextSpaceId = personalSpaceId ?? c.author.spaceId;
+        if (
+          c.author.name === cachedProfile.name &&
+          c.author.avatarUrl === avatarUrl &&
+          c.author.spaceId === nextSpaceId
+        ) {
+          return c;
+        }
         changed = true;
         return {
           ...c,
+          spaceId: personalSpaceId ?? c.spaceId,
           author: {
-            spaceId: personalSpaceId,
+            spaceId: nextSpaceId,
             address: cachedProfile.address,
             name: cachedProfile.name,
             avatarUrl,
@@ -127,7 +145,7 @@ export function useCreateComment(targetEntityId: string) {
       });
       return changed ? next : old;
     });
-  }, [cachedProfile, personalSpaceId, queryClient, targetEntityId]);
+  }, [cachedProfile, personalSpaceId, queryClient, targetEntityId, walletAddress]);
 
   const createComment = React.useCallback(
     async ({
@@ -135,34 +153,82 @@ export function useCreateComment(targetEntityId: string) {
       targetSpaceId,
       ancestorComments,
       onOptimistic,
+      commentId: existingCommentId,
     }: Omit<CreateCommentParams, 'targetEntityId'> & {
       /** Called once the optimistic row has been inserted into the cache, with its id. */
       onOptimistic?: (commentId: string) => void;
-    }): Promise<string | null> => {
-      if (!smartAccount) {
+      commentId?: string;
+    }): Promise<CreateCommentResult | null> => {
+      const account = readCachedSmartAccount(queryClient, smartAccount);
+      if (!account) {
         setToast(<span>Please connect your wallet to comment</span>);
         return null;
       }
 
+      const { personalSpaceId } = readCachedPersonalSpace(queryClient, account.account.address);
+      const commentEntityId = existingCommentId ?? IdUtils.generate();
+      const commentName = getCommentName(text);
+      const walletAddr = account.account.address;
+
+      if (!existingCommentId) {
+        const profileSnapshot = cachedProfileRef.current;
+        const profileAvatarUrl =
+          profileSnapshot?.avatarUrl && profileSnapshot.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
+            ? profileSnapshot.avatarUrl
+            : null;
+        const displaySpaceId = personalSpaceId ?? `pending:${walletAddr}`;
+        const optimisticComment: CommentEntity = {
+          id: commentEntityId,
+          name: commentName,
+          markdownContent: text,
+          targetEntityId,
+          targetSpaceId,
+          replyToCommentId: ancestorComments?.[0]?.id ?? null,
+          replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
+          author: {
+            spaceId: displaySpaceId,
+            address: profileSnapshot?.address ?? walletAddr,
+            name: profileSnapshot?.name ?? null,
+            avatarUrl: profileAvatarUrl,
+          },
+          createdAt: new Date().toISOString(),
+          spaceId: displaySpaceId,
+          resolved: false,
+          isPublishing: true,
+          isPendingPublish: true,
+        };
+
+        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) => [
+          ...old,
+          optimisticComment,
+        ]);
+
+        onOptimistic?.(commentEntityId);
+      }
+
       if (!personalSpaceId) {
-        setToast(
-          <span>
-            {isAccountSetupPending
-              ? 'Your account is still finishing setup — try again in a moment.'
-              : 'Personal space required to comment. Please complete onboarding.'}
-          </span>
+        return { id: commentEntityId, published: false };
+      }
+
+      if (existingCommentId) {
+        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
+          old.map(c =>
+            c.id === commentEntityId
+              ? {
+                  ...c,
+                  spaceId: personalSpaceId,
+                  author: { ...c.author, spaceId: personalSpaceId },
+                  isPublishing: true,
+                }
+              : c
+          )
         );
-        return null;
       }
 
       setInFlightCount(c => c + 1);
       setError(null);
 
       try {
-        const commentEntityId = IdUtils.generate();
-        const commentName = getCommentName(text);
-
-        // Build values
         const values: Value[] = [];
         const relations: Relation[] = [];
 
@@ -266,48 +332,6 @@ export function useCreateComment(targetEntityId: string) {
           }
         }
 
-        // Insert the optimistic row SYNCHRONOUSLY — before any await — so it appears in the
-        // same render as the input box closing. If we have cached author info (the common
-        // case on any comment after the first), the row renders fully resolved immediately.
-        // Otherwise we fall back to the wallet address as the jazzicon seed; the cold-load
-        // effect above patches the row once useGeoProfile finishes loading.
-        const walletAddr = smartAccount.account.address;
-        // Read through the ref so we pick up whatever useGeoProfile has resolved by now,
-        // not whatever it had at the time this callback was memoized.
-        const profileSnapshot = cachedProfileRef.current;
-        const profileAvatarUrl =
-          profileSnapshot?.avatarUrl && profileSnapshot.avatarUrl !== PLACEHOLDER_SPACE_IMAGE
-            ? profileSnapshot.avatarUrl
-            : null;
-        const optimisticComment: CommentEntity = {
-          id: commentEntityId,
-          name: commentName,
-          markdownContent: text,
-          targetEntityId,
-          targetSpaceId,
-          replyToCommentId: ancestorComments?.[0]?.id ?? null,
-          replyToCommentSpaceId: ancestorComments?.[0]?.spaceId ?? null,
-          author: {
-            spaceId: personalSpaceId,
-            address: profileSnapshot?.address ?? walletAddr,
-            name: profileSnapshot?.name ?? null,
-            avatarUrl: profileAvatarUrl,
-          },
-          createdAt: new Date().toISOString(),
-          spaceId: personalSpaceId,
-          resolved: false,
-          isPublishing: true,
-          isPendingPublish: true,
-        };
-
-        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) => [
-          ...old,
-          optimisticComment,
-        ]);
-
-        onOptimistic?.(commentEntityId);
-
-        // Publish to personal space
         const publish = Effect.gen(function* () {
           const ops = yield* Publish.prepareLocalDataForPublishing(values, relations, personalSpaceId);
 
@@ -318,12 +342,11 @@ export function useCreateComment(targetEntityId: string) {
           const result = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                personalSpace.publishEdit({
+                geo.personalSpaces.publishEdit({
                   name: `Comment: ${commentName}`,
                   spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
-                  network: 'TESTNET',
                 }),
               catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
             }),
@@ -333,7 +356,7 @@ export function useCreateComment(targetEntityId: string) {
           const txHash = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                smartAccount.sendUserOperation({
+                account.sendUserOperation({
                   calls: [{ to: result.to, value: 0n, data: result.calldata }],
                 }),
               catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
@@ -460,7 +483,7 @@ export function useCreateComment(targetEntityId: string) {
           }
         })();
 
-        return commentEntityId;
+        return { id: commentEntityId, published: true };
       } catch (err) {
         console.error('[useCreateComment] Error creating comment:', err);
         const { message, retry } = toUserFacingError(err, 'Failed to create comment: ');
@@ -471,7 +494,7 @@ export function useCreateComment(targetEntityId: string) {
         setInFlightCount(c => c - 1);
       }
     },
-    [smartAccount, personalSpaceId, isAccountSetupPending, targetEntityId, queryClient, setToast, reportError]
+    [smartAccount, targetEntityId, queryClient, setToast, reportError]
   );
 
   const editComment = React.useCallback(
@@ -484,10 +507,13 @@ export function useCreateComment(targetEntityId: string) {
       commentSpaceId: string;
       newText: string;
     }): Promise<boolean> => {
-      if (!smartAccount) {
+      const account = readCachedSmartAccount(queryClient, smartAccount);
+      if (!account) {
         setToast(<span>Please connect your wallet to edit</span>);
         return false;
       }
+
+      const { personalSpaceId } = readCachedPersonalSpace(queryClient, account.account.address);
 
       if (!personalSpaceId) {
         setToast(<span>Personal space required. Please complete onboarding.</span>);
@@ -547,12 +573,11 @@ export function useCreateComment(targetEntityId: string) {
           const result = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                personalSpace.publishEdit({
+                geo.personalSpaces.publishEdit({
                   name: `Edit comment: ${newName}`,
                   spaceId: personalSpaceId,
                   ops,
                   author: personalSpaceId,
-                  network: 'TESTNET',
                 }),
               catch: error => new TransactionWriteFailedError('IPFS upload failed', { cause: error }),
             }),
@@ -562,7 +587,7 @@ export function useCreateComment(targetEntityId: string) {
           const txHash = yield* Effect.retry(
             Effect.tryPromise({
               try: () =>
-                smartAccount.sendUserOperation({
+                account.sendUserOperation({
                   calls: [{ to: result.to, value: 0n, data: result.calldata }],
                 }),
               catch: error => new TransactionWriteFailedError('Transaction failed', { cause: error }),
@@ -616,7 +641,7 @@ export function useCreateComment(targetEntityId: string) {
         setInFlightCount(c => c - 1);
       }
     },
-    [smartAccount, personalSpaceId, targetEntityId, queryClient, setToast, reportError]
+    [smartAccount, targetEntityId, queryClient, setToast, reportError]
   );
 
   return {

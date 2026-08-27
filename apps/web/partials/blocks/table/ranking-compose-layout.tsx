@@ -11,7 +11,14 @@ export function useRankingComposeScrollRootRef() {
 }
 
 export function useRankingComposeScrollRoot() {
-  return useRankingComposeScrollRootRef()?.current ?? null;
+  const scrollRootRef = useRankingComposeScrollRootRef();
+  const [scrollRoot, setScrollRoot] = React.useState<HTMLElement | null>(null);
+
+  React.useLayoutEffect(() => {
+    setScrollRoot(scrollRootRef?.current ?? null);
+  }, [scrollRootRef]);
+
+  return scrollRoot;
 }
 
 type Props = {

@@ -1,6 +1,8 @@
+import { cache } from 'react';
+
 import { Effect } from 'effect';
 
-import { getAllEntities, getBatchEntities, getResults, getSpaces } from '~/core/io/queries';
+import { getAllEntities, getBatchEntities, getResultsPage, getSpaces } from '~/core/io/queries';
 
 import { CALL_SCHEMA } from './constants';
 import { CallSeries } from './types';
@@ -14,7 +16,7 @@ import { Telemetry } from '~/app/api/telemetry';
  * Returns [] when the CommunityCall type id isn't configured yet, so the tab
  * renders an empty state instead of erroring.
  */
-export async function fetchCommunityCalls(spaceId: string): Promise<CallSeries[]> {
+export const fetchCommunityCalls = cache(async (spaceId: string): Promise<CallSeries[]> => {
   if (!CALL_SCHEMA.COMMUNITY_CALL_TYPE) return [];
 
   const page = await Effect.runPromise(
@@ -27,7 +29,14 @@ export async function fetchCommunityCalls(spaceId: string): Promise<CallSeries[]
 
   return page.entities.flatMap(entity => {
     const schedule = entity.values.find(v => v.property.id === CALL_SCHEMA.MEETING_TIME_PROPERTY)?.value;
-    if (!schedule) return [];
+    if (!schedule) {
+      // A call with no usable schedule cannot be placed on a timeline, so it has to come out
+      // of the list — but dropping it silently is how one stayed invisible with nobody able
+      // to say why. `call-ops` now refuses to write this state; the log is for the rows that
+      // already carry it.
+      console.warn('[community-calls] skipping call with no meeting time', { entityId: entity.id });
+      return [];
+    }
 
     return [
       {
@@ -39,7 +48,7 @@ export async function fetchCommunityCalls(spaceId: string): Promise<CallSeries[]
       } satisfies CallSeries,
     ];
   });
-}
+});
 
 /** A community call plus its space's name/avatar, for the cross-space explore digest. */
 export type ExploreCall = CallSeries & { spaceName: string; spaceImage: string | null };
@@ -49,24 +58,48 @@ export type ExploreCall = CallSeries & { spaceName: string; spaceImage: string |
  * name + avatar so the digest can render a space chip. Returns [] when the type
  * id isn't configured, so the section hides.
  */
+/**
+ * The REST /search endpoint caps a page at 100 rows and silently clamps anything larger,
+ * so asking for more is misleading rather than helpful.
+ */
+const SEARCH_PAGE_SIZE = 100;
+
 export async function fetchCommunityCallsForExplore(): Promise<ExploreCall[]> {
   if (!CALL_SCHEMA.COMMUNITY_CALL_TYPE) return [];
 
   // Canonical-graph filter — the same `include_non_canonical=false` the search bar uses.
   // Listing by type alone returns hundreds of calls from test spaces (Rapporteur Test Space,
-  // Walaa 03, SITEST); the canonical filter trims that to the curated graph. The REST search
-  // doesn't carry the Meeting Time value, so we use it only to pick which entities to hydrate,
-  // then batch-fetch those for their schedules.
-  const canonical = await Effect.runPromise(
-    getResults({
+  // Walaa 03, SITEST); the canonical filter trims that to the curated graph. This request
+  // scopes no spaces, so `buildSearchPath` applies the filter server-side and the curated
+  // calls can't be crowded off the page by non-canonical ones. The REST search doesn't carry
+  // the Meeting Time value, so we use it only to pick which entities to hydrate, then
+  // batch-fetch those for their schedules.
+  const page = await Effect.runPromise(
+    getResultsPage({
       query: '',
       typeIds: [CALL_SCHEMA.COMMUNITY_CALL_TYPE],
       includeNonCanonical: false,
-      limit: 200,
+      limit: SEARCH_PAGE_SIZE,
     }).pipe(Effect.withSpan('web.fetchCommunityCallsForExplore'), Effect.provide(Telemetry))
-  ).catch(() => []);
+  ).catch((error: unknown) => {
+    // Distinguish "the search failed" from "there are no calls" — both used to render as a
+    // silently missing Explore section, which is how GEO-2480 went unnoticed.
+    console.error('[community-calls] explore digest search failed', error);
+    return null;
+  });
 
-  const callIds = canonical.map(r => r.id);
+  if (!page) return [];
+
+  if (page.total > SEARCH_PAGE_SIZE) {
+    // One page is ample for a digest that renders three rows, but say so rather than
+    // quietly dropping the tail — past the cap, "soonest upcoming" is only soonest
+    // among the rows the endpoint ranked highest.
+    console.warn(
+      `[community-calls] ${page.total} canonical calls exceed the ${SEARCH_PAGE_SIZE}-row page cap; the explore digest covers the first page only`
+    );
+  }
+
+  const callIds = page.results.map(r => r.id);
   if (callIds.length === 0) return [];
 
   const entities = await Effect.runPromise(getBatchEntities(callIds)).catch(() => []);

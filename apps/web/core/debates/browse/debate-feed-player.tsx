@@ -4,9 +4,10 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { Debate, DebateParticipant, ParticipantSlot } from '~/core/debates/api';
+import type { Debate, DebateParticipant } from '~/core/debates/api';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
+import type { DebateVotesResult } from '~/core/debates/use-debate-votes';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
 
@@ -14,16 +15,17 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { Crown, Play, Speaker, SpeakerMuted } from './icons';
+import { Play, Speaker, SpeakerMuted } from './icons';
+import { WinnerVoteButton } from './winner-vote-button';
 
 type DebateFeedPlayerProps = {
   debate: Debate;
   active: boolean;
-  hasVoted: boolean;
-  onSelectWinner: (slot: ParticipantSlot) => void;
+  votes: DebateVotesResult;
 };
 
-export function DebateFeedPlayer({ debate, active, hasVoted, onSelectWinner }: DebateFeedPlayerProps) {
+export function DebateFeedPlayer({ debate, active, votes }: DebateFeedPlayerProps) {
+  const { hasVoted } = votes;
   const controller = useDebatePlayback(debate, active);
   const {
     slot1VideoRef,
@@ -77,14 +79,13 @@ export function DebateFeedPlayer({ debate, active, hasVoted, onSelectWinner }: D
         participant={slot1Participant}
         src={urls.slot1}
         videoRef={slot1VideoRef}
-        isActiveSpeaker={activeSlot === 1}
         audible={playing && turnState?.slot === 1}
         countdown={playing && turnState?.slot === 1 ? turnState : null}
         subtitle={activeSlot === 1 ? subtitle : null}
         mutedByUser={mutedByUser}
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
-        onSelectWinner={() => onSelectWinner(1)}
+        votes={votes}
         topLeft={
           showReplay ? (
             <ControlCircle ariaLabel="Replay debate" onClick={playFromStart}>
@@ -112,14 +113,13 @@ export function DebateFeedPlayer({ debate, active, hasVoted, onSelectWinner }: D
         participant={slot2Participant}
         src={urls.slot2}
         videoRef={slot2VideoRef}
-        isActiveSpeaker={activeSlot === 2}
         audible={playing && turnState?.slot === 2}
         countdown={playing && turnState?.slot === 2 ? turnState : null}
         subtitle={activeSlot === 2 ? subtitle : null}
         mutedByUser={mutedByUser}
         onPlaybackTick={onPlaybackTick}
         onToggle={togglePlayback}
-        onSelectWinner={() => onSelectWinner(2)}
+        votes={votes}
         scrubber={
           ready ? (
             // Always available so the viewer can seek. During playback it recedes to
@@ -168,28 +168,26 @@ function DebaterVideo({
   participant,
   src,
   videoRef,
-  isActiveSpeaker,
   audible,
   countdown,
   subtitle,
   mutedByUser,
   onPlaybackTick,
   onToggle,
-  onSelectWinner,
+  votes,
   topLeft,
   scrubber,
 }: {
   participant: DebateParticipant | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  isActiveSpeaker: boolean;
   audible: boolean;
   countdown: TurnState;
   subtitle: string | null;
   mutedByUser: boolean;
   onPlaybackTick: () => void;
   onToggle: () => void;
-  onSelectWinner: () => void;
+  votes: DebateVotesResult;
   topLeft?: React.ReactNode;
   scrubber?: React.ReactNode;
 }) {
@@ -214,7 +212,7 @@ function DebaterVideo({
         {src ? (
           <video
             ref={videoRef}
-            className={cx('h-full w-full object-cover', !isActiveSpeaker && 'saturate-0')}
+            className="h-full w-full object-cover"
             playsInline
             preload="metadata"
             src={src}
@@ -264,17 +262,16 @@ function DebaterVideo({
         )}
       </button>
 
-      <button
-        type="button"
-        onClick={event => {
-          event.stopPropagation();
-          onSelectWinner();
-        }}
-        className="absolute right-4 bottom-3 z-10 flex items-center gap-1.5 rounded-full bg-white/40 px-2 py-1.5 text-white backdrop-blur-sm transition-colors hover:bg-white/55"
-      >
-        <Crown />
-        <span className="text-[1rem] leading-none">Winner?</span>
-      </button>
+      {participant && (
+        <WinnerVoteButton
+          className="absolute right-4 bottom-3 z-10"
+          debaterName={name}
+          sharePercent={votes.sharePercentFor(participant)}
+          isMyPick={votes.isMyPick(participant)}
+          disabled={votes.isVoting}
+          onVote={() => votes.castVote(participant)}
+        />
+      )}
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
     </div>

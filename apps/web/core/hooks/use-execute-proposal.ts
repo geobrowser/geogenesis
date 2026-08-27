@@ -11,13 +11,18 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { geo } from '~/core/sdk/geo-client';
-import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import {
-  ACTION_REVERTED_SELECTOR,
-  type GovernanceRevert,
-  decodeGovernanceRevert,
-} from '~/core/utils/contracts/governance-errors';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
+  SPACE_REGISTRY_ADDRESS,
+  assertSpaceRegistryDeployed,
+  contractHasCode,
+  proposalExistsOnChain,
+} from '~/core/sdk/geo-network';
+import { runEffectEither } from '~/core/telemetry/effect-runtime';
+import { type GovernanceRevert, decodeGovernanceRevert } from '~/core/utils/contracts/governance-errors';
+import {
+  type ProposalExecutability,
+  classifyProposalExecutability,
+} from '~/core/utils/contracts/proposal-executability';
 import { validateSpaceId } from '~/core/utils/utils';
 import { GEOGENESIS } from '~/core/wallet/geo-chain';
 
@@ -43,9 +48,7 @@ interface UseExecuteProposalArgs {
 export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalArgs) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleExecute = useCallback(async () => {
     if (!validateSpaceId(spaceId)) {
@@ -60,7 +63,11 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
       throw new Error('You need a registered personal space to execute proposals');
     }
 
-    const { calldata: callData } = geo.daoSpaces.proposals.execute({
+    // Fail closed: a registry address that doesn't match this chain produces
+    // a "successful" tx that emits nothing. Catch it before sending.
+    await assertSpaceRegistryDeployed();
+
+    const { to, calldata } = geo.daoSpaces.executeProposal({
       authorSpaceId: personalSpaceId,
       spaceId,
       proposalId,
@@ -73,7 +80,7 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
       action: 'PROPOSAL_EXECUTED',
     });
 
-    const txEffect = tx(callData).pipe(
+    const txEffect = tx({ to, data: calldata }).pipe(
       Effect.withSpan('web.write.executeProposal'),
       Effect.annotateSpans({
         'io.operation': 'execute_proposal',
@@ -111,26 +118,27 @@ export function useExecuteProposal({ spaceId, proposalId }: UseExecuteProposalAr
   };
 }
 
-/**
- * Whether a passed proposal can actually be executed on-chain, and if not, why.
- *
- * - `checking`   — still simulating (or no registered account to simulate from)
- * - `executable` — the execute call would succeed
- * - `dead`       — the proposal's own action reverts (ActionReverted); it can
- *                  never execute and must be recreated (legacy malformed proposal)
- * - `blocked`    — some other governance revert (already executed, not enough
- *                  votes, voting period not elapsed) — transient or resolved
- */
-export type ProposalExecutability = 'checking' | 'executable' | 'dead' | 'blocked';
+export type { ProposalExecutability };
 
 /**
- * Simulate the real execute calldata against the live chain so the UI can tell a
- * genuinely-executable proposal apart from a stale or permanently-dead one.
+ * Probe the live chain so the UI can tell a genuinely-executable proposal apart
+ * from a stale or permanently-dead one.
  *
  * `canExecute`, status, and the membership roster all come from the indexer,
  * which lags the chain — it happily shows "Pending execution" for a proposal
- * that was already executed OR for a legacy proposal whose action reverts every
- * time. The simulation is the only ground truth that separates those.
+ * that was already executed, for a legacy proposal whose action reverts every
+ * time, or for a migrated proposal the DAO has no record of. The chain is the
+ * only ground truth that separates those.
+ *
+ * Two signals, in order of strength:
+ *
+ *  1. Does the DAO know the proposal at all (`proposalExistsOnChain`)? Absence is
+ *     permanent and needs no wallet, so this runs for signed-out viewers too —
+ *     without it, a proposal that can never execute reads as "Pending execution"
+ *     to anyone who has not connected, which is most people looking at a
+ *     governance list.
+ *  2. Otherwise simulate the real execute calldata, which needs a registered
+ *     personal space to simulate from.
  *
  * A non-revert failure (slow/unreachable RPC, unknown revert) resolves to
  * `executable` so a flaky RPC never permanently hides a legitimate action.
@@ -142,16 +150,26 @@ export function useProposalExecutability({ spaceId, proposalId }: UseExecuteProp
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const account = smartAccount?.account.address;
+  const canSimulate = Boolean(account && personalSpaceId && isRegistered);
 
   const { data } = useQuery({
+    // `account` stays in the key so connecting a wallet re-runs this and upgrades
+    // a wallet-free `checking` into a real simulation.
     queryKey: ['proposal-executability', spaceId, proposalId, account],
-    enabled: Boolean(
-      account && personalSpaceId && isRegistered && validateSpaceId(spaceId) && validateSpaceId(proposalId)
-    ),
+    enabled: validateSpaceId(spaceId) && validateSpaceId(proposalId),
     // A passing result is cached briefly; a stale pass self-heals via the post-click recovery net.
     staleTime: 30_000,
     queryFn: async (): Promise<{ state: ProposalExecutability; revert: GovernanceRevert | null }> => {
-      const { calldata } = geo.daoSpaces.proposals.execute({
+      const existsOnChain = await proposalExistsOnChain(spaceId, proposalId);
+      if (existsOnChain === false) {
+        return { state: classifyProposalExecutability({ existsOnChain, simulationRevert: undefined }), revert: null };
+      }
+
+      if (!canSimulate) {
+        return { state: 'checking', revert: null };
+      }
+
+      const { calldata } = geo.daoSpaces.executeProposal({
         authorSpaceId: personalSpaceId!,
         spaceId,
         proposalId,
@@ -159,15 +177,19 @@ export function useProposalExecutability({ spaceId, proposalId }: UseExecuteProp
 
       const publicClient = createPublicClient({ chain: GEOGENESIS, transport: http() });
 
+      // An eth_call against an address with no code "succeeds" with empty
+      // data — indistinguishable from a passing simulation. Fail closed to
+      // `blocked` (button hidden) instead of reporting a phantom `executable`.
+      if (!(await contractHasCode(SPACE_REGISTRY_ADDRESS as Hex))) {
+        return { state: 'blocked', revert: null };
+      }
+
       try {
         await publicClient.call({ account: account as Hex, to: SPACE_REGISTRY_ADDRESS as Hex, data: calldata });
-        return { state: 'executable', revert: null };
+        return { state: classifyProposalExecutability({ existsOnChain, simulationRevert: null }), revert: null };
       } catch (error) {
         const revert = decodeGovernanceRevert(error);
-        // Unknown / RPC error: fail open so we never hide a valid action.
-        if (revert === null) return { state: 'executable', revert: null };
-        const state = revert.selector === ACTION_REVERTED_SELECTOR ? 'dead' : 'blocked';
-        return { state, revert };
+        return { state: classifyProposalExecutability({ existsOnChain, simulationRevert: revert }), revert };
       }
     },
   });

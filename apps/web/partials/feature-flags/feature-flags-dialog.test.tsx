@@ -38,14 +38,28 @@ describe('FeatureFlagsDialog', () => {
     expect(await screen.findByRole('heading', { name: 'Feature flags' })).toBeTruthy();
     expect(screen.getByText('Debate debugging')).toBeTruthy();
     expect(screen.getByText('Debate format selector')).toBeTruthy();
+    expect(screen.getByText('Debates debug tab per space')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Claims and debates' }));
+    const featureFlagButtons = screen
+      .getAllByRole('button')
+      .filter(button => button.getAttribute('aria-label') !== 'Close feature flags');
+    expect(featureFlagButtons.map(button => button.getAttribute('aria-label'))).toEqual([
+      'Debate debugging',
+      'Debate format selector',
+      'Debates debug tab per space',
+    ]);
+
     fireEvent.click(screen.getByRole('button', { name: 'Debate debugging' }));
     fireEvent.click(screen.getByRole('button', { name: 'Debate format selector' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Debates debug tab per space' }));
 
     await waitFor(() => {
       expect(window.localStorage.getItem(featureFlagsStorageKey)).toBe(
-        JSON.stringify({ questionsTab: true, debateDebugging: true, debateFormatSelector: true })
+        JSON.stringify({
+          debugDebatesPage: true,
+          debateDebugging: true,
+          debateFormatSelector: true,
+        })
       );
     });
   });

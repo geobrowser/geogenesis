@@ -3,6 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
+import { VOTE_DEBATES_PROPERTY_ID, VOTE_TYPE_ID } from '~/core/debates/ontology';
 import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
@@ -14,16 +15,26 @@ import {
   type EntityExistsQuery,
   type EntityFilter,
   type EntitySpacesBatchQuery,
-  SortOrder,
+  UserEntityVotesByTypeDocument,
   UserHasEntityVoteDocument,
+  type UserVoteFilter,
   type UuidFilter,
 } from '~/core/gql/graphql';
+import { uuidToHex } from '~/core/id/normalize';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
+import {
+  type ActiveResponseDirection,
+  type ResponseKind,
+  type ResponseObjectType,
+  decodeActiveResponseDirection,
+  entityResponseQueryVariables,
+} from '~/core/responses/entity-response';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
 import { RelationDecoder } from './decoders/relation';
@@ -33,6 +44,7 @@ import { Space } from './dto/spaces';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { graphql } from './graphql-client';
 import {
+  claimResponseSummariesQuery,
   entitiesBatchQuery,
   entitiesPageQuery,
   entityBacklinksQuery,
@@ -40,11 +52,11 @@ import {
   entityPageQuery,
   entityQuery,
   entityRelationsPageQuery,
+  entityRespondersQuery,
+  entityResponseCountsQuery,
   entitySpacesBatchQuery,
   entityTiebreakerBatchQuery,
   entityTypesQuery,
-  entityVoteCountQuery,
-  entityVotersQuery,
   importNameValuesQuery,
   isEditorOfSpaceQuery,
   isMemberOfSpaceQuery,
@@ -60,9 +72,11 @@ import {
   spaceQuery,
   spacesQuery,
   spacesWhereMemberQuery,
-  userEntityVoteQuery,
+  userEntityResponseQuery,
 } from './query-fragments';
 import { restFetch } from './rest';
+import { capSearchQuery } from './search-query';
+import { type SortOrder } from './sort-order';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
@@ -84,20 +98,42 @@ function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: Ab
   });
 }
 
+/**
+ * How many id batches are in flight at once.
+ *
+ * The batches are independent — each asks for a disjoint set of ids — so they were only
+ * sequential by construction, and a caller handing in 300 ids paid six round trips end to
+ * end for work that fits in one wave. `syncMany` never hit it because it pre-batches to
+ * exactly `ENTITY_ID_BATCH_SIZE` before calling in; the callers that pass an unbounded id
+ * list straight through (`core/blocks/data/filters.ts`, `partials/diffs/changed-entity.tsx`,
+ * `core/sync/engine.ts`, the community-calls fetchers) did.
+ *
+ * Bounded rather than unbounded: `EntitiesBatch` pulls every value and relation for each
+ * entity — 0.31 MB for 50 claims, measured — and browsers cap concurrent connections per
+ * host anyway, so firing twenty of those at once trades a queue we control for one we do
+ * not. Six keeps a 300-id call to a single wave.
+ */
+const ENTITY_ID_BATCH_CONCURRENCY = 6;
+
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   if (entityIds.length === 0) return Effect.succeed([]);
   if (entityIds.length <= ENTITY_ID_BATCH_SIZE) return getBatchEntitiesPage(entityIds, spaceId, signal);
 
-  return Effect.gen(function* () {
-    const entities: Entity[] = [];
+  const batches: string[][] = [];
+  for (let start = 0; start < entityIds.length; start += ENTITY_ID_BATCH_SIZE) {
+    batches.push(entityIds.slice(start, start + ENTITY_ID_BATCH_SIZE));
+  }
 
-    for (let start = 0; start < entityIds.length; start += ENTITY_ID_BATCH_SIZE) {
-      const batch = yield* getBatchEntitiesPage(entityIds.slice(start, start + ENTITY_ID_BATCH_SIZE), spaceId, signal);
-      entities.push(...batch);
-    }
-
-    return entities;
-  });
+  // `Effect.all` preserves input order in its results, so the flattened output stays in
+  // batch order exactly as the sequential loop left it. Callers that relied on that — the
+  // diff view renders in the order it asked — keep working.
+  return Effect.map(
+    Effect.all(
+      batches.map(batch => getBatchEntitiesPage(batch, spaceId, signal)),
+      { concurrency: ENTITY_ID_BATCH_CONCURRENCY }
+    ),
+    pages => pages.flat()
+  );
 }
 
 export function getBatchEntitySpaces(entityIds: string[], signal?: AbortController['signal']) {
@@ -496,7 +532,7 @@ export function getEntityTypes(entityId: string, signal?: AbortController['signa
   });
 }
 
-const COMMENT_REPLY_BACKLINKS_PAGE_SIZE = 1000;
+const BACKLINKS_PAGE_SIZE = 1000;
 
 /**
  * Cheap "does this entity exist in the indexer yet" probe — returns true once an entity with
@@ -523,6 +559,54 @@ export function getBatchEntitiesForComments(entityIds: string[], signal?: AbortC
 }
 
 /**
+ * Walks a paginated `backlinksList` query and collects the distinct source entity ids.
+ * `id` is typed loosely because codegen maps the UUID scalar to `any`.
+ */
+function collectBacklinkSourceIds<E>(
+  fetchPage: (offset: number) => Effect.Effect<ReadonlyArray<{ fromEntity?: { id: unknown } | null } | null>, E>
+) {
+  return Effect.gen(function* () {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+
+    for (let offset = 0; ; offset += BACKLINKS_PAGE_SIZE) {
+      const page = yield* fetchPage(offset);
+
+      for (const row of page) {
+        const id = row?.fromEntity?.id;
+        if (typeof id !== 'string' || seen.has(id)) continue;
+        seen.add(id);
+        ids.push(id);
+      }
+
+      if (page.length < BACKLINKS_PAGE_SIZE) return ids;
+    }
+  });
+}
+
+function getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId: string, signal?: AbortController['signal']) {
+  return collectBacklinkSourceIds(offset =>
+    graphql({
+      query: EntityCommentReplyBacklinksPageDocument,
+      decoder: (data: EntityCommentReplyBacklinksPageQuery) => data.entity?.backlinksList ?? [],
+      variables: {
+        id: parentEntityId,
+        replyToTypeId: COMMENT_REPLY_TO_ID,
+        commentTypeId: COMMENT_TYPE_ID,
+        first: BACKLINKS_PAGE_SIZE,
+        offset,
+      },
+      signal,
+    })
+  );
+}
+
+/** Counts distinct Comment entities connected to the target by incoming "Reply to" relations. */
+export function getEntityCommentCount(entityId: string, signal?: AbortController['signal']) {
+  return Effect.map(getCommentEntityIdsViaParentEntityReplyBacklinks(entityId, signal), ids => ids.length);
+}
+
+/**
  * Loads Comment entities from incoming "Reply to" backlinks on the parent entity.
  * Nested replies are included when they also backlink to the parent (same index pattern).
  */
@@ -531,38 +615,34 @@ export function getCommentEntitiesViaParentEntityReplyBacklinks(
   signal?: AbortController['signal']
 ) {
   return Effect.gen(function* () {
-    const seen = new Set<string>();
-    const ids: string[] = [];
-    let offset = 0;
+    const ids = yield* getCommentEntityIdsViaParentEntityReplyBacklinks(parentEntityId, signal);
 
-    for (;;) {
-      const page = yield* graphql({
-        query: EntityCommentReplyBacklinksPageDocument,
-        decoder: (data: EntityCommentReplyBacklinksPageQuery) => data.entity?.backlinksList ?? [],
+    if (ids.length === 0) return [] as Entity[];
+    return yield* getBatchEntitiesForComments(ids, signal);
+  });
+}
+
+/**
+ * Loads the Vote entities cast on a debate, from incoming "Debates" relations on entities
+ * typed Vote. Each vote lives in its own voter's personal space, so the tally is read across
+ * spaces rather than from one.
+ */
+export function getDebateVoteEntities(debateEntityId: string, signal?: AbortController['signal']) {
+  return Effect.gen(function* () {
+    const ids = yield* collectBacklinkSourceIds(offset =>
+      graphql({
+        query: debateVoteBacklinksPageDocument,
+        decoder: (data: DebateVoteBacklinksPageQuery) => data.entity?.backlinksList ?? [],
         variables: {
-          id: parentEntityId,
-          replyToTypeId: COMMENT_REPLY_TO_ID,
-          commentTypeId: COMMENT_TYPE_ID,
-          first: COMMENT_REPLY_BACKLINKS_PAGE_SIZE,
+          id: debateEntityId,
+          votesDebatePropertyId: VOTE_DEBATES_PROPERTY_ID,
+          voteTypeId: VOTE_TYPE_ID,
+          first: BACKLINKS_PAGE_SIZE,
           offset,
         },
         signal,
-      });
-
-      if (page.length === 0) break;
-
-      for (const row of page) {
-        const rawId = row?.fromEntity?.id;
-        if (typeof rawId !== 'string' || !rawId) continue;
-        if (!seen.has(rawId)) {
-          seen.add(rawId);
-          ids.push(rawId);
-        }
-      }
-
-      if (page.length < COMMENT_REPLY_BACKLINKS_PAGE_SIZE) break;
-      offset += COMMENT_REPLY_BACKLINKS_PAGE_SIZE;
-    }
+      })
+    );
 
     if (ids.length === 0) return [] as Entity[];
     return yield* getBatchEntitiesForComments(ids, signal);
@@ -698,18 +778,77 @@ export function getSpaceEditorsPage(
   });
 }
 
-/** Get a personal space by wallet address. Returns the space owned by this address, or null if none exists. */
+/**
+ * Get a personal space by wallet address. Returns the space owned by this address, or
+ * null if none exists.
+ *
+ * An address can have MORE than one indexed space. `overrideSpaceId` retires an
+ * account's previous space id on-chain, but the indexer keeps serving the retired row,
+ * so the same account appears twice — often under different address casing, which the
+ * case-insensitive filter (deliberately kept: addresses are stored both checksummed and
+ * lowercase) collapses into one result set. Taking `spaces[0]` from an unordered query
+ * then picks the dead space about half the time, and because the personal space is the
+ * *author* of every write, that bricks the account entirely — every publish, vote, and
+ * comment reverts `SpaceNotActive()` no matter which space it targets.
+ *
+ * So when the index returns more than one row, ask the registry which id is still
+ * active. The single-row case — every healthy account — costs no extra RPC.
+ */
 export function getSpaceByAddress(address: string, signal?: AbortController['signal']) {
   return graphql({
     query: spacesQuery,
-    decoder: data => {
-      const firstSpace = data.spaces?.[0];
-      if (!firstSpace) return null;
-      return SpaceDecoder.decode(firstSpace);
-    },
+    decoder: data => data.spaces ?? [],
     // Use case-insensitive matching since Ethereum addresses can be checksummed or lowercase
-    variables: { filter: { address: { isInsensitive: address } }, limit: 1 },
+    variables: { filter: { address: { isInsensitive: address } }, limit: DUPLICATE_SPACE_SCAN_LIMIT },
     signal,
+  }).pipe(Effect.flatMap(spaces => resolveActiveSpace(spaces, address)));
+}
+
+/** Bounds the duplicate scan. Real accounts have 1; the sweep that created these produced 2. */
+const DUPLICATE_SPACE_SCAN_LIMIT = 10;
+
+/** Exported for testing; call `getSpaceByAddress`. */
+export function resolveActiveSpace(spaces: readonly unknown[], address: string) {
+  return Effect.gen(function* () {
+    if (spaces.length === 0) return null;
+    if (spaces.length === 1) return SpaceDecoder.decode(spaces[0] as never);
+
+    const decoded = spaces.map(space => SpaceDecoder.decode(space as never)).filter(space => space !== null);
+    if (decoded.length <= 1) return decoded[0] ?? null;
+
+    const active = yield* Effect.tryPromise({
+      // Imported lazily on purpose. geo-network pulls in the chain config, which
+      // resolves an RPC at module scope and throws when none is configured — a
+      // static import would make this shared query module unloadable in any
+      // context without a live chain, including unit tests. Duplicate rows are
+      // rare, so paying for the module only here costs nothing in practice.
+      try: async () => {
+        const { isSpaceActiveOnChain } = await import('~/core/sdk/geo-network');
+        return Promise.all(decoded.map(space => isSpaceActiveOnChain(space.id)));
+      },
+      // isSpaceActiveOnChain already swallows RPC failures to `false`; this guards
+      // only against an unexpected throw, and index order is the safe fallback.
+      catch: () => new Error('failed to resolve active space'),
+    }).pipe(Effect.orElseSucceed(() => decoded.map(() => false)));
+
+    const activeSpace = decoded.find((_, index) => active[index]);
+
+    if (!activeSpace) {
+      console.warn(
+        `[getSpaceByAddress] ${decoded.length} indexed spaces for ${address}, none active on-chain. ` +
+          `Falling back to index order (${decoded[0].id}).`
+      );
+      return decoded[0];
+    }
+
+    if (activeSpace.id !== decoded[0].id) {
+      console.warn(
+        `[getSpaceByAddress] ${decoded.length} indexed spaces for ${address}; index order returned the ` +
+          `retired ${decoded[0].id}, using the on-chain active ${activeSpace.id}.`
+      );
+    }
+
+    return activeSpace;
   });
 }
 
@@ -733,9 +872,13 @@ interface ResultsArgs {
   additionalSpaceIds?: string[];
   /**
    * Pass `false` to restrict results to the canonical graph plus the user's
-   * scoped spaces (`additionalSpaceIds`). Gated client-side in `getResultsPage`
-   * via each result's `inCanonicalGraph` flag — not sent to the server, so
-   * scoped-space results are never stripped before they reach us.
+   * scoped spaces (`additionalSpaceIds`).
+   *
+   * Where that gate runs depends on whether the request scopes spaces — see
+   * `buildSearchPath`. Scoped requests gate client-side in `getResultsPage` via each
+   * result's `inCanonicalGraph` flag, so scoped-space results are never stripped
+   * before they reach us; unscoped requests gate server-side, so the canonical rows
+   * can't be pushed off the endpoint's 100-row page by non-canonical ones.
    */
   includeNonCanonical?: boolean;
 }
@@ -899,7 +1042,12 @@ export type SearchResultsPage = {
 
 export function buildSearchPath(args: ResultsArgs): string {
   const params = new URLSearchParams();
-  params.set('query', args.query);
+  // Every REST search in the app arrives here — the ten-odd `useSearch` surfaces through
+  // `E.findFuzzyPage`, plus chat, community calls and import auto-mapping calling `getResults`
+  // directly — so this is the one place the endpoint's length limit has to be respected. Capping
+  // here rather than at each input also leaves the caller's own state holding what the searcher
+  // actually typed, which is what gets echoed back to them.
+  params.set('query', capSearchQuery(args.query));
   params.set('limit', String(args.limit ?? 10));
   params.set('offset', String(args.offset ?? 0));
 
@@ -914,8 +1062,32 @@ export function buildSearchPath(args: ResultsArgs): string {
     params.set('type_ids', args.typeIds.map(toUuid).join(','));
   }
 
-  if (args.additionalSpaceIds?.length && !args.spaceId) {
-    params.set('additional_space_ids', args.additionalSpaceIds.map(toUuid).join(','));
+  const scopesAdditionalSpaces = Boolean(args.additionalSpaceIds?.length) && !args.spaceId;
+
+  if (scopesAdditionalSpaces) {
+    // REST endpoint expects UUIDs with hyphens
+    params.set('additional_space_ids', args.additionalSpaceIds!.map(toUuid).join(','));
+  }
+
+  // Canonical filtering runs server-side only when we aren't widening to scoped spaces.
+  // The endpoint documents `additional_space_ids` as "ignored when
+  // include_non_canonical=false" and means it literally — sending both silently drops
+  // the scoped spaces, which is why #1949 stopped emitting this param and moved the
+  // gate into `shouldIncludeRestSearchResult`.
+  //
+  // A client-side gate can only filter the page it was handed, though, and the endpoint
+  // caps a page at 100 rows however large a `limit` you ask for. That loses badly for an
+  // unscoped caller listing a type dominated by non-canonical entities: the
+  // community-calls digest requested every Community Call, got 100 test-space rows of
+  // 382 with none canonical, and filtered down to nothing while all 8 curated calls sat
+  // past offset 100 — so the Explore panel vanished entirely (GEO-2480).
+  //
+  // Unscoped callers therefore filter at the source; the client-side gate stays as a
+  // no-op safety net. Search-dialog requests are unaffected — they always carry
+  // ROOT_SPACE in `additionalSpaceIds` (see buildGlobalSearchSpaceIds), so they take the
+  // branch above and emit a byte-identical URL.
+  if (args.includeNonCanonical === false && !scopesAdditionalSpaces) {
+    params.set('include_non_canonical', 'false');
   }
 
   return `/search?${params.toString()}`;
@@ -1074,38 +1246,44 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
   });
 }
 
-export function getEntityVoteCount(
+export function getEntityResponseCounts(
   entityId: string,
-  objectType: 0 | 1 = 0, // objectType: 0 = Entity, 1 = Relation
+  spaceId: string,
+  responseKind: ResponseKind,
+  objectType: ResponseObjectType = 0, // objectType: 0 = Entity, 1 = Relation
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: entityVoteCountQuery,
+    query: entityResponseCountsQuery,
     decoder: data => {
-      const nodes = data.votesCountsConnection?.nodes;
-      if (!nodes || nodes.length === 0) return null;
-      const upvotes = nodes.reduce((sum: number, n: { upvotes: string }) => sum + Number(n.upvotes), 0);
-      const downvotes = nodes.reduce((sum: number, n: { downvotes: string }) => sum + Number(n.downvotes), 0);
-      return { upvotes, downvotes };
+      const counts = data.votesCountByObjectIdAndObjectTypeAndSpaceIdAndVoteKind;
+      if (!counts) return null;
+      return { positive: Number(counts.positive), negative: Number(counts.negative) };
     },
-    variables: { objectId: entityId, objectType },
+    variables: entityResponseQueryVariables(entityId, spaceId, objectType, responseKind),
     signal,
   });
 }
 
-export function getUserEntityVote(
+export function getUserEntityResponse(
   userId: string,
   entityId: string,
   spaceId: string,
-  objectType: 0 | 1 = 0,
+  responseKind: ResponseKind,
+  objectType: ResponseObjectType = 0,
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: userEntityVoteQuery,
+    query: userEntityResponseQuery,
     decoder: data => {
-      return data.userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId?.voteType ?? null;
+      return decodeActiveResponseDirection(
+        data.userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdAndVoteKind?.voteType
+      );
     },
-    variables: { userId, objectId: entityId, objectType, spaceId },
+    variables: {
+      userId,
+      ...entityResponseQueryVariables(entityId, spaceId, objectType, responseKind),
+    },
     signal,
   });
 }
@@ -1119,23 +1297,108 @@ export function getUserHasEntityVote(userId: string, signal?: AbortController['s
   });
 }
 
-export type EntityVoter = { userId: string; voteType: number };
+export type EntityResponder = { userId: string; direction: ActiveResponseDirection };
 
-export function getEntityVoters(
-  entityId: string,
-  spaceId: string,
-  objectType: 0 | 1 = 0,
+export type ClaimResponseSummaryRow = {
+  userId: string;
+  objectId: string;
+  voteType: number;
+  voteKind: number;
+};
+
+export function getClaimResponseSummaryPage(
+  filter: UserVoteFilter,
+  first: number,
+  offset: number,
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: entityVotersQuery,
-    decoder: data => {
-      return (data.userVotes ?? []) as EntityVoter[];
-    },
-    variables: { objectId: entityId, objectType, spaceId },
+    query: claimResponseSummariesQuery,
+    decoder: data =>
+      (data.userVotes ?? []).map((vote): ClaimResponseSummaryRow => ({
+        userId: String(vote.userId),
+        objectId: String(vote.objectId),
+        voteType: vote.voteType,
+        voteKind: vote.voteKind,
+      })),
+    variables: { filter, first, offset },
     signal,
   });
 }
+
+export function getEntityResponders(
+  entityId: string,
+  spaceId: string,
+  responseKind: ResponseKind,
+  objectType: ResponseObjectType = 0,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: entityRespondersQuery,
+    decoder: data => {
+      return (data.userVotes ?? []).flatMap(vote => {
+        const direction = decodeActiveResponseDirection(vote.voteType);
+        return direction ? [{ userId: String(vote.userId), direction }] : [];
+      });
+    },
+    variables: entityResponseQueryVariables(entityId, spaceId, objectType, responseKind),
+    signal,
+  });
+}
+
+export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
+
+type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string };
+
+export type UserEntityVoteObjectIdsPage = {
+  objectIds: string[];
+  voteKindByObjectId: Record<string, number>;
+  votedAtByObjectId: Record<string, string>;
+  nextOffset: number;
+  hasNextPage: boolean;
+};
+
+export function getUserEntityVoteObjectIdsPage(
+  userId: string,
+  voteType: 0 | 1,
+  objectType: 0 | 1 = 0,
+  offset = 0,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const rows: UserEntityVoteRow[] = yield* graphql({
+      query: UserEntityVotesByTypeDocument,
+      decoder: (data): UserEntityVoteRow[] =>
+        (data.userVotes ?? []).filter((row): row is UserEntityVoteRow => row != null),
+      variables: {
+        userId,
+        voteType,
+        objectType,
+        first: USER_ENTITY_VOTES_PAGE_SIZE,
+        offset,
+      },
+      signal,
+    });
+
+    const nodes = rows.filter(node => Boolean(node.objectId));
+    const objectIds = nodes.map(node => node.objectId);
+    const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
+    const votedAtByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.votedAt]));
+
+    return {
+      objectIds,
+      voteKindByObjectId,
+      votedAtByObjectId,
+      // Advance by what the server returned, not by what survived filtering, so a
+      // dropped row can't shift the window and skip the vote that follows it.
+      nextOffset: offset + rows.length,
+      // A short page is the last one. A page that lands exactly on the boundary
+      // costs one extra empty fetch, which is cheaper than a count query.
+      hasNextPage: rows.length === USER_ENTITY_VOTES_PAGE_SIZE,
+    } satisfies UserEntityVoteObjectIdsPage;
+  });
+}
+
 const EXCLUDED_BLOCK_TYPES = [
   SystemIds.TEXT_BLOCK,
   SystemIds.IMAGE_BLOCK,

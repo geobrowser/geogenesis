@@ -2,15 +2,38 @@
 
 import * as React from 'react';
 
-import { CONTENT_MAX_WIDTH } from './editable-entity-cover-avatar-header';
+import cx from 'classnames';
+
+import {
+  ENTITY_PAGE_CONTENT_MAX_WIDTH,
+  ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH,
+  type EntityPageContentVariant,
+} from './entity-page-layout';
 
 type Props = {
   children: React.ReactNode;
+  variant?: EntityPageContentVariant;
 };
 
-export function EntityPageContentContainer({ children }: Props) {
+const widthVariables = {
+  '--entity-page-content-max-width': `${ENTITY_PAGE_CONTENT_MAX_WIDTH}px`,
+  '--entity-page-with-sidebar-max-width': `${ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH}px`,
+} as React.CSSProperties;
+
+const variantClassName: Record<EntityPageContentVariant, string> = {
+  content: 'max-w-[var(--entity-page-content-max-width)]',
+  'with-sidebar': 'max-w-[var(--entity-page-with-sidebar-max-width)] lg:max-w-[var(--entity-page-content-max-width)]',
+  'auto-sidebar':
+    'max-w-[var(--entity-page-content-max-width)] has-[aside]:max-w-[var(--entity-page-with-sidebar-max-width)] lg:has-[aside]:max-w-[var(--entity-page-content-max-width)]',
+};
+
+export function EntityPageContentContainer({ children, variant = 'content' }: Props) {
   return (
-    <div className="mx-auto w-full" style={{ maxWidth: CONTENT_MAX_WIDTH }}>
+    <div
+      className={cx('mx-auto w-full', variantClassName[variant])}
+      data-entity-page-content-variant={variant}
+      style={widthVariables}
+    >
       {children}
     </div>
   );

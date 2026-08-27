@@ -5,7 +5,6 @@ import { useMutation } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { Effect, Either } from 'effect';
-import { type Hex } from 'viem';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -14,7 +13,6 @@ import { useSpace } from '~/core/hooks/use-space';
 import { geo } from '~/core/sdk/geo-client';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
-import { SPACE_REGISTRY_ADDRESS } from '~/core/utils/contracts/space-registry';
 import { validateSpaceId } from '~/core/utils/utils';
 
 interface UseProposeRemoveMemberArgs {
@@ -36,9 +34,7 @@ export function useProposeRemoveMember({ spaceId }: UseProposeRemoveMemberArgs) 
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { space } = useSpace(spaceId ?? undefined);
 
-  const tx = useSmartAccountTransaction({
-    address: SPACE_REGISTRY_ADDRESS,
-  });
+  const tx = useSmartAccountTransaction();
 
   const handleProposeRemoveMember = useCallback(
     async ({ targetMemberSpaceId, votingMode = 'fast' }: ProposeRemoveMemberParams) => {
@@ -70,7 +66,9 @@ export function useProposeRemoveMember({ spaceId }: UseProposeRemoveMemberArgs) 
         throw new Error(message);
       }
 
-      // The proposal's removeMember action must call the DAO space contract directly.
+      // The action targets the space by id and the contract resolves it at execution time, so
+      // the address is no longer passed. Still required as a precondition: no address means the
+      // space isn't a resolvable deployed DAO, and the proposal would be unexecutable.
       if (!space?.address) {
         const message = 'No space address found. Please try again.';
         console.error('No space address found for space:', spaceId);
@@ -78,7 +76,7 @@ export function useProposeRemoveMember({ spaceId }: UseProposeRemoveMemberArgs) 
         throw new Error(message);
       }
 
-      const normalizedVotingMode = votingMode === 'slow' ? 'SLOW' : 'FAST';
+      const normalizedVotingMode = votingMode === 'slow' ? ('SLOW' as const) : ('FAST' as const);
 
       console.log('Proposing to remove member', {
         authorSpaceId: personalSpaceId,
@@ -87,15 +85,14 @@ export function useProposeRemoveMember({ spaceId }: UseProposeRemoveMemberArgs) 
         votingMode: normalizedVotingMode,
       });
 
-      const { calldata: callData } = geo.daoSpaces.proposeRemoveMember({
+      const { to, calldata } = geo.daoSpaces.proposeRemoveMember({
         authorSpaceId: personalSpaceId,
         spaceId,
-        daoSpaceAddress: space.address as Hex,
         memberToRemoveSpaceId: targetMemberSpaceId,
         votingMode: normalizedVotingMode,
       });
 
-      const writeTxEffect = tx(callData).pipe(
+      const writeTxEffect = tx({ to, data: calldata }).pipe(
         Effect.withSpan('web.write.createProposal.removeMember'),
         Effect.annotateSpans({
           'io.operation': 'create_proposal',

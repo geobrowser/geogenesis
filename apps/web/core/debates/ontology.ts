@@ -1,5 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { KEY_FRAME_IMAGE_PROPERTY } from '~/core/constants';
+
 /**
  * GRC-20 ontology for publishing a finished debate to the knowledge graph.
  *
@@ -14,6 +16,9 @@ export const DEBATE_TYPE_ID = 'fd51f93520634617be397b672b23364c';
 /** Transcript (TYPE) — holds the per-turn text blocks of a debate. */
 export const TRANSCRIPT_TYPE_ID = '97042e6d9c7b4db5930c43d48debda84';
 
+/** Debates page (TYPE) — the "All debates" landing page a Recent debates block links to. */
+export const DEBATES_PAGE_TYPE_ID = 'dec3c8cae071482394f1dc4de11e7fb6';
+
 /** Debate videos (RELATION) → Video. */
 export const DEBATE_VIDEOS_PROPERTY_ID = 'c48dc314fa7148aeb967139160456f1d';
 
@@ -23,16 +28,38 @@ export const DEBATE_CLAIMS_PROPERTY_ID = 'e614cce1c4ce45868304fd1237119eb2';
 /** Transcripts (RELATION) → Transcript. */
 export const DEBATE_TRANSCRIPTS_PROPERTY_ID = 'c504c7d5c3374016a5f083e4b5a92911';
 
+/** Key frame (RELATION) → Image. The still the app shows as a video's poster. */
+export const KEY_FRAME_IMAGE_PROPERTY_ID = KEY_FRAME_IMAGE_PROPERTY;
+
 /** Supported by (RELATION) → participant space entity arguing "yes". */
 export const DEBATE_SUPPORTED_BY_PROPERTY_ID = 'd19fad5651364a7f8309daf5c7bf99dd';
 /** Opposed by (RELATION) → participant space entity arguing "no". */
 export const DEBATE_OPPOSED_BY_PROPERTY_ID = 'c57de77c3eee4e7ba0d2258d18aab11c';
+
+/**
+ * Vote (TYPE) — one viewer's pick of who won a debate. Lives in the voter's personal
+ * space and is auto-published there, the same way comments are.
+ */
+export const VOTE_TYPE_ID = '4e7fde53712f4e489e83e7f4e15de964';
+
+/** Debates (RELATION) → Debate. Which debate a Vote is about. */
+export const VOTE_DEBATES_PROPERTY_ID = 'b96bf701a399430da072f5e910cdeda9';
+
+/** Vote (RELATION) → the chosen winner's personal-space system entity. */
+export const VOTE_WINNER_PROPERTY_ID = 'bcbbc60a72fd433d841725ce62ce85f5';
 
 /** Canonical geo-sdk ids reused by the debate ontology (verified equal to the spec). */
 export const NAME_PROPERTY_ID = SystemIds.NAME_PROPERTY; // a126ca53…
 export const TYPES_PROPERTY_ID = SystemIds.TYPES_PROPERTY; // 8f151ba4…
 export const VIDEO_TYPE_ID = SystemIds.VIDEO_TYPE; // d7a4817c… (matches spec)
 export const VIDEO_URL_PROPERTY_ID = SystemIds.VIDEO_URL_PROPERTY; // 33da2ef5…
+export const IMAGE_TYPE_ID = SystemIds.IMAGE_TYPE; // ba4e4146…
+/**
+ * The unified IPFS URL property. Despite the name it carries the `ipfs://` URI for Video entities
+ * as well as Images. `RelationDtoLive` and the media hooks read a media entity's URL from here and
+ * nowhere else, so a Video that only sets `Video URL` renders as an empty relation.
+ */
+export const IMAGE_URL_PROPERTY_ID = SystemIds.IMAGE_URL_PROPERTY; // 8a743832…
 export const BLOCKS_PROPERTY_ID = SystemIds.BLOCKS; // beaba5cb…
 export const TEXT_BLOCK_TYPE_ID = SystemIds.TEXT_BLOCK; // 76474f2f…
 export const MARKDOWN_CONTENT_PROPERTY_ID = SystemIds.MARKDOWN_CONTENT; // e3e363d1… (matches spec)

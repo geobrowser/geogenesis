@@ -7,11 +7,6 @@ export const featureFlagsStorageKey = 'geo:feature-flags';
 
 export const featureFlagDefinitions = [
   {
-    id: 'questionsTab',
-    label: 'Claims and debates',
-    description: 'Show the Claims and Debates tabs on spaces.',
-  },
-  {
     id: 'debateDebugging',
     label: 'Debate debugging',
     description: 'Show manual debugging controls during debate recording.',
@@ -21,21 +16,29 @@ export const featureFlagDefinitions = [
     label: 'Debate format selector',
     description: 'Allow the first matched debater to choose a format before accepting.',
   },
+  {
+    id: 'debugDebatesPage',
+    label: 'Debates debug tab per space',
+    description: 'Enable per-space debate processing diagnostics.',
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
 export type FeatureFlags = Record<FeatureFlagId, boolean>;
-type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'debatesTab', boolean>>;
+// Claims and debates shipped to everyone, so `questionsTab` (and `debatesTab`, the id it was
+// renamed from) are no longer flags. Both are still sitting in browsers' stored flag objects;
+// normalizing drops them on the next write rather than reading them back.
+type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'questionsTab' | 'debatesTab', boolean>>;
 
 export const defaultFeatureFlags: FeatureFlags = {
-  questionsTab: false,
+  debugDebatesPage: false,
   debateDebugging: false,
   debateFormatSelector: false,
 };
 
 export function normalizeFeatureFlags(flags: StoredFeatureFlags | null | undefined): FeatureFlags {
   return {
-    questionsTab: flags?.questionsTab ?? flags?.debatesTab ?? defaultFeatureFlags.questionsTab,
+    debugDebatesPage: flags?.debugDebatesPage ?? defaultFeatureFlags.debugDebatesPage,
     debateDebugging: flags?.debateDebugging ?? defaultFeatureFlags.debateDebugging,
     debateFormatSelector: flags?.debateFormatSelector ?? defaultFeatureFlags.debateFormatSelector,
   };
@@ -57,14 +60,8 @@ export function useFeatureFlag(id: FeatureFlagId) {
   return normalizeFeatureFlags(flags)[id];
 }
 
-/**
- * The Debates feature — the space Claims/Debates tabs, the debate room, the
- * claim debate button, and the match coordinator — all gate on the single
- * `questionsTab` flag. Use this hook everywhere that renders claim/debate UI
- * instead of inlining the flag id, so every surface flips together.
- */
-export function useDebatesEnabled() {
-  return useFeatureFlag('questionsTab');
+export function useDebugDebatesPageEnabled() {
+  return useFeatureFlag('debugDebatesPage');
 }
 
 export function useFeatureFlags() {

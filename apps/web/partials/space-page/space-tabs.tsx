@@ -5,7 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { useEditable } from '~/core/state/editable-store';
-import { useDebatesEnabled } from '~/core/state/feature-flags';
+import { useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { TabEntity } from '~/core/types';
 import { Relation } from '~/core/types';
@@ -34,7 +34,7 @@ type BuildSpaceTabsParams = {
   overviewHref: string;
   dynamicTabs: Array<{ label: string; href: string }>;
   typeIds: string[];
-  isDebatesEnabled: boolean;
+  isDebugDebatesPageEnabled: boolean;
 };
 
 export function buildSpaceTabs({
@@ -42,7 +42,7 @@ export function buildSpaceTabs({
   overviewHref,
   dynamicTabs,
   typeIds,
-  isDebatesEnabled,
+  isDebugDebatesPageEnabled,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
@@ -54,15 +54,9 @@ export function buildSpaceTabs({
     },
   ];
 
-  const QUESTION_TAB: BuiltSpaceTab = {
-    label: 'Claims',
-    href: `/space/${spaceId}/claims`,
-    priority: 2,
-  };
-
-  const DEBATE_TAB: BuiltSpaceTab = {
-    label: 'Debates',
-    href: `/space/${spaceId}/debates`,
+  const DEBUG_DEBATES_TAB: BuiltSpaceTab = {
+    label: 'Debug debates',
+    href: `/space/${spaceId}/debug-debates`,
     priority: 3,
   };
 
@@ -84,7 +78,7 @@ export function buildSpaceTabs({
 
   if (typeIds.includes(SystemIds.SPACE_TYPE)) {
     if (dynamicTabs.length > 0) {
-      const reservedLabels = new Set(isDebatesEnabled ? [QUESTION_TAB.label, DEBATE_TAB.label] : []);
+      const reservedLabels = new Set(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : []);
       const visibleDynamicTabs =
         reservedLabels.size > 0 ? dynamicTabs.filter(tab => !reservedLabels.has(tab.label)) : dynamicTabs;
 
@@ -92,10 +86,7 @@ export function buildSpaceTabs({
     }
   }
 
-  if (isDebatesEnabled) {
-    tabs.push(QUESTION_TAB);
-    tabs.push(DEBATE_TAB);
-  }
+  if (isDebugDebatesPageEnabled) tabs.push(DEBUG_DEBATES_TAB);
 
   if (typeIds.includes(SystemIds.SPACE_TYPE) && !typeIds.includes(SystemIds.PERSON_TYPE)) {
     tabs.push(...SOME_SPACES_TABS);
@@ -116,7 +107,7 @@ export function buildSpaceTabs({
 
 export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities, typeIds }: SpaceTabsProps) {
   const { editable } = useEditable();
-  const isDebatesEnabled = useDebatesEnabled();
+  const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
 
   // Merge local tab relation changes with server data
   const mergedTabRelations = useRelations({
@@ -162,9 +153,8 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
 
   const systemTabsAfter: Array<{ label: string; href: string }> = [];
 
-  if (isDebatesEnabled) {
-    systemTabsAfter.push({ label: 'Claims', href: `/space/${spaceId}/claims` });
-    systemTabsAfter.push({ label: 'Debates', href: `/space/${spaceId}/debates` });
+  if (isDebugDebatesPageEnabled) {
+    systemTabsAfter.push({ label: 'Debug debates', href: `/space/${spaceId}/debug-debates` });
   }
 
   if (showCommunity) systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });
@@ -197,7 +187,13 @@ export function SpaceTabs({ spaceId, entityId, initialTabRelations, tabEntities,
     href: `${overviewHref}?tabId=${entity.id}`,
   }));
 
-  const baseTabs = buildSpaceTabs({ spaceId, overviewHref, dynamicTabs, typeIds, isDebatesEnabled });
+  const baseTabs = buildSpaceTabs({
+    spaceId,
+    overviewHref,
+    dynamicTabs,
+    typeIds,
+    isDebugDebatesPageEnabled,
+  });
 
   const tabs = showCommunity
     ? [

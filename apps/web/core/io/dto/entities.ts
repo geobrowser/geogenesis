@@ -1,13 +1,13 @@
-import { RelationDtoLive } from '~/core/io/dto/relations';
+import { RelationDtoLive, hasRelationTarget } from '~/core/io/dto/relations';
 import { Entity } from '~/core/types';
-import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
+import { name as nameFromValues, spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { RemoteEntity } from '../schema';
 import { ValueDto } from './values';
 
 export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
-  const relationsOut = remoteEntity.relationsList.map(r => RelationDtoLive(r));
+  const relationsOut = remoteEntity.relationsList.filter(hasRelationTarget).map(r => RelationDtoLive(r));
   const values = remoteEntity.valuesList.map(v => ValueDto(remoteEntity, v));
 
   // Drop spaces whose only contribution to this entity is a hidden property,
@@ -27,9 +27,17 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
     });
   }
 
+  // An entity can be named differently in every space that touches it, and the API's own `name`
+  // picks one of them for us — for `Role` in the Root space that came back as `Person role`, the
+  // name a downstream space gave it. `nameFromValues` applies the rule the rest of the app uses:
+  // the highest-ranked space wins, with Root at the top. Where the query scoped values to a single
+  // space that resolves to the same name it always did, and where it asked for no values at all
+  // there is nothing to rank, so the API's answer still stands.
+  const rankedName = nameFromValues(values);
+
   return {
     id: remoteEntity.id,
-    name: remoteEntity.name,
+    name: rankedName ?? remoteEntity.name,
     description: remoteEntity.description,
     spaces: sortSpaceIdsByRank(spaceIdsForRouting),
     types: [...remoteEntity.types],

@@ -17,6 +17,7 @@ import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import React from 'react';
 
 import { Source } from '~/core/blocks/data/source';
+import type { BlockMainMedia } from '~/core/hooks/use-block-main-media';
 import { Property, Relation, Row } from '~/core/types';
 
 import { PositionBox } from '~/design-system/position-box';
@@ -33,6 +34,7 @@ export type RenderItemProps = {
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   properties?: Record<string, Property>;
+  mainMedia?: BlockMainMedia | null;
   source: Source;
   isPlaceholder: boolean;
   autoFocus?: boolean;
@@ -56,6 +58,7 @@ export type DndItemsConfig = {
 export type TableBlockDndItemsProps = {
   spaceId: string;
   propertiesSchema?: Record<string, Property>;
+  mainMedia?: BlockMainMedia | null;
   onChangeEntry: onChangeEntryFn;
   onLinkEntry: onLinkEntryFn;
   source: Source;
@@ -80,6 +83,7 @@ export const TableBlockDndItems = ({
   onChangeEntry,
   onLinkEntry,
   propertiesSchema,
+  mainMedia,
   source,
   onUpdateRelation,
   relations,
@@ -196,6 +200,7 @@ export const TableBlockDndItems = ({
     onChangeEntry,
     onLinkEntry,
     properties: propertiesSchema,
+    mainMedia,
     source,
     collectionTypeFilters,
     placeholderFocusKey,

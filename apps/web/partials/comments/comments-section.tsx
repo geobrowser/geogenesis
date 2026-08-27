@@ -4,20 +4,28 @@ import * as React from 'react';
 import { useState } from 'react';
 
 import cx from 'classnames';
+import { useAtom } from 'jotai';
 
 import { normalizeSpaceId } from '~/core/access/space-access';
+import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
+import { Crown } from '~/core/debates/browse/icons';
+import { useDebateVotesByVoter } from '~/core/debates/use-debate-votes';
+import type { DebateVoteRecord } from '~/core/debates/vote-tally';
 import { useComments } from '~/core/hooks/use-comments';
 import { useCreateComment } from '~/core/hooks/use-create-comment';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceEditorIds } from '~/core/hooks/use-space-editor-ids';
+import { uuidToHex } from '~/core/id/normalize';
 import { renderMarkdownDocument } from '~/core/state/editor/markdown-render';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { pendingCommentComposerAtom } from '~/core/state/pending-comment-intents';
 import { useSignInPrompt } from '~/core/state/sign-in-prompt-store';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Dropdown } from '~/design-system/dropdown';
-import { EditSmall } from '~/design-system/icons/edit-small';
 import { Minus } from '~/design-system/icons/minus';
 import { Plus } from '~/design-system/icons/plus';
 import { RightArrowDiagonal } from '~/design-system/icons/right-arrow-diagonal';
@@ -26,12 +34,21 @@ import { Text } from '~/design-system/text';
 
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import {
+  avatarBottomInRowPx,
+  type CommentDensity,
+  PAGE_DENSITY,
+  PANEL_DENSITY,
+  threadArmCenterPx,
+  threadSpineOffsetPx,
+} from './comment-density';
 import type { CommentFilter, CommentSortOrder, CommentWithReplies } from './types';
 
-const COMMENT_AVATAR_COL_PX = 32;
-const COMMENT_HEADER_GAP_PX = 12;
-const COMMENT_BODY_INSET_PX = COMMENT_AVATAR_COL_PX + COMMENT_HEADER_GAP_PX;
-const COMMENT_AVATAR_COLUMN_CENTER_PX = COMMENT_AVATAR_COL_PX / 2;
+const CommentDensityContext = React.createContext<CommentDensity>(PAGE_DENSITY);
+
+function useCommentDensity(): CommentDensity {
+  return React.useContext(CommentDensityContext);
+}
 const COMMENT_THREAD_LINE_HIT_PX = 20;
 
 const THREAD_LEVEL_BRANCH_SEGMENT = 'thread-level-branch-segment';
@@ -92,6 +109,27 @@ function CommentBranchHighlightProvider({ children }: { children: React.ReactNod
   return <CommentBranchHighlightContext.Provider value={value}>{children}</CommentBranchHighlightContext.Provider>;
 }
 
+/**
+ * Voter space id → who they picked to win the debate being commented on. Context so the
+ * badge doesn't have to be threaded through every nesting level of CommentList. Empty for
+ * entities that aren't debates.
+ */
+const DebateVoteBadgeContext = React.createContext<Map<string, DebateVoteRecord>>(new Map());
+
+function CommentVoteBadge({ authorSpaceId }: { authorSpaceId: string }) {
+  const vote = React.useContext(DebateVoteBadgeContext).get(uuidToHex(authorSpaceId));
+  if (!vote?.winnerName) return null;
+
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-divider px-2 py-1 text-grey-04">
+      <Crown size={12} />
+      <Text variant="footnote" color="grey-04" as="span">
+        {vote.winnerName}
+      </Text>
+    </span>
+  );
+}
+
 function replySubtreeContainsCommentId(node: CommentWithReplies, targetId: string): boolean {
   const replies = Array.isArray(node.replies) ? node.replies : [];
   for (const reply of replies) {
@@ -136,21 +174,62 @@ function branchPointerBlurProps(
   };
 }
 
+export type CommentSectionVariant = 'page' | 'panel';
+
 interface CommentSectionProps {
   entityId: string;
   spaceId: string;
+  /**
+   * 'page' (default) is the entity page treatment. 'panel' matches the side
+   * panel design: no built-in heading (the host supplies one), compact rows,
+   * and the avatar + "Join the conversation..." composer.
+   */
+  variant?: CommentSectionVariant;
 }
 
-export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
+export function CommentSection({ entityId, spaceId, variant = 'page' }: CommentSectionProps) {
   const { comments, totalCount, isLoading } = useComments({ entityId, spaceId });
   const { createComment, editComment } = useCreateComment(entityId);
   const { personalSpaceId } = usePersonalSpaceId();
   const { smartAccount } = useSmartAccount();
   const { open: openSignInPrompt } = useSignInPrompt();
+  const enqueuePendingAction = useEnqueuePendingAction();
+  const [pendingComposer, setPendingComposer] = useAtom(pendingCommentComposerAtom);
+  const [composerExpanded, setComposerExpanded] = useState(false);
+  const [pendingReplyToId, setPendingReplyToId] = useState<string | null>(null);
   const isLoggedIn = !!smartAccount;
-  const requireSignInToComment = React.useCallback(() => openSignInPrompt('comment'), [openSignInPrompt]);
+  const isPanel = variant === 'panel';
+  const density = isPanel ? PANEL_DENSITY : PAGE_DENSITY;
+  // The panel composer leads with the viewer's own avatar (design).
+  const walletAddress = smartAccount?.account.address;
+  // Only the panel composer renders this avatar, so entity pages don't pay for
+  // the profile lookup (useGeoProfile disables itself without an account).
+  const { profile: viewerProfile } = useGeoProfile(isPanel ? walletAddress : undefined);
+  const viewerAvatarUrl =
+    viewerProfile?.avatarUrl && viewerProfile.avatarUrl !== PLACEHOLDER_SPACE_IMAGE ? viewerProfile.avatarUrl : null;
+  const viewerAvatarSeed = viewerProfile?.address ?? walletAddress ?? personalSpaceId ?? 'anonymous';
+  const requireSignInToComment = React.useCallback(
+    (replyToCommentId?: string) => {
+      setPendingComposer({ entityId, replyToCommentId: replyToCommentId ?? null });
+      openSignInPrompt('comment');
+    },
+    [entityId, openSignInPrompt, setPendingComposer]
+  );
+
+  React.useEffect(() => {
+    if (!smartAccount || !pendingComposer || pendingComposer.entityId !== entityId) return;
+    setPendingComposer(null);
+    if (pendingComposer.replyToCommentId) {
+      setPendingReplyToId(pendingComposer.replyToCommentId);
+      return;
+    }
+    setComposerExpanded(true);
+  }, [smartAccount, pendingComposer, entityId, setPendingComposer]);
   const commentAuthorSpaceIds = React.useMemo(() => collectCommentAuthorSpaceIds(comments), [comments]);
   const { editorSpaceIds } = useSpaceEditorIds(spaceId, commentAuthorSpaceIds);
+  // Resolves to an empty map unless this entity is a Debate. Gated on there being comments
+  // so entity pages without any don't pay for the lookup.
+  const debateVotesByVoter = useDebateVotesByVoter(entityId, totalCount > 0);
 
   const [sortOrder, setSortOrder] = useState<CommentSortOrder>('newest');
   const [filter, setFilter] = useState<CommentFilter>('all');
@@ -194,14 +273,32 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   // is updated via the onOptimistic callback so the row pins to the top right away.
   const handleCreateComment = React.useCallback(
     (text: string, ancestorComments?: Array<{ id: string; spaceId: string }>) => {
+      if (!smartAccount) return;
+
       void createComment({
         text,
         targetSpaceId: spaceId,
         ancestorComments,
-        onOptimistic: id => markSessionNew(id),
+        onOptimistic: markSessionNew,
+      }).then(result => {
+        if (!result || result.published) return;
+        enqueuePendingAction({
+          id: `comment:${entityId}:${result.id}`,
+          label: 'your comment',
+          requires: 'personalSpace',
+          run: () =>
+            createComment({
+              text,
+              targetSpaceId: spaceId,
+              ancestorComments,
+              commentId: result.id,
+            }).then(published => {
+              if (!published?.published) throw new Error('Comment could not be published');
+            }),
+        });
       });
     },
-    [createComment, spaceId, markSessionNew]
+    [createComment, smartAccount, spaceId, entityId, enqueuePendingAction, markSessionNew]
   );
 
   const handleEditComment = React.useCallback(
@@ -250,55 +347,70 @@ export function CommentSection({ entityId, spaceId }: CommentSectionProps) {
   }, [comments, filter, editorSpaceIds, sortWithSessionPinned]);
 
   return (
-    <CommentBranchHighlightProvider>
-      <div id="entity-comments" className="flex w-full flex-col pt-10">
-        <div className="text-mediumTitle">Comments ({totalCount})</div>
-        <Spacer height={16} />
-        <TopLevelCommentInput
-          onSubmit={handleCreateComment}
-          isLoggedIn={isLoggedIn}
-          onSignInRequired={requireSignInToComment}
-        />
-        {totalCount > 0 && (
-          <>
-            <Spacer height={16} />
-            <CommentFilters
-              sortOrder={sortOrder}
-              onSortChange={setSortOrder}
-              filter={filter}
-              onFilterChange={setFilter}
-            />
-          </>
-        )}
-        {isLoading ? (
-          <div className="py-4">
-            <Text variant="body" color="grey-04">
-              Loading comments...
-            </Text>
-          </div>
-        ) : (
-          filteredComments.length > 0 && (
+    <CommentDensityContext.Provider value={density}>
+      <CommentBranchHighlightProvider>
+        <div id="entity-comments" className={cx('flex w-full min-w-0 flex-col', !isPanel && 'pt-10')}>
+          {!isPanel && (
+            <>
+              <div className="text-mediumTitle">Comments ({totalCount})</div>
+              <Spacer height={16} />
+            </>
+          )}
+          <TopLevelCommentInput
+            onSubmit={handleCreateComment}
+            isLoggedIn={isLoggedIn}
+            onSignInRequired={requireSignInToComment}
+            expanded={composerExpanded}
+            onExpandedChange={setComposerExpanded}
+            variant={variant}
+            viewerAvatarUrl={viewerAvatarUrl}
+            viewerAvatarSeed={viewerAvatarSeed}
+          />
+          {totalCount > 0 && (
             <>
               <Spacer height={16} />
-              <CommentList
-                comments={filteredComments}
-                entityId={entityId}
-                spaceId={spaceId}
-                onReply={handleCreateComment}
-                onEdit={handleEditComment}
-                personalSpaceId={personalSpaceId}
-                editorSpaceIds={editorSpaceIds}
-                isThreadCollapsed={isThreadCollapsed}
-                toggleThreadCollapsed={toggleThreadCollapsed}
-                sortReplies={sortWithSessionPinned}
-                isLoggedIn={isLoggedIn}
-                onSignInRequired={requireSignInToComment}
+              <CommentFilters
+                sortOrder={sortOrder}
+                onSortChange={setSortOrder}
+                filter={filter}
+                onFilterChange={setFilter}
               />
             </>
-          )
-        )}
-      </div>
-    </CommentBranchHighlightProvider>
+          )}
+          {isLoading ? (
+            <div className="py-4">
+              <Text variant="body" color="grey-04">
+                Loading comments...
+              </Text>
+            </div>
+          ) : (
+            filteredComments.length > 0 && (
+              <>
+                <Spacer height={16} />
+                <DebateVoteBadgeContext.Provider value={debateVotesByVoter}>
+                  <CommentList
+                    comments={filteredComments}
+                    entityId={entityId}
+                    spaceId={spaceId}
+                    onReply={handleCreateComment}
+                    onEdit={handleEditComment}
+                    personalSpaceId={personalSpaceId}
+                    editorSpaceIds={editorSpaceIds}
+                    isThreadCollapsed={isThreadCollapsed}
+                    toggleThreadCollapsed={toggleThreadCollapsed}
+                    sortReplies={sortWithSessionPinned}
+                    isLoggedIn={isLoggedIn}
+                    onSignInRequired={requireSignInToComment}
+                    pendingReplyToId={pendingReplyToId}
+                    onPendingReplyConsumed={() => setPendingReplyToId(null)}
+                  />
+                </DebateVoteBadgeContext.Provider>
+              </>
+            )
+          )}
+        </div>
+      </CommentBranchHighlightProvider>
+    </CommentDensityContext.Provider>
   );
 }
 
@@ -372,23 +484,56 @@ function TopLevelCommentInput({
   onSubmit,
   isLoggedIn,
   onSignInRequired,
+  expanded,
+  onExpandedChange,
+  variant = 'page',
+  viewerAvatarUrl,
+  viewerAvatarSeed,
 }: {
   onSubmit: (text: string) => void;
   isLoggedIn: boolean;
-  onSignInRequired: () => void;
+  onSignInRequired: (replyToCommentId?: string) => void;
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  variant?: CommentSectionVariant;
+  viewerAvatarUrl?: string | null;
+  viewerAvatarSeed?: string;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const density = useCommentDensity();
 
-  if (!isExpanded) {
+  if (!expanded) {
+    const openComposer = () => {
+      if (!isLoggedIn) {
+        onSignInRequired();
+        return;
+      }
+      onExpandedChange(true);
+    };
+
+    // The panel design is a borderless row — the viewer's avatar, prompt text,
+    // and a rule beneath — rather than the entity page's outlined box.
+    if (variant === 'panel') {
+      return (
+        <button
+          onClick={openComposer}
+          className="flex w-full items-center gap-3 border-b border-grey-02 pb-3 text-left"
+        >
+          <span
+            className="relative shrink-0 overflow-hidden rounded-full"
+            style={{ width: density.avatarPx, height: density.avatarPx }}
+          >
+            <Avatar avatarUrl={viewerAvatarUrl} value={viewerAvatarSeed} size={density.avatarPx} />
+          </span>
+          <span className={cx(density.bodyClass, 'min-w-0 flex-1 truncate text-grey-04')}>
+            Join the conversation...
+          </span>
+        </button>
+      );
+    }
+
     return (
       <button
-        onClick={() => {
-          if (!isLoggedIn) {
-            onSignInRequired();
-            return;
-          }
-          setIsExpanded(true);
-        }}
+        onClick={openComposer}
         className="w-full rounded-lg border border-grey-02 px-4 py-3 text-left text-body text-grey-04 hover:border-text"
       >
         Start the discussion...
@@ -400,11 +545,11 @@ function TopLevelCommentInput({
     <CommentInput
       onSubmit={text => {
         onSubmit(text);
-        setIsExpanded(false);
+        onExpandedChange(false);
       }}
       placeholder=""
       autoFocus
-      onCancel={() => setIsExpanded(false)}
+      onCancel={() => onExpandedChange(false)}
     />
   );
 }
@@ -423,6 +568,7 @@ function CommentInput({
   initialValue?: string;
 }) {
   const [text, setText] = useState(initialValue);
+  const density = useCommentDensity();
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   // Guards against a rapid second click (or Enter + click) firing before React re-renders
   // with the cleared text. Set synchronously at the start of submit, released after the
@@ -451,8 +597,10 @@ function CommentInput({
     }
   };
 
-  // Auto-resize textarea
-  React.useEffect(() => {
+  // Auto-resize: start at one line and grow with the content, so an empty
+  // composer doesn't open with blank rows above the buttons. Runs on mount too,
+  // which is what collapses the initial box to a single line.
+  React.useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
@@ -471,8 +619,11 @@ function CommentInput({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         autoFocus={autoFocus}
-        rows={3}
-        className="w-full resize-none bg-transparent text-body text-text outline-none placeholder:text-grey-04"
+        rows={1}
+        className={cx(
+          density.bodyClass,
+          'w-full resize-none bg-transparent text-text outline-none placeholder:text-grey-04'
+        )}
       />
       <div className="flex items-center justify-end gap-2">
         {onCancel && (
@@ -512,6 +663,8 @@ function CommentList({
   sortReplies,
   isLoggedIn,
   onSignInRequired,
+  pendingReplyToId,
+  onPendingReplyConsumed,
   depth = 0,
   ancestors = [],
   parentCommentId,
@@ -527,7 +680,9 @@ function CommentList({
   toggleThreadCollapsed: (commentId: string) => void;
   sortReplies: (items: CommentWithReplies[]) => CommentWithReplies[];
   isLoggedIn: boolean;
-  onSignInRequired: () => void;
+  onSignInRequired: (replyToCommentId?: string) => void;
+  pendingReplyToId?: string | null;
+  onPendingReplyConsumed?: () => void;
   depth?: number;
   ancestors?: Array<{ id: string; spaceId: string }>;
   parentCommentId?: string;
@@ -591,6 +746,8 @@ function CommentList({
             sortReplies={sortReplies}
             isLoggedIn={isLoggedIn}
             onSignInRequired={onSignInRequired}
+            pendingReplyToId={pendingReplyToId}
+            onPendingReplyConsumed={onPendingReplyConsumed}
             isLast={index === comments.length - 1}
             depth={depth}
             ancestors={ancestors}
@@ -601,10 +758,19 @@ function CommentList({
   }
 
   // Nested replies with connector lines.
-  // This container lives inside the parent comment's ml-[44px] body area.
-  // The parent's avatar center is at -28px from this container's left edge.
+  // Connectors reach back to the parent avatar's centre — see threadSpineOffsetPx.
   // We render a single continuous vertical line spanning from top to the last reply's
   // avatar center, then each reply gets a horizontal arm (or curve for the last one).
+  // The elbow lands on the reply avatar's vertical centre, so its geometry
+  // follows the density's avatar size rather than the 32px avatar these paths
+  // were originally drawn against.
+  const density = useCommentDensity();
+  const spineOffsetPx = threadSpineOffsetPx(density);
+  const armCenterPx = threadArmCenterPx(density);
+  const armY = armCenterPx - 0.5;
+  const elbowRadius = Math.min(9.5, Math.max(0, armY));
+  const elbowPath = `M 0.5 0 L 0.5 ${armY - elbowRadius} Q 0.5 ${armY}, ${0.5 + elbowRadius} ${armY} L ${spineOffsetPx} ${armY}`;
+
   const parentBundle =
     parentCommentId != null && hi.focus?.kind === 'parent-thread' && hi.focus.threadCommentId === parentCommentId;
   const listSpineLit = parentBundle || (parentCommentId != null && hi.spinePressedListParentId === parentCommentId);
@@ -625,7 +791,7 @@ function CommentList({
           {...branchLeave}
           className="comment-branch-hit comment-branch-parent-hit comment-branch-spine-hit absolute z-[1] flex -translate-x-1/2 cursor-pointer justify-center border-0 bg-transparent p-0"
           style={{
-            left: 'calc(-28px + 0.5px)',
+            left: `calc(${-spineOffsetPx}px + 0.5px)`,
             top: 0,
             height: `${lastReplyTop}px`,
             width: `${COMMENT_THREAD_LINE_HIT_PX}px`,
@@ -663,16 +829,21 @@ function CommentList({
                     onPointerDown={() => hi.pressSpineForListParent(parentCommentId!)}
                     {...branchLeave}
                     className="comment-branch-hit comment-branch-parent-hit pointer-events-auto absolute cursor-pointer border-0 bg-transparent p-0"
-                    style={{ left: '-28px', top: '-2px', width: '28px', height: '22px' }}
+                    style={{
+                      left: `${-spineOffsetPx}px`,
+                      top: '-2px',
+                      width: `${spineOffsetPx}px`,
+                      height: `${armCenterPx + 6}px`,
+                    }}
                   >
                     <svg
                       className="pointer-events-none overflow-visible"
-                      style={{ width: '28px', height: '16px' }}
-                      viewBox="0 0 28 16"
+                      style={{ width: `${spineOffsetPx}px`, height: `${armCenterPx}px` }}
+                      viewBox={`0 0 ${spineOffsetPx} ${armCenterPx}`}
                       fill="none"
                     >
                       <path
-                        d="M 0.5 0 L 0.5 6 Q 0.5 15.5, 10 15.5 L 28 15.5"
+                        d={elbowPath}
                         strokeWidth="1"
                         fill="none"
                         className={cx(THREAD_LEVEL_BRANCH_SEGMENT, 'transition-colors', pathStroke)}
@@ -682,12 +853,17 @@ function CommentList({
                 ) : (
                   <svg
                     className="pointer-events-none absolute overflow-visible"
-                    style={{ left: '-28px', top: 0, width: '28px', height: '16px' }}
-                    viewBox="0 0 28 16"
+                    style={{
+                      left: `${-spineOffsetPx}px`,
+                      top: 0,
+                      width: `${spineOffsetPx}px`,
+                      height: `${armCenterPx}px`,
+                    }}
+                    viewBox={`0 0 ${spineOffsetPx} ${armCenterPx}`}
                     fill="none"
                   >
                     <path
-                      d="M 0.5 0 L 0.5 6 Q 0.5 15.5, 10 15.5 L 28 15.5"
+                      d={elbowPath}
                       strokeWidth="1"
                       fill="none"
                       className={cx(THREAD_LEVEL_BRANCH_SEGMENT, 'transition-colors', pathStroke)}
@@ -705,12 +881,17 @@ function CommentList({
                   onPointerDown={() => hi.pressSpineForListParent(parentCommentId!)}
                   {...branchLeave}
                   className="comment-branch-hit comment-branch-parent-hit pointer-events-auto absolute -translate-y-1/2 cursor-pointer border-0 bg-transparent p-0"
-                  style={{ left: '-28px', top: '16px', width: '28px', height: '12px' }}
+                  style={{
+                    left: `${-spineOffsetPx}px`,
+                    top: `${armCenterPx}px`,
+                    width: `${spineOffsetPx}px`,
+                    height: '12px',
+                  }}
                 >
                   <span
                     className={cx(
                       THREAD_LEVEL_BRANCH_SEGMENT,
-                      'absolute top-1/2 left-0 h-px w-[28px] -translate-y-1/2 transition-colors',
+                      'absolute top-1/2 left-0 h-px w-full -translate-y-1/2 transition-colors',
                       spanFill
                     )}
                   />
@@ -722,7 +903,11 @@ function CommentList({
                     'pointer-events-none absolute h-px transition-colors',
                     spanFill
                   )}
-                  style={{ left: '-28px', top: '16px', width: '28px' }}
+                  style={{
+                    left: `${-spineOffsetPx}px`,
+                    top: `${armCenterPx}px`,
+                    width: `${spineOffsetPx}px`,
+                  }}
                 />
               )}
             </div>
@@ -739,6 +924,8 @@ function CommentList({
               sortReplies={sortReplies}
               isLoggedIn={isLoggedIn}
               onSignInRequired={onSignInRequired}
+              pendingReplyToId={pendingReplyToId}
+              onPendingReplyConsumed={onPendingReplyConsumed}
               isLast={index === comments.length - 1}
               depth={depth}
               ancestors={ancestors}
@@ -763,6 +950,8 @@ function CommentItem({
   sortReplies,
   isLoggedIn,
   onSignInRequired,
+  pendingReplyToId,
+  onPendingReplyConsumed,
   isLast,
   depth,
   ancestors,
@@ -778,7 +967,9 @@ function CommentItem({
   toggleThreadCollapsed: (commentId: string) => void;
   sortReplies: (items: CommentWithReplies[]) => CommentWithReplies[];
   isLoggedIn: boolean;
-  onSignInRequired: () => void;
+  onSignInRequired: (replyToCommentId?: string) => void;
+  pendingReplyToId?: string | null;
+  onPendingReplyConsumed?: () => void;
   isLast: boolean;
   depth: number;
   ancestors: Array<{ id: string; spaceId: string }>;
@@ -788,8 +979,13 @@ function CommentItem({
   const [isEditing, setIsEditing] = useState(false);
   const threadCollapsed = isThreadCollapsed(comment.id);
 
+  React.useEffect(() => {
+    if (pendingReplyToId !== comment.id) return;
+    setIsReplying(true);
+    onPendingReplyConsumed?.();
+  }, [pendingReplyToId, comment.id, onPendingReplyConsumed]);
+
   const isOwnComment = personalSpaceId != null && comment.spaceId === personalSpaceId;
-  const isEditor = editorSpaceIds.has(comment.spaceId.toLowerCase());
 
   const handleReply = (text: string) => {
     const fullAncestors = [{ id: comment.id, spaceId: comment.spaceId }, ...ancestors];
@@ -810,15 +1006,16 @@ function CommentItem({
     return getRelativeTime(comment.createdAt);
   }, [comment.createdAt]);
 
+  const density = useCommentDensity();
   const replies = Array.isArray(comment.replies) ? comment.replies : [];
   const sortedReplies = React.useMemo(() => sortReplies(replies), [replies, sortReplies]);
   const hasReplies = replies.length > 0;
-  const nestedSpineLeftPx = -28;
+  const nestedSpineLeftPx = -threadSpineOffsetPx(density);
   /** Horizontal center of the branch line for the toggle (`commentRef` coordinates): */
-  const threadLineCenterXFromRootPx = depth === 0 || hasReplies ? COMMENT_AVATAR_COLUMN_CENTER_PX : nestedSpineLeftPx;
+  const threadLineCenterXFromRootPx = depth === 0 || hasReplies ? density.avatarCenterPx : nestedSpineLeftPx;
   const threadLineStrokeCenterNudgePx = 0.5;
   /** X of thread line relative to body inner left (vote row). */
-  const threadToggleLeftInBodyPx = threadLineCenterXFromRootPx - COMMENT_BODY_INSET_PX;
+  const threadToggleLeftInBodyPx = threadLineCenterXFromRootPx - density.bodyInsetPx;
   const commentRef = React.useRef<HTMLDivElement>(null);
   const repliesRef = React.useRef<HTMLDivElement>(null);
   const [parentLineHeight, setParentLineHeight] = React.useState<number | null>(null);
@@ -841,39 +1038,38 @@ function CommentItem({
     if (commentRef.current && repliesRef.current) {
       const commentRect = commentRef.current.getBoundingClientRect();
       const repliesRect = repliesRef.current.getBoundingClientRect();
-      setParentLineHeight(repliesRect.top - commentRect.top - 32);
+      // The spine starts below the avatar, so drop that much off its length.
+      setParentLineHeight(repliesRect.top - commentRect.top - avatarBottomInRowPx(density));
     }
-  }, [hasReplies, threadCollapsed, replies.length, isEditing, isReplying]);
+  }, [hasReplies, threadCollapsed, replies.length, isEditing, isReplying, density.avatarPx]);
 
   const expandedHeaderRow = (
-    <div className="flex items-center gap-3">
-      <div className="flex w-8 shrink-0 items-center justify-center">
+    <div className="flex items-center gap-3" style={{ minHeight: density.headerMinHeightPx }}>
+      <div
+        className="flex shrink-0 items-center justify-center"
+        style={{ width: density.avatarPx, height: density.avatarPx }}
+      >
         <a
           href={NavUtils.toSpace(comment.author.spaceId)}
-          className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full"
+          className="relative shrink-0 overflow-hidden rounded-full"
+          style={{ width: density.avatarPx, height: density.avatarPx }}
         >
-          <Avatar avatarUrl={comment.author.avatarUrl} value={comment.author.address} size={32} />
+          <Avatar avatarUrl={comment.author.avatarUrl} value={comment.author.address} size={density.avatarPx} />
         </a>
       </div>
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <a href={NavUtils.toSpace(comment.author.spaceId)} className="shrink-0 hover:underline">
-          <Text variant="bodySemibold" as="span">
-            {comment.author.name ?? 'Anonymous'}
-          </Text>
+      {/* Single line, no wrapping: a wrapped header doubles the row height, and
+          because the avatar is centred against it the body ends up stranded far
+          below the name. A long name truncates instead. */}
+      <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
+        <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
+          <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
         </a>
-        {isEditor && (
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-grey-01">
-            <EditSmall color="grey-04" />
-          </span>
-        )}
-        <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
-          {relativeTime}
-        </Text>
-        {comment.isPublishing && (
-          <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
-            Publishing…
-          </Text>
-        )}
+        {/* While publishing, this stands in for the timestamp — a just-posted
+            comment has no meaningful age yet, and showing both read as noise. */}
+        <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
+          {comment.isPublishing ? 'Publishing…' : relativeTime}
+        </span>
+        <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
         {comment.resolved && (
           <span className="text-resultSuccess inline-flex shrink-0 items-center gap-1 rounded-full bg-successTertiary px-2 py-0.5">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -902,10 +1098,14 @@ function CommentItem({
                   ...parentThreadLeave,
                 }
               : {})}
+            // Empty, padding-less, and in an `items-center` parent that won't stretch it,
+            // so without an explicit minimum this collapses to zero height and the
+            // blank-space collapse target stops being clickable.
+            style={{ minHeight: density.headerMinHeightPx }}
             className={
               hasReplies
-                ? 'comment-branch-parent-hit min-h-8 min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0'
-                : 'min-h-8 min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0'
+                ? 'comment-branch-parent-hit min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0'
+                : 'min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0'
             }
           />
         )}
@@ -926,7 +1126,12 @@ function CommentItem({
           initialValue={comment.markdownContent}
         />
       ) : (
-        <div className="prose prose-sm max-w-none text-body text-text [&_a]:text-ctaPrimary [&_h1]:text-mediumTitle [&_h2]:text-smallTitle [&_h3]:text-body [&_h3]:font-semibold [&_p]:my-1">
+        <div
+          className={cx(
+            'prose prose-sm max-w-none text-text [&_a]:text-ctaPrimary [&_h1]:text-mediumTitle [&_h2]:text-smallTitle [&_h3]:font-semibold [&_p]:my-1',
+            density.bodyClass
+          )}
+        >
           {renderedContent}
         </div>
       )}
@@ -957,17 +1162,20 @@ function CommentItem({
           <button
             onClick={() => {
               if (!isLoggedIn) {
-                onSignInRequired();
+                onSignInRequired(comment.id);
                 return;
               }
               setIsReplying(!isReplying);
             }}
-            className="text-smallButton text-grey-04 hover:text-text"
+            className={cx(density.metaClass, 'text-grey-04 hover:text-text')}
           >
             Reply
           </button>
           {isOwnComment && (
-            <button onClick={() => setIsEditing(true)} className="text-smallButton text-grey-04 hover:text-text">
+            <button
+              onClick={() => setIsEditing(true)}
+              className={cx(density.metaClass, 'text-grey-04 hover:text-text')}
+            >
               Edit
             </button>
           )}
@@ -1006,6 +1214,8 @@ function CommentItem({
             sortReplies={sortReplies}
             isLoggedIn={isLoggedIn}
             onSignInRequired={onSignInRequired}
+            pendingReplyToId={pendingReplyToId}
+            onPendingReplyConsumed={onPendingReplyConsumed}
             depth={depth + 1}
             ancestors={[{ id: comment.id, spaceId: comment.spaceId }, ...ancestors]}
             parentCommentId={comment.id}
@@ -1018,8 +1228,8 @@ function CommentItem({
   return (
     <div ref={commentRef} className={cx('relative', !isLast && 'mb-6')}>
       {threadCollapsed ? (
-        <div className="flex min-h-8 items-center gap-3">
-          <div className="flex w-8 shrink-0 items-center justify-center">
+        <div className="flex items-center gap-3" style={{ minHeight: density.headerMinHeightPx }}>
+          <div className="flex shrink-0 items-center justify-center" style={{ width: density.avatarPx }}>
             {showThreadToggle && (
               <button
                 type="button"
@@ -1034,27 +1244,25 @@ function CommentItem({
               </button>
             )}
           </div>
-          <div className="flex min-h-8 min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-            <a href={NavUtils.toSpace(comment.author.spaceId)} className="shrink-0 hover:underline">
-              <Text variant="bodySemibold" as="span">
-                {comment.author.name ?? 'Anonymous'}
-              </Text>
+          <div
+            className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden"
+            style={{ minHeight: density.headerMinHeightPx }}
+          >
+            <a href={NavUtils.toSpace(comment.author.spaceId)} className="min-w-0 truncate hover:underline">
+              <span className={cx(density.nameClass, 'text-text')}>{comment.author.name ?? 'Anonymous'}</span>
             </a>
-            <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
-              {relativeTime}
-            </Text>
-            {comment.isPublishing && (
-              <Text variant="footnote" color="grey-04" as="span" className="shrink-0">
-                Publishing…
-              </Text>
-            )}
+            <span className={cx(density.metaClass, 'shrink-0 whitespace-nowrap text-grey-04')}>
+              {comment.isPublishing ? 'Publishing…' : relativeTime}
+            </span>
+            <CommentVoteBadge authorSpaceId={comment.author.spaceId} />
             {collapsedHeaderBlankExpands && (
               <button
                 type="button"
                 aria-expanded={false}
                 aria-label={hasReplies ? 'Expand comment thread' : 'Expand comment'}
                 onClick={() => toggleThreadCollapsed(comment.id)}
-                className="min-h-8 min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0"
+                style={{ minHeight: density.headerMinHeightPx }}
+                className="min-w-12 flex-1 basis-0 cursor-pointer border-0 bg-transparent p-0"
               />
             )}
           </div>
@@ -1072,8 +1280,9 @@ function CommentItem({
               {...parentThreadLeave}
               className="comment-branch-parent-hit comment-branch-parent-spine absolute z-[1] flex -translate-x-1/2 cursor-pointer justify-center border-0 bg-transparent p-0"
               style={{
-                left: `${COMMENT_AVATAR_COLUMN_CENTER_PX}px`,
-                top: '32px',
+                left: `${density.avatarCenterPx}px`,
+                // Starts just below the avatar it descends from.
+                top: `${avatarBottomInRowPx(density)}px`,
                 height: `${parentLineHeight}px`,
                 width: `${COMMENT_THREAD_LINE_HIT_PX}px`,
               }}
@@ -1088,14 +1297,14 @@ function CommentItem({
             </button>
           )}
           {expandedHeaderRow}
-          <div className="comment-body-slot mt-1" style={{ marginLeft: COMMENT_BODY_INSET_PX }}>
+          <div className="comment-body-slot mt-1" style={{ marginLeft: density.bodyInsetPx }}>
             {expandedBodyMain}
           </div>
         </div>
       ) : (
         <>
           {expandedHeaderRow}
-          <div className="mt-1" style={{ marginLeft: COMMENT_BODY_INSET_PX }}>
+          <div className="mt-1" style={{ marginLeft: density.bodyInsetPx }}>
             {expandedBodyMain}
           </div>
         </>

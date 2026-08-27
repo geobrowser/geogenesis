@@ -1,12 +1,16 @@
-import { daoSpace, getSmartAccountWalletClient, personalSpace } from '@geoprotocol/geo-sdk';
+import { type GeoWalletClient, generateZeroDevAccount } from '@geogenesis/auth/account';
+import { defineGeoNetworkConfig } from '@geoprotocol/geo-sdk';
 import type { Op } from '@geoprotocol/geo-sdk/lite';
 
 import { Effect } from 'effect';
+import { privateKeyToAccount } from 'viem/accounts';
 
 import { getSpaceAccess } from '~/core/access/space-access';
 import { ID } from '~/core/id';
 import { getEntity, getSpace } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
+import { GEO_NETWORK } from '~/core/sdk/geo-network';
+import { isProposalExecuted } from '~/core/utils/contracts/proposal-execution';
 import { Publish } from '~/core/utils/publish';
 
 import { buildDebatePublishDraft } from '../debate-publish-draft';
@@ -49,12 +53,19 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
 
   // Only auto-publish into spaces the acceptor actually edits. Publishing needs editor rights (a
   // member can propose but not vote+execute), and attempting it elsewhere just reverts on-chain
-  // (CanNotExecute). Checked before the IPFS upload so an ineligible space costs nothing.
+  // (CanNotExecute).
   const access = await Effect.runPromise(getSpaceAccess(space, config.spaceId));
   if (!access.isEditor) {
-    console.log('[debate-acceptor] skipping publish: acceptor is not an editor of the space', {
+    // `console.error`, not `log`: this is terminal, not a retry. The debate is recorded, its claim
+    // lives somewhere the acceptor can never publish, and every sweep from here on will reach this
+    // same line and spend one of its attempt slots doing it. A personal space is the usual cause —
+    // editor rights there belong to the owner alone — which is why the rematch picker refuses to
+    // offer such a claim in the first place (see `isDebatePublishableSpace`). Reaching here means a
+    // debate got past that, so it wants looking at rather than filing under routine.
+    console.error('[debate-acceptor] debate cannot be published: acceptor is not an editor of the space', {
       debateId,
       spaceId: input.spaceId,
+      spaceType: space.type,
       acceptorSpaceId: config.spaceId,
     });
     return { status: 'not_editor', debateEntityId: draft.debateEntityId, spaceId: input.spaceId };
@@ -67,7 +78,22 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
     throw new Error(`Debate ${debateId} resolved to an empty edit.`);
   }
 
-  const smartAccount = await getSmartAccountWalletClient({ privateKey: config.privateKey, rpcUrl: config.rpcUrl });
+  // geo-sdk beta.8 removed getSmartAccountWalletClient; the acceptor signs the
+  // same ZeroDev EIP-7702 kernel flow as the browser, from its private key. The
+  // env-driven GEO_NETWORK supplies chain + sponsorship; the acceptor-config
+  // rpcUrl override keeps working by rebuilding the network with it.
+  //
+  // Goes through generateZeroDevAccount rather than createGeoWalletClient so this
+  // path gets the same pre-signing guards as the browser: RPC-serves-the-expected-
+  // chain and sponsorship-is-configured. It needs them more, not less — it is the
+  // only caller that accepts an operator-supplied rpcUrl override, and a mismatch
+  // here signs authorizations for the wrong chain and fails with AA10 at submit,
+  // after the debate edit is already on IPFS.
+  const signer = privateKeyToAccount(config.privateKey);
+  const network = config.rpcUrl
+    ? defineGeoNetworkConfig({ ...GEO_NETWORK, chain: { ...GEO_NETWORK.chain!, rpcUrl: config.rpcUrl } })
+    : GEO_NETWORK;
+  const smartAccount = await generateZeroDevAccount({ signer, network });
 
   const userOpHash = await submitEdit({
     name: draft.debateName,
@@ -75,6 +101,7 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
     ops,
     space: { id: space.id, type: space.type, address: space.address },
     smartAccount,
+    rpcUrl: config.rpcUrl,
   });
 
   console.log('[debate-acceptor] published debate', {
@@ -87,7 +114,7 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
   return { status: 'published', debateEntityId: draft.debateEntityId, spaceId: input.spaceId, userOpHash };
 }
 
-type SmartAccount = Awaited<ReturnType<typeof getSmartAccountWalletClient>>;
+type SmartAccount = GeoWalletClient;
 
 async function submitEdit({
   name,
@@ -95,41 +122,40 @@ async function submitEdit({
   ops,
   space,
   smartAccount,
+  rpcUrl,
 }: {
   name: string;
   author: string;
   ops: Op[];
   space: { id: string; type: string; address: string };
   smartAccount: SmartAccount;
+  rpcUrl?: string;
 }): Promise<string> {
   if (space.type === 'PERSONAL') {
-    const { to, calldata } = await personalSpace.publishEdit({
+    const { to, calldata } = await geo.personalSpaces.publishEdit({
       name,
       spaceId: space.id,
       ops,
       author,
-      network: 'TESTNET',
     });
     return sendUserOp(smartAccount, to, calldata);
   }
 
   // DAO space: the acceptor is an editor, so use FAST voting and auto vote + execute — otherwise the
   // proposal sits pending until someone acts on it from the Governance tab.
-  const proposal = await daoSpace.proposeEdit({
+  const proposal = await geo.daoSpaces.proposeEdit({
     name,
     ops,
     author,
-    daoSpaceAddress: space.address as `0x${string}`,
     callerSpaceId: `0x${author}`,
     daoSpaceId: `0x${space.id}`,
     votingMode: 'FAST',
-    network: 'TESTNET',
   });
 
   const createHash = await sendUserOp(smartAccount, proposal.to as `0x${string}`, proposal.calldata as `0x${string}`);
   await confirmUserOp(smartAccount, createHash, 'proposal creation');
 
-  const vote = geo.daoSpaces.proposals.vote({
+  const vote = geo.daoSpaces.voteProposal({
     authorSpaceId: author,
     spaceId: space.id,
     proposalId: proposal.proposalId,
@@ -138,13 +164,32 @@ async function submitEdit({
   const voteHash = await sendUserOp(smartAccount, vote.to as `0x${string}`, vote.calldata as `0x${string}`);
   await confirmUserOp(smartAccount, voteHash, 'vote');
 
-  const execute = geo.daoSpaces.proposals.execute({
+  // The acceptor's own vote normally executes the proposal, leaving nothing to execute here.
+  const executedByVote = await isProposalExecuted({
+    daoSpaceAddress: space.address as `0x${string}`,
+    proposalId: proposal.proposalId,
+    rpcUrl,
+  });
+  if (executedByVote) return createHash;
+
+  const execute = geo.daoSpaces.executeProposal({
     authorSpaceId: author,
     spaceId: space.id,
     proposalId: proposal.proposalId,
   });
-  const executeHash = await sendUserOp(smartAccount, execute.to as `0x${string}`, execute.calldata as `0x${string}`);
-  await confirmUserOp(smartAccount, executeHash, 'execute');
+  try {
+    const executeHash = await sendUserOp(smartAccount, execute.to as `0x${string}`, execute.calldata as `0x${string}`);
+    await confirmUserOp(smartAccount, executeHash, 'execute');
+  } catch (error) {
+    // The check above returns `null` from an unreachable RPC and can read stale state, so re-read
+    // before calling the publish a failure.
+    const executed = await isProposalExecuted({
+      daoSpaceAddress: space.address as `0x${string}`,
+      proposalId: proposal.proposalId,
+      rpcUrl,
+    });
+    if (!executed) throw error;
+  }
 
   return createHash;
 }

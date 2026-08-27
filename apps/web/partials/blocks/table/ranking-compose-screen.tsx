@@ -16,11 +16,7 @@ import {
   getPendingProposerSpaceIds,
   isPlaceholderRankingEntry,
 } from '~/core/blocks/ranking/ranking-pending-proposal-entries';
-import {
-  formatRankingPeriodLabel,
-  getRankingPeriodState,
-  rankingSubmissionsOpen,
-} from '~/core/blocks/ranking/ranking-period';
+import { getRankingPeriodState, rankingSubmissionsOpen } from '~/core/blocks/ranking/ranking-period';
 import {
   getRowDescription,
   getRowDisplayName,
@@ -33,12 +29,16 @@ import { useRankingBlockRelations } from '~/core/blocks/ranking/use-ranking-bloc
 import { useRankingComposeSearch } from '~/core/blocks/ranking/use-ranking-compose-search';
 import { useRankingEntryEntities } from '~/core/blocks/ranking/use-ranking-entry-entities';
 import { useRankingPendingEntities } from '~/core/blocks/ranking/use-ranking-pending-proposals';
+import { useRankingPeriod } from '~/core/blocks/ranking/use-ranking-period';
 import { useRankingSubmissions } from '~/core/blocks/ranking/use-ranking-submissions';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
+import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { SearchResult } from '~/core/types';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
@@ -73,6 +73,7 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const createNewSpaceId = React.useMemo(() => resolveRankingSingleTargetSpaceId(filterState), [filterState]);
 
   const { showOnboarding } = useOnboarding();
+  const [, setToast] = useToast();
   const composeAccessSpaceId = createNewSpaceId ?? spaceId;
   const {
     status: accessStatus,
@@ -88,6 +89,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
   const [rankingComposeReturnHref, setRankingComposeReturnHref] = useAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
+  const enqueuePendingAction = useEnqueuePendingAction();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   const handleBack = React.useCallback(() => {
     if (rankingComposeReturnHref) {
@@ -105,21 +108,17 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     if (accessStatus === 'needs-login' || accessStatus === 'needs-onboarding') {
       setPostOnboardingRedirect(window.location.pathname + window.location.search);
     }
-    if (accessStatus === 'needs-onboarding') {
+    if (accessStatus === 'needs-onboarding' && !isAccountSetupPending) {
       showOnboarding();
       setStep('enter-profile');
     }
     if (accessStatus === 'needs-membership') {
       void ensureAccess();
     }
-  }, [accessStatus, ensureAccess, setPostOnboardingRedirect, setStep, showOnboarding]);
+  }, [accessStatus, isAccountSetupPending, ensureAccess, setPostOnboardingRedirect, setStep, showOnboarding]);
 
   const { startDate, endDate } = useRankingBlockDates({ startDate: rankingStartDate, endDate: rankingEndDate });
-  const periodState = React.useMemo(() => getRankingPeriodState(startDate, endDate), [startDate, endDate]);
-  const datePeriodLabel = React.useMemo(
-    () => formatRankingPeriodLabel(periodState, startDate, endDate),
-    [periodState, startDate, endDate]
-  );
+  const { periodState, periodLabel, submissionsOpen } = useRankingPeriod(startDate, endDate);
 
   const {
     submissions,
@@ -135,23 +134,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     isSubmissionLive,
     submittedAtMs,
   } = useRankingSubmissions(entityId, spaceId, displayName);
-
-  // A rolling status label
-  const submissionsOpen = isRolling || rankingSubmissionsOpen(periodState);
-  const rollingLabel = React.useMemo(
-    () =>
-      isRolling
-        ? formatRollingSubmissionLabel({
-            hasSubmission: hasMySubmission || hasRolledOff,
-            isLive: isSubmissionLive,
-            submittedAtMs,
-            frequencyHours: submissionFrequencyHours,
-            now: Date.now(),
-          })
-        : null,
-    [isRolling, hasMySubmission, hasRolledOff, isSubmissionLive, submittedAtMs, submissionFrequencyHours]
-  );
-  const periodLabel = isRolling ? rollingLabel : datePeriodLabel;
 
   const canCreateNew = Boolean(createNewSpaceId) && !isLoadingCreateAccess && canEditCreateSpace;
 
@@ -194,7 +176,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
 
   const [orderedIds, setOrderedIds] = React.useState<string[]>(mySubmission?.orderedEntityIds ?? []);
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
   const [activeSwipeRowKey, setActiveSwipeRowKey] = React.useState<string | null>(null);
   const [entitySheetTarget, setEntitySheetTarget] = React.useState<{
     entityId: string;
@@ -203,7 +184,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     previewName?: string | null;
     previewDescription?: string | null;
   } | null>(null);
-  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const mobilePageScrollRef = React.useRef<HTMLDivElement>(null);
 
   const myRankingIdSet = React.useMemo(() => new Set(orderedIds.map(id => ID.uuidToHex(id))), [orderedIds]);
@@ -401,7 +381,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       hiddenGlobalIds.size === 0 ? filteredUnrankedIds : filteredUnrankedIds.filter(id => !hiddenGlobalIds.has(id)),
     [filteredUnrankedIds, hiddenGlobalIds]
   );
-  const visibleShowRankedUnrankedDivider = visibleFilteredRankedIds.length > 0 && visibleFilteredUnrankedIds.length > 0;
   const visibleHasVisibleRankableEntities =
     visibleFilteredRankedIds.length > 0 || visibleFilteredUnrankedIds.length > 0;
 
@@ -482,9 +461,19 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const hasUnpublishedChanges = draftIdsKey !== publishedIdsKey;
 
   const canPublish =
-    orderedIds.length > 0 && hasUnpublishedChanges && submissionsOpen && Boolean(personalSpaceId) && !isSaving;
+    orderedIds.length > 0 &&
+    hasUnpublishedChanges &&
+    submissionsOpen &&
+    (Boolean(personalSpaceId) || isAccountSetupPending) &&
+    !isSaving;
 
   const handlePublish = async () => {
+    // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
+    if (!rankingSubmissionsOpen(getRankingPeriodState(startDate, endDate))) {
+      setToast(<span>This ranking has closed.</span>);
+      return;
+    }
+
     const slots = orderedIds.map(id => {
       const row = rowsByEntityId.get(id);
       const entry = displayRankableEntriesById.get(id) ?? myEntriesById.get(id);
@@ -495,6 +484,41 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         spaceId: row?.columns[SystemIds.NAME_PROPERTY]?.space ?? searchPreview.spaceId ?? spaceId,
       };
     });
+
+    if (!personalSpaceId) {
+      enqueuePendingAction({
+        id: `ranking-submit:${entityId}`,
+        label: 'your ranking',
+        requires: 'personalSpace',
+        run: () =>
+          saveMySubmission(slots).then(published => {
+            if (!published) return;
+            const ogVersion = buildRankingOgVersion({
+              rankEntityId: published.rankEntityId,
+              orderedEntityIds: published.orderedEntityIds,
+              rankingName: displayName,
+              rankingStartDate,
+              rankingEndDate,
+              authorName: published.authorName,
+              authorAvatarUrl: published.authorAvatarUrl,
+            });
+            void published.indexingSettled.then(() =>
+              generatePersonalRankingOgImages({
+                rankEntityId: published.rankEntityId,
+                authorSpaceId: published.authorSpaceId,
+                blockEntityId: entityId,
+                blockEntitySpaceId: spaceId,
+                rankingStartDate,
+                rankingEndDate,
+                ogVersion,
+              })
+            );
+          }),
+      });
+      setToast(<span>Your ranking will publish once your personal space is ready.</span>);
+      return;
+    }
+
     const published = await saveMySubmission(slots);
     if (!published) return;
 
@@ -507,15 +531,19 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       authorName: published.authorName,
       authorAvatarUrl: published.authorAvatarUrl,
     });
-    void generatePersonalRankingOgImages({
-      rankEntityId: published.rankEntityId,
-      authorSpaceId: published.authorSpaceId,
-      blockEntityId: entityId,
-      blockEntitySpaceId: spaceId,
-      rankingStartDate,
-      rankingEndDate,
-      ogVersion,
-    });
+    // OG images render from indexed data, so generation waits for
+    // `indexingSettled` — detached, since the redirect below must not.
+    void published.indexingSettled.then(() =>
+      generatePersonalRankingOgImages({
+        rankEntityId: published.rankEntityId,
+        authorSpaceId: published.authorSpaceId,
+        blockEntityId: entityId,
+        blockEntitySpaceId: spaceId,
+        rankingStartDate,
+        rankingEndDate,
+        ogVersion,
+      })
+    );
 
     // After publishing, land on the fullscreen ranking view instead of the parent space page.
     setRankingComposeReturnHref(null);
@@ -597,7 +625,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           rankableEntriesById={displayRankableEntriesById}
           searchResultsById={searchResultsById}
           rowsByEntityId={rowsByEntityId}
-          showRankedUnrankedDivider={visibleShowRankedUnrankedDivider}
           hasVisibleRankableEntities={visibleHasVisibleRankableEntities}
           isSearchActive={isSearchActive}
           isSearchSettled={isSearchSettled}
@@ -613,9 +640,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           onFetchNextPage={isSearchActive ? fetchNextSearchPage : fetchNextPage}
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
-          isSearchOpen={isSearchOpen}
-          onSearchOpenChange={setIsSearchOpen}
-          searchInputRef={searchInputRef}
           onAddToMyRanking={addToMyRanking}
           onCreateNew={handleCreateNew}
           canCreateNew={canCreateNew}

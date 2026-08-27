@@ -5,10 +5,11 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { flushSync } from 'react-dom';
 
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
+import { rankingSearchHasExactNameMatch } from '~/core/blocks/ranking/ranking-search-exact-name';
 import type { RankingEntryDisplay } from '~/core/blocks/ranking/use-ranking-entry-entities';
+import { useVoteTabEntities } from '~/core/blocks/ranking/use-vote-tab-entities';
 import { useInfiniteScrollSentinel } from '~/core/space-members/use-space-participants-infinite';
 import type { Row, SearchResult } from '~/core/types';
 
@@ -17,10 +18,17 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Search } from '~/design-system/icons/search';
 
 import { RankingGlobalDesktopRow } from './ranking-block-ui';
-import { COMPOSE_ICON_BUTTON_CLASS } from './ranking-compose-header';
 import { useRankingComposeScrollRoot, useRankingComposeScrollRootRef } from './ranking-compose-layout';
 import { RankingComposeSwipeableRow } from './ranking-compose-swipeable-row';
 import { RankingEntryRow } from './ranking-entry-row';
+
+type ComposeBrowseTab = 'global' | 'upvoted' | 'downvoted';
+
+const COMPOSE_BROWSE_TABS: Array<{ id: ComposeBrowseTab; label: string }> = [
+  { id: 'global', label: 'Global ranking' },
+  { id: 'upvoted', label: 'Upvoted' },
+  { id: 'downvoted', label: 'Downvoted' },
+];
 
 const MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX = 8;
 const SEARCH_LIST_ROW_HEIGHT_PX = 88;
@@ -97,11 +105,10 @@ function useMembershipRecheckSentinel({
   return setSentinelEl;
 }
 
-function RankingComposeUnrankedDivider() {
+function RankingComposeSectionDivider({ label }: { label: string }) {
   return (
-    <div className="my-4 flex items-center gap-3" role="separator" aria-label="Unranked">
-      <div className="h-px flex-1 bg-grey-02" aria-hidden />
-      <span className="shrink-0 text-[17px] font-[600] text-text">Unranked</span>
+    <div className="my-6 flex items-center gap-3" role="separator" aria-label={label}>
+      <span className="shrink-0 text-[11px] leading-[13px] font-normal text-grey-04">{label}</span>
       <div className="h-px flex-1 bg-grey-02" aria-hidden />
     </div>
   );
@@ -184,11 +191,14 @@ function RankingComposePendingDisclosure({ count, children }: { count: number; c
   );
 }
 
-function RankingComposeCreateNewPrompt({ onCreateNew }: { onCreateNew: () => void }) {
+function RankingComposeCreateNewPrompt({ searchQuery, onCreateNew }: { searchQuery: string; onCreateNew: () => void }) {
+  const queryLabel = searchQuery.trim();
   return (
     <div className="flex items-center justify-between gap-4 py-3">
-      <p className="text-metadata text-grey-04">Can&apos;t find what you&apos;re looking for?</p>
-      <Button variant="secondary" small onClick={onCreateNew}>
+      <p className="min-w-0 text-[16px] leading-[20px] font-medium text-[#2A2B2E]">
+        No results found for &quot;{queryLabel}&quot;
+      </p>
+      <Button variant="secondary" small onClick={onCreateNew} className="!rounded-full">
         Create new
       </Button>
     </div>
@@ -266,7 +276,6 @@ type Props = {
   rankableEntriesById: Map<string, RankingEntryDisplay>;
   searchResultsById: Map<string, SearchResult>;
   rowsByEntityId: Map<string, Row>;
-  showRankedUnrankedDivider: boolean;
   hasVisibleRankableEntities: boolean;
   isSearchActive: boolean;
   isSearchSettled: boolean;
@@ -278,9 +287,6 @@ type Props = {
   onFetchNextPage: () => void;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
-  isSearchOpen: boolean;
-  onSearchOpenChange: (open: boolean) => void;
-  searchInputRef: React.RefObject<HTMLInputElement | null>;
   onAddToMyRanking: (entityId: string) => void;
   onCreateNew: () => void;
   canCreateNew: boolean;
@@ -304,7 +310,6 @@ export function RankingComposeGlobalRanking({
   rankableEntriesById,
   searchResultsById,
   rowsByEntityId,
-  showRankedUnrankedDivider,
   hasVisibleRankableEntities,
   isSearchActive,
   isSearchSettled,
@@ -316,9 +321,6 @@ export function RankingComposeGlobalRanking({
   onFetchNextPage,
   searchQuery,
   onSearchQueryChange,
-  isSearchOpen,
-  onSearchOpenChange,
-  searchInputRef,
   onAddToMyRanking,
   onCreateNew,
   canCreateNew,
@@ -331,11 +333,111 @@ export function RankingComposeGlobalRanking({
   onViewEntity,
 }: Props) {
   const isDesktop = !isMobile;
+
+  const [browseTab, setBrowseTab] = React.useState<ComposeBrowseTab>('global');
+
+  const tabsId = React.useId();
+  const browseHeadingId = `${tabsId}-browse-heading`;
+  const browsePanelId = `${tabsId}-browse-panel`;
+  const tabButtonId = React.useCallback((tab: ComposeBrowseTab) => `${tabsId}-tab-${tab}`, [tabsId]);
+  const tabButtonRefs = React.useRef<Partial<Record<ComposeBrowseTab, HTMLButtonElement | null>>>({});
+
+  const onTabKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    const isEdgeKey = event.key === 'Home' || event.key === 'End';
+    if (step === 0 && !isEdgeKey) return;
+
+    event.preventDefault();
+    setBrowseTab(current => {
+      const currentIndex = COMPOSE_BROWSE_TABS.findIndex(tab => tab.id === current);
+      const nextIndex = isEdgeKey
+        ? event.key === 'Home'
+          ? 0
+          : COMPOSE_BROWSE_TABS.length - 1
+        : (currentIndex + step + COMPOSE_BROWSE_TABS.length) % COMPOSE_BROWSE_TABS.length;
+      const next = COMPOSE_BROWSE_TABS[nextIndex].id;
+      // Follow focus, so the arrow key both selects and moves the roving stop.
+      tabButtonRefs.current[next]?.focus();
+      return next;
+    });
+  }, []);
+
+  const voteDirection = browseTab === 'upvoted' ? 'up' : browseTab === 'downvoted' ? 'down' : null;
+  const {
+    orderedIds: voteTabIds,
+    entries: voteTabEntries,
+    isLoading: isLoadingVoteTab,
+    hasNextPage: voteTabHasNextPage,
+    isFetchingNextPage: isFetchingVoteTabNextPage,
+    isError: isVoteTabError,
+    retry: retryVoteTab,
+    fetchNextPage: fetchVoteTabNextPage,
+  } = useVoteTabEntities(voteDirection);
+
+  const isVoteTab = voteDirection !== null;
+
+  const entriesById = React.useMemo(() => {
+    if (!isVoteTab) return rankableEntriesById;
+    const map = new Map(rankableEntriesById);
+    for (const entry of voteTabEntries) {
+      if (!map.has(entry.entityId)) map.set(entry.entityId, entry);
+    }
+    return map;
+  }, [isVoteTab, rankableEntriesById, voteTabEntries]);
+
+  const resolveDisplayName = React.useCallback(
+    (id: string) => entriesById.get(id)?.name ?? searchResultsById.get(id)?.name ?? '',
+    [entriesById, searchResultsById]
+  );
+
+  // The global tab's search is a server fuzzy query whose results *are* the list,
+  // so there is nothing to reuse for an arbitrary voted-id set: match locally
+  // against the names already hydrated.
+  const matchesSearchQuery = React.useCallback(
+    (id: string) => {
+      const query = searchQuery.trim().toLowerCase();
+      if (!query) return true;
+      return resolveDisplayName(id).trim().toLowerCase().includes(query);
+    },
+    [resolveDisplayName, searchQuery]
+  );
+
+  const [tabFilteredRankedIds, tabFilteredUnrankedIds] = React.useMemo(() => {
+    if (!isVoteTab) return [filteredRankedIds, filteredUnrankedIds];
+
+    const ranked: string[] = [];
+    const unranked: string[] = [];
+    for (const id of voteTabIds) {
+      // The parent filters the global lists before handing them over; a vote tab
+      // builds its own list, so it has to apply the same search and pending
+      // exclusions itself.
+      if (pendingEntityIds.has(id)) continue;
+      if (isSearchActive && !matchesSearchQuery(id)) continue;
+      if (globalRankByEntityId.has(id)) ranked.push(id);
+      else unranked.push(id);
+    }
+    return [ranked, unranked];
+  }, [
+    isVoteTab,
+    voteTabIds,
+    globalRankByEntityId,
+    filteredRankedIds,
+    filteredUnrankedIds,
+    isSearchActive,
+    matchesSearchQuery,
+    pendingEntityIds,
+  ]);
+
+  const tabShowRankedUnrankedDivider = tabFilteredRankedIds.length > 0 && tabFilteredUnrankedIds.length > 0;
+  const tabHasVisibleRankableEntities = tabFilteredRankedIds.length > 0 || tabFilteredUnrankedIds.length > 0;
+  // "Create new" belongs to the global browse flow — a vote tab can only ever show
+  // things the user already voted on.
+  const canCreateNewOnTab = canCreateNew && browseTab === 'global';
+
   const mobileScrollRootRef = useRankingComposeScrollRootRef();
   const mobileScrollRoot = useRankingComposeScrollRoot();
   const globalSectionRef = React.useRef<HTMLDivElement>(null);
   const globalSearchChromeRef = React.useRef<HTMLDivElement>(null);
-  const searchFieldContainerRef = React.useRef<HTMLDivElement>(null);
   const listContainerRef = React.useRef<HTMLDivElement>(null);
   const searchScrollTopRef = React.useRef<number | null>(null);
   const [searchListStableHeight, setSearchListStableHeight] = React.useState(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX);
@@ -376,11 +478,7 @@ export function RankingComposeGlobalRanking({
       const isFirstSearchCharacter = value.trim().length > 0 && searchQuery.trim().length === 0;
       if (isFirstSearchCharacter) {
         if (isMobile) {
-          // Defer the scroll-to-top until the first keystroke so it happens at the same
-          // moment results clear — feels like a focus change, not a page jump on icon tap.
-          // Use instant scroll so scrollTop updates synchronously before we size the
-          // placeholder; a smooth scroll would leave captureSearchListLayout reading the
-          // pre-scroll position and anchoring the placeholder below the new viewport.
+          // Scroll the sticky search chrome into view when search begins
           const scrollTarget = globalSectionRef.current ?? globalSearchChromeRef.current;
           const nextScrollTop = scrollTarget ? scrollMobilePageToElement(scrollTarget, 'auto') : null;
           captureSearchListLayout({ scrollTop: nextScrollTop ?? undefined });
@@ -394,15 +492,18 @@ export function RankingComposeGlobalRanking({
   );
 
   React.useEffect(() => {
-    if (!isSearchOpen && !searchQuery.trim()) {
+    if (!searchQuery.trim()) {
       searchScrollTopRef.current = null;
       setSearchListStableHeight(SEARCH_LIST_PLACEHOLDER_MIN_HEIGHT_PX);
     }
-  }, [isSearchOpen, searchQuery]);
+  }, [searchQuery]);
 
-  const isSearchingWithNoResults = !hasVisibleRankableEntities && (isSearchSettled || isDebouncingAfterEmptySearch);
+  const isSearchingWithNoResults = !tabHasVisibleRankableEntities && (isSearchSettled || isDebouncingAfterEmptySearch);
   const showSearchLoadingPlaceholder =
-    isSearchActive && !isSearchingWithNoResults && !hasVisibleRankableEntities && (isLoadingRows || !isSearchSettled);
+    isSearchActive &&
+    !isSearchingWithNoResults &&
+    !tabHasVisibleRankableEntities &&
+    (isLoadingRows || !isSearchSettled);
   const needsSearchStablePlaceholder = isSearchActive && (isSearchingWithNoResults || showSearchLoadingPlaceholder);
 
   React.useLayoutEffect(() => {
@@ -414,14 +515,27 @@ export function RankingComposeGlobalRanking({
     setSearchListStableHeight(computeSearchListStableHeight(pageScrollRoot, listContainerRef.current));
   }, [getPageScrollRoot, needsSearchStablePlaceholder]);
 
-  const canLoadMore = hasNextPage && hasVisibleRankableEntities;
+  const canLoadMore = isVoteTab ? voteTabHasNextPage : hasNextPage && hasVisibleRankableEntities;
+  const isFetchingMore = isVoteTab ? isFetchingVoteTabNextPage : isFetchingNextPage;
+  const fetchMore = React.useCallback(() => {
+    if (isVoteTab) void fetchVoteTabNextPage();
+    else onFetchNextPage();
+  }, [isVoteTab, fetchVoteTabNextPage, onFetchNextPage]);
 
-  const sentinelRef = useInfiniteScrollSentinel({
+  const setSentinelRef = useInfiniteScrollSentinel({
     hasNextPage: canLoadMore,
-    isFetchingNextPage,
-    fetchNextPage: onFetchNextPage,
+    isFetchingNextPage: isFetchingMore,
+    fetchNextPage: fetchMore,
     root: scrollRoot,
   });
+  const [sentinelEl, setSentinelEl] = React.useState<HTMLDivElement | null>(null);
+  const sentinelRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setSentinelEl(node);
+      setSentinelRef(node);
+    },
+    [setSentinelRef]
+  );
 
   const setMembershipSentinelEl = useMembershipRecheckSentinel({
     enabled: isAwaitingMembership && hasVisibleRankableEntities,
@@ -436,39 +550,26 @@ export function RankingComposeGlobalRanking({
 
   // Prefetch when the list is shorter than its scroll container (sentinel stays in view).
   React.useEffect(() => {
-    if (!scrollRoot || !canLoadMore || isFetchingNextPage) return;
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
+    if (!scrollRoot || !canLoadMore || isFetchingMore || !sentinelEl) return;
 
     const rootRect = scrollRoot.getBoundingClientRect();
-    const sentinelRect = sentinel.getBoundingClientRect();
+    const sentinelRect = sentinelEl.getBoundingClientRect();
     if (sentinelRect.top <= rootRect.bottom + 200) {
-      onFetchNextPage();
+      fetchMore();
     }
   }, [
+    browseTab,
     scrollRoot,
     canLoadMore,
-    isFetchingNextPage,
-    onFetchNextPage,
-    filteredRankedIds.length,
-    filteredUnrankedIds.length,
-    sentinelRef,
+    isFetchingMore,
+    fetchMore,
+    tabFilteredRankedIds.length,
+    tabFilteredUnrankedIds.length,
+    sentinelEl,
   ]);
 
-  React.useEffect(() => {
-    if (isSearchOpen) {
-      searchInputRef.current?.focus({ preventScroll: true });
-    }
-  }, [isSearchOpen, searchInputRef]);
-
-  React.useEffect(() => {
-    if (searchQuery.trim()) {
-      onSearchOpenChange(true);
-    }
-  }, [searchQuery, onSearchOpenChange]);
-
   const renderPickEntity = (id: string, globalRank?: number) => {
-    const entry = rankableEntriesById.get(id);
+    const entry = entriesById.get(id);
     const row = rowsByEntityId.get(id);
     const searchHit = searchResultsById.get(id);
     const isInMyRanking = orderedIds.includes(id);
@@ -515,12 +616,38 @@ export function RankingComposeGlobalRanking({
     ) : null;
 
   // When searching, only reveal pending entries whose name matches the query.
+  // On a vote tab they must also be in the user's voted set.
   const pendingPickIds = React.useMemo(() => {
     if (revealablePendingIds.length === 0) return [];
-    const query = isSearchActive ? searchQuery.trim().toLowerCase() : '';
-    if (!query) return revealablePendingIds;
-    return revealablePendingIds.filter(id => (rankableEntriesById.get(id)?.name?.toLowerCase() ?? '').includes(query));
-  }, [revealablePendingIds, isSearchActive, searchQuery, rankableEntriesById]);
+    let ids = revealablePendingIds;
+    if (isSearchActive) {
+      ids = ids.filter(matchesSearchQuery);
+    }
+    if (isVoteTab) {
+      const votedIds = new Set(voteTabIds);
+      ids = ids.filter(id => votedIds.has(id));
+    }
+    return ids;
+  }, [revealablePendingIds, isSearchActive, matchesSearchQuery, isVoteTab, voteTabIds]);
+
+  const hasExactNameMatch = React.useMemo(() => {
+    if (!isSearchActive) return false;
+    const extraNames = [...tabFilteredRankedIds, ...tabFilteredUnrankedIds, ...pendingPickIds].map(
+      id => entriesById.get(id)?.name ?? searchResultsById.get(id)?.name
+    );
+    return rankingSearchHasExactNameMatch(searchQuery, [...searchResultsById.values()], extraNames);
+  }, [
+    tabFilteredRankedIds,
+    tabFilteredUnrankedIds,
+    isSearchActive,
+    pendingPickIds,
+    entriesById,
+    searchQuery,
+    searchResultsById,
+  ]);
+
+  const showCreateNewPrompt =
+    canCreateNewOnTab && isSearchActive && !hasExactNameMatch && (isSearchSettled || isDebouncingAfterEmptySearch);
 
   const pendingDisclosure = (
     <RankingComposePendingDisclosure count={pendingPickIds.length}>
@@ -528,16 +655,44 @@ export function RankingComposeGlobalRanking({
     </RankingComposePendingDisclosure>
   );
 
+  const loadMoreFooter = (
+    <>
+      {isVoteTab && isVoteTabError ? (
+        <div className="flex items-center gap-2 py-3">
+          <p className="text-metadata text-grey-04">Couldn’t load votes.</p>
+          <button
+            type="button"
+            onClick={() => void retryVoteTab()}
+            className="text-metadata text-text underline hover:no-underline"
+          >
+            Try again
+          </button>
+        </div>
+      ) : canLoadMore && isFetchingMore ? (
+        <p className="py-3 text-metadata text-grey-03">Loading more…</p>
+      ) : null}
+      {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
+    </>
+  );
+
   const searchResultList = (
     <>
-      {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-      {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
-      {filteredUnrankedIds.map(id => renderPickEntity(id))}
-      {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
-      {canCreateNew && isSearchActive && !canLoadMore && isSearchSettled && hasVisibleRankableEntities ? (
-        <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} />
+      {showCreateNewPrompt ? (
+        <RankingComposeCreateNewPrompt searchQuery={searchQuery} onCreateNew={onCreateNew} />
       ) : null}
+      {showCreateNewPrompt && tabFilteredRankedIds.length > 0 ? (
+        <RankingComposeSectionDivider label="Other ranked results" />
+      ) : null}
+      {tabFilteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+      {tabShowRankedUnrankedDivider ? (
+        showCreateNewPrompt ? (
+          <RankingComposeSectionDivider label="Other unranked results" />
+        ) : (
+          <RankingComposeSectionDivider label="Unranked" />
+        )
+      ) : null}
+      {tabFilteredUnrankedIds.map(id => renderPickEntity(id))}
+      {loadMoreFooter}
       {pendingDisclosure}
       {membershipSentinel}
     </>
@@ -545,13 +700,22 @@ export function RankingComposeGlobalRanking({
 
   const browseResultList = (
     <>
-      {filteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
-      {showRankedUnrankedDivider ? <RankingComposeUnrankedDivider /> : null}
-      {filteredUnrankedIds.map(id => renderPickEntity(id))}
-      {canLoadMore ? <div ref={sentinelRef} className="h-px" aria-hidden /> : null}
-      {canLoadMore && isFetchingNextPage ? <p className="py-3 text-metadata text-grey-03">Loading more…</p> : null}
+      {browseTab !== 'global' && tabShowRankedUnrankedDivider ? (
+        <RankingComposeSectionDivider label="Already ranked" />
+      ) : null}
+      {tabFilteredRankedIds.map(id => renderPickEntity(id, globalRankByEntityId.get(id)))}
+      {tabShowRankedUnrankedDivider ? <RankingComposeSectionDivider label="Unranked" /> : null}
+      {tabFilteredUnrankedIds.map(id => renderPickEntity(id))}
+      {loadMoreFooter}
       {pendingDisclosure}
       {membershipSentinel}
+    </>
+  );
+
+  const voteTabEmptyState = (
+    <>
+      {loadMoreFooter}
+      {pendingDisclosure}
     </>
   );
 
@@ -566,69 +730,67 @@ export function RankingComposeGlobalRanking({
         className={cx('shrink-0', isMobile && 'sticky top-0 z-10 bg-white')}
         style={{ scrollMarginTop: MOBILE_SEARCH_VISIBLE_TOP_OFFSET_PX }}
       >
-        <div
-          className={cx(
-            'grid w-full min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3',
-            isDesktop && 'border-b border-grey-02 pb-4'
-          )}
-        >
-          <h2
-            className={cx(
-              'm-0 min-w-0 truncate text-text',
-              isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold'
-            )}
-          >
-            Global ranking
+        <div className={cx('w-full min-w-0', isDesktop && 'pb-4')}>
+          <h2 id={browseHeadingId} className="sr-only">
+            Browse entities to rank
           </h2>
-          <div className="flex items-center justify-self-end">
-            <Button
-              type="button"
-              variant="ghost"
-              icon={<Search color={isSearchOpen ? undefined : 'grey-04'} />}
-              onClick={() => {
-                if (isSearchOpen) {
-                  onSearchOpenChange(false);
-                  return;
-                }
-
-                if (isMobile) {
-                  flushSync(() => onSearchOpenChange(true));
-                  searchInputRef.current?.focus({ preventScroll: true });
-                  return;
-                }
-
-                onSearchOpenChange(true);
-              }}
-              className={cx(
-                COMPOSE_ICON_BUTTON_CLASS,
-                'h-8 w-8 !bg-transparent text-grey-04 transition-colors hover:!border-transparent hover:!bg-transparent hover:!text-text',
-                isSearchOpen && '!text-text'
-              )}
-              aria-label={isSearchOpen ? 'Close search' : 'Search rankable entities'}
-              aria-expanded={isSearchOpen}
+          {/* Typography matches the "My ranking" heading; the active tab is picked out
+              by colour rather than an underline. */}
+          <div
+            role="tablist"
+            aria-labelledby={browseHeadingId}
+            onKeyDown={onTabKeyDown}
+            className={cx('flex w-full min-w-0 items-center gap-6 overflow-x-auto', isDesktop && 'h-8')}
+          >
+            {COMPOSE_BROWSE_TABS.map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                id={tabButtonId(tab.id)}
+                ref={node => {
+                  tabButtonRefs.current[tab.id] = node;
+                }}
+                onClick={() => setBrowseTab(tab.id)}
+                aria-selected={browseTab === tab.id}
+                aria-controls={browsePanelId}
+                // Roving tabindex: the tablist is one stop, arrows move within it.
+                tabIndex={browseTab === tab.id ? 0 : -1}
+                className={cx(
+                  'm-0 shrink-0 whitespace-nowrap transition-colors',
+                  isMobile ? 'text-[22px] font-medium' : 'text-[17px] font-semibold',
+                  browseTab === tab.id ? 'text-text' : 'text-grey-04 hover:text-text'
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className={cx('shrink-0', isMobile && 'mt-2')}>
+          <div className="relative flex items-center">
+            <span className="pointer-events-none absolute left-2 flex">
+              <Search color="grey-04" />
+            </span>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={e => handleSearchQueryChange(e.target.value)}
+              placeholder="Search"
+              aria-label="Search rankable entities"
+              className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
             />
           </div>
         </div>
-        {isSearchOpen ? (
-          <div ref={searchFieldContainerRef} className="shrink-0 py-2">
-            <div className="relative flex items-center">
-              <span className="pointer-events-none absolute left-2 flex">
-                <Search color="grey-04" />
-              </span>
-              <input
-                ref={searchInputRef}
-                type="search"
-                value={searchQuery}
-                onChange={e => handleSearchQueryChange(e.target.value)}
-                placeholder="Search"
-                aria-label="Search rankable entities"
-                className="h-8 w-full rounded border border-grey-02 bg-white py-1 pr-2 pl-8 text-metadata text-text outline-hidden focus-visible:border-text"
-              />
-            </div>
-          </div>
-        ) : null}
       </div>
-      <div className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}>
+      {/* One panel shared by all three tabs, so it is labelled by whichever is
+          active rather than being remounted per tab. */}
+      <div
+        id={browsePanelId}
+        role="tabpanel"
+        aria-labelledby={tabButtonId(browseTab)}
+        className={cx('flex min-h-0 flex-1 flex-col', isDesktop && 'pt-4')}
+      >
         <div ref={setListContainerRef} className={cx(isDesktop && 'min-h-0 flex-1 overflow-x-hidden overflow-y-auto')}>
           {isSearchActive ? (
             showSearchLoadingPlaceholder ? (
@@ -641,7 +803,9 @@ export function RankingComposeGlobalRanking({
               <>
                 {pendingDisclosure}
                 <RankingComposeSearchListPlaceholder height={searchListStableHeight}>
-                  {canCreateNew ? <RankingComposeCreateNewPrompt onCreateNew={onCreateNew} /> : null}
+                  {showCreateNewPrompt ? (
+                    <RankingComposeCreateNewPrompt searchQuery={searchQuery} onCreateNew={onCreateNew} />
+                  ) : null}
                 </RankingComposeSearchListPlaceholder>
               </>
             ) : (
@@ -655,8 +819,14 @@ export function RankingComposeGlobalRanking({
             )
           ) : isLoadingRows && !hasAnyRankableEntityIds ? (
             <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
-          ) : !hasVisibleRankableEntities ? (
-            pendingDisclosure
+          ) : browseTab !== 'global' && isLoadingVoteTab ? (
+            <RankingComposeSearchListPlaceholder height={searchListStableHeight} />
+          ) : !tabHasVisibleRankableEntities ? (
+            browseTab === 'global' ? (
+              pendingDisclosure
+            ) : (
+              voteTabEmptyState
+            )
           ) : (
             browseResultList
           )}
