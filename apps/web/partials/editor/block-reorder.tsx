@@ -27,6 +27,7 @@ import { ensureUniqueNodeIds } from './id-extension';
 
 type BlockLayout = {
   childIndex: number;
+  element?: HTMLElement;
   top: number;
   bottom: number;
   center: number;
@@ -77,19 +78,19 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     if (!wrapper || !editorElement) return;
 
     const wrapperRect = wrapper.getBoundingClientRect();
-    const nextLayout = Array.from(editorElement.children).flatMap((element, childIndex) => {
-      if (!(element instanceof HTMLElement) || !isDraggableBlock(element)) return [];
+    const nextLayout = getTopLevelBlockElements(editor, editorElement).flatMap(({ childIndex, element }) => {
+      if (!isDraggableBlock(element)) return [];
 
       const rect = element.getBoundingClientRect();
       const top = rect.top - wrapperRect.top;
       const bottom = rect.bottom - wrapperRect.top;
 
-      return [{ childIndex, top, bottom, center: top + rect.height / 2 }];
+      return [{ childIndex, element, top, bottom, center: top + rect.height / 2 }];
     });
 
     blockLayoutRef.current = nextLayout;
     setBlockLayout(nextLayout);
-  }, [editorWrapperRef]);
+  }, [editor, editorWrapperRef]);
 
   React.useLayoutEffect(() => {
     if (!enabled) return;
@@ -105,8 +106,20 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
 
     const resizeObserver = new ResizeObserver(measureBlocks);
     const mutationObserver = new MutationObserver(measureBlocks);
+    let measureFrame: number | null = null;
+    const scheduleMeasureBlocks = () => {
+      // The drop transaction already triggers the existing active-drag effect
+      // cycle. Only schedule document edits made outside an active drag.
+      if (activeChildIndex !== null || measureFrame !== null) return;
+
+      measureFrame = requestAnimationFrame(() => {
+        measureFrame = null;
+        measureBlocks();
+      });
+    };
     resizeObserver.observe(editorElement);
     mutationObserver.observe(editorElement, { childList: true });
+    editor.on('update', scheduleMeasureBlocks);
 
     const handlePointerMove = (event: PointerEvent) => {
       if (activeChildIndex !== null) return;
@@ -116,10 +129,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
       if (target.closest('[data-block-drag-handle]')) return;
 
       const blockElement = target.closest<HTMLElement>('.ProseMirror > *');
-      const hoveredContentIndex =
-        blockElement?.parentElement === editorElement && isDraggableBlock(blockElement)
-          ? Array.from(editorElement.children).indexOf(blockElement)
-          : null;
+      const hoveredContentIndex = blockLayoutRef.current.find(block => block.element === blockElement)?.childIndex;
       const wrapperRect = wrapper.getBoundingClientRect();
       const editorRect = editorElement.getBoundingClientRect();
       const hoveredGutterIndex = getGutterHoveredChildIndex(
@@ -128,7 +138,7 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
         event.clientY - wrapperRect.top,
         editorRect.left - wrapperRect.left
       );
-      const childIndex = hoveredContentIndex ?? hoveredGutterIndex;
+      const childIndex = hoveredContentIndex ?? hoveredGutterIndex ?? null;
 
       if (childIndex === null) {
         updateHoveredChildIndex(null);
@@ -151,6 +161,8 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     return () => {
       resizeObserver.disconnect();
       mutationObserver.disconnect();
+      editor.off('update', scheduleMeasureBlocks);
+      if (measureFrame !== null) cancelAnimationFrame(measureFrame);
       wrapper.removeEventListener('pointermove', handlePointerMove);
       wrapper.removeEventListener('pointerleave', handlePointerLeave);
     };
@@ -437,6 +449,22 @@ function isDraggableBlock(element: HTMLElement) {
     !element.classList.contains('paragraph-tail-placeholder') &&
     !element.matches('.paragraph-tail-placeholder, .is-empty')
   );
+}
+
+/** Maps document children through ProseMirror positions so DOM widgets cannot shift block indexes. */
+export function getTopLevelBlockElements(editor: Editor, editorElement: HTMLElement) {
+  const blocks: Array<{ childIndex: number; element: HTMLElement }> = [];
+  let position = 0;
+
+  for (let childIndex = 0; childIndex < editor.state.doc.childCount; childIndex += 1) {
+    const element = editor.view.nodeDOM(position);
+    if (element instanceof HTMLElement && element.parentElement === editorElement) {
+      blocks.push({ childIndex, element });
+    }
+    position += editor.state.doc.child(childIndex).nodeSize;
+  }
+
+  return blocks;
 }
 
 export function makeDropZones(blocks: BlockLayout[]): DropZoneLayout[] {

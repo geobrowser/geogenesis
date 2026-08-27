@@ -48,7 +48,7 @@ export function makeBlockPosition({
   const beforeRelationIndex = allRelations.findIndex(relation => relation.blockId === beforeBlockId);
   const afterPosition =
     allRelations.find(relation => relation.blockId === afterBlockId)?.position ??
-    (beforeRelationIndex >= 0 ? allRelations[beforeRelationIndex + 1]?.position : undefined);
+    (beforeRelationIndex >= 0 ? allRelations[beforeRelationIndex + 1]?.position : allRelations[0]?.position);
 
   return Position.generateBetween(beforePosition ?? null, afterPosition ?? null);
 }

@@ -15,6 +15,7 @@ import {
   BlockGutterHoverArea,
   getGutterHoveredChildIndex,
   getNextKeyboardDropBoundary,
+  getTopLevelBlockElements,
   makeDropZones,
   moveTopLevelBlock,
   releasePointerDragFocus,
@@ -214,6 +215,22 @@ describe('makeDropZones', () => {
     ]);
 
     expect(zones.map(zone => zone.boundary)).toEqual([0, 1, 2]);
+  });
+});
+
+describe('getTopLevelBlockElements', () => {
+  it('maps document indexes without counting direct gap-cursor widgets', () => {
+    const editor = makeEditor(['A', 'B']);
+    const editorElement = editor.view.dom;
+    const firstBlock = editor.view.nodeDOM(0);
+    const gapCursor = document.createElement('div');
+    gapCursor.className = 'ProseMirror-gapcursor';
+
+    expect(firstBlock).toBeInstanceOf(HTMLElement);
+    firstBlock?.parentNode?.insertBefore(gapCursor, firstBlock.nextSibling);
+
+    expect(getTopLevelBlockElements(editor, editorElement).map(block => block.childIndex)).toEqual([0, 1]);
+    expect(getTopLevelBlockElements(editor, editorElement).map(block => block.element)).not.toContain(gapCursor);
   });
 });
 

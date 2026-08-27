@@ -30,4 +30,22 @@ describe('makeBlockPosition', () => {
 
     expect(position > 'a2').toBe(true);
   });
+
+  it('places multiple adjacent new blocks before the existing first block', () => {
+    const firstNewPosition = makeBlockPosition({
+      blockId: 'new-1',
+      nextBlockIds: ['new-1', 'new-2', 'first', 'middle', 'last'],
+      blockRelations,
+      newBlocks: [],
+    });
+    const secondNewPosition = makeBlockPosition({
+      blockId: 'new-2',
+      nextBlockIds: ['new-1', 'new-2', 'first', 'middle', 'last'],
+      blockRelations,
+      newBlocks: [{ toEntity: { id: 'new-1' }, position: firstNewPosition }],
+    });
+
+    expect(firstNewPosition < secondNewPosition).toBe(true);
+    expect(secondNewPosition < 'a0').toBe(true);
+  });
 });
