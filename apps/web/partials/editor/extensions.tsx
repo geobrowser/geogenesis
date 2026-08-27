@@ -5,7 +5,7 @@ import Italic from '@tiptap/extension-italic';
 import { BulletList, ListItem } from '@tiptap/extension-list';
 import Text from '@tiptap/extension-text';
 import Underline from '@tiptap/extension-underline';
-import { Focus, Gapcursor, Placeholder, UndoRedo } from '@tiptap/extensions';
+import { Gapcursor, Placeholder, UndoRedo } from '@tiptap/extensions';
 
 import { PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT } from '~/core/state/editor/profile-overview-tail-placeholder';
 
@@ -57,11 +57,6 @@ export const tiptapExtensions = [
   RankingNode,
   ImageNode,
   VideoNode,
-  // mode: 'deepest' tags only the leaf node, not the wrapper chain. With
-  // 'all', the `has-focus` class lands on every NodeView wrapper on the
-  // selection path — including `data-node` etc. — and the slash-hint CSS
-  // (`.is-empty.has-focus::before`) leaks onto empty NodeView wrappers.
-  Focus.configure({ className: 'has-focus', mode: 'deepest' }),
   Placeholder.configure({
     showOnlyCurrent: false,
     placeholder: ({ node }) => {
@@ -71,7 +66,7 @@ export const tiptapExtensions = [
       if (node.type.name === 'paragraph' && node.attrs?.tailPlaceholder) {
         return PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT;
       }
-      return 'Add content...';
+      return 'Add content or type "/" for other block types...';
     },
   }),
   UndoRedo,
