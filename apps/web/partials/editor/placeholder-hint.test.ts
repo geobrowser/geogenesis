@@ -1,74 +1,95 @@
 import { Editor } from '@tiptap/core';
-import type { DecorationSet } from '@tiptap/pm/view';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT } from '~/core/state/editor/profile-overview-tail-placeholder';
 
-import { tiptapExtensions } from './extensions';
+import {
+  EMPTY_BLOCK_RESTING_TEXT,
+  EMPTY_BLOCK_SLASH_HINT,
+  resolveBlockPlaceholder,
+  tiptapExtensions,
+} from './extensions';
 
-const SLASH_HINT = 'Write some content or use / to select block type...';
+const paragraph = {
+  nodeName: 'paragraph',
+  isTailPlaceholder: false,
+  hasAnchor: false,
+  isFocused: false,
+  isEmpty: false,
+};
 
-let editor: Editor | null = null;
+describe('resolveBlockPlaceholder', () => {
+  it('advertises the slash menu on the block being edited', () => {
+    expect(resolveBlockPlaceholder({ ...paragraph, hasAnchor: true, isFocused: true })).toBe(EMPTY_BLOCK_SLASH_HINT);
+  });
 
-afterEach(() => {
-  editor?.destroy();
-  editor = null;
+  it('says nothing on empty blocks the caret is not in', () => {
+    expect(resolveBlockPlaceholder({ ...paragraph, hasAnchor: false, isFocused: true })).toBe('');
+  });
+
+  // The ProseMirror selection survives blur, so gating on the caret alone would
+  // strand the hint on whichever block the user left — and keep it overlapping
+  // the block below at widths where the long copy wraps.
+  it('drops the hint once the editor loses focus, even on the block that kept the caret', () => {
+    expect(resolveBlockPlaceholder({ ...paragraph, hasAnchor: true, isFocused: false })).toBe('');
+  });
+
+  // Otherwise an untouched, empty entity page renders with nothing to click.
+  it('falls back to the short resting copy on a blurred empty document', () => {
+    expect(resolveBlockPlaceholder({ ...paragraph, hasAnchor: true, isFocused: false, isEmpty: true })).toBe(
+      EMPTY_BLOCK_RESTING_TEXT
+    );
+  });
+
+  it('prefers the hint over the resting copy once that empty document is focused', () => {
+    expect(resolveBlockPlaceholder({ ...paragraph, hasAnchor: true, isFocused: true, isEmpty: true })).toBe(
+      EMPTY_BLOCK_SLASH_HINT
+    );
+  });
+
+  it('keeps the profile bio tail invite regardless of focus or caret', () => {
+    expect(resolveBlockPlaceholder({ ...paragraph, isTailPlaceholder: true })).toBe(
+      PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT
+    );
+  });
+
+  it('leaves the heading placeholder alone', () => {
+    expect(resolveBlockPlaceholder({ ...paragraph, nodeName: 'heading' })).toBe('Heading...');
+  });
 });
 
 /**
- * Reads the placeholder text TipTap decorates each empty block with, in document
- * order. `null` marks a block that got no placeholder decoration at all.
+ * jsdom cannot give a contenteditable real DOM focus, so `editor.isFocused` is
+ * always false here. That happens to be exactly the state this test needs: it
+ * pins the blurred behaviour end-to-end, through TipTap's own decoration pass.
  */
-function placeholdersFor(content: Record<string, unknown>[], caretAt: number) {
-  editor = new Editor({
-    element: document.createElement('div'),
-    extensions: tiptapExtensions,
-    content: { type: 'doc', content },
-  });
+describe('placeholder decorations on a blurred editor', () => {
+  function renderPlaceholders(content: Record<string, unknown>[], caretAt: number) {
+    const element = document.createElement('div');
+    const editor = new Editor({ element, extensions: tiptapExtensions, content: { type: 'doc', content } });
 
-  editor.commands.setTextSelection(caretAt);
+    try {
+      editor.commands.setTextSelection(caretAt);
+      expect(editor.isFocused).toBe(false);
 
-  const { state } = editor;
-  const byPos = new Map<number, string>();
-
-  for (const plugin of state.plugins) {
-    const set = plugin.props.decorations?.call(plugin, state) as DecorationSet | null | undefined;
-    for (const decoration of set?.find() ?? []) {
-      const placeholder = (decoration as unknown as { type: { attrs?: Record<string, string> } }).type.attrs?.[
-        'data-placeholder'
-      ];
-      if (placeholder !== undefined) byPos.set(decoration.from, placeholder);
+      return Array.from(element.querySelectorAll('[data-placeholder]')).map(node =>
+        node.getAttribute('data-placeholder')
+      );
+    } finally {
+      editor.destroy();
     }
   }
 
-  const result: (string | null)[] = [];
-  state.doc.forEach((_node, offset) => result.push(byPos.get(offset) ?? null));
-  return result;
-}
+  const emptyParagraph = { type: 'paragraph' };
+  const writtenParagraph = { type: 'paragraph', content: [{ type: 'text', text: 'written' }] };
 
-const emptyParagraph = { type: 'paragraph' };
-
-describe('empty block placeholder', () => {
-  it('shows the slash hint only on the block holding the caret', () => {
-    // Three empty paragraphs; caret inside the second one.
-    const placeholders = placeholdersFor([emptyParagraph, emptyParagraph, emptyParagraph], 3);
-
-    expect(placeholders).toEqual(['', SLASH_HINT, '']);
+  it('strands no hint on the block that kept the caret', () => {
+    // Caret in the first empty block, editor blurred.
+    expect(renderPlaceholders([writtenParagraph, emptyParagraph, emptyParagraph], 10)).toEqual(['', '']);
   });
 
-  it('moves the hint with the caret', () => {
-    const placeholders = placeholdersFor([emptyParagraph, emptyParagraph, emptyParagraph], 1);
-
-    expect(placeholders).toEqual([SLASH_HINT, '', '']);
-  });
-
-  it('keeps the profile bio tail invite visible while the caret is elsewhere', () => {
-    const placeholders = placeholdersFor(
-      [emptyParagraph, { type: 'paragraph', attrs: { tailPlaceholder: true } }],
-      1
-    );
-
-    expect(placeholders).toEqual([SLASH_HINT, PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT]);
+  it('still invites input on an empty document', () => {
+    expect(renderPlaceholders([emptyParagraph], 1)).toEqual([EMPTY_BLOCK_RESTING_TEXT]);
   });
 });
