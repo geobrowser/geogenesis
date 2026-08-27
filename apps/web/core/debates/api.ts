@@ -444,19 +444,65 @@ export type MatchmakingClaim = MatchmakingReadiness & {
 
 export type MatchmakingClaimsFilter = 'all' | 'mine' | 'debate_now';
 
-/** No topic facet: topics are Knowledge Graph data geo-chat doesn't model, so the Claims tab
- * resolves and filters them itself over the loaded pages. */
+/** Topics are Knowledge Graph data, which geo-chat replicates as of GEO-2659 — so `topicId`
+ * filters server-side and the response carries a topic facet. Before that the server returned
+ * `topics: []` and ignored the parameter, and both pickers resolved and filtered topics
+ * themselves over whatever pages they had loaded. */
 export type MatchmakingClaimsQuery = {
   search?: string | null;
   spaceId?: string | null;
+  /**
+   * The spaces this viewer may see claims from at all, sent when they haven't picked one.
+   *
+   * Both this and `spaceId` are OR-ed together server-side rather than one overriding the other,
+   * so only ever send one of them: sending both would widen the query back out to every space in
+   * either list.
+   */
+  spaceIds?: string[] | null;
+  topicId?: string | null;
+  /**
+   * Narrows rows *and* facets to what a debate-again session can still offer: geo-chat drops the
+   * claim the source debate was about, and any this pairing has blocked (GEO-2674).
+   *
+   * The session id rather than the ids themselves — that set is geo-chat's own, and the client
+   * would be handing back a value it isn't the authority on.
+   */
+  rematchSessionId?: string | null;
   filter?: MatchmakingClaimsFilter;
   cursor?: string | null;
   limit?: number;
 };
 
+/** One dropdown option and how many claims the current filters leave behind it. */
+export type MatchmakingFacetCount = {
+  id: string;
+  /** Topics carry a replicated name; spaces don't — the client resolves those from the sidebar. */
+  name: string | null;
+  count: number;
+};
+
+/**
+ * The two menus, counted over the whole candidate set rather than the page being returned.
+ *
+ * Each dimension is narrowed by *the other* and never by itself — standard faceted counting, and
+ * what makes a count answer "how many of the claims matching everything else I have chosen are in
+ * here". Picking a space therefore doesn't collapse the space menu, and picking a topic doesn't
+ * collapse the topic menu, but each does narrow its counterpart.
+ *
+ * The half that is easy to miss is that this cuts both ways: a space can disappear from
+ * `space_facets` because the selected *topic* has nothing in it. That is "this combination is
+ * empty", not "this space is no longer yours to pick", and the two must not be confused — see the
+ * space effect in `claims-tab.tsx`.
+ */
 export type MatchmakingFacets = {
+  /** Superseded by `space_facets`, and derived from it — so it inherits the topic narrowing too. */
   space_ids: string[];
+  /** Superseded by `topic_facets`. Empty on every response until GEO-2659 made it real. */
   topics: MatchmakingTopic[];
+  /** Count descending. Narrowed by the topic filter, not by the space filter. */
+  space_facets: MatchmakingFacetCount[];
+  /** Count descending. Narrowed by the space filter, not by the topic filter. */
+  topic_facets: MatchmakingFacetCount[];
 };
 
 export type MatchmakingClaimsResponse = {
@@ -1046,6 +1092,12 @@ export async function listMatchmakingClaims(
   // so a cut never lands inside a surrogate pair and hands `URLSearchParams` a lone surrogate.
   if (query.search) params.set('search', capSearchQuery(query.search));
   if (query.spaceId) params.set('space_id', query.spaceId);
+  // Only when no single space is picked — see the note on the type. An empty list is left off
+  // entirely: the server reads "no ids" as "no filter", which is the opposite of what an empty
+  // eligible set means.
+  else if (query.spaceIds?.length) params.set('space_ids', query.spaceIds.join(','));
+  if (query.topicId) params.set('topic_id', query.topicId);
+  if (query.rematchSessionId) params.set('rematch_session_id', query.rematchSessionId);
   if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
   if (query.cursor) params.set('cursor', query.cursor);
   if (query.limit) params.set('limit', String(query.limit));
