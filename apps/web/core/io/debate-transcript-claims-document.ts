@@ -26,6 +26,7 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
     $blocksPropertyId: UUID!
     $authorsPropertyId: UUID!
     $claimsPropertyId: UUID!
+    $isFactualPropertyId: UUID!
   ) {
     entity(id: $id) {
       transcripts: relationsList(filter: { typeId: { is: $transcriptsPropertyId } }) {
@@ -46,6 +47,16 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
                 toEntity {
                   id
                   name
+                  # Where the claim actually lives, which is what its responses are published
+                  # against — not necessarily the space the panel is being rendered from.
+                  spaceIds
+                  # "Is factual" decides the response vocabulary: Verify/Dispute when set,
+                  # Agree/Disagree otherwise. Read per space, so it comes back with its own.
+                  valuesList(filter: { propertyId: { is: $isFactualPropertyId } }) {
+                    spaceId
+                    propertyId
+                    text
+                  }
                 }
               }
             }
@@ -58,6 +69,13 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
 
 type RelationNode<T> = { position?: string | null; toEntity: T | null } | null;
 
+type ClaimEntity = {
+  id: string;
+  name?: string | null;
+  spaceIds?: Array<string | null> | null;
+  valuesList?: Array<{ spaceId: string; propertyId: string; text?: string | null } | null> | null;
+};
+
 export type DebateTranscriptClaimsQuery = {
   entity: {
     transcripts: Array<
@@ -67,7 +85,7 @@ export type DebateTranscriptClaimsQuery = {
           RelationNode<{
             id: string;
             authors: Array<RelationNode<{ id: string }>> | null;
-            claims: Array<RelationNode<{ id: string; name?: string | null }>> | null;
+            claims: Array<RelationNode<ClaimEntity>> | null;
           }>
         > | null;
       }>
@@ -81,6 +99,7 @@ type DebateTranscriptClaimsVariables = {
   blocksPropertyId: string;
   authorsPropertyId: string;
   claimsPropertyId: string;
+  isFactualPropertyId: string;
 };
 
 export const debateTranscriptClaimsDocument = parse(DEBATE_TRANSCRIPT_CLAIMS_SOURCE) as TypedDocumentNode<

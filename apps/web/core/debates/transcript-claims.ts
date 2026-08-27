@@ -1,5 +1,6 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
+import { claimResponseKind } from '~/core/claims/response-kind';
 import { uuidToHex } from '~/core/id/normalize';
 
 import type { DebateTranscriptClaimsQuery } from '../io/debate-transcript-claims-document';
@@ -9,9 +10,19 @@ export type TranscriptClaim = {
   id: string;
   /** The claim sentence. Claim entities carry it as their name. */
   text: string;
+  /**
+   * The space the claim lives in, which is where its responses are published — not necessarily
+   * the space the panel is rendered from. Null when the graph reports none, which leaves the
+   * claim unlinkable and unrespondable rather than pointing it at the wrong space.
+   */
+  spaceId: string | null;
+  /** Which vocabulary labels the two sides: Agree/Disagree, or Verify/Dispute for a factual claim. */
+  responseKind: 'stance' | 'veracity';
 };
 
 export type DebateTranscriptClaims = {
+  /** Every claim, deduped, in transcript order. */
+  all: TranscriptClaim[];
   /** Claims keyed by the hex form of the speaker's `profile_space_id`. */
   byAuthorSpaceId: Map<string, TranscriptClaim[]>;
   /** Claims on a block with no `Authors` relation. Empty for anything we publish. */
@@ -20,6 +31,7 @@ export type DebateTranscriptClaims = {
 };
 
 export const EMPTY_TRANSCRIPT_CLAIMS: DebateTranscriptClaims = {
+  all: [],
   byAuthorSpaceId: new Map(),
   unattributed: [],
   totalCount: 0,
@@ -56,10 +68,10 @@ function presentRelations<T>(
  * by both debaters is attributed to whoever said it first rather than counted twice.
  */
 export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery): DebateTranscriptClaims {
+  const all: TranscriptClaim[] = [];
   const byAuthorSpaceId = new Map<string, TranscriptClaim[]>();
   const unattributed: TranscriptClaim[] = [];
   const seenClaimIds = new Set<string>();
-  let totalCount = 0;
 
   for (const transcript of presentRelations(data.entity?.transcripts)) {
     for (const block of presentRelations(transcript.toEntity.blocks)) {
@@ -79,9 +91,32 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery): Debate
         if (!text) continue;
 
         seenClaimIds.add(key);
-        totalCount += 1;
 
-        const row: TranscriptClaim = { id: claimEntity.id, text };
+        const spaceId = (claimEntity.spaceIds ?? []).find((id): id is string => typeof id === 'string') ?? null;
+
+        const row: TranscriptClaim = {
+          id: claimEntity.id,
+          text,
+          spaceId,
+          // Read against the claim's own space, since "Is factual" is a per-space value and the
+          // side labels have to match the space the response is published against.
+          responseKind: spaceId
+            ? claimResponseKind(
+                {
+                  values: (claimEntity.valuesList ?? [])
+                    .filter(value => value != null)
+                    .map(value => ({
+                      property: { id: value!.propertyId },
+                      spaceId: value!.spaceId,
+                      value: value!.text ?? '',
+                    })),
+                },
+                spaceId
+              )
+            : 'stance',
+        };
+
+        all.push(row);
 
         if (!authorSpaceId) {
           unattributed.push(row);
@@ -96,7 +131,7 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery): Debate
     }
   }
 
-  return { byAuthorSpaceId, unattributed, totalCount };
+  return { all, byAuthorSpaceId, unattributed, totalCount: all.length };
 }
 
 /**

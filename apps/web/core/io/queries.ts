@@ -2,6 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
 
+import { CLAIM_IS_FACTUAL_PROPERTY_ID } from '~/core/claims/ontology';
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
 import {
   AUTHORS_PROPERTY_ID,
@@ -674,6 +675,7 @@ export function getDebateTranscriptClaims(debateEntityId: string, signal?: Abort
       blocksPropertyId: BLOCKS_PROPERTY_ID,
       authorsPropertyId: AUTHORS_PROPERTY_ID,
       claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
+      isFactualPropertyId: CLAIM_IS_FACTUAL_PROPERTY_ID,
     },
     signal,
   });

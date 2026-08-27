@@ -6,11 +6,24 @@ import { claimsForParticipant, groupTranscriptClaims, unmatchedClaims } from './
 const PRESTON = 'f3dab79cb5a3d9d1759656dd5361d1c6';
 const ARTURAS = 'cc31e40f74231d530f1b5d0fc1cd94d8';
 
+const SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
+const IS_FACTUAL = 'da4a6c1f9d4446f9832ff3b49a4400ef';
+
+type Claim = {
+  id: string;
+  name?: string | null;
+  position?: string;
+  /** null models a claim the graph reports no space for. */
+  spaceId?: string | null;
+  /** '1' = factual (Verify/Dispute), anything else = stance (Agree/Disagree). */
+  isFactual?: string;
+};
+
 type Block = {
   id: string;
   position?: string;
   author?: string | null;
-  claims: Array<{ id: string; name?: string | null; position?: string }>;
+  claims: Claim[];
 };
 
 function response(blocks: Block[], transcriptPosition = 'a0'): DebateTranscriptClaimsQuery {
@@ -26,10 +39,21 @@ function response(blocks: Block[], transcriptPosition = 'a0'): DebateTranscriptC
               toEntity: {
                 id: block.id,
                 authors: block.author === null ? [] : [{ position: 'a0', toEntity: { id: block.author ?? PRESTON } }],
-                claims: block.claims.map(claim => ({
-                  position: claim.position ?? 'a0',
-                  toEntity: { id: claim.id, name: claim.name === undefined ? `Claim ${claim.id}` : claim.name },
-                })),
+                claims: block.claims.map(claim => {
+                  const spaceId = claim.spaceId === undefined ? SPACE : claim.spaceId;
+                  return {
+                    position: claim.position ?? 'a0',
+                    toEntity: {
+                      id: claim.id,
+                      name: claim.name === undefined ? `Claim ${claim.id}` : claim.name,
+                      spaceIds: spaceId === null ? [] : [spaceId],
+                      valuesList:
+                        claim.isFactual === undefined
+                          ? []
+                          : [{ spaceId: spaceId ?? SPACE, propertyId: IS_FACTUAL, text: claim.isFactual }],
+                    },
+                  };
+                }),
               },
             })),
           },
@@ -162,5 +186,86 @@ describe('unmatchedClaims', () => {
         'f3dab79c-b5a3-d9d1-7596-56dd5361d1c6',
       ])
     ).toEqual([]);
+  });
+});
+
+describe('claim space and response kind', () => {
+  it('carries the claim’s own space, which is where its responses are published', () => {
+    const grouped = groupTranscriptClaims(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(SPACE);
+  });
+
+  it('labels an ordinary claim as a stance, so the controls read Agree/Disagree', () => {
+    const grouped = groupTranscriptClaims(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].responseKind).toBe('stance');
+  });
+
+  it('labels a claim marked factual as veracity, so the controls read Verify/Dispute', () => {
+    const grouped = groupTranscriptClaims(
+      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', isFactual: '1' }] }])
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].responseKind).toBe('veracity');
+  });
+
+  it('ignores an Is-factual value set in a different space than the claim lives in', () => {
+    const grouped = groupTranscriptClaims({
+      entity: {
+        transcripts: [
+          {
+            position: 'a0',
+            toEntity: {
+              id: 'transcript-1',
+              blocks: [
+                {
+                  position: 'a0',
+                  toEntity: {
+                    id: 'block-1',
+                    authors: [{ position: 'a0', toEntity: { id: PRESTON } }],
+                    claims: [
+                      {
+                        position: 'a0',
+                        toEntity: {
+                          id: 'claim-1',
+                          name: 'Claim one',
+                          spaceIds: [SPACE],
+                          valuesList: [{ spaceId: ARTURAS, propertyId: IS_FACTUAL, text: '1' }],
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    });
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].responseKind).toBe('stance');
+  });
+
+  it('leaves a claim with no space unlinkable rather than guessing one', () => {
+    const grouped = groupTranscriptClaims(
+      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', spaceId: null }] }])
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBeNull();
+  });
+});
+
+describe('all', () => {
+  it('lists every claim once, in transcript order, matching totalCount', () => {
+    const grouped = groupTranscriptClaims(
+      response([
+        { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-2' }, { id: 'claim-1' }] },
+      ])
+    );
+
+    expect(grouped.all.map(claim => claim.id)).toEqual(['claim-1', 'claim-2']);
+    expect(grouped.totalCount).toBe(grouped.all.length);
   });
 });
