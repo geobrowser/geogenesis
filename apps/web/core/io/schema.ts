@@ -137,7 +137,12 @@ export const Entity = Schema.Struct({
   allValuesList: Schema.optional(Schema.Array(RoutingValueProjection)),
   allRelationsList: Schema.optional(Schema.Array(RoutingRelationProjection)),
   // Unfiltered total, used to tell a truncated relation list from a short one.
-  relations: Schema.optional(Schema.Struct({ totalCount: Schema.Number })),
+  /**
+   * Only some queries select this. `entityQuery` returns a `relations` *connection* here
+   * (`pageInfo`/`nodes`) with no count, so `totalCount' is optional inside the optional struct —
+   * requiring it made every `getEntity` fail decoding and return null, silently.
+   */
+  relations: Schema.optional(Schema.Struct({ totalCount: Schema.optional(Schema.Number) })),
   // cover
   // blocks: Schema.
   valuesList: Schema.Array(Value),

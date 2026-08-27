@@ -141,14 +141,6 @@ export const entitiesQuery = graphql(/* GraphQL */ `
         spaceId
       }
 
-      # Authoritative count of this entity's relations, before the 1000-row cap on relationsList
-      # below and before the decoder drops dangling ones. It is the only signal here that says
-      # whether the list was truncated - the decoded array cannot, since a capped page holding a
-      # single dangling relation decodes to fewer than 1000 entries.
-      relations {
-        totalCount
-      }
-
       valuesList(first: 1000, filter: { spaceId: { is: $spaceId } }) {
         ...EntityValueFields
       }
@@ -180,6 +172,14 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
 
       allRelationsList: relationsList(first: 1000) {
         spaceId
+      }
+
+      # Authoritative count of this entity's relations, before the 1000-row cap on relationsList
+      # below and before the decoder drops dangling ones. It is the only signal here that says
+      # whether the list was truncated - the decoded array cannot, since a capped page holding a
+      # single dangling relation decodes to fewer than 1000 entries.
+      relations {
+        totalCount
       }
 
       types {
