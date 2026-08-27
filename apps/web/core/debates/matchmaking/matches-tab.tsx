@@ -6,13 +6,14 @@ import { Text } from '~/design-system/text';
 
 import type { MatchmakingMatch } from '../api';
 import { useDebateActivity } from '../hooks';
-import { SpaceTopicFilters } from './claims-tab';
+import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubCardList } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
+import { countBy, orderFacetOptions, toggleId } from './topic-facets';
 import { useStableListOrder } from './use-stable-list-order';
 import type { DebatesHubTab } from '~/atoms';
 
@@ -25,7 +26,7 @@ import type { DebatesHubTab } from '~/atoms';
  * tab filters by space only.
  */
 export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
-  const [spaceId, setSpaceId] = React.useState<string | null>(null);
+  const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
 
   const matchesQuery = useMatchmakingMatches(true);
   const requestsQuery = useDebateRequests(true);
@@ -38,30 +39,37 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
   const matches = useStableListOrder(
     serverMatches,
     match => `${match.claim.space_id}:${match.claim.claim_entity_id}`,
-    spaceId ?? ''
+    spaceIds.join(',')
   );
 
-  const facetSpaceIds = React.useMemo(
-    () => [...new Set(serverMatches.map(match => match.claim.space_id))],
-    [serverMatches]
+  // Counted from the matches themselves — this tab has no server facet, and the whole list is in
+  // hand, so the rows are the complete answer.
+  const facetSpaces = React.useMemo(
+    () => orderFacetOptions(countBy(serverMatches.map(match => ({ id: match.claim.space_id, name: null }))), spaceIds),
+    [serverMatches, spaceIds]
   );
 
   const filtered = React.useMemo(
-    () => matches.filter(match => !spaceId || match.claim.space_id === spaceId),
-    [matches, spaceId]
+    () => matches.filter(match => spaceIds.length === 0 || spaceIds.includes(match.claim.space_id)),
+    [matches, spaceIds]
   );
 
   return (
     <div className="flex flex-col">
-      {outbound ? (
-        <div className="sticky top-0 z-10 border-b border-grey-02 bg-white px-4 py-3">
-          <OutboundRequestCard request={outbound} />
-        </div>
-      ) : null}
+      {/* One pinned header rather than a pinned card above scrolling filters: two stickies would
+          both claim `top-0` and overlap, and the outbound card is conditional so the filters
+          couldn't be offset by a known height. */}
+      <HubStickyControls>
+        {outbound ? <OutboundRequestCard request={outbound} /> : null}
+        <SpaceTopicFilters
+          spaceIds={spaceIds}
+          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+          onSpacesClear={() => setSpaceIds([])}
+          facetSpaces={facetSpaces}
+        />
+      </HubStickyControls>
 
       <div className="flex flex-col gap-3 px-4 py-3">
-        <SpaceTopicFilters spaceId={spaceId} onSpaceChange={setSpaceId} facetSpaceIds={facetSpaceIds} />
-
         <HubQueryState
           isLoading={matchesQuery.isLoading}
           error={matchesQuery.error}

@@ -224,6 +224,75 @@ describe('matchmaking', () => {
     expect(fetch).toHaveBeenCalledWith('http://localhost:8080/matchmaking/claims', expect.anything());
   });
 
+  // GEO-2659 and GEO-2674 moved the scope, the topic filter and this session's exclusions onto the
+  // wire. Nothing above reaches the URL for them — the UI suites mock the hook and assert the query
+  // object — so a renamed or wrongly joined parameter would be caught by neither.
+  it('sends the eligible scope, the topic and the session as query parameters', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims(
+      { spaceIds: ['space-1', 'space-2'], topicId: 'topic-ai', rematchSessionId: 'rematch-1' },
+      vi.fn(),
+      'user-a'
+    );
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('space_ids')).toBe('space-1,space-2');
+    expect(url.searchParams.get('topic_id')).toBe('topic-ai');
+    expect(url.searchParams.get('rematch_session_id')).toBe('rematch-1');
+  });
+
+  // Same shape as the space pair, and the same reason to send only one.
+  it('sends multiple topics as a joined list', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ topicIds: ['topic-ai', 'topic-health'] }, vi.fn(), 'user-a');
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('topic_ids')).toBe('topic-ai,topic-health');
+  });
+
+  it('sends the single topic instead of the list, never both', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ topicId: 'topic-ai', topicIds: ['topic-ai', 'topic-health'] }, vi.fn(), 'user-a');
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('topic_id')).toBe('topic-ai');
+    expect(url.searchParams.has('topic_ids')).toBe(false);
+  });
+
+  it('omits an empty topic list rather than sending it as no filter', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ topicIds: [] }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/matchmaking/claims', expect.anything());
+  });
+
+  // The two space parameters are OR-merged server-side, so sending both would widen the corpus to
+  // the whole eligible set the moment the viewer picked one space out of it.
+  it('sends the picked space instead of the scope, never both', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ spaceId: 'space-1', spaceIds: ['space-1', 'space-2'] }, vi.fn(), 'user-a');
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('space_id')).toBe('space-1');
+    expect(url.searchParams.has('space_ids')).toBe(false);
+  });
+
+  // An empty scope means "no space this viewer may be shown claims from", and the server reads a
+  // missing `space_ids` as "no filter" — the exact opposite. The callers hold the query back in
+  // that case, and this is the half of the contract that makes their doing so necessary.
+  it('omits an empty scope rather than sending it as no filter', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ spaceIds: [] }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/matchmaking/claims', expect.anything());
+  });
+
   it('creates a debate request for a claim', async () => {
     const fetch = stubJson({ id: 'request-1' });
 
