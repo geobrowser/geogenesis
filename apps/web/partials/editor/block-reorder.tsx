@@ -47,6 +47,9 @@ type DropZoneLayout = {
 };
 
 const GUTTER_HOVER_WIDTH = 60;
+const BLOCK_LINK_REVEAL_TIMEOUT_MS = 30_000;
+const BLOCK_LINK_RETRY_INTERVAL_MS = 250;
+const BLOCK_LINK_SETTLE_DELAYS_MS = [0, 250, 750, 1500, 3000, 6000] as const;
 export const blockKeyboardCodes: KeyboardCodes = {
   // Keep Enter available for the Radix menu trigger. Space remains the
   // conventional dnd-kit keyboard gesture for pick up and drop.
@@ -234,9 +237,55 @@ export function BlockReorder({
 
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     let highlightTimer: ReturnType<typeof setTimeout> | null = null;
-    let attempts = 0;
+    let settleTimers: Array<ReturnType<typeof setTimeout>> = [];
+    let revealDeadline = Date.now() + BLOCK_LINK_REVEAL_TIMEOUT_MS;
+    let settleInterrupted = false;
     let highlightedElement: HTMLElement | null = null;
     let revealedLocation: string | null = null;
+
+    const removeSettleInterruptionListeners = () => {
+      window.removeEventListener('wheel', interruptSettling);
+      window.removeEventListener('touchstart', interruptSettling);
+      window.removeEventListener('pointerdown', interruptSettling);
+      window.removeEventListener('keydown', interruptSettling);
+    };
+
+    const clearSettleTimers = () => {
+      for (const timer of settleTimers) clearTimeout(timer);
+      settleTimers = [];
+      removeSettleInterruptionListeners();
+    };
+
+    function interruptSettling() {
+      settleInterrupted = true;
+      clearSettleTimers();
+    }
+
+    const scheduleSettledScroll = (element: HTMLElement) => {
+      clearSettleTimers();
+      settleInterrupted = false;
+      window.addEventListener('wheel', interruptSettling, { passive: true });
+      window.addEventListener('touchstart', interruptSettling, { passive: true });
+      window.addEventListener('pointerdown', interruptSettling, { passive: true });
+      window.addEventListener('keydown', interruptSettling);
+
+      settleTimers = BLOCK_LINK_SETTLE_DELAYS_MS.map((delay, index) =>
+        setTimeout(() => {
+          if (!settleInterrupted && element.isConnected && (index === 0 || !isElementNearViewportCenter(element))) {
+            element.scrollIntoView({
+              behavior: index === 0 ? 'smooth' : 'auto',
+              block: 'center',
+              inline: 'nearest',
+            });
+          }
+
+          if (index === BLOCK_LINK_SETTLE_DELAYS_MS.length - 1) {
+            settleTimers = [];
+            removeSettleInterruptionListeners();
+          }
+        }, delay)
+      );
+    };
 
     const revealLinkedBlock = () => {
       if (new URL(window.location.href).searchParams.get('source') !== 'copy_link') return;
@@ -254,21 +303,24 @@ export function BlockReorder({
 
       const element = findTopLevelBlockElement(editor, blockId);
       if (!element) {
-        if (attempts < 20 && retryTimer === null) {
-          attempts += 1;
+        if (Date.now() < revealDeadline && retryTimer === null) {
           retryTimer = setTimeout(() => {
             retryTimer = null;
             revealLinkedBlock();
-          }, 100);
+          }, BLOCK_LINK_RETRY_INTERVAL_MS);
         }
         return;
       }
 
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
       revealedLocation = locationKey;
       highlightedElement?.classList.remove(...BLOCK_LINK_HIGHLIGHT_CLASSES);
       highlightedElement = element;
       element.classList.add(...BLOCK_LINK_HIGHLIGHT_CLASSES);
-      element.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      scheduleSettledScroll(element);
 
       if (highlightTimer) clearTimeout(highlightTimer);
       highlightTimer = setTimeout(() => {
@@ -278,11 +330,18 @@ export function BlockReorder({
     };
 
     const handleHashChange = () => {
-      attempts = 0;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+      clearSettleTimers();
+      revealDeadline = Date.now() + BLOCK_LINK_REVEAL_TIMEOUT_MS;
       revealedLocation = null;
       revealLinkedBlock();
     };
 
+    const mutationObserver = new MutationObserver(revealLinkedBlock);
+    mutationObserver.observe(editor.view.dom, { childList: true, subtree: true });
     revealLinkedBlock();
     window.addEventListener('hashchange', handleHashChange);
     editor.on('update', revealLinkedBlock);
@@ -290,6 +349,8 @@ export function BlockReorder({
     return () => {
       if (retryTimer) clearTimeout(retryTimer);
       if (highlightTimer) clearTimeout(highlightTimer);
+      clearSettleTimers();
+      mutationObserver.disconnect();
       highlightedElement?.classList.remove(...BLOCK_LINK_HIGHLIGHT_CLASSES);
       window.removeEventListener('hashchange', handleHashChange);
       editor.off('update', revealLinkedBlock);
@@ -725,6 +786,13 @@ export function findTopLevelBlockElement(editor: Editor, blockId: string): HTMLE
   });
 
   return block?.element ?? null;
+}
+
+export function isElementNearViewportCenter(element: HTMLElement, viewportHeight = window.innerHeight) {
+  const rect = element.getBoundingClientRect();
+  const elementCenter = rect.top + rect.height / 2;
+  const tolerance = Math.max(80, viewportHeight * 0.15);
+  return Math.abs(elementCenter - viewportHeight / 2) <= tolerance;
 }
 
 export function makeDropZones(blocks: BlockLayout[]): DropZoneLayout[] {

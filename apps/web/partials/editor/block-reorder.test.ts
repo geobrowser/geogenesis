@@ -21,6 +21,7 @@ import {
   getTopLevelBlockElements,
   insertTextBlockBelow,
   isBlockDropNoOp,
+  isElementNearViewportCenter,
   makeDropZones,
   moveTopLevelBlock,
   releasePointerDragFocus,
@@ -409,6 +410,21 @@ describe('findTopLevelBlockElement', () => {
     );
 
     expect(findTopLevelBlockElement(editor, 'c5f21322469342a99fc61e387be82c2a')).toBe(editor.view.nodeDOM(0));
+  });
+});
+
+describe('isElementNearViewportCenter', () => {
+  it('distinguishes a centered target from one displaced by late layout changes', () => {
+    const element = document.createElement('div');
+    const rect = (top: number) =>
+      ({ top, bottom: top + 100, left: 0, right: 100, width: 100, height: 100, x: 0, y: top, toJSON() {} }) as DOMRect;
+    const rectSpy = vi.spyOn(element, 'getBoundingClientRect');
+
+    rectSpy.mockReturnValue(rect(450));
+    expect(isElementNearViewportCenter(element, 1000)).toBe(true);
+
+    rectSpy.mockReturnValue(rect(50));
+    expect(isElementNearViewportCenter(element, 1000)).toBe(false);
   });
 });
 
