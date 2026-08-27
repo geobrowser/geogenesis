@@ -22,6 +22,7 @@ const COPY: Record<SignInPromptAction, { title: string }> = {
   join: { title: 'Create your personal space to join spaces' },
   comment: { title: 'Create your personal space to comment' },
   bounty: { title: 'Create your personal space to register interest in bounties' },
+  debate: { title: 'Create your personal space to join a debate' },
 };
 
 const BODY = 'A personal space lets you vote, comment, join spaces, and more.';

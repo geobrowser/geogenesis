@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => ({
   bestOrderIds: [] as string[],
   bestOrderLoading: false,
   hubOpen: vi.fn(),
+  openSignInPrompt: vi.fn(),
+  /** Whether a smart account exists, i.e. the viewer is signed in. */
+  signedIn: true,
 }));
 
 type ObserverRecord = {
@@ -119,9 +122,19 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 7, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
+// Both reach for wagmi/next-navigation context the feed's tests do not stand up.
+vi.mock('~/core/hooks/use-smart-account', () => ({
+  useSmartAccount: () => ({ smartAccount: mocks.signedIn ? { account: { address: '0xfeed' } } : null }),
+}));
+vi.mock('~/core/state/sign-in-prompt-store', () => ({
+  useSignInPrompt: () => ({ action: null, open: mocks.openSignInPrompt, close: vi.fn() }),
+}));
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.resetAllMocks();
+  // Not a mock fn, so `resetAllMocks` does not restore it.
+  mocks.signedIn = true;
   observers = [];
   mocks.entityVoteProps.length = 0;
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
@@ -577,6 +590,18 @@ describe('DebatesBrowseFeed comments', () => {
     // The hub is a portal of its own, so nothing lands in the feed's in-flow panel slot.
     expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Comments panel for/)).not.toBeInTheDocument();
+  });
+
+  // Every control in the hub needs an account, so a signed-out viewer gets the prompt rather than
+  // a panel that refuses them at each step — the same gate upvoting puts in front of them.
+  it('prompts a signed-out viewer to sign in instead of opening the hub', () => {
+    mocks.signedIn = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.openSignInPrompt).toHaveBeenCalledWith('debate');
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
   });
 
   // Both would otherwise stack over the same feed, the hub on top of a panel nobody can see past.

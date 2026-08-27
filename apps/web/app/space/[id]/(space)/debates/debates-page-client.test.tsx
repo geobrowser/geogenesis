@@ -61,6 +61,15 @@ vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
   useDebatesBestOrder: () => ({ rankByDebateId: new Map(), isLoading: false, isError: false }),
 }));
 
+// The feed's "Join a debate" button gates on a smart account and opens the shared sign-in prompt,
+// and neither hook has the wagmi/next-navigation context this suite stands up.
+vi.mock('~/core/hooks/use-smart-account', () => ({
+  useSmartAccount: () => ({ smartAccount: { account: { address: '0xfeed' } } }),
+}));
+vi.mock('~/core/state/sign-in-prompt-store', () => ({
+  useSignInPrompt: () => ({ action: null, open: vi.fn(), close: vi.fn() }),
+}));
+
 vi.mock('~/core/hooks/use-space', () => ({
   useSpace: () => ({ space: { entity: { name: 'Fashion', image: null } }, isLoading: false }),
 }));
