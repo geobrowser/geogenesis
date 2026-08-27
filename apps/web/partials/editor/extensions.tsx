@@ -66,7 +66,7 @@ export const tiptapExtensions = [
       if (node.type.name === 'paragraph' && node.attrs?.tailPlaceholder) {
         return PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT;
       }
-      return 'Add content or type "/" for other block types...';
+      return 'Write some content or use / to select block type...';
     },
   }),
   UndoRedo,
