@@ -27,6 +27,9 @@ const mocks = vi.hoisted(() => ({
   bestOrderIds: [] as string[],
   bestOrderLoading: false,
   hubOpen: vi.fn(),
+  hubClose: vi.fn(),
+  /** Whether the debates hub is already showing. */
+  hubIsOpen: false,
   openPrivySignIn: vi.fn(),
   /** Whether a smart account exists, i.e. the viewer is signed in. */
   signedIn: true,
@@ -106,10 +109,10 @@ vi.mock('./debate-claims-panel', () => ({
 }));
 vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
   useDebatesHub: () => ({
-    isOpen: false,
+    isOpen: mocks.hubIsOpen,
     activeTab: 'claims' as const,
     open: mocks.hubOpen,
-    close: vi.fn(),
+    close: mocks.hubClose,
     toggle: vi.fn(),
     setTab: vi.fn(),
   }),
@@ -133,8 +136,9 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 beforeEach(() => {
   vi.useFakeTimers();
   vi.resetAllMocks();
-  // Not a mock fn, so `resetAllMocks` does not restore it.
+  // Not mock fns, so `resetAllMocks` does not restore them.
   mocks.signedIn = true;
+  mocks.hubIsOpen = false;
   observers = [];
   mocks.entityVoteProps.length = 0;
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
@@ -601,6 +605,18 @@ describe('DebatesBrowseFeed comments', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
 
     expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
+  });
+
+  // Otherwise the button is a one-way door: pressing it again did nothing and the only way out was
+  // the panel's own close control.
+  it('closes the hub when the button is pressed a second time', () => {
+    mocks.hubIsOpen = true;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.hubClose).toHaveBeenCalledOnce();
     expect(mocks.hubOpen).not.toHaveBeenCalled();
   });
 

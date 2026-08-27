@@ -250,6 +250,12 @@ export function DebatesBrowseFeed({
               openPrivySignIn();
               return;
             }
+            // A second press closes it, the way the navbar's debate button behaves. Without this
+            // the button is a one-way door and the only way out is the panel's own close control.
+            if (debatesHub.isOpen) {
+              debatesHub.close();
+              return;
+            }
             // The hub is its own portal, so the feed's panel state stays out of it. Closing the
             // in-flow panel first keeps the two from stacking over the same feed.
             setOpenPanel(null);
