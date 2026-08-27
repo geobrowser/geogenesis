@@ -22,6 +22,7 @@ import type { Editor } from '@tiptap/react';
 import * as React from 'react';
 
 import { OrderDots } from '~/design-system/icons/order-dots';
+import { Plus } from '~/design-system/icons/plus';
 
 import { ensureUniqueNodeIds } from './id-extension';
 
@@ -40,7 +41,7 @@ type DropZoneLayout = {
   indicatorTop: number;
 };
 
-const GUTTER_HOVER_WIDTH = 48;
+const GUTTER_HOVER_WIDTH = 60;
 
 type Props = {
   children: React.ReactNode;
@@ -233,6 +234,12 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
     resetDragState();
   };
 
+  const handleInsertBelow = (childIndex: number) => {
+    if (!enabled) return;
+
+    insertTextBlockBelow(editor, childIndex);
+  };
+
   return (
     <DndContext
       sensors={sensors}
@@ -255,9 +262,10 @@ export function BlockReorder({ children, editor, editorWrapperRef, enabled, onRe
               key={getBlockDragHandleKey(editor, layout.childIndex)}
               childIndex={layout.childIndex}
               top={layout.top + Math.min(16, (layout.bottom - layout.top) / 2) - 12}
-              left={editorLeft - 32}
+              left={editorLeft - GUTTER_HOVER_WIDTH}
               isDragging={activeChildIndex !== null}
               visible={layout === handleLayout && visibleHandleIndex !== null}
+              onInsertBelow={() => handleInsertBelow(layout.childIndex)}
             />
           ))
         : null}
@@ -337,12 +345,14 @@ export function BlockDragHandle({
   left,
   isDragging,
   visible,
+  onInsertBelow,
 }: {
   childIndex: number;
   top: number;
   left: number;
   isDragging: boolean;
   visible: boolean;
+  onInsertBelow?: () => void;
 }) {
   const [isFocused, setIsFocused] = React.useState(false);
   const [isCoarseOrHoverlessPointer, setIsCoarseOrHoverlessPointer] = React.useState(false);
@@ -366,7 +376,7 @@ export function BlockDragHandle({
   return (
     <div
       data-block-drag-handle
-      className="absolute z-30 flex h-6 w-8 items-center"
+      className="absolute z-30 flex h-6 w-[60px] items-center gap-1 pr-2"
       style={{
         top,
         left,
@@ -374,6 +384,20 @@ export function BlockDragHandle({
         pointerEvents: isAvailable ? 'auto' : 'none',
       }}
     >
+      {onInsertBelow ? (
+        <button
+          type="button"
+          aria-label={`Add block below block ${childIndex + 1}`}
+          title="Add block below"
+          className="flex size-6 shrink-0 items-center justify-center rounded text-grey-04 transition-colors hover:bg-grey-01 hover:text-text focus-visible:bg-grey-01"
+          onMouseDown={event => event.preventDefault()}
+          onClick={onInsertBelow}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+        >
+          <Plus />
+        </button>
+      ) : null}
       <button
         ref={setNodeRef}
         type="button"
@@ -560,6 +584,20 @@ export function moveTopLevelBlock(editor: Editor, sourceIndex: number, dropBound
 
   editor.view.dispatch(transaction);
   return true;
+}
+
+/** Inserts a standard text block below a top-level node and moves the cursor into it. */
+export function insertTextBlockBelow(editor: Editor, childIndex: number): boolean {
+  const { doc } = editor.state;
+  if (childIndex < 0 || childIndex >= doc.childCount) return false;
+
+  const insertPosition = positionBeforeChild(doc, childIndex + 1);
+  return editor
+    .chain()
+    .insertContentAt(insertPosition, { type: 'paragraph' })
+    .focus(insertPosition + 1)
+    .scrollIntoView()
+    .run();
 }
 
 function positionBeforeChild(doc: Editor['state']['doc'], childIndex: number) {
