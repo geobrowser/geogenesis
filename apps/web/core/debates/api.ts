@@ -505,24 +505,32 @@ export type MatchmakingFacetCount = {
 /**
  * The two menus, counted over the whole candidate set rather than the page being returned.
  *
- * Each dimension is narrowed by *the other* and never by itself — standard faceted counting, and
- * what makes a count answer "how many of the claims matching everything else I have chosen are in
- * here". Picking a space therefore doesn't collapse the space menu, and picking a topic doesn't
- * collapse the topic menu, but each does narrow its counterpart.
+ * The two dimensions are **not symmetric**, because the filters aren't: spaces are OR and topics
+ * are AND (GEO-2696).
  *
- * The half that is easy to miss is that this cuts both ways: a space can disappear from
- * `space_facets` because the selected *topic* has nothing in it. That is "this combination is
- * empty", not "this space is no longer yours to pick", and the two must not be confused — see the
- * space effect in `claims-tab.tsx`.
+ * *Spaces* follow the ordinary faceted rule — narrowed by the topic selection, never by their own.
+ * Picking a space must not collapse the menu it came from, since picking a second one would only
+ * widen the list.
+ *
+ * *Topics* are co-occurrence: counted over the claims that already carry **every** selected topic.
+ * So the menu answers "what else do the claims I'm looking at carry", the selected topics come back
+ * counted at the current result size — which is what lets them be un-picked — and no option can
+ * lead to an empty list, because each one came off a surviving claim. This deliberately inverts
+ * the "never narrow a dimension by itself" rule GEO-2659 set, and the rule's purpose survives: an
+ * option that would empty the list simply isn't returned.
+ *
+ * The half that is easy to miss: a space can disappear from `space_facets` because the selected
+ * *topics* have nothing in it. That is "this combination is empty", not "this space is no longer
+ * yours to pick", and the two must not be confused — see the space effect in `claims-tab.tsx`.
  */
 export type MatchmakingFacets = {
   /** Superseded by `space_facets`, and derived from it — so it inherits the topic narrowing too. */
   space_ids: string[];
   /** Superseded by `topic_facets`. Empty on every response until GEO-2659 made it real. */
   topics: MatchmakingTopic[];
-  /** Count descending. Narrowed by the topic filter, not by the space filter. */
+  /** Count descending. Narrowed by the topic selection, never by the space selection. */
   space_facets: MatchmakingFacetCount[];
-  /** Count descending. Narrowed by the space filter, not by the topic filter. */
+  /** Count descending. Co-occurrence: over the claims carrying every selected topic. */
   topic_facets: MatchmakingFacetCount[];
 };
 

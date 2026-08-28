@@ -945,8 +945,8 @@ describe('topic menu', () => {
   });
 
   // The other dimension, which must behave differently. `space_facets` is narrowed by the topic
-  // selection — each dimension is counted without narrowing itself, so it is narrowed by the other
-  // — which means a space can drop out of the facet merely because *this combination* is empty.
+  // selection and never by its own, because spaces are OR — which means a space can drop out of the
+  // facet merely because *this combination* is empty.
   // That is a reason to show an empty list, not to revise a choice the viewer made. Clearing it
   // would silently discard the space the moment a topic, or a search, emptied the pair.
   it('keeps a selected space when the current combination has nothing in it', async () => {

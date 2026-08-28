@@ -138,10 +138,11 @@ type MultiProps<T extends string> = {
  * The multi-select twin of {@link HubFilterMenu}: checkboxes, and the menu stays open so several
  * can be picked in one visit.
  *
- * Counts sit at the end of each row and describe what that option would leave given every *other*
- * filter — geo-chat counts each dimension without narrowing itself, so a topic's count answers
- * "how many of the claims I'm already looking at carry this", and ticking one never changes the
- * numbers in its own menu.
+ * Counts describe what that option would leave, given the rest of the filter. The two dimensions
+ * differ, because the filters do: spaces are OR, so the space menu is narrowed by the topics and
+ * never by itself, and ticking a space leaves its own numbers alone. Topics are AND, so a topic's
+ * count answers "how many of the claims I'm already looking at also carry this", and ticking one
+ * does narrow the rest of its menu to what co-occurs with it (GEO-2696).
  */
 export function HubMultiFilterMenu<T extends string>({
   label,

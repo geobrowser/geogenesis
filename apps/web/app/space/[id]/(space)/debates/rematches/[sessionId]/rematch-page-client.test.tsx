@@ -380,7 +380,8 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
           .map(entry => entry.claim.space_id)
       ),
     ];
-    // Narrowed by space, never by topic: picking a topic must not collapse its own menu.
+    // Spaces narrowed by the topic selection and never by their own — picking a space must not
+    // collapse the menu it came from. Topics are co-occurrence, built above.
     const facets = {
       space_ids: spaceIds,
       topics: topicFacets,

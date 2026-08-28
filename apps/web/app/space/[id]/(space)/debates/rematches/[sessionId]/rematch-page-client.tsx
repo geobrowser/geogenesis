@@ -910,9 +910,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // `mergeFacetCounts` for why the two are not summed.
   const facetSpaces = React.useMemo(() => {
     const offered = new Set(facetSpaceIds);
-    // Narrowed by the topic and the search, never by the space selection — the mirror of
-    // `topicFacetClaims`, and the rule the server counts by: a dimension is never narrowed by
-    // itself, or picking one space would empty the menu it was picked from.
+    // Narrowed by the topic and the search, never by the space selection — what the server does
+    // for spaces, and why picking one can't empty the menu it was picked from. Spaces only: topics
+    // are AND and their menu *is* narrowed by its own selection, which is co-occurrence.
     const fromRows = countBy(
       claims
         .filter(claim => {
