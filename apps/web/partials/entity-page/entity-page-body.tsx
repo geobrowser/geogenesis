@@ -215,7 +215,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                 <EntityPageInlineDescription
                   entityId={entityId}
                   spaceId={spaceId}
-                  truncate={false}
                   fallbackDescription={previewDescription}
                 />
               )}
