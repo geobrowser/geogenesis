@@ -10,6 +10,7 @@ import { createPortal } from 'react-dom';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { FilterMode } from '~/core/blocks/data/filters';
+import { applyDropdownSelectionsToFilters } from '~/core/blocks/data/table-dropdown-selections';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -43,6 +44,7 @@ import { Text } from '~/design-system/text';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { createPropertyRelation, writeValue } from '~/partials/blocks/table/change-entry';
+import { TableBlockDropdowns } from '~/partials/blocks/table/table-block-dropdowns';
 import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
 import { TableBlockFilterGroupPill, groupFilters } from '~/partials/blocks/table/table-block-filter-pill';
 import { Editor } from '~/partials/editor/editor';
@@ -188,7 +190,7 @@ export function PowerToolsScreen() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { spaceId, name: blockName } = useDataBlock();
+  const { spaceId, name: blockName, browseDropdowns } = useDataBlock();
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { storage } = useMutate();
@@ -228,9 +230,30 @@ export function PowerToolsScreen() {
     return { propertyId: sortState.columnId, direction: sortState.direction };
   }, [sortState]);
 
+  // Browse-mode personal dropdowns overlay the query (never the persisted
+  // filters), the same way TableBlock applies them inside useDataBlock. Power
+  // Tools runs its own filter state, so the overlay is applied here.
+  const dropdownColumnIds = React.useMemo(
+    () => browseDropdowns.configs.map(d => d.propertyId),
+    [browseDropdowns.configs]
+  );
+  const applyDropdownOverlay = !isEditing && browseDropdowns.hydrated && dropdownColumnIds.length > 0;
+  const dropdownQueryState = React.useMemo(
+    () =>
+      applyDropdownOverlay
+        ? applyDropdownSelectionsToFilters(
+            effectiveFilterState,
+            activeModesByColumn,
+            browseDropdowns.selections,
+            dropdownColumnIds
+          )
+        : null,
+    [applyDropdownOverlay, effectiveFilterState, activeModesByColumn, browseDropdowns.selections, dropdownColumnIds]
+  );
+
   const data = usePowerToolsData({
-    filterStateOverride: canEdit ? undefined : temporaryFilters,
-    modesByColumnOverride: canEdit ? undefined : temporaryModesByColumn,
+    filterStateOverride: dropdownQueryState?.filterState ?? (canEdit ? undefined : temporaryFilters),
+    modesByColumnOverride: dropdownQueryState?.modesByColumn ?? (canEdit ? undefined : temporaryModesByColumn),
     extraColumnIds,
     excludedColumnIds,
     sort: serverSort,
@@ -1025,6 +1048,20 @@ export function PowerToolsScreen() {
           <Text variant="metadata" color="grey-04">
             Enable edit mode in the global toolbar to make changes.
           </Text>
+        </div>
+      )}
+
+      {!isEditing && browseDropdowns.configs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-grey-02 px-4 py-2">
+          <TableBlockDropdowns
+            configs={browseDropdowns.configs}
+            properties={data.properties}
+            spaceId={spaceId}
+            baseFilterState={effectiveFilterState}
+            selections={browseDropdowns.selections}
+            updateSelections={browseDropdowns.updateSelections}
+            hydrated={browseDropdowns.hydrated}
+          />
         </div>
       )}
 
