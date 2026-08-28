@@ -18,8 +18,13 @@ import { Text } from '~/design-system/text';
 import { positionSummariesFromCounts } from './claim-position-summaries';
 import { useClaimResponseSummary } from './claim-response-summary';
 
-/** A way out of the page, not a directory. */
-const MAX_RELATED = 4;
+/**
+ * A way out of the page, not a directory — and how many more arrive each time the reader asks.
+ *
+ * A busy topic can carry hundreds of claims, so the gallery shows a handful and offers the rest
+ * rather than capping silently and leaving the section looking like the whole answer.
+ */
+const RELATED_PAGE_SIZE = 4;
 
 /**
  * Other claims carrying one of this claim's topics, as a gallery of the same cards the debates
@@ -40,22 +45,27 @@ export function ClaimRelatedClaims({
   spaceId: string;
   topicIds: string[];
 }) {
+  const [limit, setLimit] = React.useState(RELATED_PAGE_SIZE);
+
+  // Two over the limit rather than one: this claim is filtered out of its own list below, so a
+  // single spare row could be spent on that and leave nothing to detect a further page with.
   const { entities } = useQueryEntities({
     where: {
       types: [{ id: { equals: CLAIM_TYPE_ID } }],
       spaces: [{ equals: spaceId }],
       relations: [{ typeOf: { id: { equals: TOPICS_PROPERTY_ID } }, toEntity: { id: { in: topicIds } } }],
     },
-    // One over the cap, so dropping this claim from its own list can't leave a short one.
-    first: MAX_RELATED + 1,
+    first: limit + 2,
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
     enabled: topicIds.length > 0,
   });
 
-  const related = React.useMemo(
-    () => entities.filter(entity => !ID.equals(entity.id, claimId) && entity.name).slice(0, MAX_RELATED),
+  const candidates = React.useMemo(
+    () => entities.filter(entity => !ID.equals(entity.id, claimId) && entity.name),
     [claimId, entities]
   );
+  const hasMore = candidates.length > limit;
+  const related = React.useMemo(() => candidates.slice(0, limit), [candidates, limit]);
 
   // One lookup for the whole gallery. The cards read their sides and readiness from geo-chat, the
   // same as they do in the hub — without it every card would draw an empty, un-actionable pair.
@@ -88,6 +98,15 @@ export function ClaimRelatedClaims({
           />
         ))}
       </div>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setLimit(current => current + RELATED_PAGE_SIZE)}
+          className="mt-3 text-metadata text-grey-04 transition-colors hover:text-text"
+        >
+          Show more claims
+        </button>
+      )}
     </section>
   );
 }

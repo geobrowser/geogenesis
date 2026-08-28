@@ -11,6 +11,7 @@ import { useDebateActivity, useDebateClaims } from '~/core/debates/hooks';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useSignInPrompt } from '~/core/hooks/use-sign-in-prompt';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
@@ -192,7 +193,10 @@ function ClaimPositionSection({
     [responseKind, row]
   );
 
-  const control = useClaimPositionControl({ claim, positions, readiness });
+  // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the vote
+  // arrows on an entity page do.
+  const promptSignIn = useSignInPrompt();
+  const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
 
   return (
     <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">

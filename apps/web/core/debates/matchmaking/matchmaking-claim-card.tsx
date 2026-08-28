@@ -184,11 +184,18 @@ export function useClaimPositionControl({
   positions,
   readiness,
   viewerIdentityPending,
+  onRequireSignIn,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   viewerIdentityPending?: boolean;
+  /**
+   * What to do when a signed-out visitor presses a side. Given one, the pills stay live while
+   * signed out and pressing prompts sign-in — matching the vote arrows on an entity page. Without
+   * one they stay disabled, which is what the hub's cards have always done.
+   */
+  onRequireSignIn?: () => void;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -259,7 +266,11 @@ export function useClaimPositionControl({
   }, [readiness.viewer_response, resetResponseIndexing, responseIndexing]);
 
   const respond = (position: boolean) => {
-    if (!isConnected || isAccountSetupPending) return;
+    if (!isConnected) {
+      onRequireSignIn?.();
+      return;
+    }
+    if (isAccountSetupPending) return;
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
@@ -282,8 +293,13 @@ export function useClaimPositionControl({
     respond,
     actionTitle,
     responseError,
-    /** False only while the account genuinely cannot publish, never while one is in flight. */
-    canRespond: isConnected && !isAccountSetupPending,
+    /**
+     * False only while the account genuinely cannot publish, never while one is in flight.
+     *
+     * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
+     * control gives a visitor nothing to press and no way to learn what to do about it.
+     */
+    canRespond: (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending,
   };
 }
 

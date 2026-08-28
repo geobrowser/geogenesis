@@ -10,7 +10,7 @@ import {
 } from '~/core/debates/ontology';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
-import { useQueryEntities } from '~/core/sync/use-store';
+import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -19,14 +19,17 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 /**
- * Where a claim came from, when it came from a debate.
+ * Where a claim came from.
  *
- * A claim extracted from a transcript carries a `Sources` relation pointing at the debate that
- * produced it, which is the cheap half of this. The speaker is the expensive half: attribution
- * rides the *text block's* `Authors` relation rather than the claim's, so it takes a second hop
- * back through whichever block quoted the claim.
+ * A claim lifted from somewhere else carries a `Sources` relation pointing at it, which is the
+ * cheap half of this. That source is not always a debate — an article can carry claims too — so
+ * the sentence names it by its own type rather than asserting one.
  *
- * Renders nothing for a claim authored directly in a space — there is no speaker to name, and a
+ * The speaker is the expensive half, and only debates have one: attribution rides the *text
+ * block's* `Authors` relation rather than the claim's, so it takes a second hop back through
+ * whichever block quoted the claim. Without a speaker the row still names the source.
+ *
+ * Renders nothing for a claim authored directly in a space — there is nothing to point at, and a
  * row that is empty more often than not is worse than no row.
  */
 export function ClaimProvenance({
@@ -65,6 +68,12 @@ export function ClaimProvenance({
     return null;
   }, [blocks]);
 
+  // `Sources` points wherever the claim came from, which is not always a debate — a claim pulled
+  // from an article carries that article. The relation only gives an id and a name, so the type
+  // has to be read off the entity itself to name the source in the sentence below.
+  const { entity: sourceEntity } = useQueryEntity({ id: source?.id ?? '', enabled: source !== null });
+  const sourceKind = sourceEntity?.types.find(type => type.name)?.name?.toLowerCase() ?? 'source';
+
   const speakerSpaceIds = React.useMemo(() => (speakerSpaceId ? [speakerSpaceId] : []), [speakerSpaceId]);
   const { profilesBySpaceId } = useProfilesBySpaceIds(speakerSpaceIds, speakerSpaceIds.length > 0);
   const speaker = speakerSpaceId ? profilesBySpaceId.get(speakerSpaceId) : undefined;
@@ -81,18 +90,35 @@ export function ClaimProvenance({
           <Avatar avatarUrl={speaker?.avatarUrl} value={speakerSpaceId} size={24} />
         </span>
       )}
-      <Text as="p" variant="metadata" color="grey-04" className="min-w-0">
-        {speaker?.name ? (
-          <>
-            First stated by <span className="text-text">{speaker.name}</span> in{' '}
-          </>
-        ) : (
-          <>From the debate </>
-        )}
-        <Link href={NavUtils.toEntity(spaceId, source.id)} className="text-text hover:underline">
-          {source.name ?? 'this debate'}
+      {/* Two lines rather than one sentence. Debate names are built from both debaters and the
+          claim, so they run long — inlined, the attribution and the title wrapped into a single
+          run-on block where "Preston Mantel in Preston Mantel vs. …" read as a stutter. Splitting
+          them puts the person on one line and what they said it in on the next. */}
+      <div className="flex min-w-0 flex-col">
+        <Text as="span" variant="metadata" color="grey-04">
+          {speaker?.name ? (
+            <>
+              First stated by{' '}
+              {/* Linked when the profile resolves to one. `profileLink` is nullable — a speaker
+                  whose personal space has no front-page entity has nowhere to go, and a link to
+                  nothing is worse than plain text. `whitespace-nowrap` keeps a two-word name from
+                  breaking across lines. */}
+              {speaker.profileLink ? (
+                <Link href={speaker.profileLink} className="whitespace-nowrap text-text hover:underline">
+                  {speaker.name}
+                </Link>
+              ) : (
+                <span className="whitespace-nowrap text-text">{speaker.name}</span>
+              )}
+            </>
+          ) : (
+            `From the ${sourceKind}`
+          )}
+        </Text>
+        <Link href={NavUtils.toEntity(spaceId, source.id)} className="truncate text-metadata text-text hover:underline">
+          {source.name ?? `this ${sourceKind}`}
         </Link>
-      </Text>
+      </div>
     </section>
   );
 }

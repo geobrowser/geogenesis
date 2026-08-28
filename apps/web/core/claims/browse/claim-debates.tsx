@@ -28,8 +28,15 @@ import { Text } from '~/design-system/text';
 
 import { useDebateKeyframes } from './use-debate-keyframes';
 
-/** Enough to show the claim has been argued without turning the page into a debate index. */
-const MAX_DEBATES = 5;
+/**
+ * Enough to show the claim has been argued without turning the page into a debate index, and how
+ * many more arrive each time the reader asks.
+ *
+ * A claim usually collects a handful of debates, but nothing bounds it — so rather than cap
+ * silently and let the section quietly under-report, one extra row is always fetched purely to
+ * learn whether there are more, and the reader is offered them.
+ */
+const DEBATE_PAGE_SIZE = 5;
 
 type DebateSide = { spaceId: string; position: boolean };
 
@@ -52,14 +59,21 @@ export function ClaimDebates({
   /** Labels each debater's side in the claim's own vocabulary — Agree/Disagree or Verify/Dispute. */
   responseKind: 'stance' | 'veracity';
 }) {
-  const { entities: debates, isLoading } = useQueryEntities({
+  const [limit, setLimit] = React.useState(DEBATE_PAGE_SIZE);
+
+  // One more than shown: `useQueryEntities` reports no total, so an extra row is the cheapest
+  // honest answer to "is there anything past this".
+  const { entities: page, isLoading } = useQueryEntities({
     where: {
       types: [{ id: { equals: DEBATE_TYPE_ID } }],
       spaces: [{ equals: spaceId }],
       relations: [{ typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { equals: claimId } } }],
     },
-    first: MAX_DEBATES,
+    first: limit + 1,
   });
+
+  const hasMore = page.length > limit;
+  const debates = React.useMemo(() => page.slice(0, limit), [limit, page]);
 
   const sidesByDebateId = React.useMemo(() => {
     const map = new Map<string, DebateSide[]>();
@@ -114,6 +128,15 @@ export function ClaimDebates({
           </li>
         ))}
       </ul>
+      {hasMore && (
+        <button
+          type="button"
+          onClick={() => setLimit(current => current + DEBATE_PAGE_SIZE)}
+          className="mt-3 text-metadata text-grey-04 transition-colors hover:text-text"
+        >
+          Show more debates
+        </button>
+      )}
     </section>
   );
 }

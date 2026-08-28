@@ -4,8 +4,15 @@ import { useQuery } from '@tanstack/react-query';
 
 import { Effect } from 'effect';
 
-import { getEntityResponseCounts } from '~/core/io/queries';
-import { type ResponseKind, entityResponseCountsQueryKey } from '~/core/responses/entity-response';
+import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { getEntityResponseCounts, getUserEntityResponse } from '~/core/io/queries';
+import {
+  type ActiveResponseDirection,
+  type ResponseKind,
+  entityResponseCountsQueryKey,
+  userEntityResponseQueryKey,
+} from '~/core/responses/entity-response';
 
 /** Entity responses rather than relation responses, matching what `EntityVoteButtons` asks for. */
 export const CLAIM_RESPONSE_OBJECT_TYPE = 0;
@@ -61,21 +68,37 @@ export function summarizeClaimResponses(positive: number, negative: number): Omi
   };
 }
 
+/** How many of each side a given response direction is worth, for the optimistic adjustment below. */
+function sideWeights(direction: ActiveResponseDirection | null | undefined): [positive: number, negative: number] {
+  if (direction === 'positive') return [1, 0];
+  if (direction === 'negative') return [0, 1];
+  return [0, 0];
+}
+
 /**
  * The split of on-chain responses on a claim, in one space.
  *
- * Deliberately the same query key `EntityVoteButtons` uses, so the verdict and the response control
- * share one fetch and one cache entry — the two are on screen together and must never disagree.
+ * Deliberately the same query keys `EntityVoteButtons` uses, so the verdict, the response pills and
+ * this share one fetch each — the three are on screen together and must never disagree.
  *
  * Space-scoped, and the space is the caller's. Responses are published against a space, so a claim
  * that lives in several has a different population in each; reading one space's counts under
  * another space's heading would report a number that belongs to neither.
+ *
+ * Counts the viewer's own response optimistically. Publishing, indexing and the read-back take a
+ * few seconds, so without this the bar sits at the old split while the pills next to it have
+ * already moved — which reads as the response not having counted. The adjustment is a delta rather
+ * than an increment: it adds the side the viewer now holds and removes the one the indexed counts
+ * still have them on, so it stays correct when they switch sides or clear their response, and
+ * collapses to zero the moment the server agrees.
  */
 export function useClaimResponseSummary(
   entityId: string,
   spaceId: string,
   responseKind: ResponseKind
 ): ClaimResponseSummary {
+  const { personalSpaceId } = usePersonalSpaceId();
+
   const { data, isLoading } = useQuery({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
     queryFn: () =>
@@ -83,5 +106,33 @@ export function useClaimResponseSummary(
     staleTime: 30_000,
   });
 
-  return { ...summarizeClaimResponses(data?.positive ?? 0, data?.negative ?? 0), isLoading };
+  // What the counts above already include for this viewer — the baseline the delta subtracts.
+  const { data: indexedDirection } = useQuery({
+    queryKey: userEntityResponseQueryKey(personalSpaceId, entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
+    queryFn: async () => {
+      if (!personalSpaceId) return null;
+      return Effect.runPromise(
+        getUserEntityResponse(personalSpaceId, entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)
+      );
+    },
+    enabled: Boolean(personalSpaceId),
+    staleTime: 30_000,
+  });
+
+  const indexing = useEntityResponseIndexingSnapshot({ entityId, spaceId, responseKind });
+  // Any non-idle snapshot means we know the viewer's intent, `indexed` included — dropping back to
+  // the server's copy the moment indexing reports done, but before the count query has refetched,
+  // is what would make a landed response flicker back to the old split.
+  const pending = indexing.status === 'idle' ? null : indexing.pending;
+  const activeDirection = pending ? pending.expectedResponse : indexedDirection;
+
+  const [activePositive, activeNegative] = sideWeights(activeDirection);
+  const [indexedPositive, indexedNegative] = sideWeights(indexedDirection);
+
+  // Clamped: the counts and the viewer's indexed response are two queries that can settle out of
+  // step, and a negative side would render as a bar sliver pointing the wrong way.
+  const positive = Math.max(0, (data?.positive ?? 0) + activePositive - indexedPositive);
+  const negative = Math.max(0, (data?.negative ?? 0) + activeNegative - indexedNegative);
+
+  return { ...summarizeClaimResponses(positive, negative), isLoading };
 }
