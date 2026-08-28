@@ -161,6 +161,28 @@ vi.mock('./hooks', () => ({
       refetch: vi.fn(),
     };
   },
+  // Each card's end slot asks whether there is a debate to be had on its claim. One shared query at
+  // runtime; here it only has to answer "no", so the slot stays empty and the tab's own assertions
+  // are about the tab.
+  useMatchmakingMatches: () => ({ data: { matches: [] }, isLoading: false, error: null }),
+  useDebateRequests: () => ({ data: { inbound: [], outbound: null }, isLoading: false, error: null }),
+  useCreateDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+}));
+
+// The cards report their own responses now, which is a graph read per card and not what this tab's
+// tests are about.
+vi.mock('~/core/claims/browse/claim-response-summary', () => ({
+  useClaimResponseSummary: () => ({
+    positive: 0,
+    negative: 0,
+    total: 0,
+    percent: null,
+    meetsFloor: false,
+    isControversial: false,
+    isLoading: true,
+    viewerDirection: null,
+    viewerSpaceId: null,
+  }),
 }));
 
 // The readiness switch rides the shared queue-backed machine, which reaches for geo-chat auth and
@@ -175,6 +197,8 @@ vi.mock('../hooks', () => ({
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  // Read by the end slot's match lookup; the tab's tests do not exercise availability.
+  useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
   useLeaveDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
   // Featured rows are hydrated by the per-space debate-claims lookup. Records what it was asked

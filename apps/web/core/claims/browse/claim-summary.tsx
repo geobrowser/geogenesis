@@ -1,10 +1,10 @@
 'use client';
 
+import * as Popover from '@radix-ui/react-popover';
+
 import * as React from 'react';
 
 import cx from 'classnames';
-
-import * as Popover from '@radix-ui/react-popover';
 
 import { ENTITY_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 

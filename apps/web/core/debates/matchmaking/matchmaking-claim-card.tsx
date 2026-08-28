@@ -6,6 +6,9 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
+import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
+import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import {
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
@@ -15,9 +18,6 @@ import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
-import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
-import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 

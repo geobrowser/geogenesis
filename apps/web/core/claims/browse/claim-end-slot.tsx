@@ -3,15 +3,14 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-
-import type { Debate } from '~/core/debates/api';
-import { NavUtils } from '~/core/utils/utils';
-
 // A plain link, not `PrefetchLink`. That one warms the entity queries behind an entity page, which
 // is worth it for a destination the reader is looking at — but the end slot rides on every card in
 // a feed, and prefetching a debate for each of them is exactly the eager work the feed's viewport
 // gating exists to avoid.
 import Link from 'next/link';
+
+import type { Debate } from '~/core/debates/api';
+import { NavUtils } from '~/core/utils/utils';
 
 import { useClaimMatchup } from './use-claim-matchup';
 
@@ -65,7 +64,8 @@ export function ClaimEndSlot({
     enabled,
   });
 
-  const base = 'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-footnoteMedium transition-colors';
+  const base =
+    'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-footnoteMedium transition-colors';
 
   if (match) {
     return (

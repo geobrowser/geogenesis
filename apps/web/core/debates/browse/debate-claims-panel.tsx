@@ -10,11 +10,11 @@ import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-sum
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
+import { useDebateClaims } from '~/core/debates/hooks';
+import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/core/debates/transcript-claims';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { useDebateClaims } from '~/core/debates/hooks';
-import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { NavUtils } from '~/core/utils/utils';

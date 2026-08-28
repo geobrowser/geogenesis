@@ -2,11 +2,11 @@
 
 import * as React from 'react';
 
+import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import {
   positionSummariesFromCounts,
   viewerResponseFromDirection,
 } from '~/core/claims/browse/claim-position-summaries';
-import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { claimSummaryTier, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
@@ -280,7 +280,7 @@ function ClaimVerdictColumn({
 
   return (
     <>
-      <div className="text-[2rem] leading-none font-semibold tracking-[-0.8px] tabular-nums text-text">{percent}%</div>
+      <div className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums">{percent}%</div>
       <Text as="p" variant="metadata" color="grey-04" className="mt-1.5">
         {copy.positiveAction.toLowerCase()}
       </Text>
@@ -329,7 +329,9 @@ function ClaimCardActions({
     where: {
       types: [{ id: { equals: DEBATE_TYPE_ID } }],
       spaces: [{ equals: item.spaceId }],
-      relations: [{ typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { equals: item.entityId } } }],
+      relations: [
+        { typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { equals: item.entityId } } },
+      ],
     },
     first: COUNT_PAGE_SIZE,
     enabled,
@@ -357,7 +359,12 @@ function ClaimCardActions({
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       {debateCount ? (
-        <button type="button" onClick={open} aria-label={`${debateCount} debates on this claim`} className={actionClassName}>
+        <button
+          type="button"
+          onClick={open}
+          aria-label={`${debateCount} debates on this claim`}
+          className={actionClassName}
+        >
           <span className="block size-3.5 shrink-0">
             <Megaphone />
           </span>

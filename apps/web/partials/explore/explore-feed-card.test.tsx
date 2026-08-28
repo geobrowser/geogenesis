@@ -9,6 +9,21 @@ import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 
 import { ExploreFeedCard } from './explore-feed-card';
 
+// The claim card's response controls reach this module, whose top-level `atomWithStorage` runs on
+// import — and under Node's own webstorage, which shadows jsdom's with an object that has no
+// getItem, that import takes the whole suite down before a test runs. Mocked rather than worked
+// around in a setup file so the file stands on its own.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: () => false,
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+}));
+
+vi.mock('./claim-explore-feed-card', () => ({
+  ClaimExploreFeedCard: ({ item }: { item: { title: string } }) => <div data-testid="claim-card">{item.title}</div>,
+}));
+
 vi.mock('~/design-system/fallback-image', () => ({
   FallbackImage: () => <div data-testid="image" />,
 }));
@@ -80,6 +95,31 @@ describe('ExploreFeedCard', () => {
   it('does not route non-debate items to the debate card', () => {
     render(<ExploreFeedCard item={item} />);
     expect(screen.queryByTestId('debate-card')).toBeNull();
+  });
+
+  it('routes Claim-typed items to the claim card', () => {
+    // Hyphenated on purpose: type-id comparison must ignore hyphenation.
+    const claimItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: '96f859ef-a1ca-4b22-9372-c86ad58b694b', name: 'Claim' }],
+      title: 'Ukrainian drones struck a St. Petersburg oil terminal.',
+    };
+    render(<ExploreFeedCard item={claimItem} />);
+
+    expect(screen.getByTestId('claim-card').textContent).toBe(claimItem.title);
+  });
+
+  it('leaves every other type on the generic card', () => {
+    // The constraint this whole card is gated by: a claim looks different, and nothing else moves.
+    // `item` is typed with a name of "Claim" but not the Claim *id*, which is exactly the trap —
+    // the gate reads ids, and a card must not change because a type happens to be called Claim.
+    render(<ExploreFeedCard item={item} />);
+    expect(screen.queryByTestId('claim-card')).toBeNull();
+
+    cleanup();
+    render(<ExploreFeedCard item={{ ...item, types: [{ id: 'some-other-type', name: 'Person' }] }} />);
+    expect(screen.queryByTestId('claim-card')).toBeNull();
+    expect(screen.queryByTestId('row-actions')).not.toBeNull();
   });
 
   it('routes card actions through EntityRowActions so claims keep their debate toggle', () => {

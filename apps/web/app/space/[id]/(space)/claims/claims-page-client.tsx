@@ -417,4 +417,3 @@ function ClaimDebateStatus({ debateClaim, published }: { debateClaim: DebateClai
 
   return null;
 }
-

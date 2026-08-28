@@ -51,11 +51,48 @@ vi.mock('~/core/debates/claims-best-order', async () => {
   };
 });
 
-vi.mock('~/partials/entity-page/entity-row-actions', () => ({
-  EntityRowActions: (props: Record<string, unknown>) => {
+// The rows carry the shared claim controls now — labelled pills and the evidence-scaled summary —
+// rather than the data block's chevrons. Mocked at the summary, which is the one part that receives
+// the claim and its space, so these assertions still test what they always tested: which claim each row
+// is for, and which space it is scoped to.
+vi.mock('~/core/claims/browse/claim-summary', () => ({
+  ClaimSummary: (props: Record<string, unknown>) => {
     mocks.responseControlProps.push(props);
     return <div data-testid={`row-actions-${String(props.entityId)}`} />;
   },
+}));
+
+// The pills publish through the entity-response stack, which is not what this panel is about.
+vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
+  PositionRow: () => <div data-testid="position-row" />,
+  useClaimPositionControl: () => ({
+    viewerPosition: null,
+    optimisticPositions: [],
+    respond: vi.fn(),
+    actionTitle: () => '',
+    responseError: null,
+    canRespond: true,
+  }),
+}));
+
+vi.mock('~/core/claims/browse/claim-response-summary', () => ({
+  useClaimResponseSummary: () => ({
+    positive: 0,
+    negative: 0,
+    total: 0,
+    percent: null,
+    meetsFloor: false,
+    isControversial: false,
+    isLoading: false,
+    viewerDirection: null,
+    viewerSpaceId: null,
+  }),
+}));
+
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
+
+vi.mock('~/core/debates/hooks', () => ({
+  useDebateClaims: () => ({ data: { claims: [] }, isLoading: false, isError: false, error: null }),
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({

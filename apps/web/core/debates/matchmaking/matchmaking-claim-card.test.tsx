@@ -576,5 +576,4 @@ describe('MatchmakingClaimCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
     expect(mocks.submitResponse).toHaveBeenCalled();
   });
-
 });

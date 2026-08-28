@@ -89,8 +89,7 @@ export function ClaimVerdict({
           />
         </div>
         <Text as="p" variant="footnote" color="grey-04" className="mt-3">
-          {summary.total === 1 ? '1 response' : `${summary.total} responses`} so far — too few to call
-          the split.
+          {summary.total === 1 ? '1 response' : `${summary.total} responses`} so far — too few to call the split.
         </Text>
       </section>
     );

@@ -16,7 +16,15 @@ import { ID } from '~/core/id';
  * The queries are the hub's own and are keyed identically, so a list of cards asking this question
  * shares one fetch of the matches rather than one per card.
  */
-export function useClaimMatchup({ claimId, spaceId, enabled = true }: { claimId: string; spaceId: string; enabled?: boolean }) {
+export function useClaimMatchup({
+  claimId,
+  spaceId,
+  enabled = true,
+}: {
+  claimId: string;
+  spaceId: string;
+  enabled?: boolean;
+}) {
   const matchesQuery = useMatchmakingMatches(enabled);
   const requestsQuery = useDebateRequests(enabled);
   const { data: activity } = useDebateActivity(enabled);
