@@ -36,6 +36,7 @@ export function useTopicLinkedEntities({
   after,
   enabled = true,
   rankInSpaceId,
+  spaceIds,
 }: {
   topicId: string;
   /** Narrows to these types. Omit for everything that names the topic. */
@@ -45,13 +46,21 @@ export function useTopicLinkedEntities({
   enabled?: boolean;
   /** The space the ranking is read in. Ranking is space-scoped; omit to leave the page unranked. */
   rankInSpaceId?: string | null;
+  /**
+   * Narrows to entities living in one of these spaces. Undefined leaves the query unscoped, which
+   * is what `useTopicSpaceScope` returns while the allowlist is still resolving.
+   */
+  spaceIds?: string[];
 }) {
   const where = React.useMemo(
     () => ({
       ...(typeIds && typeIds.length > 0 ? { types: typeIds.map(id => ({ id: { equals: id } })) } : {}),
+      // Omitted rather than sent empty: the converter only emits a clause for a non-empty list, and
+      // an empty one on the wire would be a filter matching nothing.
+      ...(spaceIds && spaceIds.length > 0 ? { spaces: spaceIds.map(id => ({ equals: id })) } : {}),
       relations: [{ typeOf: { id: { equals: TOPICS_PROPERTY_ID } }, toEntity: { id: { equals: topicId } } }],
     }),
-    [topicId, typeIds]
+    [spaceIds, topicId, typeIds]
   );
 
   const {

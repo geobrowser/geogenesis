@@ -6,6 +6,8 @@ import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pag
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 
+import { useTopicSpaceScope } from '../use-topic-space-scope';
+
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
@@ -35,18 +37,21 @@ const COVERAGE_PAGE_SIZE = 8;
  * comment row — and the version this section drew by hand had already drifted: no image, no
  * timestamp, no actions, a type chip where the feed sets a dotted meta line.
  */
-export function TopicCoverage({ topicId }: { topicId: string }) {
+export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: string }) {
   const pages = useCursorPages();
+  const scopedSpaceIds = useTopicSpaceScope(spaceId);
   const { page, isLoading, isPlaceholderData } = useTopicCoverage({
     topicId,
     first: COVERAGE_PAGE_SIZE,
     after: pages.cursor,
+    spaceIds: scopedSpaceIds,
   });
 
-  // A topic gathers across spaces, so these are routinely spaces the viewer has never opened and the
-  // browse sidebar cannot name. Looked up for the page in one batch rather than per card.
-  const spaceIds = React.useMemo(() => [...new Set(page.rows.map(row => row.spaceId))], [page.rows]);
-  const { labelsById } = useSpaceLabels(spaceIds);
+  // The spaces the rows landed in — a different question from the scope above, which is the spaces
+  // they were allowed to come from. Routinely spaces the viewer has never opened and the browse
+  // sidebar cannot name, so they are looked up for the page in one batch rather than per card.
+  const rowSpaceIds = React.useMemo(() => [...new Set(page.rows.map(row => row.spaceId))], [page.rows]);
+  const { labelsById } = useSpaceLabels(rowSpaceIds);
 
   const items = React.useMemo(
     () => page.rows.map(row => toFeedItem(row, spaceLabel(labelsById, row.spaceId))),

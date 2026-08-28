@@ -60,14 +60,21 @@ const FRAGMENT = 'TopicCoverageFragment';
 const TOPIC_COVERAGE_SOURCE = /* GraphQL */ `
   ${exploreCardPropertyFragment(FRAGMENT)}
 
-  query TopicCoverage($topicsPropertyId: UUID!, $topicId: UUID!, $typeIds: [UUID!], $first: Int, $after: Cursor) {
+  query TopicCoverage(
+    $topicsPropertyId: UUID!
+    $topicId: UUID!
+    $typeIds: [UUID!]
+    $spaceIds: [UUID!]
+    $first: Int
+    $after: Cursor
+  ) {
     relationsConnection(
       first: $first
       after: $after
       filter: {
         typeId: { is: $topicsPropertyId }
         toEntityId: { is: $topicId }
-        fromEntity: { typeIds: { overlaps: $typeIds } }
+        fromEntity: { typeIds: { overlaps: $typeIds }, spaceIds: { overlaps: $spaceIds } }
       }
     ) {
       pageInfo {
@@ -127,9 +134,20 @@ function decodeCoverage(response: CoverageResponse): TopicCoveragePage {
   };
 }
 
-export function useTopicCoverage({ topicId, first, after }: { topicId: string; first: number; after?: string }) {
+export function useTopicCoverage({
+  topicId,
+  first,
+  after,
+  spaceIds,
+}: {
+  topicId: string;
+  first: number;
+  after?: string;
+  /** Undefined leaves the query unscoped, which is what the scope hook returns while it resolves. */
+  spaceIds?: string[];
+}) {
   const { data, isLoading, isPlaceholderData } = useQuery({
-    queryKey: ['topic', 'coverage', ID.uuidToHex(topicId), first, after ?? null],
+    queryKey: ['topic', 'coverage', ID.uuidToHex(topicId), first, after ?? null, spaceIds ?? null],
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
@@ -139,6 +157,7 @@ export function useTopicCoverage({ topicId, first, after }: { topicId: string; f
             topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
             topicId: ID.uuidToHex(topicId),
             typeIds: COVERAGE_TYPE_IDS.map(ID.uuidToHex),
+            spaceIds: spaceIds?.map(ID.uuidToHex),
             first,
             after,
           },

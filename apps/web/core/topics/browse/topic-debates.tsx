@@ -20,6 +20,7 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { useTopicLinkedEntities } from './use-topic-linked-entities';
 
 const DEBATES_PAGE_SIZE = 5;
@@ -50,11 +51,13 @@ const CLAIMS_CONSIDERED = 100;
 export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: string }) {
   const pages = useCursorPages();
 
+  const spaceIds = useTopicSpaceScope(spaceId);
   const { entities: claims, isLoading: claimsLoading } = useTopicLinkedEntities({
     topicId,
     typeIds: [CLAIM_TYPE_ID],
     first: CLAIMS_CONSIDERED,
     rankInSpaceId: spaceId,
+    spaceIds,
   });
   const claimIds = React.useMemo(() => claims.map(claim => claim.id), [claims]);
 
@@ -67,6 +70,10 @@ export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: s
   } = useQueryEntities({
     where: {
       types: [{ id: { equals: DEBATE_TYPE_ID } }],
+      // Scoped on both hops. The claims above are already narrowed, but a debate can be published
+      // into a space of its own, so a curated claim argued in an uncurated space would otherwise
+      // still surface here.
+      ...(spaceIds && spaceIds.length > 0 ? { spaces: spaceIds.map(id => ({ equals: id })) } : {}),
       relations: [{ typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { in: claimIds } } }],
     },
     first: DEBATES_PAGE_SIZE,

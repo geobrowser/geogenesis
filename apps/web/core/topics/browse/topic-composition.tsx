@@ -17,6 +17,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { EPISODE_TYPE_ID, NEWS_STORY_TYPE_ID, POST_TYPE_ID, TWEET_TYPE_ID } from '../ontology';
+import { useTopicSpaceScope } from '../use-topic-space-scope';
 
 /**
  * What a topic is made of, counted rather than sampled.
@@ -40,15 +41,25 @@ const TOPIC_COMPOSITION_SOURCE = /* GraphQL */ `
     $post: [UUID!]
     $debate: [UUID!]
     $debateClaimsPropertyId: UUID!
+    $spaceIds: [UUID!]
   ) {
-    total: relationsConnection(filter: { typeId: { is: $topicsPropertyId }, toEntityId: { is: $topicId } }) {
+    # Scoped like every other bucket. The remainder is \`total\` minus the named buckets, so leaving
+    # this one wide would turn everything the scope excludes into "other" — a bar that grows as the
+    # page shows less.
+    total: relationsConnection(
+      filter: {
+        typeId: { is: $topicsPropertyId }
+        toEntityId: { is: $topicId }
+        fromEntity: { spaceIds: { overlaps: $spaceIds } }
+      }
+    ) {
       totalCount
     }
     claims: relationsConnection(
       filter: {
         typeId: { is: $topicsPropertyId }
         toEntityId: { is: $topicId }
-        fromEntity: { typeIds: { overlaps: $claim } }
+        fromEntity: { typeIds: { overlaps: $claim }, spaceIds: { overlaps: $spaceIds } }
       }
     ) {
       totalCount
@@ -57,7 +68,7 @@ const TOPIC_COMPOSITION_SOURCE = /* GraphQL */ `
       filter: {
         typeId: { is: $topicsPropertyId }
         toEntityId: { is: $topicId }
-        fromEntity: { typeIds: { overlaps: $episode } }
+        fromEntity: { typeIds: { overlaps: $episode }, spaceIds: { overlaps: $spaceIds } }
       }
     ) {
       totalCount
@@ -66,7 +77,7 @@ const TOPIC_COMPOSITION_SOURCE = /* GraphQL */ `
       filter: {
         typeId: { is: $topicsPropertyId }
         toEntityId: { is: $topicId }
-        fromEntity: { typeIds: { overlaps: $news } }
+        fromEntity: { typeIds: { overlaps: $news }, spaceIds: { overlaps: $spaceIds } }
       }
     ) {
       totalCount
@@ -75,7 +86,7 @@ const TOPIC_COMPOSITION_SOURCE = /* GraphQL */ `
       filter: {
         typeId: { is: $topicsPropertyId }
         toEntityId: { is: $topicId }
-        fromEntity: { typeIds: { overlaps: $tweet } }
+        fromEntity: { typeIds: { overlaps: $tweet }, spaceIds: { overlaps: $spaceIds } }
       }
     ) {
       totalCount
@@ -84,7 +95,7 @@ const TOPIC_COMPOSITION_SOURCE = /* GraphQL */ `
       filter: {
         typeId: { is: $topicsPropertyId }
         toEntityId: { is: $topicId }
-        fromEntity: { typeIds: { overlaps: $post } }
+        fromEntity: { typeIds: { overlaps: $post }, spaceIds: { overlaps: $spaceIds } }
       }
     ) {
       totalCount
@@ -101,6 +112,7 @@ const TOPIC_COMPOSITION_SOURCE = /* GraphQL */ `
     debates: entitiesConnection(
       filter: {
         typeIds: { overlaps: $debate }
+        spaceIds: { overlaps: $spaceIds }
         relations: {
           some: {
             typeId: { is: $debateClaimsPropertyId }
@@ -120,9 +132,9 @@ type CompositionResponse = Record<string, { totalCount?: number | null } | null 
 
 type Bucket = { key: string; label: string; count: number; className: string };
 
-export function useTopicComposition(topicId: string) {
+export function useTopicComposition(topicId: string, spaceIds?: string[]) {
   const { data, isLoading } = useQuery({
-    queryKey: ['topic', 'composition', ID.uuidToHex(topicId)],
+    queryKey: ['topic', 'composition', ID.uuidToHex(topicId), spaceIds ?? null],
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
@@ -146,6 +158,7 @@ export function useTopicComposition(topicId: string) {
             post: [ID.uuidToHex(POST_TYPE_ID)],
             debate: [ID.uuidToHex(DEBATE_TYPE_ID)],
             debateClaimsPropertyId: ID.uuidToHex(DEBATE_CLAIMS_PROPERTY_ID),
+            spaceIds: spaceIds?.map(ID.uuidToHex),
           },
           signal,
         })
@@ -164,8 +177,11 @@ export function useTopicComposition(topicId: string) {
  * which matters because the mix changes completely between topics: measured, one is 227 claims to
  * 73 episodes and another is 150 episodes to 56 news stories.
  */
-export function TopicComposition({ topicId }: { topicId: string }) {
-  const { counts, isLoading } = useTopicComposition(topicId);
+export function TopicComposition({ topicId, spaceId }: { topicId: string; spaceId: string }) {
+  // Scoped exactly like the sections below it, or the strip would promise content the page can't
+  // show.
+  const spaceIds = useTopicSpaceScope(spaceId);
+  const { counts, isLoading } = useTopicComposition(topicId, spaceIds);
 
   const buckets = React.useMemo<Bucket[]>(() => {
     if (!counts) return [];

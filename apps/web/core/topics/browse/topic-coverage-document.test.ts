@@ -53,8 +53,11 @@ describe('the topic coverage document', () => {
     // `overlaps`, not `containedBy`: the latter requires the entity's types to be a subset of the
     // list, so an episode that picks up a second type would silently vanish. The two agree on
     // today's data, which is what makes the mistake easy to make and hard to see.
-    expect(printed).toContain('fromEntity: {typeIds: {overlaps: $typeIds}}');
+    expect(printed).toContain('typeIds: {overlaps: $typeIds}');
     expect(printed).not.toContain('containedBy');
+    // Spaces are scoped with `overlaps` for a sharper reason: `spaceIds` is an array column, so
+    // `in` would demand an entity's whole set of spaces equal ours and drop every multi-space one.
+    expect(printed).toContain('spaceIds: {overlaps: $spaceIds}');
   });
 
   it('does not scope its value and relation lists to a space list it cannot have', () => {

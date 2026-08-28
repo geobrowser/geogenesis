@@ -9,6 +9,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { TopicClaimCard } from './topic-claim-card';
+import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { useTopicLinkedEntities } from './use-topic-linked-entities';
 
 const CLAIMS_PAGE_SIZE = 6;
@@ -24,12 +25,14 @@ const CLAIMS_PAGE_SIZE = 6;
  */
 export function TopicClaims({ topicId, spaceId }: { topicId: string; spaceId: string }) {
   const pages = useCursorPages();
+  const spaceIds = useTopicSpaceScope(spaceId);
   const { entities, isLoading, isPlaceholderData, endCursor, hasNextPage } = useTopicLinkedEntities({
     topicId,
     typeIds: [CLAIM_TYPE_ID],
     first: CLAIMS_PAGE_SIZE,
     after: pages.cursor,
     rankInSpaceId: spaceId,
+    spaceIds,
   });
 
   const claims = React.useMemo(() => entities.filter(entity => entity.name), [entities]);
