@@ -50,8 +50,12 @@ import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useStableListOrder } from './use-stable-list-order';
 
 const SEARCH_DEBOUNCE_MS = 250;
-/** Long enough to absorb a run of ticks, short enough not to feel like lag on a single one. */
-const SELECTION_DEBOUNCE_MS = 350;
+/**
+ * Just long enough to coalesce a run of ticks into one request. It was 350ms while the backend
+ * took seconds and each discarded request was expensive; now that GEO-2721 has landed the request
+ * is the cheap part, and the wait is the only thing left that anyone can feel.
+ */
+const SELECTION_DEBOUNCE_MS = 120;
 
 /**
  * GEO-2683. `featured` is the tab's own, not one of geo-chat's: the index has no notion of the tag,
@@ -148,10 +152,9 @@ export function ClaimsTab() {
   // Featured draws its own list, so the index isn't asked for one. The query keeps saying `all`
   // rather than going undefined: switching to Featured and back then lands on the pages already
   // cached instead of paging the corpus again from the top.
-  // Debounced like the search box, and for the same reason. The menu stays open across ticks, so
-  // picking three topics fired three requests and threw two away — each competing for a backend
-  // that takes seconds to answer once topics are involved (GEO-2721). The menu still reflects the
-  // tick instantly; only the request waits.
+  // Debounced like the search box, and for the same reason: the menu stays open across ticks, so
+  // picking three topics in a row fires three requests and throws two away. The menu still
+  // reflects each tick instantly; only the request waits.
   const debouncedTopicIds = useDebouncedValue(topicIds, SELECTION_DEBOUNCE_MS);
   const debouncedSpaceIds = useDebouncedValue(spaceIds, SELECTION_DEBOUNCE_MS);
 

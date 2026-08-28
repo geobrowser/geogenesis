@@ -12,6 +12,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { formatFacetCount } from './topic-facets';
+import { useDelayedFlag } from './use-delayed-flag';
 
 export type HubFilterOption<T extends string> = {
   value: T;
@@ -146,6 +147,14 @@ type MultiProps<T extends string> = {
  * count answers "how many of the claims I'm already looking at also carry this", and ticking one
  * does narrow the rest of its menu to what co-occurs with it (GEO-2696).
  */
+/**
+ * How long the counts may be pending before they turn into skeletons. GEO-2721 made the facets
+ * query fast — a materialized set rather than a subquery re-run per candidate row, 65ms rather
+ * than 17s — so an answer now normally arrives inside this window and the numbers just change.
+ * The skeleton stays for the slow answer it was written for, instead of flashing on every tick.
+ */
+const COUNT_SKELETON_DELAY_MS = 250;
+
 export function HubMultiFilterMenu<T extends string>({
   label,
   options,
@@ -158,6 +167,7 @@ export function HubMultiFilterMenu<T extends string>({
   countsPending,
 }: MultiProps<T>) {
   const [open, setOpen] = React.useState(false);
+  const showCountSkeletons = useDelayedFlag(countsPending ?? false, COUNT_SKELETON_DELAY_MS);
   const selected = new Set<string>(values);
 
   return (
@@ -234,7 +244,7 @@ export function HubMultiFilterMenu<T extends string>({
                 {option.label}
               </Text>
             )}
-            {option.count === undefined ? null : countsPending ? (
+            {option.count === undefined ? null : showCountSkeletons ? (
               // Held as a skeleton rather than removed: the number is coming back, and taking the
               // column away and putting it back makes every row twitch on each tick.
               <span className="ml-auto shrink-0">
