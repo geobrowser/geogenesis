@@ -126,6 +126,14 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     [filterStateKey, effectiveFilterMode]
   );
 
+  /**
+   * The query's own identity. Deliberately derived from `where` rather than `filterStateKey`:
+   * `effectiveFilterState` also carries `columnName`/`valueName`, which `resolveFilterDisplayNames`
+   * fills in asynchronously and `filterStateToWhere` discards. Keying off the filter state would
+   * make a name resolving from `null` to a string look like a new query.
+   */
+  const whereKey = React.useMemo(() => stableStringify(where), [where]);
+
   // Use the mapping to get the potential renderable properties.
   const propertiesSchema = useProperties(shownColumnIds, spaceId);
 
@@ -460,20 +468,24 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isPlaceholderData,
 
     /**
-     * A failed remote fetch settles as `isFetched` with the local-store fallback, so callers
-     * rendering an empty state need this to tell "nothing matched" from "the query never came
-     * back". Only the GEO/SPACES query reports one today; COLLECTION and RELATIONS do not.
+     * A failed remote fetch settles as `isFetched`, so callers rendering an empty state need this
+     * to tell "nothing matched" from "the query never came back".
+     *
+     * Source-scoped like `isFetched`/`hasNextPage` above, and for the same reason: the entities
+     * query is keyed purely on its content, so two blocks with identical `where`/page/sort share a
+     * cache entry. Without this scoping a COLLECTION or RELATIONS block would report the failure of
+     * an unrelated GEO block that happened to issue the same query.
      */
-    error: queriedError,
+    error: source.type === 'GEO' || source.type === 'SPACES' ? queriedError : null,
     /** Retry after `error` — without it a failed fetch reads as "fetched, zero results" forever. */
-    refetch: refetchQueriedEntities,
+    refetch: source.type === 'GEO' || source.type === 'SPACES' ? refetchQueriedEntities : undefined,
 
     /**
-     * The serialized query identity. Exposed so callers that cache derived per-query state can
-     * invalidate on exactly the same signal the query itself keys on, rather than re-deriving a
-     * projection of the filter/sort state that can silently drift from it.
+     * The serialized query identity. Exposed so callers caching derived per-query state can
+     * invalidate on exactly what the query keys on, rather than re-deriving a projection of the
+     * filter/sort state that can silently drift from it.
      */
-    filterStateKey,
+    whereKey,
     sortKey,
 
     name: entity?.name ?? null,

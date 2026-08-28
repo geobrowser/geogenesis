@@ -119,9 +119,7 @@ describe('useBlockInfiniteScroll', () => {
   // Without the entity scoping in the selector, every block on the page inherits infinite scroll
   // from any other block's relation entity in the same space.
   it('ignores a value on a different block’s relation entity', () => {
-    storeValues.current = [
-      infiniteScrollValue({ entity: { id: 'some-other-blocks-relation', name: null } }),
-    ];
+    storeValues.current = [infiniteScrollValue({ entity: { id: 'some-other-blocks-relation', name: null } })];
 
     const { result } = renderHook(() => useBlockInfiniteScroll());
     expect(result.current).toBe(false);

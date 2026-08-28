@@ -30,7 +30,7 @@ describe('buildAccumulationResetKey', () => {
     isInfiniteScroll: true,
     pageSize: 25,
     sourceKey: '"GEO"',
-    filterStateKey: '[{"columnId":"a","value":"b"}]',
+    whereKey: '{"values":[{"property":"a","value":"b"}]}',
     filterMode: 'AND',
     sortKey: 'null',
   };
@@ -45,12 +45,9 @@ describe('buildAccumulationResetKey', () => {
   it('changes when the query identity changes but the column and value do not', () => {
     const asRelation = buildAccumulationResetKey({
       ...base,
-      filterStateKey: '[{"columnId":"a","value":"b","valueType":"RELATION"}]',
+      whereKey: '{"relations":[{"property":"a","toEntity":"b"}]}',
     });
-    const asText = buildAccumulationResetKey({
-      ...base,
-      filterStateKey: '[{"columnId":"a","value":"b","valueType":"TEXT"}]',
-    });
+    const asText = buildAccumulationResetKey({ ...base, whereKey: '{"values":[{"property":"a","contains":"b"}]}' });
     expect(asRelation).not.toBe(asText);
   });
 
@@ -105,9 +102,7 @@ describe('resolveInfiniteScrollDisplay', () => {
   // A failed fetch settles as isFetched with an empty local-store fallback and hasNextPage false.
   // Without the error signal that is indistinguishable from an exhausted, empty result set.
   it('offers a retry instead of the placeholder when the first page fails', () => {
-    expect(
-      resolveInfiniteScrollDisplay({ ...base, hasRows: false, hasNextPage: false, hasError: true })
-    ).toEqual({
+    expect(resolveInfiniteScrollDisplay({ ...base, hasRows: false, hasNextPage: false, hasError: true })).toEqual({
       showSentinel: false,
       showSkeleton: false,
       showRetry: true,
@@ -128,14 +123,17 @@ describe('resolveInfiniteScrollDisplay', () => {
     });
   });
 
-  // Every row on this page was hidden or owned by another block. Walking on is correct; declaring
-  // the whole result set empty strands the rows on later pages.
-  it('keeps walking when a page yields no visible rows but more pages exist', () => {
+  // Deliberately does NOT keep fetching, even though more pages exist: the sentinel would sit
+  // alone in an empty container with a 1000px root margin, stay intersecting, and walk the entire
+  // source unbounded. This matches the pre-branch behaviour, and the case is not reachable in
+  // browse mode anyway — rows are only hidden from a block by `isEntityVisibleInBlock`, which acts
+  // on entities registered at creation time, and infinite scroll is off while editing.
+  it('does not auto-walk when a page yields no visible rows', () => {
     expect(resolveInfiniteScrollDisplay({ ...base, hasRows: false })).toEqual({
-      showSentinel: true,
-      showSkeleton: true,
+      showSentinel: false,
+      showSkeleton: false,
       showRetry: false,
-      showEmptyState: false,
+      showEmptyState: true,
     });
   });
 
@@ -162,7 +160,7 @@ describe('resolveInfiniteScrollDisplay', () => {
     const paged = { ...base, isInfiniteScroll: false };
 
     it('renders no infinite-scroll affordances at all', () => {
-      const result = resolveInfiniteScrollDisplay({ ...paged, hasNextPage: true, isFetchingNextPage: true });
+      const result = resolveInfiniteScrollDisplay({ ...paged, hasNextPage: true });
       expect(result.showSentinel).toBe(false);
       expect(result.showSkeleton).toBe(false);
       expect(result.showRetry).toBe(false);

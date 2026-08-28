@@ -581,7 +581,7 @@ const ConfiguredTableBlock = ({
     isPlaceholderData,
     error: dataBlockError,
     refetch: refetchDataBlock,
-    filterStateKey,
+    whereKey,
     sortKey,
     hasNextPage,
     hasPreviousPage,
@@ -753,7 +753,8 @@ const ConfiguredTableBlock = ({
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
 
   // A failed page never lands in `rowPages`, so without this the block cannot tell "no results"
-  // from "the fetch never came back" — see `resolveInfiniteScrollDisplay`.
+  // from "the fetch never came back" — see `resolveInfiniteScrollDisplay`. `error` is source-scoped
+  // by `useDataBlock`, so this only ever reflects this block's own query.
   const hasInfiniteScrollError = isInfiniteScroll && dataBlockError != null;
 
   const accumulationResetKey = React.useMemo(
@@ -764,11 +765,11 @@ const ConfiguredTableBlock = ({
         sourceKey: JSON.stringify(
           source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO'
         ),
-        filterStateKey,
+        whereKey,
         filterMode: activeFilterMode,
         sortKey,
       }),
-    [isInfiniteScroll, pageSize, source, filterStateKey, activeFilterMode, sortKey]
+    [isInfiniteScroll, pageSize, source, whereKey, activeFilterMode, sortKey]
   );
 
   // `setPage(0)` only lands on the next render, so between the reset and that render `pageNumber`
@@ -792,8 +793,8 @@ const ConfiguredTableBlock = ({
   React.useEffect(() => {
     if (!isInfiniteScroll) return;
     if (!isFetched || isPlaceholderData) return;
-    // A failed fetch settles as `isFetched` with the local-store fallback, so committing here
-    // would bank an empty page as loaded and never retry it.
+    // A failed fetch still settles as `isFetched`, so committing here would bank whatever the
+    // local-store fallback returned as if it were the page, and never retry it.
     if (hasInfiniteScrollError) return;
     if (awaitingPageResetRef.current) {
       // Nothing to wait for once we are actually on page 0 — that is the reset having landed
@@ -842,10 +843,11 @@ const ConfiguredTableBlock = ({
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
   // 2. OR filters are active and unfiltered data had multiple pages
-  // Never in infinite-scroll browse mode — except when infinite scroll has errored, where the
-  // pager is the only way forward if retrying keeps failing.
+  // Never in infinite-scroll browse mode. Restoring it on error does not help: the rendered list
+  // is the accumulated pages regardless of page number, so the pager cannot change what is on
+  // screen, and paging switches query keys which clears the error and re-arms the sentinel.
   const hasPagination =
-    (!isInfiniteScroll || hasInfiniteScrollError) &&
+    !isInfiniteScroll &&
     (hasPreviousPage || hasNextPage || totalPages > 1 || (activeFilters.length > 0 && hasMultiplePagesWhenUnfiltered));
 
   let EntriesComponent = (
@@ -988,11 +990,7 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  if (
-    infiniteScrollDisplay.showSentinel ||
-    infiniteScrollDisplay.showSkeleton ||
-    infiniteScrollDisplay.showRetry
-  ) {
+  if (infiniteScrollDisplay.showSentinel || infiniteScrollDisplay.showSkeleton || infiniteScrollDisplay.showRetry) {
     EntriesComponent = (
       <>
         {displayEntries.length > 0 && EntriesComponent}
@@ -1003,9 +1001,9 @@ const ConfiguredTableBlock = ({
           </div>
         )}
         {infiniteScrollDisplay.showRetry && (
-          <div className="flex flex-col items-center gap-2 py-4 text-footnote text-grey-04">
+          <div className="flex flex-col items-center gap-2 py-4 text-footnote text-grey-04" role="status">
             <span>Couldn&apos;t load more results.</span>
-            <button type="button" onClick={() => void refetchDataBlock()} className="text-ctaPrimary hover:underline">
+            <button type="button" onClick={() => void refetchDataBlock?.()} className="text-ctaPrimary hover:underline">
               Try again
             </button>
           </div>

@@ -21,18 +21,21 @@ export function viewRendersAllEntries(view: DataBlockView): boolean {
  * Identity of the query whose pages are being accumulated. When it changes, the accumulated pages
  * belong to a query that is no longer on screen and must be thrown away.
  *
- * `filterStateKey` and `sortKey` come straight from `useDataBlock`, which is what the query itself
- * keys on. Deriving them here instead — projecting a few fields off each filter — is how this
- * drifted before: `valueType`, `isBacklink`, `relationValueTypes` and `typesRelationSpaceId` all
- * change the emitted `where` clause without touching `columnId` or `value`, so a filter swap could
- * re-run the query while leaving this key byte-identical, stranding the previous filter's rows in
- * the list.
+ * `whereKey` and `sortKey` come straight from `useDataBlock` and are the serialized query identity.
+ * Re-deriving them here — projecting a few fields off each filter — is how this drifted before:
+ * `valueType`, `isBacklink`, `relationValueTypes` and `typesRelationSpaceId` all change the emitted
+ * `where` clause without touching `columnId` or `value`, so a filter swap could re-run the query
+ * while leaving this key byte-identical, stranding the previous filter's rows in the list.
+ *
+ * Equally, this must not key on anything the query ignores. `filterStateKey` would be wrong for
+ * that reason: it carries display names resolved asynchronously, so a name arriving would discard
+ * the user's accumulated pages for a query that never changed.
  */
 export function buildAccumulationResetKey(input: {
   isInfiniteScroll: boolean;
   pageSize: number;
   sourceKey: string;
-  filterStateKey: string;
+  whereKey: string;
   filterMode: string;
   sortKey: string;
 }): string {
@@ -40,7 +43,7 @@ export function buildAccumulationResetKey(input: {
     input.isInfiniteScroll,
     input.pageSize,
     input.sourceKey,
-    input.filterStateKey,
+    input.whereKey,
     input.filterMode,
     input.sortKey,
   ]);
@@ -97,19 +100,17 @@ export function resolveInfiniteScrollDisplay(input: {
   }
 
   // An error outranks everything: never keep fetching, never claim the result set is empty, and
-  // never leave the skeleton up. The user gets a retry instead — and the caller restores the
-  // pager, so there is a way forward even if retrying keeps failing.
+  // never leave the skeleton up. The user gets a retry instead.
   if (hasError) {
     return { showSentinel: false, showSkeleton: false, showRetry: true, showEmptyState: false };
   }
 
-  // No rows yet but more pages exist — every row on this page was filtered out (hidden, or owned
-  // by another block). Keep the sentinel mounted so the list walks on to a page that has some,
-  // rather than declaring the whole result set empty.
-  if (!hasRows && hasNextPage) {
-    return { showSentinel: true, showSkeleton: true, showRetry: false, showEmptyState: false };
-  }
-
+  // Note there is deliberately no "no rows but more pages exist, so keep walking" branch. It would
+  // be an unbounded auto-fetch — the sentinel sits alone in an empty container with a 1000px root
+  // margin, so it stays intersecting and re-fires as fast as responses arrive, walking the entire
+  // source. The case it would serve is not reachable in practice either: rows are only hidden from
+  // a block by `isEntityVisibleInBlock`, which acts on entities registered at creation time, and
+  // infinite scroll is off while editing.
   return {
     showSentinel: hasRows && hasNextPage,
     showSkeleton: hasRows && isFetchingNextPage,
