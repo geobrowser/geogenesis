@@ -171,22 +171,23 @@ function ClaimHeader({
   );
 }
 
-/** The live case: the side buttons publish the viewer's on-chain response. */
-function RespondableControls({
+/**
+ * The viewer's side of a claim, and everything needed to change it.
+ *
+ * Extracted from the card so surfaces that draw their own layout around the same controls — the
+ * claim page's "Your position" block — publish responses through exactly this path rather than
+ * growing a second copy of the optimistic and indexing handling below, which exists to fix bugs
+ * that are not obvious from the outside.
+ */
+export function useClaimPositionControl({
   claim,
   positions,
   readiness,
-  activeDebate,
-  onOpenClaim,
-  hideReadinessToggle,
   viewerIdentityPending,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
-  onOpenClaim?: () => void;
-  hideReadinessToggle?: boolean;
   viewerIdentityPending?: boolean;
 }) {
   const target = {
@@ -275,6 +276,37 @@ function RespondableControls({
     return position ? copy.positiveAction : copy.negativeAction;
   };
 
+  return {
+    viewerPosition,
+    optimisticPositions,
+    respond,
+    actionTitle,
+    responseError,
+    /** False only while the account genuinely cannot publish, never while one is in flight. */
+    canRespond: isConnected && !isAccountSetupPending,
+  };
+}
+
+/** The live case: the side buttons publish the viewer's on-chain response. */
+function RespondableControls({
+  claim,
+  positions,
+  readiness,
+  activeDebate,
+  onOpenClaim,
+  hideReadinessToggle,
+  viewerIdentityPending,
+}: {
+  claim: DebateClaimSummary;
+  positions: DebateClaimPositionSummary[];
+  readiness: MatchmakingReadiness;
+  activeDebate?: boolean;
+  onOpenClaim?: () => void;
+  hideReadinessToggle?: boolean;
+  viewerIdentityPending?: boolean;
+}) {
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
+    useClaimPositionControl({ claim, positions, readiness, viewerIdentityPending });
   return (
     <>
       <ClaimHeader
@@ -295,7 +327,7 @@ function RespondableControls({
         // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
         // overlapping submissions, so there is nothing to protect against — and dimming the pills
         // for the length of an indexing round trip read as the response not having landed.
-        disabled={!isConnected || isAccountSetupPending}
+        disabled={!canRespond}
         titleFor={actionTitle}
       />
       {responseError ? (
@@ -441,7 +473,7 @@ function UnresolvableControls({
   );
 }
 
-function PositionRow({
+export function PositionRow({
   positions,
   responseKind,
   viewerPosition,

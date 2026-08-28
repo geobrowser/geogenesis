@@ -5,7 +5,10 @@ import * as React from 'react';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { TAG_PROPERTY_ID } from '~/core/constants';
-import { ClaimDebateButton } from '~/core/debates/claim-debate-button';
+import type { DebateClaim } from '~/core/debates/api';
+import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
+import { useDebateClaims } from '~/core/debates/hooks';
+import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { ID } from '~/core/id';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -16,9 +19,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
-
 import { ClaimDebates } from './claim-debates';
+import { positionSummariesFromCounts } from './claim-position-summaries';
 import { ClaimProvenance } from './claim-provenance';
 import { ClaimRelatedClaims } from './claim-related-claims';
 import { useClaimResponseSummary } from './claim-response-summary';
@@ -65,8 +67,6 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 
   if (!entity) return null;
 
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
-
   return (
     <div className="@container">
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-6 @[560px]:gap-8 @[560px]:px-5 @[560px]:py-8">
@@ -77,7 +77,7 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
               {tags.map(tag => (
                 <span
                   key={tag.id}
-                  className="inline-flex max-w-full items-center rounded-sm bg-ctaTertiary px-2 py-0.5 text-metadata font-medium text-ctaPrimary"
+                  className="inline-flex max-w-full items-center rounded-sm bg-grey-01 px-2 py-0.5 text-metadata font-medium text-grey-04"
                 >
                   <span className="truncate">{tag.toEntity.name ?? tag.toEntity.id}</span>
                 </span>
@@ -117,21 +117,13 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 
         <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
 
-        {/* Your position. The response control and the readiness toggle are stacked rather than
-            placed side by side because they are one sequence, not two choices: readiness can only
-            be switched on once a side has been taken. */}
-        <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
-          <Text as="div" variant="metadataMedium" color="grey-04" className="mb-2">
-            Your position
-          </Text>
-          <EntityVoteButtons entityId={entityId} spaceId={spaceId} />
-          <div className="mt-4 border-t border-divider pt-4">
-            <ClaimDebateButton entityId={entityId} spaceId={spaceId} />
-            <Text as="p" variant="metadata" color="grey-04" className="mt-2">
-              {`Stand ready and we'll match you with someone who picked ${copy.negativeAction.toLowerCase()}.`}
-            </Text>
-          </div>
-        </section>
+        <ClaimPositionSection
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          positive={summary.positive}
+          negative={summary.negative}
+        />
 
         <ClaimDebates claimId={entityId} spaceId={spaceId} responseKind={responseKind} />
 
@@ -140,6 +132,107 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
         <ClaimRelatedClaims claimId={entityId} spaceId={spaceId} topicIds={topicIds} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Taking a side, and standing ready to argue it.
+ *
+ * One card, stacked, because the two are a sequence rather than two independent choices: the
+ * readiness switch can only be turned *on* for a claim you have already responded to. Side by side
+ * they read as two controls that mysteriously disable each other.
+ *
+ * The pills and the publishing behind them come from the hub's own control, so a response taken
+ * here goes through exactly the path a response taken in the panel does — including the optimistic
+ * handling that keeps a just-published side from looking like it was discarded.
+ */
+function ClaimPositionSection({
+  entityId,
+  spaceId,
+  responseKind,
+  positive,
+  negative,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: 'stance' | 'veracity';
+  positive: number;
+  negative: number;
+}) {
+  // geo-chat's row carries the viewer's server-side response and their readiness. A claim nobody
+  // has answered has no row at all, which is a settled answer rather than a missing one.
+  const rowQuery = useDebateClaims(spaceId, [entityId], true);
+  const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
+
+  const claim = React.useMemo(
+    () => ({
+      id: row?.id ?? entityId,
+      space_id: spaceId,
+      claim_entity_id: entityId,
+      claim: '',
+      description: null,
+    }),
+    [entityId, row?.id, spaceId]
+  );
+
+  const positions = React.useMemo(
+    () => positionSummariesFromCounts(positive, negative, responseKind, row),
+    [negative, positive, responseKind, row]
+  );
+
+  const readiness = React.useMemo(
+    () => ({
+      response_kind: row?.response_kind ?? responseKind,
+      viewer_response: row?.viewer_response ?? null,
+      viewer_debate_ready: row?.viewer_debate_ready ?? false,
+      readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
+    }),
+    [responseKind, row]
+  );
+
+  const control = useClaimPositionControl({ claim, positions, readiness });
+  const copy = ENTITY_RESPONSE_COPY[readiness.response_kind];
+
+  return (
+    <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
+      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-2.5">
+        Your position
+      </Text>
+      <PositionRow
+        positions={control.optimisticPositions}
+        responseKind={readiness.response_kind}
+        viewerPosition={control.viewerPosition}
+        onRespond={control.respond}
+        disabled={!control.canRespond}
+        titleFor={control.actionTitle}
+      />
+      {control.responseError ? (
+        <div role="alert" className="mt-2">
+          <Text as="p" variant="footnote" color="red-01">
+            {control.responseError}
+          </Text>
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-divider pt-4">
+        <div className="min-w-0">
+          <Text as="div" variant="metadataMedium" color="text">
+            Ready to debate this
+          </Text>
+          <Text as="p" variant="metadata" color="grey-04" className="mt-0.5">
+            {`We'll match you with someone who picked ${copy.negativeAction.toLowerCase()}.`}
+          </Text>
+        </div>
+        <ClaimDebateReadiness
+          debateClaim={row}
+          entityId={entityId}
+          spaceId={spaceId}
+          canEnable={!row?.active_debate}
+          isLoading={rowQuery.isLoading}
+          compact
+        />
+      </div>
+    </section>
   );
 }
 

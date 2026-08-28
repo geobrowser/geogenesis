@@ -21,9 +21,12 @@ import type { Entity, Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { GeoImage } from '~/design-system/geo-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
+
+import { useDebateKeyframes } from './use-debate-keyframes';
 
 /** Enough to show the claim has been argued without turning the page into a debate index. */
 const MAX_DEBATES = 5;
@@ -83,6 +86,7 @@ export function ClaimDebates({
 
   const debateIds = React.useMemo(() => debates.map(debate => debate.id), [debates]);
   const winnerShareByDebateId = useWinnerShares(debateIds);
+  const keyframeByDebateId = useDebateKeyframes(debates);
 
   if (isLoading) {
     return <Skeleton className="h-[120px] w-full rounded-lg" />;
@@ -93,7 +97,7 @@ export function ClaimDebates({
   return (
     <section aria-label="Debates on this claim">
       <Text as="h2" variant="smallTitle" color="text" className="mb-3 block">
-        {debates.length === 1 ? 'Debate on this claim' : 'Debates on this claim'}
+        Debates on this claim
       </Text>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {debates.map(debate => (
@@ -104,6 +108,7 @@ export function ClaimDebates({
               sides={sidesByDebateId.get(debate.id) ?? []}
               profilesBySpaceId={profilesBySpaceId}
               winnerShare={winnerShareByDebateId.get(debate.id) ?? null}
+              keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
               responseKind={responseKind}
             />
           </li>
@@ -167,6 +172,7 @@ function DebateRow({
   sides,
   profilesBySpaceId,
   winnerShare,
+  keyframeUrl,
   responseKind,
 }: {
   debate: Entity;
@@ -174,6 +180,7 @@ function DebateRow({
   sides: DebateSide[];
   profilesBySpaceId: Map<string, { name?: string | null; avatarUrl?: string | null }>;
   winnerShare: WinnerShare | null;
+  keyframeUrl: string | null;
   responseKind: 'stance' | 'veracity';
 }) {
   const nameFor = (participantSpaceId: string) => profilesBySpaceId.get(participantSpaceId)?.name ?? 'Unnamed debater';
@@ -183,6 +190,11 @@ function DebateRow({
       href={NavUtils.toEntity(spaceId, debate.id)}
       className="flex items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 transition-colors hover:border-grey-03"
     >
+      {/* The still the debate was published with. A debate whose video predates keyframe capture
+          keeps the neutral tile rather than an image element pointed at nothing. */}
+      <span className="relative block aspect-video w-20 shrink-0 overflow-hidden rounded-md bg-grey-01 @[420px]:w-24">
+        {keyframeUrl && <GeoImage value={keyframeUrl} alt="" fill sizes="96px" className="object-cover" />}
+      </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {sides.length > 0 ? (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

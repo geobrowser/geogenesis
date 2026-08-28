@@ -45,18 +45,18 @@ export function ClaimVerdict({
   return (
     <section aria-label="Response summary" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        <div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-[2.25rem] leading-none font-semibold tracking-[-1px] tabular-nums">{percent}%</span>
-            <Text as="span" variant="metadataMedium" color="grey-04">
-              {/* "Agreements" → "agree", "Verifications" → "verify" reads wrong; use the action verb. */}
-              {copy.positiveAction.toLowerCase()}
-            </Text>
-          </div>
+        {/* The share and what it is a share *of*, stacked — the number carries the emphasis and the
+            verb sits under it, rather than the two competing on one baseline. */}
+        <div className="flex flex-col">
+          <span className="text-[2.5rem] leading-none font-semibold tracking-[-1px] tabular-nums">{percent}%</span>
+          <Text as="span" variant="metadata" color="grey-04" className="mt-1">
+            {/* "Agreements" → "agree", "Verifications" → "verify" reads wrong; use the action verb. */}
+            {copy.positiveAction.toLowerCase()}
+          </Text>
         </div>
         <div className="flex items-center gap-2">
           {summary.isControversial && (
-            <span className="rounded-sm bg-orange/20 px-1.5 py-0.5 text-metadata font-medium text-text">
+            <span className="rounded-sm bg-orange/25 px-1.5 py-0.5 text-metadata font-medium text-text">
               Controversial
             </span>
           )}
