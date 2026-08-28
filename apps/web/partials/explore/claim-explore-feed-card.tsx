@@ -23,9 +23,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
-import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
 
 /**
@@ -41,6 +39,12 @@ import { SpaceThumb } from './space-thumb';
  * rule that runs the full height so the meta row is inside the split rather than spanning above it.
  * At phone width the rule turns horizontal and the verdict moves above the pills: same two zones,
  * same order, rotated.
+ *
+ * No actions row. It briefly carried debate and related-claim counts, which the coverage numbers
+ * did not support — 33 debates against 311,047 claims — and then comments and Share, which is what
+ * the generic card has. Even that earned less than it cost here: a strip of small grey glyphs under
+ * a card whose whole lower half is already the response controls and the verdict. The claim's title
+ * links to its page, where the comments are.
  *
  * Scoped to Claim entities by the caller. Every other type keeps the generic card untouched.
  */
@@ -240,8 +244,6 @@ export function ClaimExploreFeedCard({
           )}
         </div>
       </div>
-
-      <ClaimCardActions item={item} />
     </article>
   );
 }
@@ -344,40 +346,6 @@ function ClaimVerdictColumn({
           viewerSpaceId={summary.viewerSpaceId}
         />
       </div>
-    </div>
-  );
-}
-
-/**
- * Comments and Share, the way every explore card carries them.
- *
- * This row briefly also counted debates and related claims. Both are gone, and the coverage numbers
- * are why: there are 33 debates in the graph against 311,047 claims, so the megaphone rendered on
- * roughly one card in six thousand, and related claims resolve through topics, which 15% of claims
- * carry. Two glyphs that are almost never there is not a feature — it is a row of chrome under every
- * card, bought so a handful of cards can say something the card already says better.
- *
- * Because it does say it better: a debate on this claim surfaces in the end slot as *Watch live* or
- * *Watch the debate*, at the top of the card, as something to press. A count of them down here was
- * the weaker rendering of the same fact.
- *
- * Dropping them takes two per-card graph queries out of the feed with them.
- */
-function ClaimCardActions({ item }: { item: ExploreFeedItem }) {
-  const actionClassName = 'inline-flex items-center gap-1.5 text-[14px] text-grey-04 transition-colors hover:text-text';
-
-  return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      {item.commentCount > 0 ? (
-        <Link href={`${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`} className={actionClassName}>
-          <ExploreCommentsIcon />
-          <span className="tabular-nums">{item.commentCount}</span>
-        </Link>
-      ) : null}
-      <button type="button" className={actionClassName}>
-        <ExploreShareIcon />
-        <span>Share</span>
-      </button>
     </div>
   );
 }
