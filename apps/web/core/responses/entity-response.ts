@@ -49,8 +49,6 @@ export type EntityResponseCopy = {
   negativeAction: string;
   removePositive: string;
   removeNegative: string;
-  positiveSection: string;
-  negativeSection: string;
   empty: string;
   loading: string;
   viewResponders: string;
@@ -64,8 +62,6 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     negativeAction: 'Downvote',
     removePositive: 'Remove upvote',
     removeNegative: 'Remove downvote',
-    positiveSection: 'Upvotes',
-    negativeSection: 'Downvotes',
     empty: 'No votes yet',
     loading: 'Loading voters…',
     viewResponders: 'View voters',
@@ -77,8 +73,6 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     negativeAction: 'Disagree',
     removePositive: 'Remove agreement',
     removeNegative: 'Remove disagreement',
-    positiveSection: 'Agreements',
-    negativeSection: 'Disagreements',
     empty: 'No stances yet',
     loading: 'Loading responders…',
     viewResponders: 'View stances',
@@ -90,8 +84,6 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     negativeAction: 'Dispute',
     removePositive: 'Remove verification',
     removeNegative: 'Remove dispute',
-    positiveSection: 'Verifications',
-    negativeSection: 'Disputes',
     empty: 'No veracity responses yet',
     loading: 'Loading responders…',
     viewResponders: 'View veracity responses',
