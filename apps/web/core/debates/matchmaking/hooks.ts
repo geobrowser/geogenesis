@@ -50,6 +50,16 @@ const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
  * are readable signed out now (GEO-2725), so the socket stays gated while the lists no longer are
  * — a signed-out viewer gets a static list rather than none, which is the trade the hub wants.
  */
+/**
+ * Whether a previous query's key belongs to the account asking now.
+ *
+ * `debateQueryKeys.matchmakingClaims` puts `accountKey` in the key, so comparing that one element
+ * is enough — and it is read positionally because the key is built here and nowhere else.
+ */
+function sameQueryAccount(previousKey: readonly unknown[], accountKey: string | null) {
+  return previousKey[2] === accountKey;
+}
+
 export function useMatchmakingScope(enabled: boolean) {
   const { authenticated } = useGeoChatAuth();
   useDebateGatewayScope({ scope: 'matchmaking' }, enabled && authenticated);
@@ -91,7 +101,13 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
     getNextPageParam: lastPage => lastPage.next_cursor,
     // Changing a filter or typing in search changes the query key; without this the list would be
     // replaced by a skeleton on every keystroke.
-    placeholderData: keepPreviousData,
+    //
+    // Only within one account, though. Signing out changes `accountKey` in the key too, and holding
+    // the previous pages through that would render the signed-in list — `mine` results, viewer
+    // readiness — as the anonymous answer until the new request lands. A skeleton is the honest
+    // state there, so the carry-over is dropped when the account behind the previous query differs.
+    placeholderData: (previousData, previousQuery) =>
+      previousQuery && !sameQueryAccount(previousQuery.queryKey, accountKey) ? undefined : previousData,
     enabled,
   });
 }

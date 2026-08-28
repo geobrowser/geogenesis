@@ -1262,4 +1262,21 @@ describe('ClaimsTab -- Featured', () => {
     expect(screen.getByRole('button', { name: 'My positions' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Debate now' })).toBeInTheDocument();
   });
+
+  // Signing out with a viewer-relative filter selected used to leave the tab querying it
+  // anonymously, with a trigger showing a value no longer in the menu.
+  it('falls back to Featured when the selected filter is hidden by signing out', async () => {
+    const view = render(<ClaimsTab />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Featured/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
+    expect(screen.getByRole('button', { name: /My positions/ })).toBeInTheDocument();
+
+    mocks.authenticated = false;
+    view.rerender(<ClaimsTab />);
+
+    expect(screen.getByRole('button', { name: /Featured/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /My positions/ })).not.toBeInTheDocument();
+    expect(mocks.lastQuery).not.toMatchObject({ filter: 'mine' });
+  });
 });

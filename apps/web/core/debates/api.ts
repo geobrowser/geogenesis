@@ -1110,9 +1110,11 @@ export async function listDebatePeople(
   signal?: AbortSignal
 ) {
   return geoChatRequest<DebatePeopleResponse>('/matchmaking/people', {
-    // Attempted anonymously so the hub's People tab can render signed out. geo-chat decides
-    // whether to serve it; a refusal surfaces as the sign-in state rather than an error.
-    auth: 'optional',
+    // Anonymous only when there is genuinely nobody signed in, matching `listDebateClaims`. A flat
+    // 'optional' would also swallow a token-exchange failure for a signed-in viewer and send the
+    // request anonymously — and the anonymous answer would then be cached under their account key,
+    // leaving viewer-relative fields like `can_challenge` quietly wrong with nothing to retry.
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,
@@ -1148,8 +1150,9 @@ export async function listMatchmakingClaims(
 
   const search = params.toString();
   return geoChatRequest<MatchmakingClaimsResponse>(`/matchmaking/claims${search ? `?${search}` : ''}`, {
-    // Same as People above: anonymous read, with geo-chat free to refuse it.
-    auth: 'optional',
+    // Same as People above: anonymous only with nobody signed in, never as a fallback for a
+    // signed-in viewer whose token exchange failed.
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,

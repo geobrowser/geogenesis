@@ -172,9 +172,11 @@ function PersonRow({
             ? onRequireSignIn()
             : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
         }
-        // Signed out, the row's own availability flags are about nobody in particular, so they are
-        // not a reason to refuse the press — the press is what starts the sign-in.
-        disabled={!onRequireSignIn && (!person.can_challenge || person.in_debate || disabled)}
+        // `in_debate` holds signed out too: it means this person is in an active debate right now,
+        // which is true of them rather than of any viewer, so signing in would not make them
+        // available. `can_challenge` and the viewer's own pending request are the viewer-relative
+        // ones, and those are what the press bypasses on its way to the sign-in.
+        disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
         pending={createChallenge.isPending}
         pendingLabel="Requesting…"
         title={disabled ? disabledReason : undefined}

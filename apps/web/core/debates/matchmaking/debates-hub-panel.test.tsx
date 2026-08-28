@@ -10,6 +10,7 @@ import { debatesHubAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
+  ready: true,
   authenticated: true,
   available: false,
   updateAvailability: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobile }));
 
 vi.mock('../hooks', () => ({
-  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: 'user-a' }),
+  useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: 'user-a' }),
   useDebateActivity: () => ({ data: { available_to_debate: mocks.available, incoming_request_count: 0 } }),
   useUpdateDebateAvailability: () => ({ mutate: mocks.updateAvailability, isPending: false }),
   useCreateDebateChallenge: () => ({ mutate: vi.fn(), isPending: false, error: null }),
@@ -98,6 +99,7 @@ function renderOpen(tab: 'requests' | 'matches' | 'claims' | 'people' = 'request
 }
 
 beforeEach(() => {
+  mocks.ready = true;
   mocks.authenticated = true;
   mocks.available = false;
   mocks.people = [];
@@ -182,6 +184,25 @@ describe('DebatesHubPanel', () => {
 
     expect(screen.queryByRole('button', { name: /Matches/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Requests/ })).not.toBeInTheDocument();
+  });
+
+  // `authenticated` is false while Privy restores, so a row drawn before then is the signed-out
+  // one — a returning viewer would watch Matches and Requests appear and their selected tab jump.
+  it('hides the tab row until Privy has resolved, rather than drawing the signed-out one', () => {
+    mocks.ready = false;
+    mocks.authenticated = false;
+    renderOpen('matches');
+
+    // `aria-hidden` takes the row out of the accessibility tree, so it is not reachable at all —
+    // which is the point: nothing is announced or focusable until we know which row it should be.
+    expect(screen.queryByRole('button', { name: 'Claims' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Claims', hidden: true })).toBeInTheDocument();
+  });
+
+  it('shows the tab row once Privy has resolved', () => {
+    renderOpen('matches');
+
+    expect(screen.getByRole('button', { name: 'Claims' })).toBeInTheDocument();
   });
 
   // Signing out with Matches open would otherwise leave a tab body showing with no tab selected.

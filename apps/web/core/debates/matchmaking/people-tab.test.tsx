@@ -291,11 +291,21 @@ describe('PeopleTab', () => {
 
   // The row's availability flags describe a pairing with somebody, and signed out there is nobody
   // to pair with — so they are not a reason to refuse the press that starts the sign-in.
-  it('keeps the button live signed out even when the row reads unavailable', () => {
+  it('keeps the button live signed out when only the viewer-relative flag is off', () => {
     mocks.authenticated = false;
     mocks.people = [{ ...person('user-them', 'Arturas'), can_challenge: false }];
     render(<PeopleTab />);
 
     expect(screen.getByRole('button', { name: 'Debate' })).not.toBeDisabled();
+  });
+
+  // `in_debate` is true of the person, not of any viewer, so signing in would not make them
+  // available — offering the press would spend a login on an answer that does not change.
+  it('still refuses a person already in a debate when signed out', () => {
+    mocks.authenticated = false;
+    mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
+    render(<PeopleTab />);
+
+    expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
   });
 });

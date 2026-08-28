@@ -260,7 +260,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         </div>
       </div>
 
-      <div className="shrink-0 px-4">
+      {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
+          restoration, so a row drawn before then is the signed-out one — a returning viewer would
+          watch Matches and Requests appear, and a selected tab of theirs jump to Claims. */}
+      <div className={cx('shrink-0 px-4', !ready && 'invisible')} aria-hidden={!ready}>
         <div className="relative">
           {/* The row is `w-max` so the labels never compress, and both panel shells are
               `overflow-hidden` — so on a narrow phone whichever tab sits last is simply cut off
@@ -310,8 +313,6 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         data-debates-hub-scroll
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
       >
-        {/* Still gated on `ready`: rendering before Privy has restored the session would show the
-            signed-out tab row for a beat to someone who is in fact signed in. */}
         {!ready ? null : (
           <HubSwap activeKey={activeTab}>
             {activeTab === 'requests' ? (

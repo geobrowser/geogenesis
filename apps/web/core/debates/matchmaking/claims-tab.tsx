@@ -106,7 +106,12 @@ export function ClaimsTab() {
   // Featured is where the tab opens. The whole corpus is the wider net but the shallower one — a
   // curator's pick is a better first thing to put in front of someone than whatever the index
   // ranked highest, and All claims is one option below.
-  const [filter, setFilter] = React.useState<ClaimsTabFilter>('featured');
+  const [selectedFilter, setFilter] = React.useState<ClaimsTabFilter>('featured');
+  // Signing out with a viewer-relative filter selected would otherwise leave the tab querying it
+  // anonymously and showing a trigger value that is no longer in the menu. Derived rather than
+  // reset through an effect so the query, the menu label, the ordering key and the empty state all
+  // read the same value on the very first render after the session goes away.
+  const filter = !authenticated && SIGNED_OUT_HIDDEN_FILTERS.includes(selectedFilter) ? 'featured' : selectedFilter;
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
 
@@ -444,7 +449,7 @@ export function ClaimsTab() {
           facetTopics={facetTopics}
           leading={
             <HubFilterMenu
-              label={FILTER_OPTIONS.find(option => option.value === filter)?.label ?? 'All claims'}
+              label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
               options={filterOptions}
               value={filter}
               onChange={setFilter}
