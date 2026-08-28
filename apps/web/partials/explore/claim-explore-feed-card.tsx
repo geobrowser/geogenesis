@@ -306,9 +306,14 @@ function ClaimVerdictColumn({
  * Each glyph renders only when it has something to report. A row of zeroes advertises emptiness,
  * where a short row simply says less — and on this data most rows are short.
  *
- * Debates and related claims open the claim in the side panel. That is deliberately the whole
- * interaction for now: it makes the numbers worth pressing without inventing a second panel UX,
- * and deep-linking to the right section of the claim page is the obvious follow-up.
+ * Every item opens the claim in the side panel. That is deliberately the whole interaction for now:
+ * it makes the numbers worth pressing without inventing a second panel UX, and deep-linking to the
+ * right section of the claim page is the obvious follow-up.
+ *
+ * All of it left-aligned in one run, Share last. Sources used to be pushed to the far right, which
+ * looked composed on a busy claim and stranded on an ordinary one — two lone items at opposite ends
+ * with nothing between them. A row that simply gets shorter reads as having less to say; a row that
+ * holds its ends open reads as having lost something.
  */
 function ClaimCardActions({
   item,
@@ -381,15 +386,26 @@ function ClaimCardActions({
           <span className="tabular-nums">{item.commentCount}</span>
         </Link>
       ) : null}
+      {/* Clickable, like everything else in this row. It counts real articles the claim was lifted
+          from, and a count you cannot follow is a count that raises a question and refuses to
+          answer it. Opens the claim, where `ClaimProvenance` names them — the same holding pattern
+          the debate and related-claim counts use until the side panel gets a proper destination. */}
+      {sourceCount > 0 ? (
+        <button
+          type="button"
+          onClick={open}
+          aria-label={`${sourceCount} ${sourceCount === 1 ? 'source' : 'sources'} for this claim`}
+          className={actionClassName}
+        >
+          <span className="tabular-nums">
+            {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
+          </span>
+        </button>
+      ) : null}
       <button type="button" onClick={open} className={actionClassName}>
         <ExploreShareIcon />
         <span>Share</span>
       </button>
-      {sourceCount > 0 ? (
-        <span className="ml-auto text-[12px] text-grey-04 tabular-nums">
-          {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
-        </span>
-      ) : null}
     </div>
   );
 }
