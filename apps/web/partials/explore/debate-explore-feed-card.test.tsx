@@ -49,6 +49,14 @@ vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
   useDebateShareAction: () => ({ state: 'ready', method: 'share', tooltipMessage: undefined, onActivate: vi.fn() }),
 }));
 
+vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
+  useDebateTranscriptClaims: () => ({
+    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: 3 },
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 vi.mock('~/core/debates/browse/debate-claims-panel', () => ({
   DebateClaimsPanel: ({ onClose }: { onClose: () => void }) => (
     <aside data-testid="claims-panel">
@@ -96,6 +104,15 @@ function watchableDebate(): Debate {
   return {
     id: 'fd51f935-2063-4617-8039-7b672b23364c',
     status: 'complete',
+    // The card reads `claim.space_id` to scope its transcript-claims lookup to the space the
+    // debate was published to, so the fixture carries the claim the type has always required.
+    claim: {
+      id: 'claim-summary-1',
+      space_id: '52c7ae149838b6d47ce0f3b2a5974546',
+      claim_entity_id: 'claim-entity-1',
+      claim: 'Waking up early improves health and productivity',
+      description: null,
+    },
     recordings: [{ participant_slot: 1 }, { participant_slot: 2 }],
     participants: [],
   } as unknown as Debate;
