@@ -8,6 +8,7 @@ import cx from 'classnames';
 
 import { ENTITY_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 
+import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
@@ -96,16 +97,26 @@ export function ClaimSummary({
           <Text as="span" variant="metadata" color="grey-04">
             {copy.positiveAction.toLowerCase()}
           </Text>
-          {summary.isControversial && (
-            <span className="rounded-sm bg-orange/25 px-1.5 py-0.5 text-metadata font-medium text-text">
-              Controversial
-            </span>
-          )}
         </span>
         {responders}
       </div>
     </div>
   );
+}
+
+/**
+ * A claim the responses are genuinely split over.
+ *
+ * Lives beside the space chip rather than down in the summary: it says what *kind* of claim this is,
+ * which is the question the meta row answers, and it is the one thing on a claim card worth
+ * spotting from across a list. Built on the design system's `Tag` so it matches every other tag in
+ * the product — it was a hand-rolled span at a size the scale does not contain.
+ *
+ * Only ever rendered past the response floor, because "contested" off two responses is not a fact
+ * about the claim, it is a fact about how few people have read it.
+ */
+export function ControversialTag({ className }: { className?: string }) {
+  return <Tag className={cx('bg-orange/25 text-text', className)}>Controversial</Tag>;
 }
 
 /**
@@ -119,7 +130,7 @@ export function ClaimSummary({
  * *ready to argue* a side, a viewer-relative offer. These are people who *responded*, a fact about
  * the claim. Two populations, two places, so neither has to be explained.
  */
-function ClaimResponders({
+export function ClaimResponders({
   entityId,
   spaceId,
   responseKind,

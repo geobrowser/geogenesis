@@ -8,7 +8,7 @@ import Link from 'next/link';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { ClaimSummary } from '~/core/claims/browse/claim-summary';
+import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import {
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
@@ -145,11 +145,14 @@ function ClaimHeader({
   claim,
   isOnGraph,
   endSlot,
+  isControversial,
   onOpenClaim,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
   endSlot: React.ReactNode;
+  /** Flagged beside the space chip — what kind of claim this is, which is the row's own question. */
+  isControversial?: boolean;
   onOpenClaim?: () => void;
 }) {
   const claimTextClassName = 'mb-3 block text-metadataMedium leading-snug text-pretty line-clamp-3';
@@ -175,7 +178,10 @@ function ClaimHeader({
     <>
       {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. */}
       <div className="mb-2 flex items-start justify-between gap-3">
-        <SpaceChip spaceId={claim.space_id} />
+        <span className="flex min-w-0 items-center gap-1.5">
+          <SpaceChip spaceId={claim.space_id} />
+          {isControversial ? <ControversialTag /> : null}
+        </span>
         {endSlot}
       </div>
       {openable}
@@ -333,12 +339,17 @@ function RespondableControls({
 }) {
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
     useClaimPositionControl({ claim, positions, readiness, viewerIdentityPending });
+  // One read for the card. The header flags a contested claim and the footer reports the split, and
+  // deciding that twice is how the two would eventually disagree.
+  const summary = useClaimResponseSummary(claim.claim_entity_id, claim.space_id, readiness.response_kind);
+
   return (
     <>
       <ClaimHeader
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
+        isControversial={summary.isControversial}
         endSlot={<ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />}
       />
       <PositionRow
@@ -359,40 +370,16 @@ function RespondableControls({
           </Text>
         </div>
       ) : null}
-      <CardSummary claim={claim} responseKind={readiness.response_kind} />
+      {summary.isLoading ? null : (
+        <ClaimSummary
+          entityId={claim.claim_entity_id}
+          spaceId={claim.space_id}
+          responseKind={readiness.response_kind}
+          summary={summary}
+          className="mt-3 border-t border-divider pt-3"
+        />
+      )}
     </>
-  );
-}
-
-/**
- * How the claim has been answered, scaled to how many have answered.
- *
- * Fetched by the card rather than passed in, so every host draws the same thing without each having
- * to remember to — and so the tier can never be decided twice. The query keys are the ones
- * `EntityVoteButtons` and the claim page already use, so a card sitting beside either shares their
- * fetch rather than adding one.
- */
-function CardSummary({
-  claim,
-  responseKind,
-}: {
-  claim: DebateClaimSummary;
-  responseKind: MatchmakingReadiness['response_kind'];
-}) {
-  const summary = useClaimResponseSummary(claim.claim_entity_id, claim.space_id, responseKind);
-
-  // Nothing rather than an invitation while the counts are still out: "Be the first" is a claim
-  // about the world, and asserting it before the data lands would retract it a moment later.
-  if (summary.isLoading) return null;
-
-  return (
-    <ClaimSummary
-      entityId={claim.claim_entity_id}
-      spaceId={claim.space_id}
-      responseKind={responseKind}
-      summary={summary}
-      className="mt-3 border-t border-divider pt-3"
-    />
   );
 }
 

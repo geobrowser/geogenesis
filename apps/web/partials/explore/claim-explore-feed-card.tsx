@@ -8,6 +8,7 @@ import {
   viewerResponseFromDirection,
 } from '~/core/claims/browse/claim-position-summaries';
 import { claimSummaryTier, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { ClaimResponders, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
@@ -27,8 +28,6 @@ import { NavUtils } from '~/core/utils/utils';
 import { Megaphone } from '~/design-system/icons/megaphone';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
-
-import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 
 import { ExploreClaimsIcon } from './explore-claims-icon';
 import { ExploreCommentsIcon } from './explore-comments-icon';
@@ -134,78 +133,94 @@ export function ClaimExploreFeedCard({
   const topicIds = useTopicIds(entity?.relations);
 
   return (
-    <article ref={setContainer} className="flex flex-col gap-3 border-b border-divider py-4 last:border-b-0">
-      <div className="flex flex-col gap-x-9 gap-y-4 @[640px]:flex-row @[640px]:items-stretch">
-        <div className="flex min-w-0 flex-1 flex-col">
-          {/* Whose space, how old, and what the claim offers. Topics used to sit here; at 15%
-              coverage they were absent five times in six and restated the space chip on most of the
-              rest, and the slot is worth more to something you can press. */}
-          <div className="mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            {!hideSpaceLink ? (
-              <Link
-                href={NavUtils.toSpace(item.spaceId)}
-                className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] tracking-[-0.35px] text-text hover:underline"
-              >
-                <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-                <span className="min-w-0 truncate">{item.spaceName}</span>
-              </Link>
-            ) : null}
-            {!hideJoinButton && !item.isMemberOrEditor ? (
-              <ExploreJoinSpaceButton
-                spaceId={item.spaceId}
-                hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-                variant="pill"
-                label="Join"
-              />
-            ) : null}
-            {timeAgo ? (
-              <span className="text-[12px] leading-[13px] tracking-[-0.35px] text-grey-04">· {timeAgo}</span>
-            ) : null}
-            <ClaimEndSlot
-              claimId={item.entityId}
+    <article ref={setContainer} className="flex flex-col gap-4 border-b border-divider py-4 last:border-b-0">
+      {/*
+        Two zones, divided by a rule that runs the whole height: everything you can *do* to the claim
+        on the left, everything describing its *state* on the right, with the meta row inside the
+        split rather than spanning above it.
+
+        A grid rather than nested flex, because the two widths want different orders. On a phone the
+        verdict belongs between the claim and the pills — read it, then answer — while at desktop
+        width it belongs beside both. Explicit placement says that in one place; ordering utilities
+        smeared across four children would not.
+
+        `md` is max-width 767px in this codebase, so the *base* rules are the desktop layout and the
+        `md:` rules narrow it. Container queries are not an option here: nothing in the explore feed
+        establishes a container, so a `@[640px]:` variant would silently never apply.
+      */}
+      <div className="grid grid-cols-[minmax(0,1fr)_186px] gap-x-9 md:grid-cols-1 md:gap-y-4">
+        <div className="col-start-1 row-start-1 mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 md:mb-0">
+          {!hideSpaceLink ? (
+            <Link
+              href={NavUtils.toSpace(item.spaceId)}
+              className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] tracking-[-0.35px] text-text hover:underline"
+            >
+              <SpaceThumb image={item.spaceImage} name={item.spaceName} />
+              <span className="min-w-0 truncate">{item.spaceName}</span>
+            </Link>
+          ) : null}
+          {!hideJoinButton && !item.isMemberOrEditor ? (
+            <ExploreJoinSpaceButton
               spaceId={item.spaceId}
-              activeDebate={row?.active_debate}
-              enabled={nearViewport}
-              className="ml-auto"
+              hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
+              variant="pill"
+              label="Join"
             />
-          </div>
-
-          {/* No thumbnail: claims carry no image, so the generic card's 60px well is either an empty
-              gutter or a placeholder that says nothing. The sentence gets the column instead — it
-              runs to a median of 108 characters and needs it. */}
-          <Link href={NavUtils.toEntity(item.spaceId, item.entityId)} className="group/title min-w-0">
-            <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline">
-              {item.title}
-            </h2>
-          </Link>
-
-          <div className="mt-4 max-w-[360px]">
-            <PositionRow
-              positions={control.optimisticPositions}
-              responseKind={responseKind}
-              viewerPosition={control.viewerPosition}
-              onRespond={control.respond}
-              disabled={!control.canRespond}
-              titleFor={control.actionTitle}
-            />
-            {control.responseError ? (
-              <div role="alert" className="mt-2">
-                <Text as="p" variant="footnote" color="red-01">
-                  {control.responseError}
-                </Text>
-              </div>
-            ) : null}
-          </div>
+          ) : null}
+          {/* Beside the space, because it says what kind of claim this is. */}
+          {summary.isControversial ? <ControversialTag /> : null}
+          {timeAgo ? (
+            <span className="text-[12px] leading-[13px] tracking-[-0.35px] text-grey-04">· {timeAgo}</span>
+          ) : null}
+          <ClaimEndSlot
+            claimId={item.entityId}
+            spaceId={item.spaceId}
+            activeDebate={row?.active_debate}
+            enabled={nearViewport}
+            className="ml-auto"
+          />
         </div>
 
-        {/* The verdict, behind a rule at desktop width and above one on a phone. */}
-        <div className="border-t border-divider pt-4 @[640px]:w-[186px] @[640px]:shrink-0 @[640px]:border-t-0 @[640px]:border-l @[640px]:pt-0 @[640px]:pl-6">
-          <ClaimVerdictColumn
-            entityId={item.entityId}
-            spaceId={item.spaceId}
+        {/* No thumbnail: claims carry no image, so the generic card's 60px well is either an empty
+            gutter or a placeholder that says nothing. The sentence gets the column instead — it
+            runs to a median of 108 characters and needs it. */}
+        <Link
+          href={NavUtils.toEntity(item.spaceId, item.entityId)}
+          className="group/title col-start-1 row-start-2 min-w-0"
+        >
+          <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline">
+            {item.title}
+          </h2>
+        </Link>
+
+        <div className="col-start-1 row-start-3 mt-4 max-w-[360px] md:row-start-4 md:mt-0">
+          <PositionRow
+            positions={control.optimisticPositions}
             responseKind={responseKind}
-            summary={summary}
+            viewerPosition={control.viewerPosition}
+            onRespond={control.respond}
+            disabled={!control.canRespond}
+            titleFor={control.actionTitle}
           />
+          {control.responseError ? (
+            <div role="alert" className="mt-2">
+              <Text as="p" variant="footnote" color="red-01">
+                {control.responseError}
+              </Text>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Spans all three rows at desktop width, which is what makes the rule full-height. */}
+        <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 md:col-start-1 md:row-span-1 md:row-start-3 md:border-b md:border-l-0 md:pb-4 md:pl-0">
+          {summary.isLoading ? null : (
+            <ClaimVerdictColumn
+              entityId={item.entityId}
+              spaceId={item.spaceId}
+              responseKind={responseKind}
+              summary={summary}
+            />
+          )}
         </div>
       </div>
 
@@ -249,15 +264,16 @@ function ClaimVerdictColumn({
     );
   }
 
+  // The shared control, not a bare avatar stack. Pressing it opens who took which side — the same
+  // list the claim page shows. This card drew the faces without the popover around them, which is
+  // exactly the "faces you cannot press" problem the cluster exists to solve.
   const responders = (
-    <ClaimResponderAvatars
+    <ClaimResponders
       entityId={entityId}
       spaceId={spaceId}
-      objectType={0}
       responseKind={responseKind}
-      totalResponders={summary.total}
-      viewerSpaceId={summary.viewerSpaceId}
-      optimisticViewerResponse={summary.viewerDirection}
+      summary={summary}
+      label={copy.viewResponders}
     />
   );
 
@@ -292,11 +308,8 @@ function ClaimVerdictColumn({
         <span className="bg-green" style={{ width: `${percent}%` }} />
         <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
       </div>
-      {summary.isControversial && (
-        <span className="mt-3 inline-block rounded-sm bg-orange/25 px-1.5 py-0.5 text-metadata font-medium text-text">
-          Controversial
-        </span>
-      )}
+      {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
+          what kind of claim this is rather than adding a second voice to the split. */}
       <div className="mt-3">{responders}</div>
     </>
   );

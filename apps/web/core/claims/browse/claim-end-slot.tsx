@@ -64,8 +64,10 @@ export function ClaimEndSlot({
     enabled,
   });
 
-  const base =
-    'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-footnoteMedium transition-colors';
+  // `smallButton` rather than `footnoteMedium`: this is a button, and the footnote scale is 11px at
+  // weight 500 — small enough to squint at and heavy enough to look shouted, which is the worst
+  // pairing for the one control the card most wants pressed.
+  const base = 'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-3 text-smallButton transition-colors';
 
   if (match) {
     return (

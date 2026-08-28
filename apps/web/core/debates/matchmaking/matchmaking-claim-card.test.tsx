@@ -181,7 +181,6 @@ function participant(id: string) {
   } as DebateClaimPositionSummary['participants'][number];
 }
 
-const toggleName = 'Ready to debate this claim';
 
 function renderCard(card: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
