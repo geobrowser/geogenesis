@@ -5,12 +5,6 @@
  * and `core/constants.ts` — this only adds what the page needs beyond them.
  */
 
-/** Hosts (RELATION) → Person. An episode's regular presenters. */
-export const HOSTS_PROPERTY_ID = 'c72d9abbbca84e86b7e8b71e91d2b37e';
-
-/** Guests (RELATION) → Person. Who appeared on an episode. */
-export const GUESTS_PROPERTY_ID = 'cb60a1a66fb548c9b936200c5c271330';
-
 /**
  * Subtopics, as a second property.
  *

@@ -52,12 +52,21 @@ function useParentTopic(childId: string | null, spaceId: string | null): Entity 
   });
 
   const candidateIds = React.useMemo(() => entities.map(entity => entity.id), [entities]);
-  const { rankByClaimId } = useClaimsBestOrder(candidateIds, spaceId, TOPIC_TYPE_ID);
+  const { rankByClaimId, isReady } = useClaimsBestOrder(candidateIds, spaceId, TOPIC_TYPE_ID);
 
   // Ranked rather than sorted by id. Both are stable, which is what fixed the path changing between
   // visits — but ranking picks the parent the feed considers most significant rather than whichever
   // id happens to sort first, so a topic sits under its most prominent parent.
-  return React.useMemo(() => sortClaimsByBest(entities, rankByClaimId)[0] ?? null, [entities, rankByClaimId]);
+  //
+  // Held until the ranking arrives. The candidates and their ranking are two requests, and choosing
+  // on the first would take the server's arbitrary first row — then swap to a different parent a
+  // moment later, and with it every rung above, because each level's query starts from the level
+  // below. A crumb that rewrites itself is the bug the ranking was meant to fix. Same gate
+  // `useTopicLinkedEntities` puts on the same hook.
+  return React.useMemo(
+    () => (isReady ? (sortClaimsByBest(entities, rankByClaimId)[0] ?? null) : null),
+    [entities, isReady, rankByClaimId]
+  );
 }
 
 /**

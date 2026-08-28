@@ -33,10 +33,12 @@ const META_CHIP_CLASS = 'flex h-6 max-w-full items-center rounded border border-
  * A topic is the graph's aggregation point: claims, episodes, news, tweets and documents all name
  * one, and the generic entity page shows that as undifferentiated backlinks. This orders it.
  *
- * Deliberately *not* space-scoped, unlike the claim page. A claim's responses belong to a space and
- * mixing two would report a population that belongs to neither; a topic's value is the opposite —
- * it gathers across spaces, and scoping it to the space in the route would empty most of the page.
- * Each row is linked into the space it actually lives in.
+ * Scoped differently from the claim page rather than not at all. A claim's responses belong to one
+ * space and mixing two would report a population that belongs to neither, so that page pins itself
+ * to the route's space. A topic's value is the opposite — it gathers — so pinning it the same way
+ * would empty most of the page. What it draws from instead is the curated graph *plus* the route's
+ * space (`useTopicSpaceScope`), which keeps the gathering while keeping out spaces nobody curated.
+ * Each row is still linked into the space it actually lives in, which is routinely not the route's.
  *
  * One column at every width, laid out against a container query rather than the viewport, so the
  * route, the entity side panel and a phone are three widths of one page. Same as the claim page.

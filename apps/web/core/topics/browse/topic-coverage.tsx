@@ -62,7 +62,11 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
     return <Skeleton className="h-[140px] w-full rounded-lg" />;
   }
 
-  if (items.length === 0) return null;
+  // Only on the first page. Later on, an empty page still has to render its pager — a stale cursor
+  // or a page whose every node failed to decode would otherwise remove the section along with the
+  // Previous control that is the reader's only way back. Same guard the Claims and Debates sections
+  // already use.
+  if (items.length === 0 && pages.isFirstPage) return null;
 
   return (
     <section aria-label="Coverage">

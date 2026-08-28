@@ -8,6 +8,7 @@ import { DebateRow, type DebateSide, relationTargets, useWinnerShares } from '~/
 import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pages';
 import { useDebateKeyframes } from '~/core/claims/browse/use-debate-keyframes';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { claimResponseKind } from '~/core/claims/response-kind';
 import {
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
@@ -32,8 +33,10 @@ const DEBATES_PAGE_SIZE = 5;
  * by how many claim ids the lookup can carry. A cap rather than every claim: a topic can hold
  * hundreds, and a query listing all of them would be enormous for a section showing five rows.
  *
- * The claims are the Best-ranked ones, so what the cap drops is the lowest-ranked rather than an
- * arbitrary slice.
+ * What the cap drops is the least recently updated. `useTopicLinkedEntities` fetches its page in
+ * `UpdatedAtDesc` order and applies Best ranking *within* that page — ranking a topic-filtered set
+ * server-side is the query that takes ~17s and loses its order (GEO-2720) — so the cap bites before
+ * the ranking does. A debate on an older claim is therefore out of reach of this section.
  */
 const CLAIMS_CONSIDERED = 100;
 
@@ -105,6 +108,34 @@ export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: s
   );
   const { profilesBySpaceId } = useProfilesBySpaceIds(participantSpaceIds, participantSpaceIds.length > 0);
 
+  /**
+   * How each debate's sides should be labelled, read from the claim it argues.
+   *
+   * A factual claim is verified or disputed; everything else is agreed or disagreed with. The
+   * section used to label every row `stance`, which is right for most claims and simply wrong on a
+   * factual one — and the claim is already in hand, since the debates were found through it.
+   *
+   * A debate spanning claims of both kinds takes the first one it names that this page loaded,
+   * which is the claim the row is here on behalf of. There is no correct single label for such a
+   * debate, and picking the claim that put it on the page at least makes the label match the
+   * section around it.
+   */
+  const responseKindByDebateId = React.useMemo(() => {
+    const claimsById = new Map(claims.map(claim => [claim.id, claim]));
+    const kinds = new Map<string, 'stance' | 'veracity'>();
+
+    for (const debate of debates) {
+      const argued = relationTargets(debate.relations, DEBATE_CLAIMS_PROPERTY_ID)
+        .map(id => claimsById.get(id))
+        .find(Boolean);
+      // The claim's own space, not the route's: `claimResponseKind` reads a space-scoped value, and
+      // a topic gathers across spaces, so reading it in the route's space finds nothing and every
+      // factual claim quietly falls back to `stance` — the bug this is fixing.
+      if (argued) kinds.set(debate.id, claimResponseKind(argued, argued.spaces[0] ?? spaceId));
+    }
+    return kinds;
+  }, [claims, debates, spaceId]);
+
   const debateIds = React.useMemo(() => debates.map(debate => debate.id), [debates]);
   const winnerShareByDebateId = useWinnerShares(debateIds);
   const keyframeByDebateId = useDebateKeyframes(debates);
@@ -130,10 +161,10 @@ export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: s
               profilesBySpaceId={profilesBySpaceId}
               winnerShare={winnerShareByDebateId.get(debate.id) ?? null}
               keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
-              // Sides are labelled in the vocabulary of the claim being argued. A topic spans both
-              // kinds, and the debate row has no claim in hand to read it from, so the common one
-              // stands in: Agree/Disagree is right for everything but a factual claim.
-              responseKind="stance"
+              // Sides are labelled in the vocabulary of the claim being argued. `stance` stands in
+              // only when the debate names no claim this page loaded, which is the one case there
+              // is nothing to read the vocabulary from.
+              responseKind={responseKindByDebateId.get(debate.id) ?? 'stance'}
             />
           </li>
         ))}
