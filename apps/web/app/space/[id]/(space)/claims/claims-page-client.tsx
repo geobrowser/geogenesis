@@ -377,9 +377,9 @@ function ClaimListItem({
         readiness={readiness}
         activeDebate={activeDebate}
         footer={
-          /* The readiness switch is gone from here too: a response now carries readiness with it,
-             so a switch would contradict the rule rather than express it. What is left is the one
-             thing this page knows that the rule does not — whether a debate is already under way. */
+          /* The readiness switch is gone from here too — the Debate toggle is being retired. What
+             is left is the one thing this page knows that the card does not: whether a debate on
+             this claim is already under way. */
           <ClaimDebateStatus debateClaim={debateClaim} published={published} />
         }
       />

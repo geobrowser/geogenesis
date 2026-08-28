@@ -50,10 +50,6 @@ vi.mock('../hooks', () => ({
 // The end slot asks the hub whether there is a debate to be had. That is one shared query at
 // runtime and a whole auth stack in a test, so it is mocked at the hook rather than under it —
 // `mocks.match` is what decides whether the slot offers anything.
-vi.mock('~/core/debates/use-auto-debate-readiness', () => ({
-  useAutoDebateReadiness: () => {},
-}));
-
 vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
   // Only the lookup is stubbed. `withMatchParticipants` stays real, so the card's merge of the
   // match's participants into the pills runs here rather than being mocked away — and a whole-module

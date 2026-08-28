@@ -77,10 +77,6 @@ vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => 
   }),
 }));
 
-vi.mock('~/core/debates/use-auto-debate-readiness', () => ({
-  useAutoDebateReadiness: () => {},
-}));
-
 vi.mock('./hooks', () => ({
   useMatchmakingClaims: (query: unknown, enabled: boolean) => {
     mocks.lastQuery = query;

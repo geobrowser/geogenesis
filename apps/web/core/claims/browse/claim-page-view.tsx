@@ -236,9 +236,9 @@ function ClaimPositionSection({
 
   return (
     <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
-      {/* No readiness switch. Taking a side now stands the viewer ready by itself — see
-          `useAutoDebateReadiness` — so a switch here would show on, refuse to stay off, and make a
-          liar of itself the moment anyone tried. */}
+      {/* No readiness switch. The Debate toggle is being retired, so nothing here interacts with
+          it — and the corner the card gave it is now the end slot, which always offers something
+          the reader can act on. */}
       <Text as="div" variant="metadataMedium" color="grey-04" className="mb-2.5 block">
         Your position
       </Text>

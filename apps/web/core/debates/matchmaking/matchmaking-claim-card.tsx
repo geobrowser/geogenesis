@@ -10,7 +10,6 @@ import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
-import { useAutoDebateReadiness } from '~/core/debates/use-auto-debate-readiness';
 import {
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
@@ -213,15 +212,12 @@ export function useClaimPositionControl({
   claim,
   positions,
   readiness,
-  activeDebate,
   viewerIdentityPending,
   onRequireSignIn,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  /** Passed through to the readiness rule, which will not stand anyone up mid-debate. */
-  activeDebate?: Debate | boolean | null;
   viewerIdentityPending?: boolean;
   /**
    * What to do when a signed-out visitor presses a side. Given one, the pills stay live while
@@ -256,17 +252,6 @@ export function useClaimPositionControl({
     () => withMatchParticipants(positions, match?.positions),
     [match?.positions, positions]
   );
-
-  // Taking a side *is* offering to argue it. The switch that used to say so is gone, so the rule
-  // lives with the control that publishes the response — which means every surface drawing these
-  // pills gets it, and none of them has to remember to.
-  useAutoDebateReadiness({
-    entityId: claim.claim_entity_id,
-    spaceId: claim.space_id,
-    readiness,
-    activeDebate,
-    enabled: isResolvableClaim(claim),
-  });
 
   // The client knows its own response long before geo-chat does — publishing, indexing, and then
   // the notification round trip all have to finish first. Any non-idle snapshot means we know,
@@ -378,7 +363,7 @@ function RespondableControls({
   onRequireSignIn?: () => void;
 }) {
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
-    useClaimPositionControl({ claim, positions, readiness, activeDebate, viewerIdentityPending, onRequireSignIn });
+    useClaimPositionControl({ claim, positions, readiness, viewerIdentityPending, onRequireSignIn });
   // One read for the card. The header flags a contested claim and the footer reports the split, and
   // deciding that twice is how the two would eventually disagree.
   const summary = useClaimResponseSummary(claim.claim_entity_id, claim.space_id, readiness.response_kind);
