@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   authenticated: true,
   gatewayPaused: false,
+  gatewayPauseReason: null as string | null,
   currentUserId: 'user-for' as string | null,
   // What the token exchange answers with when the stored session hasn't been written yet.
   resolvedUserId: null as string | null,
@@ -79,6 +80,7 @@ vi.mock('./debate-gateway', () => ({
   useDebateGateway: () => ({
     status: mocks.gatewayPaused ? 'degraded' : 'ready',
     paused: mocks.gatewayPaused,
+    pauseReason: mocks.gatewayPauseReason,
     capabilities: [],
   }),
   useDebateGatewayScope: () => undefined,
@@ -142,6 +144,7 @@ beforeEach(() => {
   mocks.promptsFetching = false;
   mocks.authenticated = true;
   mocks.gatewayPaused = false;
+  mocks.gatewayPauseReason = null;
   mocks.currentUserId = 'user-for';
   mocks.resolvedUserId = null;
   mocks.refetch.mockReset();
@@ -185,6 +188,37 @@ describe('DebateCoordinator', () => {
     mocks.gatewayPaused = false;
     rerender(<DebateCoordinator />);
     expect(screen.queryByText('Live debate updates are paused while reconnecting.')).not.toBeInTheDocument();
+  });
+
+  /**
+   * GEO-2670. The banner said "reconnecting" for all six pause reasons, two of which are not
+   * reconnecting and one of which never recovers — so a report of it carried no information and
+   * every occurrence had to be re-diagnosed from the subscription code. Each cause now says
+   * something a reader can act on, and the reason reaches the DOM for the ones that get screenshot.
+   */
+  it('says what kind of pause it is, rather than always claiming to reconnect', () => {
+    const expected: Array<[string | null, string]> = [
+      ['rate_limited', 'Live debate updates are catching up.'],
+      ['subscription_limit', 'Too many claims on this page to follow live. Some may be out of date.'],
+      ['unsupported', 'Live debate updates are unavailable.'],
+      ['error', 'Live debate updates are paused while retrying.'],
+      // Transport trouble is the one case where the original wording was honest.
+      ['disconnected', 'Live debate updates are paused while reconnecting.'],
+      ['session', 'Live debate updates are paused while reconnecting.'],
+      [null, 'Live debate updates are paused while reconnecting.'],
+    ];
+
+    for (const [reason, text] of expected) {
+      mocks.gatewayPaused = true;
+      mocks.gatewayPauseReason = reason;
+      const { unmount } = render(<DebateCoordinator />);
+
+      const banner = screen.getByRole('status');
+      expect(banner).toHaveTextContent(text);
+      expect(banner).toHaveAttribute('data-pause-reason', reason ?? 'unknown');
+
+      unmount();
+    }
   });
 
   it('does not route another tab into a shared debate-again browser', async () => {
