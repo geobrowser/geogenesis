@@ -2,12 +2,14 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import {
   positionSummariesFromCounts,
   viewerResponseFromDirection,
 } from '~/core/claims/browse/claim-position-summaries';
-import { claimSummaryTier, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSideSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
@@ -123,6 +125,8 @@ export function ClaimExploreFeedCard({
   const promptSignIn = usePrivySignIn();
   const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
 
+  // Withheld while the counts are still out, so the column does not appear a beat after the card.
+  const hasVerdict = !summary.isLoading && summary.total > 0;
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
 
   // Deduped by normalized id and named only where the type has a name — an unnamed one would render
@@ -198,7 +202,15 @@ export function ClaimExploreFeedCard({
       {/* `gap-x-6` to match the right column's `pl-6`, so the rule sits centred in a 24px gutter:
             the offer at the end of the meta row and the share below it are the same distance from
             it, rather than the offer floating 36px out while the number sits 24px in. */}
-      <div className="grid grid-cols-[minmax(0,1fr)_220px] gap-x-6 md:grid-cols-1 md:gap-y-4">
+      <div
+        className={cx(
+          'grid md:grid-cols-1 md:gap-y-4',
+          // No verdict, no column, no rule. A claim nobody has answered has nothing to report, and
+          // an empty 220px cell behind a vertical line reads as something having failed to load —
+          // where the claim simply taking the full width reads as a claim nobody has answered.
+          hasVerdict ? 'grid-cols-[minmax(0,1fr)_220px] gap-x-6' : 'grid-cols-1'
+        )}
+      >
         {/* The generic card's meta row, class for class: the space, a 6px spacer, then segments
             joined by `MetaDot`, whose own margins carry the spacing. Every difference from it turned
             out to be a difference the eye could see — a flex `gap` instead of those margins, a
@@ -262,16 +274,16 @@ export function ClaimExploreFeedCard({
         </div>
 
         {/* Spans all three rows at desktop width, which is what makes the rule full-height. */}
-        <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 md:col-start-1 md:row-span-1 md:row-start-3 md:border-l-0 md:pl-0">
-          {summary.isLoading ? null : (
+        {hasVerdict ? (
+          <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 md:col-start-1 md:row-span-1 md:row-start-3 md:border-l-0 md:pl-0">
             <ClaimVerdictColumn
               entityId={item.entityId}
               spaceId={item.spaceId}
               responseKind={responseKind}
               summary={summary}
             />
-          )}
-        </div>
+          </div>
+        ) : null}
       </div>
     </article>
   );
@@ -297,20 +309,6 @@ function ClaimVerdictColumn({
   summary: ReturnType<typeof useClaimResponseSummary>;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
-  const tier = claimSummaryTier(summary.total);
-
-  if (tier === 'invite') {
-    return (
-      <div className="md:flex md:flex-wrap md:items-baseline md:gap-x-1.5">
-        <Text as="p" variant="metadataMedium" color="text" className="leading-snug">
-          Nobody has answered yet
-        </Text>
-        <Text as="p" variant="metadata" color="grey-04" className="mt-2 md:mt-0">
-          Be the first to {copy.positiveAction.toLowerCase()} it.
-        </Text>
-      </div>
-    );
-  }
 
   const percent = summary.percent ?? 0;
 

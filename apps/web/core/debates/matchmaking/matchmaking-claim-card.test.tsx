@@ -462,11 +462,15 @@ describe('MatchmakingClaimCard', () => {
     expect(screen.getByText('75%')).toBeInTheDocument();
   });
 
-  it('invites a first response rather than reporting a zero', () => {
+  it('says nothing at all where nobody has answered', () => {
+    // The state most claims are in. It used to carry "Be the first to agree it.", which told the
+    // reader what the two pills directly above it already say — a footer existing to have a footer.
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
-    expect(screen.getByText('Be the first to agree it.')).toBeInTheDocument();
+    expect(screen.queryByText(/Be the first/)).not.toBeInTheDocument();
     expect(screen.queryByText('0%')).not.toBeInTheDocument();
+    // The pills are still the invitation.
+    expect(screen.getByRole('button', { name: /^Agree/ })).toBeInTheDocument();
   });
 
   // geo-chat owns the avatar stacks, and its copy trails the response by a publish, an index and a

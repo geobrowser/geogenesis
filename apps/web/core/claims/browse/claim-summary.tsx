@@ -54,17 +54,13 @@ export function ClaimSummary({
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const tier = claimSummaryTier(summary.total);
 
-  // An invitation rather than a "0%", and the verb is the claim's own — "Be the first to verify it"
-  // on a factual claim, "to agree" on an opinion.
-  if (tier === 'invite') {
-    return (
-      <div className={className}>
-        <Text as="p" variant="metadata" color="grey-04">
-          Be the first to {copy.positiveAction.toLowerCase()} it.
-        </Text>
-      </div>
-    );
-  }
+  // Nothing at all where nobody has answered.
+  //
+  // This used to invite one — "Be the first to verify it" — which is a line telling the reader what
+  // the two buttons directly above it already say, on the state the great majority of claims are in.
+  // The pills are the invitation; a sentence restating them is a footer that exists to have a
+  // footer.
+  if (tier === 'invite') return null;
 
   const responders = (
     <ClaimResponders
