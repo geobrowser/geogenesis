@@ -77,7 +77,7 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
 
   // The whole path down to this topic, not just the rung above it — a topic can sit several levels
   // deep, and showing one parent reads as though the hierarchy is flat.
-  const ancestors = useTopicAncestors(entityId);
+  const ancestors = useTopicAncestors(entityId, spaceId);
 
   if (isLoading && !entity) {
     return (

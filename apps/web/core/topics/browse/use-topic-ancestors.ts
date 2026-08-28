@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 
-import { SUBTOPIC_RELATION_TYPE_ID } from '~/core/constants';
+import { SUBTOPIC_RELATION_TYPE_ID, TOPIC_TYPE_ID } from '~/core/constants';
+import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
@@ -17,8 +18,14 @@ import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
  */
 const MAX_DEPTH = 5;
 
-/** One rung of the walk: whoever names `childId` as a subtopic. */
-function useParentTopic(childId: string | null): Entity | null {
+/**
+ * One rung of the walk: whoever names `childId` as a subtopic.
+ *
+ * A topic can be a subtopic of several — the hierarchy is a graph, not a tree — so the candidates
+ * are ranked and the best one taken. Ranking a bounded set of ids already in hand is a lookup
+ * rather than a scan, which is the one shape the ranked connection serves properly (GEO-2720).
+ */
+function useParentTopic(childId: string | null, spaceId: string | null): Entity | null {
   const { entities } = useQueryEntities({
     where: {
       // Both hierarchy properties, for the same reason the subtopic list reads both: which one a
@@ -44,14 +51,13 @@ function useParentTopic(childId: string | null): Entity | null {
     enabled: Boolean(childId),
   });
 
-  // Pick the same parent every time. Ordering by id is arbitrary but *stable*, which is the property
-  // that matters: a breadcrumb that changes between visits is worse than one that picks a defensible
-  // branch and sticks to it. A curated-parent preference would be better and needs the tag on the
-  // candidates, which this projection doesn't carry.
-  return React.useMemo(() => {
-    if (entities.length === 0) return null;
-    return [...entities].sort((a, b) => a.id.localeCompare(b.id))[0] ?? null;
-  }, [entities]);
+  const candidateIds = React.useMemo(() => entities.map(entity => entity.id), [entities]);
+  const { rankByClaimId } = useClaimsBestOrder(candidateIds, spaceId, TOPIC_TYPE_ID);
+
+  // Ranked rather than sorted by id. Both are stable, which is what fixed the path changing between
+  // visits — but ranking picks the parent the feed considers most significant rather than whichever
+  // id happens to sort first, so a topic sits under its most prominent parent.
+  return React.useMemo(() => sortClaimsByBest(entities, rankByClaimId)[0] ?? null, [entities, rankByClaimId]);
 }
 
 /**
@@ -64,14 +70,14 @@ function useParentTopic(childId: string | null): Entity | null {
  * Cycles are possible in user-authored data and would otherwise walk until the depth cap, so a
  * topic already seen ends the walk.
  */
-export function useTopicAncestors(topicId: string): Entity[] {
+export function useTopicAncestors(topicId: string, spaceId: string | null): Entity[] {
   // A fixed number of rungs, called unconditionally. The walk is data-dependent but the hook count
   // cannot be: each level is enabled only once the one below it has produced a parent.
-  const first = useParentTopic(topicId);
-  const second = useParentTopic(first?.id ?? null);
-  const third = useParentTopic(second?.id ?? null);
-  const fourth = useParentTopic(third?.id ?? null);
-  const fifth = useParentTopic(fourth?.id ?? null);
+  const first = useParentTopic(topicId, spaceId);
+  const second = useParentTopic(first?.id ?? null, spaceId);
+  const third = useParentTopic(second?.id ?? null, spaceId);
+  const fourth = useParentTopic(third?.id ?? null, spaceId);
+  const fifth = useParentTopic(fourth?.id ?? null, spaceId);
 
   return React.useMemo(() => {
     const chain: Entity[] = [];
