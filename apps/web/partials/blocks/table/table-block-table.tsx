@@ -288,14 +288,33 @@ export const TableBlockTable = ({
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells] = useState<Record<string, boolean>>({});
 
+  // Rebuilt on every render before this, which is the other half of the same hazard: TanStack
+  // treats a new `columns` identity as a change and re-derives from it, so an unstable array feeds
+  // the very resets the pagination fix below is stopping.
+  const columns = React.useMemo(() => formatColumns(properties, space), [properties, space]);
+
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(properties, space),
+    columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    state: {
+    // GEOGENESIS-8B / A3: "Maximum update depth exceeded" on /space/:id.
+    //
+    // This was `state.pagination`, which declares pagination *controlled* — and it was a fresh
+    // object literal on every render with no `onPaginationChange` to receive updates. So the table
+    // could never settle: `autoResetPageIndex` fires whenever the data changes, calls
+    // `setPagination`, falls through to the internal `onStateChange`, re-renders, reads a brand new
+    // `{ pageIndex: 0 }` object, and resets again. React can't bail out of that the way it does for
+    // an unchanged primitive, because the object identity differs every time. The reported
+    // stacktrace is exactly that cycle: resetPageIndex → setPageIndex → setPagination →
+    // onPaginationChange → setState → onStateChange.
+    //
+    // Nothing in this component ever changes the page — there is no pagination UI, and `pageIndex`
+    // appeared only in that literal. "Start at page 0, nine rows" is `initialState`, which the
+    // table owns internally, so the reset writes 0 over 0 and stops.
+    initialState: {
       pagination: {
         pageIndex: 0,
         pageSize: 9,
