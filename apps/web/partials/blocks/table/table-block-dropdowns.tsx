@@ -266,10 +266,14 @@ function TableBlockDropdown({
     rootMargin: '120px',
   });
 
-  // Search when the list is long, or when the value universe is open-ended
-  // (no target types) — then typing is the only way to reach a value that
-  // isn't already in the table.
-  const showSearch = allOptions.length > SEARCH_BAR_THRESHOLD || !hasTargetTypes || query.length > 0;
+  // The search bar hides in exactly two states: the initial fetch (nothing
+  // to search yet) and a settled short list (everything is already on
+  // screen). While more is loading behind existing items — or more pages
+  // exist — it stays, and typing always keeps it.
+  const isAnyLoading = isTableOptionsLoading || isSearching || waitForFilterTypes;
+  const isInitialLoading = allOptions.length === 0 && isAnyLoading;
+  const isSettledShortList = !isAnyLoading && !hasNextSearchPage && allOptions.length <= SEARCH_BAR_THRESHOLD;
+  const showSearch = query.length > 0 || (!isInitialLoading && !isSettledShortList);
 
   const nameOf = React.useCallback(
     (id: string) => allOptions.find(option => ID.equals(option.id, id))?.name ?? null,
