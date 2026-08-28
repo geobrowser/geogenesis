@@ -13,6 +13,7 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Text } from '~/design-system/text';
 
@@ -24,11 +25,16 @@ import { Text } from '~/design-system/text';
  * space would report a population of zero, which is the failure the claim page's own scoping note
  * describes from the other direction.
  *
+ * Resolved with `resolveEntitySpaceId` rather than by taking `spaces[0]`. That list counts every
+ * space holding a relation authored from the claim, and is rank-sorted, so its first entry is
+ * whichever *citing* space ranks highest — a space the claim may hold no content in at all. This
+ * id does more than scope a read: it is the `space_id` the card publishes a response to.
+ *
  * The geo-chat row is fetched per card rather than batched for the section: the batch endpoint takes
  * a single space, and these claims can come from as many spaces as the page has cards.
  */
 export function TopicClaimCard({ claim, fallbackSpaceId }: { claim: Entity; fallbackSpaceId: string }) {
-  const spaceId = claim.spaces[0] ?? fallbackSpaceId;
+  const spaceId = resolveEntitySpaceId(claim, fallbackSpaceId);
 
   const rowQuery = useDebateClaims(spaceId, [claim.id], true);
   const row: DebateClaim | null = rowQuery.data?.claims.find(entry => entry.claim_entity_id === claim.id) ?? null;

@@ -7,6 +7,7 @@ import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -106,7 +107,10 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
                     </span>
                   )}
                   <Link
-                    href={NavUtils.toEntity(ancestor.spaces[0] ?? spaceId, ancestor.id)}
+                    // Where the ancestor actually lives, not `spaces[0]` — that list is
+                    // rank-sorted and counts citing spaces, so the crumb could link into a space
+                    // holding nothing but a link back to this topic.
+                    href={NavUtils.toEntity(resolveEntitySpaceId(ancestor, spaceId), ancestor.id)}
                     className="text-metadata text-grey-04 transition-colors hover:text-text"
                   >
                     {ancestor.name ?? ancestor.id}

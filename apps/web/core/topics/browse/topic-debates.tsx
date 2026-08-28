@@ -17,6 +17,7 @@ import {
 } from '~/core/debates/ontology';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useQueryEntities } from '~/core/sync/use-store';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
@@ -131,7 +132,13 @@ export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: s
       // The claim's own space, not the route's: `claimResponseKind` reads a space-scoped value, and
       // a topic gathers across spaces, so reading it in the route's space finds nothing and every
       // factual claim quietly falls back to `stance` — the bug this is fixing.
-      if (argued) kinds.set(debate.id, claimResponseKind(argued, argued.spaces[0] ?? spaceId));
+      //
+      // Which is also why `spaces[0]` won't do. That list counts spaces holding a relation authored
+      // from the claim and is rank-sorted, so its head is whichever citing space ranks highest —
+      // `Is factual` isn't there either, and the fallback fires just the same, from a line that
+      // looks like it addressed the problem. `resolveEntitySpaceId` asks where the claim is
+      // actually placed, and its own docs name this flag as the case it exists for.
+      if (argued) kinds.set(debate.id, claimResponseKind(argued, resolveEntitySpaceId(argued, spaceId)));
     }
     return kinds;
   }, [claims, debates, spaceId]);
@@ -155,8 +162,9 @@ export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: s
             <DebateRow
               debate={debate}
               // The debate's own space, not the topic's. A topic aggregates across spaces, so the
-              // space in the route is often not one the debate was published into.
-              spaceId={debate.spaces[0] ?? spaceId}
+              // space in the route is often not one the debate was published into — and `spaces[0]`
+              // answers that with a rank-sorted list that includes spaces merely citing it.
+              spaceId={resolveEntitySpaceId(debate, spaceId)}
               sides={sidesByDebateId.get(debate.id) ?? []}
               profilesBySpaceId={profilesBySpaceId}
               winnerShare={winnerShareByDebateId.get(debate.id) ?? null}
