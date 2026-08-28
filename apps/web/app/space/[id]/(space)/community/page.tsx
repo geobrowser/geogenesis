@@ -1,13 +1,16 @@
 import { IdUtils } from '@geoprotocol/geo-sdk/lite';
 
+import * as React from 'react';
+
 import { notFound } from 'next/navigation';
 
 import { fetchCommunityCalls } from '~/core/community-calls/fetch-community-calls';
+import { ROOT_SPACE } from '~/core/constants';
 
-import { SpaceCommunityCallsSection } from '~/partials/community-calls/space-community-calls-section';
 import { CommunityTabPage } from '~/partials/community-tab/community-tab-page';
-import { EntityPageSideRail } from '~/partials/entity-page/entity-page-side-rail';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
+import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
+import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -21,18 +24,19 @@ export default async function CommunityPage(props: Props) {
   }
 
   const spaceId = params.id;
-  const communityCalls = await fetchCommunityCalls(spaceId).catch(() => []);
+
+  // Root Community mirrors Overview: same Explore rail. Other spaces show calls only.
+  const sidebar =
+    spaceId === ROOT_SPACE ? (
+      <React.Suspense fallback={null}>
+        <RootExploreSidePanelContainer />
+      </React.Suspense>
+    ) : (
+      <SpaceOverviewSidePanel spaceId={spaceId} communityCalls={await fetchCommunityCalls(spaceId).catch(() => [])} />
+    );
 
   return (
-    <EntityPageSidebarLayout
-      sidebar={
-        communityCalls.length > 0 ? (
-          <EntityPageSideRail>
-            <SpaceCommunityCallsSection spaceId={spaceId} series={communityCalls} />
-          </EntityPageSideRail>
-        ) : null
-      }
-    >
+    <EntityPageSidebarLayout sidebar={sidebar}>
       <CommunityTabPage spaceId={spaceId} />
     </EntityPageSidebarLayout>
   );

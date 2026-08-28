@@ -17,6 +17,12 @@ export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
 
 /**
+ * Whether a space rail is currently rendering content. The header lives in the
+ * layout (separate DOM from the page body), so it can't use `has-[aside]`.
+ */
+export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
+
+/**
  * Entity whose comments are open in the global comments panel, or `null` when
  * it's closed. Comment buttons appear on entities all over the app — explore
  * cards, feed rows, data blocks — and everywhere except an entity's own full
