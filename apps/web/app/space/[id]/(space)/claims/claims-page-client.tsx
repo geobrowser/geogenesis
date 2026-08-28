@@ -10,6 +10,7 @@ import { isClaimPublishedInSpace } from '~/core/claims/publish';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
 import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
+import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import { useDebateClaims } from '~/core/debates/hooks';
 import {
@@ -75,10 +76,6 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
     }
     return map;
   }, [debateClaimsQuery.data?.claims]);
-  const activeDebates = React.useMemo(
-    () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_debate ? [claim.active_debate] : [])),
-    [debateClaimsQuery.data?.claims]
-  );
   const responseKindsByEntityId = React.useMemo(
     () =>
       new Map(
@@ -130,7 +127,6 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
             claims={claims}
             isLoading={isLoading}
             spaceId={spaceId}
-            debateJoinBlocked={activeDebates.length > 0}
             debateClaimsByEntityId={debateClaimsByEntityId}
             responseKindsByEntityId={responseKindsByEntityId}
             debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
@@ -250,7 +246,6 @@ function ClaimsList({
   claims,
   isLoading,
   spaceId,
-  debateJoinBlocked,
   debateClaimsByEntityId,
   responseKindsByEntityId,
   debateStatus,
@@ -258,7 +253,6 @@ function ClaimsList({
   claims: Entity[];
   isLoading: boolean;
   spaceId: string;
-  debateJoinBlocked: boolean;
   debateClaimsByEntityId: Map<string, DebateClaim>;
   responseKindsByEntityId: Map<string, 'stance' | 'veracity'>;
   debateStatus: string | null;
@@ -296,7 +290,6 @@ function ClaimsList({
           key={claim.id}
           claim={claim}
           spaceId={spaceId}
-          debateJoinBlocked={debateJoinBlocked}
           debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
           responseKind={responseKindsByEntityId.get(claim.id) ?? claimResponseKind(claim, spaceId)}
         />
@@ -308,22 +301,22 @@ function ClaimsList({
 function ClaimListItem({
   claim,
   spaceId,
-  debateJoinBlocked,
   debateClaim,
   responseKind,
 }: {
   claim: Entity;
   spaceId: string;
-  debateJoinBlocked: boolean;
   debateClaim: DebateClaim | null;
   responseKind: 'stance' | 'veracity';
 }) {
   const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
   const published = isClaimPublishedInSpace(claim, spaceId);
-  const activeDebate = debateClaim?.active_debate ?? null;
   // Kept when the Debate toggle went (GEO-2740): the toggle drew this side effect, but the
   // snapshot it retires is what drives the notification that now creates readiness server-side.
   useRetireConfirmedResponseIndexing({ debateClaim, entityId: claim.id, spaceId });
+  // Catches up readiness for a position the viewer already held before GEO-2740. Temporary; see
+  // the hook.
+  useBackfillReadinessForHeldPosition({ debateClaim, entityId: claim.id, spaceId });
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
