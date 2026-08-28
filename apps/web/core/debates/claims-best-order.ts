@@ -64,7 +64,16 @@ export async function fetchClaimsBestOrder(
 export type ClaimsBestOrder = {
   /** Claim entity id (hex) -> position in the ranking. Absent means the ranking didn't cover it. */
   rankByClaimId: Map<string, number>;
-  isLoading: boolean;
+  /**
+   * Whether the ranking has settled, so callers know when it is safe to paint rows.
+   *
+   * Deliberately not `!isLoading`: a query that has just been enabled reports `isLoading` false for
+   * the render before it starts fetching, which is long enough to paint one frame of unranked rows
+   * and then resequence them. This is true only when there is nothing to wait for or the lookup has
+   * actually resolved — success or failure, since a failure means transcript order and that is a
+   * settled answer too.
+   */
+  isReady: boolean;
 };
 
 /**
@@ -80,10 +89,12 @@ export function useClaimsBestOrder(claimIds: string[], spaceId: string | null): 
   // Sorted so the key is stable across renders that hand the same ids in a different order.
   const normalizedIds = React.useMemo(() => [...claimIds].map(ID.uuidToHex).sort(), [claimIds]);
 
-  const { data, isLoading } = useQuery({
+  const enabled = Boolean(spaceId) && normalizedIds.length > 0;
+
+  const { data, isFetched } = useQuery({
     queryKey: ['claims', 'best-order', spaceId, normalizedIds],
     queryFn: ({ signal }) => fetchClaimsBestOrder(normalizedIds, spaceId!, signal),
-    enabled: Boolean(spaceId) && normalizedIds.length > 0,
+    enabled,
     // A snapshot for as long as the panel is open. A refetch would resequence a list someone is
     // already reading, and reshuffle which claims sit above the "Show more" fold.
     staleTime: Infinity,
@@ -100,7 +111,7 @@ export function useClaimsBestOrder(claimIds: string[], spaceId: string | null): 
     return map;
   }, [data]);
 
-  return { rankByClaimId, isLoading };
+  return { rankByClaimId, isReady: !enabled || isFetched };
 }
 
 /**

@@ -121,11 +121,17 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery): Debate
  */
 export function unmatchedClaims(claims: DebateTranscriptClaims, participantSpaceIds: string[]): TranscriptClaim[] {
   const known = new Set(participantSpaceIds.map(uuidToHex));
-  const orphaned = [...claims.byAuthorSpaceId.entries()]
-    .filter(([authorSpaceId]) => !known.has(authorSpaceId))
-    .flatMap(([, rows]) => rows);
 
-  return [...orphaned, ...claims.unattributed];
+  const claimed = new Set<string>();
+  for (const [authorSpaceId, rows] of claims.byAuthorSpaceId) {
+    if (known.has(authorSpaceId)) for (const row of rows) claimed.add(uuidToHex(row.id));
+  }
+
+  // Filtered out of the flat list rather than assembled from the author map: walking the map would
+  // emit one unknown author's claims together and then every unattributed one after them, so an
+  // A/B/A transcript came out A/A/B. `all` is already in transcript order, which is the order this
+  // is documented to fall back to.
+  return claims.all.filter(claim => !claimed.has(uuidToHex(claim.id)));
 }
 
 /** The claims a given participant made, in transcript order. */

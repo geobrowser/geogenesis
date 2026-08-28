@@ -43,18 +43,25 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
     [claims.all, debate.claim.space_id]
   );
   const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);
-  const { rankByClaimId } = useClaimsBestOrder(claimIds, claimsSpaceId);
+  const { rankByClaimId, isReady: rankingReady } = useClaimsBestOrder(claimIds, claimsSpaceId);
+
+  // Held back the way the debate feed holds its rows back while the same ranking loads: painting
+  // transcript order first and reordering a moment later moves claims under someone already
+  // reading, and can carry one across the "Show more" fold after they have looked at it.
+  const isOrdering = isLoading || !rankingReady;
 
   const orphaned = React.useMemo(
     () =>
-      sortClaimsByBest(
-        unmatchedClaims(
-          claims,
-          participants.map(participant => participant.profile_space_id)
-        ),
-        rankByClaimId
-      ),
-    [claims, participants, rankByClaimId]
+      isOrdering
+        ? []
+        : sortClaimsByBest(
+            unmatchedClaims(
+              claims,
+              participants.map(participant => participant.profile_space_id)
+            ),
+            rankByClaimId
+          ),
+    [claims, participants, rankByClaimId, isOrdering]
   );
 
   React.useEffect(() => {
@@ -96,8 +103,12 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               />
             </div>
             <ClaimList
-              claims={sortClaimsByBest(claimsForParticipant(claims, participant.profile_space_id), rankByClaimId)}
-              isLoading={isLoading}
+              claims={
+                isOrdering
+                  ? []
+                  : sortClaimsByBest(claimsForParticipant(claims, participant.profile_space_id), rankByClaimId)
+              }
+              isLoading={isOrdering}
               error={error}
             />
           </article>

@@ -165,6 +165,35 @@ describe('unmatchedClaims', () => {
     expect(unmatchedClaims(grouped, [PRESTON]).map(claim => claim.id)).toEqual(['claim-2']);
   });
 
+  // Regression: this used to walk the author map and then append the unattributed ones, so one
+  // unknown author's claims came out grouped together and every unauthored claim was pushed to the
+  // end — an A/B/A transcript surfaced as A/A/B.
+  it('keeps transcript order across unknown authors and unauthored claims', () => {
+    const STRANGER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const grouped = groupTranscriptClaims(
+      response([
+        { id: 'block-1', position: 'a1', author: STRANGER, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: null, claims: [{ id: 'claim-2' }] },
+        { id: 'block-3', position: 'a3', author: STRANGER, claims: [{ id: 'claim-3' }] },
+      ])
+    );
+
+    expect(unmatchedClaims(grouped, [PRESTON]).map(claim => claim.id)).toEqual(['claim-1', 'claim-2', 'claim-3']);
+  });
+
+  it('leaves a participant’s claims out while keeping the rest in transcript order', () => {
+    const STRANGER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const grouped = groupTranscriptClaims(
+      response([
+        { id: 'block-1', position: 'a1', author: STRANGER, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: PRESTON, claims: [{ id: 'claim-mine' }] },
+        { id: 'block-3', position: 'a3', author: null, claims: [{ id: 'claim-3' }] },
+      ])
+    );
+
+    expect(unmatchedClaims(grouped, [PRESTON]).map(claim => claim.id)).toEqual(['claim-1', 'claim-3']);
+  });
+
   it('includes unattributed claims and finds nothing when every author is a participant', () => {
     const grouped = groupTranscriptClaims(
       response([

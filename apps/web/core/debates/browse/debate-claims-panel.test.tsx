@@ -15,6 +15,7 @@ const CLAIM_SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
 const mocks = vi.hoisted(() => ({
   claims: null as DebateTranscriptClaims | null,
   isLoading: false,
+  rankingReady: true,
   error: null as Error | null,
   /** Props every rendered response control received, in render order. */
   responseControlProps: [] as Array<Record<string, unknown>>,
@@ -44,7 +45,10 @@ vi.mock('~/core/debates/claims-best-order', async () => {
     '~/core/debates/claims-best-order'
   );
   // The real sort is under test through the panel; only the network lookup is stubbed.
-  return { ...actual, useClaimsBestOrder: () => ({ rankByClaimId: mocks.rankByClaimId, isLoading: false }) };
+  return {
+    ...actual,
+    useClaimsBestOrder: () => ({ rankByClaimId: mocks.rankByClaimId, isReady: mocks.rankingReady }),
+  };
 });
 
 vi.mock('~/partials/entity-page/entity-row-actions', () => ({
@@ -112,6 +116,7 @@ beforeEach(() => {
   mocks.error = null;
   mocks.responseControlProps.length = 0;
   mocks.rankByClaimId = new Map();
+  mocks.rankingReady = true;
 });
 
 afterEach(cleanup);
@@ -220,6 +225,28 @@ describe('DebateClaimsPanel', () => {
 
     expect(screen.getByText('Preston 4.')).toBeInTheDocument();
     expect(screen.queryByText('Arturas 4.')).not.toBeInTheDocument();
+  });
+
+  // Painting transcript order and reordering a moment later moves claims under someone already
+  // reading, and can carry one across the "Show more" fold. The debate feed withholds rows for the
+  // same reason while the same ranking loads.
+  it('withholds rows until the ranking settles, rather than reordering them under the reader', () => {
+    mocks.rankingReady = false;
+    mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'Sleep matters.')] });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(screen.queryByText('Sleep matters.')).not.toBeInTheDocument();
+    expect(screen.getAllByText('Loading claims…').length).toBeGreaterThan(0);
+  });
+
+  it('paints the rows once the ranking settles', () => {
+    mocks.rankingReady = true;
+    mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'Sleep matters.')] });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(screen.getByText('Sleep matters.')).toBeInTheDocument();
   });
 
   it('shows the total in the header and surfaces unattributed claims', () => {
