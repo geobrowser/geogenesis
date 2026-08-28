@@ -39,7 +39,11 @@ export function DebatesHubButton() {
       // The pending count is the whole point of the button, and an aria-label would otherwise
       // override the visible number. It says "Debate" to match the label below: a control should
       // answer to the word it shows, so the two move together.
-      aria-label={requestCount > 0 ? `Debate, ${requestCount} pending requests` : 'Debate'}
+      //
+      // Counted, because this is read aloud and "1 pending requests" is not a sentence.
+      aria-label={
+        requestCount > 0 ? `Debate, ${requestCount} pending ${requestCount === 1 ? 'request' : 'requests'}` : 'Debate'
+      }
       aria-expanded={isOpen}
       onClick={() => toggle()}
       className={cx(

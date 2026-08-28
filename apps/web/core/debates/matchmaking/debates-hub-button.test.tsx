@@ -71,9 +71,13 @@ describe('DebatesHubButton', () => {
 
   /**
    * GEO-2689. A megaphone on its own does not say "debate", and the button had nothing else to go
-   * on. Whatever the word is, the button has to answer to it: a control that shows one name while
-   * answering to another is worse than one showing none, so these pin the visible label and the
-   * accessible name to each other rather than to a particular spelling.
+   * on.
+   *
+   * Most of these do pin the word: "Debate" is the product's choice, and a test that shrugged at it
+   * would not notice the button quietly renaming itself. The one exception is the agreement case
+   * below, which reads whatever is shown and requires the accessible name to match — that one holds
+   * whichever word is chosen, because a control showing one name while answering to another is
+   * worse than one showing none.
    */
   describe('label', () => {
     it('says what the button is for', () => {
@@ -107,6 +111,14 @@ describe('DebatesHubButton', () => {
       expect(screen.getByRole('button', { name: 'Debate, 2 pending requests' })).toBeInTheDocument();
       expect(screen.getByText('Debate')).toBeInTheDocument();
       expect(screen.getByText('2')).toBeInTheDocument();
+    });
+
+    // Read aloud, so it has to be a sentence. One request is not "1 pending requests".
+    it('counts a single pending request', () => {
+      mocks.incomingRequestCount = 1;
+      renderButton();
+
+      expect(screen.getByRole('button', { name: 'Debate, 1 pending request' })).toBeInTheDocument();
     });
 
     // Set in the browse sidebar's menu type so the two read as the same kind of navigation text,
