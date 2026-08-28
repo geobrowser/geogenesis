@@ -73,6 +73,7 @@ export function ClaimRelatedClaims({
   const {
     entities: page,
     isLoading,
+    isPlaceholderData,
     endCursor,
     hasNextPage,
   } = useQueryEntities({
@@ -166,7 +167,10 @@ export function ClaimRelatedClaims({
       <CursorPager
         isFirstPage={pages.isFirstPage}
         hasNextPage={hasNextPage}
-        isLoading={isLoading}
+        // `keepPreviousData` leaves `isLoading` false while the previous page — and its now-stale
+        // `endCursor` — are still on screen. Without this a second click on Next records that same
+        // cursor again, and the trail Previous walks back through gains a duplicate.
+        isLoading={isLoading || isPlaceholderData}
         onPrevious={pages.toPrevious}
         onNext={() => endCursor && pages.toNext(endCursor)}
       />

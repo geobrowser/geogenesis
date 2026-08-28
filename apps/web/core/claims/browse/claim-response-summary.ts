@@ -44,6 +44,14 @@ export type ClaimResponseSummary = {
   meetsFloor: boolean;
   isControversial: boolean;
   isLoading: boolean;
+  /**
+   * The side the viewer holds right now, optimistic included, and the space that identifies them.
+   *
+   * Exposed because the counts here are adjusted optimistically: anything drawing people onto the
+   * two sides has to make the same adjustment, or the number moves while the face stays put.
+   */
+  viewerDirection: ActiveResponseDirection | null;
+  viewerSpaceId: string | null;
 };
 
 /**
@@ -53,7 +61,10 @@ export type ClaimResponseSummary = {
  * an untouched claim because the two mean different things and callers render them differently:
  * no module at all, versus a genuine 0%.
  */
-export function summarizeClaimResponses(positive: number, negative: number): Omit<ClaimResponseSummary, 'isLoading'> {
+export function summarizeClaimResponses(
+  positive: number,
+  negative: number
+): Omit<ClaimResponseSummary, 'isLoading' | 'viewerDirection' | 'viewerSpaceId'> {
   const total = positive + negative;
   const percent = total > 0 ? Math.round((100 * positive) / total) : null;
   const meetsFloor = total >= CLAIM_RESPONSE_FLOOR;
@@ -134,5 +145,10 @@ export function useClaimResponseSummary(
   const positive = Math.max(0, (data?.positive ?? 0) + activePositive - indexedPositive);
   const negative = Math.max(0, (data?.negative ?? 0) + activeNegative - indexedNegative);
 
-  return { ...summarizeClaimResponses(positive, negative), isLoading };
+  return {
+    ...summarizeClaimResponses(positive, negative),
+    isLoading,
+    viewerDirection: activeDirection ?? null,
+    viewerSpaceId: personalSpaceId ?? null,
+  };
 }

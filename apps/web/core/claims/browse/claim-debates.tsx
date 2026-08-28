@@ -15,6 +15,7 @@ import {
   VOTE_TYPE_ID,
   VOTE_WINNER_PROPERTY_ID,
 } from '~/core/debates/ontology';
+import { type DebateVoteRecord, tallyDebateVotes, voteSharePercentages } from '~/core/debates/vote-tally';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
 import { responsePositionLabel } from '~/core/responses/entity-response';
@@ -68,6 +69,7 @@ export function ClaimDebates({
   const {
     entities: debates,
     isLoading,
+    isPlaceholderData,
     endCursor,
     hasNextPage,
   } = useQueryEntities({
@@ -141,7 +143,10 @@ export function ClaimDebates({
       <CursorPager
         isFirstPage={pages.isFirstPage}
         hasNextPage={hasNextPage}
-        isLoading={isLoading}
+        // `keepPreviousData` leaves `isLoading` false while the previous page — and its now-stale
+        // `endCursor` — are still on screen. Without this a second click on Next records that same
+        // cursor again, and the trail Previous walks back through gains a duplicate.
+        isLoading={isLoading || isPlaceholderData}
         onPrevious={pages.toPrevious}
         onNext={() => endCursor && pages.toNext(endCursor)}
       />
@@ -157,6 +162,11 @@ type WinnerShare = { spaceId: string; percent: number; totalVotes: number };
  * One query for every debate on screen rather than one per debate. Deliberately *not* space-scoped:
  * a Vote is auto-published into the voter's own personal space, so scoping to the claim's space
  * would find none of them.
+ *
+ * Counted through `tallyDebateVotes`, which collapses a voter's votes to one. A double-submit or a
+ * retried publish can leave several Vote entities in one personal space for the same debate, and
+ * counting the entities would let a single account inflate a total and, with it, decide the winner.
+ * `voteSharePercentages` then rounds by largest remainder so the shares add to 100.
  */
 function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
   const { entities: votes } = useQueryEntities({
@@ -171,30 +181,47 @@ function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
   });
 
   return React.useMemo(() => {
-    const tallies = new Map<string, Map<string, number>>();
+    const recordsByDebateId = new Map<string, DebateVoteRecord[]>();
+    // The tally keys winners by hex, so keep a way back to the id the profile lookup was given.
+    const spaceIdByHex = new Map<string, string>();
 
     for (const vote of votes) {
       const debateId = relationTargets(vote.relations, VOTE_DEBATES_PROPERTY_ID)[0];
-      const winnerSpaceId = relationTargets(vote.relations, VOTE_WINNER_PROPERTY_ID)[0];
-      if (!debateId || !winnerSpaceId) continue;
+      const winnerSpaceEntityId = relationTargets(vote.relations, VOTE_WINNER_PROPERTY_ID)[0];
+      // The space a Vote lives in is its voter, which is what one-vote-per-person is enforced on.
+      const voterSpaceId = vote.spaces[0];
+      if (!debateId || !winnerSpaceEntityId || !voterSpaceId) continue;
 
-      const byWinner = tallies.get(debateId) ?? new Map<string, number>();
-      byWinner.set(winnerSpaceId, (byWinner.get(winnerSpaceId) ?? 0) + 1);
-      tallies.set(debateId, byWinner);
+      spaceIdByHex.set(ID.uuidToHex(winnerSpaceEntityId), winnerSpaceEntityId);
+      const records = recordsByDebateId.get(debateId) ?? [];
+      records.push({
+        id: vote.id,
+        voterSpaceId,
+        winnerSpaceEntityId,
+        winnerName: null,
+        winnerRelationId: null,
+      });
+      recordsByDebateId.set(debateId, records);
     }
 
     const shares = new Map<string, WinnerShare>();
-    for (const [debateId, byWinner] of tallies) {
-      const total = [...byWinner.values()].reduce((sum, count) => sum + count, 0);
-      if (total === 0) continue;
+    for (const [debateId, records] of recordsByDebateId) {
+      const { countsBySpaceEntityId } = tallyDebateVotes(records, null);
+      const entries = [...countsBySpaceEntityId.entries()];
+      const totalVotes = entries.reduce((sum, [, count]) => sum + count, 0);
+      if (totalVotes === 0) continue;
 
-      const [leaderSpaceId, leaderCount] = [...byWinner.entries()].reduce((best, entry) =>
-        entry[1] > best[1] ? entry : best
-      );
+      const percentages = voteSharePercentages(entries.map(([, count]) => count));
+      let leaderIndex = 0;
+      entries.forEach(([, count], index) => {
+        if (count > entries[leaderIndex]![1]) leaderIndex = index;
+      });
+
+      const leaderHex = entries[leaderIndex]![0];
       shares.set(debateId, {
-        spaceId: leaderSpaceId,
-        percent: Math.round((100 * leaderCount) / total),
-        totalVotes: total,
+        spaceId: spaceIdByHex.get(leaderHex) ?? leaderHex,
+        percent: percentages[leaderIndex] ?? 0,
+        totalVotes,
       });
     }
     return shares;

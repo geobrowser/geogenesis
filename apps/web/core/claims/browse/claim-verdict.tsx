@@ -24,13 +24,11 @@ export function ClaimVerdict({
   spaceId,
   responseKind,
   summary,
-  viewerSpaceId,
 }: {
   entityId: string;
   spaceId: string;
   responseKind: ResponseKind;
   summary: ClaimResponseSummary;
-  viewerSpaceId?: string | null;
 }) {
   if (summary.isLoading) {
     return <Skeleton className="h-[132px] w-full rounded-lg" />;
@@ -83,6 +81,8 @@ export function ClaimVerdict({
           entityId={entityId}
           spaceId={spaceId}
           responseKind={responseKind}
+          viewerDirection={summary.viewerDirection}
+          viewerSpaceId={summary.viewerSpaceId}
         />
         <SideSummary
           swatchClassName="bg-red-01"
@@ -92,6 +92,8 @@ export function ClaimVerdict({
           entityId={entityId}
           spaceId={spaceId}
           responseKind={responseKind}
+          viewerDirection={summary.viewerDirection}
+          viewerSpaceId={summary.viewerSpaceId}
           alignEnd
         />
       </div>
@@ -108,6 +110,8 @@ function SideSummary({
   entityId,
   spaceId,
   responseKind,
+  viewerDirection,
+  viewerSpaceId,
   alignEnd = false,
 }: {
   swatchClassName: string;
@@ -117,6 +121,8 @@ function SideSummary({
   entityId: string;
   spaceId: string;
   responseKind: ResponseKind;
+  viewerDirection: 'positive' | 'negative' | null;
+  viewerSpaceId: string | null;
   alignEnd?: boolean;
 }) {
   return (
@@ -133,6 +139,8 @@ function SideSummary({
           direction={direction}
           label={label}
           totalResponders={count}
+          viewerDirection={viewerDirection}
+          viewerSpaceId={viewerSpaceId}
         />
       )}
     </div>

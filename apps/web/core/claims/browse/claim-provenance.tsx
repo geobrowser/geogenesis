@@ -48,11 +48,18 @@ export function ClaimProvenance({
     return relation ? { id: relation.toEntity.id, name: relation.toEntity.name } : null;
   }, [claimRelations]);
 
-  // Only asked for once we know there is a source debate to attribute the claim to.
+  // Only asked for once we know there is a source to attribute the claim to, and constrained to
+  // blocks belonging to *that* source. A claim can be quoted by more than one transcript — the same
+  // sentence surfacing in a later debate is the ordinary case, not an edge one — and a lookup keyed
+  // on the claim alone would take whichever block came back first and hang someone else's name on
+  // it. Both clauses have to hold: relations given as an array are AND-ed.
   const { entities: blocks } = useQueryEntities({
     where: {
       types: [{ id: { equals: TEXT_BLOCK_TYPE_ID } }],
-      relations: [{ typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { equals: claimId } } }],
+      relations: [
+        { typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { equals: claimId } } },
+        { typeOf: { id: { equals: SOURCES_PROPERTY_ID } }, toEntity: { id: { equals: source?.id ?? '' } } },
+      ],
     },
     first: 1,
     enabled: source !== null,

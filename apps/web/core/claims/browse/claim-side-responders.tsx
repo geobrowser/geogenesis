@@ -8,6 +8,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import pluralize from 'pluralize';
 
+import { ID } from '~/core/id';
 import { getEntityResponders } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import {
@@ -40,6 +41,8 @@ export function ClaimSideResponders({
   direction,
   label,
   totalResponders,
+  viewerDirection,
+  viewerSpaceId,
 }: {
   entityId: string;
   spaceId: string;
@@ -49,6 +52,9 @@ export function ClaimSideResponders({
   label: string;
   /** The authoritative count for this side, which can exceed the faces the query returns. */
   totalResponders: number;
+  /** The side the viewer holds right now, optimistic included, and the space identifying them. */
+  viewerDirection: ActiveResponseDirection | null;
+  viewerSpaceId: string | null;
 }) {
   // Held rather than left to Radix so the profile lookup below is deferred until the list is
   // actually opened — a page of claim cards would otherwise fetch every side's profiles up front.
@@ -60,10 +66,22 @@ export function ClaimSideResponders({
     staleTime: 30_000,
   });
 
-  const sideSpaceIds = React.useMemo(
-    () => (responders ?? []).filter(responder => responder.direction === direction).map(responder => responder.userId),
-    [direction, responders]
-  );
+  // The viewer is placed from their own response rather than from the indexed rows, which trail it
+  // by a publish and an index. The counts above are adjusted the same way, so without this the
+  // number on a side moves while the face stays on the old one — or disappears from both.
+  //
+  // Removed from wherever the index still has them and added to the side they now hold, so
+  // switching sides and clearing both land correctly. Same overlay `ClaimResponderAvatars` does.
+  const sideSpaceIds = React.useMemo(() => {
+    const indexed = (responders ?? [])
+      .filter(responder => responder.direction === direction)
+      .map(responder => responder.userId);
+
+    if (!viewerSpaceId) return indexed;
+
+    const withoutViewer = indexed.filter(id => !ID.equals(id, viewerSpaceId));
+    return viewerDirection === direction ? [viewerSpaceId, ...withoutViewer] : withoutViewer;
+  }, [direction, responders, viewerDirection, viewerSpaceId]);
 
   if (sideSpaceIds.length === 0) return null;
 
