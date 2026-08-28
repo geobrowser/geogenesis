@@ -116,9 +116,17 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
             </nav>
           )}
 
-          <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
+          {/* The `mainPage` token, which is what a regular entity name is set in — size, line height,
+              weight and letter spacing all come from it rather than being restated here, so a topic
+              and any other entity read as the same kind of page.
+
+              Deliberately not container-scaled, for the same reason: the regular entity header
+              isn't either, so scaling this one down in the side panel would reintroduce exactly the
+              mismatch it is here to remove. `text-pretty` stays — it governs where the line breaks,
+              not how big it is. */}
+          <Text as="h1" variant="mainPage" color="text" className="block wrap-break-word text-pretty">
             {entity.name ?? entity.id}
-          </h1>
+          </Text>
 
           {entity.description && (
             <Text as="p" variant="body" color="grey-04">

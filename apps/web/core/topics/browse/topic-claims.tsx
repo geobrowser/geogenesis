@@ -12,7 +12,7 @@ import { TopicClaimCard } from './topic-claim-card';
 import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { useTopicLinkedEntities } from './use-topic-linked-entities';
 
-const CLAIMS_PAGE_SIZE = 6;
+const CLAIMS_PAGE_SIZE = 4;
 
 /**
  * The claims filed under this topic, as the cards the debates hub and the claim page already draw.
