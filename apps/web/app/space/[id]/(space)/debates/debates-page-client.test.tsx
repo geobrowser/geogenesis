@@ -45,6 +45,7 @@ vi.mock('~/core/state/feature-flags', () => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a' }),
   useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => mocks.media,
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
@@ -59,6 +60,12 @@ vi.mock('~/core/debates/hooks', () => ({
 // they were written against.
 vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
   useDebatesBestOrder: () => ({ rankByDebateId: new Map(), isLoading: false, isError: false }),
+}));
+
+// The feed's "Join a debate" button opens the login when signed out, and that hook reaches for
+// next-navigation and Privy context this suite does not stand up.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => vi.fn(),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({

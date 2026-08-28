@@ -9,6 +9,7 @@ import {
   BLOCKS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
+  DEBATE_PARTICIPANTS_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TRANSCRIPTS_PROPERTY_ID,
   DEBATE_TYPE_ID,
@@ -183,6 +184,16 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     relate({
       fromEntity: debateRef,
       propertyId: p.position ? DEBATE_SUPPORTED_BY_PROPERTY_ID : DEBATE_OPPOSED_BY_PROPERTY_ID,
+      toEntityId: p.spaceEntityId,
+      toEntityName: p.displayName,
+    });
+    // Both participants also get the side-agnostic Participants relation. Supported by / Opposed by
+    // already name them, but they encode *which side* — so "every debate this person was in" would
+    // mean unioning two relations and knowing which one to look on. One relation makes that a
+    // single filter, which is what a data block needs.
+    relate({
+      fromEntity: debateRef,
+      propertyId: DEBATE_PARTICIPANTS_PROPERTY_ID,
       toEntityId: p.spaceEntityId,
       toEntityName: p.displayName,
     });

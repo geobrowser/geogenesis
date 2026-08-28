@@ -101,3 +101,49 @@ describe('RelationDecoder — dangling relations', () => {
     expect(decoded?.toEntity.id).toBe(targetId);
   });
 });
+
+describe('the optional relations projection', () => {
+  const base = {
+    id: entityId,
+    name: 'Entity',
+    description: null,
+    types: [],
+    spaceIds: [spaceId],
+    valuesList: [],
+    relationsList: [],
+  };
+
+  /**
+   * Different queries put different things under `relations`, and the schema has to tolerate all of
+   * them: a decode failure here returns `null` silently — `EntityDecoder.decode` swallows it — so a
+   * schema that is too strict takes out every call to whichever query it doesn't fit, with nothing
+   * to show for it.
+   *
+   * Requiring `totalCount` inside this struct did exactly that: `entityQuery` returns a *connection*
+   * (`pageInfo`/`nodes`) with no count, so every `getEntity` decoded as `null`.
+   */
+  it('decodes the connection shape that entityQuery returns', () => {
+    const decoded = EntityDecoder.decode({
+      ...base,
+      relations: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] },
+    });
+
+    expect(decoded).not.toBeNull();
+  });
+
+  it('decodes the count shape that EntitiesBatch returns, and carries the count', () => {
+    const decoded = EntityDecoder.decode({ ...base, relations: { totalCount: 4000 } });
+
+    expect(decoded).not.toBeNull();
+    // The count is the only signal that says a relation list was truncated; `relations.length`
+    // can't, because the decoder filters dangling relations out of it.
+    expect(decoded?.relationsTotalCount).toBe(4000);
+  });
+
+  it('decodes when a query selects no relations projection at all', () => {
+    const decoded = EntityDecoder.decode(base);
+
+    expect(decoded).not.toBeNull();
+    expect(decoded?.relationsTotalCount).toBeUndefined();
+  });
+});

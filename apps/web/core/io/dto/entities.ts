@@ -45,5 +45,8 @@ export function EntityDtoLive(remoteEntity: RemoteEntity): Entity {
     values: values,
     createdAt: remoteEntity.createdAt,
     updatedAt: remoteEntity.updatedAt,
+    // Carried through because `relations` above is filtered: `hasRelationTarget` drops dangling
+    // ones, so its length cannot tell a truncated page from a short one.
+    relationsTotalCount: remoteEntity.relations?.totalCount,
   };
 }
