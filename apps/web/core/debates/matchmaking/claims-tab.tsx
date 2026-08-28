@@ -505,23 +505,26 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
   );
 
   return (
-    <div
-      className={workspace ? '@container grid min-h-0 gap-6 @[60rem]:grid-cols-[15rem_minmax(0,1fr)]' : 'flex flex-col'}
-    >
+    <div className={workspace ? 'flex min-w-0 gap-8' : 'flex flex-col'}>
       {workspace && (
         /* First zone to go on a laptop: the centre is the work, and every narrowing in here is
            still reachable from the menus the panel uses — which is what the narrow layout falls
            back to. */
         <aside
           aria-label="Filters"
-          className="hidden min-h-0 overflow-y-auto pl-4 @[60rem]:block"
+          // Measured against the *workspace* container by name, the same one the live rail reads.
+          // An unnamed query here would resolve to whichever container happened to be nearest —
+          // which is how the rail ended up hidden while the layout still reserved a column for it.
+          className="hidden w-60 shrink-0 self-start @[72rem]/hub:block"
           data-testid="hub-facet-rail"
         >
           {facetRail}
         </aside>
       )}
 
-      <div className={workspace ? 'flex min-w-0 flex-col' : 'contents'}>
+      {/* Its own container, named, so the card grid reflows on the width the cards actually get
+          rather than on the workspace's. `min-w-0` is what lets it shrink below its content. */}
+      <div className={workspace ? '@container/claims flex min-w-0 flex-1 flex-col' : 'contents'}>
         <HubStickyControls>
           {searchInput}
 
@@ -589,7 +592,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
                 workspace
                   ? // Reflows on the centre column's own width, not the viewport's, so the rails
                     // collapsing gives the grid its columns back without a second breakpoint set.
-                    'grid grid-cols-1 gap-3 @[34rem]:grid-cols-2 @[58rem]:grid-cols-3'
+                    'grid grid-cols-1 gap-3 @[30rem]/claims:grid-cols-2 @[46rem]/claims:grid-cols-3'
                   : undefined
               }
             >

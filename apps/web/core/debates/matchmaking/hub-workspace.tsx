@@ -22,28 +22,40 @@ import { HubLiveRail } from './hub-live-rail';
  *
  * Collapse order is deliberate and matches the design: the facet rail goes first (every narrowing
  * in it is still reachable from the menus the panel uses, which is what the narrow layout falls
- * back to), then the live rail. Both are container queries on the workspace rather than viewport
- * media queries, so the same component would behave in a narrower host without new breakpoints.
+ * back to), then the live rail. Both are container queries on this element by name, so the two
+ * decisions are measured against one width and cannot disagree — an unnamed query resolves to
+ * whichever container happens to be nearest, which is how the rail first ended up hidden while the
+ * layout still reserved a column for it.
+ *
+ * The thresholds are set against the shell's `max-w-[1200px]` on `<main>`, which every route
+ * inherits — so the workspace tops out at 1200px however wide the window is. The design wants
+ * roughly 1280px for three zones plus a detail pane; getting there means letting this route out of
+ * that cap, which is a shell change rather than one this component can make.
  */
 export function DebatesHubWorkspace() {
   return (
-    <div className="@container mx-auto flex w-full max-w-[110rem] flex-col">
+    // No `max-w` of its own: the app shell already caps every route at 1200px, so one here would
+    // only ever be dead weight — and the thresholds below are set against that 1200px, not against
+    // the viewport. See the note on the facet rail.
+    <div className="@container/hub flex w-full flex-col">
       <header className="flex items-center justify-between gap-3 px-4 py-5">
         <Text as="h1" variant="mediumTitle" color="text">
           Debates
         </Text>
       </header>
 
-      <div className="grid min-h-0 gap-6 @[75rem]:grid-cols-[minmax(0,1fr)_20rem]">
-        {/* `min-w-0` on the corpus column: without it a long claim sets the column's minimum and the
-            grid stops honouring the rail's track. */}
-        <div className="min-w-0">
+      {/* Flex with explicit rail widths rather than grid tracks: a hidden grid item still leaves
+          its track behind, which is what left a column of empty space where the facet rail should
+          have been. A hidden flex child takes no room at all. */}
+      <div className="flex gap-8 px-4">
+        {/* `min-w-0` so a long claim cannot set the column's floor and push the rail off. */}
+        <div className="min-w-0 flex-1">
           <ClaimsTab layout="workspace" />
         </div>
 
-        {/* Second to go, after the facet rail. Its lists stay reachable from the panel, which is
-            still one press away in the navbar. */}
-        <aside aria-label="Live" className="hidden min-h-0 overflow-y-auto @[75rem]:block">
+        {/* Second to go, after the facet rail — both measured against `/hub`, so the two decisions
+            cannot disagree. Its lists stay reachable from the panel, one press away in the navbar. */}
+        <aside aria-label="Live" className="hidden w-80 shrink-0 self-start @[64rem]/hub:block">
           <HubLiveRail />
         </aside>
       </div>
