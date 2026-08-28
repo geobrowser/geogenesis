@@ -10,6 +10,8 @@ import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response
 
 import { type Debate, type DebateActivity, type DebateRematchSession, GeoChatRequestError } from './api';
 import { DebateCoordinator } from './debate-coordinator';
+import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
+import { useDebateGatewayScope, useDebateGatewaySpaceScopes } from './debate-gateway';
 import {
   debateQueryKeys,
   useAcceptDebateRematchRequest,
@@ -26,12 +28,13 @@ import {
   useGeoChatAuth,
   useLeaveDebateRematch,
   useMarkDebateReady,
+  useSpaceDebates,
   useUpdateDebateAvailability,
 } from './hooks';
-import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
+  spaceSupport: 'indexed' as 'indexed' | 'not-indexed' | 'unknown',
   acceptDebateRematchRequest: vi.fn(),
   getIdentityToken: vi.fn(),
   identityToken: vi.fn(),
@@ -53,8 +56,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, back: mocks.back }),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,
@@ -62,9 +64,18 @@ vi.mock('@geogenesis/auth', () => ({
   usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: { id: 'user-a' } }),
 }));
 
+// geo-chat only indexes DAO spaces, and the debate hooks hold until they know the space is one.
+// Three-valued: `unknown` is the window before the space type resolves, which the hooks have to
+// report as loading rather than as a settled empty answer. Most tests here are about a space that
+// does have debates, so `indexed` is the default.
+vi.mock('./space-debate-support', () => ({
+  useSpaceDebateSupport: () => mocks.spaceSupport,
+}));
+
 vi.mock('./debate-gateway', () => ({
   useDebateGateway: () => ({ status: 'ready', paused: false }),
   useDebateGatewayScope: vi.fn(),
+  useDebateGatewaySnapshot: () => ({ status: 'ready', paused: false }),
   useDebateGatewaySpaceScopes: vi.fn(),
 }));
 
@@ -141,6 +152,7 @@ describe('useDebateRematchClaimsForIds', () => {
 describe('useDebateClaimsBySpaces', () => {
   beforeEach(() => {
     mocks.authenticated = true;
+    mocks.spaceSupport = 'indexed';
     mocks.identityToken.mockReturnValue(null);
     mocks.getIdentityToken.mockResolvedValue(null);
     mocks.listDebateClaims.mockReset();
@@ -235,6 +247,8 @@ function DebateExitHarness() {
 describe('useGeoChatAuth', () => {
   beforeEach(() => {
     mocks.authenticated = true;
+    mocks.spaceSupport = 'indexed';
+    vi.mocked(useDebateGatewayScope).mockClear();
     mocks.getIdentityToken.mockReset();
     mocks.identityToken.mockReset();
     mocks.consentToDebateRematch.mockReset();
@@ -314,6 +328,90 @@ describe('useGeoChatAuth', () => {
     expect(mocks.getIdentityToken).toHaveBeenCalledTimes(1);
   });
 
+  /**
+   * geo-chat indexes DAO spaces only. Asked about a personal space it answers `space_not_found` and
+   * the gateway rejects the matching SUBSCRIBE, which pauses the socket with no reconnect scheduled
+   * — the "Live debate updates are paused while reconnecting" banner that never clears. A claim
+   * curated onto a personal page, or one whose own home space is personal, arrives here as exactly
+   * that space.
+   */
+  it('asks geo-chat nothing about a personal space', async () => {
+    mocks.spaceSupport = 'not-indexed';
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(() => useDebateClaims('space-1', ['claim-1'], true), { wrapper });
+
+    await waitFor(() => expect(useDebateGatewayScope).toHaveBeenCalled());
+    expect(mocks.listDebateClaims).not.toHaveBeenCalled();
+    // Every call must be disabled — one enabled subscribe is all it takes to pause the socket.
+    expect(vi.mocked(useDebateGatewayScope).mock.calls.every(([, enabled]) => enabled === false)).toBe(true);
+  });
+
+  /**
+   * The gate can't disable the query and stop there. A disabled react-query reports
+   * `isLoading: false` with no data, which every consumer reads as a settled empty answer: the
+   * browse feed paints the ordinary entity page in place of the video takeover and the join panel
+   * says "No claims are available to debate yet", each for one round trip. The wait has to reach
+   * them as a wait.
+   */
+  it('reports itself loading while the space type is still resolving', async () => {
+    mocks.spaceSupport = 'unknown';
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result, rerender } = renderHook(() => useDebateClaims('space-1', ['claim-1'], true), { wrapper });
+
+    expect(result.current.isLoading).toBe(true);
+    expect(mocks.listDebateClaims).not.toHaveBeenCalled();
+
+    // And once it settles as a space with no debates, the wait ends rather than running forever.
+    mocks.spaceSupport = 'not-indexed';
+    rerender();
+    expect(result.current.isLoading).toBe(false);
+    expect(mocks.listDebateClaims).not.toHaveBeenCalled();
+  });
+
+  // The browse feed subscribes the same way, and opening it on a personal space raised the banner
+  // on its own — so the gate has to cover this hook too, not only the claims one.
+  it('asks geo-chat nothing about a personal space from the browse feed', async () => {
+    mocks.spaceSupport = 'not-indexed';
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useSpaceDebates('space-1', true), { wrapper });
+
+    await waitFor(() => expect(useDebateGatewayScope).toHaveBeenCalled());
+    expect(result.current.isLoading).toBe(false);
+    expect(vi.mocked(useDebateGatewayScope).mock.calls.every(([, enabled]) => enabled === false)).toBe(true);
+  });
+
+  it('holds the browse feed loading while the space type is still resolving', () => {
+    mocks.spaceSupport = 'unknown';
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useSpaceDebates('space-1', true), { wrapper });
+
+    expect(result.current.isLoading).toBe(true);
+  });
+
   it('leaves indexed-response claim refreshes to the gateway notification path', async () => {
     mocks.identityToken.mockReturnValue(null);
     mocks.getIdentityToken.mockResolvedValue(null);
@@ -378,10 +476,71 @@ describe('useGeoChatAuth', () => {
     });
 
     await waitFor(() =>
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims'],
-      })
+      expect(invalidateQueries).toHaveBeenCalledWith({ predicate: expect.any(Function) }, { cancelRefetch: false })
     );
+
+    // Only the batches naming the claim, plus the id-less session list any response can add a
+    // row to. The picker holds a batch per page on screen; refetching all of them for one
+    // response is what left its positions trailing.
+    const predicate = invalidateQueries.mock.calls.at(-1)![0]!.predicate!;
+    const batch = (claimIds: string[]) =>
+      ({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims', claimIds] }) as never;
+    expect(predicate(batch(['claim-1']))).toBe(true);
+    expect(predicate(batch(['claim-0', 'claim-1', 'claim-2']))).toBe(true);
+    expect(predicate(batch([]))).toBe(true);
+    expect(predicate(batch(['claim-2']))).toBe(false);
+    expect(
+      predicate({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-2', 'claims', ['claim-1']] } as never)
+    ).toBe(false);
+  });
+
+  // Cancelling a batch that is about to answer throws the request away, and when responses keep
+  // arriving it means none of them ever land — the starvation this family is invalidated around.
+  // The request in flight is left to land, then asked again so the answer postdates the response.
+  it('lets a rematch batch in flight land and asks it again once an indexed response arrives', async () => {
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    let landFirst!: () => void;
+    mocks.listDebateRematchClaims.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          landFirst = () => resolve({ claims: [], excluded_claim_ids: [] });
+        })
+    );
+
+    renderHook(() => useDebateRematchClaims('rematch-1', ['claim-1']), { wrapper });
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+        status: 'indexed',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'negative',
+          personalSpaceId: 'profile-1',
+          responseKind: 'veracity',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      });
+    });
+
+    // The request that was already on its way is not restarted out from under itself.
+    const batch = queryClient
+      .getQueryCache()
+      .find({ queryKey: debateQueryKeys.rematchClaims('user-a', 'rematch-1', ['claim-1']) })!;
+    expect(batch.state.fetchStatus).toBe('fetching');
+    expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1);
+
+    act(() => landFirst());
+
+    // ...and once it has landed, it is asked again, so what ends up on screen knows the response.
+    await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(2));
   });
 
   // A `users/me` sent before logout can resolve after it. Writing that result back would
@@ -465,7 +624,16 @@ describe('useUpdateDebateAvailability', () => {
 
     expect(mocks.updateDebateAvailability).toHaveBeenCalledWith(false, expect.any(Function), 'user-a');
     expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(authoritative);
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['debates'] });
+    // Everything under `'debates'` bar the rematch picker's positions batches, which availability
+    // says nothing about and which cost a request per page of claims on screen.
+    expect(invalidateQueries).toHaveBeenCalledWith({ predicate: expect.any(Function) });
+    const predicate = invalidateQueries.mock.calls.at(-1)![0]!.predicate!;
+    expect(predicate({ queryKey: ['debates', 'account', 'user-a', 'activity'] } as never)).toBe(true);
+    expect(predicate({ queryKey: ['debates', 'claims', 'space-1', 'all'] } as never)).toBe(true);
+    expect(
+      predicate({ queryKey: ['debates', 'account', 'user-a', 'rematch', 'rematch-1', 'claims', ['claim-1']] } as never)
+    ).toBe(false);
+    expect(predicate({ queryKey: ['claim-picker', 'page'] } as never)).toBe(false);
   });
 
   it('rolls the optimistic activity back when the request fails', async () => {
@@ -991,6 +1159,10 @@ describe('debate query refresh behavior', () => {
     window.localStorage.clear();
   });
 
+  // The gateway owns freshness for these, so time passing must not cost a request. Account activity
+  // is deliberately not among them any more — it gates the incoming-request popup and polls to
+  // survive a deaf socket (GEO-2638); its cadence is pinned in `hooks-query-network.test.tsx`,
+  // where the two focus gates a real interval depends on can be stated directly.
   it('does not issue periodic debate reads while time advances', async () => {
     vi.useFakeTimers();
     window.localStorage.setItem(
@@ -1005,20 +1177,10 @@ describe('debate query refresh behavior', () => {
       })
     );
     const fetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          online: true,
-          available_to_debate: true,
-          cooldown_until: null,
-          match: null,
-          debate: null,
-          rematch: null,
-        }),
-        {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      )
+      new Response(JSON.stringify({ id: 'debate-1' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
     );
     vi.stubGlobal('fetch', fetch);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -1026,7 +1188,7 @@ describe('debate query refresh behavior', () => {
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     );
 
-    renderHook(() => useDebateActivity(), { wrapper });
+    renderHook(() => useDebate('debate-1', true), { wrapper });
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
 
     await act(async () => vi.advanceTimersByTimeAsync(60_000));

@@ -8,8 +8,10 @@ import type {
   SpaceDebatesResponse,
 } from '../api';
 import {
+  type DebateClaimInput,
   type DebatePublishInput,
   type DebatePublishParticipant,
+  type DebatePublishTurn,
   mergeTranscriptSegmentsIntoTurns,
 } from '../debate-publish-draft';
 import { hasProcessedVideo } from '../playback-utils';
@@ -59,12 +61,25 @@ export type DebateSource = {
   input: DebatePublishInput;
 };
 
+/**
+ * Why a debate can't be published yet — or, for `media_failed`, ever.
+ *
+ * The distinction between `media_not_ready` and `media_failed` is the whole point of having two
+ * codes: one is a debate the next sweep will pick up, the other is a debate no sweep will ever
+ * publish. Collapsing them is how twelve debates died unnoticed over a month — a permanently dead
+ * job counted as "still processing" on every tick, forever, and looked exactly like a healthy
+ * backlog.
+ */
+export type DebateNotPublishableCode =
+  | 'not_complete'
+  | 'recording_cancelled'
+  | 'cancellation_window_open'
+  | 'media_not_ready'
+  | 'media_failed';
+
 export class DebateNotPublishableError extends Error {
-  code: 'not_complete' | 'recording_cancelled' | 'cancellation_window_open' | 'media_not_ready';
-  constructor(
-    code: 'not_complete' | 'recording_cancelled' | 'cancellation_window_open' | 'media_not_ready',
-    message: string
-  ) {
+  code: DebateNotPublishableCode;
+  constructor(code: DebateNotPublishableCode, message: string) {
     super(message);
     this.name = 'DebateNotPublishableError';
     this.code = code;
@@ -100,7 +115,18 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   assertDebateRecordingPublishable(debate, Date.now());
 
   const media = await geoChatGet<DebateMediaResponse>(`/debates/${debateId}/media`);
+  // A failed job has already spent its retries in the worker; it is not coming back on its own.
+  if (media.job?.status === 'failed') {
+    throw new DebateNotPublishableError(
+      'media_failed',
+      `Debate ${debateId} media job failed permanently and will not be retried.`
+    );
+  }
   if (media.job?.status !== 'succeeded') {
+    // Queued, running, or no job row yet — all of which the next tick may resolve. A missing job is
+    // the weakest of the three: if the enqueue itself was lost there is nothing to wait for, but
+    // that is indistinguishable from "about to be enqueued", so it stays a wait rather than risking
+    // a false report of permanent death.
     throw new DebateNotPublishableError(
       'media_not_ready',
       `Debate ${debateId} media is not ready (job ${media.job?.status ?? 'missing'}).`
@@ -108,15 +134,25 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   }
 
   // A job can succeed without composing a `final_video`; publishing then yields a videoless Debate.
+  // Terminal, not a wait: the job that would have produced it has already finished.
   if (!hasProcessedVideo(media)) {
-    throw new DebateNotPublishableError('media_not_ready', `Debate ${debateId} has no processed final_video artifact.`);
+    throw new DebateNotPublishableError(
+      'media_failed',
+      `Debate ${debateId} media job succeeded without a processed final_video artifact.`
+    );
   }
 
   const videoUrl = await pinArtifactToIpfs(debateId, 'final_video');
   const keyframeUrl = media.artifacts.some(artifact => artifact.kind === 'preview_image')
     ? await pinKeyframeToIpfs(debateId)
     : null;
-  const transcriptTurns = await loadTranscriptTurns(debateId, debate);
+  // Prefer geo-chat's canonical turns + pre-attributed claims (extracted in its media job, next to
+  // transcription). geo-chat is the single authority on turn boundaries, so its `turn_index` lines
+  // the published transcript blocks up with the claims exactly. Falls back to merging the raw
+  // transcript ourselves (and publishing no claims) when claims aren't available yet.
+  const extracted = await loadDebateClaims(debateId);
+  const transcriptTurns = extracted?.transcriptTurns ?? (await loadTranscriptTurns(debateId, debate));
+  const claims = extracted?.claims ?? [];
 
   const participants: DebatePublishParticipant[] = debate.participants.map(p => ({
     spaceEntityId: p.profile_space_id,
@@ -134,6 +170,7 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     videoUrl,
     keyframeUrl,
     transcriptTurns,
+    claims,
   };
 
   return { debate, media, input };
@@ -198,6 +235,55 @@ async function pinKeyframeToIpfs(debateId: string): Promise<string | null> {
     console.warn(`[debate-acceptor] could not pin keyframe for ${debateId}; publishing without one.`, error);
     return null;
   }
+}
+
+type DebateExtractedClaimsTurn = {
+  turn_index: number;
+  participant_slot: number;
+  /** The turn speaker's Geo personal-space entity id (the Authors relation target). */
+  attributed_space_id: string;
+  speaker_name: string | null;
+  text: string;
+};
+type DebateExtractedClaimsClaim = { text: string; is_factual: boolean | null; turn_index: number };
+type DebateExtractedClaimsResponse = { turns: DebateExtractedClaimsTurn[]; claims: DebateExtractedClaimsClaim[] };
+
+/**
+ * Load geo-chat's pre-computed, pre-attributed debate claims. geo-chat extracts them in its media
+ * job (beside Whisper) and returns the canonical per-turn structure PLUS the claims keyed to it by
+ * `turn_index`, so the transcript blocks we publish and the claims attach to the same turns.
+ *
+ * Returns null when claims are unavailable (older debate, extraction failed, or geo-chat does not
+ * report claims for this debate) — the caller then falls back to the raw /transcript merge and
+ * publishes with no claims. `turn_index` is expected 0-based and contiguous over non-empty turns.
+ */
+async function loadDebateClaims(
+  debateId: string
+): Promise<{ transcriptTurns: DebatePublishTurn[]; claims: DebateClaimInput[] } | null> {
+  let response: DebateExtractedClaimsResponse;
+  try {
+    response = await geoChatGet<DebateExtractedClaimsResponse>(`/debates/${debateId}/claims`);
+  } catch (error) {
+    // A missing/failed claims read shouldn't block publishing the Debate + Transcript.
+    console.warn(`[debate-acceptor] could not load extracted claims for ${debateId}; using raw transcript.`, error);
+    return null;
+  }
+  if (!response || !Array.isArray(response.turns) || response.turns.length === 0) return null;
+
+  const transcriptTurns: DebatePublishTurn[] = [...response.turns]
+    .sort((a, b) => a.turn_index - b.turn_index)
+    .map(turn => ({
+      turnIndex: turn.turn_index,
+      speakerSpaceEntityId: turn.attributed_space_id,
+      speakerName: turn.speaker_name,
+      text: turn.text,
+    }));
+  const claims: DebateClaimInput[] = (response.claims ?? []).map(claim => ({
+    text: claim.text,
+    isFactual: claim.is_factual ?? null,
+    turnIndex: claim.turn_index,
+  }));
+  return { transcriptTurns, claims };
 }
 
 async function loadTranscriptTurns(debateId: string, debate: Debate) {

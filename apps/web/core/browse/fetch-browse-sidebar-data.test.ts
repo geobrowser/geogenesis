@@ -25,8 +25,12 @@ vi.mock('~/core/io/subgraph/fetch-editor-space-ids', () => ({
   fetchEditorSpaceIds: (...args: unknown[]) => mocks.fetchEditorSpaceIds(...args),
 }));
 
+// The sidebar reads the traversal through its shared wrapper, so that is what has to be
+// stubbed. The mock keeps the `fetchFeaturedSpaces` name for the spy because these suites
+// assert on what the sidebar does with the traversal's answer, not on how it is shared —
+// `fetch-featured-spaces.test.ts` owns the sharing.
 vi.mock('~/core/io/subgraph/fetch-featured-spaces', () => ({
-  fetchFeaturedSpaces: (...args: unknown[]) => mocks.fetchFeaturedSpaces(...args),
+  fetchFeaturedSpacesShared: (...args: unknown[]) => mocks.fetchFeaturedSpaces(...args),
 }));
 
 vi.mock('~/core/io/subgraph/fetch-pending-membership-space-ids', () => ({

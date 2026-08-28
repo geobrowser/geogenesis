@@ -1,12 +1,12 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import * as Effect from 'effect/Effect';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { graphql } from '~/core/io/graphql-client';
 
-import { claimPickerPageQueryKey, fetchClaimPickerPage } from './claim-picker-page';
+import { claimPickerEntitiesQueryKey, fetchClaimPickerEntities } from './claim-picker-page';
 
 vi.mock('~/core/io/graphql-client', () => ({
   graphql: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock('~/core/io/graphql-client', () => ({
 
 const graphqlMock = graphql as unknown as Mock;
 
-describe('fetchClaimPickerPage', () => {
+describe('fetchClaimPickerEntities', () => {
   beforeEach(() => {
     graphqlMock.mockReset();
   });
@@ -23,40 +23,28 @@ describe('fetchClaimPickerPage', () => {
     graphqlMock.mockImplementation(({ decoder }) => Effect.succeed(decoder({ entitiesConnection })));
   }
 
-  it('asks the server for only the fields the picker reads, scoped to the claim type', async () => {
-    respondWith({ pageInfo: { endCursor: null, hasNextPage: false }, nodes: [] });
+  it('asks the server for only the fields the picker reads, for exactly the ids given', async () => {
+    respondWith({ nodes: [] });
 
-    await fetchClaimPickerPage({ search: '' });
+    await fetchClaimPickerEntities(['claim-1', 'claim-2']);
 
-    const variables = graphqlMock.mock.calls.at(-1)?.[0]?.variables;
-    expect(variables).toMatchObject({
+    expect(graphqlMock.mock.calls.at(-1)?.[0]?.variables).toEqual({
       claimTypeId: CLAIM_TYPE_ID,
       propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
       topicsPropertyId: TOPICS_PROPERTY_ID,
-      first: 50,
+      ids: ['claim-1', 'claim-2'],
     });
-    // The ORM path excluded nameless claims server-side; the picker cannot render them either.
-    expect(variables.filter).toEqual({ name: { isNull: false, isNot: '' } });
   });
 
-  it('maps the search term to the same case-insensitive substring the ORM used', async () => {
-    respondWith({ pageInfo: { endCursor: 'c-2', hasNextPage: true }, nodes: [] });
-
-    const page = await fetchClaimPickerPage({ search: 'fast fashion', after: 'c-1' });
-
-    expect(graphqlMock.mock.calls.at(-1)?.[0]?.variables).toMatchObject({
-      after: 'c-1',
-      filter: { name: { isNull: false, isNot: '', includesInsensitive: 'fast fashion' } },
-    });
-    expect(page.endCursor).toBe('c-2');
-    expect(page.hasNextPage).toBe(true);
+  it('does not ask at all for an empty list', async () => {
+    await expect(fetchClaimPickerEntities([])).resolves.toEqual([]);
+    expect(graphqlMock).not.toHaveBeenCalled();
   });
 
-  // The picker's helpers were written against `Entity`; the narrow page has to land in the same
-  // shape or the home-space, response-kind and topic lookups silently see nothing.
+  // The picker's helpers were written against `Entity`; the narrow projection has to land in the
+  // same shape or the home-space, response-kind and topic lookups silently see nothing.
   it('decodes nodes into the Entity subset the picker reads', async () => {
     respondWith({
-      pageInfo: { endCursor: null, hasNextPage: false },
       nodes: [
         {
           id: 'claim-1',
@@ -71,19 +59,15 @@ describe('fetchClaimPickerPage', () => {
             { spaceId: 'space-b', propertyId: SystemIds.NAME_PROPERTY, text: null, boolean: null },
             null,
           ],
-          relationsList: [
-            { toEntity: { id: 'topic-1', name: 'Fashion' } },
-            { toEntity: null },
-            null,
-          ],
+          relationsList: [{ toEntity: { id: 'topic-1', name: 'Fashion' } }, { toEntity: null }, null],
         },
         null,
       ],
     });
 
-    const page = await fetchClaimPickerPage({ search: '' });
+    const entities = await fetchClaimPickerEntities(['claim-1']);
 
-    expect(page.entities).toEqual([
+    expect(entities).toEqual([
       {
         id: 'claim-1',
         name: 'Fast fashion is bad',
@@ -100,18 +84,16 @@ describe('fetchClaimPickerPage', () => {
     ]);
   });
 
-  it('returns an empty page when the connection is missing', async () => {
+  it('returns nothing when the connection is missing', async () => {
     respondWith(null);
 
-    const page = await fetchClaimPickerPage({ search: '' });
-
-    expect(page).toEqual({ entities: [], endCursor: null, hasNextPage: false });
+    await expect(fetchClaimPickerEntities(['claim-1'])).resolves.toEqual([]);
   });
 });
 
 // The gateway reconciles and the debates mutations invalidate everything under `'debates'`; a
-// knowledge-graph page under that root would refetch on every reconnect and, when the graph
+// knowledge-graph lookup under that root would refetch on every reconnect and, when the graph
 // failed, be read as a broken socket.
-it('keys the picker page outside the debates family', () => {
-  expect(claimPickerPageQueryKey('', undefined)[0]).not.toBe('debates');
+it('keys the picker lookup outside the debates family', () => {
+  expect(claimPickerEntitiesQueryKey(['claim-1'])[0]).not.toBe('debates');
 });

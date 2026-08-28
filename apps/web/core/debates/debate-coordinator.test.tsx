@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt } from './api';
 import { DebateCoordinator } from './debate-coordinator';
-import { clearEnteringDebate, markEnteringDebate } from './debate-entry-intent';
+import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   dismissRequestMutate: vi.fn(),
   blockUserMutate: vi.fn(),
   pathname: '/space/space-1/debates',
+  // Whether this tab is the focused one. jsdom reports no focus, so the real store would make
+  // every routing case here look like a background tab.
+  hasAttention: true,
   prompts: [] as DebateSharePrompt[],
   promptsFetching: false,
   mediaMutate: vi.fn(),
@@ -36,6 +39,7 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   abortMutateAsync: vi.fn(),
   clearDebateActivity: vi.fn(),
+  rememberDebateReturnDestination: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -64,6 +68,11 @@ vi.mock('./hooks', () => ({
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
   useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
   useClearDebateActivity: () => mocks.clearDebateActivity,
+}));
+
+vi.mock('./debate-attention', () => ({
+  useDebatePresence: () => true,
+  useDebateAttention: () => mocks.hasAttention,
 }));
 
 vi.mock('./debate-gateway', () => ({
@@ -103,6 +112,10 @@ vi.mock('./claim-response-indexed-notifier', () => ({
   useClaimResponseIndexedNotifier: vi.fn(),
 }));
 
+vi.mock('./debate-return-navigation', () => ({
+  rememberDebateReturnDestination: mocks.rememberDebateReturnDestination,
+}));
+
 vi.mock('~/core/state/feature-flags', () => ({}));
 
 beforeEach(() => {
@@ -124,6 +137,7 @@ beforeEach(() => {
   mocks.dismissRequestMutate.mockReset();
   mocks.blockUserMutate.mockReset();
   mocks.pathname = '/space/space-1/debates';
+  mocks.hasAttention = true;
   mocks.prompts = [];
   mocks.promptsFetching = false;
   mocks.authenticated = true;
@@ -134,6 +148,7 @@ beforeEach(() => {
   mocks.abortMutateAsync.mockReset();
   mocks.abortMutateAsync.mockResolvedValue(undefined);
   mocks.clearDebateActivity.mockReset();
+  mocks.rememberDebateReturnDestination.mockReset();
   Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
   Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
   Object.defineProperty(URL, 'createObjectURL', {
@@ -172,12 +187,13 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByText('Live debate updates are paused while reconnecting.')).not.toBeInTheDocument();
   });
 
-  it('routes an available participant into a shared rematch browser', async () => {
+  it('does not route another tab into a shared debate-again browser', async () => {
     mocks.activity = activityWithRematch('browsing');
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(mocks.rememberDebateReturnDestination).not.toHaveBeenCalled();
   });
 
   it('leaves a secondary tab on its current page when shared activity contains a debate', async () => {
@@ -397,12 +413,55 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
   });
 
+  // GEO-2648. This coordinator runs in every open tab, and the source-debate guard only covers
+  // rematches that have one — a session with `source_debate_id: null` fell through and pushed
+  // *every* tab into the picker at once, which is what Dovile saw: all her tabs jumped to the
+  // claim being debated. The majority of sessions take this branch, so it fired routinely.
+  it('does not route a tab the viewer is not looking at', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.hasAttention = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    // Give the effect the same room to fire that the focused-tab case below needs.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  // Focus is what decides, not presence: several windows can be visible at once, so an unfocused
+  // tab must stay put and the focused one must still route in.
+  it('routes the focused tab once it gains attention', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.hasAttention = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    const view = render(<DebateCoordinator />);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    // The viewer turns to this tab. Attention is a subscription, so the effect re-runs.
+    mocks.hasAttention = true;
+    view.rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
   // The sender learns it was accepted the same way every other flow does: activity gains a rematch
   // and the routing effect walks them into the claim picker. No popup is involved either way.
   it('routes the sender into the claim picker once the challenge is accepted', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';
-    mocks.activity = { ...activityWithRematch('browsing'), challenge: null };
+    const activity = activityWithRematch('browsing');
+    mocks.activity = {
+      ...activity,
+      rematch: { ...activity.rematch!, source_debate_id: null },
+      challenge: null,
+    };
 
     render(<DebateCoordinator />);
 
@@ -436,6 +495,107 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
   });
 
+  // GEO-2604. The window this closes: the rematch session has converted, so activity reports the
+  // new `ready` debate and no longer reports a rematch, but the page's own session query has not
+  // caught up and so has not navigated yet. That is exactly the shape the ready prompt exists for —
+  // a ready debate the viewer has not been told about — so it opened over a page that was already
+  // on its way into the room, then vanished when the navigation landed. Preston reported a popup
+  // that "required no interaction" and redirected him anyway.
+  it('does not prompt over the rematch page for a debate that page is about to open', async () => {
+    mocks.pathname = '/space/space-1/debates/rematches/rematch-1';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+    // Nor the fallback bar: it would flash in exactly the same window.
+    expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  // GEO-2604, the other window: accepting is a round trip, the server creates the debate inside it
+  // and emits `debate.state_changed` to the accepting tab, so that tab's own socket event can hand
+  // the coordinator a `ready` debate on some other path while the response it is waiting on is still
+  // in flight. The id-keyed intent cannot help — there is no id until the response arrives.
+  it('does not prompt while this tab is waiting on an accept', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+    const release = markEnteringPendingDebate();
+
+    try {
+      render(<DebateCoordinator />);
+
+      await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+      expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+      // Nor the rejoin bar, which would flash in the same window for the same reason.
+      expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+    } finally {
+      release();
+    }
+  });
+
+  // Released when the mutation settles, so a failed accept cannot leave the viewer with no way in.
+  it('prompts again once the accept has settled', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+    const release = markEnteringPendingDebate();
+    const { rerender } = render(<DebateCoordinator />);
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+
+    release();
+    rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
+  });
+
+  // Counted, not boolean: two accepts can overlap, and the first to settle must not drop the
+  // second's claim and let the prompt through underneath it.
+  it('keeps suppressing while a second overlapping accept is still in flight', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+    const releaseFirst = markEnteringPendingDebate();
+    const releaseSecond = markEnteringPendingDebate();
+    const { rerender } = render(<DebateCoordinator />);
+
+    releaseFirst();
+    rerender(<DebateCoordinator />);
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+
+    releaseSecond();
+    rerender(<DebateCoordinator />);
+    await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
+  });
+
+  // Still prompted anywhere else, so suppressing it above cannot swallow a real one.
+  it('still prompts for a ready debate away from the rematch page', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
+  });
+
   // The loop this stops: the room hides itself and returns whoever opens a debate whose recording
   // was cancelled, so routing into it from here bounced the viewer back and forth — the screen
   // flickered, and the opponent's "your debate was removed" dialog reappeared after Okay.
@@ -460,13 +620,13 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
   });
 
-  it('still routes into a deciding rematch while the debate is intact', async () => {
+  it('leaves an unrelated tab alone while an intact debate-again session is deciding', async () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = activityWithRematch('deciding');
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/debate-1'));
+    await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
   });
 
   it.each(['complete', 'cancelled'] as const)('does not reopen a %s debate from stale activity', async status => {

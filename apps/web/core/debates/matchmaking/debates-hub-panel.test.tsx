@@ -112,6 +112,20 @@ describe('DebatesHubPanel', () => {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
 
+    // jsdom has no layout, so reachability at a narrow width can't be asserted directly. The
+    // scroll container is the thing that guarantees it, so pin that instead — without it the
+    // last tab is clipped by the panel's `overflow-hidden` with no way to get to it.
+    const row = screen.getByRole('button', { name: /^Claims/ }).closest('.overflow-x-auto');
+    expect(row).not.toBeNull();
+
+    // Order, not just presence: the labels alone stayed green through a reorder.
+    const order = ['Claims', 'People', 'Matches', 'Requests'];
+    const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
+    for (const [index, tab] of rendered.slice(0, -1).entries()) {
+      const next = rendered[index + 1];
+      expect(Boolean(tab.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    }
+
     fireEvent.click(screen.getByRole('button', { name: /^People/ }));
 
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
@@ -142,6 +156,33 @@ describe('DebatesHubPanel', () => {
 
   // `aria-modal` on the sheet hides the navbar toggle and the backdrop from assistive tech, so
   // without this the only way out is Escape — a key phones don't have.
+  // The panel's only dismissal on desktop, and the one thing the opener exemption must not cost.
+  it('closes when a pointer goes down outside it', () => {
+    const store = renderOpen();
+    const outside = document.createElement('div');
+    document.body.appendChild(outside);
+
+    fireEvent.pointerDown(outside);
+
+    expect(store.get(debatesHubAtom)).toBeNull();
+    outside.remove();
+  });
+
+  // The navbar's button and the browse feed's "Join a debate" both carry this marker so their own
+  // click can toggle the panel. Without the exemption the pointerdown closed it and the click
+  // reopened it, which read as a flicker.
+  it('stays open when the pointer goes down on something marked as an opener', () => {
+    const store = renderOpen();
+    const opener = document.createElement('button');
+    opener.setAttribute('data-debates-hub-opener', '');
+    document.body.appendChild(opener);
+
+    fireEvent.pointerDown(opener);
+
+    expect(store.get(debatesHubAtom)).not.toBeNull();
+    opener.remove();
+  });
+
   it('gives the mobile sheet a close button that assistive tech can reach', () => {
     mocks.isMobile = true;
     const store = renderOpen();

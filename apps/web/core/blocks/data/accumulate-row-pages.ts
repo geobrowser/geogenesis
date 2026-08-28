@@ -1,12 +1,16 @@
 import type { Row } from '~/core/types';
 
-export type RowPage = { page: number; rows: Row[] };
+export type RowPage<T extends { entityId: string } = Row> = { page: number; rows: T[] };
 
-function rowEntityIdsSignature(rows: Row[]): string {
+export function rowEntityIdsSignature(rows: Array<{ entityId: string }>): string {
   return rows.map(row => row.entityId).join('|');
 }
 
-export function upsertRowPage(pages: RowPage[], page: number, rows: Row[]): RowPage[] {
+export function upsertRowPage<T extends { entityId: string }>(
+  pages: RowPage<T>[],
+  page: number,
+  rows: T[]
+): RowPage<T>[] {
   const signature = rowEntityIdsSignature(rows);
   const existing = pages.find(p => p.page === page);
   if (existing && rowEntityIdsSignature(existing.rows) === signature) {
@@ -18,8 +22,8 @@ export function upsertRowPage(pages: RowPage[], page: number, rows: Row[]): RowP
   return next;
 }
 
-export function flattenRowPages(pages: RowPage[]): Row[] {
-  const ordered: Row[] = [];
+export function flattenRowPages<T extends { entityId: string }>(pages: RowPage<T>[]): T[] {
+  const ordered: T[] = [];
   const seen = new Set<string>();
 
   for (const page of pages) {

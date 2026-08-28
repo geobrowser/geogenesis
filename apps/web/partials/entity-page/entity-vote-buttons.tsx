@@ -1,7 +1,6 @@
 'use client';
 
 import { useGeoLogin } from '@geogenesis/auth';
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 import { useQuery } from '@tanstack/react-query';
 
@@ -10,12 +9,11 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { uuidToHex } from '~/core/id/normalize';
 import {
   type EntityResponder,
   getEntityResponders,
@@ -30,17 +28,17 @@ import {
   entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
   entityResponseCountsQueryKey,
-  getEntityResponseKind,
   hasUnpublishedClaimResponseKindEdit,
+  resolveEntityResponseKind,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
-import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Avatar } from '~/design-system/avatar';
-import { getChecked } from '~/design-system/checkbox';
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { ChevronUp } from '~/design-system/icons/chevron-up';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
@@ -52,13 +50,11 @@ import { Skeleton } from '~/design-system/skeleton';
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
+
 const ENTITY_RESPONSE_OBJECT_TYPE = 0;
 
 type ResponseVariant = 'default' | 'thumbs' | 'chevrons';
-
-const CLAIM_TYPE = uuidToHex(CLAIM_TYPE_ID);
-const CLAIM_IS_FACTUAL = uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID);
-const TYPES_PROPERTY = uuidToHex(SystemIds.TYPES_PROPERTY);
 
 type EntityVoteButtonsProps = {
   entityId: string;
@@ -70,7 +66,7 @@ type EntityVoteButtonsProps = {
 
 export function EntityVoteButtons({
   entityId,
-  spaceId,
+  spaceId: requestedSpaceId,
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
   presentation = 'inline',
@@ -91,20 +87,24 @@ export function EntityVoteButtons({
     includeDeleted: true,
     enabled: responseKindOverride === undefined,
   });
-  const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
-  const activeValues = entity?.values.filter(value => !value.isDeleted) ?? [];
-  const isClaim =
-    activeRelations.some(
-      relation => uuidToHex(relation.type.id) === TYPES_PROPERTY && uuidToHex(relation.toEntity.id) === CLAIM_TYPE
-    ) ?? false;
-  const isFactualClaim =
-    isClaim &&
-    getChecked(
-      activeValues.find(
-        v => uuidToHex(v.spaceId) === uuidToHex(spaceId) && uuidToHex(v.property.id) === CLAIM_IS_FACTUAL
-      )?.value
-    ) === true;
-  const inferredResponseKind = getEntityResponseKind({ isClaim, isFactual: isFactualClaim });
+  // Which space the response belongs to, which is not always the one the caller renders from. An
+  // entity collected into a curated page without a pinned target space arrives here as the page's
+  // own space, where it holds nothing: the counts came back empty and the percentage read 0%.
+  // Resolving it to the space the entity actually lives in is what puts the tally back.
+  //
+  // Every response kind, not only claims (GEO-2660). A table that lists the top-ranked version of
+  // an entity should show that version's votes, so curation follows the same rule as a claim's
+  // stance: the arrows belong to whichever space the row is actually showing. This does not re-home
+  // curation wholesale — `resolveEntitySpaceId` keeps the requested space whenever the entity holds
+  // live content there, so every ordinary row and every entity page are untouched, and only a row
+  // listing an entity that lives somewhere else diverts.
+  //
+  // What it costs: a curation vote cast against a listing space before this reads as the entity
+  // holding nothing there — nothing but the Score that vote itself wrote, which residency ignores
+  // by design — so that vote is no longer the one displayed. It is still recorded in that space.
+  // Auto-join doesn't widen with it: `useEntityVote` excludes curation from `ensureSpaceMembership`.
+  const spaceId = resolveEntitySpaceId(entity, requestedSpaceId);
+  const inferredResponseKind = resolveEntityResponseKind(entity, spaceId);
   const responseKind = responseKindOverride === undefined ? inferredResponseKind : responseKindOverride;
   const hasUnpublishedResponseKindEdit =
     responseKindOverride === undefined && hasUnpublishedClaimResponseKindEdit(entity, spaceId);
@@ -114,19 +114,58 @@ export function EntityVoteButtons({
     queryResponseKind === 'curation' ? 'default' : queryResponseKind === 'veracity' ? 'chevrons' : 'thumbs';
   const responseCopy = ENTITY_RESPONSE_COPY[queryResponseKind];
 
-  const { submitResponse, optimisticResponse, isResponseIndexingDelayed, isConnected, personalSpaceId } =
-    useEntityResponse({ entityId, spaceId, responseKind });
+  const {
+    submitResponse,
+    submitResponseAsync,
+    optimisticResponse,
+    isResponseIndexingDelayed,
+    isConnected,
+    personalSpaceId,
+  } = useEntityResponse({ entityId, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
-  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
+  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const enqueuePendingAction = useEnqueuePendingAction();
+
+  // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
+  // once the space exists (see pending-actions). Keep the optimistic mark on screen until the
+  // queued write is replayed, then hand off to the mutation's own optimistic state.
+  const voteActionId = `entity-vote:${entityId}:${spaceId}`;
+  const [queuedResponse, setQueuedResponse] = React.useState<ActiveResponseDirection | undefined>(undefined);
+  React.useEffect(() => {
+    if (queuedResponse !== undefined && optimisticResponse !== undefined) setQueuedResponse(undefined);
+  }, [queuedResponse, optimisticResponse]);
+
+  // Direction a signed-out user picked before sign-in opened.
+  const pendingSignInDirectionRef = React.useRef<ActiveResponseDirection | undefined>(undefined);
+
+  function queueVoteWrite(direction: ActiveResponseDirection) {
+    setQueuedResponse(direction);
+    enqueuePendingAction({
+      id: voteActionId,
+      label: 'your vote',
+      requires: 'personalSpace',
+      run: () => submitResponseAsync(direction).then(() => {}),
+    });
+  }
 
   const { login } = useGeoLogin({
-    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
+    onComplete: args => {
+      trackPrivyAuth(args, { auth_flow: 'manual_login' });
+
+      const direction = pendingSignInDirectionRef.current;
+      if (direction !== undefined) {
+        pendingSignInDirectionRef.current = undefined;
+        queueVoteWrite(direction);
+      }
+    },
   });
 
   const [respondersOpen, setRespondersOpen] = React.useState(false);
@@ -157,7 +196,10 @@ export function EntityVoteButtons({
     staleTime: 30_000,
   });
 
-  const activeResponse = optimisticResponse === undefined ? serverResponseDirection : optimisticResponse;
+  // A queued (pre-personal-space) vote overrides the mutation's own optimistic state until it is
+  // replayed and cleared from the queue, at which point the mutation's state takes over.
+  const effectiveOptimistic = queuedResponse !== undefined ? queuedResponse : optimisticResponse;
+  const activeResponse = effectiveOptimistic === undefined ? serverResponseDirection : effectiveOptimistic;
 
   const positiveResponses = BigInt(responseCounts?.positive ?? 0);
   const negativeResponses = BigInt(responseCounts?.negative ?? 0);
@@ -167,6 +209,9 @@ export function EntityVoteButtons({
   const displayScore = netScore + responseScore(activeResponse) - responseScore(serverResponseDirection);
 
   function openPrivySignIn() {
+    // Stay on this page after onboarding instead of bouncing to the explore page.
+    const search = searchParams?.toString();
+    setPostOnboardingRedirect(`${pathname}${search ? `?${search}` : ''}`);
     setName('');
     setTopicId('');
     setAvatar('');
@@ -175,12 +220,20 @@ export function EntityVoteButtons({
     login();
   }
 
-  function handlePositiveResponse() {
+  function queueResponse(direction: ActiveResponseDirection) {
     if (!smartAccount) {
+      pendingSignInDirectionRef.current = direction;
       openPrivySignIn();
       return;
     }
-    if (!isConnected) return;
+    queueVoteWrite(direction);
+  }
+
+  function handlePositiveResponse() {
+    if (!isConnected) {
+      queueResponse('positive');
+      return;
+    }
     if (activeResponse === 'positive') {
       submitResponse('clear', {
         onSuccess: () => {
@@ -203,11 +256,10 @@ export function EntityVoteButtons({
   }
 
   function handleNegativeResponse() {
-    if (!smartAccount) {
-      openPrivySignIn();
+    if (!isConnected) {
+      queueResponse('negative');
       return;
     }
-    if (!isConnected) return;
     if (activeResponse === 'negative') {
       submitResponse('clear', {
         onSuccess: () => {
@@ -243,32 +295,30 @@ export function EntityVoteButtons({
 
   const positiveActive = activeResponse === 'positive';
   const negativeActive = activeResponse === 'negative';
-  const responseDisabled = !!smartAccount && (!isConnected || isAccountSetupPending);
-  const positiveTitle = !smartAccount
-    ? responseCopy.signIn
-    : isAccountSetupPending
-      ? 'Finishing account setup…'
-      : isConnected
-        ? positiveActive
-          ? responseCopy.removePositive
-          : responseCopy.positiveAction
-        : responseCopy.connect;
-  const negativeTitle = !smartAccount
-    ? responseCopy.signIn
-    : isAccountSetupPending
-      ? 'Finishing account setup…'
-      : isConnected
-        ? negativeActive
-          ? responseCopy.removeNegative
-          : responseCopy.negativeAction
-        : responseCopy.connect;
+  // Never block the buttons: when the personal space isn't ready the click queues the vote
+  // instead of writing it, so the user is never stopped from acting while it's being created.
+  const responseDisabled = false;
+  const positiveTitle = !isConnected
+    ? smartAccount
+      ? 'Vote now — saved until your account is ready'
+      : responseCopy.signIn
+    : positiveActive
+      ? responseCopy.removePositive
+      : responseCopy.positiveAction;
+  const negativeTitle = !isConnected
+    ? smartAccount
+      ? 'Vote now — saved until your account is ready'
+      : responseCopy.signIn
+    : negativeActive
+      ? responseCopy.removeNegative
+      : responseCopy.negativeAction;
 
   const totalResponders = (responseCounts?.positive ?? 0) + (responseCounts?.negative ?? 0);
 
   const optimisticPositiveDelta =
-    optimisticResponse !== undefined ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
+    effectiveOptimistic !== undefined ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
   const optimisticNegativeDelta =
-    optimisticResponse !== undefined ? (negativeActive ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0) : 0;
+    effectiveOptimistic !== undefined ? (negativeActive ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0) : 0;
   const effectivePositive = Math.max(0, (responseCounts?.positive ?? 0) + optimisticPositiveDelta);
   const effectiveNegative = Math.max(0, (responseCounts?.negative ?? 0) + optimisticNegativeDelta);
   const effectiveTotal = effectivePositive + effectiveNegative;
@@ -304,7 +354,7 @@ export function EntityVoteButtons({
       responseKind={queryResponseKind}
       totalResponders={effectiveTotal}
       viewerSpaceId={personalSpaceId}
-      optimisticViewerResponse={optimisticResponse}
+      optimisticViewerResponse={effectiveOptimistic}
     />
   ) : null;
 
@@ -357,7 +407,6 @@ export function EntityVoteButtons({
         title={positiveTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          !isClaimVariant && 'translate-y-px',
           claimResponseButtonColor(positiveActive),
           responseDisabled && 'cursor-default opacity-50'
         )}
@@ -396,7 +445,6 @@ export function EntityVoteButtons({
         title={negativeTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          !isClaimVariant && 'translate-y-px',
           claimResponseButtonColor(negativeActive),
           responseDisabled && 'cursor-default opacity-50'
         )}

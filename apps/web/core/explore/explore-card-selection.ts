@@ -1,5 +1,8 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { EVENT_SCHEMA } from '~/core/community-calls/constants';
+import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
+
 import {
   EXPLORE_AVATAR_PROPERTY_ID,
   EXPLORE_COVER_PROPERTY_ID,
@@ -7,7 +10,7 @@ import {
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
 } from './explore-constants';
 
-// Only the four property IDs and the three relation-type IDs we actually read per entity.
+// Only the property IDs and relation-type IDs we actually read per entity.
 // Narrowing these on the server slashes payload size — most entities have dozens of
 // unrelated values/relations we'd otherwise serialize, ship, and decode for nothing.
 const CARD_VALUE_PROPERTY_IDS = [
@@ -21,6 +24,10 @@ const CARD_RELATION_TYPE_IDS = [
   ContentIds.AVATAR_PROPERTY,
   // `types` relation — used to derive space-scoped type tags.
   SystemIds.TYPES_PROPERTY,
+  // Community call recordings — feed the CommunityCall card's player.
+  EVENT_SCHEMA.RECORDINGS_PROPERTY,
+  // Rendered debate video — populates ExploreFeedItem.debateVideoUrls.
+  DEBATE_VIDEOS_PROPERTY_ID,
 ];
 
 const valuePropertyIdList = CARD_VALUE_PROPERTY_IDS.map(id => `"${id}"`).join(', ');

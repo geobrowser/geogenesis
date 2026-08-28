@@ -17,7 +17,11 @@ export const relationToEntityFragment = graphql(/* GraphQL */ `
     types {
       id
     }
-    valuesList {
+    # Bounded like every sibling list in this file. This one rides on each relation of each
+    # entity in a batch, so it is the most multiplied list here and the only one that was
+    # left open — an entity with a heavily-valued neighbour could pull far more than the
+    # three fields below suggest.
+    valuesList(first: 1000) {
       spaceId
       propertyId
       text
@@ -155,6 +159,36 @@ export const entitiesBatchQuery = graphql(/* GraphQL */ `
       name
       description
       spaceIds
+
+      # Carried because this query now hydrates the sync store, which the singular Entity query
+      # used to do. That one selects them, and a consumer reading a timestamp off the store treats
+      # their absence as not-loaded and falls back to a per-row Entity fetch - which is the N+1
+      # this batching exists to remove. Dropping them here would reintroduce it wherever such a
+      # consumer renders.
+      createdAt
+      updatedAt
+
+      # Same lightweight cross-space projection the singular Entity query carries, for the same
+      # reason: the lists below are space-scoped for display, and EntityDtoLive can only strip
+      # hidden-only spaces out of link routing when it has an unscoped view. Without these it
+      # falls back to the raw spaceIds and can route a link at a space holding nothing visible.
+      # Two scalars per row, and it brings every batch consumer up to the singular contract.
+      allValuesList: valuesList(first: 1000) {
+        spaceId
+        propertyId
+      }
+
+      allRelationsList: relationsList(first: 1000) {
+        spaceId
+      }
+
+      # Authoritative count of this entity's relations, before the 1000-row cap on relationsList
+      # below and before the decoder drops dangling ones. It is the only signal here that says
+      # whether the list was truncated - the decoded array cannot, since a capped page holding a
+      # single dangling relation decodes to fewer than 1000 entries.
+      relations {
+        totalCount
+      }
 
       types {
         id
@@ -806,6 +840,28 @@ export const userHasEntityVoteQuery = graphql(/* GraphQL */ `
   query UserHasEntityVote($userId: UUID!) {
     userVotes(condition: { userId: $userId }, first: 1) {
       userId
+    }
+  }
+`);
+
+/**
+ * Offset pagination rather than a cursor: `VOTED_AT_*` 500s on `userVotesConnection`,
+ * but works on the `userVotes` list field (as `ParticipantPositions` already relies on).
+ * Server-side ordering is what keeps a freshly cast vote on the first page — sorting
+ * client-side only orders the pages already fetched, so the newest vote would land on
+ * the last page and vanish from the tab the moment its pending override cleared.
+ */
+export const userEntityVotesByTypeQuery = graphql(/* GraphQL */ `
+  query UserEntityVotesByType($userId: UUID!, $voteType: Int!, $objectType: Int!, $first: Int!, $offset: Int!) {
+    userVotes(
+      condition: { userId: $userId, voteType: $voteType, objectType: $objectType }
+      first: $first
+      offset: $offset
+      orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]
+    ) {
+      objectId
+      voteKind
+      votedAt
     }
   }
 `);

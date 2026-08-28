@@ -29,7 +29,14 @@ export const fetchCommunityCalls = cache(async (spaceId: string): Promise<CallSe
 
   return page.entities.flatMap(entity => {
     const schedule = entity.values.find(v => v.property.id === CALL_SCHEMA.MEETING_TIME_PROPERTY)?.value;
-    if (!schedule) return [];
+    if (!schedule) {
+      // A call with no usable schedule cannot be placed on a timeline, so it has to come out
+      // of the list — but dropping it silently is how one stayed invisible with nobody able
+      // to say why. `call-ops` now refuses to write this state; the log is for the rows that
+      // already carry it.
+      console.warn('[community-calls] skipping call with no meeting time', { entityId: entity.id });
+      return [];
+    }
 
     return [
       {

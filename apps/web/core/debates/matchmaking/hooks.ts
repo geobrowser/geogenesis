@@ -22,10 +22,15 @@ import {
   unblockDebateUser,
   withdrawDebateRequest,
 } from '../api';
-import { markEnteringDebate } from '../debate-entry-intent';
+import { markEnteringDebate, markEnteringPendingDebate } from '../debate-entry-intent';
 import { useDebateGatewayScope } from '../debate-gateway';
 import { debatePath } from '../debate-routes';
-import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import {
+  debateQueryKeys,
+  debateQueryNetworkOptions,
+  invalidateDebatesOutsideRematchClaims,
+  useGeoChatAuth,
+} from '../hooks';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
 
@@ -242,7 +247,7 @@ export function useCreateDebateRequest() {
 
   return useMutation({
     mutationFn: (request: CreateDebateRequestBody) => createDebateRequest(request, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 
@@ -252,7 +257,7 @@ export function useWithdrawDebateRequest() {
 
   return useMutation({
     mutationFn: (requestId: string) => withdrawDebateRequest(requestId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 
@@ -265,7 +270,7 @@ export function useDismissDebateRequest() {
       const body: DismissDebateRequestBody = removeIntent ? { remove_intent: true } : {};
       return dismissDebateRequest(requestId, body, getPrivyIdentityToken, accountKey);
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 
@@ -282,6 +287,12 @@ export function useAcceptDebateRequest() {
   return useMutation({
     mutationFn: ({ requestId, formatId }: { requestId: string; formatId?: string }) =>
       acceptDebateRequest(requestId, getPrivyIdentityToken, accountKey, formatId),
+    // Claimed before the request leaves, released when it settles. The id-keyed intent below cannot
+    // be taken until the response names the debate, and the server emits `debate.state_changed` to
+    // this very tab on the way — so without this the coordinator gets a `ready` debate off our own
+    // socket event, mid-round-trip, and prompts us to join what we are already accepting (GEO-2604).
+    onMutate: () => ({ releaseEntry: markEnteringPendingDebate() }),
+    onSettled: (_result, _error, _variables, context) => context?.releaseEntry(),
     onSuccess: result => {
       if (result.debate) {
         queryClient.setQueryData(debateQueryKeys.debate(result.debate.id), result.debate);
@@ -292,7 +303,7 @@ export function useAcceptDebateRequest() {
         markEnteringDebate(result.debate.id);
         router.push(debatePath(result.debate));
       }
-      void queryClient.invalidateQueries({ queryKey: ['debates'] });
+      void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
 }
@@ -303,7 +314,7 @@ export function useBlockDebateUser() {
 
   return useMutation({
     mutationFn: (userId: string) => blockDebateUser(userId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 
@@ -313,6 +324,6 @@ export function useUnblockDebateUser() {
 
   return useMutation({
     mutationFn: (userId: string) => unblockDebateUser(userId, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['debates'] }),
+    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }

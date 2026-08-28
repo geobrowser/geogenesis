@@ -24,6 +24,13 @@ type ClaimDebateReadinessProps = {
   className?: string;
   textVariant?: 'metadata' | 'body';
   compact?: boolean;
+  /**
+   * Whether the lookup this claim's row would come from is still running. Only the compact form
+   * reads it — the full form renders nothing without a row either way — but that form's placeholder
+   * announces itself as loading, so it has to be told when the loading is over. Defaults to `true`
+   * to keep that placeholder for a caller that doesn't know.
+   */
+  isLoading?: boolean;
 };
 
 export function ClaimDebateReadiness({
@@ -34,11 +41,15 @@ export function ClaimDebateReadiness({
   className,
   textVariant = 'metadata',
   compact = false,
+  isLoading = true,
 }: ClaimDebateReadinessProps) {
   if (!debateClaim) {
-    return compact ? (
-      <DebateToggle checked={false} disabled className={className} title="Debate readiness is loading" />
-    ) : null;
+    // A settled lookup that produced no row means there is no readiness to show: geo-chat indexes
+    // DAO spaces only, so a claim living in a personal space never gets one. Show nothing rather
+    // than a disabled toggle whose tooltip and screen-reader label claim a load is in progress —
+    // that load has already finished, and saying otherwise is a wait with no end.
+    if (!compact || !isLoading) return null;
+    return <DebateToggle checked={false} disabled className={className} title="Debate readiness is loading" />;
   }
 
   return (

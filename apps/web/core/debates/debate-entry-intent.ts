@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { rememberDebateReturnDestination } from './debate-return-navigation';
+
 /**
  * The debate this tab is on its way into.
  *
@@ -29,6 +31,7 @@ const ENTRY_INTENT_TIMEOUT_MS = 30_000;
 
 let enteringDebateId: string | null = null;
 let expiry: ReturnType<typeof setTimeout> | null = null;
+let pendingEntries = 0;
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -47,6 +50,7 @@ function set(debateId: string | null) {
 
 /** Call immediately before pushing into a debate room. */
 export function markEnteringDebate(debateId: string) {
+  rememberDebateReturnDestination();
   set(debateId);
   expiry = setTimeout(() => {
     expiry = null;
@@ -58,6 +62,36 @@ export function markEnteringDebate(debateId: string) {
 export function clearEnteringDebate(debateId?: string) {
   if (debateId !== undefined && enteringDebateId !== debateId) return;
   set(null);
+}
+
+/**
+ * The same intent, for the window where the debate has no id yet (GEO-2604).
+ *
+ * `markEnteringDebate` can only be called once the accept response names the debate, and the accept
+ * is a round trip. The server creates the debate inside it and emits `debate.state_changed` to both
+ * parties, so the accepting tab's *own* gateway event can land, invalidate activity, and hand the
+ * coordinator a `ready` debate on some other path — the exact shape it reads as "this person has not
+ * been told" — while the response it is waiting on is still in flight. The prompt appears for as
+ * long as the round trip has left to run, then the push takes it away. That is the popup Preston saw
+ * flash and then redirect without him touching it.
+ *
+ * Held from the moment the mutation is sent, so there is no window left to lose. Counted rather than
+ * boolean: two accepts can overlap, and the first to settle must not release the second's claim.
+ *
+ * No timeout here, unlike the id-keyed intent above. This is released by the mutation settling,
+ * which React Query guarantees on both success and failure — where the id-keyed intent is released
+ * by a navigation that may never commit and so needs its own backstop.
+ */
+export function markEnteringPendingDebate(): () => void {
+  pendingEntries += 1;
+  emit();
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    pendingEntries -= 1;
+    emit();
+  };
 }
 
 const subscribe = (listener: () => void) => {
@@ -72,4 +106,12 @@ const getServerSnapshot = () => null;
 
 export function useEnteringDebateId() {
   return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}
+
+const getPendingSnapshot = () => pendingEntries > 0;
+const getPendingServerSnapshot = () => false;
+
+/** Whether this tab is waiting on an accept that will walk it into a debate room. */
+export function useEnteringDebatePending() {
+  return React.useSyncExternalStore(subscribe, getPendingSnapshot, getPendingServerSnapshot);
 }

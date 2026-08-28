@@ -4,8 +4,18 @@ import * as React from 'react';
 
 import { Avatar } from '~/design-system/avatar';
 
-import type { DebateRequestParty } from '../api';
+import type { DebateParticipantSummary, DebateRequestParty } from '../api';
 import { speakerLabel } from '../playback-utils';
+
+/**
+ * A claimless challenge carries only the two people — no claim means no side to take, so its
+ * parties are plain summaries rather than the position-bearing parties a claim request has.
+ */
+type RequestPartyLike = DebateParticipantSummary | DebateRequestParty;
+
+function positionLabel(party: RequestPartyLike): string | null {
+  return 'position_label' in party ? party.position_label : null;
+}
 
 /**
  * The "You vs Them" row shared by the sent and received request cards: one inset strip, each side
@@ -18,8 +28,8 @@ export function RequestParties({
   showPositions = true,
   overflow,
 }: {
-  viewer: DebateRequestParty | null;
-  opponent: DebateRequestParty;
+  viewer: RequestPartyLike | null;
+  opponent: RequestPartyLike;
   showPositions?: boolean;
   /** The "…" menu, which the design anchors to the opponent's end of the row. */
   overflow?: React.ReactNode;
@@ -51,7 +61,7 @@ function PartySummary({
   showPosition,
   trailing,
 }: {
-  party: DebateRequestParty | null;
+  party: RequestPartyLike | null;
   label: string;
   showPosition: boolean;
   trailing?: React.ReactNode;
@@ -67,9 +77,9 @@ function PartySummary({
           </span>
           <span className="truncate text-footnote">{label}</span>
         </span>
-        {showPosition && party ? (
+        {showPosition && party && positionLabel(party) ? (
           <span className="max-w-full shrink-0 truncate rounded-full bg-grey-02 px-1.5 py-0.5 text-footnote">
-            {party.position_label}
+            {positionLabel(party)}
           </span>
         ) : null}
       </div>

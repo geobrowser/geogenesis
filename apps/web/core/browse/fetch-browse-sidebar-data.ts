@@ -6,7 +6,7 @@ import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
 import { AbortError } from '~/core/io/subgraph/errors';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
-import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
+import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import {
   fetchPendingEditorshipSpaceIds,
   fetchPendingMembershipSpaceIds,
@@ -176,7 +176,7 @@ type FeaturedSpacesSource = FeaturedSpace[] | PromiseLike<FeaturedSpace[]>;
 type ResolvedFeaturedSpaces = { featured: FeaturedSpace[]; error: boolean };
 
 function resolveFeaturedSpaces(source?: FeaturedSpacesSource): Promise<ResolvedFeaturedSpaces> {
-  const promise = source ? Promise.resolve(source) : fetchFeaturedSpaces();
+  const promise = source ? Promise.resolve(source) : fetchFeaturedSpacesShared();
   return promise.then(
     featured => ({ featured, error: false }),
     error => {

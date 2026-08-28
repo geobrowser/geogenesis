@@ -1,9 +1,11 @@
 'use client';
 
-import { CancelledError, type QueryClient, type QueryKey } from '@tanstack/react-query';
+import { CancelledError, type Query, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { isParticipantPositionsQueryKey } from '~/core/debates/participant-positions';
+import { isRematchClaimsQueryKey } from '~/core/debates/rematch-claims-query-key';
 import { queryClient } from '~/core/query-client';
 import {
   claimResponseTargetKey,
@@ -29,9 +31,35 @@ export type DebateGatewayScope =
 
 export type MatchmakingSection = 'people' | 'claims' | 'matches';
 
+/**
+ * Why live updates are paused, when they are.
+ *
+ * Every pause used to collapse into the same `{ degraded, paused }`, so a client spending its
+ * command budget was indistinguishable from a dropped socket — and diagnosing GEO-2670 meant
+ * reading the subscription code rather than a log line. These are the distinctions that change what
+ * you would do about it:
+ *
+ * - `rate_limited` is a *client* fault. We sent more gateway commands than the session allows, so
+ *   the fix is to send fewer, not to wait.
+ * - `subscription_limit` is a ceiling we are sitting against; the account stream still works and
+ *   reconnecting would hit it again.
+ * - `disconnected` and `session` are ordinary transport trouble that a reconnect resolves.
+ * - `unsupported` means the server never advertised the debate capability, so nothing will recover
+ *   it without a deploy.
+ */
+export type DebateGatewayPauseReason =
+  | 'disconnected'
+  | 'session'
+  | 'rate_limited'
+  | 'subscription_limit'
+  | 'unsupported'
+  | 'error';
+
 export type DebateGatewaySnapshot = {
   status: 'idle' | 'connecting' | 'ready' | 'degraded';
   paused: boolean;
+  /** Set whenever `paused` is true, so a pause can be acted on rather than merely noticed. */
+  pauseReason: DebateGatewayPauseReason | null;
   /** Capabilities advertised by the last READY. Used to detect `debate_matchmaking_v1`. */
   capabilities: string[];
 };
@@ -92,6 +120,12 @@ const DEFAULT_HEARTBEAT_INTERVAL_MS = 30_000;
 const HANDSHAKE_TIMEOUT_MS = 10_000;
 const INVALIDATION_COALESCE_MS = 50;
 const INVALIDATION_RETRY_BASE_MS = 250;
+/**
+ * How long an unrecognised `ERROR` frame suppresses another reconnect. One recycle repairs a
+ * transient rejection; a second inside this window means it is reproducing, and spinning on it
+ * would be worse than running degraded.
+ */
+const ERROR_RECONNECT_COOLDOWN_MS = 60_000;
 /** Re-flushes after the first attempt fails transiently, so up to four attempts in all. */
 const MAX_INVALIDATION_RETRIES = 3;
 const BROAD_INVALIDATION_KEY = 'debates:all';
@@ -111,7 +145,12 @@ export class DebateGatewayClient {
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
 
-  private snapshot: DebateGatewaySnapshot = { status: 'idle', paused: false, capabilities: EMPTY_CAPABILITIES };
+  private snapshot: DebateGatewaySnapshot = {
+    status: 'idle',
+    paused: false,
+    pauseReason: null,
+    capabilities: EMPTY_CAPABILITIES,
+  };
   private capabilities: string[] = EMPTY_CAPABILITIES;
   private getPrivyIdentityToken: GetPrivyIdentityToken | null = null;
   private accountKey: string | null = null;
@@ -121,6 +160,7 @@ export class DebateGatewayClient {
   private readyForDebates = false;
   private lastSequence: number | null = null;
   private reconnectAttempt = 0;
+  private lastErrorReconnectAt: number | null = null;
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatsAwaitingAck = 0;
   private debatePresence = true;
@@ -155,7 +195,7 @@ export class DebateGatewayClient {
     this.accountKey = accountKey;
     if (this.enabled) return;
     this.enabled = true;
-    this.setSnapshot({ status: 'connecting', paused: false });
+    this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
     void this.connect();
   }
 
@@ -178,6 +218,7 @@ export class DebateGatewayClient {
     this.hasReachedReady = false;
     this.lastSequence = null;
     this.reconnectAttempt = 0;
+    this.lastErrorReconnectAt = null;
     this.clearAllTimers();
     this.disposeSocket();
     this.sentScopes.clear();
@@ -186,7 +227,7 @@ export class DebateGatewayClient {
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
-    this.setSnapshot({ status: 'idle', paused: false });
+    this.setSnapshot({ status: 'idle', paused: false, pauseReason: null });
   }
 
   retainScope(scope: DebateGatewayScope) {
@@ -238,7 +279,7 @@ export class DebateGatewayClient {
       socket.onclose = () => this.handleClose(socket);
     } catch {
       if (!this.enabled || generation !== this.connectionGeneration) return;
-      this.setSnapshot({ status: 'degraded', paused: true });
+      this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'session' });
       this.scheduleReconnect();
     }
   }
@@ -277,11 +318,35 @@ export class DebateGatewayClient {
         if (isEventsLagged(envelope.payload)) {
           this.queueBroadReconcile();
         } else if (isRateLimited(envelope.payload)) {
-          this.forceReconnect(socket, rateLimitRetryDelayMs(envelope.payload));
+          const retryDelayMs = rateLimitRetryDelayMs(envelope.payload);
+          // Loud on purpose, and distinct from every other pause. This one is *our* fault: we sent
+          // more gateway commands than `gateway_commands_by_session` allows, so waiting does not fix
+          // it — sending fewer does. It reads as an ordinary reconnect to the viewer, which is how a
+          // subscription bug hid behind the generic banner until GEO-2670 was traced by hand.
+          console.error(
+            `Debate gateway rate limited; retrying in ${retryDelayMs}ms. This means the client sent ` +
+              'too many gateway commands, not that the connection is unhealthy.'
+          );
+          this.forceReconnect(socket, retryDelayMs, 'rate_limited');
         } else if (isSubscriptionLimitReached(envelope.payload)) {
-          this.setSnapshot({ status: 'degraded', paused: true });
+          // A real ceiling, and reconnecting re-sends the same scopes and hits it again. The
+          // account-routed stream keeps working; only the scopes past the limit are lost.
+          this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'subscription_limit' });
+        } else if (this.canRecoverFromError()) {
+          // Anything else is not known to be permanent, and parking here was a dead end: nothing in
+          // this branch closes the socket, so heartbeats keep being acked, `heartbeatsAwaitingAck`
+          // never reaches two, and `forceReconnect` is never reached. The connection stayed up in a
+          // state the client had already declared dead, for the rest of the session, with no path
+          // back to `ready` — a scope-level rejection took the account-level stream down with it.
+          // Recycle the socket instead, on the usual backoff (GEO-2650).
+          this.lastErrorReconnectAt = Date.now();
+          this.forceReconnect(socket);
         } else {
-          this.setSnapshot({ status: 'degraded', paused: true });
+          // Already tried that recently, so the error is reproducing rather than transient and
+          // another reconnect would spin: `reconnectAttempt` resets on a successful invalidation
+          // flush, which a fresh connection performs before the error recurs, so the backoff would
+          // never actually grow. Park, and let the degraded poll carry correctness.
+          this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'error' });
         }
         break;
     }
@@ -305,13 +370,13 @@ export class DebateGatewayClient {
     const supportsDebates = this.capabilities.includes(CAPABILITY);
     if (!supportsDebates) {
       this.readyForDebates = false;
-      this.setSnapshot({ status: 'degraded', paused: true });
+      this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'unsupported' });
       return;
     }
 
     const firstReadyForSocket = !this.readyForDebates;
     this.readyForDebates = true;
-    this.setSnapshot({ status: 'ready', paused: false });
+    this.setSnapshot({ status: 'ready', paused: false, pauseReason: null });
 
     if (firstReadyForSocket) {
       this.queueBroadReconcile();
@@ -424,7 +489,11 @@ export class DebateGatewayClient {
     this.queueInvalidation(BROAD_INVALIDATION_KEY, {
       predicate: query => {
         const root = query.queryKey[0];
-        return root === 'debates' || isClaimResponseSummaryQueryKey(query.queryKey);
+        return (
+          root === 'debates' ||
+          isClaimResponseSummaryQueryKey(query.queryKey) ||
+          isParticipantPositionsQueryKey(query.queryKey)
+        );
       },
       refetchType: 'active',
     });
@@ -495,6 +564,10 @@ export class DebateGatewayClient {
           );
         }
 
+        // The rematch picker reads both participants' sides straight from the graph; any response
+        // landing in a space it watches may be one of theirs. One query, so no need to narrow.
+        if (isParticipantPositionsQueryKey(query.queryKey)) return true;
+
         return isClaimResponseSummaryQueryKey(query.queryKey, {
           spaceId,
           targetKeys: changedResponseTargets,
@@ -529,16 +602,46 @@ export class DebateGatewayClient {
   private async flushInvalidations(invalidations: InvalidationFilters[], attempt = 0) {
     const results = await Promise.allSettled(
       invalidations.map(async queryFilters => {
+        const matches = (query: Query) => queryFilters.predicate === undefined || queryFilters.predicate(query);
         // Cancelling stops a stale in-flight response from overwriting the fresh refetch — which
         // only matters once there is data to overwrite. A query still on its first load has none;
         // aborting it restarts a request that was about to land, and on a screen with slow round
         // trips and frequent events that restart repeated until nothing ever landed.
+        //
+        // The rematch picker's positions batches are never cancelled, loaded or not. They are one
+        // request per page of claims on screen, and responses land on them faster than the round
+        // trips complete; restarting every batch on every event starved the list of updates for as
+        // long as the other side kept responding. A batch in flight is left to land and is then
+        // asked again, so the answer on screen is never older than the event that prompted it.
+        const inFlightRematchBatches = this.queryClient.getQueryCache().findAll({
+          ...queryFilters,
+          fetchStatus: 'fetching',
+          predicate: query => isRematchClaimsQueryKey(query.queryKey) && matches(query),
+        });
         await this.queryClient.cancelQueries({
           ...queryFilters,
           predicate: query =>
-            query.state.data !== undefined && (queryFilters.predicate === undefined || queryFilters.predicate(query)),
+            query.state.data !== undefined && !isRematchClaimsQueryKey(query.queryKey) && matches(query),
         });
-        await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true });
+        // `cancelRefetch: false`: a refetch of a query still fetching joins that request instead
+        // of aborting it. Everything this flush meant to cancel has been cancelled above.
+        //
+        // The re-ask runs whether or not the invalidation settled cleanly: a hook-side refresh can
+        // cancel one joined batch, and that one batch's `CancelledError` must not cost every other
+        // batch in this flush the refetch that brings it past the event.
+        try {
+          await this.queryClient.invalidateQueries(queryFilters, { throwOnError: true, cancelRefetch: false });
+        } finally {
+          if (inFlightRematchBatches.length > 0) {
+            await this.queryClient.refetchQueries(
+              {
+                type: 'active',
+                predicate: query => inFlightRematchBatches.some(batch => batch.queryHash === query.queryHash),
+              },
+              { throwOnError: true, cancelRefetch: false }
+            );
+          }
+        }
       })
     );
 
@@ -652,11 +755,15 @@ export class DebateGatewayClient {
     this.readyForDebates = false;
     this.clearConnectionTimers();
     if (!this.enabled) return;
-    this.setSnapshot({ status: 'degraded', paused: true });
+    this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'disconnected' });
     this.scheduleReconnect();
   }
 
-  private forceReconnect(socket: WebSocketLike, minimumDelayMs = 0) {
+  private forceReconnect(
+    socket: WebSocketLike,
+    minimumDelayMs = 0,
+    reason: DebateGatewayPauseReason = 'disconnected'
+  ) {
     if (socket !== this.socket) return;
     this.socket = null;
     this.readyForDebates = false;
@@ -664,8 +771,14 @@ export class DebateGatewayClient {
     socket.onclose = null;
     socket.close();
     if (!this.enabled) return;
-    this.setSnapshot({ status: 'degraded', paused: true });
+    this.setSnapshot({ status: 'degraded', paused: true, pauseReason: reason });
     this.scheduleReconnect(minimumDelayMs);
+  }
+
+  private canRecoverFromError() {
+    return (
+      this.lastErrorReconnectAt === null || Date.now() - this.lastErrorReconnectAt >= ERROR_RECONNECT_COOLDOWN_MS
+    );
   }
 
   private scheduleReconnect(minimumDelayMs = 0) {
@@ -724,6 +837,9 @@ export class DebateGatewayClient {
     if (
       snapshot.status === this.snapshot.status &&
       snapshot.paused === this.snapshot.paused &&
+      // Included deliberately: a pause whose reason changed is a different pause, and without this
+      // the reason would be written but never delivered to a listener.
+      snapshot.pauseReason === this.snapshot.pauseReason &&
       capabilities === this.snapshot.capabilities
     ) {
       return;
@@ -761,6 +877,9 @@ function invalidationFailureRecovery(error: unknown): InvalidationRecovery {
   // spurious "live updates paused".
   if (error instanceof CancelledError) return 'ignore';
   if (error instanceof DOMException && error.name === 'AbortError') return 'ignore';
+  // The participants' positions are read from the knowledge graph, which this socket has nothing
+  // to do with. Its client has already retried; the query polls, so the next tick picks it up.
+  if (isGraphqlRequestError(error)) return 'ignore';
   if (!(error instanceof GeoChatRequestError)) return 'reconnect';
   if (error.code && deterministicInvalidationErrorCodes.has(error.code)) return 'ignore';
   if (error.status === 401 || error.status === 403) return 'reauthenticate';
@@ -771,7 +890,24 @@ function invalidationFailureRecovery(error: unknown): InvalidationRecovery {
   return 'reconnect';
 }
 
-const debateGateway = new DebateGatewayClient({
+function isGraphqlRequestError(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    '_tag' in error &&
+    (error as { _tag?: unknown })._tag === 'GraphqlRequestError'
+  );
+}
+
+/**
+ * The one client every debate surface shares. `useDebateGateway` owns its lifecycle; everything
+ * else retains scopes on it.
+ *
+ * Exported so the scope hooks can be tested against the instance they actually use. Their bug was
+ * command *volume* (GEO-2670), which is only observable by counting what reaches this object — a
+ * separately constructed client would have tested the test's own wiring instead.
+ */
+export const debateGateway = new DebateGatewayClient({
   queryClient,
   getSession: getGeoChatSession,
   getApiBaseUrl: getGeoChatApiBaseUrl,
@@ -818,17 +954,54 @@ export function useDebateGatewayScope(scope: DebateGatewayScope, enabled: boolea
  * surface showing claims from several spaces at once — the rematch picker — has to hold them all
  * or it only hears about some of its own rows.
  */
+/**
+ * Hold a space scope for each id, reconciling rather than rebuilding when the set changes.
+ *
+ * The set arrives in stages — the rematch picker adds spaces as the opponent's claims land, then
+ * the curated ones, then each browsed page — and it used to key one retain/release block on the
+ * whole joined list. Because retention is refcounted and React runs cleanup before the next
+ * effect, adding a single space released all N and re-retained all N: roughly `2N + 1` gateway
+ * commands where one was needed, every time the set grew.
+ *
+ * `gateway_commands_by_session` allows 120 per minute. A picker spanning fifteen spaces across a
+ * few arrival stages passes that on its own, and the server answers `rate_limited`, which the
+ * client turns into a reconnect — and on READY it re-subscribes every scope in one burst, spending
+ * the budget again. That is the reconnecting banner that would not go away in the debate-again
+ * flow (GEO-2670), and it is self-inflicted: the churn was almost entirely
+ * unsubscribe-then-resubscribe for spaces that never left the set.
+ *
+ * Reconciling makes a growing set cost one command per genuinely new space.
+ */
 export function useDebateGatewaySpaceScopes(spaceIds: string[], enabled: boolean) {
   // Joined so the effect keys off the ids themselves rather than a fresh array each render.
   const key = spaceIds.join(',');
+  const heldRef = React.useRef<Map<string, () => void>>(new Map());
 
   React.useEffect(() => {
-    if (!enabled || !key) return;
-    const releases = key.split(',').map(spaceId => debateGateway.retainScope({ scope: 'space', space_id: spaceId }));
-    return () => {
-      for (const release of releases) release();
-    };
+    const held = heldRef.current;
+    const wanted = new Set(enabled && key ? key.split(',') : []);
+
+    // Copied before iterating: releasing mutates the map being walked.
+    for (const [spaceId, release] of [...held]) {
+      if (wanted.has(spaceId)) continue;
+      release();
+      held.delete(spaceId);
+    }
+    for (const spaceId of wanted) {
+      if (held.has(spaceId)) continue;
+      held.set(spaceId, debateGateway.retainScope({ scope: 'space', space_id: spaceId }));
+    }
   }, [enabled, key]);
+
+  // Unmount only, deliberately. Putting this on the effect above is what caused the churn: its
+  // cleanup runs on every key change, not just when the caller goes away.
+  React.useEffect(
+    () => () => {
+      for (const release of heldRef.current.values()) release();
+      heldRef.current.clear();
+    },
+    []
+  );
 }
 
 /** Read-only view of the gateway snapshot. Unlike `useDebateGateway` this never starts a socket. */

@@ -6,11 +6,14 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
+import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
+  prefetchAllowlist: vi.fn(),
   back: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
@@ -52,7 +55,7 @@ const mocks = vi.hoisted(() => ({
   ownershipRequestTakeover: vi.fn(),
   ownershipRelease: vi.fn(),
   ownershipClose: vi.fn(),
-  ownershipTakeoverHandler: null as null | (() => boolean | Promise<boolean>),
+  ownershipTakeoverHandler: null as null | ((context: DebateRoomTakeoverContext) => boolean | Promise<boolean>),
   ownershipCoordinationMode: 'lock-and-broadcast' as 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback',
   useRealRoomOwnership: false,
   deviceChangeHandler: null as null | (() => void),
@@ -249,7 +252,15 @@ class FakeBroadcastChannel {
   }
 }
 
+// The warm-up reaches for a QueryClient and this suite renders without a provider. Mocked to the
+// question the room is responsible for: does entering a debate ask for the allowlist to be warmed?
+vi.mock('~/core/debates/use-prefetch-claim-space-allowlist', () => ({
+  usePrefetchClaimSpaceAllowlist: (enabled: boolean) => mocks.prefetchAllowlist(enabled),
+}));
+
 beforeEach(() => {
+  mocks.prefetchAllowlist.mockReset();
+  clearDebateReturnDestination();
   setHistoryLength(1);
   mocks.back.mockReset();
   mocks.push.mockReset();
@@ -303,6 +314,9 @@ beforeEach(() => {
   mocks.clearTimedOutDebateActivity.mockReset();
   mocks.roomOn.mockReset();
   mocks.capture.mockReset();
+  // Tests run as an unfocused tab by default so the auto-takeover-on-focus effect stays quiet;
+  // focused-tab scenarios opt in per test.
+  vi.spyOn(document, 'hasFocus').mockReturnValue(false);
   mocks.ownershipAcquire.mockReset().mockResolvedValue({ acquired: true, waitedForLocalRelease: false });
   mocks.ownershipRequestTakeover.mockReset().mockResolvedValue(true);
   mocks.ownershipRelease.mockReset();
@@ -385,6 +399,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   cleanup();
+  clearDebateReturnDestination();
   await Promise.resolve();
   await Promise.resolve();
   vi.useRealTimers();
@@ -424,6 +439,16 @@ describe('isDebateInThankYouPeriod', () => {
 });
 
 describe('DebateRoomPageClient', () => {
+  // GEO-2599. The debate-again picker's All tab waits on the claim-space allowlist, which walks the
+  // Root space's topic tree — about thirteen sequential round trips cold, and the tab stays empty
+  // until it lands. Entering the room says the picker is minutes away, so the traversal is started
+  // against a viewer who is watching a debate rather than one waiting on a list.
+  it('warms the claim-space allowlist on entering a debate', () => {
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.prefetchAllowlist).toHaveBeenCalledWith(true);
+  });
+
   it('returns through browser history without rendering an already-completed room', async () => {
     setHistoryLength(2);
 
@@ -451,8 +476,9 @@ describe('DebateRoomPageClient', () => {
   // Forward, never back: the entry behind this room is often this same room (hub → room → rematch
   // → room), and stepping back into a debate that ended under us re-runs the exit from a fresh
   // mount. That was the flicker, and on the opponent's side it took a second Okay to escape.
-  it('sends a recording canceller forward to the debates page instead of back into the room', async () => {
+  it('returns a recording canceller to the page that opened the flow', async () => {
     setHistoryLength(2);
+    rememberDebateReturnDestination('/space/my-space?tab=activity');
     mocks.debate = {
       ...completedDebate(),
       recording_cancelled_at: '2026-07-02T00:01:20.000Z',
@@ -463,17 +489,16 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(screen.queryByText('Debate complete.')).not.toBeInTheDocument();
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/my-space?tab=activity'));
     expect(mocks.back).not.toHaveBeenCalled();
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
   });
 
-  // The session is what keeps both sides "in a flow": it disables every Debate control and keeps
-  // DebateCoordinator routing back into the room the cancellation just emptied.
-  it('leaves the rematch the cancelled recording anchored', async () => {
+  // Declining to publish and wanting another debate are unrelated choices, so the session the
+  // debate anchored outlives the cancellation and the canceller stays where they can act on it.
+  it('keeps the rematch the cancelled recording anchored, and does not eject the canceller', async () => {
     setHistoryLength(2);
     mocks.rematch = rematchSession('deciding');
-    mocks.leaveRematchMutateAsync.mockResolvedValue(rematchSession('ended'));
     mocks.debate = {
       ...completedDebate(),
       rematch_session_id: 'rematch-1',
@@ -484,13 +509,17 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.clearDebateActivity).not.toHaveBeenCalled());
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('leaves the rematch on the opponent side too, and never blocks their exit on it', async () => {
+  // The opponent is told the recording is gone, then put back on the thank-you screen: the debate
+  // they already agreed to is still there to accept.
+  it('returns the opponent to the flow after they acknowledge the removal', async () => {
     setHistoryLength(2);
     mocks.rematch = rematchSession('deciding');
-    mocks.leaveRematchMutateAsync.mockRejectedValue(new Error('rematch already gone'));
     mocks.debate = {
       ...completedDebate(),
       rematch_session_id: 'rematch-1',
@@ -502,11 +531,84 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Your debate was removed')).toBeInTheDocument();
-    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    // The notice is a dialog over the debate, not a replacement for it. Returning it early
+    // unmounted the screen behind it and left the backdrop showing the app shell.
+    expect(screen.getByText('Debate complete.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Okay' }));
 
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
+    await waitFor(() => expect(screen.queryByText('Your debate was removed')).not.toBeInTheDocument());
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
+  });
+
+  // A cold load has no rematch data yet, so the teardown waits for the answer instead of reading
+  // "not loaded" as "still live" — which would leave the canceller sitting on a dead screen.
+  it('tears the room down once an unloaded rematch resolves to expired', async () => {
+    setHistoryLength(2);
+    mocks.rematch = null;
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // Nothing is decided while the session is unknown.
+    await waitFor(() => expect(screen.queryByText('Loading debate...')).not.toBeInTheDocument());
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    mocks.rematch = rematchSession('expired');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+  });
+
+  // Cancelling and then deciding against the rematch is the one exit left, and it was gated on
+  // saving a recording that had just been discarded — so it failed every time.
+  it('lets a canceller leave the surviving rematch without persisting a discarded recording', async () => {
+    setHistoryLength(2);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+    mocks.rematch = rematchSession('deciding');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    expect(screen.queryByText('Could not save the local recording. Please try leaving again.')).not.toBeInTheDocument();
+  });
+
+  // The exception that keeps the old teardown honest: there is nothing left to return to, so
+  // cancelling still ends the room rather than stranding the canceller on a dead screen.
+  it('still ends the room when the rematch has already expired', async () => {
+    setHistoryLength(2);
+    mocks.rematch = rematchSession('expired');
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
@@ -1332,6 +1434,108 @@ describe('DebateRoomPageClient', () => {
     );
   });
 
+  it('automatically reclaims the debate when the blocked tab is the focused one', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // No "Continue here" click: the lock race landed the room in another tab while the user is
+    // looking at this one, so the focused tab issues the takeover itself.
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('does not auto-reclaim across devices after a duplicate-identity disconnect', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    act(() => emitRoomEvent('disconnected', 2));
+
+    // The other participant identity may be the user's phone; evicting it must stay behind the
+    // explicit "Continue here" click even though this tab is focused.
+    expect(await screen.findByText('This debate is active in another tab or device.')).toBeInTheDocument();
+    expect(mocks.ownershipRequestTakeover).not.toHaveBeenCalled();
+  });
+
+  it('does not retry a refused auto-takeover until the tab genuinely loses and regains focus', async () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.ownershipRequestTakeover.mockResolvedValue(false);
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce());
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // A refusal must not spin: the next attempt waits for a real focus transition.
+    expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce();
+    expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
+
+    // Redundant focus/visibilitychange events while the tab never lost focus must not retry —
+    // browsers fire both for a single activation, and a double connect() supersedes itself.
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce();
+
+    // A genuine blur re-arms the attempt; regaining focus retries exactly once even though the
+    // activation fires both events.
+    hasFocus.mockReturnValue(false);
+    act(() => {
+      window.dispatchEvent(new Event('blur'));
+    });
+    hasFocus.mockReturnValue(true);
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledTimes(2));
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.ownershipRequestTakeover).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not auto-takeover once the debate is in progress', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // Past preflight the room is (or should be) recording, so the focused duplicate stays on the
+    // dead-end screen rather than pulling a live debate out from under the owner.
+    expect(
+      await screen.findByRole('heading', { name: 'This debate is already open in another tab.' })
+    ).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.ownershipRequestTakeover).not.toHaveBeenCalled();
+  });
+
   it('keeps takeover available during a preflight ownership conflict', async () => {
     const now = Date.parse('2026-07-02T00:00:05.000Z');
     vi.spyOn(Date, 'now').mockReturnValue(now);
@@ -1369,7 +1573,9 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
 
-    await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(true);
+    await expect(
+      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 }))
+    ).resolves.toBe(true);
     expect(mocks.roomDisconnect).toHaveBeenCalledOnce();
     expect(mocks.capture).toHaveBeenCalledOnce();
     expect(mocks.capture).toHaveBeenCalledWith(
@@ -1394,7 +1600,8 @@ describe('DebateRoomPageClient', () => {
       await screen.findByRole('heading', { name: 'This debate is already open in another tab.' })
     ).toBeInTheDocument();
     expect(screen.getByText('Close this tab and continue your debate in the original tab.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Go to debates' })).toHaveAttribute('href', '/space/space-1/debates');
+    fireEvent.click(screen.getByRole('button', { name: 'Go back' }));
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
     expect(screen.queryByRole('button', { name: 'Continue here' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Back to debates' })).not.toBeInTheDocument();
     expect(screen.queryByText('Debate room')).not.toBeInTheDocument();
@@ -1402,6 +1609,23 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText('Waiting for both speakers to join.')).not.toBeInTheDocument();
     expect(mocks.liveKitJoinMutateAsync).not.toHaveBeenCalled();
     expect(mocks.roomConnect).not.toHaveBeenCalled();
+  });
+
+  it('returns a secondary tab ownership conflict to the page that opened the room', async () => {
+    rememberDebateReturnDestination('/space/root-space?tab=activity');
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="opponent-space" debateId="debate-1" />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Go back' }));
+
+    expect(mocks.replace).toHaveBeenCalledWith('/space/root-space?tab=activity');
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
   it('does not hand off a stale preflight after the first turn has started locally', async () => {
@@ -1422,7 +1646,9 @@ describe('DebateRoomPageClient', () => {
     // must compare against the clock directly instead of trusting the last rendered status.
     now.mockReturnValue(Date.parse('2026-07-02T00:00:11.000Z'));
     monotonicNow.mockReturnValue(3_000);
-    await expect(Promise.resolve(mocks.ownershipTakeoverHandler?.())).resolves.toBe(false);
+    await expect(
+      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 }))
+    ).resolves.toBe(false);
     expect(mocks.roomDisconnect).not.toHaveBeenCalled();
   });
 
@@ -1469,6 +1695,62 @@ describe('DebateRoomPageClient', () => {
     act(() => emitRoomEvent('trackUnsubscribed', track));
     expect(track.detach).toHaveBeenCalled();
     expect(document.body.contains(remoteVideo)).toBe(false);
+  });
+
+  // GEO-2602, reported as "audio but no video from opponent". Reconnecting cleared the remote
+  // tiles and the code assumed the tracks would come back as fresh TrackSubscribed events. They
+  // do not: LiveKit reconnects by ICE restart and the subscriptions survive it, so nothing
+  // re-fires and nothing re-attaches. The opponent's tile then stays empty for the rest of the
+  // debate.
+  it('puts the opponent back on screen after a reconnect', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    const remoteVideo = document.createElement('video');
+    const track = { kind: 'video', attach: () => remoteVideo, detach: vi.fn(() => [remoteVideo]) };
+
+    act(() => emitRoomEvent('trackSubscribed', track));
+    expect(document.body.contains(remoteVideo)).toBe(true);
+
+    act(() => emitRoomEvent('reconnecting'));
+    expect(document.body.contains(remoteVideo)).toBe(false);
+
+    // No second trackSubscribed — that is the whole point.
+    act(() => emitRoomEvent('reconnected'));
+
+    expect(document.body.contains(remoteVideo)).toBe(true);
+  });
+
+  // Why the report was "audio but no video" rather than "the call went silent": an element removed
+  // from the DOM keeps playing, so stripping the container orphaned a live audio element. The
+  // track has to be detached, not just unparented.
+  it('detaches remote audio on a reconnect rather than orphaning a still-playing element', async () => {
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.markJoinedMutateAsync).toHaveBeenCalled());
+
+    const remoteAudio = document.createElement('audio');
+    const track = { kind: 'audio', attach: () => remoteAudio, detach: vi.fn(() => [remoteAudio]) };
+
+    act(() => emitRoomEvent('trackSubscribed', track));
+    track.detach.mockClear();
+
+    act(() => emitRoomEvent('reconnecting'));
+
+    expect(track.detach).toHaveBeenCalled();
   });
 
   it('surfaces a reconnecting state while LiveKit restarts a dropped call', async () => {
@@ -1561,7 +1843,7 @@ describe('DebateRoomPageClient', () => {
     // emit Disconnected, so the CLIENT_INITIATED from our own room.disconnect() never reaches the
     // handler body — no "Lost connection" error, no drop metric.
     await act(async () => {
-      await mocks.ownershipTakeoverHandler?.();
+      await mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 });
     });
     mocks.capture.mockClear();
     act(() => emitRoomEvent('disconnected', 1));
@@ -2261,6 +2543,30 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.enqueueRecording).not.toHaveBeenCalled();
   });
 
+  it('starts capturing during preflight rather than waiting for the recording window to open', async () => {
+    // GEO-2644. The recorder used to be scheduled for `startAtMs`, so the encoder's own warmup
+    // happened at t=0 and every recording began fractionally after the window it is measured
+    // against. Capture has to be running *before* the window opens; the server trims the
+    // pre-window head, so starting early costs nothing and padding the head is what it avoids.
+    installRecordingMocks();
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preflight',
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      started_at: null,
+      // Ten seconds after the synchronized clock, so the window is still firmly shut.
+      preflight_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
+    // Recording, but the debate has not started — nothing is uploaded until the window closes.
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+  });
+
   it('shows connection state without exposing the connection deadline', async () => {
     mocks.debate = {
       ...completedDebate(),
@@ -2286,6 +2592,7 @@ describe('DebateRoomPageClient', () => {
 
   it('stops media at the deadline and returns to matching after backend cancellation', async () => {
     vi.useFakeTimers();
+    rememberDebateReturnDestination('/space/my-space/claims#recent');
     const connectingDebate: Debate = {
       ...completedDebate(),
       status: 'connecting',
@@ -2311,7 +2618,7 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.clearTimedOutDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(mocks.replace).not.toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(750));
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/questions');
+    expect(mocks.replace).toHaveBeenCalledWith('/space/my-space/claims#recent');
   });
 
   it('keeps the room connected when preflight won the deadline race', async () => {

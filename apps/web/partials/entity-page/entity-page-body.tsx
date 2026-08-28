@@ -2,6 +2,11 @@
 
 import * as React from 'react';
 
+import { ClaimPageView } from '~/core/claims/browse/claim-page-view';
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import type { Relation, TabEntity } from '~/core/types';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
@@ -13,7 +18,6 @@ import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { BacklinksClientContainer } from '~/partials/entity-page/backlinks-client-container';
-import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
@@ -74,17 +78,20 @@ function EntityTabsSection({
   );
 }
 
-function RouteBacklinks({ entityId }: { entityId: string }) {
-  return (
-    <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-      <React.Suspense fallback={<div />}>
-        <BacklinksServerContainer entityId={entityId} />
-      </React.Suspense>
-    </TrackedErrorBoundary>
-  );
-}
-
-function SidePanelBacklinks({ entityId }: { entityId: string }) {
+/**
+ * Both variants fetch through `BacklinksClientContainer`, which is the only one of the two
+ * containers that can run here.
+ *
+ * `BacklinksServerContainer` is an async component. This file is a client component, so React
+ * doesn't treat it as a Server Component — it re-invokes the function on every render, which fires
+ * its two requests again, suspends, resolves, renders, and invokes it again. The `Suspense` that
+ * used to wrap it hid that entirely: the backlinks looked fine while a single entity page load sent
+ * `EntityBacklinksPage` 82 times and `Spaces` 64 times, with identical variables (GEO-2666).
+ *
+ * The server container is still right for the three routes that render it from an actual server
+ * component; it just can't be reached from here.
+ */
+function EntityBacklinks({ entityId }: { entityId: string }) {
   return (
     <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
       <BacklinksClientContainer entityId={entityId} />
@@ -114,14 +121,34 @@ function EditorFooter({
         <ToggleEntityPage id={entityId} spaceId={spaceId} />
       )}
       <Spacer height={40} />
-      {variant === 'route' ? <RouteBacklinks entityId={entityId} /> : <SidePanelBacklinks entityId={entityId} />}
+      <EntityBacklinks entityId={entityId} />
       <CommentSection entityId={entityId} spaceId={spaceId} />
     </>
   );
 }
 
+/**
+ * Whether this entity should render the custom Claim read view.
+ *
+ * Editing always falls through to the generic page: the custom view is a read surface with no
+ * property editor behind it, so an editor who lost the value sheet would have no way to change the
+ * claim.
+ *
+ * Unscoped, matching how `EntityVoteButtons` and `ClaimDebateButton` read the same flag. `types` is
+ * derived across every space either way, so this is about consistency with the controls the page
+ * renders rather than about reaching a type a scoped read would miss.
+ */
+function useShowsClaimView(entityId: string, spaceId: string) {
+  const isEditing = useUserIsEditing(spaceId);
+  const { entity } = useQueryEntity({ id: entityId });
+  const isClaim = entity?.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID)) ?? false;
+
+  return isClaim && !isEditing;
+}
+
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
+  const showsClaimView = useShowsClaimView(entityId, spaceId);
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
   const entityMediaUrl = useEntityMediaUrl(entityId, spaceId);
@@ -135,6 +162,15 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     previewImageUrl?.startsWith('ipfs://') || previewImageUrl?.startsWith('http')
       ? previewImageUrl
       : (previewImageResolvedUrl ?? previewImageUrl);
+
+  // After every hook above, so the branch can't change the hook order between renders — the flag
+  // flips when edit mode is toggled, which happens without remounting.
+  //
+  // Placed here rather than in the entity route's template strategy so the side panel is covered
+  // too: both surfaces render through this component, and the strategy only sees the route.
+  if (showsClaimView) {
+    return <ClaimPageView entityId={entityId} spaceId={spaceId} />;
+  }
 
   const tabsSection = (
     <EntityTabsSection

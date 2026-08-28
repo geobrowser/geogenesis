@@ -37,6 +37,8 @@ import { useOnboarding } from '~/core/hooks/use-onboarding';
 import { useRankingComposeAccess } from '~/core/hooks/use-ranking-compose-access';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import type { SearchResult } from '~/core/types';
 
 import { stepAtom } from '~/partials/onboarding/dialog';
@@ -87,6 +89,8 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
   const [rankingComposeReturnHref, setRankingComposeReturnHref] = useAtom(rankingComposeReturnHrefAtom);
   const setStep = useSetAtom(stepAtom);
+  const enqueuePendingAction = useEnqueuePendingAction();
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
   const handleBack = React.useCallback(() => {
     if (rankingComposeReturnHref) {
@@ -104,14 +108,14 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
     if (accessStatus === 'needs-login' || accessStatus === 'needs-onboarding') {
       setPostOnboardingRedirect(window.location.pathname + window.location.search);
     }
-    if (accessStatus === 'needs-onboarding') {
+    if (accessStatus === 'needs-onboarding' && !isAccountSetupPending) {
       showOnboarding();
       setStep('enter-profile');
     }
     if (accessStatus === 'needs-membership') {
       void ensureAccess();
     }
-  }, [accessStatus, ensureAccess, setPostOnboardingRedirect, setStep, showOnboarding]);
+  }, [accessStatus, isAccountSetupPending, ensureAccess, setPostOnboardingRedirect, setStep, showOnboarding]);
 
   const { startDate, endDate } = useRankingBlockDates({ startDate: rankingStartDate, endDate: rankingEndDate });
   const { periodState, periodLabel, submissionsOpen } = useRankingPeriod(startDate, endDate);
@@ -377,7 +381,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
       hiddenGlobalIds.size === 0 ? filteredUnrankedIds : filteredUnrankedIds.filter(id => !hiddenGlobalIds.has(id)),
     [filteredUnrankedIds, hiddenGlobalIds]
   );
-  const visibleShowRankedUnrankedDivider = visibleFilteredRankedIds.length > 0 && visibleFilteredUnrankedIds.length > 0;
   const visibleHasVisibleRankableEntities =
     visibleFilteredRankedIds.length > 0 || visibleFilteredUnrankedIds.length > 0;
 
@@ -458,7 +461,11 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
   const hasUnpublishedChanges = draftIdsKey !== publishedIdsKey;
 
   const canPublish =
-    orderedIds.length > 0 && hasUnpublishedChanges && submissionsOpen && Boolean(personalSpaceId) && !isSaving;
+    orderedIds.length > 0 &&
+    hasUnpublishedChanges &&
+    submissionsOpen &&
+    (Boolean(personalSpaceId) || isAccountSetupPending) &&
+    !isSaving;
 
   const handlePublish = async () => {
     // `submissionsOpen` comes from the last render. Re-check against a fresh clock:
@@ -477,6 +484,41 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
         spaceId: row?.columns[SystemIds.NAME_PROPERTY]?.space ?? searchPreview.spaceId ?? spaceId,
       };
     });
+
+    if (!personalSpaceId) {
+      enqueuePendingAction({
+        id: `ranking-submit:${entityId}`,
+        label: 'your ranking',
+        requires: 'personalSpace',
+        run: () =>
+          saveMySubmission(slots).then(published => {
+            if (!published) return;
+            const ogVersion = buildRankingOgVersion({
+              rankEntityId: published.rankEntityId,
+              orderedEntityIds: published.orderedEntityIds,
+              rankingName: displayName,
+              rankingStartDate,
+              rankingEndDate,
+              authorName: published.authorName,
+              authorAvatarUrl: published.authorAvatarUrl,
+            });
+            void published.indexingSettled.then(() =>
+              generatePersonalRankingOgImages({
+                rankEntityId: published.rankEntityId,
+                authorSpaceId: published.authorSpaceId,
+                blockEntityId: entityId,
+                blockEntitySpaceId: spaceId,
+                rankingStartDate,
+                rankingEndDate,
+                ogVersion,
+              })
+            );
+          }),
+      });
+      setToast(<span>Your ranking will publish once your personal space is ready.</span>);
+      return;
+    }
+
     const published = await saveMySubmission(slots);
     if (!published) return;
 
@@ -583,7 +625,6 @@ export function RankingComposeScreen({ spaceId, rankingStartDate = '', rankingEn
           rankableEntriesById={displayRankableEntriesById}
           searchResultsById={searchResultsById}
           rowsByEntityId={rowsByEntityId}
-          showRankedUnrankedDivider={visibleShowRankedUnrankedDivider}
           hasVisibleRankableEntities={visibleHasVisibleRankableEntities}
           isSearchActive={isSearchActive}
           isSearchSettled={isSearchSettled}
