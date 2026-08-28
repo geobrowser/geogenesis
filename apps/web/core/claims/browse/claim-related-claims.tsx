@@ -7,6 +7,7 @@ import * as React from 'react';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
+import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
@@ -35,9 +36,14 @@ const RELATED_PAGE_SIZE = 4;
  *
  * This is where topics finally pay off — as a way out of the page rather than a label on it.
  *
- * Ordered by recency for now. The explore page's "Best" ranking is the order this wants, but the
- * helper that exposes it for a bounded set of claim ids lands with the debate claims panel work;
- * this should adopt it once that is on master rather than growing a second copy of the query.
+ * Each page is ranked the way the explore page's "Best" sort ranks everything else, over the rows
+ * that page holds.
+ *
+ * Within the page, deliberately. The ranking helper takes a bounded set of ids, and the query
+ * behind it warns against opening the ranking to a scan — an unfiltered ranked connection is
+ * several times slower than the filtered one. So the corpus order stays the server's and Best
+ * decides what leads the page the reader is looking at. Ranking the whole topic would need the
+ * ranked connection to page, which is a server-side change rather than a caller's.
  */
 export function ClaimRelatedClaims({
   claimId,
@@ -75,10 +81,16 @@ export function ClaimRelatedClaims({
     enabled: topicIds.length > 0,
   });
 
-  const related = React.useMemo(
+  const candidates = React.useMemo(
     () => page.filter(entity => !ID.equals(entity.id, claimId) && entity.name),
     [claimId, page]
   );
+
+  const candidateIds = React.useMemo(() => candidates.map(entity => entity.id), [candidates]);
+  const { rankByClaimId } = useClaimsBestOrder(candidateIds, spaceId);
+  // Claims the ranking hasn't scored keep their server order behind the ranked ones, so a topic the
+  // feed has barely touched still reads in a sensible sequence rather than arbitrarily.
+  const related = React.useMemo(() => sortClaimsByBest(candidates, rankByClaimId), [candidates, rankByClaimId]);
 
   // The page holding this claim shows one card fewer, and a topic with only this claim on its first
   // page would show none at all. Skip forward rather than render an empty gallery on a topic that
