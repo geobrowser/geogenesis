@@ -27,10 +27,8 @@ import { Skeleton } from '~/design-system/skeleton';
 
 import {
   AVAILABLE_CARD_HEIGHT_PX,
-  AVAILABLE_CARD_WIDTH_PX,
   AvailableBountyCard,
   BountyCard,
-  CARD_WIDTH_PX,
   COMPLETED_CARD_HEIGHT_PX,
   IN_PROGRESS_CARD_HEIGHT_PX,
   InProgressBountyCard,
@@ -74,11 +72,42 @@ function applyFilters(
 
 type BountyCardComponent = (props: { bounty: SpaceBounty }) => React.ReactElement;
 
-const GRID_CLASS = 'flex flex-wrap gap-4';
+/**
+ * Column counts follow the container, not the viewport.
+ *
+ * These grids sit in a column whose width three separate things move — the left nav expanding
+ * (200px), the right rail appearing (360px + margin), and the full-screen "View all" route having
+ * neither. Only the first of those changes the viewport, so viewport breakpoints cannot express
+ * "three across when there is room for three". `auto-fill` reads the container instead, and the
+ * minimum track width below is the only number that decides the count.
+ *
+ * `auto-fill` rather than `auto-fit`: empty tracks are kept, so a section holding one bounty shows
+ * one card rather than one card stretched across the row.
+ *
+ * The minimums are chosen to land on the intended counts across the widths this column actually
+ * takes — 750px with the rail, 900px without:
+ *
+ * - 220px → three narrow cards at 750px (needs 692) and still three at 900px (four would need 928).
+ * - 340px → two wide cards at 750px (needs 696) and still two at 900px (three would need 1052).
+ *
+ * Below those widths each drops a column on its own, which is the intended narrow behaviour.
+ */
+const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4';
 
-function BountyGrid({ bounties, card: Card }: { bounties: SpaceBounty[]; card: BountyCardComponent }) {
+/** Available cards carry a description, so they are given roughly half again the room. */
+const AVAILABLE_GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4';
+
+function BountyGrid({
+  bounties,
+  card: Card,
+  className = GRID_CLASS,
+}: {
+  bounties: SpaceBounty[];
+  card: BountyCardComponent;
+  className?: string;
+}) {
   return (
-    <div className={GRID_CLASS}>
+    <div className={className}>
       {bounties.map(bounty => (
         <Card key={bounty.id} bounty={bounty} />
       ))}
@@ -110,7 +139,7 @@ function AvailableBountyGrid({ bounties, allBounties }: BountyGridProps) {
   const { registerInterest, pendingBountyId, canRegisterInterest } = useInterestedInBounty();
 
   return (
-    <div className={GRID_CLASS}>
+    <div className={AVAILABLE_GRID_CLASS}>
       {bounties.map(bounty => (
         <AvailableBountyCard
           key={bounty.id}
@@ -344,7 +373,7 @@ function BountiesSection({
   emptyMessage,
   grid: Grid,
   cardHeightPx,
-  cardWidthPx = CARD_WIDTH_PX,
+  gridClassName = GRID_CLASS,
   isInfinite = false,
   viewAllHref,
 }: {
@@ -354,7 +383,8 @@ function BountiesSection({
   emptyMessage: string;
   grid: BountyGridComponent;
   cardHeightPx: number;
-  cardWidthPx?: number;
+  /** Matches the grid the section's cards use, so the skeletons occupy the same columns. */
+  gridClassName?: string;
   isInfinite?: boolean;
   /** "View all" navigates to this full-screen route. */
   viewAllHref: string;
@@ -405,9 +435,9 @@ function BountiesSection({
       {isError ? (
         <BountiesErrorState onRetry={() => void refetch()} />
       ) : isLoading ? (
-        <div className="flex flex-wrap gap-4">
+        <div className={gridClassName}>
           {Array.from({ length: INLINE_CARD_LIMIT }).map((_, index) => (
-            <Skeleton key={index} className="rounded-lg" style={{ width: cardWidthPx, height: cardHeightPx }} />
+            <Skeleton key={index} className="w-full rounded-lg" style={{ height: cardHeightPx }} />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -453,7 +483,7 @@ function BountiesFullView({
   backHref,
   grid: Grid,
   cardHeightPx,
-  cardWidthPx = CARD_WIDTH_PX,
+  gridClassName = GRID_CLASS,
   emptyMessage,
 }: {
   spaceId: string;
@@ -462,7 +492,8 @@ function BountiesFullView({
   backHref: string;
   grid: BountyGridComponent;
   cardHeightPx: number;
-  cardWidthPx?: number;
+  /** Matches the grid the view's cards use, so the skeletons occupy the same columns. */
+  gridClassName?: string;
   emptyMessage: string;
 }) {
   const { bounties, skills, isLoading, isError, refetch, truncated, totalCount } = useSpaceBounties(
@@ -491,9 +522,9 @@ function BountiesFullView({
         {isError ? (
           <BountiesErrorState onRetry={() => void refetch()} />
         ) : isLoading ? (
-          <div className="flex flex-wrap gap-4">
+          <div className={gridClassName}>
             {Array.from({ length: INLINE_CARD_LIMIT }).map((_, index) => (
-              <Skeleton key={index} className="rounded-lg" style={{ width: cardWidthPx, height: cardHeightPx }} />
+              <Skeleton key={index} className="w-full rounded-lg" style={{ height: cardHeightPx }} />
             ))}
           </div>
         ) : filtered.length === 0 ? (
@@ -514,7 +545,7 @@ type BountyStatusConfig = {
   taskStatusId: string;
   grid: BountyGridComponent;
   cardHeightPx: number;
-  cardWidthPx: number;
+  gridClassName: string;
   emptyMessage: string;
   isInfinite?: boolean;
 };
@@ -525,7 +556,7 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
     taskStatusId: BOUNTY_TASK_STATUS_DONE_ENTITY_ID,
     grid: CompletedBountyGrid,
     cardHeightPx: COMPLETED_CARD_HEIGHT_PX,
-    cardWidthPx: CARD_WIDTH_PX,
+    gridClassName: GRID_CLASS,
     emptyMessage: 'No completed bounties yet.',
   },
   'in-progress': {
@@ -533,7 +564,7 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
     taskStatusId: BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID,
     grid: InProgressBountyGrid,
     cardHeightPx: IN_PROGRESS_CARD_HEIGHT_PX,
-    cardWidthPx: CARD_WIDTH_PX,
+    gridClassName: GRID_CLASS,
     emptyMessage: 'No in progress bounties yet.',
   },
   available: {
@@ -541,7 +572,7 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
     taskStatusId: BOUNTY_TASK_STATUS_TODO_ENTITY_ID,
     grid: AvailableBountyGrid,
     cardHeightPx: AVAILABLE_CARD_HEIGHT_PX,
-    cardWidthPx: AVAILABLE_CARD_WIDTH_PX,
+    gridClassName: AVAILABLE_GRID_CLASS,
     emptyMessage: 'No available bounties yet.',
     isInfinite: true,
   },
