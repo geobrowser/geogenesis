@@ -1058,6 +1058,7 @@ export function PowerToolsScreen() {
             properties={data.properties}
             spaceId={spaceId}
             baseFilterState={effectiveFilterState}
+            baseModesByColumn={activeModesByColumn}
             selections={browseDropdowns.selections}
             updateSelections={browseDropdowns.updateSelections}
             hydrated={browseDropdowns.hydrated}

@@ -1,77 +1,64 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
+
 import * as React from 'react';
 
-import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { ID } from '~/core/id';
-import { useQueryEntities } from '~/core/sync/use-store';
-import type { Property } from '~/core/types';
 
-export type DropdownOption = { id: string; name: string | null };
+import { type DropdownOption, fetchDropdownOptions } from './fetch-dropdown-options';
+import { filterStateToWhere } from './filter-state-to-where';
+import type { Filter, ModesByColumn } from './filters';
 
-/** Bound the option list; the target types of a relation property can be broad. */
-const MAX_DROPDOWN_OPTIONS = 100;
+export type { DropdownOption } from './fetch-dropdown-options';
 
 /**
- * Candidate values for one browse-mode dropdown: entities of the property's
- * relation target type(s), scoped to the block's space — the same vocabulary
- * the filter-creation prompt searches for that property. Entities that are
- * already selected or are the block filter's defaults are always merged in,
- * so a preset is never missing from its own dropdown.
+ * Candidate values for one browse-mode dropdown: the to-entities that occur
+ * for `columnId` across the table's population — the block's filter with this
+ * property's own constraint removed, so the list is not narrowed by what is
+ * currently selected. Built with the same where/filter transformers the table
+ * query uses. Entities that are selected or are the filter's defaults are
+ * always merged in, so a preset is never missing from its own dropdown.
  */
 export function useDropdownOptions({
-  property,
-  spaceId,
+  columnId,
+  baseFilterState,
+  baseModesByColumn,
   pinned,
 }: {
-  property: Property | undefined;
-  spaceId: string;
+  columnId: string;
+  baseFilterState: Filter[];
+  baseModesByColumn: ModesByColumn;
   /** Ids (with names when known) that must appear regardless of the fetch window. */
   pinned: DropdownOption[];
 }) {
-  const { typeIds, waitForFilterTypes } = useRelationTargetTypeIds({
-    propertyId: property?.id,
-    spaceId,
-    relationValueTypes: property?.relationValueTypes,
-  });
-
-  const hasTargetTypes = Boolean(typeIds && typeIds.length > 0);
-
   const where = React.useMemo(() => {
-    if (!typeIds || typeIds.length === 0) return {};
-    return {
-      spaces: [{ equals: spaceId }],
-      types: typeIds.map(id => ({ id: { equals: id } })),
-    };
-  }, [typeIds, spaceId]);
+    const withoutColumn = baseFilterState.filter(f => !(ID.equals(f.columnId, columnId) && !f.isBacklink));
+    return filterStateToWhere(withoutColumn, baseModesByColumn);
+  }, [baseFilterState, baseModesByColumn, columnId]);
 
-  const { entities, isLoading } = useQueryEntities({
-    where,
-    first: MAX_DROPDOWN_OPTIONS,
-    enabled: hasTargetTypes && !waitForFilterTypes,
+  const whereKey = React.useMemo(() => JSON.stringify(where), [where]);
+
+  const { data: fetched = [], isLoading } = useQuery({
+    queryKey: ['data-block', 'dropdown-options', columnId, whereKey],
+    queryFn: ({ signal }) => fetchDropdownOptions({ propertyId: columnId, where, signal }),
+    staleTime: 60_000,
   });
 
   const options: DropdownOption[] = React.useMemo(() => {
     const byId = new Map<string, DropdownOption>();
-    for (const entity of entities) byId.set(entity.id, { id: entity.id, name: entity.name ?? null });
+    for (const option of fetched) byId.set(option.id, option);
     for (const pin of pinned) {
       const existing = byId.get(pin.id);
-      if (!existing) byId.set(pin.id, pin);
-      else if (!existing.name && pin.name) byId.set(pin.id, pin);
+      if (!existing || (!existing.name && pin.name)) byId.set(pin.id, pin);
     }
     return [...byId.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
-  }, [entities, pinned]);
+  }, [fetched, pinned]);
 
   const nameOf = React.useCallback(
     (id: string) => options.find(option => ID.equals(option.id, id))?.name ?? null,
     [options]
   );
 
-  return {
-    options,
-    nameOf,
-    isLoading: hasTargetTypes && (waitForFilterTypes || isLoading),
-    /** No resolvable target type: the dropdown can still show pinned values. */
-    hasTargetTypes,
-  };
+  return { options, nameOf, isLoading };
 }

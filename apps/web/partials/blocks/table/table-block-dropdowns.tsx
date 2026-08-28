@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { Filter } from '~/core/blocks/data/filters';
+import type { Filter, ModesByColumn } from '~/core/blocks/data/filters';
 import {
   DropdownSelections,
   effectiveDropdownSelection,
@@ -27,6 +27,7 @@ type TableBlockDropdownsProps = {
   spaceId: string;
   /** The filter state the dropdowns default against (the block's, plus any temporary filters). */
   baseFilterState: Filter[];
+  baseModesByColumn: ModesByColumn;
   selections: DropdownSelections;
   updateSelections: (updater: (current: DropdownSelections) => DropdownSelections) => void;
   hydrated: boolean;
@@ -37,17 +38,20 @@ type TableBlockDropdownsProps = {
  * property listed in the block's `Dropdowns` config. Every toggle applies
  * immediately (no Done button); selections are a per-user view and never
  * edit the block's filters. Only relation properties are offered — other
- * property types listed in the config are skipped (out of scope).
+ * property types listed in the config are skipped (out of scope). At most
+ * one menu is open at a time.
  */
 export function TableBlockDropdowns({
   configs,
   properties,
-  spaceId,
   baseFilterState,
+  baseModesByColumn,
   selections,
   updateSelections,
   hydrated,
 }: TableBlockDropdownsProps) {
+  const [openColumnId, setOpenColumnId] = React.useState<string | null>(null);
+
   const relationDropdowns = configs
     .map(config => ({
       config,
@@ -64,11 +68,15 @@ export function TableBlockDropdowns({
           key={config.propertyId}
           config={config}
           property={property!}
-          spaceId={spaceId}
           baseFilterState={baseFilterState}
+          baseModesByColumn={baseModesByColumn}
           selections={selections}
           updateSelections={updateSelections}
           hydrated={hydrated}
+          open={openColumnId === config.propertyId}
+          onOpenChange={open =>
+            setOpenColumnId(current => (open ? config.propertyId : current === config.propertyId ? null : current))
+          }
         />
       ))}
     </>
@@ -78,16 +86,19 @@ export function TableBlockDropdowns({
 function TableBlockDropdown({
   config,
   property,
-  spaceId,
   baseFilterState,
+  baseModesByColumn,
   selections,
   updateSelections,
   hydrated,
-}: Omit<TableBlockDropdownsProps, 'configs' | 'properties'> & {
+  open,
+  onOpenChange,
+}: Omit<TableBlockDropdownsProps, 'configs' | 'properties' | 'spaceId'> & {
   config: BlockDropdownConfig;
   property: Property;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [open, setOpen] = React.useState(false);
   const columnId = config.propertyId;
   const label = config.propertyName ?? property.name ?? 'Property';
 
@@ -111,7 +122,12 @@ function TableBlockDropdown({
     return [...byId.values()];
   }, [defaultFilters, selected]);
 
-  const { options, nameOf, isLoading } = useDropdownOptions({ property, spaceId, pinned });
+  const { options, nameOf, isLoading } = useDropdownOptions({
+    columnId,
+    baseFilterState,
+    baseModesByColumn,
+    pinned,
+  });
 
   const selectedNames = selected.map(id => nameOf(id) ?? '…');
   const pillLabel =
@@ -137,7 +153,7 @@ function TableBlockDropdown({
     <Menu
       asChild
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={onOpenChange}
       className="max-w-[280px]"
       trigger={
         <button
@@ -170,7 +186,7 @@ function TableBlockDropdown({
           </>
         )}
         {options.length === 0 && (
-          <p className="px-2 py-2 text-sm text-grey-04">{isLoading ? 'Loading…' : 'No options'}</p>
+          <p className="px-2 py-2 text-sm text-grey-04">{isLoading ? 'Loading…' : 'No values in this table'}</p>
         )}
         {options.map(option => {
           const checked = selected.some(id => ID.equals(id, option.id));

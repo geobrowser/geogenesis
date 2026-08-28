@@ -1071,6 +1071,7 @@ const ConfiguredTableBlock = ({
               properties={mergedBlockProperties}
               spaceId={spaceId}
               baseFilterState={browseDropdowns.baseFilterState}
+              baseModesByColumn={browseDropdowns.baseModesByColumn}
               selections={browseDropdowns.selections}
               updateSelections={browseDropdowns.updateSelections}
               hydrated={browseDropdowns.hydrated}

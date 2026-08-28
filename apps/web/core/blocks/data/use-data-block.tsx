@@ -538,6 +538,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
       updateSelections: updateDropdownSelections,
       hydrated: dropdownSelectionsHydrated,
       baseFilterState: effectiveFilterState,
+      baseModesByColumn: effectiveModesByColumn,
     },
 
     // From useSort
