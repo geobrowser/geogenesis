@@ -2,15 +2,13 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import { ENTITY_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { type ClaimResponseSummary, claimSummaryTier } from './claim-response-summary';
-import { ClaimSideResponders } from './claim-side-responders';
+import { ClaimSideSummary } from './claim-summary';
 
 /**
  * Where opinion sits on a claim: one number, the split, and who is on each side.
@@ -62,15 +60,17 @@ export function ClaimVerdict({
   return (
     <section aria-label="Response summary" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        {/* The share and what it is a share *of*, stacked — the number carries the emphasis and the
-            verb sits under it, rather than the two competing on one baseline. */}
-        <div className="flex flex-col">
+        {/* The share and what it is a share *of*, on one baseline. They were stacked, which gave the
+            verb a line of its own for one small word and pushed everything under it down. Sharing a
+            line reads as one statement — "68% agree" — which is what it is, and it matches the
+            explore card exactly. */}
+        <span className="flex items-baseline gap-1.5">
           <span className="text-[2.5rem] leading-none font-semibold tracking-[-1px] tabular-nums">{percent}%</span>
-          <Text as="span" variant="metadata" color="grey-04" className="mt-1">
+          <Text as="span" variant="metadata" color="grey-04">
             {/* "Agreements" → "agree", "Verifications" → "verify" reads wrong; use the action verb. */}
             {copy.positiveAction.toLowerCase()}
           </Text>
-        </div>
+        </span>
         <div className="flex items-center gap-2">
           {summary.isControversial && (
             <span className="rounded-sm bg-orange/25 px-1.5 py-0.5 text-metadata font-medium text-text">
@@ -93,7 +93,7 @@ export function ClaimVerdict({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <SideSummary
+        <ClaimSideSummary
           swatchClassName="bg-green"
           label={copy.positiveAction}
           count={summary.positive}
@@ -104,7 +104,7 @@ export function ClaimVerdict({
           viewerDirection={summary.viewerDirection}
           viewerSpaceId={summary.viewerSpaceId}
         />
-        <SideSummary
+        <ClaimSideSummary
           swatchClassName="bg-red-01"
           label={copy.negativeAction}
           count={summary.negative}
@@ -118,51 +118,5 @@ export function ClaimVerdict({
         />
       </div>
     </section>
-  );
-}
-
-/** One side of the split: its swatch, its count, and the people who took it. */
-function SideSummary({
-  swatchClassName,
-  label,
-  count,
-  direction,
-  entityId,
-  spaceId,
-  responseKind,
-  viewerDirection,
-  viewerSpaceId,
-  alignEnd = false,
-}: {
-  swatchClassName: string;
-  label: string;
-  count: number;
-  direction: 'positive' | 'negative';
-  entityId: string;
-  spaceId: string;
-  responseKind: ResponseKind;
-  viewerDirection: 'positive' | 'negative' | null;
-  viewerSpaceId: string | null;
-  alignEnd?: boolean;
-}) {
-  return (
-    <div className={cx('flex min-w-0 items-center gap-2', alignEnd && 'justify-end')}>
-      <span className={cx('size-2 shrink-0 rounded-xs', swatchClassName)} aria-hidden />
-      <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
-        {label} {count}
-      </Text>
-      {count > 0 && (
-        <ClaimSideResponders
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          direction={direction}
-          label={label}
-          totalResponders={count}
-          viewerDirection={viewerDirection}
-          viewerSpaceId={viewerSpaceId}
-        />
-      )}
-    </div>
   );
 }

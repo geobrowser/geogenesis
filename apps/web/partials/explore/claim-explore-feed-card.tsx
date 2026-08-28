@@ -8,7 +8,7 @@ import {
   viewerResponseFromDirection,
 } from '~/core/claims/browse/claim-position-summaries';
 import { claimSummaryTier, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { ClaimResponders, ControversialTag } from '~/core/claims/browse/claim-summary';
+import { ClaimSideSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
@@ -265,44 +265,23 @@ function ClaimVerdictColumn({
     );
   }
 
-  // The shared control, not a bare avatar stack. Pressing it opens who took which side — the same
-  // list the claim page shows. This card drew the faces without the popover around them, which is
-  // exactly the "faces you cannot press" problem the cluster exists to solve.
-  const responders = (
-    <ClaimResponders
-      entityId={entityId}
-      spaceId={spaceId}
-      responseKind={responseKind}
-      summary={summary}
-      label={copy.viewResponders}
-    />
-  );
-
   const percent = summary.percent ?? 0;
 
-  // One line, then the bar. The share and its verb share a baseline, the faces sit at the far end
-  // of that same line, and the bar runs underneath the width of the column.
-  //
-  // This is now the same arrangement at both widths, which it did not start as: the rail had a
-  // stack and the phone had a band. Two layouts for four elements was one more than the content
-  // justified, and the condensed line turned out to read better in the rail too — the number keeps
-  // its size, the label stops taking a line of its own, and the bar gets the full width to be read
-  // across instead of competing with the faces beside it.
+  // The share and its verb on one line, the bar under it, then the two sides — the claim page's own
+  // arrangement, through the claim page's own component. Two sides rather than one merged cluster
+  // because the faces then belong to a side: pressing Agree opens who agreed, not a mixed list to
+  // read through. Stacked rather than pushed to opposite ends, which is what the page does with the
+  // width to do it; at 220px they would wrap into each other.
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
-        <span className="flex items-baseline gap-1.5">
-          <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums">
-            {percent}%
-          </span>
-          <Text as="span" variant="metadata" color="grey-04">
-            {copy.positiveAction.toLowerCase()}
-          </Text>
+      <span className="flex items-baseline gap-1.5">
+        <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums">
+          {percent}%
         </span>
-        {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
-            what kind of claim this is rather than adding a second voice to the split. */}
-        <span className="shrink-0">{responders}</span>
-      </div>
+        <Text as="span" variant="metadata" color="grey-04">
+          {copy.positiveAction.toLowerCase()}
+        </Text>
+      </span>
       <div
         className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-grey-01"
         role="img"
@@ -310,6 +289,32 @@ function ClaimVerdictColumn({
       >
         <span className="bg-green" style={{ width: `${percent}%` }} />
         <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
+      </div>
+      {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
+          what kind of claim this is rather than adding a second voice to the split. */}
+      <div className="mt-3 flex flex-col gap-1.5">
+        <ClaimSideSummary
+          swatchClassName="bg-green"
+          label={copy.positiveAction}
+          count={summary.positive}
+          direction="positive"
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          viewerDirection={summary.viewerDirection}
+          viewerSpaceId={summary.viewerSpaceId}
+        />
+        <ClaimSideSummary
+          swatchClassName="bg-red-01"
+          label={copy.negativeAction}
+          count={summary.negative}
+          direction="negative"
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          viewerDirection={summary.viewerDirection}
+          viewerSpaceId={summary.viewerSpaceId}
+        />
       </div>
     </div>
   );

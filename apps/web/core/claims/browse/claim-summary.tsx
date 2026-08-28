@@ -11,6 +11,7 @@ import { Effect } from 'effect';
 import { getEntityResponders } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import {
+  type ActiveResponseDirection,
   ENTITY_RESPONSE_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
@@ -24,6 +25,7 @@ import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatar
 import { RespondersPopoverContent } from '~/partials/entity-page/entity-vote-buttons';
 
 import { CLAIM_RESPONSE_OBJECT_TYPE, type ClaimResponseSummary, claimSummaryTier } from './claim-response-summary';
+import { ClaimSideResponders } from './claim-side-responders';
 
 /**
  * Where opinion sits on a claim, scaled to the evidence behind it.
@@ -117,6 +119,61 @@ export function ControversialTag({ className }: { className?: string }) {
 }
 
 /**
+ * One side of the split: its swatch, its count, and the people who took it.
+ *
+ * Lifted out of the claim page's verdict so the explore card can use the same thing. Two of these
+ * say more than one combined cluster does — the faces beside a count belong to *that* side, and
+ * pressing a count opens that side's list rather than a mixed one you then have to read through.
+ *
+ * That is worth the extra row. The single `ClaimResponders` cluster still exists for the compact
+ * card, where there is one line to spend and no room to split it.
+ */
+export function ClaimSideSummary({
+  swatchClassName,
+  label,
+  count,
+  direction,
+  entityId,
+  spaceId,
+  responseKind,
+  viewerDirection,
+  viewerSpaceId,
+  alignEnd = false,
+}: {
+  swatchClassName: string;
+  label: string;
+  count: number;
+  direction: ActiveResponseDirection;
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  viewerDirection: ActiveResponseDirection | null;
+  viewerSpaceId: string | null;
+  alignEnd?: boolean;
+}) {
+  return (
+    <div className={cx('flex min-w-0 items-center gap-2', alignEnd && 'justify-end')}>
+      <span className={cx('size-2 shrink-0 rounded-xs', swatchClassName)} aria-hidden />
+      <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
+        {label} {count}
+      </Text>
+      {count > 0 && (
+        <ClaimSideResponders
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          direction={direction}
+          label={label}
+          totalResponders={count}
+          viewerDirection={viewerDirection}
+          viewerSpaceId={viewerSpaceId}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
  * The people who responded, as one control rather than two things that happen to sit together.
  *
  * Faces and count were already on screen and already fetched; what they lacked was somewhere to
@@ -127,7 +184,7 @@ export function ControversialTag({ className }: { className?: string }) {
  * *ready to argue* a side, a viewer-relative offer. These are people who *responded*, a fact about
  * the claim. Two populations, two places, so neither has to be explained.
  */
-export function ClaimResponders({
+function ClaimResponders({
   entityId,
   spaceId,
   responseKind,
