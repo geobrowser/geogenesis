@@ -29,6 +29,7 @@ import { CheckboxVisual } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Menu } from '~/design-system/menu';
+import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 
 /** Above this many options the menu gets a search bar. */
 const SEARCH_BAR_THRESHOLD = 20;
@@ -163,6 +164,9 @@ function TableBlockDropdown({
   });
   const hasTargetTypes = Boolean(typeIds?.length);
 
+  // The option list is its own scroll area (below a fixed search bar), so the
+  // sentinel observes intersection with it rather than with the viewport.
+  const [listEl, setListEl] = React.useState<HTMLDivElement | null>(null);
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery, 200).trim();
   const typeIdsKey = typeIds?.slice().sort().join(',') ?? '';
@@ -232,11 +236,6 @@ function TableBlockDropdown({
     return out;
   }, [pinned, tableOptions, searchOptions]);
 
-  const usedInSpacesCount = React.useMemo(
-    () => new Set([...pinned.map(p => p.id), ...tableOptions.map(o => o.id)]).size,
-    [pinned, tableOptions]
-  );
-
   const visibleOptions = React.useMemo(() => {
     if (!query) return allOptions;
     const needle = query.toLowerCase();
@@ -264,6 +263,7 @@ function TableBlockDropdown({
     isFetchingNextPage: isSearchFetchingNextPage,
     fetchNextPage: loadMore,
     rootMargin: '120px',
+    root: listEl,
   });
 
   // The search bar hides in exactly two states: the initial fetch (nothing
@@ -309,6 +309,9 @@ function TableBlockDropdown({
       onOpenChange={onOpenChange}
       onCloseAutoFocus={event => event.preventDefault()}
       className="max-w-[280px]"
+      // The Menu viewport stops scrolling; the option list below the search
+      // bar scrolls instead, so the bar never leaves view.
+      viewportClassName="flex w-full max-h-[min(400px,75vh)] min-h-0 min-w-0 flex-col overflow-hidden bg-white [background-clip:padding-box]"
       trigger={
         <button
           type="button"
@@ -326,12 +329,9 @@ function TableBlockDropdown({
         </button>
       }
     >
-      <div className="flex flex-col p-2">
+      <div className="flex min-h-0 flex-col">
         {showSearch && (
-          // Sticks to the top of the menu's scroll viewport so it stays
-          // reachable while scrolling a long list (same treatment as the
-          // Power Tools table header).
-          <div className="sticky top-0 z-10 -mx-2 -mt-2 bg-white px-2 pt-2 pb-2">
+          <div className="shrink-0 px-2 pt-2 pb-2">
             <Input
               withSearchIcon
               placeholder={`Search ${label.toLowerCase()}...`}
@@ -342,36 +342,42 @@ function TableBlockDropdown({
             />
           </div>
         )}
-        {isOverridden && (
-          <>
-            <button
-              type="button"
-              onClick={reset}
-              className="flex items-center rounded px-2 py-2 text-left text-sm text-grey-04 hover:bg-grey-01 hover:text-text"
-            >
-              Reset to table default
-            </button>
-            <div className="my-1 h-px shrink-0 bg-divider" aria-hidden />
-          </>
-        )}
-        {visibleOptions.length === 0 && (
-          <p className="px-2 py-2 text-sm text-grey-04">
-            {isLoading ? 'Loading…' : query ? 'No matches' : 'No values in this table'}
-          </p>
-        )}
-        {renderedOptions.map((option, index) => {
-          const checked = selected.some(id => ID.equals(id, option.id));
-          const startsSearchExtras = !query && index === usedInSpacesCount && index > 0;
-          return (
-            <React.Fragment key={option.id}>
-              {startsSearchExtras && (
-                <div className="my-1 flex items-center gap-2 px-2" aria-hidden>
-                  <span className="h-px flex-1 bg-divider" />
-                  <span className="text-footnote text-grey-04">More</span>
-                  <span className="h-px flex-1 bg-divider" />
-                </div>
-              )}
+        <div
+          ref={setListEl}
+          onWheel={e => {
+            // The Menu's own wheel trap would cancel scrolling here because
+            // its viewport no longer scrolls; trap against this list instead
+            // and keep the event from reaching it.
+            trapWheelToElement(listEl, e);
+            e.stopPropagation();
+          }}
+          className={cx(
+            'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-2 pb-2',
+            !showSearch && 'pt-2'
+          )}
+        >
+          {isOverridden && (
+            <>
               <button
+                type="button"
+                onClick={reset}
+                className="flex items-center rounded px-2 py-2 text-left text-sm text-grey-04 hover:bg-grey-01 hover:text-text"
+              >
+                Reset to table default
+              </button>
+              <div className="my-1 h-px shrink-0 bg-divider" aria-hidden />
+            </>
+          )}
+          {visibleOptions.length === 0 && (
+            <p className="px-2 py-2 text-sm text-grey-04">
+              {isLoading ? 'Loading…' : query ? 'No matches' : 'No values in this table'}
+            </p>
+          )}
+          {renderedOptions.map(option => {
+            const checked = selected.some(id => ID.equals(id, option.id));
+            return (
+              <button
+                key={option.id}
                 type="button"
                 role="menuitemcheckbox"
                 aria-checked={checked}
@@ -381,13 +387,13 @@ function TableBlockDropdown({
                 <CheckboxVisual checked={checked} />
                 <span className="min-w-0 truncate">{option.name ?? option.id}</span>
               </button>
-            </React.Fragment>
-          );
-        })}
-        {hasMore && <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />}
-        {(isSearchFetchingNextPage || (isSearching && renderedOptions.length > 0)) && (
-          <p className="px-2 pt-1 text-footnote text-grey-04">Loading…</p>
-        )}
+            );
+          })}
+          {hasMore && <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />}
+          {(isSearchFetchingNextPage || (isSearching && renderedOptions.length > 0)) && (
+            <p className="px-2 pt-1 text-footnote text-grey-04">Loading…</p>
+          )}
+        </div>
       </div>
     </Menu>
   );
