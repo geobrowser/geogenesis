@@ -119,7 +119,8 @@ export function IncomingRequestPopup({
                   // chasing a requester-side "nobody holding the opposite position is available"
                   // error and made no difference, so the exclusion comes from the dismissal itself,
                   // not this flag.)
-                  onSuccess: () => dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer),
+                  onSuccess: () =>
+                    dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer),
                 }
               );
             })
