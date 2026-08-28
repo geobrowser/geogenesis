@@ -22,6 +22,11 @@ const mocks = vi.hoisted(() => ({
     runId: string | null;
   },
   spaceName: 'Crypto',
+  match: null as { id: string } | null,
+  blockedReason: undefined as string | undefined,
+  request: vi.fn(),
+  summaryPositive: 0,
+  summaryNegative: 0,
   spaceId: '019fedae-72b6-7ab2-927a-df044d57c566',
   viewerSpaceId: 'personal-space',
 }));
@@ -40,6 +45,38 @@ vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutateAsync, reset: vi.fn(), isPending: false, error: null }),
   useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutateAsync, isPending: false, error: null }),
+}));
+
+// The end slot asks the hub whether there is a debate to be had. That is one shared query at
+// runtime and a whole auth stack in a test, so it is mocked at the hook rather than under it —
+// `mocks.match` is what decides whether the slot offers anything.
+vi.mock('~/core/claims/browse/use-claim-matchup', () => ({
+  useClaimMatchup: () => ({
+    match: mocks.match,
+    blockedReason: mocks.blockedReason,
+    isRequesting: false,
+    requestError: null,
+    request: mocks.request,
+  }),
+}));
+
+// The card reports its own responses now. The tier this returns is what decides whether the footer
+// shows a bar, a tally, or an invitation.
+vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>();
+  return {
+    ...actual,
+    useClaimResponseSummary: () => ({
+      ...actual.summarizeClaimResponses(mocks.summaryPositive, mocks.summaryNegative),
+      isLoading: false,
+      viewerDirection: null,
+      viewerSpaceId: null,
+    }),
+  };
+});
+
+vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
+  ClaimResponderAvatars: () => null,
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -159,6 +196,13 @@ beforeEach(() => {
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
+  // Nothing on offer and nobody having answered is the state most claims are actually in, so it is
+  // the state every test starts from.
+  mocks.match = null;
+  mocks.blockedReason = undefined;
+  mocks.request.mockReset();
+  mocks.summaryPositive = 0;
+  mocks.summaryNegative = 0;
   mocks.viewerSpaceId = 'personal-space';
 });
 
@@ -309,40 +353,103 @@ describe('position avatar stack', () => {
 });
 
 describe('MatchmakingClaimCard', () => {
-  it('puts the debate toggle in the card header beside the space name', () => {
+  it('carries no readiness switch', () => {
+    // It moved off the card entirely. Asserted rather than left implicit because the corner it
+    // vacated is now the end slot, and a switch reappearing there would quietly take the space the
+    // offer needs.
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
-    const toggle = screen.getByRole('switch', { name: toggleName });
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  it('puts the offer in the header beside the space name, above the claim', () => {
+    mocks.match = { id: 'match-1' };
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    const request = screen.getByRole('button', { name: 'Request debate' });
     const spaceName = screen.getByText('Crypto');
 
-    // The header row is the toggle's own row: the space chip and the toggle share it, which is
-    // what puts the toggle top-right rather than below the response buttons.
-    const headerRow = toggle.parentElement?.parentElement;
+    // The header row is the slot's own row: the space chip and the offer share it, which is what
+    // puts the offer top-right rather than below the response pills.
+    const headerRow = request.parentElement?.parentElement;
     expect(headerRow).not.toBeNull();
     expect(headerRow?.contains(spaceName)).toBe(true);
 
-    // ...and the header sits above the claim, so the toggle precedes it in the document.
+    // ...and the header sits above the claim, so the offer precedes it in the document.
     const claimText = screen.getByText(CLAIM_TEXT);
-    expect(toggle.compareDocumentPosition(claimText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(request.compareDocumentPosition(claimText) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('keeps the toggle above the response buttons', () => {
+  it('leaves the header empty when there is nothing to offer', () => {
+    // The common case by a wide margin, and it has to cost nothing: no dimmed control, no
+    // placeholder, nothing for the reader to work out.
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
-    const toggle = screen.getByRole('switch', { name: toggleName });
-    const agree = screen.getByRole('button', { name: /^Agree/ });
-
-    expect(toggle.compareDocumentPosition(agree) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Watch/ })).not.toBeInTheDocument();
   });
 
-  it('still heads the card with the toggle when the claim is not on the graph', () => {
+  it('says why the offer cannot be taken rather than dimming it silently', () => {
+    mocks.match = { id: 'match-1' };
+    mocks.blockedReason = 'Withdraw your open request to send another.';
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
+    // Shown, not left to a `title`: native tooltips never appear on touch and are unreliable on a
+    // disabled button, which is exactly when the explanation matters.
+    expect(screen.getByText('Withdraw your open request to send another.')).toBeInTheDocument();
+  });
+
+  it('opens the room when a debate is running', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness()}
+        activeDebate={{ id: 'debate-7' } as never}
+      />
+    );
+
+    // A verb, not a status. "Debating now" told the reader something was happening and gave them
+    // nowhere to go, which is the whole reason the slot holds actions.
+    expect(screen.getByRole('link', { name: /Watch live/ })).toHaveAttribute(
+      'href',
+      `/space/${mocks.spaceId}/debates/debate-7`
+    );
+  });
+
+  it('still heads the card with the space chip when the claim is not on the graph', () => {
     const offGraph = { ...claim, claim_entity_id: 'not-a-graph-id' };
     renderCard(<MatchmakingClaimCard claim={offGraph} positions={positions} readiness={readiness()} />);
 
-    const toggle = screen.getByRole('switch', { name: toggleName });
-    expect(toggle.parentElement?.parentElement?.contains(screen.getByText('Crypto'))).toBe(true);
-    // The unavailable notice loses the toggle it used to sit beside, but must still be shown.
+    expect(screen.getByText('Crypto')).toBeInTheDocument();
+    // The unavailable notice must still be shown.
     expect(screen.getByText('Claim unavailable')).toBeInTheDocument();
+  });
+
+  it('scales the footer to the number of responses', () => {
+    // Two responses is the median claim. A percentage here would read "100%" off a sample of two,
+    // so the card reports the tally and no rate.
+    mocks.summaryPositive = 2;
+    mocks.summaryNegative = 0;
+    const { unmount } = renderCard(
+      <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />
+    );
+    expect(screen.getByText('2 agree · 0 disagree')).toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+    unmount();
+
+    mocks.summaryPositive = 9;
+    mocks.summaryNegative = 3;
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+    expect(screen.getByText('75%')).toBeInTheDocument();
+  });
+
+  it('invites a first response rather than reporting a zero', () => {
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    expect(screen.getByText('Be the first to agree it.')).toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
   });
 
   // geo-chat owns the avatar stacks, and its copy trails the response by a publish, an index and a
@@ -470,18 +577,4 @@ describe('MatchmakingClaimCard', () => {
     expect(mocks.submitResponse).toHaveBeenCalled();
   });
 
-  it('leaves the toggle disabled and uncaptioned without a response', () => {
-    // The card still shows what to do: the response pills render directly beneath this header,
-    // so the disabled switch no longer carries a caption of its own.
-    renderCard(
-      <MatchmakingClaimCard
-        claim={claim}
-        positions={positions}
-        readiness={readiness({ viewer_response: null, viewer_debate_ready: false })}
-      />
-    );
-
-    expect(screen.getByRole('switch', { name: toggleName })).toBeDisabled();
-    expect(screen.queryByText('Respond to this claim to debate it.')).not.toBeInTheDocument();
-  });
 });

@@ -4,14 +4,19 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import {
+  positionSummariesFromCounts,
+  viewerResponseFromDirection,
+} from '~/core/claims/browse/claim-position-summaries';
+import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { buildClaimDraft } from '~/core/claims/claim-draft';
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublishedInSpace } from '~/core/claims/publish';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
 import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
-import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
 import { useDebateClaims } from '~/core/debates/hooks';
+import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import {
   ClaimResponseBatchBoundary,
   useClaimResponseSummaryBatch,
@@ -19,7 +24,7 @@ import {
 import { useDiff } from '~/core/state/diff-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities } from '~/core/sync/use-store';
-import type { Entity, Relation } from '~/core/types';
+import type { Entity } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';
@@ -305,6 +310,17 @@ function ClaimsList({
   );
 }
 
+/**
+ * One claim in a space's editing view, drawn as the card every other claim surface draws.
+ *
+ * This was a third card shape — its own shadow, its own title size, chevron response controls, and
+ * a topic chip group nothing else showed. The response controls in particular were the entity-row
+ * chevrons, which name neither side; on a page that is nothing but claims, that is exactly backwards.
+ *
+ * The readiness switch stays here, unlike on the browse-mode surfaces. This is the page an editor
+ * comes to in order to stage claims for debate, so the control belongs to the task — and it is the
+ * one place it has not lost a home.
+ */
 function ClaimListItem({
   claim,
   spaceId,
@@ -318,45 +334,73 @@ function ClaimListItem({
   debateClaim: DebateClaim | null;
   responseKind: 'stance' | 'veracity';
 }) {
-  const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
   const published = isClaimPublishedInSpace(claim, spaceId);
   const activeDebate = debateClaim?.active_debate ?? null;
+  const summary = useClaimResponseSummary(claim.id, spaceId, responseKind);
 
-  return (
-    <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
-      <div className="min-w-0">
+  const claimSummary = React.useMemo(
+    () => ({
+      id: debateClaim?.id ?? claim.id,
+      space_id: spaceId,
+      claim_entity_id: claim.id,
+      claim: claim.name ?? claim.id,
+      description: claim.description,
+    }),
+    [claim.description, claim.id, claim.name, debateClaim?.id, spaceId]
+  );
+
+  const positions = React.useMemo(
+    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, debateClaim),
+    [debateClaim, responseKind, summary.negative, summary.positive]
+  );
+
+  const readiness = React.useMemo(
+    () => ({
+      response_kind: responseKind,
+      viewer_response:
+        debateClaim?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
+      viewer_debate_ready: debateClaim?.viewer_debate_ready ?? false,
+      readiness_disabled_reason: debateClaim?.readiness_disabled_reason ?? null,
+    }),
+    [debateClaim, responseKind, summary.viewerDirection]
+  );
+
+  // A draft has no on-chain identity to respond to or debate over, so the card would offer controls
+  // that cannot work. Say what to do about it instead.
+  if (!published) {
+    return (
+      <article className="rounded-lg border border-grey-02 bg-white px-5 py-4">
         <Text as="h3" variant="bodySemibold" color="text" className="block">
           {claim.name ?? claim.id}
         </Text>
+        <Text as="p" variant="body" color="grey-04" className="mt-2">
+          Publish this claim before starting a debate.
+        </Text>
+      </article>
+    );
+  }
 
-        {!published && (
-          <Text as="p" variant="body" color="grey-04" className="mt-2">
-            Publish this claim before starting a debate.
-          </Text>
-        )}
-      </div>
-
-      {published && (
-        <div className="mt-3 flex items-center gap-4">
-          <DebateEntityResponseControls entityId={claim.id} spaceId={spaceId} responseKind={responseKind} />
-          <ClaimDebateReadiness
-            compact
-            debateClaim={debateClaim}
-            entityId={claim.id}
-            spaceId={spaceId}
-            canEnable={!activeDebate && !debateJoinBlocked}
-          />
-        </div>
-      )}
-
-      <ClaimDebateStatus debateClaim={debateClaim} published={published} />
-
-      {topics.length > 0 && (
-        <div className="mt-3 grid gap-2 md:grid-cols-3">
-          <RelationChipGroup label="Topics" relations={topics} />
-        </div>
-      )}
-    </article>
+  return (
+    <div>
+      <MatchmakingClaimCard
+        claim={claimSummary}
+        positions={positions}
+        readiness={readiness}
+        activeDebate={activeDebate}
+        footer={
+          <div className="mt-3 flex items-center justify-between gap-3 border-t border-divider pt-3">
+            <ClaimDebateReadiness
+              compact
+              debateClaim={debateClaim}
+              entityId={claim.id}
+              spaceId={spaceId}
+              canEnable={!activeDebate && !debateJoinBlocked}
+            />
+            <ClaimDebateStatus debateClaim={debateClaim} published={published} />
+          </div>
+        }
+      />
+    </div>
   );
 }
 
@@ -374,36 +418,3 @@ function ClaimDebateStatus({ debateClaim, published }: { debateClaim: DebateClai
   return null;
 }
 
-function RelationChipGroup({
-  label,
-  relations,
-  className,
-}: {
-  label: string;
-  relations: Relation[];
-  className?: string;
-}) {
-  if (relations.length === 0) return null;
-
-  return (
-    <div className={className}>
-      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-1">
-        {label}
-      </Text>
-      <div className="flex flex-wrap gap-1.5">
-        {relations.map(relation => (
-          <span
-            key={relation.id}
-            className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
-          >
-            <span className="truncate">{relation.toEntity.name ?? relation.toEntity.id}</span>
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function relationsForProperty(relations: Relation[], propertyId: string): Relation[] {
-  return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
-}
