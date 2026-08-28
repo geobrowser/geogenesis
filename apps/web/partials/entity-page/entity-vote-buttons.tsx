@@ -521,7 +521,14 @@ function DebateVotePill({
 
 type ResponderWithProfile = EntityResponder & { profile: Profile };
 
-function RespondersPopoverContent({
+/**
+ * Who took which side, sectioned by side.
+ *
+ * Exported so the claim card's responder cluster opens exactly this list rather than growing a
+ * second one. The popover already existed; it was only ever reachable from the bare number between
+ * the chevrons, which is a poor target for something worth pressing.
+ */
+export function RespondersPopoverContent({
   entityId,
   spaceId,
   objectType,

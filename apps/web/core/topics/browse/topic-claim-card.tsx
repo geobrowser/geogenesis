@@ -11,14 +11,16 @@ import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
-import { Text } from '~/design-system/text';
-
 /**
- * One claim on a topic page, drawn as the hub's card with its split beneath.
+ * One claim on a topic page, drawn as the card every other claim surface draws.
+ *
+ * The split used to be passed down as a `footer` from here. It isn't any more: the card reports its
+ * own responses through `ClaimSummary`, so the topic page, the hub and the explore feed cannot show
+ * the same claim two different ways — and the summary scales itself to the evidence rather than
+ * printing a percentage off two votes.
  *
  * Space-scoped to the claim's own space rather than the route's. A topic aggregates across spaces,
  * so the space in the URL is often not one this claim lives in — reading its responses against that
@@ -68,50 +70,7 @@ export function TopicClaimCard({ claim, fallbackSpaceId }: { claim: Entity; fall
         viewer_debate_ready: row?.viewer_debate_ready ?? false,
         readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
       }}
-      activeDebate={Boolean(row?.active_debate)}
-      hideReadinessToggle={row === null && rowQuery.isLoading}
-      footer={<ClaimSplit summary={summary} responseKind={responseKind} />}
+      activeDebate={row?.active_debate ?? null}
     />
-  );
-}
-
-/** The split under the card, a miniature of the claim page's verdict. */
-function ClaimSplit({
-  summary,
-  responseKind,
-}: {
-  summary: ReturnType<typeof useClaimResponseSummary>;
-  responseKind: 'stance' | 'veracity';
-}) {
-  if (summary.percent === null) return null;
-
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
-  const percent = summary.percent;
-
-  return (
-    <div className="mt-3 border-t border-divider pt-3">
-      <div
-        className="flex h-1.5 overflow-hidden rounded-full bg-grey-01"
-        role="img"
-        aria-label={`${percent}% ${copy.positiveAction.toLowerCase()}, ${100 - percent}% ${copy.negativeAction.toLowerCase()}`}
-      >
-        <span className="bg-green" style={{ width: `${percent}%` }} />
-        <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
-      </div>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
-          <span className="text-text">{percent}%</span> {copy.positiveAction.toLowerCase()}
-        </Text>
-        {summary.isControversial ? (
-          <span className="rounded-sm bg-orange/25 px-1.5 py-0.5 text-metadata font-medium text-text">
-            Controversial
-          </span>
-        ) : (
-          <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
-            {summary.total} {summary.total === 1 ? 'response' : 'responses'}
-          </Text>
-        )}
-      </div>
-    </div>
   );
 }

@@ -55,6 +55,32 @@ export type ClaimResponseSummary = {
 };
 
 /**
+ * How much of a verdict the evidence actually supports.
+ *
+ * Measured against testnet, 93% of claims with any response at all are unanimous, the median claim
+ * has two responses, and only 2% reach the floor above. A percentage rendered from the first
+ * response is therefore almost always "100%" standing on a sample of two — a rate where there is
+ * only a tally, stated in the loudest type on the surface.
+ *
+ * So the presentation scales with the population rather than the presence of one:
+ *
+ *   - `invite`  nobody has answered. There is nothing to divide and an invitation to extend.
+ *   - `counts`  answered, but below the floor. Report the tally and no rate: "7 verify · 2 dispute"
+ *               says everything true about four responses without implying a proportion.
+ *   - `full`    enough responders to characterise the split, so the share, the bar and the
+ *               Controversial band all mean what they appear to mean.
+ *
+ * One helper for every surface deliberately: the card, the feed and the claim page draw the same
+ * number, and a tier decided twice is a tier that will eventually disagree with itself.
+ */
+export type ClaimSummaryTier = 'invite' | 'counts' | 'full';
+
+export function claimSummaryTier(total: number): ClaimSummaryTier {
+  if (total <= 0) return 'invite';
+  return total >= CLAIM_RESPONSE_FLOOR ? 'full' : 'counts';
+}
+
+/**
  * The split, or null where there is nothing to divide.
  *
  * Pure so the floor and the band can be tested without a query. `percent` is null rather than 0 on

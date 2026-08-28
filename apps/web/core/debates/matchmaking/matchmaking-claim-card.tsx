@@ -15,6 +15,9 @@ import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
+import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
@@ -26,33 +29,31 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import type {
+  Debate,
   DebateClaimPositionSummary,
   DebateClaimSummary,
   DebateParticipantSummary,
   MatchmakingReadiness,
 } from '../api';
-import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { hubCardMotion } from './hub-motion';
 
 type Props = {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
-  /** Drives the response buttons and the readiness toggle. */
+  /** Drives the response buttons and the vocabulary the sides are labelled in. */
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
-  /** Rendered under the controls — e.g. the Matches tab's "Request debate" button. */
+  /**
+   * The live debate on this claim, as either geo-chat shape — the `DebateClaim` row carries the
+   * debate, the paged index carries only a flag. The end slot surfaces it as "Watch live".
+   */
+  activeDebate?: Debate | boolean | null;
+  /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
   /**
    * Replaces the claim's link to its entity page. The rematch picker opens the side panel instead:
    * following a link there would navigate out of the app shell and abandon the live session.
    */
   onOpenClaim?: () => void;
-  /**
-   * Leaves the readiness switch out. For hosts that can't yet say whether the viewer is standing
-   * ready — the switch reads `viewer_debate_ready`, so drawing it from an unresolved lookup would
-   * report "not ready" on a claim they are in fact ready on.
-   */
-  hideReadinessToggle?: boolean;
   /**
    * Set when `positions` cannot be trusted to say which side the viewer is on — the rematch picker
    * identifies the viewer inside the summaries by geo-chat user id, which is null until its token
@@ -75,9 +76,16 @@ export function isResolvableClaim(claim: Pick<DebateClaimSummary, 'space_id' | '
 }
 
 /**
- * Taking a side is an on-chain claim response, so the two side buttons are the only way to do it —
- * there are deliberately no separate vote arrows here. Readiness, the geo-chat half, rides
- * alongside them.
+ * One claim, drawn the same way everywhere a claim appears as a card.
+ *
+ * Taking a side is an on-chain claim response, so the two side pills are the only way to do it —
+ * there are deliberately no separate vote arrows here. The pills carry labels and faces and no
+ * counts: a control should say what pressing it does, and the faces inside one mean *ready to argue
+ * this side*, a viewer-relative offer. How many people have answered is a different question, about
+ * the claim rather than the reader, and it lives in the summary underneath.
+ *
+ * The readiness switch used to ride in the header. It has moved off the card entirely, and the
+ * corner it held is now the end slot — which always offers something the reader can act on.
  */
 export function MatchmakingClaimCard({
   claim,
@@ -86,7 +94,6 @@ export function MatchmakingClaimCard({
   activeDebate,
   footer,
   onOpenClaim,
-  hideReadinessToggle,
   viewerIdentityPending,
   ref,
 }: Props) {
@@ -105,7 +112,6 @@ export function MatchmakingClaimCard({
           readiness={readiness}
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
-          hideReadinessToggle={hideReadinessToggle}
           viewerIdentityPending={viewerIdentityPending}
         />
       ) : (
@@ -115,7 +121,6 @@ export function MatchmakingClaimCard({
           claim={claim}
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
-          hideReadinessToggle={hideReadinessToggle}
         />
       )}
 
@@ -125,46 +130,53 @@ export function MatchmakingClaimCard({
 }
 
 /**
- * Space chip, readiness toggle, and the claim itself — the chrome both control variants share.
- * The toggle rides in the header's top right per the design, but whether it can be turned on
- * depends on response state only the respondable variant tracks, so each passes its own.
+ * Space chip, the end slot, and the claim itself — the chrome both control variants share.
+ *
+ * The meta row answers two things and no more: whose space this is, and what the claim offers the
+ * reader right now. Topics used to sit here and no longer do — 15% of claims carry one, and where
+ * it appears it usually restates the space chip beside it.
+ *
+ * The claim is set larger than the chrome around it and clamped to three lines. It is the content;
+ * nothing else on the card competes. The clamp is not cosmetic: claim text runs to a median of 108
+ * characters and a maximum of 222, and unclamped, one long claim sets the row height for its
+ * neighbour in the topic page's two-up grid.
  */
 function ClaimHeader({
   claim,
   isOnGraph,
-  toggle,
+  endSlot,
   onOpenClaim,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
-  toggle: React.ReactNode;
+  endSlot: React.ReactNode;
   onOpenClaim?: () => void;
 }) {
+  const claimTextClassName = 'mb-3 block text-metadataMedium leading-snug text-pretty line-clamp-3';
+
   const openable = isOnGraph ? (
     onOpenClaim ? (
-      <button type="button" onClick={onOpenClaim} className="mb-3 block text-left text-metadataMedium hover:underline">
+      <button type="button" onClick={onOpenClaim} className={`${claimTextClassName} text-left hover:underline`}>
         {claim.claim}
       </button>
     ) : (
       <Link
         href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
-        className="mb-3 block text-metadataMedium hover:underline"
+        className={`${claimTextClassName} hover:underline`}
       >
         {claim.claim}
       </Link>
     )
   ) : (
-    <Text as="p" variant="metadataMedium" className="mb-3">
-      {claim.claim}
-    </Text>
+    <p className={claimTextClassName}>{claim.claim}</p>
   );
 
   return (
     <>
-      {/* `items-start` so the chip stays put when the toggle stacks an explanation beneath it. */}
+      {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. */}
       <div className="mb-2 flex items-start justify-between gap-3">
         <SpaceChip spaceId={claim.space_id} />
-        {toggle}
+        {endSlot}
       </div>
       {openable}
     </>
@@ -310,15 +322,13 @@ function RespondableControls({
   readiness,
   activeDebate,
   onOpenClaim,
-  hideReadinessToggle,
   viewerIdentityPending,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
+  activeDebate?: Debate | boolean | null;
   onOpenClaim?: () => void;
-  hideReadinessToggle?: boolean;
   viewerIdentityPending?: boolean;
 }) {
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
@@ -329,11 +339,7 @@ function RespondableControls({
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
-        toggle={
-          hideReadinessToggle ? null : (
-            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
-          )
-        }
+        endSlot={<ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />}
       />
       <PositionRow
         positions={optimisticPositions}
@@ -353,7 +359,40 @@ function RespondableControls({
           </Text>
         </div>
       ) : null}
+      <CardSummary claim={claim} responseKind={readiness.response_kind} />
     </>
+  );
+}
+
+/**
+ * How the claim has been answered, scaled to how many have answered.
+ *
+ * Fetched by the card rather than passed in, so every host draws the same thing without each having
+ * to remember to — and so the tier can never be decided twice. The query keys are the ones
+ * `EntityVoteButtons` and the claim page already use, so a card sitting beside either shares their
+ * fetch rather than adding one.
+ */
+function CardSummary({
+  claim,
+  responseKind,
+}: {
+  claim: DebateClaimSummary;
+  responseKind: MatchmakingReadiness['response_kind'];
+}) {
+  const summary = useClaimResponseSummary(claim.claim_entity_id, claim.space_id, responseKind);
+
+  // Nothing rather than an invitation while the counts are still out: "Be the first" is a claim
+  // about the world, and asserting it before the data lands would retract it a moment later.
+  if (summary.isLoading) return null;
+
+  return (
+    <ClaimSummary
+      entityId={claim.claim_entity_id}
+      spaceId={claim.space_id}
+      responseKind={responseKind}
+      summary={summary}
+      className="mt-3 border-t border-divider pt-3"
+    />
   );
 }
 
@@ -453,14 +492,12 @@ function UnresolvableControls({
   readiness,
   activeDebate,
   onOpenClaim,
-  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
+  activeDebate?: Debate | boolean | null;
   onOpenClaim?: () => void;
-  hideReadinessToggle?: boolean;
 }) {
   return (
     <>
@@ -468,11 +505,15 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
-        toggle={
-          /* Readiness is geo-chat state, so it still works without a graph id. */
-          hideReadinessToggle ? null : (
-            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
-          )
+        endSlot={
+          /* A live debate is geo-chat state, so it can still be watched without a graph id — but
+             the graph cannot resolve this claim, so there is no match to request against it. */
+          <ClaimEndSlot
+            claimId={claim.claim_entity_id}
+            spaceId={claim.space_id}
+            activeDebate={activeDebate}
+            enabled={false}
+          />
         }
       />
       <PositionRow

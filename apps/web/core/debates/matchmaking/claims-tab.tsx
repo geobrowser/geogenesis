@@ -213,7 +213,6 @@ export function ClaimsTab() {
   // every keystroke, and the gateway scopes those lookups hold stay put while it happens.
   const featuredGroups = React.useMemo(() => featuredClaimIdsBySpace(featuredAllowed), [featuredAllowed]);
   const featuredRows = useDebateClaimsBySpaces(featuredGroups);
-  const featuredReadinessUnresolved = featured && (featuredRows.isLoading || featuredRows.isError);
 
   // Only real entity ids can be looked up in the KG; the graph 400s the whole batch on a single
   // malformed id, so drop any that aren't valid.
@@ -465,11 +464,6 @@ export function ClaimsTab() {
                 positions={entry.positions}
                 readiness={entry}
                 activeDebate={entry.active_debate}
-                // Featured rows carry `viewer_debate_ready: false` until geo-chat's per-space lookup
-                // lands, and a switch drawn from that would report "not ready" on a claim the viewer
-                // is in fact standing ready on. The paged rows come with readiness on them, so this
-                // only ever applies to Featured.
-                hideReadinessToggle={featuredReadinessUnresolved}
               />
             ))}
           </HubCardList>

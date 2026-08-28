@@ -9,15 +9,20 @@ import { ENTITY_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { type ClaimResponseSummary } from './claim-response-summary';
+import { type ClaimResponseSummary, claimSummaryTier } from './claim-response-summary';
 import { ClaimSideResponders } from './claim-side-responders';
 
 /**
  * Where opinion sits on a claim: one number, the split, and who is on each side.
  *
- * Renders from the first response onward. Only a claim nobody has answered has nothing to divide,
- * and that is the one case this is absent for — the response floor governs whether the split can
- * be called *controversial*, not whether it can be shown at all.
+ * Scaled to the evidence, through the same `claimSummaryTier` every card reads — so the page and a
+ * card describing the same claim cannot say different things about it.
+ *
+ * The tier matters most here, because this is where the number is loudest. A 40px "100%" is a
+ * strong statement, and on the measured data it was usually standing on two responses: 93% of
+ * answered claims are unanimous and only 2% reach the floor. Below the floor the module now reports
+ * the tally at the weight a tally deserves and keeps the percentage out of it; at zero it invites a
+ * first response rather than rendering nothing at all.
  */
 export function ClaimVerdict({
   entityId,
@@ -34,10 +39,64 @@ export function ClaimVerdict({
     return <Skeleton className="h-[132px] w-full rounded-lg" />;
   }
 
-  if (summary.percent === null) return null;
-
   const copy = ENTITY_RESPONSE_COPY[responseKind];
-  const percent = summary.percent;
+  const tier = claimSummaryTier(summary.total);
+
+  // An invitation, where before there was nothing at all — and nothing is what the great majority
+  // of claims render, so this is the state most readers meet.
+  if (tier === 'invite') {
+    return (
+      <section aria-label="Response summary" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
+        <Text as="p" variant="metadataMedium" color="text">
+          No responses yet
+        </Text>
+        <Text as="p" variant="metadata" color="grey-04" className="mt-1">
+          Be the first to {copy.positiveAction.toLowerCase()} this claim.
+        </Text>
+      </section>
+    );
+  }
+
+  // Answered, but not by enough people to characterise a split. Report the tally at the weight a
+  // tally deserves: no bar, and above all no percentage, which would state a rate where there is
+  // only a count.
+  if (tier === 'counts') {
+    return (
+      <section aria-label="Response summary" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+          <SideSummary
+            swatchClassName="bg-green"
+            label={copy.positiveAction}
+            count={summary.positive}
+            direction="positive"
+            entityId={entityId}
+            spaceId={spaceId}
+            responseKind={responseKind}
+            viewerDirection={summary.viewerDirection}
+            viewerSpaceId={summary.viewerSpaceId}
+          />
+          <SideSummary
+            swatchClassName="bg-red-01"
+            label={copy.negativeAction}
+            count={summary.negative}
+            direction="negative"
+            entityId={entityId}
+            spaceId={spaceId}
+            responseKind={responseKind}
+            viewerDirection={summary.viewerDirection}
+            viewerSpaceId={summary.viewerSpaceId}
+            alignEnd
+          />
+        </div>
+        <Text as="p" variant="footnote" color="grey-04" className="mt-3">
+          {summary.total === 1 ? '1 response' : `${summary.total} responses`} so far — too few to call
+          the split.
+        </Text>
+      </section>
+    );
+  }
+
+  const percent = summary.percent ?? 0;
 
   return (
     <section aria-label="Response summary" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">

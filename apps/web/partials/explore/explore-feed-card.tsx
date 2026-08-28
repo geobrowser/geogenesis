@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
@@ -16,6 +17,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { PublishedRecordingPlayer } from '~/partials/community-calls/published-recording-player';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
+import { ClaimExploreFeedCard } from './claim-explore-feed-card';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
@@ -61,6 +63,7 @@ function ExploreFeedCommentLink({ href, count }: { href: string; count: number }
 const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
 const COMMUNITY_CALL_EVENT_TYPE = normalizeId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
 const DEBATE_TYPE = normalizeId(DEBATE_TYPE_ID);
+const CLAIM_TYPE = normalizeId(CLAIM_TYPE_ID);
 const RANKING_BLOCK_TYPE = normalizeId(RANKING_BLOCK_TYPE_ID);
 
 function CardTitle({ item }: { item: ExploreFeedItem }) {
@@ -151,6 +154,21 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
       />
     );
   }
+
+  // Claims get the card built for them — labelled position pills, an evidence-scaled verdict, and
+  // no thumbnail well they have no image to fill. Narrowly gated on purpose: every other type keeps
+  // the generic card exactly as it was, so this changes what a Claim looks like and nothing else.
+  const isClaim = props.item.types.some(type => normalizeId(type.id) === CLAIM_TYPE);
+  if (isClaim) {
+    return (
+      <ClaimExploreFeedCard
+        item={props.item}
+        hideSpaceLink={props.hideSpaceLink}
+        hideJoinButton={props.hideJoinButton}
+      />
+    );
+  }
+
   return <BaseExploreFeedCard {...props} />;
 }
 

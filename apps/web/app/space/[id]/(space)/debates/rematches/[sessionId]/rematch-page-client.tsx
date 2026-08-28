@@ -1567,7 +1567,9 @@ function RematchClaimCard({
       claim={claim.claim}
       positions={positions}
       readiness={readiness}
-      activeDebate={activeDebate}
+      // The picker has no active-debate signal of its own, and it is mid-session anyway: there is
+      // nothing to watch that isn't the session the viewer is already in.
+      activeDebate={null}
       // `positions` locates the viewer by geo-chat user id, which is null until the token exchange
       // lands. Until then `serverLocalPosition` reads as "no position" for someone the summaries
       // may already count, and the card would draw them onto a second side.
@@ -1575,9 +1577,6 @@ function RematchClaimCard({
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
-      // Rather than draw the switch off on a guess. Only while this claim's readiness is genuinely
-      // unknown — a settled lookup that simply has no row for it really does mean "not ready".
-      hideReadinessToggle={claimReadiness === null && readinessUnresolved}
       footer={
         awaitingResponse || canRequest || requesting ? (
           <div className="mt-3">
