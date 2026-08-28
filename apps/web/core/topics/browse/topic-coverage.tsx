@@ -1,7 +1,8 @@
 'use client';
 
 import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pages';
-import { NavUtils } from '~/core/utils/utils';
+import { SpaceChip } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
@@ -81,8 +82,10 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
  */
 function CoverageRow({ item, spaceId }: { item: CoverageItem; spaceId: string }) {
   // The row's own space where it has one, so a link from a topic doesn't drop the reader into a
-  // space the entity holds nothing in.
-  const href = NavUtils.toEntity(item.spaceIds[0] ?? spaceId, item.id);
+  // space the entity holds nothing in. A topic gathers across spaces, so this is routinely not the
+  // space in the route — which is why the chip below is worth showing at all.
+  const space = item.spaceIds.find(validateSpaceId) ?? null;
+  const href = NavUtils.toEntity(space ?? spaceId, item.id);
 
   return (
     <Link href={href} className="flex min-w-0 flex-col gap-1 py-3">
@@ -92,13 +95,22 @@ function CoverageRow({ item, spaceId }: { item: CoverageItem; spaceId: string })
       {item.description && (
         <p className="line-clamp-2 text-[16px] leading-[20px] tracking-[-0.03em] text-grey-04">{item.description}</p>
       )}
-      {/* A chip rather than a line of grey text: on a feed mixing episodes, tweets and official
-          documents the kind is the row's leading signal, and set as metadata it read as part of the
-          description rather than a label on it. */}
-      {item.kind && (
-        <span className="mt-1 flex h-6 w-fit items-center rounded border border-grey-02 bg-white px-1.5 text-metadata text-grey-04">
-          {item.kind}
-        </span>
+      {/* What it is and where it came from, together. Chips rather than a line of grey text: on a
+          feed mixing episodes, tweets and official documents drawn from several spaces, these are
+          the row's leading signals, and set as metadata under the description they read as part of
+          the description rather than labels on it.
+          
+          The space is the same chip a claim card draws, so one space reads identically wherever it
+          appears. */}
+      {(item.kind || space) && (
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {item.kind && (
+            <span className="flex h-6 items-center rounded border border-grey-02 bg-white px-1.5 text-metadata text-grey-04">
+              {item.kind}
+            </span>
+          )}
+          {space && <SpaceChip spaceId={space} />}
+        </div>
       )}
     </Link>
   );
