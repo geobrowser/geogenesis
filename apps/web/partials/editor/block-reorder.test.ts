@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
+import { Placeholder } from '@tiptap/extensions';
 import { Editor } from '@tiptap/react';
 
 import React from 'react';
@@ -239,6 +240,33 @@ describe('insertTextBlockBelow', () => {
 
     expect(insertTextBlockBelow(editor, 1)).toBe(true);
     expect(blockText(editor)).toEqual(['A', 'B', '']);
+  });
+
+  it('shows the empty-block help text as soon as the inserted block receives focus', async () => {
+    const helpText = 'Empty block help';
+    const editor = new Editor({
+      extensions: [
+        Document,
+        Paragraph,
+        Text,
+        Placeholder.configure({
+          showOnlyCurrent: false,
+          placeholder: ({ editor: currentEditor, hasAnchor }) => (currentEditor.isFocused && hasAnchor ? helpText : ''),
+        }),
+      ],
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'A' }] }] },
+    });
+    editors.push(editor);
+    document.body.appendChild(editor.view.dom);
+
+    expect(insertTextBlockBelow(editor, 0)).toBe(true);
+    await waitFor(() => expect(editor.isFocused).toBe(true));
+
+    expect(
+      Array.from(editor.view.dom.querySelectorAll('[data-placeholder]')).map(node =>
+        node.getAttribute('data-placeholder')
+      )
+    ).toEqual([helpText]);
   });
 
   it('does not change the document for an invalid block index', () => {
