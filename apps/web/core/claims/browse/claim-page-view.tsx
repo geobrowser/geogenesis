@@ -7,9 +7,7 @@ import { claimResponseKind } from '~/core/claims/response-kind';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateClaim } from '~/core/debates/api';
 import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
-import { useDebateActivity, useDebateClaims } from '~/core/debates/hooks';
-import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
-import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
+import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
@@ -24,10 +22,12 @@ import { Text } from '~/design-system/text';
 import { CommentSection } from '~/partials/comments/comments-section';
 
 import { ClaimDebates } from './claim-debates';
+import { ClaimEndSlot } from './claim-end-slot';
 import { positionSummariesFromCounts, viewerResponseFromDirection } from './claim-position-summaries';
 import { ClaimProvenance } from './claim-provenance';
 import { ClaimRelatedClaims } from './claim-related-claims';
 import { type ClaimResponseSummary, useClaimResponseSummary } from './claim-response-summary';
+import { ControversialTag } from './claim-summary';
 import { ClaimVerdict } from './claim-verdict';
 
 /** Topic chips shown inline before the rest collapse into a count. */
@@ -95,9 +95,16 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
               which on a claim — a full sentence running to three or four lines — leaves each one
               breaking well short of the measure and reads as wrapping early. Pretty only avoids a
               stranded last word, so the lines fill. */}
-          <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
-            {entity.name ?? entity.id}
-          </h1>
+          {/* The claim, and what it offers the reader — the same slot the cards end their meta row
+              with, in the same relative position, so the offer is where anyone arriving from a card
+              already expects it. `items-start` keeps the slot on the first line of a claim that
+              runs to three. */}
+          <div className="flex items-start justify-between gap-4">
+            <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
+              {entity.name ?? entity.id}
+            </h1>
+            <ClaimEndSlot claimId={entityId} spaceId={spaceId} activeDebate={row?.active_debate} className="mt-1" />
+          </div>
 
           {entity.description && (
             <Text as="p" variant="body" color="grey-04">
@@ -115,6 +122,9 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
               {tags.map(tag => (
                 <MetaChip key={tag.id}>{tag.toEntity.name ?? tag.toEntity.id}</MetaChip>
               ))}
+              {/* Among the chips that say what this is, which is what "contested" is — and the same
+                  component the cards use, rather than a second span at a size the scale lacks. */}
+              {summary.isControversial ? <ControversialTag /> : null}
             </div>
 
             {topics.length > 0 && (
@@ -261,68 +271,7 @@ function ClaimPositionSection({
           </Text>
         </div>
       ) : null}
-
-      <ClaimMatchup claimId={entityId} spaceId={spaceId} />
     </section>
-  );
-}
-
-/**
- * The live half of the position card: someone holding the opposite side is online and ready, so
- * there is a debate to be had right now.
- *
- * Reads the same matches the hub's Matches tab does, narrowed to this claim. A match needs three
- * things at once — you standing ready, them standing ready, and opposite responses — so this is
- * absent far more often than it is present, and it stays absent rather than explaining itself.
- * The readiness switch above is where someone goes to become matchable; repeating that here would
- * put a second explanation on a card that already carries the control.
- */
-function ClaimMatchup({ claimId, spaceId }: { claimId: string; spaceId: string }) {
-  const matchesQuery = useMatchmakingMatches(true);
-  const requestsQuery = useDebateRequests(true);
-  const { data: activity } = useDebateActivity(true);
-  const createRequest = useCreateDebateRequest();
-
-  const match = (matchesQuery.data?.matches ?? []).find(
-    candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
-  );
-
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
-  // Only when the server actually says so — a missing field must not block requesting.
-  const unavailable = activity?.available_to_debate === false;
-  const blockedReason = unavailable
-    ? 'Switch yourself to available to send a request.'
-    : outbound
-      ? 'Withdraw your open request to send another.'
-      : undefined;
-  const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
-
-  if (!match) return null;
-
-  return (
-    <div className="mt-3 flex flex-col gap-1 border-t border-divider pt-3">
-      <HubPillButton
-        onClick={() => createRequest.mutate({ space_id: spaceId, claim_entity_id: claimId })}
-        disabled={Boolean(blockedReason)}
-        pending={createRequest.isPending}
-        pendingLabel="Requesting…"
-        className="w-full"
-      >
-        Request debate
-      </HubPillButton>
-      {/* Shown rather than left to a `title`: native tooltips never appear on touch and are
-          unreliable on a disabled button, which is exactly when the explanation matters. */}
-      {blockedReason ? (
-        <Text as="p" variant="footnote" color="grey-04">
-          {blockedReason}
-        </Text>
-      ) : null}
-      {requestError ? (
-        <Text as="p" variant="footnote" color="red-01">
-          {requestError}
-        </Text>
-      ) : null}
-    </div>
   );
 }
 
