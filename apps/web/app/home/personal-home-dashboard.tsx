@@ -246,7 +246,11 @@ function GovernanceFilterMenu({
         maxHeightClass ?? 'max-h-[200px]'
       )}
       trigger={
-        <SmallButton icon={<ChevronDownSmall />} disabled={disabled} className={cx(pendingLabel && 'opacity-70')}>
+        <SmallButton
+          icon={<ChevronDownSmall />}
+          aria-disabled={disabled || undefined}
+          className={cx(pendingLabel && 'opacity-70', disabled && 'cursor-default')}
+        >
           {displayLabel}
         </SmallButton>
       }
