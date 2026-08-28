@@ -2,51 +2,53 @@ import { describe, expect, it } from 'vitest';
 
 import { shouldHideAssistant } from './assistant-visibility';
 
-const FEED = '/space/25omwWh6HYgeRQKCaSpVpa/debates';
-const WIDE = false;
-const COMPACT = true;
+const SPACE = '25omwWh6HYgeRQKCaSpVpa';
+const FEED_ROUTE = `/space/${SPACE}/debates`;
+// What a shared debate link opens: the same feed, rendered by DebateEntityView under the generic
+// entity route. Nothing in this path says "debate".
+const ENTITY_ROUTE = `/space/${SPACE}/8f2c1d4e9a0b4c7d8e5f6a7b8c9d0e1f`;
+const TAKEOVER = true;
+const NO_TAKEOVER = false;
 
 describe('shouldHideAssistant', () => {
-  // The launcher is fixed bottom-right at z-1100. Below `md` the feed is full-bleed and its
+  // The launcher is fixed bottom-right at z-1100. While the feed fills a compact viewport its
   // interaction bar runs horizontally under the videos, putting share directly beneath it.
-  it('hides on the debates feed only once the layout is compact', () => {
-    expect(shouldHideAssistant(FEED, COMPACT)).toBe(true);
-    expect(shouldHideAssistant(FEED, WIDE)).toBe(false);
+  it('hides wherever the feed has taken over a compact viewport', () => {
+    expect(shouldHideAssistant(FEED_ROUTE, TAKEOVER)).toBe(true);
+    // The route this is really about: a shared link, where the path gives nothing away.
+    expect(shouldHideAssistant(ENTITY_ROUTE, TAKEOVER)).toBe(true);
   });
 
-  // Its bar is a vertical rail beside the column at this width, so there is nothing to obstruct
-  // and no reason to take the assistant away.
-  it('leaves the desktop feed alone', () => {
-    expect(shouldHideAssistant(FEED, WIDE)).toBe(false);
+  // Wider viewports put that bar in a vertical rail beside the column, so nothing is obstructed
+  // and there is no reason to take the assistant away.
+  it('leaves both routes alone when the feed is not a compact takeover', () => {
+    expect(shouldHideAssistant(FEED_ROUTE, NO_TAKEOVER)).toBe(false);
+    expect(shouldHideAssistant(ENTITY_ROUTE, NO_TAKEOVER)).toBe(false);
   });
 
-  // Full-screen at every width and parks a voice dock in the same corner, so width is irrelevant.
-  it('keeps hiding on the rematch picker at any width', () => {
-    const picker = '/space/25omwWh6HYgeRQKCaSpVpa/debates/rematches/session-1';
-    expect(shouldHideAssistant(picker, COMPACT)).toBe(true);
-    expect(shouldHideAssistant(picker, WIDE)).toBe(true);
+  // Full-screen at every width and parks a voice dock in the same corner, so the takeover flag
+  // is irrelevant to it.
+  it('keeps hiding on the rematch picker either way', () => {
+    const picker = `/space/${SPACE}/debates/rematches/session-1`;
+    expect(shouldHideAssistant(picker, TAKEOVER)).toBe(true);
+    expect(shouldHideAssistant(picker, NO_TAKEOVER)).toBe(true);
   });
 
-  it('keeps hiding on ranking-compose at any width', () => {
-    const compose = '/space/25omwWh6HYgeRQKCaSpVpa/ranking-compose';
-    expect(shouldHideAssistant(compose, COMPACT)).toBe(true);
-    expect(shouldHideAssistant(compose, WIDE)).toBe(true);
+  it('keeps hiding on ranking-compose either way', () => {
+    const compose = `/space/${SPACE}/ranking-compose`;
+    expect(shouldHideAssistant(compose, TAKEOVER)).toBe(true);
+    expect(shouldHideAssistant(compose, NO_TAKEOVER)).toBe(true);
   });
 
-  // The pattern is anchored, so it must not swallow the room or anything nested under it.
-  it('does not match routes below the feed', () => {
-    for (const pathname of [
-      '/space/25omwWh6HYgeRQKCaSpVpa/debates/debate-1',
-      '/space/25omwWh6HYgeRQKCaSpVpa/debates/rematches',
-    ]) {
-      expect(shouldHideAssistant(pathname, COMPACT)).toBe(false);
-    }
+  // An ordinary entity page is the same path shape as the shared-link case above, so nothing may
+  // hang off the path — only off the takeover the feed announces.
+  it('leaves an ordinary entity page alone', () => {
+    expect(shouldHideAssistant(ENTITY_ROUTE, NO_TAKEOVER)).toBe(false);
   });
 
-  it('leaves unrelated routes alone at both widths', () => {
-    for (const pathname of ['/', '/root', '/space/25omwWh6HYgeRQKCaSpVpa', '/space/25omwWh6HYgeRQKCaSpVpa/community']) {
-      expect(shouldHideAssistant(pathname, COMPACT)).toBe(false);
-      expect(shouldHideAssistant(pathname, WIDE)).toBe(false);
+  it('leaves unrelated routes alone either way', () => {
+    for (const pathname of ['/', '/root', `/space/${SPACE}`, `/space/${SPACE}/community`]) {
+      expect(shouldHideAssistant(pathname, NO_TAKEOVER)).toBe(false);
     }
   });
 });

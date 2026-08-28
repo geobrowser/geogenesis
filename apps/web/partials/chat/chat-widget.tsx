@@ -50,6 +50,8 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
+import { debateFullscreenActiveAtom } from '~/atoms';
+
 import { shouldHideAssistant } from './assistant-visibility';
 import { ChatPanel } from './chat-panel';
 
@@ -200,7 +202,9 @@ export function ChatWidget() {
 
   const pathname = usePathname() ?? '';
   const isCompactLayout = useIsCompactLayout();
-  const hideAssistantOnRoute = shouldHideAssistant(pathname, isCompactLayout);
+  // The feed sets this while it fills the viewport, on whichever route it is rendering under.
+  const debateFullscreenActive = useAtomValue(debateFullscreenActiveAtom);
+  const hideAssistantOnRoute = shouldHideAssistant(pathname, isCompactLayout && debateFullscreenActive);
   const params = useParams();
 
   React.useLayoutEffect(() => {
