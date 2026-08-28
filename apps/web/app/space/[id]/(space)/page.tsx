@@ -8,7 +8,6 @@ import { notFound } from 'next/navigation';
 
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { fetchSubtopics } from '~/core/io/subgraph/fetch-subtopics';
 import { firstLine } from '~/core/opengraph';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
@@ -28,7 +27,7 @@ import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-side
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
 import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
 import { SpaceOverviewSidePanel } from '~/partials/space-page/space-overview-side-panel';
-import { SubtopicGallery } from '~/partials/space-page/subtopic-gallery';
+import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-gallery-server-container';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
@@ -103,7 +102,7 @@ export default async function SpacePage(props0: Props) {
   return (
     <EntityPageSidebarLayout sidebar={sidebar}>
       <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-        <SubtopicGalleryContainer spaceId={params.id} />
+        <SubtopicGalleryServerContainer spaceId={params.id} />
       </React.Suspense>
       <React.Suspense fallback={null}>
         <Editor spaceId={spaceId} shouldHandleOwnSpacing />
@@ -140,7 +139,7 @@ async function TopicEntityBody({ spaceId, topicEntityId }: { spaceId: string; to
       >
         <EntityPageContentContainer>
           <React.Suspense fallback={<SubtopicGallerySkeleton />}>
-            <SubtopicGalleryContainer spaceId={spaceId} />
+            <SubtopicGalleryServerContainer spaceId={spaceId} />
           </React.Suspense>
           <React.Suspense fallback={null}>
             <Editor spaceId={spaceId} shouldHandleOwnSpacing />
@@ -231,26 +230,6 @@ const SubtopicGallerySkeleton = () => {
       <Spacer height={40} />
     </>
   );
-};
-
-type SubtopicGalleryContainerProps = {
-  spaceId: string;
-};
-
-const SubtopicGalleryContainer = async ({ spaceId }: SubtopicGalleryContainerProps) => {
-  const space = await cachedFetchSpace(spaceId);
-
-  if (!space) {
-    return null;
-  }
-
-  const subtopics = await fetchSubtopics(spaceId);
-
-  if (subtopics.length === 0) {
-    return null;
-  }
-
-  return <SubtopicGallery spaceId={spaceId} subtopics={subtopics} />;
 };
 
 const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {
