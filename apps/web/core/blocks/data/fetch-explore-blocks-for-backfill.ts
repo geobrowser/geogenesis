@@ -99,7 +99,7 @@ export async function fetchExploreBlockRelationsForBackfill(
     }
 
     const connection: ExploreViewRelationsPage['relationsConnection'] = result.right.relationsConnection;
-    if (!connection) break;
+    if (!connection) return out;
 
     for (const node of connection.nodes) {
       if (!node) continue;
@@ -107,9 +107,14 @@ export async function fetchExploreBlockRelationsForBackfill(
       if (mapped) out.push(mapped);
     }
 
-    if (!connection.pageInfo.hasNextPage || !connection.pageInfo.endCursor) break;
+    if (!connection.pageInfo.hasNextPage || !connection.pageInfo.endCursor) return out;
     after = connection.pageInfo.endCursor;
   }
 
-  return out;
+  // Falling out of the loop means `hasNextPage` was still true at MAX_PAGES. Returning here would
+  // hand back a partial set that the caller cannot tell apart from a complete one, and this feeds a
+  // one-shot migration — a silently partial backfill looks like a successful one.
+  throw new Error(
+    `Explore VIEW relations exceeded ${MAX_PAGES} pages of ${PAGE_SIZE}; raise MAX_PAGES rather than backfilling a partial set`
+  );
 }

@@ -1,5 +1,6 @@
 import * as React from 'react';
 
+import { ID } from '~/core/id';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useValues } from '~/core/sync/use-store';
 
@@ -22,17 +23,21 @@ export function useBlockInfiniteScroll(): boolean {
     return initialBlockEntities.find(entity => entity.id === blocksRelationEntityId) ?? null;
   }, [blocksRelationEntityId, initialBlockEntities]);
 
+  // `includeDeleted` matters: deleting a value tombstones it rather than removing it, so without
+  // this the array empties and we fall through to the server snapshot, which still reports the
+  // pre-deletion value until the next publish + reload.
   const infiniteScrollValues = useValues({
+    includeDeleted: true,
     selector: value =>
       value.entity.id === blocksRelationEntityId &&
-      value.property.id === DATA_BLOCK_INFINITE_SCROLL_PROPERTY_ID &&
+      ID.equals(value.property.id, DATA_BLOCK_INFINITE_SCROLL_PROPERTY_ID) &&
       value.spaceId === spaceId,
   });
 
   return React.useMemo(() => {
     if (infiniteScrollValues.length > 0) {
       const chosen = infiniteScrollValues.find(value => value.isLocal) ?? infiniteScrollValues[0];
-      return parseBlockInfiniteScroll(chosen.value);
+      return chosen.isDeleted ? false : parseBlockInfiniteScroll(chosen.value);
     }
 
     return readBlockInfiniteScrollFromValues(initialBlockRelationEntity?.values, spaceId);
