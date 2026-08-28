@@ -2,10 +2,13 @@ import {
   ContentIds,
   type DecimalMantissa,
   Graph,
+  IdUtils,
   Op,
+  Ops,
   type PropertyValueParam,
   SystemIds,
 } from '@geoprotocol/geo-sdk/lite';
+import { updateRelation as updateGrc20Relation } from '@geoprotocol/grc-20';
 
 import { Effect } from 'effect';
 
@@ -93,6 +96,24 @@ function prepareOps(values: Value[], relations: Relation[], spaceId: string): Op
     if (r.isDeleted) {
       const { ops: deleteOps } = Graph.deleteRelation({ id: r.id });
       ops.push(...deleteOps);
+    } else if (r.isRelationUpdate) {
+      if (r.relationUpdateUnsetFields?.length) {
+        ops.push(
+          updateGrc20Relation({
+            id: IdUtils.toGrcId(r.id),
+            position: r.position,
+            ...(r.toSpaceId && { toSpace: IdUtils.toGrcId(r.toSpaceId) }),
+            unset: r.relationUpdateUnsetFields,
+          })
+        );
+      } else {
+        const { ops: updateOps } = Ops.relations.update({
+          id: r.id,
+          position: r.position,
+          ...(r.toSpaceId && { toSpace: r.toSpaceId }),
+        });
+        ops.push(...updateOps);
+      }
     } else {
       const { ops: createOps } = Graph.createRelation({
         fromEntity: r.fromEntity.id,

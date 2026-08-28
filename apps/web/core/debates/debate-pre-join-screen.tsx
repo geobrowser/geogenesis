@@ -1,8 +1,6 @@
 'use client';
 
-import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import * as RadioGroup from '@radix-ui/react-radio-group';
 
 import * as React from 'react';
 
@@ -10,7 +8,7 @@ import cx from 'classnames';
 
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
 import type { DebateParticipantSummary, ParticipantSlot } from '~/core/debates/api';
-import { type MediaDeviceOption, type PreJoinMediaState, systemDefaultAudioOutput } from '~/core/debates/media-session';
+import type { MediaDeviceOption, PreJoinMediaState } from '~/core/debates/media-session';
 
 import { Avatar } from '~/design-system/avatar';
 import { Check } from '~/design-system/icons/check';
@@ -18,8 +16,11 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
-import { CameraIcon, CloseIcon, LeaveIcon, MicrophoneIcon, RecordingCircleButton } from './debate-room-controls';
+import { AudioSettings, MobileSettingsSheet } from './audio-settings';
+import { CameraIcon, LeaveIcon, MicrophoneIcon, RecordingCircleButton } from './debate-room-controls';
+import { DeviceOptionGroup } from './device-option-group';
 import { MicrophoneLevelMeter } from './microphone-level-meter';
+import { useScrollLock } from './use-scroll-lock';
 
 export type DebatePreScreenParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
@@ -95,18 +96,7 @@ export function DebatePreScreen({
   const selectedCameraLabel =
     videoInputDevices.find(device => device.deviceId === selectedVideoInputId)?.label ?? 'Camera';
 
-  React.useEffect(() => {
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalDocumentOverflow = document.documentElement.style.overflow;
-
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalDocumentOverflow;
-    };
-  }, []);
+  useScrollLock();
 
   React.useEffect(() => {
     const video = localVideoRef.current;
@@ -365,141 +355,6 @@ function DesktopSettingsPopover({
         </Popover.Portal>
       )}
     </Popover.Root>
-  );
-}
-
-function MobileSettingsSheet({
-  title,
-  open,
-  onOpenChange,
-  returnFocusRef,
-  children,
-}: {
-  title: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  returnFocusRef: React.RefObject<HTMLButtonElement | null>;
-  children: React.ReactNode;
-}) {
-  return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[1010] bg-black/55" />
-        <Dialog.Content
-          aria-label={title}
-          data-layout="bottom-sheet"
-          onCloseAutoFocus={event => {
-            event.preventDefault();
-            returnFocusRef.current?.focus();
-          }}
-          className="rounded-t-2xl fixed inset-x-0 bottom-0 z-[1011] max-h-[88dvh] overflow-y-auto bg-white px-5 pt-5 pb-[max(24px,env(safe-area-inset-bottom))] text-left text-text shadow-lg outline-none"
-        >
-          <div className="flex items-center justify-between border-b border-grey-02 pb-4">
-            <Dialog.Title className="text-bodySemibold">{title}</Dialog.Title>
-            <Dialog.Close asChild>
-              <button
-                type="button"
-                aria-label={`Close ${title}`}
-                className="grid size-8 place-items-center rounded-full text-grey-04 hover:bg-grey-01 hover:text-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-text"
-              >
-                <CloseIcon />
-              </button>
-            </Dialog.Close>
-          </div>
-          <div className="pt-4">{children}</div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
-  );
-}
-
-function AudioSettings({
-  audioInputDevices,
-  audioOutputDevices,
-  selectedAudioInputId,
-  selectedAudioOutputId,
-  audioOutputSupported,
-  error,
-  onAudioInputChange,
-  onAudioOutputChange,
-}: {
-  audioInputDevices: MediaDeviceOption[];
-  audioOutputDevices: MediaDeviceOption[];
-  selectedAudioInputId: string;
-  selectedAudioOutputId: string;
-  audioOutputSupported: boolean;
-  error: string | null;
-  onAudioInputChange: (deviceId: string) => void;
-  onAudioOutputChange: (deviceId: string) => void;
-}) {
-  return (
-    <div className="space-y-3">
-      <DeviceOptionGroup
-        label="Select a microphone"
-        options={audioInputDevices}
-        selectedDeviceId={selectedAudioInputId}
-        onChange={onAudioInputChange}
-      />
-      <div className="border-t border-grey-02 pt-3">
-        <DeviceOptionGroup
-          label="Select a speaker"
-          options={audioOutputSupported ? audioOutputDevices : [systemDefaultAudioOutput]}
-          selectedDeviceId={audioOutputSupported ? selectedAudioOutputId : systemDefaultAudioOutput.deviceId}
-          disabled={!audioOutputSupported}
-          onChange={onAudioOutputChange}
-        />
-      </div>
-      {error && (
-        <Text as="p" variant="metadata" color="red-01">
-          {error}
-        </Text>
-      )}
-    </div>
-  );
-}
-
-function DeviceOptionGroup({
-  label,
-  options,
-  selectedDeviceId,
-  disabled = false,
-  onChange,
-}: {
-  label: string;
-  options: MediaDeviceOption[];
-  selectedDeviceId: string;
-  disabled?: boolean;
-  onChange: (deviceId: string) => void;
-}) {
-  return (
-    <RadioGroup.Root aria-label={label} value={selectedDeviceId} disabled={disabled} onValueChange={onChange}>
-      <Text as="p" variant="metadata" color="grey-04" className="px-1 pb-1">
-        {label}
-      </Text>
-      <div className="space-y-0.5">
-        {options.map(device => {
-          const selected = device.deviceId === selectedDeviceId;
-          return (
-            <RadioGroup.Item
-              key={`${device.kind}:${device.deviceId}`}
-              value={device.deviceId}
-              className={cx(
-                'flex min-h-9 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-metadata text-text outline-none',
-                selected ? 'bg-grey-01' : 'hover:bg-grey-01',
-                'focus-visible:ring-1 focus-visible:ring-text disabled:cursor-default disabled:opacity-100'
-              )}
-            >
-              <span className="min-w-0 truncate">{device.label}</span>
-              {selected && (
-                <span aria-hidden="true" className="shrink-0">
-                  <Check />
-                </span>
-              )}
-            </RadioGroup.Item>
-          );
-        })}
-      </div>
-    </RadioGroup.Root>
   );
 }
 

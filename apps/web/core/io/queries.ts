@@ -3,7 +3,16 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
-import { VOTE_DEBATES_PROPERTY_ID, VOTE_TYPE_ID } from '~/core/debates/ontology';
+import {
+  AUTHORS_PROPERTY_ID,
+  BLOCKS_PROPERTY_ID,
+  DEBATE_CLAIMS_PROPERTY_ID,
+  DEBATE_TRANSCRIPTS_PROPERTY_ID,
+  NAME_PROPERTY_ID,
+  VOTE_DEBATES_PROPERTY_ID,
+  VOTE_TYPE_ID,
+} from '~/core/debates/ontology';
+import { groupTranscriptClaims } from '~/core/debates/transcript-claims';
 import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
@@ -15,16 +24,26 @@ import {
   type EntityExistsQuery,
   type EntityFilter,
   type EntitySpacesBatchQuery,
-  SortOrder,
+  UserEntityVotesByTypeDocument,
   UserHasEntityVoteDocument,
+  type UserVoteFilter,
   type UuidFilter,
 } from '~/core/gql/graphql';
+import { uuidToHex } from '~/core/id/normalize';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
+import {
+  type ActiveResponseDirection,
+  type ResponseKind,
+  type ResponseObjectType,
+  decodeActiveResponseDirection,
+  entityResponseQueryVariables,
+} from '~/core/responses/entity-response';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import { debateTranscriptClaimsDocument } from './debate-transcript-claims-document';
 import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
@@ -35,6 +54,7 @@ import { Space } from './dto/spaces';
 import { entitiesOrderedByPropertyConnectionDocument } from './entities-ordered-by-property-connection-document';
 import { graphql } from './graphql-client';
 import {
+  claimResponseSummariesQuery,
   entitiesBatchQuery,
   entitiesPageQuery,
   entityBacklinksQuery,
@@ -42,11 +62,11 @@ import {
   entityPageQuery,
   entityQuery,
   entityRelationsPageQuery,
+  entityRespondersQuery,
+  entityResponseCountsQuery,
   entitySpacesBatchQuery,
   entityTiebreakerBatchQuery,
   entityTypesQuery,
-  entityVoteCountQuery,
-  entityVotersQuery,
   importNameValuesQuery,
   isEditorOfSpaceQuery,
   isMemberOfSpaceQuery,
@@ -62,9 +82,11 @@ import {
   spaceQuery,
   spacesQuery,
   spacesWhereMemberQuery,
-  userEntityVoteQuery,
+  userEntityResponseQuery,
 } from './query-fragments';
 import { restFetch } from './rest';
+import { capSearchQuery } from './search-query';
+import { type SortOrder } from './sort-order';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
@@ -86,20 +108,42 @@ function getBatchEntitiesPage(entityIds: string[], spaceId?: string, signal?: Ab
   });
 }
 
+/**
+ * How many id batches are in flight at once.
+ *
+ * The batches are independent — each asks for a disjoint set of ids — so they were only
+ * sequential by construction, and a caller handing in 300 ids paid six round trips end to
+ * end for work that fits in one wave. `syncMany` never hit it because it pre-batches to
+ * exactly `ENTITY_ID_BATCH_SIZE` before calling in; the callers that pass an unbounded id
+ * list straight through (`core/blocks/data/filters.ts`, `partials/diffs/changed-entity.tsx`,
+ * `core/sync/engine.ts`, the community-calls fetchers) did.
+ *
+ * Bounded rather than unbounded: `EntitiesBatch` pulls every value and relation for each
+ * entity — 0.31 MB for 50 claims, measured — and browsers cap concurrent connections per
+ * host anyway, so firing twenty of those at once trades a queue we control for one we do
+ * not. Six keeps a 300-id call to a single wave.
+ */
+const ENTITY_ID_BATCH_CONCURRENCY = 6;
+
 export function getBatchEntities(entityIds: string[], spaceId?: string, signal?: AbortController['signal']) {
   if (entityIds.length === 0) return Effect.succeed([]);
   if (entityIds.length <= ENTITY_ID_BATCH_SIZE) return getBatchEntitiesPage(entityIds, spaceId, signal);
 
-  return Effect.gen(function* () {
-    const entities: Entity[] = [];
+  const batches: string[][] = [];
+  for (let start = 0; start < entityIds.length; start += ENTITY_ID_BATCH_SIZE) {
+    batches.push(entityIds.slice(start, start + ENTITY_ID_BATCH_SIZE));
+  }
 
-    for (let start = 0; start < entityIds.length; start += ENTITY_ID_BATCH_SIZE) {
-      const batch = yield* getBatchEntitiesPage(entityIds.slice(start, start + ENTITY_ID_BATCH_SIZE), spaceId, signal);
-      entities.push(...batch);
-    }
-
-    return entities;
-  });
+  // `Effect.all` preserves input order in its results, so the flattened output stays in
+  // batch order exactly as the sequential loop left it. Callers that relied on that — the
+  // diff view renders in the order it asked — keep working.
+  return Effect.map(
+    Effect.all(
+      batches.map(batch => getBatchEntitiesPage(batch, spaceId, signal)),
+      { concurrency: ENTITY_ID_BATCH_CONCURRENCY }
+    ),
+    pages => pages.flat()
+  );
 }
 
 export function getBatchEntitySpaces(entityIds: string[], signal?: AbortController['signal']) {
@@ -615,6 +659,30 @@ export function getDebateVoteEntities(debateEntityId: string, signal?: AbortCont
   });
 }
 
+/**
+ * Every claim extracted from a debate's transcript, grouped by the speaker it's attributed to.
+ *
+ * Walks Debate → Transcripts → Blocks → (Authors, Claims) in one request, scoped to the debate's
+ * publication space. Attribution comes from the text block rather than the claim, and the scoping
+ * is what keeps a stranger's relation out of it; see `debate-transcript-claims-document.ts`.
+ */
+export function getDebateTranscriptClaims(debateEntityId: string, spaceId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: debateTranscriptClaimsDocument,
+    decoder: data => groupTranscriptClaims(data, spaceId),
+    variables: {
+      id: debateEntityId,
+      transcriptsPropertyId: DEBATE_TRANSCRIPTS_PROPERTY_ID,
+      blocksPropertyId: BLOCKS_PROPERTY_ID,
+      authorsPropertyId: AUTHORS_PROPERTY_ID,
+      claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
+      spaceId,
+      namePropertyId: NAME_PROPERTY_ID,
+    },
+    signal,
+  });
+}
+
 export function getEntityBacklinks(entityId: string, spaceId?: string, signal?: AbortController['signal']) {
   return graphql({
     query: entityBacklinksQuery,
@@ -1008,7 +1076,12 @@ export type SearchResultsPage = {
 
 export function buildSearchPath(args: ResultsArgs): string {
   const params = new URLSearchParams();
-  params.set('query', args.query);
+  // Every REST search in the app arrives here — the ten-odd `useSearch` surfaces through
+  // `E.findFuzzyPage`, plus chat, community calls and import auto-mapping calling `getResults`
+  // directly — so this is the one place the endpoint's length limit has to be respected. Capping
+  // here rather than at each input also leaves the caller's own state holding what the searcher
+  // actually typed, which is what gets echoed back to them.
+  params.set('query', capSearchQuery(args.query));
   params.set('limit', String(args.limit ?? 10));
   params.set('offset', String(args.offset ?? 0));
 
@@ -1207,38 +1280,44 @@ export function getProperties(ids: string[], signal?: AbortController['signal'])
   });
 }
 
-export function getEntityVoteCount(
+export function getEntityResponseCounts(
   entityId: string,
-  objectType: 0 | 1 = 0, // objectType: 0 = Entity, 1 = Relation
+  spaceId: string,
+  responseKind: ResponseKind,
+  objectType: ResponseObjectType = 0, // objectType: 0 = Entity, 1 = Relation
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: entityVoteCountQuery,
+    query: entityResponseCountsQuery,
     decoder: data => {
-      const nodes = data.votesCountsConnection?.nodes;
-      if (!nodes || nodes.length === 0) return null;
-      const upvotes = nodes.reduce((sum: number, n: { upvotes: string }) => sum + Number(n.upvotes), 0);
-      const downvotes = nodes.reduce((sum: number, n: { downvotes: string }) => sum + Number(n.downvotes), 0);
-      return { upvotes, downvotes };
+      const counts = data.votesCountByObjectIdAndObjectTypeAndSpaceIdAndVoteKind;
+      if (!counts) return null;
+      return { positive: Number(counts.positive), negative: Number(counts.negative) };
     },
-    variables: { objectId: entityId, objectType },
+    variables: entityResponseQueryVariables(entityId, spaceId, objectType, responseKind),
     signal,
   });
 }
 
-export function getUserEntityVote(
+export function getUserEntityResponse(
   userId: string,
   entityId: string,
   spaceId: string,
-  objectType: 0 | 1 = 0,
+  responseKind: ResponseKind,
+  objectType: ResponseObjectType = 0,
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: userEntityVoteQuery,
+    query: userEntityResponseQuery,
     decoder: data => {
-      return data.userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceId?.voteType ?? null;
+      return decodeActiveResponseDirection(
+        data.userVoteByUserIdAndObjectIdAndObjectTypeAndSpaceIdAndVoteKind?.voteType
+      );
     },
-    variables: { userId, objectId: entityId, objectType, spaceId },
+    variables: {
+      userId,
+      ...entityResponseQueryVariables(entityId, spaceId, objectType, responseKind),
+    },
     signal,
   });
 }
@@ -1252,23 +1331,108 @@ export function getUserHasEntityVote(userId: string, signal?: AbortController['s
   });
 }
 
-export type EntityVoter = { userId: string; voteType: number };
+export type EntityResponder = { userId: string; direction: ActiveResponseDirection };
 
-export function getEntityVoters(
-  entityId: string,
-  spaceId: string,
-  objectType: 0 | 1 = 0,
+export type ClaimResponseSummaryRow = {
+  userId: string;
+  objectId: string;
+  voteType: number;
+  voteKind: number;
+};
+
+export function getClaimResponseSummaryPage(
+  filter: UserVoteFilter,
+  first: number,
+  offset: number,
   signal?: AbortController['signal']
 ) {
   return graphql({
-    query: entityVotersQuery,
-    decoder: data => {
-      return (data.userVotes ?? []) as EntityVoter[];
-    },
-    variables: { objectId: entityId, objectType, spaceId },
+    query: claimResponseSummariesQuery,
+    decoder: data =>
+      (data.userVotes ?? []).map((vote): ClaimResponseSummaryRow => ({
+        userId: String(vote.userId),
+        objectId: String(vote.objectId),
+        voteType: vote.voteType,
+        voteKind: vote.voteKind,
+      })),
+    variables: { filter, first, offset },
     signal,
   });
 }
+
+export function getEntityResponders(
+  entityId: string,
+  spaceId: string,
+  responseKind: ResponseKind,
+  objectType: ResponseObjectType = 0,
+  signal?: AbortController['signal']
+) {
+  return graphql({
+    query: entityRespondersQuery,
+    decoder: data => {
+      return (data.userVotes ?? []).flatMap(vote => {
+        const direction = decodeActiveResponseDirection(vote.voteType);
+        return direction ? [{ userId: String(vote.userId), direction }] : [];
+      });
+    },
+    variables: entityResponseQueryVariables(entityId, spaceId, objectType, responseKind),
+    signal,
+  });
+}
+
+export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
+
+type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string };
+
+export type UserEntityVoteObjectIdsPage = {
+  objectIds: string[];
+  voteKindByObjectId: Record<string, number>;
+  votedAtByObjectId: Record<string, string>;
+  nextOffset: number;
+  hasNextPage: boolean;
+};
+
+export function getUserEntityVoteObjectIdsPage(
+  userId: string,
+  voteType: 0 | 1,
+  objectType: 0 | 1 = 0,
+  offset = 0,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const rows: UserEntityVoteRow[] = yield* graphql({
+      query: UserEntityVotesByTypeDocument,
+      decoder: (data): UserEntityVoteRow[] =>
+        (data.userVotes ?? []).filter((row): row is UserEntityVoteRow => row != null),
+      variables: {
+        userId,
+        voteType,
+        objectType,
+        first: USER_ENTITY_VOTES_PAGE_SIZE,
+        offset,
+      },
+      signal,
+    });
+
+    const nodes = rows.filter(node => Boolean(node.objectId));
+    const objectIds = nodes.map(node => node.objectId);
+    const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
+    const votedAtByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.votedAt]));
+
+    return {
+      objectIds,
+      voteKindByObjectId,
+      votedAtByObjectId,
+      // Advance by what the server returned, not by what survived filtering, so a
+      // dropped row can't shift the window and skip the vote that follows it.
+      nextOffset: offset + rows.length,
+      // A short page is the last one. A page that lands exactly on the boundary
+      // costs one extra empty fetch, which is cheaper than a count query.
+      hasNextPage: rows.length === USER_ENTITY_VOTES_PAGE_SIZE,
+    } satisfies UserEntityVoteObjectIdsPage;
+  });
+}
+
 const EXCLUDED_BLOCK_TYPES = [
   SystemIds.TEXT_BLOCK,
   SystemIds.IMAGE_BLOCK,

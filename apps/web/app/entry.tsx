@@ -20,18 +20,21 @@ import { Persistence } from '~/core/state/persistence';
 import { ClientOnly } from '~/design-system/client-only';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
+import { EntityCommentsPanelHost } from '~/partials/comments/entity-comments-panel-host';
 import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
+import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
 import { FeatureFlagsDialog } from '~/partials/feature-flags/feature-flags-dialog';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
+import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { StatusBar } from '~/partials/review/status-bar';
 import { SearchDialog } from '~/partials/search';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
-import { rankingFullscreenActiveAtom } from '~/atoms';
+import { communityFullscreenActiveAtom, rankingFullscreenActiveAtom } from '~/atoms';
 
 const OnboardingDialog = dynamic(
   () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
@@ -81,10 +84,17 @@ const ChatWidget = dynamic(() => import('~/partials/chat/chat-widget').then(m =>
   ssr: false,
 });
 
+const DebatesHubPanel = dynamic(
+  () => import('~/core/debates/matchmaking/debates-hub-panel').then(m => ({ default: m.DebatesHubPanel })),
+  { ssr: false }
+);
+
 export function App({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
   const rankingFullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
+  const communityFullscreenActive = useAtomValue(communityFullscreenActiveAtom);
+  const fullscreenActive = rankingFullscreenActive || communityFullscreenActive;
 
   const { isReviewOpen, setIsReviewOpen } = useDiff();
 
@@ -113,19 +123,21 @@ export function App({ children }: { children: React.ReactNode }) {
         <React.Suspense fallback={null}>
           <PageViewTracker />
         </React.Suspense>
-        <div className="sm:hidden">{!rankingFullscreenActive && <BrowseSidebar />}</div>
+        <div className="sm:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">
-          <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !rankingFullscreenActive} />
+          <Navbar onSearchClick={() => setOpen(true)} hideLogo={sidebarOpen && !fullscreenActive} />
           <SearchDialog open={open} onDone={() => setOpen(false)} />
           <div className="min-w-0 flex-1 2xl:px-[2ch]">
             <Main>{children}</Main>
           </div>
         </div>
         <EntitySidePanel />
+        <EntityCommentsPanelHost />
         {/* Client-side rendered due to `window.localStorage` usage */}
         <ClientOnly>
           <OnboardingDialog />
           <PendingPersonalSpaceRunner />
+          <PendingActionsRunner />
           <CreateSpaceDialog />
           <PendingCreatedSpaceRunner />
           <PendingCreatedSpaceStatus />
@@ -139,11 +151,15 @@ export function App({ children }: { children: React.ReactNode }) {
           <ChatWidget />
           <FeatureFlagsDialog />
           <DebateCoordinator />
+          <DebatesHubPanel />
           <DebateRecordingUploadCoordinator />
           <Persistence />
         </ClientOnly>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </div>
+      <React.Suspense fallback={null}>
+        <PersonalProfileCreatePostSidePanelSync />
+      </React.Suspense>
     </DebateMediaSessionProvider>
   );
 }

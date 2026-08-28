@@ -16,6 +16,9 @@ export const DEBATE_TYPE_ID = 'fd51f93520634617be397b672b23364c';
 /** Transcript (TYPE) — holds the per-turn text blocks of a debate. */
 export const TRANSCRIPT_TYPE_ID = '97042e6d9c7b4db5930c43d48debda84';
 
+/** Debates page (TYPE) — the "All debates" landing page a Recent debates block links to. */
+export const DEBATES_PAGE_TYPE_ID = 'dec3c8cae071482394f1dc4de11e7fb6';
+
 /** Debate videos (RELATION) → Video. */
 export const DEBATE_VIDEOS_PROPERTY_ID = 'c48dc314fa7148aeb967139160456f1d';
 
@@ -32,6 +35,19 @@ export const KEY_FRAME_IMAGE_PROPERTY_ID = KEY_FRAME_IMAGE_PROPERTY;
 export const DEBATE_SUPPORTED_BY_PROPERTY_ID = 'd19fad5651364a7f8309daf5c7bf99dd';
 /** Opposed by (RELATION) → participant space entity arguing "no". */
 export const DEBATE_OPPOSED_BY_PROPERTY_ID = 'c57de77c3eee4e7ba0d2258d18aab11c';
+
+/**
+ * Participants (RELATION) → both participants, regardless of side.
+ *
+ * Supported by / Opposed by already name everyone in a debate, but they answer "who argued which
+ * way" and so cannot be filtered as one set: a data block of "debates I was in" would have to union
+ * two relations and know which side to look on. This is the side-agnostic membership.
+ *
+ * `SystemIds.PARTICIPANTS_PROPERTY` rather than a debates-specific id, deliberately — a query for
+ * the canonical property finds these debates alongside anything else that uses it, which is the
+ * point of a shared ontology. A private id would have needed every consumer to learn about it.
+ */
+export const DEBATE_PARTICIPANTS_PROPERTY_ID = SystemIds.PARTICIPANTS_PROPERTY; // 0b9b1a35…
 
 /**
  * Vote (TYPE) — one viewer's pick of who won a debate. Lives in the voter's personal

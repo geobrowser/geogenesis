@@ -32,7 +32,7 @@ function debateBody(overrides: Record<string, unknown> = {}) {
 }
 
 /** Routes each geo-chat path the loader touches — plus the object store it redirects to — to a canned response. */
-function mockGeoChat(media: unknown, debate = debateBody(), artifactStatus = 200) {
+function mockGeoChat(media: unknown, debate = debateBody(), artifactStatus = 200, claims: unknown = null) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL, init?: RequestInit) => {
@@ -42,11 +42,13 @@ function mockGeoChat(media: unknown, debate = debateBody(), artifactStatus = 200
       }
       const body = url.endsWith('/media')
         ? media
-        : url.includes('/transcript')
-          ? { segments: [] }
-          : url.includes('/media/artifacts/url')
-            ? { upload: { url: presignedUrlFor(String(init?.body)) } }
-            : debate;
+        : url.endsWith('/claims')
+          ? claims
+          : url.includes('/transcript')
+            ? { segments: [] }
+            : url.includes('/media/artifacts/url')
+              ? { upload: { url: presignedUrlFor(String(init?.body)) } }
+              : debate;
       return new Response(JSON.stringify(body), { status: 200 });
     })
   );
@@ -92,6 +94,37 @@ describe('loadDebatePublishSource media gating', () => {
     expect(input.keyframeUrl).toBe('ipfs://cid-for-preview_image');
   });
 
+  it('uses geo-chat canonical turns + pre-attributed claims when available', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), 200, {
+      turns: [
+        { turn_index: 0, participant_slot: 1, attributed_space_id: 'space-1', speaker_name: 'Specter', text: 'Nuclear program was advancing.' },
+        { turn_index: 1, participant_slot: 2, attributed_space_id: 'space-2', speaker_name: 'Antispecter', text: 'There was no congressional approval.' },
+      ],
+      claims: [
+        { text: 'The nuclear program was advancing.', is_factual: true, turn_index: 0 },
+        { text: 'The action was unjustified.', is_factual: false, turn_index: 1 },
+      ],
+    });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    // Transcript blocks come from geo-chat's canonical turns, attributed to each speaker's space entity.
+    expect(input.transcriptTurns.map(t => t.speakerSpaceEntityId)).toEqual(['space-1', 'space-2']);
+    expect(input.transcriptTurns[0].text).toBe('Nuclear program was advancing.');
+    // Claims arrive pre-attributed, keyed to the same turn indices.
+    expect(input.claims).toEqual([
+      { text: 'The nuclear program was advancing.', isFactual: true, turnIndex: 0 },
+      { text: 'The action was unjustified.', isFactual: false, turnIndex: 1 },
+    ]);
+  });
+
+  it('falls back to the raw transcript with no claims when geo-chat reports none', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    expect(input.claims).toEqual([]);
+    expect(input.transcriptTurns).toEqual([]); // /transcript mock returns no segments
+  });
+
   it('publishes without a keyframe when the worker composed no preview_image', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
 
@@ -121,11 +154,12 @@ describe('loadDebatePublishSource media gating', () => {
   });
 
   // Without this gate, a succeeded job missing final_video publishes a videoless Debate entity.
-  it('treats a succeeded job with no final_video as not yet publishable', async () => {
+  // Terminal rather than a wait: the job that would have produced the video has already finished.
+  it('treats a succeeded job with no final_video as permanently unpublishable', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'preview_image' }] });
 
     await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(DebateNotPublishableError);
-    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/no processed final_video/);
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toMatchObject({ code: 'media_failed' });
   });
 
   // The hevc rendition is a companion to final_video, never a substitute for it.
@@ -138,10 +172,27 @@ describe('loadDebatePublishSource media gating', () => {
     await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(DebateNotPublishableError);
   });
 
-  it.each([['failed'], ['pending'], ['running']])('leaves a %s media job for a later tick', async status => {
+  it.each([['queued'], ['pending'], ['running']])('leaves a %s media job for a later tick', async status => {
     mockGeoChat({ job: { status }, artifacts: [] });
 
-    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/media is not ready/);
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toMatchObject({ code: 'media_not_ready' });
+  });
+
+  // A failed job has already spent its retries in the worker, so no later tick will publish this
+  // debate. Sharing `media_not_ready` with the statuses above is what let a dead debate count as a
+  // healthy backlog on every sweep, forever.
+  it('reports a failed media job as permanent rather than pending', async () => {
+    mockGeoChat({ job: { status: 'failed' }, artifacts: [] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toMatchObject({ code: 'media_failed' });
+  });
+
+  // A debate with no job row at all is the ambiguous case: a lost enqueue looks exactly like one
+  // about to happen, so it stays a wait rather than being reported as permanently dead.
+  it('treats a missing media job as a wait, not a permanent failure', async () => {
+    mockGeoChat({ job: null, artifacts: [] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toMatchObject({ code: 'media_not_ready' });
   });
 
   it('permanently rejects a cancelled debate even when media previously succeeded', async () => {

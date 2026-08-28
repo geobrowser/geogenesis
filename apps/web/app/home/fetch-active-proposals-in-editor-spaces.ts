@@ -10,6 +10,8 @@ import {
 } from '~/core/io/rest';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { defaultProfile, fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import { compareOpenProposals } from '~/core/governance/sort-open-proposals';
+import { fetchProposalSubmittedTimes, getSubmittedTime } from '~/core/io/subgraph/fetch-proposal-submitted-times';
 import { filterGrantedMembershipRequests } from '~/core/io/subgraph/filter-granted-membership-requests';
 import { ProposalStatus, ProposalType } from '~/core/io/substream-schema';
 import { Profile } from '~/core/types';
@@ -57,6 +59,8 @@ export async function getActiveProposalsForSpacesWhereEditor(
         name: string | null;
         type: ProposalType;
         createdBy: Profile;
+        /** Indexed submission time; 0 when unavailable. */
+        submittedAt: number;
         startTime: number;
         endTime: number;
         status: ProposalStatus;
@@ -106,16 +110,16 @@ export async function getActiveProposalsForSpacesWhereEditor(
     status === 'pending' ? await filterGrantedMembershipRequests(activeVotingOnly) : activeVotingOnly;
   const filteredProposals = status === 'pending' ? deduplicateMembershipProposals(notYetGranted) : notYetGranted;
 
-  filteredProposals.sort((a, b) => {
-    const aVoted = a.userVote !== null;
-    const bVoted = b.userVote !== null;
+  // Submission time is the sort's last key, so it has to be resolved across every
+  // candidate rather than the page that survives pagination below.
+  const submittedTimes = await fetchProposalSubmittedTimes(filteredProposals.map(p => p.proposalId));
 
-    if (aVoted !== bVoted) {
-      return aVoted ? 1 : -1;
-    }
-
-    return b.timing.endTime - a.timing.endTime;
+  const order = (p: (typeof filteredProposals)[number]) => ({
+    hasViewerVote: p.userVote !== null,
+    endTime: p.timing.endTime,
+    submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
   });
+  filteredProposals.sort((a, b) => compareOpenProposals(order(a), order(b), { unvotedFirst: true, endTime: 'desc' }));
 
   const startIndex = page * PAGE_SIZE;
   const endIndex = startIndex + PAGE_SIZE;
@@ -126,6 +130,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
   const uniqueCreatorIds = [...new Set(creatorIds)];
   const profilesForProposals = await Effect.runPromise(fetchProfilesBySpaceIds(uniqueCreatorIds));
   const profilesBySpaceId = new Map(uniqueCreatorIds.map((id, i) => [id, profilesForProposals[i]]));
+
 
   const proposals = paginatedProposals.map(p => {
     const profile = profilesBySpaceId.get(p.proposedBy) ?? defaultProfile(p.proposedBy, p.proposedBy);
@@ -139,6 +144,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
       name: p.name,
       type,
       createdBy: profile,
+      submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
       startTime: p.timing.startTime,
       endTime: p.timing.endTime,
       status,

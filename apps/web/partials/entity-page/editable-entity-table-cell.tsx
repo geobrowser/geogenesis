@@ -7,6 +7,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { Source } from '~/core/blocks/data/source';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useSpaceAwareValue } from '~/core/sync/use-store';
 import { Property } from '~/core/types';
@@ -22,6 +23,7 @@ import { NumberField } from '~/design-system/editable-fields/number-field';
 import { WebUrlField } from '~/design-system/editable-fields/web-url-field';
 import { Create } from '~/design-system/icons/create';
 import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { SelectEntity } from '~/design-system/select-entity';
 import { SelectEntityAsPopover } from '~/design-system/select-entity-dialog';
 
@@ -142,7 +144,7 @@ export function EditableEntityTableCell({
                 name={name}
                 currentSpaceId={currentSpaceId}
                 entityId={entityId}
-                spaceId={toSpaceId ?? currentSpaceId}
+                spaceId={toSpaceId}
                 collectionId={collectionId}
                 relationId={relationId}
                 verified={verified}
@@ -345,22 +347,23 @@ function NavigateButton({ spaceId, entityId }: { spaceId: string; entityId: stri
   const router = useRouter();
 
   const handleClick = (e: MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     router.push(NavUtils.toEntity(spaceId, entityId, true));
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
+    <Link
+      href={NavUtils.toEntity(spaceId, entityId, true)}
+      entityId={entityId}
+      spaceId={spaceId}
       aria-label="Navigate to entity"
-      onMouseDown={e => {
-        e.stopPropagation();
-      }}
-      className="inline-flex h-5 w-5 shrink-0 items-center justify-center border-none bg-transparent p-0 text-grey-03 transition duration-300 ease-in-out hover:text-text"
+      className="inline-flex shrink-0 items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+      onMouseDown={e => e.stopPropagation()}
+      onClick={handleClick}
     >
       <RightArrowLongChip />
-    </button>
+    </Link>
   );
 }
 

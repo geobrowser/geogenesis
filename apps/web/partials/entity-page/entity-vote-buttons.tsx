@@ -9,16 +9,34 @@ import * as React from 'react';
 import cx from 'classnames';
 import { Effect } from 'effect';
 import { useSetAtom } from 'jotai';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 import { downvoted, trackPrivyAuth, upvoted, voteCast } from '~/core/analytics';
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { useEntityVote } from '~/core/hooks/use-entity-vote';
+import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { type EntityVoter, getEntityVoteCount, getEntityVoters, getUserEntityVote } from '~/core/io/queries';
+import {
+  type EntityResponder,
+  getEntityResponders,
+  getEntityResponseCounts,
+  getUserEntityResponse,
+} from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
-import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
+import {
+  type ActiveResponseDirection,
+  ENTITY_RESPONSE_COPY,
+  type ResponseKind,
+  entityResponderProfilesQueryKey,
+  entityRespondersQueryKey,
+  entityResponseCountsQueryKey,
+  hasUnpublishedClaimResponseKindEdit,
+  resolveEntityResponseKind,
+  userEntityResponseQueryKey,
+} from '~/core/responses/entity-response';
+import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { Profile } from '~/core/types';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronDown } from '~/design-system/icons/chevron-down';
@@ -29,107 +47,171 @@ import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
-import { ClaimVoterAvatars } from '~/partials/entity-page/claim-voter-avatars';
+import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
-type OptimisticVote = 0 | 1 | 'none' | null;
+import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 
-// Entity votes are always object type 0 — the SDK hardcodes it in the vote
-// topic, so reads here pin the same value to stay consistent with writes.
-const ENTITY_VOTE_OBJECT_TYPE = 0;
+const ENTITY_RESPONSE_OBJECT_TYPE = 0;
 
-type VoteVariant = 'default' | 'thumbs' | 'chevrons';
-
-const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
-
-const CLAIM_TYPE = normalizeId(CLAIM_TYPE_ID);
-const CLAIM_IS_FACTUAL = normalizeId(CLAIM_IS_FACTUAL_PROPERTY_ID);
-
-function parseBoolean(value: string | null | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === '1' || normalized === 'true' || normalized === 'yes';
-}
+type ResponseVariant = 'default' | 'thumbs' | 'chevrons';
 
 type EntityVoteButtonsProps = {
   entityId: string;
   spaceId: string;
-  claimVoterAvatarsPosition?: 'leading' | 'trailing';
+  responseKind?: ResponseKind | null;
+  claimResponderAvatarsPosition?: 'leading' | 'trailing';
+  presentation?: 'inline' | 'debate-vertical' | 'debate-horizontal';
 };
 
 export function EntityVoteButtons({
   entityId,
-  spaceId,
-  claimVoterAvatarsPosition = 'leading',
+  spaceId: requestedSpaceId,
+  responseKind: responseKindOverride,
+  claimResponderAvatarsPosition = 'leading',
+  presentation = 'inline',
 }: EntityVoteButtonsProps) {
-  const { upvote, downvote, unvote, isConnected, personalSpaceId } = useEntityVote({
-    entityId,
-    spaceId,
+  const responseBatch = useClaimResponseBatchState();
+  // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
+  // but derives `types` from all of them, so a claim collected into another space — a data block
+  // row, a ranking entry — has its Types relation only in the space it was published to. Asking
+  // for that other space returned an entity with no Types relation at all, so this read it as a
+  // plain entity and drew curation arrows, while `ClaimDebateButton` reads `types` and drew the
+  // Debate toggle beside it. One claim, two controls disagreeing about what it was.
+  //
+  // Space still decides the *kind* of response, just not whether there is one: the checks below
+  // and `hasUnpublishedClaimResponseKindEdit` each re-filter to `spaceId` themselves, so widening
+  // the query leaves them reading exactly what they read before.
+  const { entity, isLoading: isLoadingEntity } = useQueryEntity({
+    id: entityId,
+    includeDeleted: true,
+    enabled: responseKindOverride === undefined,
   });
-  const { smartAccount } = useSmartAccount();
-  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  // Which space the response belongs to, which is not always the one the caller renders from. An
+  // entity collected into a curated page without a pinned target space arrives here as the page's
+  // own space, where it holds nothing: the counts came back empty and the percentage read 0%.
+  // Resolving it to the space the entity actually lives in is what puts the tally back.
+  //
+  // Every response kind, not only claims (GEO-2660). A table that lists the top-ranked version of
+  // an entity should show that version's votes, so curation follows the same rule as a claim's
+  // stance: the arrows belong to whichever space the row is actually showing. This does not re-home
+  // curation wholesale — `resolveEntitySpaceId` keeps the requested space whenever the entity holds
+  // live content there, so every ordinary row and every entity page are untouched, and only a row
+  // listing an entity that lives somewhere else diverts.
+  //
+  // What it costs: a curation vote cast against a listing space before this reads as the entity
+  // holding nothing there — nothing but the Score that vote itself wrote, which residency ignores
+  // by design — so that vote is no longer the one displayed. It is still recorded in that space.
+  // Auto-join doesn't widen with it: `useEntityVote` excludes curation from `ensureSpaceMembership`.
+  const spaceId = resolveEntitySpaceId(entity, requestedSpaceId);
+  const inferredResponseKind = resolveEntityResponseKind(entity, spaceId);
+  const responseKind = responseKindOverride === undefined ? inferredResponseKind : responseKindOverride;
+  const hasUnpublishedResponseKindEdit =
+    responseKindOverride === undefined && hasUnpublishedClaimResponseKindEdit(entity, spaceId);
+  const queryResponseKind = responseKind ?? 'stance';
+  const isResponseKindLoading = responseKindOverride === undefined && isLoadingEntity;
+  const variant: ResponseVariant =
+    queryResponseKind === 'curation' ? 'default' : queryResponseKind === 'veracity' ? 'chevrons' : 'thumbs';
+  const responseCopy = ENTITY_RESPONSE_COPY[queryResponseKind];
 
-  // Claim entities render a different vote control.
-  const { entity, isLoading: isLoadingEntity } = useQueryEntity({ id: entityId, spaceId });
-  const isClaim = entity?.types.some(t => normalizeId(t.id) === CLAIM_TYPE) ?? false;
-  const isFactualClaim =
-    isClaim && parseBoolean(entity?.values.find(v => normalizeId(v.property.id) === CLAIM_IS_FACTUAL)?.value);
-  const variant: VoteVariant = isClaim ? (isFactualClaim ? 'chevrons' : 'thumbs') : 'default';
+  const {
+    submitResponse,
+    submitResponseAsync,
+    optimisticResponse,
+    isResponseIndexingDelayed,
+    isConnected,
+    personalSpaceId,
+  } = useEntityResponse({ entityId, spaceId, responseKind });
+  const { smartAccount } = useSmartAccount();
 
   const setName = useSetAtom(nameAtom);
   const setTopicId = useSetAtom(topicIdAtom);
   const setAvatar = useSetAtom(avatarAtom);
   const setSpaceId = useSetAtom(spaceIdAtom);
   const setStep = useSetAtom(stepAtom);
+  const setPostOnboardingRedirect = useSetAtom(postOnboardingRedirectAtom);
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const enqueuePendingAction = useEnqueuePendingAction();
+
+  // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
+  // once the space exists (see pending-actions). Keep the optimistic mark on screen until the
+  // queued write is replayed, then hand off to the mutation's own optimistic state.
+  const voteActionId = `entity-vote:${entityId}:${spaceId}`;
+  const [queuedResponse, setQueuedResponse] = React.useState<ActiveResponseDirection | undefined>(undefined);
+  React.useEffect(() => {
+    if (queuedResponse !== undefined && optimisticResponse !== undefined) setQueuedResponse(undefined);
+  }, [queuedResponse, optimisticResponse]);
+
+  // Direction a signed-out user picked before sign-in opened.
+  const pendingSignInDirectionRef = React.useRef<ActiveResponseDirection | undefined>(undefined);
+
+  function queueVoteWrite(direction: ActiveResponseDirection) {
+    setQueuedResponse(direction);
+    enqueuePendingAction({
+      id: voteActionId,
+      label: 'your vote',
+      requires: 'personalSpace',
+      run: () => submitResponseAsync(direction).then(() => {}),
+    });
+  }
 
   const { login } = useGeoLogin({
-    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login' }),
+    onComplete: args => {
+      trackPrivyAuth(args, { auth_flow: 'manual_login' });
+
+      const direction = pendingSignInDirectionRef.current;
+      if (direction !== undefined) {
+        pendingSignInDirectionRef.current = undefined;
+        queueVoteWrite(direction);
+      }
+    },
   });
 
-  const [optimisticVote, setOptimisticVote] = React.useState<OptimisticVote>(null);
-  const [optimisticScore, setOptimisticScore] = React.useState<bigint | null>(null);
-  const [votersOpen, setVotersOpen] = React.useState(false);
+  const [respondersOpen, setRespondersOpen] = React.useState(false);
 
-  const { data: voteCounts } = useQuery<{ upvotes: number; downvotes: number } | null>({
-    queryKey: ['entity-vote-count', entityId, ENTITY_VOTE_OBJECT_TYPE],
-    queryFn: () => Effect.runPromise(getEntityVoteCount(entityId, ENTITY_VOTE_OBJECT_TYPE)),
+  const { data: responseCounts } = useQuery<{ positive: number; negative: number } | null>({
+    queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, queryResponseKind),
+    queryFn: () =>
+      Effect.runPromise(getEntityResponseCounts(entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)),
+    enabled: !responseBatch.managed && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
-  const { data: userVoteType } = useQuery({
-    queryKey: ['user-entity-vote', personalSpaceId, entityId, spaceId, ENTITY_VOTE_OBJECT_TYPE],
+  const { data: serverResponseDirection } = useQuery({
+    queryKey: userEntityResponseQueryKey(
+      personalSpaceId,
+      entityId,
+      spaceId,
+      ENTITY_RESPONSE_OBJECT_TYPE,
+      queryResponseKind
+    ),
     queryFn: async () => {
       if (!personalSpaceId) return null;
-      return Effect.runPromise(getUserEntityVote(personalSpaceId, entityId, spaceId, ENTITY_VOTE_OBJECT_TYPE));
+      return Effect.runPromise(
+        getUserEntityResponse(personalSpaceId, entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)
+      );
     },
-    enabled: !!personalSpaceId,
+    enabled: !responseBatch.managed && !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
-  React.useEffect(
-    function clearOptimisticScoreOnServerUpdate() {
-      setOptimisticScore(null);
-    },
-    [voteCounts]
-  );
+  // A queued (pre-personal-space) vote overrides the mutation's own optimistic state until it is
+  // replayed and cleared from the queue, at which point the mutation's state takes over.
+  const effectiveOptimistic = queuedResponse !== undefined ? queuedResponse : optimisticResponse;
+  const activeResponse = effectiveOptimistic === undefined ? serverResponseDirection : effectiveOptimistic;
 
-  React.useEffect(
-    function clearOptimisticVoteOnServerUpdate() {
-      setOptimisticVote(null);
-    },
-    [userVoteType]
-  );
-
-  const serverVoteDirection = userVoteType === 0 ? 0 : userVoteType === 1 ? 1 : null;
-  const activeVote =
-    optimisticVote !== null ? (optimisticVote === 'none' ? null : optimisticVote) : serverVoteDirection;
-
-  const upvotes = BigInt(voteCounts?.upvotes ?? 0);
-  const downvotes = BigInt(voteCounts?.downvotes ?? 0);
-  const netScore = upvotes - downvotes;
-  const displayScore = optimisticScore !== null ? optimisticScore : netScore;
+  const positiveResponses = BigInt(responseCounts?.positive ?? 0);
+  const negativeResponses = BigInt(responseCounts?.negative ?? 0);
+  const netScore = positiveResponses - negativeResponses;
+  const responseScore = (direction: ActiveResponseDirection | null | undefined) =>
+    direction === 'positive' ? 1n : direction === 'negative' ? -1n : 0n;
+  const displayScore = netScore + responseScore(activeResponse) - responseScore(serverResponseDirection);
 
   function openPrivySignIn() {
+    // Stay on this page after onboarding instead of bouncing to the explore page.
+    const search = searchParams?.toString();
+    setPostOnboardingRedirect(`${pathname}${search ? `?${search}` : ''}`);
     setName('');
     setTopicId('');
     setAvatar('');
@@ -138,73 +220,62 @@ export function EntityVoteButtons({
     login();
   }
 
-  function handleUpvote() {
+  function queueResponse(direction: ActiveResponseDirection) {
     if (!smartAccount) {
+      pendingSignInDirectionRef.current = direction;
       openPrivySignIn();
       return;
     }
-    if (!isConnected) return;
-    const base = optimisticScore !== null ? optimisticScore : netScore;
-    if (activeVote === 0) {
-      setOptimisticVote('none');
-      setOptimisticScore(base - 1n);
-      unvote(undefined, {
+    queueVoteWrite(direction);
+  }
+
+  function handlePositiveResponse() {
+    if (!isConnected) {
+      queueResponse('positive');
+      return;
+    }
+    if (activeResponse === 'positive') {
+      submitResponse('clear', {
         onSuccess: () => {
           voteCast('none', voteProperties('remove', 'up'));
         },
-        onError: () => {
-          setOptimisticVote(0);
-          setOptimisticScore(null);
-        },
       });
     } else {
-      const delta = activeVote === 1 ? 2n : 1n;
-      const prevVote = activeVote;
-      setOptimisticVote(0);
-      setOptimisticScore(base + delta);
-      upvote(undefined, {
+      const previousResponse = activeResponse ?? null;
+      submitResponse('positive', {
         onSuccess: () => {
-          upvoted(voteProperties(prevVote === 1 ? 'switch' : 'cast', prevVote === 1 ? 'down' : undefined));
-        },
-        onError: () => {
-          setOptimisticVote(prevVote === 1 ? 1 : null);
-          setOptimisticScore(null);
+          upvoted(
+            voteProperties(
+              previousResponse === 'negative' ? 'switch' : 'cast',
+              previousResponse === 'negative' ? 'down' : undefined
+            )
+          );
         },
       });
     }
   }
 
-  function handleDownvote() {
-    if (!smartAccount) {
-      openPrivySignIn();
+  function handleNegativeResponse() {
+    if (!isConnected) {
+      queueResponse('negative');
       return;
     }
-    if (!isConnected) return;
-    const base = optimisticScore !== null ? optimisticScore : netScore;
-    if (activeVote === 1) {
-      setOptimisticVote('none');
-      setOptimisticScore(base + 1n);
-      unvote(undefined, {
+    if (activeResponse === 'negative') {
+      submitResponse('clear', {
         onSuccess: () => {
           voteCast('none', voteProperties('remove', 'down'));
         },
-        onError: () => {
-          setOptimisticVote(1);
-          setOptimisticScore(null);
-        },
       });
     } else {
-      const delta = activeVote === 0 ? 2n : 1n;
-      const prevVote = activeVote;
-      setOptimisticVote(1);
-      setOptimisticScore(base - delta);
-      downvote(undefined, {
+      const previousResponse = activeResponse ?? null;
+      submitResponse('negative', {
         onSuccess: () => {
-          downvoted(voteProperties(prevVote === 0 ? 'switch' : 'cast', prevVote === 0 ? 'up' : undefined));
-        },
-        onError: () => {
-          setOptimisticVote(prevVote === 0 ? 0 : null);
-          setOptimisticScore(null);
+          downvoted(
+            voteProperties(
+              previousResponse === 'positive' ? 'switch' : 'cast',
+              previousResponse === 'positive' ? 'up' : undefined
+            )
+          );
         },
       });
     }
@@ -216,29 +287,47 @@ export function EntityVoteButtons({
       previous_vote_direction: previousDirection,
       entity_id: entityId,
       space_id: spaceId,
-      object_type: ENTITY_VOTE_OBJECT_TYPE,
+      object_type: ENTITY_RESPONSE_OBJECT_TYPE,
     };
   }
 
   const scoreLabel = formatScore(displayScore);
 
-  const upvoteActive = activeVote === 0;
-  const downvoteActive = activeVote === 1;
+  const positiveActive = activeResponse === 'positive';
+  const negativeActive = activeResponse === 'negative';
+  // Never block the buttons: when the personal space isn't ready the click queues the vote
+  // instead of writing it, so the user is never stopped from acting while it's being created.
+  const responseDisabled = false;
+  const positiveTitle = !isConnected
+    ? smartAccount
+      ? 'Vote now — saved until your account is ready'
+      : responseCopy.signIn
+    : positiveActive
+      ? responseCopy.removePositive
+      : responseCopy.positiveAction;
+  const negativeTitle = !isConnected
+    ? smartAccount
+      ? 'Vote now — saved until your account is ready'
+      : responseCopy.signIn
+    : negativeActive
+      ? responseCopy.removeNegative
+      : responseCopy.negativeAction;
 
-  const totalVoters = (voteCounts?.upvotes ?? 0) + (voteCounts?.downvotes ?? 0);
+  const totalResponders = (responseCounts?.positive ?? 0) + (responseCounts?.negative ?? 0);
 
-  const optimisticUpDelta = optimisticVote !== null ? (upvoteActive ? 1 : 0) - (serverVoteDirection === 0 ? 1 : 0) : 0;
-  const optimisticDownDelta =
-    optimisticVote !== null ? (downvoteActive ? 1 : 0) - (serverVoteDirection === 1 ? 1 : 0) : 0;
-  const effectiveUpvotes = Math.max(0, (voteCounts?.upvotes ?? 0) + optimisticUpDelta);
-  const effectiveDownvotes = Math.max(0, (voteCounts?.downvotes ?? 0) + optimisticDownDelta);
-  const effectiveTotal = effectiveUpvotes + effectiveDownvotes;
-  const percentLabel = effectiveTotal > 0 ? `${Math.round((100 * effectiveUpvotes) / effectiveTotal)}%` : '0%';
+  const optimisticPositiveDelta =
+    effectiveOptimistic !== undefined ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
+  const optimisticNegativeDelta =
+    effectiveOptimistic !== undefined ? (negativeActive ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0) : 0;
+  const effectivePositive = Math.max(0, (responseCounts?.positive ?? 0) + optimisticPositiveDelta);
+  const effectiveNegative = Math.max(0, (responseCounts?.negative ?? 0) + optimisticNegativeDelta);
+  const effectiveTotal = effectivePositive + effectiveNegative;
+  const percentLabel = effectiveTotal > 0 ? `${Math.round((100 * effectivePositive) / effectiveTotal)}%` : '0%';
 
   const isClaimVariant = variant !== 'default';
   const displayLabel = isClaimVariant ? percentLabel : scoreLabel;
 
-  const renderVoteIcon = (direction: 'up' | 'down', active: boolean) => {
+  const renderResponseIcon = (direction: 'up' | 'down', active: boolean) => {
     if (variant === 'chevrons') {
       return direction === 'up' ? <ChevronUp /> : <ChevronDown />;
     }
@@ -250,62 +339,86 @@ export function EntityVoteButtons({
     return <VoteArrow direction={direction} filled={active} color="grey-03" />;
   };
 
-  const claimVoteButtonColor = (active: boolean) => {
+  const claimResponseButtonColor = (active: boolean) => {
     if (variant === 'chevrons') {
       return active ? 'text-[#2A2B2E]' : 'text-grey-03 hover:text-grey-04';
     }
     return isClaimVariant && (active ? 'text-grey-04' : 'text-grey-03 hover:text-grey-04');
   };
 
-  const claimVoterAvatars = isClaimVariant ? (
-    <ClaimVoterAvatars
+  const claimResponderAvatars = isClaimVariant ? (
+    <ClaimResponderAvatars
       entityId={entityId}
       spaceId={spaceId}
-      objectType={ENTITY_VOTE_OBJECT_TYPE}
-      totalVoters={totalVoters}
+      objectType={ENTITY_RESPONSE_OBJECT_TYPE}
+      responseKind={queryResponseKind}
+      totalResponders={effectiveTotal}
+      viewerSpaceId={personalSpaceId}
+      optimisticViewerResponse={effectiveOptimistic}
     />
   ) : null;
 
-  const claimVoterAvatarsClassName = 'inline-flex h-5 shrink-0 items-center';
+  const claimResponderAvatarsClassName = 'inline-flex h-5 shrink-0 items-center';
 
-  if (isLoadingEntity) {
+  if ((responseBatch.managed && !responseBatch.ready) || isResponseKindLoading) {
     return <Skeleton className="h-5 w-16 shrink-0 rounded" />;
+  }
+
+  if (hasUnpublishedResponseKindEdit) {
+    return (
+      <span className="text-metadata text-grey-04" title="Publish the claim type change before responding">
+        Publish changes before responding
+      </span>
+    );
+  }
+
+  if (responseKind === null) {
+    return (
+      <span className="text-metadata text-grey-04" title="The response type is unavailable">
+        Response unavailable
+      </span>
+    );
+  }
+
+  if (presentation !== 'inline') {
+    return (
+      <DebateVotePill
+        orientation={presentation === 'debate-vertical' ? 'vertical' : 'horizontal'}
+        score={scoreLabel}
+        positiveActive={positiveActive}
+        negativeActive={negativeActive}
+        disabled={responseDisabled}
+        positiveTitle={positiveTitle}
+        negativeTitle={negativeTitle}
+        onPositive={handlePositiveResponse}
+        onNegative={handleNegativeResponse}
+      />
+    );
   }
 
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
-      {claimVoterAvatarsPosition === 'leading' && claimVoterAvatars ? (
-        <span className={cx(claimVoterAvatarsClassName, 'mr-1')}>{claimVoterAvatars}</span>
+      {claimResponderAvatarsPosition === 'leading' && claimResponderAvatars ? (
+        <span className={cx(claimResponderAvatarsClassName, 'mr-1')}>{claimResponderAvatars}</span>
       ) : null}
       <button
-        onClick={handleUpvote}
-        disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
-        title={
-          !smartAccount
-            ? 'Sign in to vote'
-            : isAccountSetupPending
-              ? 'Finishing account setup…'
-              : isConnected
-                ? upvoteActive
-                  ? 'Remove upvote'
-                  : 'Upvote'
-                : 'Connect wallet to vote'
-        }
+        onClick={handlePositiveResponse}
+        disabled={responseDisabled}
+        title={positiveTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          !isClaimVariant && 'translate-y-px',
-          claimVoteButtonColor(upvoteActive),
-          !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
+          claimResponseButtonColor(positiveActive),
+          responseDisabled && 'cursor-default opacity-50'
         )}
       >
-        {renderVoteIcon('up', upvoteActive)}
+        {renderResponseIcon('up', positiveActive)}
       </button>
-      <Popover.Root open={votersOpen} onOpenChange={setVotersOpen}>
+      <Popover.Root open={respondersOpen} onOpenChange={setRespondersOpen}>
         <Popover.Trigger asChild>
           <button
             className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
-            title={totalVoters > 0 ? 'View voters' : undefined}
-            disabled={totalVoters === 0}
+            title={totalResponders > 0 ? responseCopy.viewResponders : undefined}
+            disabled={totalResponders === 0}
           >
             {displayLabel}
           </button>
@@ -317,86 +430,163 @@ export function EntityVoteButtons({
             sideOffset={8}
             className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           >
-            <VotersPopoverContent entityId={entityId} spaceId={spaceId} objectType={ENTITY_VOTE_OBJECT_TYPE} />
+            <RespondersPopoverContent
+              entityId={entityId}
+              spaceId={spaceId}
+              objectType={ENTITY_RESPONSE_OBJECT_TYPE}
+              responseKind={responseKind}
+            />
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
       <button
-        onClick={handleDownvote}
-        disabled={!!smartAccount && (!isConnected || isAccountSetupPending)}
-        title={
-          !smartAccount
-            ? 'Sign in to vote'
-            : isAccountSetupPending
-              ? 'Finishing account setup…'
-              : isConnected
-                ? downvoteActive
-                  ? 'Remove downvote'
-                  : 'Downvote'
-                : 'Connect wallet to vote'
-        }
+        onClick={handleNegativeResponse}
+        disabled={responseDisabled}
+        title={negativeTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          !isClaimVariant && 'translate-y-px',
-          claimVoteButtonColor(downvoteActive),
-          !!smartAccount && (!isConnected || isAccountSetupPending) && 'cursor-default opacity-50'
+          claimResponseButtonColor(negativeActive),
+          responseDisabled && 'cursor-default opacity-50'
         )}
       >
-        {renderVoteIcon('down', downvoteActive)}
+        {renderResponseIcon('down', negativeActive)}
       </button>
-      {claimVoterAvatarsPosition === 'trailing' && claimVoterAvatars ? (
-        <span className={cx(claimVoterAvatarsClassName, 'ml-1')}>{claimVoterAvatars}</span>
+      {claimResponderAvatarsPosition === 'trailing' && claimResponderAvatars ? (
+        <span className={cx(claimResponderAvatarsClassName, 'ml-1')}>{claimResponderAvatars}</span>
+      ) : null}
+      {isResponseIndexingDelayed ? (
+        <span aria-live="polite" className="ml-1 text-metadata text-grey-04">
+          Response submitted. Waiting for confirmation.
+        </span>
       ) : null}
     </div>
   );
 }
 
-type VoterWithProfile = EntityVoter & { profile: Profile };
-
-function VotersPopoverContent({
-  entityId,
-  spaceId,
-  objectType,
+function DebateVotePill({
+  orientation,
+  score,
+  positiveActive,
+  negativeActive,
+  disabled,
+  positiveTitle,
+  negativeTitle,
+  onPositive,
+  onNegative,
 }: {
-  entityId: string;
-  spaceId: string;
-  objectType: 0 | 1;
+  orientation: 'vertical' | 'horizontal';
+  score: string;
+  positiveActive: boolean;
+  negativeActive: boolean;
+  disabled: boolean;
+  positiveTitle: string;
+  negativeTitle: string;
+  onPositive: () => void;
+  onNegative: () => void;
 }) {
-  const { data: votersWithProfiles, isLoading } = useQuery({
-    queryKey: ['entity-voters', entityId, spaceId, objectType],
-    queryFn: async () => {
-      const voters = await Effect.runPromise(getEntityVoters(entityId, spaceId, objectType));
-      if (voters.length === 0) return [];
-      const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(voters.map(v => v.userId)));
-      return voters.map((voter, i): VoterWithProfile => ({ ...voter, profile: profiles[i]! }));
-    },
-    staleTime: 30_000,
-  });
-
-  const upvoters = votersWithProfiles?.filter(v => v.voteType === 0) ?? [];
-  const downvoters = votersWithProfiles?.filter(v => v.voteType === 1) ?? [];
-
-  if (isLoading) {
-    return <div className="px-3 py-4 text-center text-metadataMedium text-grey-04">Loading voters...</div>;
-  }
-
-  if (!votersWithProfiles || votersWithProfiles.length === 0) {
-    return <div className="px-3 py-4 text-center text-metadataMedium text-grey-04">No votes yet</div>;
-  }
-
   return (
-    <div className="max-h-[356px] overflow-y-auto">
-      {upvoters.length > 0 && <VoterSection label="Upvotes" voters={upvoters} />}
-      {downvoters.length > 0 && <VoterSection label="Downvotes" voters={downvoters} />}
+    <div
+      data-entity-vote-presentation={`debate-${orientation}`}
+      className={cx(
+        'flex items-center justify-center gap-1.5 rounded-full border border-grey-02 bg-white text-text shadow-light',
+        orientation === 'vertical' ? 'w-9 flex-col py-2' : 'h-7 px-2.5'
+      )}
+    >
+      <button
+        type="button"
+        aria-label={positiveTitle}
+        aria-pressed={positiveActive}
+        disabled={disabled}
+        title={positiveTitle}
+        onClick={onPositive}
+        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50 aria-pressed:text-ctaPrimary"
+      >
+        <VoteArrow direction="up" filled={positiveActive} color={positiveActive ? 'ctaPrimary' : undefined} />
+      </button>
+      <span className="text-metadataMedium text-text tabular-nums">{score}</span>
+      <button
+        type="button"
+        aria-label={negativeTitle}
+        aria-pressed={negativeActive}
+        disabled={disabled}
+        title={negativeTitle}
+        onClick={onNegative}
+        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50 aria-pressed:text-red-01"
+      >
+        <VoteArrow direction="down" filled={negativeActive} color={negativeActive ? 'red-01' : undefined} />
+      </button>
     </div>
   );
 }
 
-function VoterSection({ label, voters }: { label: string; voters: VoterWithProfile[] }) {
+type ResponderWithProfile = EntityResponder & { profile: Profile };
+
+function RespondersPopoverContent({
+  entityId,
+  spaceId,
+  objectType,
+  responseKind,
+}: {
+  entityId: string;
+  spaceId: string;
+  objectType: 0 | 1;
+  responseKind: ResponseKind;
+}) {
+  const responseBatch = useClaimResponseBatchState();
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const respondersQueryKey = entityRespondersQueryKey(entityId, spaceId, objectType, responseKind);
+  const { data: responders, isLoading: isLoadingResponders } = useQuery({
+    queryKey: respondersQueryKey,
+    queryFn: () => Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, objectType)),
+    enabled: !responseBatch.managed,
+    staleTime: 30_000,
+  });
+  const responderSpaceIds = React.useMemo(() => responders?.map(responder => responder.userId) ?? [], [responders]);
+  const { data: profiles, isLoading: isLoadingProfiles } = useQuery({
+    queryKey: [...entityResponderProfilesQueryKey(entityId, spaceId, objectType, responseKind), responderSpaceIds],
+    enabled: !responseBatch.managed && responderSpaceIds.length > 0,
+    queryFn: () => Effect.runPromise(fetchProfilesBySpaceIds(responderSpaceIds)),
+    staleTime: 30_000,
+  });
+  let respondersWithProfiles: ResponderWithProfile[] | undefined;
+  if (responders?.length === 0) {
+    respondersWithProfiles = [];
+  } else if (responders && profiles) {
+    respondersWithProfiles = responders.map((responder, index): ResponderWithProfile => ({
+      ...responder,
+      profile: profiles[index]!,
+    }));
+  }
+  const isLoading = isLoadingResponders || (responderSpaceIds.length > 0 && isLoadingProfiles);
+
+  const positiveResponders = respondersWithProfiles?.filter(v => v.direction === 'positive') ?? [];
+  const negativeResponders = respondersWithProfiles?.filter(v => v.direction === 'negative') ?? [];
+
+  if (isLoading) {
+    return <div className="px-3 py-4 text-center text-metadataMedium text-grey-04">{copy.loading}</div>;
+  }
+
+  if (!respondersWithProfiles || respondersWithProfiles.length === 0) {
+    return <div className="px-3 py-4 text-center text-metadataMedium text-grey-04">{copy.empty}</div>;
+  }
+
+  return (
+    <div className="max-h-[356px] overflow-y-auto">
+      {positiveResponders.length > 0 && (
+        <ResponderSection label={copy.positiveSection} responders={positiveResponders} />
+      )}
+      {negativeResponders.length > 0 && (
+        <ResponderSection label={copy.negativeSection} responders={negativeResponders} />
+      )}
+    </div>
+  );
+}
+
+function ResponderSection({ label, responders }: { label: string; responders: ResponderWithProfile[] }) {
   return (
     <div>
       <div className="px-3 pt-2.5 pb-1.5 text-footnoteMedium text-grey-04">{label}</div>
-      {voters.map(v => (
+      {responders.map(v => (
         <VoterRow key={v.userId} profile={v.profile} />
       ))}
     </div>

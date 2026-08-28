@@ -5,22 +5,18 @@ import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
-import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
-import { useDebateActivity, useUpdateDebateAvailability } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
-import { useToast } from '~/core/hooks/use-toast';
 import { useEditable } from '~/core/state/editable-store';
-import { useDebatesEnabled } from '~/core/state/feature-flags';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
@@ -28,7 +24,6 @@ import { GeoConnectButton } from '~/core/wallet';
 import { Avatar } from '~/design-system/avatar';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
-import { DisconnectWallet } from '~/design-system/icons/disconnect-wallet';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Menu } from '~/design-system/menu';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -53,11 +48,7 @@ export function NavbarActions() {
   const { personalSpaceId } = usePersonalSpaceId();
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
-  const isDebatesEnabled = useDebatesEnabled();
-  const activityQuery = useDebateActivity(isDebatesEnabled);
-  const availabilityMutation = useUpdateDebateAvailability();
   const { user } = usePrivy();
-  const [, setToast] = useToast();
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
@@ -87,15 +78,6 @@ export function NavbarActions() {
   const displayName = profile?.name?.trim() || shortAddress(address);
   const email = userEmail(user);
   const identityDetail = email ?? address;
-  const availableToDebate = activityQuery.data?.available_to_debate ?? true;
-  const availabilityPending = activityQuery.isPending || availabilityMutation.isPending;
-
-  const toggleDebateAvailability = () => {
-    availabilityMutation.mutate(!availableToDebate, {
-      onError: () => setToast(<span>Couldn’t update debate availability.</span>),
-    });
-  };
-
   return (
     <div className="flex items-center gap-4">
       <ModeToggle />
@@ -113,67 +95,25 @@ export function NavbarActions() {
         open={open}
         onOpenChange={onOpenChange}
         sideOffset={12}
-        className={
-          isDebatesEnabled ? 'w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]' : 'max-w-[165px]'
-        }
+        className="w-[calc(100vw-16px)] max-w-[322px] rounded-[20px] sm:w-[322px]"
       >
-        {isDebatesEnabled ? (
-          <>
-            <IdentityHeader
-              address={address}
-              avatarValue={avatarValue}
-              displayName={displayName}
-              detail={identityDetail}
-              href={personalHref}
-              onNavigate={() => onOpenChange(false)}
-            />
-            <div className="border-t border-grey-02">
-              <button
-                type="button"
-                role="switch"
-                aria-checked={availableToDebate}
-                disabled={availabilityPending}
-                onClick={toggleDebateAvailability}
-                className="flex w-full items-center justify-between gap-1 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none disabled:cursor-wait disabled:text-grey-03"
-              >
-                <span className="min-w-0 truncate">Available to debate</span>
-                <span
-                  aria-hidden="true"
-                  className={cx(
-                    'relative h-4 w-6 shrink-0 rounded-full transition-colors',
-                    availableToDebate ? 'bg-text' : 'bg-grey-03'
-                  )}
-                >
-                  <span
-                    className={cx(
-                      'absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform',
-                      availableToDebate && 'translate-x-2'
-                    )}
-                  />
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={logout}
-                className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
-              >
-                Sign out
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            {personalHref && (
-              <AvatarMenuItem href={personalHref}>
-                <p className="text-button">Personal space</p>
-              </AvatarMenuItem>
-            )}
-            <AvatarMenuItem onClick={logout}>
-              <p className="text-button">Sign out</p>
-              <DisconnectWallet />
-            </AvatarMenuItem>
-          </>
-        )}
+        <IdentityHeader
+          address={address}
+          avatarValue={avatarValue}
+          displayName={displayName}
+          detail={identityDetail}
+          href={personalHref}
+          onNavigate={() => onOpenChange(false)}
+        />
+        <div className="border-t border-grey-02">
+          <button
+            type="button"
+            onClick={logout}
+            className="flex w-full items-center px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none"
+          >
+            Sign out
+          </button>
+        </div>
       </Menu>
     </div>
   );
@@ -267,47 +207,6 @@ function normalizeEmail(value: unknown) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-const avatarMenuItemStyles = cva(
-  'flex w-full items-center justify-between bg-white px-3 py-2 text-button select-none hover:outline-hidden aria-disabled:cursor-not-allowed aria-disabled:text-grey-03',
-  {
-    variants: {
-      disabled: {
-        true: 'cursor-not-allowed text-grey-03',
-        false: 'cursor-pointer text-grey-04 hover:bg-bg hover:text-text',
-      },
-    },
-    defaultVariants: {
-      disabled: false,
-    },
-  }
-);
-
-function AvatarMenuItem({
-  children,
-  onClick,
-  href,
-  disabled = false,
-}: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  href?: string;
-  disabled?: boolean;
-}) {
-  if (href) {
-    return (
-      <Link href={href} className={avatarMenuItemStyles({ disabled })}>
-        {children}
-      </Link>
-    );
-  }
-
-  return (
-    <button onClick={onClick} disabled={disabled} className={avatarMenuItemStyles({ disabled })}>
-      {children}
-    </button>
-  );
 }
 
 const shake = [7, -8.4, 6.3, -10, 8.4, -4.4, 0];

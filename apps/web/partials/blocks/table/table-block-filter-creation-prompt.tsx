@@ -24,6 +24,7 @@ import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { ID } from '~/core/id';
 import { getSpacesWhereMember } from '~/core/io/queries';
+import { capSearchQuery } from '~/core/io/search-query';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { E } from '~/core/sync/orm';
@@ -1682,6 +1683,7 @@ function TableBlockEntityFilterInput({
 
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery);
+  const cappedQuery = capSearchQuery(query);
   const additionalSpaceIds = useGlobalSearchSpaceIds();
 
   const searchBlocked = (waitForFilterTypes || restrictSearchToTypes) && !filterByTypes?.length;
@@ -1698,7 +1700,13 @@ function TableBlockEntityFilterInput({
     fetchNextPage: fetchNextSearchPage,
     hasNextPage: hasNextSearchPage,
   } = useInfiniteQuery({
-    queryKey: ['table-block-filter-search', query, filterByTypes?.slice().sort().join(',') ?? '', additionalSpaceIds],
+    // The capped query, so typing past the cap stops re-running a search that cannot change.
+    queryKey: [
+      'table-block-filter-search',
+      cappedQuery,
+      filterByTypes?.slice().sort().join(',') ?? '',
+      additionalSpaceIds,
+    ],
     enabled: focused && !searchBlocked,
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
@@ -1713,7 +1721,7 @@ function TableBlockEntityFilterInput({
         store,
         cache,
         where: {
-          name: { fuzzy: query },
+          name: { fuzzy: cappedQuery },
           ...(filterByTypes?.length ? { types: filterByTypes.map(id => ({ id: { equals: id } })) } : {}),
         },
         first: FILTER_DROPDOWN_PAGE_SIZE,

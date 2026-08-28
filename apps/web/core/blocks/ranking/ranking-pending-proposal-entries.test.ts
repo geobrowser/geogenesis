@@ -38,6 +38,7 @@ describe('entityDiffToRankingEntry', () => {
       name: 'Joe’s Pizza',
       description: 'Best slice in town',
       image: null,
+      spaceId: null,
     });
   });
 
@@ -47,6 +48,7 @@ describe('entityDiffToRankingEntry', () => {
       name: 'Untitled',
       description: null,
       image: null,
+      spaceId: null,
     });
   });
 });

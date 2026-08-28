@@ -6,7 +6,6 @@ import cx from 'classnames';
 import { usePathname } from 'next/navigation';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
-import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -74,17 +73,19 @@ export function EditableSpaceHeading({
   spaceId,
   entityId,
   addSubspaceComponent,
+  nameAccessoryComponent,
   actionsComponent,
 }: {
   spaceId: string;
   entityId: string;
   addSubspaceComponent?: React.ReactElement<any>;
+  /** Rendered directly after the name in browse mode, e.g. the verification state. */
+  nameAccessoryComponent?: React.ReactNode;
   /** Rendered at the end of the name row, e.g. the profile "Debate" button. */
   actionsComponent?: React.ReactNode;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
-  const { isEditor, isMember } = useAccessControl(spaceId);
   const { space } = useSpace(spaceId);
 
   const path = usePathname();
@@ -149,13 +150,16 @@ export function EditableSpaceHeading({
             <Spacer height={3.5} />
           </div>
         ) : (
-          <div>
-            <div className="flex items-center justify-between">
-              <Truncate maxLines={3} shouldTruncate>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <Truncate maxLines={3} shouldTruncate className="w-auto! min-w-0">
                 <Text as="h1" variant="mainPage">
                   {name ?? ZERO_WIDTH_SPACE}
                 </Text>
               </Truncate>
+              {nameAccessoryComponent ? (
+                <span className="mt-[9px] inline-flex shrink-0">{nameAccessoryComponent}</span>
+              ) : null}
             </div>
             <Spacer height={12} />
           </div>
@@ -235,11 +239,6 @@ export function EditableSpaceHeading({
                       <MenuItem onClick={() => dispatch({ type: 'OPEN_CREATE_IN_SPACE' })}>
                         <p>Create in space</p>
                       </MenuItem>
-                      {(isEditor || isMember) && (
-                        <MenuItem href={NavUtils.toImport(spaceId)}>
-                          <p>Import data</p>
-                        </MenuItem>
-                      )}
                       {isEditing && Spaces.hasExternalTopic(space) && (
                         <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
                           <p>Edit space config</p>

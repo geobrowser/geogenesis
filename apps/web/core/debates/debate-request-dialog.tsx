@@ -10,6 +10,7 @@ import { DebateFormatDetails } from './format-details';
 import { DebateFormatSelector } from './format-selector';
 import type { DebateFormatId } from './formats';
 import { speakerLabel } from './playback-utils';
+import { useScrollLock } from './use-scroll-lock';
 
 export type DebateRequestDialogParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
@@ -34,6 +35,25 @@ type DebateRequestDialogProps = {
   error: string | null;
   onAccept: () => void;
   onReject: () => void;
+  /** Defaults to "Accept". The GEO-2514 ready prompt says "Join debate" — there is nothing left
+   * to accept by then, only a room to walk into. */
+  acceptLabel?: string;
+  /** Defaults to "Reject". GEO-2430 request popups say "Not now" instead. */
+  rejectLabel?: string;
+  /**
+   * `stacked` (the default) leads with Accept and puts the reject below it — right for a match,
+   * which you are expected to take. `split` sets them side by side, which is what GEO-2430's
+   * request popup does: turning a request down is an ordinary answer, not a way out.
+   */
+  actionsLayout?: 'stacked' | 'split';
+  /** Replaces the plain "Debate request" eyebrow, e.g. with the claim's space. */
+  eyebrow?: React.ReactNode;
+  /** GEO-2430: a text action beside the "Debate format" heading, e.g. "Dismiss forever". */
+  formatAction?: { label: string; onClick: () => void };
+  /** Rendered centred under the claim, e.g. the claim's Debate toggle. */
+  headerNote?: React.ReactNode;
+  /** GEO-2430: overflow ("…") menu anchored to the participants card, e.g. to block a user. */
+  overflowMenu?: React.ReactNode;
 };
 
 export function DebateRequestDialog({
@@ -46,6 +66,13 @@ export function DebateRequestDialog({
   error,
   onAccept,
   onReject,
+  acceptLabel = 'Accept',
+  rejectLabel = 'Reject',
+  actionsLayout = 'stacked',
+  eyebrow,
+  formatAction,
+  headerNote,
+  overflowMenu,
 }: DebateRequestDialogProps) {
   const titleId = React.useId();
   const turnParticipants = React.useMemo(
@@ -62,18 +89,7 @@ export function DebateRequestDialog({
   const firstParticipant = positionParticipants[0];
   const secondParticipant = positionParticipants[1] ?? firstParticipant;
 
-  React.useEffect(() => {
-    const originalBodyOverflow = document.body.style.overflow;
-    const originalDocumentOverflow = document.documentElement.style.overflow;
-
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-
-    return () => {
-      document.body.style.overflow = originalBodyOverflow;
-      document.documentElement.style.overflow = originalDocumentOverflow;
-    };
-  }, []);
+  useScrollLock();
 
   if (!firstParticipant || !secondParticipant) return null;
 
@@ -86,16 +102,20 @@ export function DebateRequestDialog({
         className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid max-h-[calc(100dvh-2rem)] w-[min(370px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg bg-bg p-5 text-text shadow-card"
       >
         <header className="min-w-0 text-center">
-          <Text as="div" variant="metadata" color="text">
-            Debate request
-          </Text>
+          {eyebrow ?? (
+            <Text as="div" variant="metadata" color="text">
+              Debate request
+            </Text>
+          )}
           <h2 id={titleId} className="mt-3 text-cardEntityTitle leading-[1.375rem]">
             {claim}
           </h2>
+          {headerNote ? <div className="mt-3 flex justify-center">{headerNote}</div> : null}
         </header>
 
         <div className="min-h-0 overflow-y-auto pr-1">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center rounded-lg bg-white py-5">
+          <div className="relative grid grid-cols-[1fr_auto_1fr] items-center rounded-lg bg-white py-5">
+            {overflowMenu ? <div className="absolute top-2 right-2">{overflowMenu}</div> : null}
             <ParticipantSummary participant={firstParticipant} currentUserId={currentUserId} />
             <div className="relative grid w-16 place-items-center">
               <span
@@ -114,6 +134,16 @@ export function DebateRequestDialog({
               <Text as="h3" variant="metadata" color="text">
                 Debate format
               </Text>
+              {formatAction && (
+                <button
+                  type="button"
+                  onClick={formatAction.onClick}
+                  disabled={busy}
+                  className="text-metadata text-grey-04 underline transition-colors hover:text-text disabled:opacity-50"
+                >
+                  {formatAction.label}
+                </button>
+              )}
               {formatSelector && (
                 <DebateFormatSelector
                   value={formatSelector.value}
@@ -139,22 +169,45 @@ export function DebateRequestDialog({
         </div>
 
         <footer className="grid gap-5">
-          <button
-            type="button"
-            onClick={onAccept}
-            disabled={busy}
-            className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
-          >
-            Accept
-          </button>
-          <button
-            type="button"
-            onClick={onReject}
-            disabled={busy}
-            className="mx-auto px-4 py-1 text-metadata text-grey-04 hover:text-text disabled:opacity-50"
-          >
-            Reject
-          </button>
+          {actionsLayout === 'split' ? (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={onReject}
+                disabled={busy}
+                className="flex h-7 w-full items-center justify-center rounded-full border border-grey-02 px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50"
+              >
+                {rejectLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onAccept}
+                disabled={busy}
+                className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+              >
+                {acceptLabel}
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onAccept}
+                disabled={busy}
+                className="flex h-7 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+              >
+                {acceptLabel}
+              </button>
+              <button
+                type="button"
+                onClick={onReject}
+                disabled={busy}
+                className="mx-auto px-4 py-1 text-metadata text-grey-04 hover:text-text disabled:opacity-50"
+              >
+                {rejectLabel}
+              </button>
+            </>
+          )}
         </footer>
       </section>
     </div>
