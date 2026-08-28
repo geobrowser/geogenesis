@@ -324,7 +324,10 @@ function TableBlockDropdown({
     >
       <div className="flex flex-col p-2">
         {showSearch && (
-          <div className="pb-2">
+          // Sticks to the top of the menu's scroll viewport so it stays
+          // reachable while scrolling a long list (same treatment as the
+          // Power Tools table header).
+          <div className="sticky top-0 z-10 -mx-2 -mt-2 bg-white px-2 pt-2 pb-2">
             <Input
               withSearchIcon
               placeholder={`Search ${label.toLowerCase()}...`}
@@ -379,7 +382,7 @@ function TableBlockDropdown({
         })}
         {hasMore && <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />}
         {(isSearchFetchingNextPage || (isSearching && renderedOptions.length > 0)) && (
-          <p className="px-2 pt-1 text-footnote text-grey-04">Loading more…</p>
+          <p className="px-2 pt-1 text-footnote text-grey-04">Loading…</p>
         )}
       </div>
     </Menu>
