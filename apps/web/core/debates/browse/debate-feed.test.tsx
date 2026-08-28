@@ -86,6 +86,16 @@ vi.mock('~/core/hooks/use-space', () => ({
   useSpace: () => ({ space: { entity: { name: 'Fashion', image: null } }, isLoading: false }),
 }));
 
+// PrefetchLink hydrates the entity it points at on hover, so it reaches for the sync engine and
+// the router. Stubbing those keeps the real anchor — and therefore the real hrefs — under test.
+vi.mock('~/core/sync/use-sync-engine', () => ({
+  useSyncEngine: () => ({ hydrate: vi.fn() }),
+}));
+vi.mock('next/navigation', async () => {
+  const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
+  return { ...actual, useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }) };
+});
+
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
 }));
@@ -215,6 +225,31 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+describe('DebatesBrowseFeed header links', () => {
+  // Both name something that has a page, and neither was reachable.
+  it('links the space chip to the space and the claim title to its entity', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const heading = screen.getByRole('heading', { name: 'Debates are useful' });
+    // Inside the h2, not instead of it: the ref, the line clamp and the overflow measurement all
+    // stay on the element they were written for.
+    expect(within(heading).getByRole('link', { name: 'Debates are useful' })).toHaveAttribute(
+      'href',
+      '/space/space-1/claim-entity-debate-1'
+    );
+
+    expect(screen.getAllByRole('link', { name: 'Fashion' })[0]).toHaveAttribute('href', '/space/space-1');
+  });
+
+  // Truncation runs parent -> anchor -> text, and an anchor at its default `min-width: auto` would
+  // refuse to shrink, pushing the topics off the row instead of ellipsing the name.
+  it('keeps the space link shrinkable so the name still truncates', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.getAllByRole('link', { name: 'Fashion' })[0]).toHaveClass('min-w-0');
+  });
 });
 
 describe('DebatesBrowseFeed video sharing', () => {
