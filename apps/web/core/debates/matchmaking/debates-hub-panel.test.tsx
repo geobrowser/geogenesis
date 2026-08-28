@@ -285,5 +285,4 @@ it('closes itself once a navigation lands', () => {
   store.rerender();
 
   expect(store.get(debatesHubAtom)).toBeNull();
-
 });

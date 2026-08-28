@@ -38,8 +38,10 @@ export function DebatesHubWorkspace() {
     // only ever be dead weight — and the thresholds below are set against that 1200px, not against
     // the viewport. See the note on the facet rail.
     <div className="@container/hub flex w-full flex-col">
-      <header className="flex items-center justify-between gap-3 px-4 py-5">
-        <Text as="h1" variant="mediumTitle" color="text">
+      {/* `mainPage`, the variant every other route's h1 uses. Pinned under the navbar (h-11) so the
+          page keeps saying what it is while the corpus scrolls. */}
+      <header className="sticky top-11 z-20 flex items-center justify-between gap-3 bg-white px-4 py-5">
+        <Text as="h1" variant="mainPage" color="text">
           Debates
         </Text>
       </header>
@@ -55,7 +57,13 @@ export function DebatesHubWorkspace() {
 
         {/* Second to go, after the facet rail — both measured against `/hub`, so the two decisions
             cannot disagree. Its lists stay reachable from the panel, one press away in the navbar. */}
-        <aside aria-label="Live" className="hidden w-80 shrink-0 self-start @[64rem]/hub:block">
+        {/* Sticky rather than its own scroll container. Stacking overflow areas is what made the
+            rail read as several panels side by side; sticking it to the viewport lets the page
+            scroll as one, and the rail only scrolls itself once it is taller than the screen. */}
+        <aside
+          aria-label="Live"
+          className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-80 shrink-0 self-start overflow-y-auto @[64rem]/hub:block"
+        >
           <HubLiveRail />
         </aside>
       </div>

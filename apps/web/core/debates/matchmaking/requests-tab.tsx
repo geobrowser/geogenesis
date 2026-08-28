@@ -35,7 +35,12 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * presentation plus narrowing. (Requests carry no topics — the topic facet is a Claims/Matches
  * concern, so the design's third menu has nothing to offer here.)
  */
-export function RequestsTab() {
+/**
+ * `dense` is the live rail (GEO-2726): no `HubStickyControls`, because three of these stacked in
+ * one column meant three elements all claiming `sticky top-0`, and the filters are a full-tab
+ * affordance rather than something a 20rem rail has room to offer.
+ */
+export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
@@ -95,22 +100,24 @@ export function RequestsTab() {
 
   return (
     <div className="flex flex-col">
-      <HubStickyControls>
-        <SpaceTopicFilters
-          spaceIds={spaceIds}
-          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-          onSpacesClear={() => setSpaceIds([])}
-          facetSpaces={facetSpaces}
-          leading={
-            <HubFilterMenu
-              label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
-              options={STATUS_OPTIONS}
-              value={status}
-              onChange={setStatus}
-            />
-          }
-        />
-      </HubStickyControls>
+      {!dense && (
+        <HubStickyControls>
+          <SpaceTopicFilters
+            spaceIds={spaceIds}
+            onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+            onSpacesClear={() => setSpaceIds([])}
+            facetSpaces={facetSpaces}
+            leading={
+              <HubFilterMenu
+                label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
+                options={STATUS_OPTIONS}
+                value={status}
+                onChange={setStatus}
+              />
+            }
+          />
+        </HubStickyControls>
+      )}
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState

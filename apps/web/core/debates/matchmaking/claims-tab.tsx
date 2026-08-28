@@ -515,7 +515,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
           // Measured against the *workspace* container by name, the same one the live rail reads.
           // An unnamed query here would resolve to whichever container happened to be nearest —
           // which is how the rail ended up hidden while the layout still reserved a column for it.
-          className="hidden w-60 shrink-0 self-start @[72rem]/hub:block"
+          className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-60 shrink-0 self-start overflow-y-auto @[72rem]/hub:block"
           data-testid="hub-facet-rail"
         >
           {facetRail}
@@ -525,7 +525,7 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
       {/* Its own container, named, so the card grid reflows on the width the cards actually get
           rather than on the workspace's. `min-w-0` is what lets it shrink below its content. */}
       <div className={workspace ? '@container/claims flex min-w-0 flex-1 flex-col' : 'contents'}>
-        <HubStickyControls>
+        <HubStickyControls workspaceStickyOffset={workspace}>
           {searchInput}
 
           {!workspace && (
@@ -641,9 +641,25 @@ export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) 
  * can't see. The tab row above it is already fixed — it sits outside the panel's scroll container
  * — so this is the only piece that needed pinning here.
  */
-export function HubStickyControls({ children }: { children: React.ReactNode }) {
+export function HubStickyControls({
+  children,
+  workspaceStickyOffset = false,
+}: {
+  children: React.ReactNode;
+  workspaceStickyOffset?: boolean;
+}) {
   return (
-    <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3">{children}</div>
+    <div
+      className={cx(
+        'sticky z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3',
+        // The panel's scroll container starts at the controls, so `top-0` pins them there. In the
+        // workspace the page itself scrolls under a fixed navbar and a pinned page header, so the
+        // same `top-0` would slide the search under both.
+        workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0'
+      )}
+    >
+      {children}
+    </div>
   );
 }
 

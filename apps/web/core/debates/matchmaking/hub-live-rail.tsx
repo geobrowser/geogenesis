@@ -35,15 +35,15 @@ export function HubLiveRail() {
       {!ready ? null : authenticated ? (
         <>
           <RailSection label="Requests">
-            <RequestsTab />
+            <RequestsTab dense />
           </RailSection>
           <RailSection label="Matches">
             {/* No tabs to change to out here. The panel's Matches list offers a way over to Claims
                 when it is empty; in this layout Claims is already on screen beside it. */}
-            <MatchesTab onTabChange={() => {}} />
+            <MatchesTab dense onTabChange={() => {}} />
           </RailSection>
           <RailSection label="Available now">
-            <PeopleTab />
+            <PeopleTab dense />
           </RailSection>
         </>
       ) : (
@@ -79,7 +79,7 @@ function SignedOutRail() {
       </section>
 
       <RailSection label="Available now">
-        <PeopleTab />
+        <PeopleTab dense />
       </RailSection>
     </>
   );
