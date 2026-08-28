@@ -44,6 +44,15 @@ const DEBATE_PAGE_SIZE = 5;
 type DebateSide = { spaceId: string; position: boolean };
 
 /**
+ * How many votes are fetched for the whole section before the shares are withheld.
+ *
+ * One request covers every debate on the page, so this is a section-wide ceiling rather than a
+ * per-debate one. Reaching it means the set is partial, and a winner drawn from a partial set is a
+ * guess wearing a percentage.
+ */
+const VOTE_FETCH_CAP = 500;
+
+/**
  * The debates that argued this claim.
  *
  * Space-scoped like the rest of the page: a debate is published into the space its claim lives in,
@@ -174,13 +183,21 @@ function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
       types: [{ id: { equals: VOTE_TYPE_ID } }],
       relations: [{ typeOf: { id: { equals: VOTE_DEBATES_PROPERTY_ID } }, toEntity: { id: { in: debateIds } } }],
     },
-    // A ceiling rather than a guess: the share is a headline, and paging every vote to refine a
-    // rounded percentage would cost more than the precision is worth.
-    first: 500,
+    first: VOTE_FETCH_CAP,
     enabled: debateIds.length > 0,
   });
 
   return React.useMemo(() => {
+    // A truncated page is an arbitrary subset of the votes across every debate on screen, so any
+    // share computed from it could name the wrong winner and would state a total that is simply
+    // untrue. No share at all is the honest answer; a confidently wrong percentage is not.
+    //
+    // Suppressing rather than paging to completion is a deliberate trade. `getDebateVoteEntities`
+    // walks every backlink page, but it does so per debate — five paginated fetches for a headline
+    // stat on a secondary module, on every claim page view. If the cap ever starts being reached
+    // in practice, that is the path to move to.
+    if (votes.length >= VOTE_FETCH_CAP) return new Map<string, WinnerShare>();
+
     const recordsByDebateId = new Map<string, DebateVoteRecord[]>();
     // The tally keys winners by hex, so keep a way back to the id the profile lookup was given.
     const spaceIdByHex = new Map<string, string>();

@@ -12,7 +12,7 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { ENTITY_RESPONSE_COPY, responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
@@ -167,10 +167,17 @@ export function ClaimRelatedClaims({
       <CursorPager
         isFirstPage={pages.isFirstPage}
         hasNextPage={hasNextPage}
-        // `keepPreviousData` leaves `isLoading` false while the previous page — and its now-stale
-        // `endCursor` — are still on screen. Without this a second click on Next records that same
-        // cursor again, and the trail Previous walks back through gains a duplicate.
-        isLoading={isLoading || isPlaceholderData}
+        // Three states where the cursor and what is on screen disagree, and stepping would land
+        // somewhere the reader never saw:
+        //
+        //   isLoading          — no page yet
+        //   isPlaceholderData  — previous page still shown, its `endCursor` now stale
+        //   !isRankReady       — new page fetched but deliberately not committed until ranked, so
+        //                        the cursor has already advanced past the page being looked at
+        //
+        // The last is specific to this section: the entity query has moved on while `related` is
+        // still holding the previous page, so Next would skip the page in between entirely.
+        isLoading={isLoading || isPlaceholderData || !isRankReady}
         onPrevious={pages.toPrevious}
         onNext={() => endCursor && pages.toNext(endCursor)}
       />
@@ -206,6 +213,12 @@ function RelatedClaimCard({
     [responseKind, row, summary.negative, summary.positive]
   );
 
+  const viewerResponse = React.useMemo(() => {
+    if (summary.viewerDirection === null) return null;
+    const position = summary.viewerDirection === 'positive';
+    return { position, position_label: responsePositionLabel(responseKind, position) };
+  }, [responseKind, summary.viewerDirection]);
+
   return (
     <MatchmakingClaimCard
       claim={{
@@ -218,7 +231,10 @@ function RelatedClaimCard({
       positions={positions}
       readiness={{
         response_kind: responseKind,
-        viewer_response: row?.viewer_response ?? null,
+        // Falls back to the on-chain summary, which resolves independently of geo-chat's batch.
+        // Treating an unarrived row as "no response" drew the viewer's own side unselected, and a
+        // click on it republished the response they already held instead of clearing it.
+        viewer_response: row?.viewer_response ?? viewerResponse,
         viewer_debate_ready: row?.viewer_debate_ready ?? false,
         readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
       }}
