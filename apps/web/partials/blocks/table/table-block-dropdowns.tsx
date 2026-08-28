@@ -146,7 +146,11 @@ function TableBlockDropdown({
   }, [defaultFilters, selected]);
 
   // Values that occur in this table for the property.
-  const { options: tableOptions, isLoading: isTableOptionsLoading } = useDropdownOptions({
+  const {
+    options: tableOptions,
+    isLoading: isTableOptionsLoading,
+    inferredTypeIds,
+  } = useDropdownOptions({
     columnId,
     baseFilterState,
     baseModesByColumn,
@@ -162,14 +166,18 @@ function TableBlockDropdown({
     spaceId,
     relationValueTypes: property.relationValueTypes,
   });
-  const hasTargetTypes = Boolean(typeIds?.length);
+  // Declared relation value types first; otherwise the types inferred from
+  // the values the property is actually used with, so the universe can still
+  // be paged for properties that never declared one (most space-local ones).
+  const searchTypeIds = typeIds?.length ? typeIds : inferredTypeIds;
+  const hasTargetTypes = searchTypeIds.length > 0;
 
   // The option list is its own scroll area (below a fixed search bar), so the
   // sentinel observes intersection with it rather than with the viewport.
   const [listEl, setListEl] = React.useState<HTMLDivElement | null>(null);
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery, 200).trim();
-  const typeIdsKey = typeIds?.slice().sort().join(',') ?? '';
+  const typeIdsKey = searchTypeIds.slice().sort().join(',');
 
   const {
     data: searchPages,
@@ -187,7 +195,7 @@ function TableBlockDropdown({
         cache,
         where: {
           name: { fuzzy: query },
-          ...(typeIds?.length ? { types: typeIds.map(id => ({ id: { equals: id } })) } : {}),
+          ...(searchTypeIds.length ? { types: searchTypeIds.map(id => ({ id: { equals: id } })) } : {}),
         },
         first: SEARCH_PAGE_SIZE,
         skip: pageParam,

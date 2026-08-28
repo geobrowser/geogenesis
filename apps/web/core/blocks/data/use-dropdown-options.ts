@@ -12,6 +12,9 @@ import type { Filter, ModesByColumn } from './filters';
 
 export type { DropdownOption } from './fetch-dropdown-options';
 
+const EMPTY_OPTIONS: DropdownOption[] = [];
+const EMPTY_IDS: string[] = [];
+
 /**
  * Candidate values for one browse-mode dropdown: the to-entities that occur
  * for `columnId` across the table's population — the block's filter with this
@@ -39,11 +42,14 @@ export function useDropdownOptions({
 
   const whereKey = React.useMemo(() => JSON.stringify(where), [where]);
 
-  const { data: fetched = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['data-block', 'dropdown-options', columnId, whereKey],
     queryFn: ({ signal }) => fetchDropdownOptions({ propertyId: columnId, where, signal }),
     staleTime: 60_000,
   });
+
+  const fetched = data?.options ?? EMPTY_OPTIONS;
+  const inferredTypeIds = data?.inferredTypeIds ?? EMPTY_IDS;
 
   const options: DropdownOption[] = React.useMemo(() => {
     const byId = new Map<string, DropdownOption>();
@@ -60,5 +66,5 @@ export function useDropdownOptions({
     [options]
   );
 
-  return { options, nameOf, isLoading };
+  return { options, nameOf, isLoading, inferredTypeIds };
 }

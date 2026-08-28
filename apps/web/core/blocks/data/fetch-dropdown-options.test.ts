@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { spaceIdsFromWhere, toDropdownOptions } from './fetch-dropdown-options';
+import { inferTargetTypeIds, spaceIdsFromWhere, toDropdownOptions } from './fetch-dropdown-options';
 
 describe('toDropdownOptions', () => {
   it('collapses relations to distinct to-entities sorted by name', () => {
@@ -28,6 +28,29 @@ describe('toDropdownOptions', () => {
   it('handles an empty or null relation list', () => {
     expect(toDropdownOptions({ relations: null })).toEqual([]);
     expect(toDropdownOptions({ relations: [] })).toEqual([]);
+  });
+});
+
+describe('inferTargetTypeIds', () => {
+  const rel = (id: string, types: string[]) => ({ toEntity: { id, name: id, types: types.map(t => ({ id: t })) } });
+
+  it('returns the types shared by at least half of the distinct values, most common first', () => {
+    const ids = inferTargetTypeIds({
+      relations: [
+        rel('a', ['topic']),
+        rel('b', ['topic', 'industry']),
+        rel('c', ['topic']),
+        rel('d', ['person']),
+        rel('a', ['topic']), // duplicate relation to the same value counts once
+      ],
+    });
+    expect(ids).toEqual(['topic']);
+  });
+
+  it('infers nothing from a single value or when no type reaches the threshold', () => {
+    expect(inferTargetTypeIds({ relations: [rel('a', ['topic'])] })).toEqual([]);
+    expect(inferTargetTypeIds({ relations: [rel('a', ['x']), rel('b', ['y']), rel('c', ['z'])] })).toEqual([]);
+    expect(inferTargetTypeIds({ relations: null })).toEqual([]);
   });
 });
 

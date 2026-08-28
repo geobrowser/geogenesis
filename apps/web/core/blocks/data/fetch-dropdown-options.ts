@@ -17,7 +17,17 @@ export type DropdownOption = { id: string; name: string | null };
 export const DROPDOWN_OPTIONS_RELATION_WINDOW = 1000;
 
 type DropdownOptionsResult = {
-  relations: { toEntity: { id: string; name: string | null } | null }[] | null;
+  relations: { toEntity: { id: string; name: string | null; types?: { id: string }[] | null } | null }[] | null;
+};
+
+export type DropdownOptionsFetch = {
+  options: DropdownOption[];
+  /**
+   * Target types inferred from usage: the types shared by most of the values
+   * the property points at. Used when the property declares no relation value
+   * types, so the search universe can still be paged.
+   */
+  inferredTypeIds: string[];
 };
 type DropdownOptionsVariables = { propertyId: string; spaceIds?: UuidFilter | null; first: number };
 
@@ -34,6 +44,9 @@ const DROPDOWN_OPTIONS_DOCUMENT = parse(/* GraphQL */ `
       toEntity {
         id
         name
+        types {
+          id
+        }
       }
     }
   }
@@ -68,6 +81,28 @@ export function toDropdownOptions(result: DropdownOptionsResult): DropdownOption
 }
 
 /**
+ * Types carried by at least half of the distinct values (and by at least two
+ * of them), most common first. Nothing is inferred from a single value.
+ */
+export function inferTargetTypeIds(result: DropdownOptionsResult): string[] {
+  const typesByEntity = new Map<string, Set<string>>();
+  for (const relation of result.relations ?? []) {
+    const target = relation.toEntity;
+    if (!target?.id) continue;
+    const set = typesByEntity.get(target.id) ?? new Set<string>();
+    for (const type of target.types ?? []) set.add(type.id);
+    typesByEntity.set(target.id, set);
+  }
+  const counts = new Map<string, number>();
+  for (const set of typesByEntity.values()) for (const id of set) counts.set(id, (counts.get(id) ?? 0) + 1);
+  const threshold = Math.max(2, Math.ceil(typesByEntity.size / 2));
+  return [...counts.entries()]
+    .filter(([, count]) => count >= threshold)
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => id);
+}
+
+/**
  * The to-entities `propertyId` is used with across the block's spaces (the
  * spaces come from `where`, the block's filter). This is the vocabulary a
  * browse-mode dropdown offers — "what values exist for this property here" —
@@ -81,11 +116,14 @@ export function fetchDropdownOptions({
   propertyId: string;
   where: WhereCondition;
   signal?: AbortSignal;
-}): Promise<DropdownOption[]> {
+}): Promise<DropdownOptionsFetch> {
   return Effect.runPromise(
     graphql({
       query: DROPDOWN_OPTIONS_DOCUMENT,
-      decoder: toDropdownOptions,
+      decoder: (result: DropdownOptionsResult) => ({
+        options: toDropdownOptions(result),
+        inferredTypeIds: inferTargetTypeIds(result),
+      }),
       variables: {
         propertyId,
         spaceIds: spaceIdsFromWhere(where) ?? null,
