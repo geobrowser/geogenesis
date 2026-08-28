@@ -2,6 +2,11 @@
 
 import * as React from 'react';
 
+import { ClaimPageView } from '~/core/claims/browse/claim-page-view';
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 import type { Relation, TabEntity } from '~/core/types';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
@@ -122,8 +127,28 @@ function EditorFooter({
   );
 }
 
+/**
+ * Whether this entity should render the custom Claim read view.
+ *
+ * Editing always falls through to the generic page: the custom view is a read surface with no
+ * property editor behind it, so an editor who lost the value sheet would have no way to change the
+ * claim.
+ *
+ * Unscoped, matching how `EntityVoteButtons` and `ClaimDebateButton` read the same flag. `types` is
+ * derived across every space either way, so this is about consistency with the controls the page
+ * renders rather than about reaching a type a scoped read would miss.
+ */
+function useShowsClaimView(entityId: string, spaceId: string) {
+  const isEditing = useUserIsEditing(spaceId);
+  const { entity } = useQueryEntity({ id: entityId });
+  const isClaim = entity?.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID)) ?? false;
+
+  return isClaim && !isEditing;
+}
+
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
+  const showsClaimView = useShowsClaimView(entityId, spaceId);
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
   const entityMediaUrl = useEntityMediaUrl(entityId, spaceId);
@@ -137,6 +162,15 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     previewImageUrl?.startsWith('ipfs://') || previewImageUrl?.startsWith('http')
       ? previewImageUrl
       : (previewImageResolvedUrl ?? previewImageUrl);
+
+  // After every hook above, so the branch can't change the hook order between renders — the flag
+  // flips when edit mode is toggled, which happens without remounting.
+  //
+  // Placed here rather than in the entity route's template strategy so the side panel is covered
+  // too: both surfaces render through this component, and the strategy only sees the route.
+  if (showsClaimView) {
+    return <ClaimPageView entityId={entityId} spaceId={spaceId} />;
+  }
 
   const tabsSection = (
     <EntityTabsSection
