@@ -45,8 +45,19 @@ function response(blocks: Block[], transcriptPosition = 'a0'): DebateTranscriptC
                     position: claim.position ?? 'a0',
                     toEntity: {
                       id: claim.id,
+                      // Aggregated across spaces, so it is only the resolver's last resort.
                       name: claim.name === undefined ? `Claim ${claim.id}` : claim.name,
                       spaceIds: spaceId === null ? [] : [spaceId],
+                      names:
+                        claim.name === undefined
+                          ? spaceId === null
+                            ? []
+                            : [{ spaceId, text: `Claim ${claim.id}` }]
+                          : claim.name === null
+                            ? []
+                            : spaceId === null
+                              ? []
+                              : [{ spaceId, text: claim.name }],
                     },
                   };
                 }),
@@ -244,6 +255,75 @@ describe('all', () => {
   });
 });
 
+/** A claim entity with Name values in several spaces, as the query returns them. */
+function multiSpaceClaim(names: Array<{ spaceId: string; text: string }>, aggregated: string | null) {
+  return {
+    entity: {
+      transcripts: [
+        {
+          position: 'a0',
+          toEntity: {
+            id: 'transcript-1',
+            blocks: [
+              {
+                position: 'a0',
+                toEntity: {
+                  id: 'block-1',
+                  authors: [{ position: 'a0', toEntity: { id: PRESTON } }],
+                  claims: [
+                    {
+                      position: 'a0',
+                      toEntity: {
+                        id: 'claim-1',
+                        name: aggregated,
+                        spaceIds: names.map(value => value.spaceId),
+                        names,
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
+
+describe('claim text resolution', () => {
+  // `toEntity.name` merges every space, so a Name published elsewhere could rewrite what a debater
+  // is shown to have said — the cross-space attribution the relation filters exist to stop,
+  // arriving through the text instead of the link.
+  it('shows the sentence named in the debate’s space, not the aggregated name', () => {
+    const OTHER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const grouped = groupTranscriptClaims(
+      multiSpaceClaim(
+        [
+          { spaceId: OTHER, text: 'Something the speaker never said.' },
+          { spaceId: SPACE, text: 'What the speaker actually said.' },
+        ],
+        'Something the speaker never said.'
+      ),
+      SPACE
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].text).toBe('What the speaker actually said.');
+  });
+
+  it('falls back to the aggregated name only when no space names the claim', () => {
+    const grouped = groupTranscriptClaims(multiSpaceClaim([], 'Only the aggregated name.'), SPACE);
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].text).toBe('Only the aggregated name.');
+  });
+
+  it('drops a claim that no space names and that has no aggregated name either', () => {
+    const grouped = groupTranscriptClaims(multiSpaceClaim([], null), SPACE);
+
+    expect(grouped.totalCount).toBe(0);
+  });
+});
+
 describe('space scoping', () => {
   // Relations are space-attributed and anyone may publish one in their own space pointing at any
   // entity, so the traversal is filtered to the debate's publication space. The claim's own row has
@@ -282,13 +362,49 @@ describe('space scoping', () => {
     expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(SPACE);
   });
 
-  it('falls back to the claim’s own space when it does not live in the debate’s', () => {
-    const OTHER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  // `spaceIds` is not a home-space list — it also counts spaces holding an outbound relation — so
+  // its raw first entry can be a space that merely cites the claim. Resolution is deferred to
+  // `entityHomeSpaceId`, the same rule the entity side panel and data block rows follow.
+  it('resolves an external claim to the space that names it, not the first id listed', () => {
+    const CITING = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const NAMING = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
     const grouped = groupTranscriptClaims(
-      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', spaceId: OTHER }] }]),
+      {
+        entity: {
+          transcripts: [
+            {
+              position: 'a0',
+              toEntity: {
+                id: 'transcript-1',
+                blocks: [
+                  {
+                    position: 'a0',
+                    toEntity: {
+                      id: 'block-1',
+                      authors: [{ position: 'a0', toEntity: { id: PRESTON } }],
+                      claims: [
+                        {
+                          position: 'a0',
+                          toEntity: {
+                            id: 'claim-1',
+                            name: 'External claim',
+                            // The citing space is listed first and does not name the claim.
+                            spaceIds: [CITING, NAMING],
+                            names: [{ spaceId: NAMING, text: 'External claim' }],
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
       SPACE
     );
 
-    expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(OTHER);
+    expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(NAMING);
   });
 });

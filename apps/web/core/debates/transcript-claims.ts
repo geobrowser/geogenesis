@@ -1,6 +1,8 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
+import { NAME_PROPERTY_ID } from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
+import { entityHomeSpaceId } from '~/core/utils/space/entity-home-space';
 
 import type { DebateTranscriptClaimsQuery } from '../io/debate-transcript-claims-document';
 
@@ -53,6 +55,49 @@ function presentRelations<T>(
   return present.sort((a, b) => Position.compare(a.position ?? null, b.position ?? null));
 }
 
+type ClaimEntityNaming = {
+  name?: string | null;
+  spaceIds?: Array<string | null> | null;
+  names?: Array<{ spaceId: string; text?: string | null } | null> | null;
+};
+
+/**
+ * The sentence to show for a claim and the space its row belongs to, both read per space.
+ *
+ * The sentence cannot come from the relation's aggregated `toEntity.name`: that field merges every
+ * space, which `core/io/dto/relations.ts` says in as many words and works around the same way. Left
+ * alone it would let a Name published for this claim in an unrelated space rewrite what a debater is
+ * shown to have said — the cross-space attribution the relation filters exist to prevent, arriving
+ * through the text instead of the link.
+ *
+ * The space cannot come from `spaceIds[0]` either. `entity-home-space.ts` documents that the list
+ * counts every space holding a value *or an outbound relation*, so its first entry can be a space
+ * that merely cites the claim. Home-space resolution is deferred to that module rather than
+ * reimplemented, so this follows the same rule as the entity side panel and the data block rows.
+ *
+ * The debate's own space wins whenever the claim is named there, which it is for anything we
+ * published. Everything else is the documented fallback for a claim linked in from elsewhere.
+ */
+function resolveClaimNaming(claim: ClaimEntityNaming, debateSpaceId: string): { text: string; spaceId: string | null } {
+  const named = (claim.names ?? []).flatMap(value =>
+    value && typeof value.text === 'string' && value.text.trim().length > 0
+      ? [{ spaceId: value.spaceId, text: value.text.trim() }]
+      : []
+  );
+
+  const inDebateSpace = named.find(value => uuidToHex(value.spaceId) === uuidToHex(debateSpaceId));
+  if (inDebateSpace) return { text: inDebateSpace.text, spaceId: debateSpaceId };
+
+  const homeSpaceId = entityHomeSpaceId({
+    spaces: (claim.spaceIds ?? []).filter((id): id is string => typeof id === 'string'),
+    values: named.map(value => ({ property: { id: NAME_PROPERTY_ID }, spaceId: value.spaceId, value: value.text })),
+  });
+
+  const atHome = homeSpaceId ? named.find(value => uuidToHex(value.spaceId) === uuidToHex(homeSpaceId)) : undefined;
+
+  return { text: (atHome?.text ?? claim.name?.trim() ?? '').trim(), spaceId: homeSpaceId };
+}
+
 /**
  * Flatten the transcript traversal into claims grouped by the speaker who made them.
  *
@@ -83,20 +128,13 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
         const key = uuidToHex(claimEntity.id);
         if (seenClaimIds.has(key)) continue;
 
+        const resolved = resolveClaimNaming(claimEntity, spaceId);
         // A claim with no name has nothing to render — its text *is* its name.
-        const text = claimEntity.name?.trim();
-        if (!text) continue;
+        if (!resolved.text) continue;
 
         seenClaimIds.add(key);
 
-        // The debate's space when the claim lives there, which it does for anything we published,
-        // rather than whichever space `spaceIds` happens to list first. A claim also curated into
-        // someone else's space would otherwise hand its row that space, and the row's link and
-        // response would follow it out of the debate this panel is showing.
-        const homeSpaces = (claimEntity.spaceIds ?? []).filter((id): id is string => typeof id === 'string');
-        const claimSpaceId = homeSpaces.find(id => uuidToHex(id) === uuidToHex(spaceId)) ?? homeSpaces[0] ?? null;
-
-        const row: TranscriptClaim = { id: claimEntity.id, text, spaceId: claimSpaceId };
+        const row: TranscriptClaim = { id: claimEntity.id, text: resolved.text, spaceId: resolved.spaceId };
 
         all.push(row);
 

@@ -32,6 +32,7 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
     $authorsPropertyId: UUID!
     $claimsPropertyId: UUID!
     $spaceId: UUID!
+    $namePropertyId: UUID!
   ) {
     entity(id: $id) {
       transcripts: relationsList(filter: { typeId: { is: $transcriptsPropertyId }, spaceId: { is: $spaceId } }) {
@@ -51,10 +52,18 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
                 position
                 toEntity {
                   id
+                  # Not space-scoped, so only a last resort — see the note above.
                   name
-                  # Where the claim actually lives, which is what its responses are published
-                  # against — not necessarily the space the panel is being rendered from.
+                  # Candidate spaces. Not a home-space list on its own: it also counts spaces
+                  # holding an outbound relation, so its raw order cannot pick one.
                   spaceIds
+                  # The claim sentence per space. The aggregated name field above merges spaces, so a
+                  # Name published for this claim elsewhere could otherwise rewrite what a debater
+                  # is shown to have said.
+                  names: valuesList(filter: { propertyId: { is: $namePropertyId } }) {
+                    spaceId
+                    text
+                  }
                 }
               }
             }
@@ -71,6 +80,7 @@ type ClaimEntity = {
   id: string;
   name?: string | null;
   spaceIds?: Array<string | null> | null;
+  names?: Array<{ spaceId: string; text?: string | null } | null> | null;
 };
 
 export type DebateTranscriptClaimsQuery = {
@@ -97,6 +107,7 @@ type DebateTranscriptClaimsVariables = {
   authorsPropertyId: string;
   claimsPropertyId: string;
   spaceId: string;
+  namePropertyId: string;
 };
 
 export const debateTranscriptClaimsDocument = parse(DEBATE_TRANSCRIPT_CLAIMS_SOURCE) as TypedDocumentNode<

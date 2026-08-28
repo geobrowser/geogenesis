@@ -8,6 +8,7 @@ import {
   BLOCKS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_TRANSCRIPTS_PROPERTY_ID,
+  NAME_PROPERTY_ID,
   VOTE_DEBATES_PROPERTY_ID,
   VOTE_TYPE_ID,
 } from '~/core/debates/ontology';
@@ -676,6 +677,7 @@ export function getDebateTranscriptClaims(debateEntityId: string, spaceId: strin
       authorsPropertyId: AUTHORS_PROPERTY_ID,
       claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
       spaceId,
+      namePropertyId: NAME_PROPERTY_ID,
     },
     signal,
   });
