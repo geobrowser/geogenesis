@@ -24,13 +24,7 @@ import { MemberRow } from '~/partials/space-page/space-member-row';
 import { CLAIM_RESPONSE_OBJECT_TYPE } from './claim-response-summary';
 
 /**
- * Long enough to cross the gap between the trigger and the panel without the panel vanishing
- * mid-reach, short enough that it doesn't linger once the pointer has genuinely left.
- */
-const CLOSE_GRACE_MS = 120;
-
-/**
- * The people on one side of a claim: a stack of faces that opens the full list.
+ * The people on one side of a claim: a stack of faces that opens the full list when pressed.
  *
  * `ClaimResponderAvatars` reports everyone who responded regardless of direction, which is right
  * for a single stack beside a score and wrong under a split — used on both sides it shows the same
@@ -56,22 +50,9 @@ export function ClaimSideResponders({
   /** The authoritative count for this side, which can exceed the faces the query returns. */
   totalResponders: number;
 }) {
+  // Held rather than left to Radix so the profile lookup below is deferred until the list is
+  // actually opened — a page of claim cards would otherwise fetch every side's profiles up front.
   const [open, setOpen] = React.useState(false);
-  const closeTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const cancelClose = React.useCallback(() => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-  }, []);
-
-  const scheduleClose = React.useCallback(() => {
-    cancelClose();
-    closeTimer.current = setTimeout(() => setOpen(false), CLOSE_GRACE_MS);
-  }, [cancelClose]);
-
-  React.useEffect(() => cancelClose, [cancelClose]);
 
   const { data: responders } = useQuery({
     queryKey: entityRespondersQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
@@ -88,17 +69,8 @@ export function ClaimSideResponders({
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
-      {/* Hover opens it, and so do click and keyboard focus. Hover alone would put the list out of
-          reach of anyone on a touchscreen or a keyboard, and Radix has no hover-card primitive
-          installed to hand that to. */}
       <Popover.Trigger
         aria-label={`${totalResponders} ${pluralize('person', totalResponders)} ${label.toLowerCase()}`}
-        onMouseEnter={() => {
-          cancelClose();
-          setOpen(true);
-        }}
-        onMouseLeave={scheduleClose}
-        onFocus={() => setOpen(true)}
         className="inline-flex cursor-pointer items-center rounded"
       >
         <RankingAggregatedSubmitterAvatars
@@ -110,17 +82,7 @@ export function ClaimSideResponders({
         />
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content
-          side="bottom"
-          align="start"
-          sideOffset={8}
-          avoidCollisions
-          // Hovering must not steal focus, or the page scrolls to the panel under the pointer.
-          onOpenAutoFocus={event => event.preventDefault()}
-          onMouseEnter={cancelClose}
-          onMouseLeave={scheduleClose}
-          className="z-100 origin-top-left"
-        >
+        <Popover.Content side="bottom" align="start" sideOffset={8} avoidCollisions className="z-100 origin-top-left">
           {open ? <ResponderList spaceIds={sideSpaceIds} label={label} totalCount={totalResponders} /> : null}
         </Popover.Content>
       </Popover.Portal>
