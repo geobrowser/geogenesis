@@ -14,6 +14,7 @@ import {
   getRematchLiveKitToken,
   joinDebateQueue,
   listDebateClaims,
+  listDebatePeople,
   listMatchmakingClaims,
   notifyClaimResponseIndexed,
   resetGeoChatSession,
@@ -365,6 +366,77 @@ describe('debate queue readiness', () => {
 
     await expect(joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a')).rejects.toBeInstanceOf(GeoChatRequestError);
     expect(fetch).toHaveBeenCalledOnce();
+  });
+});
+
+// GEO-2725 opened both matchmaking reads to signed-out viewers. The risk in doing that is the
+// mirror of the case below: a blanket `auth: 'optional'` would also treat a signed-in viewer's
+// failed token exchange as "no account" and fetch anonymously, and that answer would be cached
+// under their account key — leaving viewer-relative fields like `can_challenge` quietly wrong.
+describe('matchmaking read authentication', () => {
+  const okResponse = (body: unknown) =>
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+
+  beforeEach(() => {
+    resetGeoChatSession();
+    window.localStorage.removeItem('geo:chat-session');
+  });
+
+  it('reads people anonymously when nobody is signed in', async () => {
+    const fetch = okResponse({ people: [] });
+    vi.stubGlobal('fetch', fetch);
+
+    // Passed but never consulted: with no account there is no exchange to make, which is what
+    // keeps this path anonymous rather than merely tokenless.
+    const getPrivyIdentityToken = vi.fn();
+
+    await expect(listDebatePeople(getPrivyIdentityToken, null)).resolves.toEqual({ people: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/matchmaking/people',
+      expect.objectContaining({ headers: {} })
+    );
+    expect(getPrivyIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade a signed-in people request to anonymous when the token exchange fails', async () => {
+    const fetch = okResponse({ people: [] });
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(listDebatePeople(getPrivyIdentityToken, 'user-a')).rejects.toThrow('Identity token unavailable');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('reads matchmaking claims anonymously when nobody is signed in', async () => {
+    const fetch = okResponse({ claims: [], next_cursor: null });
+    vi.stubGlobal('fetch', fetch);
+
+    const getPrivyIdentityToken = vi.fn();
+
+    await expect(listMatchmakingClaims({ filter: 'all' }, getPrivyIdentityToken, null)).resolves.toEqual({
+      claims: [],
+      next_cursor: null,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/matchmaking/claims'),
+      expect.objectContaining({ headers: {} })
+    );
+    expect(getPrivyIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade a signed-in claims request to anonymous when the token exchange fails', async () => {
+    const fetch = okResponse({ claims: [], next_cursor: null });
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(listMatchmakingClaims({ filter: 'all' }, getPrivyIdentityToken, 'user-a')).rejects.toThrow(
+      'Identity token unavailable'
+    );
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 

@@ -60,6 +60,12 @@ type Props = {
    * that only means "don't know yet", which would draw the viewer onto two sides at once.
    */
   viewerIdentityPending?: boolean;
+  /**
+   * Sends a signed-out viewer to Privy instead of publishing. Set by hosts that render to signed-out
+   * viewers — the hub's Claims tab and the claim page — and left unset when signing in is not a
+   * possibility the host has to handle, which keeps the response path unchanged for everyone else.
+   */
+  onRequireSignIn?: () => void;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -88,6 +94,7 @@ export function MatchmakingClaimCard({
   onOpenClaim,
   hideReadinessToggle,
   viewerIdentityPending,
+  onRequireSignIn,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -107,6 +114,7 @@ export function MatchmakingClaimCard({
           onOpenClaim={onOpenClaim}
           hideReadinessToggle={hideReadinessToggle}
           viewerIdentityPending={viewerIdentityPending}
+          onRequireSignIn={onRequireSignIn}
         />
       ) : (
         <UnresolvableControls
@@ -312,6 +320,7 @@ function RespondableControls({
   onOpenClaim,
   hideReadinessToggle,
   viewerIdentityPending,
+  onRequireSignIn,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -320,9 +329,10 @@ function RespondableControls({
   onOpenClaim?: () => void;
   hideReadinessToggle?: boolean;
   viewerIdentityPending?: boolean;
+  onRequireSignIn?: () => void;
 }) {
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
-    useClaimPositionControl({ claim, positions, readiness, viewerIdentityPending });
+    useClaimPositionControl({ claim, positions, readiness, viewerIdentityPending, onRequireSignIn });
   return (
     <>
       <ClaimHeader
