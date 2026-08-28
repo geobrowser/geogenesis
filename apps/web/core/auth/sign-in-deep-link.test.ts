@@ -64,6 +64,32 @@ describe('urlWithoutSignInModal', () => {
     );
   });
 
+  // A fragment is route state in this app, not decoration — `block-reorder` resolves a linked
+  // block out of `window.location.hash`. Rebuilding the URL without it drops the anchor the
+  // viewer followed, and `replaceState` rewrites the whole URL, so the loss is not recoverable.
+  it('keeps the fragment', () => {
+    expect(urlWithoutSignInModal('/space/space-1/entity-1', params('modal=signin&source=email'), '#block-1')).toBe(
+      '/space/space-1/entity-1#block-1'
+    );
+  });
+
+  it('orders the fragment after the surviving params', () => {
+    expect(urlWithoutSignInModal('/space/space-1/entity-1', params('modal=signin&tabId=tab-2'), '#block-1')).toBe(
+      '/space/space-1/entity-1?tabId=tab-2#block-1'
+    );
+  });
+
+  // `location.hash` is '' when there is no anchor and '#' for a bare one, and neither should
+  // leave a dangling marker on the tidied URL.
+  it('adds no marker when there is no anchor', () => {
+    expect(urlWithoutSignInModal('/explore', params('modal=signin'), '')).toBe('/explore');
+    expect(urlWithoutSignInModal('/explore', params('modal=signin'), '#')).toBe('/explore');
+  });
+
+  it('tolerates a bare id from a caller that is not reading location.hash', () => {
+    expect(urlWithoutSignInModal('/explore', params('modal=signin'), 'block-1')).toBe('/explore#block-1');
+  });
+
   it('is a no-op on a URL that never carried the trigger', () => {
     expect(urlWithoutSignInModal('/explore', params('tabId=tab-2'))).toBe('/explore?tabId=tab-2');
     expect(urlWithoutSignInModal('/explore', null)).toBe('/explore');

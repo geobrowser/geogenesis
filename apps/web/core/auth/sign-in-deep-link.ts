@@ -51,13 +51,20 @@ export function signInModalSource(params: ReadableParams): string | null {
  * The same URL with the trigger removed, preserving every other param — the viewer may have
  * arrived on a route that carries its own state, and dropping it would be a worse bug than the
  * one this clearing exists to prevent.
+ *
+ * The fragment has to be passed in: `usePathname` and `useSearchParams` both omit it, and a
+ * fragment is route state here rather than decoration — `block-reorder` resolves a linked block
+ * out of `window.location.hash`. Rebuilding a URL without it would silently drop the anchor a
+ * viewer followed.
  */
-export function urlWithoutSignInModal(pathname: string, params: ReadableParams): string {
+export function urlWithoutSignInModal(pathname: string, params: ReadableParams, hash = ''): string {
   const next = new URLSearchParams(params?.toString() ?? '');
   next.delete(MODAL_PARAM);
   next.delete(SOURCE_PARAM);
   const search = next.toString();
-  return search ? `${pathname}?${search}` : pathname;
+  // Accepts `location.hash` as-is, which already carries the `#`, and tolerates a bare id.
+  const fragment = !hash || hash === '#' ? '' : hash.startsWith('#') ? hash : `#${hash}`;
+  return `${pathname}${search ? `?${search}` : ''}${fragment}`;
 }
 
 /**

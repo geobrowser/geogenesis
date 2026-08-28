@@ -41,6 +41,8 @@ describe('SignInDeepLinkHandler', () => {
     mocks.signInOptions = null;
     mocks.openSignIn.mockReset();
     mocks.replaceState.mockReset();
+    // Set by one test below, and it would otherwise leak an anchor into every later assertion.
+    window.location.hash = '';
     vi.spyOn(window.history, 'replaceState').mockImplementation(mocks.replaceState);
   });
 
@@ -56,6 +58,19 @@ describe('SignInDeepLinkHandler', () => {
     render(<SignInDeepLinkHandler />);
 
     expect(mocks.replaceState).toHaveBeenCalledWith(null, '', '/explore');
+  });
+
+  // `replaceState` rewrites the whole URL, so an anchor missing from `cleanUrl` is an anchor
+  // thrown away — and this app resolves linked blocks out of `window.location.hash`.
+  it('keeps the anchor the viewer followed', () => {
+    mocks.pathname = '/space/space-1/entity-1';
+    mocks.search = 'modal=signin&source=email';
+    window.location.hash = '#block-1';
+
+    render(<SignInDeepLinkHandler />);
+
+    expect(mocks.replaceState).toHaveBeenCalledWith(null, '', '/space/space-1/entity-1#block-1');
+    expect(mocks.signInOptions?.redirectTo).toBe('/space/space-1/entity-1#block-1');
   });
 
   it('keeps any other param the route was carrying', () => {

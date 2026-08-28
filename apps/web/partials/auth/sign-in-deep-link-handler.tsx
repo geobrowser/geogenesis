@@ -24,7 +24,12 @@ export function SignInDeepLinkHandler() {
 
   const requested = requestsSignInModal(searchParams);
   const source = signInModalSource(searchParams);
-  const cleanUrl = urlWithoutSignInModal(pathname ?? '/', searchParams);
+  // Neither `usePathname` nor `useSearchParams` reports the fragment, so it is read off the
+  // location or it is lost — and `replaceState` below rewrites the whole URL, anchor included.
+  // Safe to read during render: this component is client-only, and the value is settled by the
+  // time the effect that consumes it runs.
+  const hash = typeof window === 'undefined' ? '' : window.location.hash;
+  const cleanUrl = urlWithoutSignInModal(pathname ?? '/', searchParams, hash);
 
   const openSignIn = usePrivySignIn(undefined, {
     // Not the current URL, which still holds the trigger: a viewer who signs up goes through
