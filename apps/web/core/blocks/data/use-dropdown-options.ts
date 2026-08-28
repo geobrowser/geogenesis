@@ -12,8 +12,8 @@ import type { Filter, ModesByColumn } from './filters';
 
 export type { DropdownOption } from './fetch-dropdown-options';
 
-/** Upper bound on population pages walked for one dropdown (× 200 entities). */
-const MAX_POPULATION_PAGES = 25;
+/** Upper bound on population pages walked for one dropdown (× 1000 entities). */
+const MAX_POPULATION_PAGES = 5;
 
 /**
  * The values of one property across the table's population — the block's

@@ -32,8 +32,17 @@ export type DropdownOption = { id: string; name: string | null };
  * relations for the property are read by `fromEntityId` (indexed). Pages
  * are pulled as the user scrolls or searches.
  */
-export const DROPDOWN_POPULATION_PAGE_SIZE = 200;
+export const DROPDOWN_POPULATION_PAGE_SIZE = 1000;
+/**
+ * Relations are read per chunk of population ids, in parallel. Latency is
+ * dominated by fixed per-request cost (a 1000-id page costs the same as a
+ * 200-id one), so pages are large and the relation lookups fan out; a dense
+ * property (Types) has more relations than entities, so each chunk keeps
+ * its own window instead of one capped query for the whole page.
+ */
+export const DROPDOWN_RELATION_CHUNK = 250;
 export const DROPDOWN_RELATION_WINDOW = 1000;
+const RELATION_CHUNK_CONCURRENCY = 4;
 
 type PopulationPageResult = {
   entitiesConnection: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: { id: string }[] } | null;
@@ -177,14 +186,30 @@ export function fetchDropdownOptionsPage({
         return { options: [], endCursor: population.endCursor, hasNextPage: false };
       }
 
-      const options = yield* graphql({
-        query: RELATIONS_DOCUMENT,
-        decoder: toDropdownOptions,
-        variables: { propertyId, fromEntityIds: population.ids, first: DROPDOWN_RELATION_WINDOW },
-        signal,
-      });
+      const chunks: string[][] = [];
+      for (let start = 0; start < population.ids.length; start += DROPDOWN_RELATION_CHUNK) {
+        chunks.push(population.ids.slice(start, start + DROPDOWN_RELATION_CHUNK));
+      }
 
-      return { options, endCursor: population.endCursor, hasNextPage: population.hasNextPage };
+      const perChunk = yield* Effect.all(
+        chunks.map(fromEntityIds =>
+          graphql({
+            query: RELATIONS_DOCUMENT,
+            decoder: toDropdownOptions,
+            variables: { propertyId, fromEntityIds, first: DROPDOWN_RELATION_WINDOW },
+            signal,
+          })
+        ),
+        { concurrency: RELATION_CHUNK_CONCURRENCY }
+      );
+
+      return {
+        options: toDropdownOptions({
+          relations: perChunk.flat().map(option => ({ toEntity: { id: option.id, name: option.name } })),
+        }),
+        endCursor: population.endCursor,
+        hasNextPage: population.hasNextPage,
+      };
     })
   );
 }

@@ -175,10 +175,11 @@ function TableBlockDropdown({
   });
 
   // Two stable states while open: walking (the scope is still being read)
-  // and settled. The search bar hides while walking with nothing to search
-  // yet, and on a settled short list (everything is already on screen).
+  // and settled. The search bar is available from the start — a user need
+  // not wait for the walk to begin typing — and hides only on a settled
+  // short list, where everything is already on screen.
   const isSettledShortList = !isWalking && options.length <= SEARCH_BAR_THRESHOLD;
-  const showSearch = query.length > 0 || (!(isWalking && options.length === 0) && !isSettledShortList);
+  const showSearch = query.length > 0 || !isSettledShortList;
 
   const selectedNames = selected.map(id => nameOf(id) ?? '…');
   const pillLabel =
