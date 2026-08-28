@@ -11,6 +11,7 @@ import { produce } from 'immer';
 
 import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
+import type { DataBlockView } from '~/core/blocks/data/data-block-view';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import { Source } from '~/core/blocks/data/source';
@@ -549,6 +550,12 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
   );
 }
 
+/**
+ * Views whose renderer draws every entry it is given, so accumulating pages actually grows the
+ * list. TABLE is absent deliberately: `TableBlockTable` paginates internally at a fixed 9 rows.
+ */
+const INFINITE_SCROLLABLE_VIEWS = new Set<DataBlockView>(['LIST', 'BULLETED_LIST', 'GALLERY', 'PILL', 'EXPLORE']);
+
 const ConfiguredTableBlock = ({
   spaceId,
   blockId,
@@ -731,8 +738,16 @@ const ConfiguredTableBlock = ({
 
   // Infinite scroll is opt-in via the Infinite scroll BOOLEAN on the Blocks
   // relation entity (same entity that holds View and Properties).
+  //
+  // It only applies to views that render every entry handed to them. `TableBlockTable` — the
+  // TABLE view and the fallback for any view without its own renderer — paginates internally at
+  // a fixed 9 rows with no pager of its own, so accumulating past that is invisible: the list
+  // never grows, the sentinel below it never stops intersecting, and it walks the whole source
+  // one page at a time while the user sees nine rows. Allowlist rather than deny TABLE, so a
+  // view added later has to opt in instead of silently inheriting that.
   const infiniteScrollProperty = useBlockInfiniteScroll();
-  const isInfiniteScroll = infiniteScrollProperty && !isEditing;
+  const viewRendersAllEntries = INFINITE_SCROLLABLE_VIEWS.has(view);
+  const isInfiniteScroll = infiniteScrollProperty && viewRendersAllEntries && !isEditing;
 
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
 
@@ -749,9 +764,17 @@ const ConfiguredTableBlock = ({
     [isInfiniteScroll, pageSize, source, activeFilters, activeFilterMode, sortState]
   );
 
+  // `setPage(0)` only lands on the next render, so between the reset and that render `pageNumber`
+  // still points at the page the user was on. The accumulation effect below runs in this same
+  // commit, so without this flag it would seed the freshly cleared `rowPages` with the *old*
+  // page's rows under the old index — leaving the list opening at page 3, or stranding those rows
+  // at the end forever if the new result set is shorter.
+  const awaitingPageResetRef = React.useRef(false);
+
   React.useEffect(() => {
     setRowPages(prev => (prev.length === 0 ? prev : []));
     if (!infiniteScrollProperty) return;
+    awaitingPageResetRef.current = true;
     setPage(0);
   }, [accumulationResetKey, infiniteScrollProperty, setPage]);
 
@@ -762,6 +785,12 @@ const ConfiguredTableBlock = ({
   React.useEffect(() => {
     if (!isInfiniteScroll) return;
     if (!isFetched || isPlaceholderData) return;
+    if (awaitingPageResetRef.current) {
+      // Nothing to wait for once we are actually on page 0 — that is the reset having landed
+      // (or it never moved us, because we were already there).
+      if (pageNumber !== 0) return;
+      awaitingPageResetRef.current = false;
+    }
     const realRows = entries.filter(row => !row.placeholder);
     setRowPages(prev => upsertRowPage(prev, pageNumber, realRows));
   }, [isInfiniteScroll, isFetched, isPlaceholderData, pageNumber, entries]);
