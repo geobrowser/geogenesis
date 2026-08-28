@@ -1,5 +1,7 @@
 'use client';
 
+import { keepPreviousData } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -32,9 +34,8 @@ import { useDebateKeyframes } from './use-debate-keyframes';
  * Enough to show the claim has been argued without turning the page into a debate index, and how
  * many more arrive each time the reader asks.
  *
- * A claim usually collects a handful of debates, but nothing bounds it — so rather than cap
- * silently and let the section quietly under-report, one extra row is always fetched purely to
- * learn whether there are more, and the reader is offered them.
+ * A claim usually collects a handful of debates, but nothing bounds it, so the section pages
+ * rather than capping silently and quietly under-reporting.
  */
 const DEBATE_PAGE_SIZE = 5;
 
@@ -59,21 +60,36 @@ export function ClaimDebates({
   /** Labels each debater's side in the claim's own vocabulary — Agree/Disagree or Verify/Dispute. */
   responseKind: 'stance' | 'veracity';
 }) {
-  const [limit, setLimit] = React.useState(DEBATE_PAGE_SIZE);
-
-  // One more than shown: `useQueryEntities` reports no total, so an extra row is the cheapest
-  // honest answer to "is there anything past this".
-  const { entities: page, isLoading } = useQueryEntities({
+  // Cursor paging rather than a growing `first`: raising the limit refetches every row already on
+  // screen to add a handful, where `after` asks only for the ones past them. `hasNextPage` answers
+  // "is there more" outright, so nothing has to be over-fetched to infer it.
+  const [cursor, setCursor] = React.useState<string | undefined>();
+  const {
+    entities: page,
+    isLoading,
+    endCursor,
+    hasNextPage,
+  } = useQueryEntities({
     where: {
       types: [{ id: { equals: DEBATE_TYPE_ID } }],
       spaces: [{ equals: spaceId }],
       relations: [{ typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { equals: claimId } } }],
     },
-    first: limit + 1,
+    first: DEBATE_PAGE_SIZE,
+    after: cursor,
+    placeholderData: keepPreviousData,
   });
 
-  const hasMore = page.length > limit;
-  const debates = React.useMemo(() => page.slice(0, limit), [limit, page]);
+  // Pages accumulate: the query returns one page at a time, and the section shows every debate
+  // fetched so far. Keyed by id so a row arriving in two pages is held once.
+  const [debates, setDebates] = React.useState<Entity[]>([]);
+  React.useEffect(() => {
+    setDebates(current => {
+      const next = new Map(current.map(debate => [debate.id, debate]));
+      for (const debate of page) next.set(debate.id, debate);
+      return next.size === current.length ? current : [...next.values()];
+    });
+  }, [page]);
 
   const sidesByDebateId = React.useMemo(() => {
     const map = new Map<string, DebateSide[]>();
@@ -102,7 +118,9 @@ export function ClaimDebates({
   const winnerShareByDebateId = useWinnerShares(debateIds);
   const keyframeByDebateId = useDebateKeyframes(debates);
 
-  if (isLoading) {
+  // Only while there is nothing to show. Once a page has landed the list stays put and the next
+  // one appends beneath it, rather than collapsing back to a skeleton on every "Show more".
+  if (isLoading && debates.length === 0) {
     return <Skeleton className="h-[120px] w-full rounded-lg" />;
   }
 
@@ -128,13 +146,14 @@ export function ClaimDebates({
           </li>
         ))}
       </ul>
-      {hasMore && (
+      {hasNextPage && endCursor && (
         <button
           type="button"
-          onClick={() => setLimit(current => current + DEBATE_PAGE_SIZE)}
-          className="mt-3 text-metadata text-grey-04 transition-colors hover:text-text"
+          onClick={() => setCursor(endCursor)}
+          disabled={isLoading}
+          className="mt-3 text-metadata text-grey-04 transition-colors hover:text-text disabled:opacity-60"
         >
-          Show more debates
+          {isLoading ? 'Loading…' : 'Show more debates'}
         </button>
       )}
     </section>

@@ -1,5 +1,7 @@
 'use client';
 
+import { keepPreviousData } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
@@ -21,8 +23,8 @@ import { useClaimResponseSummary } from './claim-response-summary';
 /**
  * A way out of the page, not a directory — and how many more arrive each time the reader asks.
  *
- * A busy topic can carry hundreds of claims, so the gallery shows a handful and offers the rest
- * rather than capping silently and leaving the section looking like the whole answer.
+ * A busy topic can carry hundreds of claims, so the gallery pages rather than capping silently and
+ * leaving the section looking like the whole answer.
  */
 const RELATED_PAGE_SIZE = 4;
 
@@ -45,27 +47,52 @@ export function ClaimRelatedClaims({
   spaceId: string;
   topicIds: string[];
 }) {
-  const [limit, setLimit] = React.useState(RELATED_PAGE_SIZE);
-
-  // Two over the limit rather than one: this claim is filtered out of its own list below, so a
-  // single spare row could be spent on that and leave nothing to detect a further page with.
-  const { entities } = useQueryEntities({
+  // Cursor paging rather than a growing `first`, so asking for more fetches only the rows past the
+  // ones already on screen. `hasNextPage` is the server's own answer, which matters here more than
+  // for the debates list: this claim is filtered out of its own results below, so counting rows to
+  // infer a further page would be off by one exactly when the page contains it.
+  const [cursor, setCursor] = React.useState<string | undefined>();
+  const {
+    entities: page,
+    isLoading,
+    endCursor,
+    hasNextPage,
+  } = useQueryEntities({
     where: {
       types: [{ id: { equals: CLAIM_TYPE_ID } }],
       spaces: [{ equals: spaceId }],
       relations: [{ typeOf: { id: { equals: TOPICS_PROPERTY_ID } }, toEntity: { id: { in: topicIds } } }],
     },
-    first: limit + 2,
+    first: RELATED_PAGE_SIZE,
+    after: cursor,
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
+    placeholderData: keepPreviousData,
     enabled: topicIds.length > 0,
   });
 
-  const candidates = React.useMemo(
-    () => entities.filter(entity => !ID.equals(entity.id, claimId) && entity.name),
-    [claimId, entities]
+  const [seen, setSeen] = React.useState<Entity[]>([]);
+  React.useEffect(() => {
+    setSeen(current => {
+      const next = new Map(current.map(entity => [entity.id, entity]));
+      for (const entity of page) next.set(entity.id, entity);
+      return next.size === current.length ? current : [...next.values()];
+    });
+  }, [page]);
+
+  const related = React.useMemo(
+    () => seen.filter(entity => !ID.equals(entity.id, claimId) && entity.name),
+    [claimId, seen]
   );
-  const hasMore = candidates.length > limit;
-  const related = React.useMemo(() => candidates.slice(0, limit), [candidates, limit]);
+
+  // A page can arrive holding nothing this section can show — most obviously the page containing
+  // this claim itself, which is filtered out above. Left alone the section would hide on a topic
+  // that does have other claims, just further down. Advance rather than render an empty shell with
+  // a button; each step moves the cursor forward, so this settles on the first page with rows or
+  // at the end of the list.
+  React.useEffect(() => {
+    if (isLoading || related.length > 0 || !hasNextPage || !endCursor) return;
+    setCursor(endCursor);
+  }, [endCursor, hasNextPage, isLoading, related.length]);
 
   // One lookup for the whole gallery. The cards read their sides and readiness from geo-chat, the
   // same as they do in the hub — without it every card would draw an empty, un-actionable pair.
@@ -77,6 +104,8 @@ export function ClaimRelatedClaims({
     return map;
   }, [rowsQuery.data?.claims]);
 
+  // Nothing to show and nothing left to fetch. While a further page exists the effect above is
+  // still walking toward it, and hiding now would flash the section out and back in.
   if (related.length === 0) return null;
 
   return (
@@ -98,13 +127,14 @@ export function ClaimRelatedClaims({
           />
         ))}
       </div>
-      {hasMore && (
+      {hasNextPage && endCursor && (
         <button
           type="button"
-          onClick={() => setLimit(current => current + RELATED_PAGE_SIZE)}
-          className="mt-3 text-metadata text-grey-04 transition-colors hover:text-text"
+          onClick={() => setCursor(endCursor)}
+          disabled={isLoading}
+          className="mt-3 text-metadata text-grey-04 transition-colors hover:text-text disabled:opacity-60"
         >
-          Show more claims
+          {isLoading ? 'Loading…' : 'Show more claims'}
         </button>
       )}
     </section>

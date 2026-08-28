@@ -108,13 +108,13 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
                   <Link
                     key={topic.id}
                     href={NavUtils.toEntity(spaceId, topic.toEntity.id)}
-                    className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text transition-colors hover:border-grey-03"
+                    className={`${META_CHIP_CLASS} text-text transition-colors hover:border-text`}
                   >
                     <span className="truncate">{topic.toEntity.name ?? topic.toEntity.id}</span>
                   </Link>
                 ))}
                 {topics.length > TOPIC_CHIP_CAP && (
-                  <span className="inline-flex items-center rounded-md bg-grey-01 px-2 py-1 text-[0.8125rem] text-grey-04 tabular-nums">
+                  <span className={`${META_CHIP_CLASS} text-grey-04 tabular-nums`}>
                     +{topics.length - TOPIC_CHIP_CAP}
                   </span>
                 )}
@@ -302,10 +302,18 @@ function ClaimMatchup({ claimId, spaceId }: { claimId: string; spaceId: string }
   );
 }
 
-/** The neutral chip the type and tags share, so the left of the row reads as one group. */
+/**
+ * The chip a space homepage uses for its types, reused here for the claim's type, its tags and its
+ * topics — the same shape in all three places, since they are the same kind of label.
+ *
+ * `asChild` is not used: the topic variant is a link and needs its own hover state, so the class
+ * string is exported and composed rather than the element being wrapped.
+ */
+const META_CHIP_CLASS = 'flex h-6 max-w-full items-center rounded border border-grey-02 bg-white px-1.5 text-metadata';
+
 function MetaChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex max-w-full items-center rounded-sm bg-grey-01 px-2 py-0.5 text-metadata font-medium text-grey-04">
+    <span className={`${META_CHIP_CLASS} text-text`}>
       <span className="truncate">{children}</span>
     </span>
   );
