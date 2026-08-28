@@ -1,7 +1,7 @@
 'use client';
 
 import { isRevertedUserOperationError } from '@geogenesis/auth/account';
-import { Graph, IdUtils, type Op } from '@geoprotocol/geo-sdk/lite';
+import { IdUtils, Ops, type Op } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -218,29 +218,32 @@ export function useCreateComment(targetEntityId: string) {
       setError(null);
 
       try {
-        // The SDK builds the reply chain from the immediate parent; default to the entity
-        // being commented on for a top-level comment. `ancestorComments` is ordered
-        // [immediate parent, ..., root], so index 0 is the parent to reply to.
+        // `ancestorComments` is ordered [immediate parent, ..., root comment] and contains only
+        // comments — never the entity being commented on. Index 0 is the direct reply target;
+        // for a top-level comment there is no parent, so we reply straight to the target entity.
         const immediateParent = ancestorComments?.[0];
         const replyToTarget = immediateParent
           ? { entityId: immediateParent.id, spaceId: immediateParent.spaceId }
           : { entityId: targetEntityId, spaceId: targetSpaceId };
+        const replyToRelations = immediateParent
+          ? [
+              ...ancestorComments!.slice(1).map(c => ({ entityId: c.id, spaceId: c.spaceId, position: null })),
+              { entityId: targetEntityId, spaceId: targetSpaceId, position: null },
+            ]
+          : [];
 
-        // Generate the comment ops through the SDK instead of hand-building values/relations.
         let ops: Op[];
         try {
-          const result = await Graph.createComment({
+          const result = Ops.comments.create({
             id: commentEntityId,
             content: text,
             replyTo: replyToTarget,
             resolved: false,
-            // The SDK's `Network` type only permits 'TESTNET' as of geo-sdk 0.20.3; switch to
-            // GEO_NETWORK.id once the SDK widens it to include mainnet.
-            network: 'TESTNET',
+            replyToRelations,
           });
           ops = result.ops;
         } catch (err) {
-          console.error('[useCreateComment] Graph.createComment failed:', err);
+          console.error('[useCreateComment] Ops.comments.create failed:', err);
           // Roll back the optimistic row since we never produced ops to publish.
           queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
             old.filter(c => c.id !== commentEntityId)
@@ -449,7 +452,7 @@ export function useCreateComment(targetEntityId: string) {
       try {
         const newName = getCommentName(newText);
         // Generate the update ops through the SDK instead of hand-building values.
-        const { ops } = Graph.updateComment({ id: commentId, content: newText });
+        const { ops } = Ops.comments.update({ id: commentId, content: newText });
 
         // Optimistically update the comment in the query cache
         queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
