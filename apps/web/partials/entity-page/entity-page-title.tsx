@@ -1,6 +1,9 @@
 'use client';
 
 import cx from 'classnames';
+
+import * as React from 'react';
+
 import Textarea from 'react-textarea-autosize';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
@@ -19,6 +22,8 @@ type EntityPageTitleProps = {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  /** Rendered inline directly after the title in browse mode, e.g. a verification badge. */
+  accessory?: React.ReactNode;
 };
 
 export function EntityPageTitle({
@@ -27,6 +32,7 @@ export function EntityPageTitle({
   onChange,
   placeholder = 'Entity name...',
   className,
+  accessory,
 }: EntityPageTitleProps) {
   if (isEditing) {
     return (
@@ -47,7 +53,16 @@ export function EntityPageTitle({
 
   return (
     <div className={className}>
-      <h1 className={cx(titleTypographyClassName, 'w-full text-text')}>{value || ZERO_WIDTH_SPACE}</h1>
+      {accessory ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <h1 className={cx(titleTypographyClassName, 'min-w-0 wrap-break-word text-text')}>
+            {value || ZERO_WIDTH_SPACE}
+          </h1>
+          <span className="mt-[9px] inline-flex shrink-0">{accessory}</span>
+        </div>
+      ) : (
+        <h1 className={cx(titleTypographyClassName, 'w-full text-text')}>{value || ZERO_WIDTH_SPACE}</h1>
+      )}
       <Spacer height={12} />
     </div>
   );

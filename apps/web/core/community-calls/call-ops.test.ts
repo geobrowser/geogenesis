@@ -11,7 +11,7 @@ import {
   buildPublishRecordingsOps,
   buildUpdateCallOps,
 } from './call-ops';
-import { EVENT_SCHEMA } from './constants';
+import { CALL_SCHEMA, EVENT_SCHEMA } from './constants';
 
 function fakeBlockRelation(id: string): Relation {
   return {
@@ -55,6 +55,52 @@ describe('buildCreateCallOps', () => {
     });
 
     expect(relations.filter(r => r.type.id === SystemIds.BLOCKS)).toHaveLength(0);
+  });
+});
+
+/**
+ * The bug this closes: a Meeting Time value stored as the empty string
+ * (`65587cf0adea4ea8b5c2c8b3c39cc87f`). Both readers expand a call into occurrences and
+ * drop anything yielding none, so an empty schedule does not degrade the call — it deletes
+ * it from every view while leaving the entity in the graph, with no feedback to the author.
+ */
+describe('empty schedules are refused rather than written', () => {
+  const fields = {
+    spaceId: 'space-1',
+    name: 'Test community call',
+    description: 'Test description',
+    autoPublishAhead: 0,
+  };
+
+  it.each(['', '   ', '\n'])('create refuses schedule %j', schedule => {
+    expect(() => buildCreateCallOps({ ...fields, schedule })).toThrow(/empty schedule/i);
+  });
+
+  // The path that actually produced the bad row: create only writes autoPublishAhead when
+  // it is > 0, and the broken call had one at 0 — so it had been through an edit.
+  it.each(['', '   '])('update refuses schedule %j', schedule => {
+    expect(() => buildUpdateCallOps({ ...fields, schedule, entityId: 'call-1' })).toThrow(/empty schedule/i);
+  });
+
+  // Refused, not unset. Every other optional field here unsets when empty, and for the
+  // schedule that would be equally invisible — so neither is acceptable.
+  it('does not fall back to unsetting the meeting time', () => {
+    let captured: unknown = null;
+    try {
+      buildUpdateCallOps({ ...fields, schedule: '', entityId: 'call-1' });
+    } catch (error) {
+      captured = error;
+    }
+    expect(captured).toBeInstanceOf(Error);
+  });
+
+  it('still accepts a real schedule', () => {
+    const { values } = buildCreateCallOps({
+      ...fields,
+      schedule: 'DTSTART;TZID=Europe/Vilnius:20260821T220000\nDTEND;TZID=Europe/Vilnius:20260821T230000',
+    });
+    const meeting = values.find(v => v.property.id === CALL_SCHEMA.MEETING_TIME_PROPERTY);
+    expect(meeting?.value).toContain('DTSTART');
   });
 });
 

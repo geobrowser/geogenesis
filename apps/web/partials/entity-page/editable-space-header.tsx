@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 import { usePathname } from 'next/navigation';
 
-import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -70,17 +69,19 @@ export function EditableSpaceHeading({
   spaceId,
   entityId,
   addSubspaceComponent,
+  nameAccessoryComponent,
   actionsComponent,
 }: {
   spaceId: string;
   entityId: string;
   addSubspaceComponent?: React.ReactElement<any>;
+  /** Rendered directly after the name in browse mode, e.g. the verification state. */
+  nameAccessoryComponent?: React.ReactNode;
   /** Rendered at the end of the name row, e.g. the profile "Debate" button. */
   actionsComponent?: React.ReactNode;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
-  const { isEditor, isMember } = useAccessControl(spaceId);
   const { space } = useSpace(spaceId);
 
   const path = usePathname();
@@ -137,6 +138,7 @@ export function EditableSpaceHeading({
           value={name ?? ''}
           isEditing={isEditing}
           onChange={onNameChange}
+          accessory={nameAccessoryComponent}
           className="min-w-0 grow"
         />
         {isSpacePage && (
@@ -214,11 +216,6 @@ export function EditableSpaceHeading({
                       <MenuItem onClick={() => dispatch({ type: 'OPEN_CREATE_IN_SPACE' })}>
                         <p>Create in space</p>
                       </MenuItem>
-                      {(isEditor || isMember) && (
-                        <MenuItem href={NavUtils.toImport(spaceId)}>
-                          <p>Import data</p>
-                        </MenuItem>
-                      )}
                       {isEditing && Spaces.hasExternalTopic(space) && (
                         <MenuItem href={NavUtils.toEntity(spaceId, entityId)}>
                           <p>Edit space config</p>

@@ -2,6 +2,9 @@ type TakeoverRequest = {
   type: 'takeover-request';
   requestId: string;
   requesterId: string;
+  // Optional on the wire: tabs running a build that predates the field omit it, and the owner
+  // assumes a focused requester so an old tab is never permanently unbeatable mid-deploy.
+  requesterPriority?: DebateRoomTabPriority;
 };
 
 type TakeoverResponse = {
@@ -13,48 +16,95 @@ type TakeoverResponse = {
 
 type OwnershipMessage = TakeoverRequest | TakeoverResponse;
 
+export type DebateRoomTakeoverContext = {
+  requesterPriority: DebateRoomTabPriority;
+  ownerPriority: DebateRoomTabPriority;
+};
+
 type CreateDebateRoomOwnershipCoordinatorOptions = {
   debateId: string;
   userId: string;
-  onTakeoverRequested: () => boolean | Promise<boolean>;
+  onTakeoverRequested: (context: DebateRoomTakeoverContext) => boolean | Promise<boolean>;
+  // Test seam; production uses debateRoomTabPriority.
+  getTabPriority?: () => DebateRoomTabPriority;
 };
 
 export type DebateRoomOwnershipCoordinator = {
   readonly instanceId: string;
-  acquire: () => Promise<boolean>;
+  readonly coordinationMode: DebateRoomOwnershipCoordinationMode;
+  acquire: () => Promise<DebateRoomOwnershipAcquireResult>;
   requestTakeover: () => Promise<boolean>;
   release: () => Promise<void>;
   close: () => void;
   ownsConnection: () => boolean;
 };
 
+export type DebateRoomOwnershipAcquireResult = {
+  acquired: boolean;
+  waitedForLocalRelease: boolean;
+};
+
+export type DebateRoomOwnershipCoordinationMode = 'lock-and-broadcast' | 'lock-only' | 'livekit-fallback';
+
+// 0 = hidden, 1 = visible but unfocused, 2 = focused. Biases the ownership race toward the tab
+// the user is looking at: without it, whichever tab's connect() ran microseconds earlier owns the
+// debate — and after a rematch the background tab structurally wins, because the foreground tab
+// is still persisting its recording when the navigation fan-out lands.
+export type DebateRoomTabPriority = 0 | 1 | 2;
+
+export function debateRoomTabPriority(): DebateRoomTabPriority {
+  // Without a document we cannot tell, so claim focus rather than add an artificial delay.
+  if (typeof document === 'undefined') return 2;
+  if (document.visibilityState !== 'visible') return 0;
+  return typeof document.hasFocus === 'function' && !document.hasFocus() ? 1 : 2;
+}
+
+// A hidden tab waits long enough for a focused tab to reach its own lock request first, but far
+// less than the ~10s connecting window, so a genuinely solo hidden tab still connects comfortably.
+const acquisitionStaggerMs: Record<DebateRoomTabPriority, number> = { 0: 700, 1: 250, 2: 0 };
+
 const takeoverResponseTimeoutMs = 1_500;
+const localReleaseBarriers = new Map<string, Promise<void>>();
 
 export function createDebateRoomOwnershipCoordinator({
   debateId,
   userId,
   onTakeoverRequested,
+  getTabPriority = debateRoomTabPriority,
 }: CreateDebateRoomOwnershipCoordinatorOptions): DebateRoomOwnershipCoordinator {
   const instanceId = createInstanceId();
   const coordinationName = `geo:debate-room:${debateId}:${userId}`;
-  const canCoordinate =
-    typeof navigator !== 'undefined' && Boolean(navigator.locks?.request) && typeof BroadcastChannel !== 'undefined';
+  const lockManager =
+    typeof navigator !== 'undefined' && typeof navigator.locks?.request === 'function' ? navigator.locks : null;
   let channel: BroadcastChannel | null = null;
-  if (canCoordinate) {
+  if (lockManager && typeof BroadcastChannel !== 'undefined') {
     try {
       channel = new BroadcastChannel(coordinationName);
     } catch {
       channel = null;
     }
   }
-  const supportsCoordination = channel !== null;
+  let coordinationMode: DebateRoomOwnershipCoordinationMode = lockManager
+    ? channel
+      ? 'lock-and-broadcast'
+      : 'lock-only'
+    : 'livekit-fallback';
+  let lockRequestsAvailable = lockManager !== null;
   let ownsConnection = false;
   let closed = false;
   let releaseLock: (() => void) | null = null;
   let lockRequest: Promise<void> | null = null;
   let releaseRequest: Promise<void> | null = null;
-  let acquisition: Promise<boolean> | null = null;
+  let acquisition: Promise<DebateRoomOwnershipAcquireResult> | null = null;
+  let activeAcquisitionAttempt: { cancelled: boolean } | null = null;
   const pendingTakeovers = new Map<string, (released: boolean) => void>();
+
+  const fallBackToLiveKitIdentity = () => {
+    lockRequestsAvailable = false;
+    coordinationMode = 'livekit-fallback';
+    channel?.close();
+    channel = null;
+  };
 
   const postTakeoverResponse = (message: TakeoverRequest, released: boolean) => {
     if (!channel || closed) return;
@@ -71,42 +121,117 @@ export function createDebateRoomOwnershipCoordinator({
     }
   };
 
-  const acquireLock = (): Promise<boolean> => {
-    if (releaseRequest) return releaseRequest.then(acquireLock);
-    if (ownsConnection) return Promise.resolve(true);
-    if (!supportsCoordination) {
-      ownsConnection = true;
-      return Promise.resolve(true);
-    }
-    if (closed) return Promise.resolve(false);
-    if (acquisition) return acquisition;
+  // Resolves the in-flight acquisition stagger immediately: a takeover arriving mid-stagger and
+  // release()/close() must not sit out the residual delay (nothing else re-checks cancellation
+  // until the timer or a focus event fires).
+  let finishActiveStagger: (() => void) | null = null;
 
-    acquisition = new Promise<boolean>(resolve => {
-      const request = navigator.locks.request(
-        coordinationName,
-        { ifAvailable: true, mode: 'exclusive' },
-        async lock => {
-          resolve(Boolean(lock));
-          if (!lock || closed) return;
-          ownsConnection = true;
-          await new Promise<void>(release => {
-            releaseLock = release;
+  // Holds off the lock request in proportion to how far the tab is from the user's attention, so
+  // the focused tab reaches navigator.locks first even when a background tab's connect() started
+  // earlier. Resolves early if the tab gains focus mid-wait.
+  const awaitAcquisitionStagger = (delay: number, cancelled: () => boolean) =>
+    new Promise<void>(resolve => {
+      let settled = false;
+      let timer: number | null = null;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (finishActiveStagger === finish) finishActiveStagger = null;
+        if (timer !== null) window.clearTimeout(timer);
+        window.removeEventListener('focus', onPriorityChange);
+        document.removeEventListener('visibilitychange', onPriorityChange);
+        resolve();
+      };
+      const onPriorityChange = () => {
+        if (getTabPriority() === 2 || cancelled()) finish();
+      };
+      timer = window.setTimeout(finish, delay);
+      window.addEventListener('focus', onPriorityChange);
+      document.addEventListener('visibilitychange', onPriorityChange);
+      finishActiveStagger = finish;
+    });
+
+  const acquireLock = (skipStagger = false): Promise<DebateRoomOwnershipAcquireResult> => {
+    if (ownsConnection) return Promise.resolve({ acquired: true, waitedForLocalRelease: false });
+    if (closed) return Promise.resolve({ acquired: false, waitedForLocalRelease: false });
+    if (!lockManager || !lockRequestsAvailable) {
+      // No stagger here: with LiveKit DUPLICATE_IDENTITY as the arbiter the LAST connect wins, so
+      // delaying a hidden tab would hand it the room instead of the focused one. The focused tab
+      // recovers through the auto-takeover-on-focus path instead.
+      ownsConnection = true;
+      return Promise.resolve({ acquired: true, waitedForLocalRelease: false });
+    }
+    if (acquisition) {
+      // The dedup slot may hold a mid-stagger acquisition; a takeover must not inherit the
+      // residual delay, so settle the stagger now and share the (correct) result.
+      if (skipStagger) finishActiveStagger?.();
+      return acquisition;
+    }
+
+    const attempt = { cancelled: false };
+    activeAcquisitionAttempt = attempt;
+    let waitedForLocalRelease = false;
+    const currentAcquisition = (async () => {
+      if (localReleaseBarriers.has(coordinationName)) {
+        waitedForLocalRelease = await waitForLocalReleaseBarriers(coordinationName, () => closed || attempt.cancelled);
+      }
+      if (closed || attempt.cancelled) return { acquired: false, waitedForLocalRelease };
+      if (ownsConnection) return { acquired: true, waitedForLocalRelease };
+      // Takeovers skip the stagger: they are an explicit user action, already focus-driven. A
+      // zero delay must not even await — callers rely on an unstaggered acquire registering its
+      // lock request synchronously (the close/release drain machinery depends on it).
+      const staggerDelay = skipStagger ? 0 : acquisitionStaggerMs[getTabPriority()];
+      if (staggerDelay > 0 && typeof window !== 'undefined') {
+        await awaitAcquisitionStagger(staggerDelay, () => closed || attempt.cancelled);
+        if (closed || attempt.cancelled) return { acquired: false, waitedForLocalRelease };
+        if (ownsConnection) return { acquired: true, waitedForLocalRelease };
+      }
+
+      const lockResult = await new Promise<'acquired' | 'blocked' | 'unavailable'>(resolve => {
+        let request: Promise<void>;
+        try {
+          request = lockManager.request(coordinationName, { ifAvailable: true, mode: 'exclusive' }, async lock => {
+            const acquiredLock = Boolean(lock) && !closed && !attempt.cancelled;
+            resolve(acquiredLock ? 'acquired' : 'blocked');
+            if (!acquiredLock) return;
+            ownsConnection = true;
+            await new Promise<void>(release => {
+              releaseLock = release;
+            });
+            releaseLock = null;
+            ownsConnection = false;
           });
-          releaseLock = null;
-          ownsConnection = false;
+        } catch {
+          resolve('unavailable');
+          return;
         }
-      );
-      lockRequest = request.then(
-        () => undefined,
-        () => resolve(false)
-      );
-    })
-      .catch(() => false)
-      .finally(() => {
-        acquisition = null;
+        const activeRequest = request.then(
+          () => undefined,
+          () => resolve('unavailable')
+        );
+        lockRequest = activeRequest;
+        void activeRequest.finally(() => {
+          if (lockRequest === activeRequest) lockRequest = null;
+        });
       });
 
-    return acquisition;
+      if (lockResult === 'unavailable') {
+        if (closed || attempt.cancelled) return { acquired: false, waitedForLocalRelease };
+        fallBackToLiveKitIdentity();
+        ownsConnection = true;
+        return { acquired: true, waitedForLocalRelease };
+      }
+
+      return { acquired: lockResult === 'acquired', waitedForLocalRelease };
+    })()
+      .catch(() => ({ acquired: false, waitedForLocalRelease }))
+      .finally(() => {
+        if (acquisition === currentAcquisition) acquisition = null;
+        if (activeAcquisitionAttempt === attempt) activeAcquisitionAttempt = null;
+      });
+
+    acquisition = currentAcquisition;
+    return currentAcquisition;
   };
 
   const release = async () => {
@@ -114,21 +239,24 @@ export function createDebateRoomOwnershipCoordinator({
       await releaseRequest;
       return;
     }
-    if (!supportsCoordination) {
+    if (!lockManager || !lockRequestsAvailable) {
       ownsConnection = false;
       return;
     }
-    if (!releaseLock) return;
-    const activeRequest = lockRequest;
-    const releaseCurrentLock = releaseLock;
+    const activeRequest = lockRequest ?? acquisition?.then(() => undefined);
+    if (!activeRequest) return;
+    if (activeAcquisitionAttempt) activeAcquisitionAttempt.cancelled = true;
+    // A cancelled stagger would otherwise run out its timer, holding the local-release barrier —
+    // and any same-tab successor waiting on it — for the residual delay.
+    finishActiveStagger?.();
     ownsConnection = false;
-    releaseCurrentLock();
-    const request = activeRequest ?? Promise.resolve();
-    const completion = request.finally(() => {
-      if (releaseRequest === completion) releaseRequest = null;
+    releaseLock?.();
+    const barrier = registerLocalReleaseBarrier(coordinationName, activeRequest);
+    releaseRequest = barrier;
+    void barrier.finally(() => {
+      if (releaseRequest === barrier) releaseRequest = null;
     });
-    releaseRequest = completion;
-    await releaseRequest;
+    await barrier;
   };
 
   if (channel) {
@@ -142,7 +270,11 @@ export function createDebateRoomOwnershipCoordinator({
       }
 
       if (message.type !== 'takeover-request' || message.requesterId === instanceId || !ownsConnection) return;
-      void Promise.resolve(onTakeoverRequested())
+      const takeoverContext: DebateRoomTakeoverContext = {
+        requesterPriority: message.requesterPriority ?? 2,
+        ownerPriority: getTabPriority(),
+      };
+      void Promise.resolve(onTakeoverRequested(takeoverContext))
         .then(async released => {
           if (released) await release();
           postTakeoverResponse(message, released);
@@ -155,12 +287,17 @@ export function createDebateRoomOwnershipCoordinator({
 
   return {
     instanceId,
-    acquire: acquireLock,
+    get coordinationMode() {
+      return coordinationMode;
+    },
+    acquire: () => acquireLock(),
     requestTakeover: async () => {
       if (ownsConnection) return true;
-      if (!supportsCoordination) return acquireLock();
-      if (!channel || closed) return false;
-      if (await acquireLock()) return true;
+      if (!lockManager || !lockRequestsAvailable) return (await acquireLock(true)).acquired;
+      if (closed) return false;
+      if ((await acquireLock(true)).acquired) return true;
+      if (!channel) return false;
+      const takeoverChannel = channel;
 
       const requestId = createInstanceId();
       const released = await new Promise<boolean>(resolve => {
@@ -174,10 +311,11 @@ export function createDebateRoomOwnershipCoordinator({
           resolve(result);
         });
         try {
-          channel.postMessage({
+          takeoverChannel.postMessage({
             type: 'takeover-request',
             requestId,
             requesterId: instanceId,
+            requesterPriority: getTabPriority(),
           } satisfies TakeoverRequest);
         } catch {
           window.clearTimeout(timeout);
@@ -186,7 +324,7 @@ export function createDebateRoomOwnershipCoordinator({
         }
       });
       if (!released) return false;
-      return acquireLock();
+      return (await acquireLock(true)).acquired;
     },
     release,
     close: () => {
@@ -198,6 +336,27 @@ export function createDebateRoomOwnershipCoordinator({
     },
     ownsConnection: () => ownsConnection,
   };
+}
+
+function registerLocalReleaseBarrier(coordinationName: string, activeRequest: Promise<void>) {
+  const barrier = activeRequest
+    .catch(() => undefined)
+    .finally(() => {
+      if (localReleaseBarriers.get(coordinationName) === barrier) localReleaseBarriers.delete(coordinationName);
+    });
+  localReleaseBarriers.set(coordinationName, barrier);
+  return barrier;
+}
+
+async function waitForLocalReleaseBarriers(coordinationName: string, cancelled: () => boolean) {
+  let waited = false;
+  let barrier = localReleaseBarriers.get(coordinationName);
+  while (barrier && !cancelled()) {
+    waited = true;
+    await barrier;
+    barrier = localReleaseBarriers.get(coordinationName);
+  }
+  return waited;
 }
 
 function createInstanceId() {

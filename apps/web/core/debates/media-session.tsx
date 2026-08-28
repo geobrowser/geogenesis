@@ -323,7 +323,19 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   );
 
   const changeAudioOutput = React.useCallback(async (deviceId: string) => {
-    if (!audioOutputSupportedRef.current) return;
+    // `ensurePreview` is what normally primes this, but the claim-exploration voice dock picks a
+    // speaker without ever building a preview. Probe on demand there rather than silently dropping
+    // the user's choice — and never re-probe once a selection has actually failed.
+    if (!audioOutputSupportedRef.current) {
+      if (audioOutputSelectionFailedRef.current) return;
+      const livekit = await import('livekit-client');
+      if (typeof livekit.supportsAudioOutputSelection !== 'function' || !livekit.supportsAudioOutputSelection()) {
+        return;
+      }
+      if (!mountedRef.current) return;
+      audioOutputSupportedRef.current = true;
+      setAudioOutputSupported(true);
+    }
     const generation = audioOutputSelectionGenerationRef.current + 1;
     audioOutputSelectionGenerationRef.current = generation;
     setAudioOutputError(null);
@@ -479,10 +491,6 @@ export function useDebateMediaSession() {
   const session = React.useContext(DebateMediaSessionContext);
   if (!session) throw new Error('useDebateMediaSession must be used inside DebateMediaSessionProvider');
   return session;
-}
-
-export function debateMatchMediaSessionKey(matchId: string) {
-  return `match:${matchId}`;
 }
 
 export function debateMediaSessionKey(debateId: string) {

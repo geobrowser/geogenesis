@@ -32,23 +32,46 @@ vi.mock('~/core/debates/use-debate-votes', () => ({
   useDebateVotesByVoter: () => new Map(),
 }));
 
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  EntityVoteButtons: () => <div data-testid="entity-vote-buttons" />,
+}));
+
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace }),
+  // `prefetch` is for PrefetchLink, which the feed header's space and claim links use.
+  useRouter: () => ({ replace: mocks.replace, prefetch: vi.fn() }),
+}));
+
+// PrefetchLink hydrates the entity it points at on hover, which reaches for the sync engine.
+vi.mock('~/core/sync/use-sync-engine', () => ({
+  useSyncEngine: () => ({ hydrate: vi.fn() }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: () => true,
-  useDebatesEnabled: () => true,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a' }),
   useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => mocks.media,
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
-  useJoinDebateQueue: () => ({ mutate: vi.fn(), isPending: false }),
+  useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
+// The feed orders itself by the explore "Best" ranking. These tests are about readiness and
+// error states, so the ranking is settled and empty — which leaves the feed on recency, the order
+// they were written against.
+vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
+  useDebatesBestOrder: () => ({ rankByDebateId: new Map(), isLoading: false, isError: false }),
+}));
+
+// The feed's "Join a debate" button opens the login when signed out, and that hook reaches for
+// next-navigation and Privy context this suite does not stand up.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => vi.fn(),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({
@@ -57,6 +80,28 @@ vi.mock('~/core/hooks/use-space', () => ({
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
+}));
+
+// The feed's comment button opens a panel backed by the entity-comments stack,
+// whose storage-backed atoms initialize at import time. Stub it (and the live
+// count) the way the other debate suites do.
+vi.mock('~/partials/comments/entity-comments-panel', () => ({
+  EntityCommentsPanel: () => <div>Comments panel</div>,
+}));
+
+vi.mock('~/core/hooks/use-comments', () => ({
+  useComments: () => ({ comments: [], totalCount: 0, isLoading: false, error: null, refetch: vi.fn() }),
+}));
+
+// The feed's Claims badge reads the debate's transcript claims through react-query, and this
+// suite renders the feed without a QueryClientProvider. Stub it the way the other debate suites do;
+// the grouping and ordering have their own unit tests.
+vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
+  useDebateTranscriptClaims: () => ({
+    claims: { all: [], byAuthorSpaceId: new Map(), unattributed: [], totalCount: 0 },
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
@@ -90,8 +135,9 @@ describe('DebatesPageClient browse feed', () => {
 
     expect(screen.getByRole('heading', { name: 'Debates are useful' })).toBeInTheDocument();
     expect(screen.getAllByText('Fashion').length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: 'Join debate' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Join a debate' }).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Winner?').length).toBeGreaterThan(0);
+    expect(screen.getAllByTestId('entity-vote-buttons')).toHaveLength(2);
 
     await waitFor(() => expect(container.querySelectorAll('video')).toHaveLength(2));
   });
@@ -138,6 +184,7 @@ function completedDebate(): Debate {
       description: null,
     },
     status: 'complete',
+    response_kind: null,
     room_name: 'debate-1',
     first_participant_slot: 1,
     current_turn_index: 1,

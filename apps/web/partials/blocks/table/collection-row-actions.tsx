@@ -11,16 +11,18 @@ import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';
 
 import { GeoImage } from '~/design-system/geo-image';
-import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
 import { Menu } from '~/design-system/icons/menu';
 import { RelationSmall } from '~/design-system/icons/relation-small';
-import { RightArrowLongChip } from '~/design-system/icons/right-arrow-long-chip';
+import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 import { TopRanked } from '~/design-system/icons/top-ranked';
+import { Trash } from '~/design-system/icons/trash';
 import { PrefetchLink } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { CopyEntityIdButton } from '~/partials/blocks/table/copy-entity-id-button';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
+import { rowOpenerClassName } from '~/partials/blocks/table/row-control-styles';
 
 type CollectionRowActionsProps = {
   isEditing: boolean;
@@ -53,6 +55,12 @@ export function CollectionRowActions({
   // dismiss handlers while it's active.
   const [isSpacePopoverOpen, setIsSpacePopoverOpen] = useState(false);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether this popover opened because a cursor crossed the trigger, rather than because someone
+  // asked for it. On close Radix hands focus back to the trigger, which is right for a popover you
+  // opened on purpose and wrong for one that opened on the way past: focus lands on a button nobody
+  // focused, every view's `group-focus-within:visible` matches, and the row's controls stay up with
+  // the pointer long gone. Keyboard opens still get their focus back — see `onCloseAutoFocus`.
+  const openedByHoverRef = useRef(false);
   const { storage } = useMutate();
   const { blockEntity } = useDataBlock();
   const { space } = useSpace(spaceId ?? '');
@@ -65,12 +73,18 @@ export function CollectionRowActions({
     };
   }, []);
 
+  // By the relation's own id, not by what it points at. `blockEntity.relations` holds everything
+  // hanging off the block — its types, its blocks, its filters — so matching on `toEntity.id` would
+  // delete whichever of those happened to reach this entity first. That was survivable while
+  // removal took two deliberate interactions to reach; as a one-click control on every row it is
+  // not. `relationId` is the collection-item relation for this row (use-mapping.ts:127), which is
+  // exactly the one to drop.
   const onDeleteEntry = async () => {
-    if (blockEntity) {
-      const blockRelation = blockEntity.relations.find(r => r.toEntity.id === entityId);
-      if (blockRelation) {
-        storage.relations.delete(blockRelation);
-      }
+    if (!blockEntity || !relationId) return;
+
+    const blockRelation = blockEntity.relations.find(r => r.id === relationId);
+    if (blockRelation) {
+      storage.relations.delete(blockRelation);
     }
   };
 
@@ -89,8 +103,25 @@ export function CollectionRowActions({
 
   return (
     <div className="flex shrink-0 flex-nowrap items-center gap-0.5">
-      {relationId && (
-        <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+      {/* Side panel first: it is the one people reach for, so it keeps a fixed position rather than
+          shifting left and right depending on whether the row has a menu to show. */}
+      {showSidePanel && (
+        <DataBlockOpenSidePanelButton
+          entityId={entityId}
+          entitySpaceId={spaceId ?? currentSpaceId}
+          openedWithMainViewEditing={openedWithMainViewEditing}
+        />
+      )}
+      {(relationId || isEditing) && (
+        <Popover.Root
+          open={isPopoverOpen}
+          onOpenChange={next => {
+            // Radix routes click and keyboard opens through here; hover sets the state directly
+            // below, so anything arriving on this path was deliberate.
+            if (next) openedByHoverRef.current = false;
+            setIsPopoverOpen(next);
+          }}
+        >
           <Popover.Trigger asChild>
             <button
               type="button"
@@ -100,20 +131,26 @@ export function CollectionRowActions({
                   clearTimeout(closeTimeoutRef.current);
                   closeTimeoutRef.current = null;
                 }
+                // Only when this is the event that opens it. A pointer wandering over the trigger of
+                // a popover someone opened from the keyboard must not relabel it as a hover open, or
+                // the close would skip the focus restoration that open is owed.
+                if (!isPopoverOpen) openedByHoverRef.current = true;
                 setIsPopoverOpen(true);
               }}
               onMouseLeave={() => {
                 if (closeTimeoutRef.current) {
                   clearTimeout(closeTimeoutRef.current);
                 }
+                // Long enough to bridge the few pixels between the trigger and the menu, which
+                // overlap, and short enough not to feel like the menu is refusing to leave.
                 closeTimeoutRef.current = setTimeout(() => {
                   setIsPopoverOpen(false);
-                }, 300);
+                }, 120);
               }}
               onMouseDown={e => e.preventDefault()}
-              className="inline-flex shrink-0 items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+              className={rowOpenerClassName}
             >
-              <Menu />
+              <Menu filled={false} size={19} />
             </button>
           </Popover.Trigger>
           <Popover.Portal>
@@ -124,6 +161,18 @@ export function CollectionRowActions({
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
+              }}
+              // Focus never entered a hover-opened popover, so there is nothing to give back, and
+              // taking the default would strand it on the trigger and hold the row's controls open.
+              // A popover opened by click or keyboard still returns focus the way it should.
+              onCloseAutoFocus={event => {
+                if (openedByHoverRef.current) event.preventDefault();
+              }}
+              // Unless focus did end up in here after all — tabbed in, or moved by something we
+              // rendered. Whatever holds it is about to unmount, so from this point the close owes
+              // focus a home and Radix's restoration is the only one on offer.
+              onFocusCapture={() => {
+                openedByHoverRef.current = false;
               }}
               onFocusOutside={event => {
                 if (isSpacePopoverOpen) event.preventDefault();
@@ -142,7 +191,7 @@ export function CollectionRowActions({
                 setIsPopoverOpen(false);
               }}
             >
-              {isEditing && (
+              {isEditing && relationId && (
                 <SelectSpaceAsPopover
                   entityId={EntityId(entityId)}
                   spaceId={spaceId}
@@ -170,43 +219,47 @@ export function CollectionRowActions({
                   }
                 />
               )}
-              <PrefetchLink
-                href={`/space/${currentSpaceId}/${relationEntityId}`}
-                className="p-1 group-hover:text-grey-03 hover:text-text!"
-              >
-                <RelationSmall />
-              </PrefetchLink>
-              {isEditing && (
-                <button
-                  type="button"
-                  onClick={onDeleteEntry}
-                  onMouseDown={e => e.preventDefault()}
+              {relationId && (
+                <PrefetchLink
+                  href={`/space/${currentSpaceId}/${relationEntityId}`}
                   className="p-1 group-hover:text-grey-03 hover:text-text!"
                 >
-                  <CheckCloseSmall />
-                </button>
+                  <RelationSmall />
+                </PrefetchLink>
+              )}
+              {/* The entity the row's relation points at, not the relation itself. The relation's
+                  own id is a click away through the link beside this one (GEO-2679). */}
+              <CopyEntityIdButton entityId={entityId} />
+              {isEditing && (
+                <PrefetchLink
+                  href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}
+                  entityId={entityId}
+                  spaceId={spaceId ?? currentSpaceId}
+                  aria-label="Navigate to entity"
+                  className="p-1 group-hover:text-grey-03 hover:text-text!"
+                >
+                  <RightArrowLongSmall />
+                </PrefetchLink>
               )}
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
       )}
-      {showSidePanel && (
-        <DataBlockOpenSidePanelButton
-          entityId={entityId}
-          entitySpaceId={spaceId ?? currentSpaceId}
-          openedWithMainViewEditing={openedWithMainViewEditing}
-        />
-      )}
-      {isEditing && (
-        <PrefetchLink
-          href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}
-          entityId={entityId}
-          spaceId={spaceId ?? currentSpaceId}
-          aria-label="Navigate to entity"
-          className="inline-flex shrink-0 items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+      {/* Last in the row on purpose: the only destructive action here, kept furthest from the side
+          panel people open by habit. Grey until hovered, then red — the row shouldn't shout at
+          someone who is only reading it. No confirmation: this is an edit like any other, and the
+          review bar is where it gets taken back. */}
+      {isEditing && relationId && (
+        <button
+          type="button"
+          aria-label="Remove from collection"
+          title="Remove from collection"
+          onClick={onDeleteEntry}
+          onMouseDown={e => e.preventDefault()}
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center text-grey-03 transition duration-300 ease-in-out hover:text-red-01"
         >
-          <RightArrowLongChip />
-        </PrefetchLink>
+          <Trash />
+        </button>
       )}
     </div>
   );

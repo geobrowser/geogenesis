@@ -141,10 +141,29 @@ export function useEntityMediaUrl(entityId: string | undefined, spaceId: string)
 export function useEntityMedia(
   entityId: string | undefined,
   spaceId: string
-): { avatarUrl: string | undefined; coverUrl: string | undefined } {
-  const [fetchedAvatarUrl, setFetchedAvatarUrl] = React.useState<string | undefined>(undefined);
-  const [fetchedCoverUrl, setFetchedCoverUrl] = React.useState<string | undefined>(undefined);
+): {
+  avatarUrl: string | undefined;
+  coverUrl: string | undefined;
+  /**
+   * True while the avatar/cover relations are still being fetched. Until it clears, two
+   * undefined URLs mean "we don't know yet", not "this entity has no image" — callers that
+   * swap in a placeholder need to tell those apart or they flash it on every card.
+   */
+  isResolving: boolean;
+} {
+  // Keyed by what it was fetched for, not held as bare URLs. Point the hook at a different
+  // entity and the previous one's results have to stop counting — otherwise the old image stays
+  // on screen, and because a URL is present `isResolving` reads false, so nothing ever corrects
+  // it if the new entity has no image of its own.
+  const [fetched, setFetched] = React.useState<{
+    key: string;
+    avatarUrl: string | undefined;
+    coverUrl: string | undefined;
+  } | null>(null);
   const cache = useQueryClient();
+
+  const fetchKey = `${entityId ?? ''}:${spaceId}`;
+  const settled = fetched?.key === fetchKey ? fetched : null;
 
   const storeAvatarRelation = useRelation({
     selector: r => r.fromEntity.id === entityId && r.type.id === ContentIds.AVATAR_PROPERTY && r.spaceId === spaceId,
@@ -170,6 +189,13 @@ export function useEntityMedia(
     // the store. These reuse the same cache keys as the single-purpose hooks
     // above, so all media hooks for one entity dedupe onto shared requests.
     const id = entityId;
+    const key = `${id}:${spaceId}`;
+
+    // Requests for an entity we've since moved off must not land. Whoever finishes last would
+    // otherwise win, and a late reply for the *previous* entity overwrites the current one's
+    // result with a key that no longer matches — leaving it stranded, since `settled` reads as
+    // null and the effect has no reason to run again.
+    let cancelled = false;
 
     const fetchMedia = async () => {
       try {
@@ -192,25 +218,41 @@ export function useEntityMedia(
               }),
         ]);
 
-        const avatarUrl = avatarRelations[0]?.toEntity.value;
-        if (avatarUrl && typeof avatarUrl === 'string' && avatarUrl.startsWith('ipfs://')) {
-          setFetchedAvatarUrl(avatarUrl);
-        }
+        if (cancelled) return;
 
+        const avatarUrl = avatarRelations[0]?.toEntity.value;
         const coverUrl = coverRelations[0]?.toEntity.value;
-        if (coverUrl && typeof coverUrl === 'string' && coverUrl.startsWith('ipfs://')) {
-          setFetchedCoverUrl(coverUrl);
-        }
+
+        setFetched({
+          key,
+          avatarUrl: asImageUrl(avatarUrl),
+          coverUrl: asImageUrl(coverUrl),
+        });
       } catch {
-        // ignored — entity may not exist
+        // Ignored — the entity may not exist. Still record the attempt: a caller waiting on
+        // `isResolving` would otherwise hold its loading state forever.
+        if (cancelled) return;
+        setFetched({ key, avatarUrl: undefined, coverUrl: undefined });
       }
     };
 
     fetchMedia();
-  }, [entityId, spaceId, storeAvatarUrl, storeCoverUrl, cache]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [entityId, spaceId, fetchKey, storeAvatarUrl, storeCoverUrl, cache]);
+
+  const avatarUrl = storeAvatarUrl ?? settled?.avatarUrl;
+  const coverUrl = storeCoverUrl ?? settled?.coverUrl;
 
   return {
-    avatarUrl: storeAvatarUrl ?? fetchedAvatarUrl,
-    coverUrl: storeCoverUrl ?? fetchedCoverUrl,
+    avatarUrl,
+    coverUrl,
+    isResolving: Boolean(entityId) && !avatarUrl && !coverUrl && settled === null,
   };
+}
+
+function asImageUrl(value: unknown): string | undefined {
+  return typeof value === 'string' && value.startsWith('ipfs://') ? value : undefined;
 }

@@ -3,7 +3,6 @@
 import * as React from 'react';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
-import { useDebatesEnabled } from '~/core/state/feature-flags';
 
 import { DebatesBrowseFeed } from './debate-feed';
 
@@ -23,9 +22,8 @@ type DebateEntityViewProps = {
  */
 export function DebateEntityView({ spaceId, debateId, editView }: DebateEntityViewProps) {
   const isEditing = useUserIsEditing(spaceId);
-  const debatesEnabled = useDebatesEnabled();
 
-  if (isEditing || !debatesEnabled) {
+  if (isEditing) {
     return <>{editView}</>;
   }
 

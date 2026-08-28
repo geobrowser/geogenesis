@@ -11,12 +11,7 @@ import { Proposal } from '~/core/io/dto/proposals';
 import type { SubstreamVote } from '~/core/io/substream-schema';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeGovernanceError } from '~/core/utils/contracts/governance-errors';
-import {
-  NavUtils,
-  formatGovernanceOutcomeDate,
-  formatGovernanceOutcomeTime,
-  getProposalTimeRemaining,
-} from '~/core/utils/utils';
+import { NavUtils, getProposalTimeRemaining } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { SmallButton } from '~/design-system/button';
@@ -26,6 +21,9 @@ import { Pending } from '~/design-system/pending';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { Execute } from '~/partials/active-proposal/execute';
+import { proposalTimestampSeconds } from '~/core/governance/proposal-timestamp';
+
+import { GovernanceOutcomeDate, GovernanceOutcomeTime } from '~/partials/governance/governance-outcome-timestamp';
 import { useAddOptimisticVote, useRemoveOptimisticVote } from '~/partials/governance/optimistic-voted-atom';
 
 interface Props {
@@ -35,6 +33,8 @@ interface Props {
   proposalType: Proposal['type'];
   proposalVersion?: number;
   governanceHomeReturnSearch?: string;
+  startTime: number;
+  submittedAt: number;
   endTime: number;
   isProposalEnded: boolean;
   canExecute: boolean;
@@ -63,6 +63,8 @@ export function AcceptOrRejectMember({
   proposalName,
   proposalType,
   governanceHomeReturnSearch,
+  startTime,
+  submittedAt,
   endTime,
   isProposalEnded,
   canExecute,
@@ -158,19 +160,37 @@ export function AcceptOrRejectMember({
 
   const { hours, minutes } = getProposalTimeRemaining(endTime);
 
+  const timestampSeconds = proposalTimestampSeconds({ status, endTime, startTime, submittedAt });
+  // Open requests show when they were submitted; the status answers a different
+  // question, so it stays alongside rather than being replaced.
+  const openStatusLabel =
+    // v2 contracts don't stamp startTime/endTime until the first vote fires, and
+    // getProposalTimeRemaining clamps at zero — so a countdown here would claim
+    // "0h 0m remaining" on a request whose voting hasn't opened.
+    endTime <= 0 ? 'Voting opens on first vote' : `${hours}h ${minutes}m remaining`;
   const footerLeft =
     status === 'ACCEPTED' || status === 'REJECTED' || isProposalEnded ? (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
-        <span className="shrink-0">{formatGovernanceOutcomeDate(endTime)}</span>
+        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
         <span aria-hidden className="shrink-0 text-grey-03 select-none">
           ·
         </span>
-        <time className="shrink-0 tabular-nums" dateTime={new Date(endTime * 1000).toISOString()}>
-          {formatGovernanceOutcomeTime(endTime)}
-        </time>
+        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
+      </div>
+    ) : timestampSeconds > 0 ? (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-metadataMedium text-text">
+        <GovernanceOutcomeDate geoTimeSeconds={timestampSeconds} className="shrink-0" />
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
+          ·
+        </span>
+        <GovernanceOutcomeTime geoTimeSeconds={timestampSeconds} className="shrink-0 tabular-nums" />
+        <span aria-hidden className="shrink-0 text-grey-03 select-none">
+          ·
+        </span>
+        <span className="shrink-0 text-grey-04">{openStatusLabel}</span>
       </div>
     ) : (
-      <p className="text-metadataMedium">{`${hours}h ${minutes}m remaining`}</p>
+      <p className="text-metadataMedium">{openStatusLabel}</p>
     );
 
   const proposalHref = NavUtils.toProposal(spaceId, proposalId, 'home', governanceHomeReturnSearch);

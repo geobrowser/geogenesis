@@ -102,31 +102,42 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
       groupNameById.set(value.entity.id, value.value);
     }
 
+    // The chip's relation icon opens the edge, not the property, so each property has to carry the
+    // relation it was reached through — the group's for a grouped property, the type's otherwise.
+    // Without it the chip renders a popover with nothing in it.
+    const relationEntityIdByPropertyId = new Map<string, string>();
+    for (const relation of typePropertyRelations) {
+      relationEntityIdByPropertyId.set(relation.toEntity.id, relation.entityId);
+    }
+
     const consumed = new Set<string>();
     const groups = groupRelations.map(groupRelation => {
       const groupId = groupRelation.toEntity.id;
-      const propertyIds = sortRelations(
+      const propertyRelations = sortRelations(
         groupPropertyRelations.filter(
           relation => relation.fromEntity.id === groupId && typePropertyIdSet.has(relation.toEntity.id)
         )
-      )
-        .map(relation => relation.toEntity.id)
-        .filter(propertyId => {
-          if (consumed.has(propertyId)) return false;
-          consumed.add(propertyId);
-          return true;
-        });
+      ).filter(relation => {
+        const propertyId = relation.toEntity.id;
+        if (consumed.has(propertyId)) return false;
+        consumed.add(propertyId);
+        return true;
+      });
+
+      for (const relation of propertyRelations) {
+        relationEntityIdByPropertyId.set(relation.toEntity.id, relation.entityId);
+      }
 
       return {
         id: groupId,
         label: (groupNameById.get(groupId) ?? groupRelation.toEntity.name ?? '').trim() || 'Untitled group',
-        propertyIds,
+        propertyIds: propertyRelations.map(relation => relation.toEntity.id),
       };
     });
 
     const ungrouped = typePropertyIds.filter(propertyId => !consumed.has(propertyId));
 
-    return { groups, ungrouped, propertyNameById };
+    return { groups, ungrouped, propertyNameById, relationEntityIdByPropertyId };
   }, [
     groupNameValues,
     groupPropertyRelations,
@@ -158,6 +169,7 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
                   isEditing={false}
                   currentSpaceId={spaceId}
                   entityId={propertyId}
+                  relationEntityId={sections.relationEntityIdByPropertyId.get(propertyId)}
                   small
                   truncateLabel
                 >
@@ -172,7 +184,7 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
           <div className="flex flex-col gap-2">
             {sections.groups.length > 0 && (
               <Text as="p" variant="metadata" className="leading-[13px] tracking-[-0.35px] text-grey-04">
-                Ungrouped properties
+                Other properties
               </Text>
             )}
             <div className="flex flex-wrap gap-2">
@@ -182,6 +194,7 @@ function TypeSchemaReadView({ entityId, spaceId }: Props) {
                   isEditing={false}
                   currentSpaceId={spaceId}
                   entityId={propertyId}
+                  relationEntityId={sections.relationEntityIdByPropertyId.get(propertyId)}
                   small
                   truncateLabel
                 >

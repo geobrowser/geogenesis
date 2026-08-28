@@ -30,6 +30,7 @@ import { useWebFetchDispatcher } from '~/core/chat/web-fetch-dispatcher';
 import { ROOT_SPACE } from '~/core/constants';
 import { useInjectJob } from '~/core/hooks/use-inject-job';
 import { useSpace } from '~/core/hooks/use-space';
+import { completeDailyUploadActivity } from '~/core/space/use-space-daily-activities';
 import {
   HISTORY_CAP,
   type PersistedChat,
@@ -56,8 +57,15 @@ type AssistantMessageSource = 'typed' | 'option_click';
 
 const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose'] as const;
 
+// The claim-exploration picker is its own full-screen overlay, and it parks a voice dock in the
+// bottom-right corner — exactly where the assistant's launcher floats.
+const FULLSCREEN_CHILD_ROUTE_PATTERNS = [/\/debates\/rematches\/[^/]+$/] as const;
+
 function isFullscreenChildRoute(pathname: string): boolean {
-  return FULLSCREEN_CHILD_ROUTE_SUFFIXES.some(suffix => pathname.endsWith(suffix));
+  return (
+    FULLSCREEN_CHILD_ROUTE_SUFFIXES.some(suffix => pathname.endsWith(suffix)) ||
+    FULLSCREEN_CHILD_ROUTE_PATTERNS.some(pattern => pattern.test(pathname))
+  );
 }
 
 // Guard router.push against hallucinated id shapes.
@@ -991,6 +999,10 @@ export function ChatWidget() {
         return;
       }
       const result = applyInjectOpsToStore(injectState.ops, injectJob.spaceId);
+      // Ingestion genuinely succeeded here (job polled to `completed` and its ops
+      // applied to the store), so this is the only place we mark the daily upload
+      // activity done — not at submission time, where the job could still fail.
+      completeDailyUploadActivity(injectJob.spaceId);
       const primaryPill =
         result.primaryEntityId && result.primaryEntityName
           ? `[${result.primaryEntityName.replace(/[\[\]]/g, '')}](geo://entity/${result.primaryEntityId}?space=${injectJob.spaceId})`

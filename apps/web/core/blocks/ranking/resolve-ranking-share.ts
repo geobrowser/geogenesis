@@ -4,6 +4,11 @@ import { cache } from 'react';
 
 import { Effect } from 'effect';
 
+import {
+  type BlockParentRelation,
+  type BlockPlacement,
+  pickBlockPlacement,
+} from '~/core/blocks/resolve-block-placement';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { getAllEntities, getEntity, getEntityPage, getRelationsByToEntityIds } from '~/core/io/queries';
 import { fetchProfileBySpaceId } from '~/core/io/subgraph/fetch-profile';
@@ -60,17 +65,10 @@ export type ResolvedGlobalRankingShare = {
   entries: RankingOgEntryData[];
 };
 
-type ToEntityRelation = {
-  id: string;
-  fromEntityId: string;
-  toEntityId: string;
-  spaceId: string;
-};
-
 export type ResolveRankingShareDeps = {
   fetchEntity: (entityId: string, spaceId?: string) => Promise<Entity | null>;
   fetchEntityPage: (entityId: string, spaceId?: string) => Promise<{ entity: Entity; relations: Relation[] } | null>;
-  fetchRelationsByToEntity: (blockEntityId: string, typeId: string, spaceId: string) => Promise<ToEntityRelation[]>;
+  fetchRelationsByToEntity: (blockEntityId: string, typeId: string, spaceId: string) => Promise<BlockParentRelation[]>;
   fetchProfile: (spaceId: string) => Promise<Profile | null>;
   fetchEntities: (entityIds: string[], spaceId?: string) => Promise<Entity[]>;
   fetchPersonalCardData: typeof getRankingOgCardData;
@@ -85,9 +83,7 @@ const defaultDeps: ResolveRankingShareDeps = {
     return { entity: page.entity, relations: page.relations };
   },
   fetchRelationsByToEntity: (blockEntityId, typeId, spaceId) =>
-    Effect.runPromise(getRelationsByToEntityIds([blockEntityId], typeId, spaceId)) as unknown as Promise<
-      ToEntityRelation[]
-    >,
+    Effect.runPromise(getRelationsByToEntityIds([blockEntityId], typeId, spaceId)),
   fetchProfile: async spaceId => {
     try {
       return await Effect.runPromise(fetchProfileBySpaceId(spaceId));
@@ -123,22 +119,19 @@ function pickPrimarySpace(spaceIds: string[] | undefined): string {
 
 /**
  * Find where the block is embedded (its parent entity + the relation id of that
- * containment). The block is the target of a `BLOCKS` relation from its parent.
- * Best-effort: returns empty strings when the relation can't be found.
+ * containment), via the injected fetcher so callers can stub the I/O.
  */
-async function resolveBlockPlacement(
+async function resolveBlockPlacementViaDeps(
   deps: ResolveRankingShareDeps,
   blockEntityId: string,
   blockEntitySpaceId: string
-): Promise<{ parentEntityId: string; relationId: string }> {
+): Promise<BlockPlacement> {
   try {
     const relations = await deps.fetchRelationsByToEntity(blockEntityId, SystemIds.BLOCKS, blockEntitySpaceId);
-    if (!relations || relations.length === 0) return { parentEntityId: '', relationId: '' };
-    if (relations.length > 1) {
+    if (relations && relations.length > 1) {
       console.warn(`[resolve-ranking-share] multiple BLOCKS parents for block ${blockEntityId}; using first match`);
     }
-    const match = relations.find(r => r.spaceId === blockEntitySpaceId) ?? relations[0];
-    return { parentEntityId: match.fromEntityId ?? '', relationId: match.id ?? '' };
+    return pickBlockPlacement(relations) ?? { parentEntityId: '', relationId: '' };
   } catch {
     return { parentEntityId: '', relationId: '' };
   }
@@ -211,7 +204,7 @@ export async function resolvePersonalRankingShareImpl(
   });
 
   // 6. Resolve placement for back-navigation / vote / "add my ranking".
-  const { parentEntityId, relationId } = await resolveBlockPlacement(deps, blockEntityId, blockEntitySpaceId);
+  const { parentEntityId, relationId } = await resolveBlockPlacementViaDeps(deps, blockEntityId, blockEntitySpaceId);
 
   // 7. Resolve the full ordered ranking (names + images) server-side so the
   //    shared view paints every row immediately instead of cascading through
@@ -306,7 +299,7 @@ export async function resolveGlobalRankingShareImpl(
     };
   });
 
-  const { parentEntityId, relationId } = await resolveBlockPlacement(deps, blockEntityId, blockEntitySpaceId);
+  const { parentEntityId, relationId } = await resolveBlockPlacementViaDeps(deps, blockEntityId, blockEntitySpaceId);
 
   return {
     kind: 'global',

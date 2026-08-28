@@ -20,6 +20,9 @@ import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils
 import { type DebateVoteRecord, tallyDebateVotes, voteSharePercentages } from '~/core/debates/vote-tally';
 import { TransactionWriteFailedError } from '~/core/errors';
 import { ID } from '~/core/id';
+import { useGeoChatAuth } from '~/core/debates/hooks';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { useEnqueuePendingAction } from '~/core/state/pending-actions';
 import { checkEntityExists, getDebateVoteEntities } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -33,6 +36,39 @@ import { useSmartAccount } from '../hooks/use-smart-account';
 import { useToast } from '../hooks/use-toast';
 
 const votesQueryKey = (debateEntityId: string) => ['debate-votes', debateEntityId] as const;
+
+/**
+ * Shared across every mounted copy of the hook: the feed and claims panel both mount
+ * `useDebateVotes` for the same debate, so a local `useState` would leave the other surface's
+ * pills enabled mid-publish.
+ */
+const debatesWithVoteInFlight = new Set<string>();
+const voteInFlightListeners = new Set<() => void>();
+
+export function resetDebateVotePublishStateForTests() {
+  debatesWithVoteInFlight.clear();
+}
+
+function setVoteInFlight(debateEntityId: string, inFlight: boolean) {
+  if (inFlight) debatesWithVoteInFlight.add(debateEntityId);
+  else debatesWithVoteInFlight.delete(debateEntityId);
+  for (const listener of voteInFlightListeners) listener();
+}
+
+function subscribeToVoteInFlight(listener: () => void) {
+  voteInFlightListeners.add(listener);
+  return () => {
+    voteInFlightListeners.delete(listener);
+  };
+}
+
+function useVoteInFlight(debateEntityId: string): boolean {
+  return React.useSyncExternalStore(
+    subscribeToVoteInFlight,
+    () => debatesWithVoteInFlight.has(debateEntityId),
+    () => false
+  );
+}
 
 function retrySchedule(maxDuration: Duration.DurationInput) {
   return Schedule.exponential('100 millis').pipe(
@@ -56,6 +92,7 @@ function parseVoteEntity(entity: Entity): DebateVoteRecord | null {
     voterSpaceId,
     winnerSpaceEntityId: winner.toEntity.id,
     winnerName: null,
+    winnerRelationId: winner.id,
   };
 }
 
@@ -112,15 +149,23 @@ export type DebateVotesResult = {
  * voter's space rather than from geo-chat.
  */
 export function useDebateVotes(debate: Debate): DebateVotesResult {
-  const { smartAccount } = useSmartAccount();
+  const { smartAccount, isLoading: isAccountLoading, error: accountError } = useSmartAccount();
+  const openPrivySignIn = usePrivySignIn();
+  const { ready: authReady, authenticated } = useGeoChatAuth();
+  const enqueuePendingAction = useEnqueuePendingAction();
+  // Lets the queued replay reach the current `castVote` without making the callback depend on
+  // itself. The runner only fires it once a personal space exists, so the replay lands past the
+  // branch that queued it.
+  const castVoteRef = React.useRef<(participant: DebateParticipant) => Promise<void>>(async () => {});
   const { personalSpaceId } = usePersonalSpaceId();
   const queryClient = useQueryClient();
   const [, setToast] = useToast();
   const reportError = useReportError();
-  const [isVoting, setIsVoting] = React.useState(false);
+  const pollGenerationRef = React.useRef(0);
 
   // A Debate entity's id is its geo-chat debate id, so votes hang off it without a lookup.
   const debateEntityId = ID.uuidToHex(debate.id);
+  const isVoting = useVoteInFlight(debateEntityId);
   const { profile } = useGeoProfile(smartAccount?.account.address);
 
   const { data: votes } = useQuery({
@@ -156,10 +201,41 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
   const castVote = React.useCallback(
     async (participant: DebateParticipant) => {
-      if (hasVoted || isVoting) return;
+      if (debatesWithVoteInFlight.has(debateEntityId)) return;
+
+      const previousVote = tally.myVote;
+      if (previousVote && ID.equals(previousVote.winnerSpaceEntityId, participant.profile_space_id)) return;
+      if (previousVote && previousVote.winnerRelationId == null) return;
 
       if (!smartAccount) {
-        setToast(<span>Please connect your wallet to vote</span>);
+        // Null covers three different situations — signed out, still restoring, and a failed
+        // initialization — and only the first is an invitation to log in. Privy is the authority
+        // on which one this is, and sending a signed-in viewer through login would clear their
+        // half-finished onboarding.
+        if (authReady && !authenticated) {
+          // Keep the pick. Signing in is a detour, and coming back to an unchanged debate with
+          // the vote silently dropped is worse than the toast this replaced. The runner replays
+          // it once there is a personal space to write from, which is what the vote needs and
+          // what finishing onboarding produces.
+          enqueuePendingAction({
+            id: `debate-winner-vote:${debateEntityId}`,
+            label: 'your winner vote',
+            requires: 'personalSpace',
+            run: () => castVoteRef.current(participant),
+          });
+          // Signed out is a step, not an error: open the login the upvote control opens rather
+          // than a toast that names the problem and leaves them to find the way in.
+          openPrivySignIn();
+          return;
+        }
+        if (accountError) {
+          reportError('Your account could not be loaded, so the vote was not sent. Please reload and try again.');
+          return;
+        }
+        if (isAccountLoading || !authReady) return;
+        // Signed in with no usable account and nothing reporting why. Better a toast than a login
+        // that cannot help.
+        setToast(<span>Your account is not ready to vote yet. Please try again in a moment.</span>);
         return;
       }
       if (!personalSpaceId) {
@@ -170,8 +246,9 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       const winnerName = speakerLabel(participant);
       const voterName = profile?.name ?? 'Anonymous';
       const debateName = debate.claim.claim;
-      const voteEntityId = IdUtils.generate();
+      const voteEntityId = previousVote?.id ?? IdUtils.generate();
       const voteName = `${voterName} votes ${winnerName} on ${debateName}`;
+      const previousWinnerRelationId = previousVote?.winnerRelationId ?? null;
 
       const values: Value[] = [
         {
@@ -198,26 +275,41 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         hasBeenPublished: false,
       });
 
-      const relations: Relation[] = [
+      const anchorRelations: Relation[] = [
         relate(TYPES_PROPERTY_ID, 'Types', VOTE_TYPE_ID, 'Vote'),
         relate(VOTE_DEBATES_PROPERTY_ID, 'Debates', debateEntityId, debateName),
-        relate(VOTE_WINNER_PROPERTY_ID, 'Vote', participant.profile_space_id, winnerName),
       ];
 
-      // Flip the pills to percentages while the publish is still in flight. The poll below
-      // reconciles with the indexer afterwards.
+      const newWinnerRelation = relate(VOTE_WINNER_PROPERTY_ID, 'Vote', participant.profile_space_id, winnerName);
+
+      const relations: Relation[] = [...anchorRelations];
+      if (previousVote) {
+        relations.push({
+          ...relate(VOTE_WINNER_PROPERTY_ID, 'Vote', previousVote.winnerSpaceEntityId, previousVote.winnerName),
+          id: previousWinnerRelationId!,
+          isDeleted: true,
+        });
+      }
+      relations.push(newWinnerRelation);
+
+      // Keep the new relation id on the optimistic row so a switch during the indexer lag can
+      // still delete it.
       const optimisticVote: DebateVoteRecord = {
         id: voteEntityId,
         voterSpaceId: personalSpaceId,
         winnerSpaceEntityId: participant.profile_space_id,
         winnerName,
+        winnerRelationId: newWinnerRelation.id,
       };
+
+      const pollGeneration = ++pollGenerationRef.current;
+
       queryClient.setQueryData<DebateVoteRecord[]>(votesQueryKey(debateEntityId), (old = []) => [
-        ...old,
+        ...old.filter(vote => vote.id !== voteEntityId),
         optimisticVote,
       ]);
 
-      setIsVoting(true);
+      setVoteInFlight(debateEntityId, true);
 
       const publish = Effect.gen(function* () {
         const ops = yield* Publish.prepareLocalDataForPublishing(values, relations, personalSpaceId);
@@ -251,11 +343,14 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
         const result = await Effect.runPromise(Effect.either(publish));
 
         if (Either.isLeft(result)) {
-          // The vote never landed, so roll the pills back to "Winner?" instead of leaving
-          // percentages on screen.
-          queryClient.setQueryData<DebateVoteRecord[]>(votesQueryKey(debateEntityId), (old = []) =>
-            old.filter(vote => vote.id !== voteEntityId)
-          );
+          // Publish failed — restore the previous pick, or clear on a failed first vote.
+          queryClient.setQueryData<DebateVoteRecord[]>(votesQueryKey(debateEntityId), (old = []) => {
+            const live = old.find(vote => vote.id === voteEntityId);
+            if (live && live.winnerRelationId !== optimisticVote.winnerRelationId) return old;
+
+            const withoutOptimistic = old.filter(vote => vote.id !== voteEntityId);
+            return previousVote ? [...withoutOptimistic, previousVote] : withoutOptimistic;
+          });
 
           const error = result.left;
           if (error instanceof Error && error.message.includes('User rejected')) return;
@@ -268,7 +363,7 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
 
         setToast(<span>Vote published!</span>);
       } finally {
-        setIsVoting(false);
+        setVoteInFlight(debateEntityId, false);
       }
 
       // The indexer lags the chain. Invalidating now would drop the optimistic row and flash
@@ -278,32 +373,47 @@ export function useDebateVotes(debate: Debate): DebateVotesResult {
       const MAX_POLL_ATTEMPTS = 45;
       const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
+      const isVoteIndexed = async () => {
+        if (!previousVote) return await Effect.runPromise(checkEntityExists(voteEntityId));
+        const indexed = tallyDebateVotes(await fetchDebateVotes(debateEntityId), personalSpaceId).myVote;
+        return indexed !== null && ID.equals(indexed.winnerSpaceEntityId, participant.profile_space_id);
+      };
+
       void (async () => {
         await sleep(FIRST_POLL_MS);
         for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+          if (pollGeneration !== pollGenerationRef.current) return;
           try {
-            if (await Effect.runPromise(checkEntityExists(voteEntityId))) break;
+            if (await isVoteIndexed()) break;
           } catch (error) {
             console.error('[useDebateVotes] Poll for indexed vote failed:', error);
           }
           await sleep(POLL_INTERVAL_MS);
         }
+        if (pollGeneration !== pollGenerationRef.current) return;
         await queryClient.invalidateQueries({ queryKey: votesQueryKey(debateEntityId) });
       })();
     },
     [
-      hasVoted,
-      isVoting,
+      tally.myVote,
       smartAccount,
       personalSpaceId,
       profile?.name,
       debate.claim.claim,
       debateEntityId,
       queryClient,
+      openPrivySignIn,
+      enqueuePendingAction,
+      authReady,
+      authenticated,
+      isAccountLoading,
+      accountError,
       setToast,
       reportError,
     ]
   );
+
+  castVoteRef.current = castVote;
 
   return { sharePercentFor, isMyPick, hasVoted, isVoting, castVote };
 }

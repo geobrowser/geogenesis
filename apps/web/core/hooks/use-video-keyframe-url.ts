@@ -15,20 +15,30 @@ function isDirectMediaUrl(value: string | null | undefined): value is string {
   return Boolean(value && (value.startsWith('ipfs://') || value.startsWith('http://') || value.startsWith('https://')));
 }
 
+export type VideoKeyframeUrl = {
+  url: string | undefined;
+  /**
+   * True while the keyframe relation is still being fetched, so `url` being undefined doesn't
+   * yet mean "this video has no keyframe". Callers that fall back to a placeholder image should
+   * hold off until this clears, or every card shows the placeholder and then swaps.
+   */
+  isResolving: boolean;
+};
+
 /**
  * Resolves the keyframe image URL for a video entity, reading the keyframe
  * relation from the store when present and otherwise fetching only that
  * relation from the network. The network read is cached under a stable key so
  * repeated hooks for the same video dedupe onto one request.
  */
-export function useVideoKeyframeUrl(videoEntityId: string | undefined, spaceId: string): string | undefined {
+export function useVideoKeyframeUrl(videoEntityId: string | undefined, spaceId: string): VideoKeyframeUrl {
   const storeKeyframeRelation = useSpaceAwareRelation({
     selector: r =>
       Boolean(videoEntityId) && r.fromEntity.id === videoEntityId && ID.equals(r.type.id, KEY_FRAME_IMAGE_PROPERTY),
     spaceId,
   });
 
-  const { data: fetchedRelations } = useQuery({
+  const { data: fetchedRelations, isFetched } = useQuery({
     queryKey: ['network', 'relations-by-property', videoEntityId, KEY_FRAME_IMAGE_PROPERTY, spaceId],
     queryFn: ({ signal }) =>
       Effect.runPromise(getRelationsByFromEntityId(videoEntityId as string, KEY_FRAME_IMAGE_PROPERTY, spaceId, signal)),
@@ -53,6 +63,10 @@ export function useVideoKeyframeUrl(videoEntityId: string | undefined, spaceId: 
     return urls.find(v => v.spaceId === imageSpaceId)?.value ?? urls[0]?.value;
   }, [imageValues, imageSpaceId]);
 
-  if (isDirectMediaUrl(raw)) return raw;
-  return lookedUp ?? undefined;
+  const url = isDirectMediaUrl(raw) ? raw : (lookedUp ?? undefined);
+
+  return {
+    url,
+    isResolving: Boolean(videoEntityId) && !url && !storeKeyframeRelation && !isFetched,
+  };
 }

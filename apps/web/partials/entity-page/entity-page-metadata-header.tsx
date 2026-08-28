@@ -355,7 +355,7 @@ export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: En
               <Create />
             </Link>
           )}
-          <ClaimDebateButton entityId={id} spaceId={spaceId} entity={entity} />
+          <ClaimDebateButton entityId={id} spaceId={spaceId} />
           {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
         </div>
       </div>

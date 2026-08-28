@@ -1,11 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MAX_SEARCH_QUERY_LENGTH } from '~/core/io/search-query';
+
 import {
   GeoChatRequestError,
+  blockDebateUser,
   completeLocalRecordingUpload,
+  createDebateRequest,
+  dismissDebateRequest,
   endDebateTurn,
   getDebateActivity,
   getGeoChatSession,
+  getRematchLiveKitToken,
+  joinDebateQueue,
+  listDebateClaims,
+  listMatchmakingClaims,
+  notifyClaimResponseIndexed,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
   updateDebateAvailability,
@@ -157,6 +167,351 @@ describe('debate availability', () => {
         body: JSON.stringify({ available_to_debate: false }),
       })
     );
+  });
+});
+
+describe('matchmaking', () => {
+  function stubJson(body: unknown) {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+    return fetch;
+  }
+
+  it('only sends the claim filters that are set', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ search: 'chips', filter: 'debate_now', limit: 20 }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/matchmaking/claims?search=chips&filter=debate_now&limit=20',
+      expect.objectContaining({ method: 'GET' })
+    );
+  });
+
+  // GEO-2658. `/matchmaking/claims` has no ceiling on `search` — it trims, escapes the LIKE
+  // wildcards and binds — so this is about the same typed string behaving the same way whichever
+  // search box it went into, not about staying inside a limit.
+  it('caps an over-long claim search the way the other search box does', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ search: 'a'.repeat(250) }, vi.fn(), 'user-a');
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('search')).toHaveLength(MAX_SEARCH_QUERY_LENGTH);
+  });
+
+  // The part that is a correctness fix rather than a consistency one: slicing by code unit would
+  // cut a surrogate pair in half, and `URLSearchParams` turns a lone surrogate into a replacement
+  // character — a query the server can never match.
+  it('never cuts an emoji in half on the way out', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ search: '🎉'.repeat(120) }, vi.fn(), 'user-a');
+
+    const sent = new URL((fetch.mock.calls[0]?.[0] as string) ?? '').searchParams.get('search') ?? '';
+    expect(sent).not.toContain('\uFFFD');
+    expect([...sent]).toHaveLength(MAX_SEARCH_QUERY_LENGTH);
+  });
+
+  it('omits the default "all" filter and unset facets', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ filter: 'all', spaceId: null }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/matchmaking/claims', expect.anything());
+  });
+
+  // GEO-2659 and GEO-2674 moved the scope, the topic filter and this session's exclusions onto the
+  // wire. Nothing above reaches the URL for them — the UI suites mock the hook and assert the query
+  // object — so a renamed or wrongly joined parameter would be caught by neither.
+  it('sends the eligible scope, the topic and the session as query parameters', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims(
+      { spaceIds: ['space-1', 'space-2'], topicId: 'topic-ai', rematchSessionId: 'rematch-1' },
+      vi.fn(),
+      'user-a'
+    );
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('space_ids')).toBe('space-1,space-2');
+    expect(url.searchParams.get('topic_id')).toBe('topic-ai');
+    expect(url.searchParams.get('rematch_session_id')).toBe('rematch-1');
+  });
+
+  // Same shape as the space pair, and the same reason to send only one.
+  it('sends multiple topics as a joined list', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ topicIds: ['topic-ai', 'topic-health'] }, vi.fn(), 'user-a');
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('topic_ids')).toBe('topic-ai,topic-health');
+  });
+
+  it('sends the single topic instead of the list, never both', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ topicId: 'topic-ai', topicIds: ['topic-ai', 'topic-health'] }, vi.fn(), 'user-a');
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('topic_id')).toBe('topic-ai');
+    expect(url.searchParams.has('topic_ids')).toBe(false);
+  });
+
+  it('omits an empty topic list rather than sending it as no filter', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ topicIds: [] }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/matchmaking/claims', expect.anything());
+  });
+
+  // The two space parameters are OR-merged server-side, so sending both would widen the corpus to
+  // the whole eligible set the moment the viewer picked one space out of it.
+  it('sends the picked space instead of the scope, never both', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ spaceId: 'space-1', spaceIds: ['space-1', 'space-2'] }, vi.fn(), 'user-a');
+
+    const url = new URL((fetch.mock.calls[0]?.[0] as string) ?? '');
+    expect(url.searchParams.get('space_id')).toBe('space-1');
+    expect(url.searchParams.has('space_ids')).toBe(false);
+  });
+
+  // An empty scope means "no space this viewer may be shown claims from", and the server reads a
+  // missing `space_ids` as "no filter" — the exact opposite. The callers hold the query back in
+  // that case, and this is the half of the contract that makes their doing so necessary.
+  it('omits an empty scope rather than sending it as no filter', async () => {
+    const fetch = stubJson({ claims: [], next_cursor: null });
+
+    await listMatchmakingClaims({ spaceIds: [] }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/matchmaking/claims', expect.anything());
+  });
+
+  it('creates a debate request for a claim', async () => {
+    const fetch = stubJson({ id: 'request-1' });
+
+    await createDebateRequest({ space_id: 'space-1', claim_entity_id: 'claim-1' }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-requests',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ space_id: 'space-1', claim_entity_id: 'claim-1' }),
+      })
+    );
+  });
+
+  it('dismisses a request and optionally drops the claim intent', async () => {
+    const fetch = stubJson({ request: {}, match: null, debate: null });
+
+    await dismissDebateRequest('request-1', { remove_intent: true }, vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-requests/request-1/dismiss',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ remove_intent: true }) })
+    );
+  });
+
+  it('blocks a user', async () => {
+    const fetch = stubJson({ blocked: [] });
+
+    await blockDebateUser('user-b', vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/me/debate-blocks/user-b',
+      expect.objectContaining({ method: 'PUT' })
+    );
+  });
+});
+
+describe('debate queue readiness', () => {
+  // The endpoint takes no body at all: a body once meant a client-chosen position, and briefly a
+  // `source` discriminator for the legacy/hub split that GEO-2514 removed. geo-chat 426s either.
+  it('joins with no body', async () => {
+    const response = { claim: { id: 'claim-1' }, match: null };
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a')).resolves.toEqual(response);
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/spaces/space-1/claims/claim-1/debate-queue', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer access-token' },
+      body: undefined,
+      signal: undefined,
+    });
+  });
+
+  it('surfaces a readiness failure rather than retrying it', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'claim response required', code: 'claim_response_required' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(joinDebateQueue('space-1', 'claim-1', vi.fn(), 'user-a')).rejects.toBeInstanceOf(GeoChatRequestError);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe('debate claim hydration authentication', () => {
+  it('does not silently downgrade a signed-in claim request to anonymous access', async () => {
+    resetGeoChatSession();
+    window.localStorage.removeItem('geo:chat-session');
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ claims: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(listDebateClaims('space-1', ['claim-1'], getPrivyIdentityToken, 'user-a')).rejects.toThrow(
+      'Identity token unavailable'
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps anonymous claim browsing available without an authorization header', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ claims: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(listDebateClaims('space-1', ['claim-1'])).resolves.toEqual({ claims: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/spaces/space-1/debate-claims?claim_ids=claim-1',
+      expect.objectContaining({ headers: {} })
+    );
+  });
+});
+
+describe('rematch voice tokens', () => {
+  it('mints a token for the session with an authenticated bodyless POST', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          token: 'jwt',
+          url: 'wss://livekit.test',
+          room_name: 'geo-rematch-session-1',
+          participant_slot: 2,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(getRematchLiveKitToken('session-1', vi.fn(), 'user-a')).resolves.toEqual({
+      token: 'jwt',
+      url: 'wss://livekit.test',
+      room_name: 'geo-rematch-session-1',
+      participant_slot: 2,
+    });
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/debate-rematches/session-1/livekit-token', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer access-token' },
+      body: undefined,
+      signal: undefined,
+    });
+  });
+
+  // The dock reads the code to decide between rendering nothing and offering a retry, so it has to
+  // survive the request layer intact.
+  it('surfaces the backend refusal code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'livekit_not_configured', message: 'No LiveKit' } }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    await expect(getRematchLiveKitToken('session-1', vi.fn(), 'user-a')).rejects.toMatchObject({
+      status: 503,
+      code: 'livekit_not_configured',
+    });
+  });
+});
+
+describe('claim response indexing notifications', () => {
+  it('posts the indexed response snapshot and accepts an empty success response', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(
+      notifyClaimResponseIndexed('space-1', 'claim-1', 'veracity', false, vi.fn(), 'user-a')
+    ).resolves.toBeUndefined();
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/spaces/space-1/claims/claim-1/response-indexed', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer access-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ response_kind: 'veracity', position: false }),
+      signal: undefined,
+    });
+  });
+
+  it('retries transient failures twice before succeeding', async () => {
+    vi.useFakeTimers();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(null, { status: 503, statusText: 'Unavailable' }))
+      .mockResolvedValueOnce(new Response(null, { status: 503, statusText: 'Unavailable' }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetch);
+
+    const notification = notifyClaimResponseIndexed('space-1', 'claim-1', 'stance', null, vi.fn(), 'user-a');
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    await vi.runAllTimersAsync();
+
+    await expect(notification).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('stops retrying when the notification is cancelled', async () => {
+    vi.useFakeTimers();
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 503, statusText: 'Unavailable' }));
+    vi.stubGlobal('fetch', fetch);
+    const controller = new AbortController();
+
+    const notification = notifyClaimResponseIndexed(
+      'space-1',
+      'claim-1',
+      'stance',
+      true,
+      vi.fn(),
+      'user-a',
+      controller.signal
+    );
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    controller.abort();
+
+    await expect(notification).rejects.toMatchObject({ name: 'AbortError' });
+    await vi.runAllTimersAsync();
+    expect(fetch).toHaveBeenCalledOnce();
   });
 });
 

@@ -37,6 +37,17 @@ const DEFAULT_DISCONNECT_INFO = {
   message: "We weren't able to reconnect automatically. You can try rejoining the call below.",
 };
 
+/**
+ * The scheduled cutoff. Not keyed on a DisconnectReason because it doesn't have one — the
+ * cutoff disconnects the client itself, so LiveKit reports CLIENT_INITIATED, exactly as if
+ * the user had pressed Leave. Saying so explicitly is the point: without it the cutoff
+ * dropped people back on the calls page with no explanation (GEO-2584).
+ */
+const ENDED_INFO = {
+  heading: 'Call ended',
+  message: 'This call reached the end of its scheduled time, so everyone was disconnected.',
+};
+
 function getDisconnectInfo(reason: DisconnectReason | undefined): { heading: string; message: string } {
   return (reason !== undefined && DISCONNECT_INFO[reason]) || DEFAULT_DISCONNECT_INFO;
 }
@@ -51,9 +62,12 @@ export function ReconnectionOverlay({ status, disconnectReason, onRejoin, onLeav
   if (status === 'connected') return null;
 
   const isReconnecting = status === 'reconnecting';
-  const disconnectInfo = getDisconnectInfo(disconnectReason);
+  const isEnded = status === 'ended';
+  const disconnectInfo = isEnded ? ENDED_INFO : getDisconnectInfo(disconnectReason);
   const title = isReconnecting ? 'Reconnecting' : disconnectInfo.heading;
-  const isRoomDeleted = disconnectReason === DisconnectReason.ROOM_DELETED;
+  // Nothing to rejoin in either case: the room is gone, or the schedule window is over and
+  // the join screen would refuse a fresh token anyway. Offer acknowledgement, not a retry.
+  const isTerminal = isEnded || disconnectReason === DisconnectReason.ROOM_DELETED;
 
   return (
     <div role="dialog" aria-modal="true" className="fixed inset-0 z-100 flex items-center justify-center bg-text/20">
@@ -73,9 +87,9 @@ export function ReconnectionOverlay({ status, disconnectReason, onRejoin, onLeav
 
         {rejoinError && <p className="text-metadata text-red-01">{rejoinError}</p>}
 
-        {status === 'disconnected' && (
+        {(status === 'disconnected' || isEnded) && (
           <div className="flex w-full flex-col gap-2">
-            {isRoomDeleted ? (
+            {isTerminal ? (
               <Button variant="primary" onClick={onLeave}>
                 OK
               </Button>

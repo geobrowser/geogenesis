@@ -238,7 +238,7 @@ type BadgeProps = {
   children: React.ReactNode;
 };
 
-const Badge = ({ children }: BadgeProps) => {
+export const Badge = ({ children }: BadgeProps) => {
   return (
     <div className="shrink-0">
       <div className="rounded bg-black px-1.25 py-0.5 text-xs leading-none text-white">{children}</div>
