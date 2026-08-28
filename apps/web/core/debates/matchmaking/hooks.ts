@@ -43,6 +43,13 @@ const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
  * switch and the round trip that followed — UNSUBSCRIBE, SUBSCRIBE, READY — re-reconciled the whole
  * scope, refetching every loaded claims page and eating into the session's SUBSCRIBE budget.
  */
+/**
+ * Subscribes to matchmaking's live updates, which need a session, and reports whether there is one.
+ *
+ * The two used to be the same answer: no session meant no socket *and* no list. Claims and People
+ * are readable signed out now (GEO-2725), so the socket stays gated while the lists no longer are
+ * — a signed-out viewer gets a static list rather than none, which is the trade the hub wants.
+ */
 export function useMatchmakingScope(enabled: boolean) {
   const { authenticated } = useGeoChatAuth();
   useDebateGatewayScope({ scope: 'matchmaking' }, enabled && authenticated);
@@ -51,13 +58,15 @@ export function useMatchmakingScope(enabled: boolean) {
 
 export function useDebatePeople(enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-  const authenticated = useMatchmakingScope(enabled);
+  useMatchmakingScope(enabled);
 
   return useQuery({
     ...debateQueryNetworkOptions,
+    // `accountKey` is null signed out, which keys the anonymous list separately from anyone's —
+    // so signing in cannot serve the signed-out answer, and signing out cannot leak the other way.
     queryKey: debateQueryKeys.people(accountKey),
     queryFn: ({ signal }) => listDebatePeople(getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && authenticated,
+    enabled,
     // Presence is the most volatile thing the hub shows, and coming back to the window is exactly
     // when it is most likely to have moved on without us.
     refetchOnWindowFocus: true,
@@ -66,7 +75,7 @@ export function useDebatePeople(enabled: boolean) {
 
 export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-  const authenticated = useMatchmakingScope(enabled);
+  useMatchmakingScope(enabled);
 
   return useInfiniteQuery({
     ...debateQueryNetworkOptions,
@@ -83,7 +92,7 @@ export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boo
     // Changing a filter or typing in search changes the query key; without this the list would be
     // replaced by a skeleton on every keystroke.
     placeholderData: keepPreviousData,
-    enabled: enabled && authenticated,
+    enabled,
   });
 }
 

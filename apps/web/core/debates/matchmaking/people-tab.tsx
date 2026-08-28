@@ -2,13 +2,15 @@
 
 import * as React from 'react';
 
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+
 import { Avatar } from '~/design-system/avatar';
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
 
 import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
-import { useCreateDebateChallenge, useDebateActivity } from '../hooks';
+import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
@@ -23,9 +25,16 @@ import { useUnexpiredRequests } from './use-request-countdown';
  * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
  */
 export function PeopleTab() {
+  const { authenticated } = useGeoChatAuth();
+  const promptSignIn = usePrivySignIn();
+  // Undefined when signed in, so every path below keeps behaving exactly as it did.
+  const onRequireSignIn = authenticated ? undefined : promptSignIn;
+
   const peopleQuery = useDebatePeople(true);
-  const { data: activity } = useDebateActivity(true);
-  const { data: requests } = useDebateRequests(true);
+  // Both describe the viewer's own state, so signed out there is nothing to ask for. Passing
+  // `authenticated` rather than `true` keeps them from firing a request that can only 401.
+  const { data: activity } = useDebateActivity(authenticated);
+  const { data: requests } = useDebateRequests(authenticated);
   const currentUserId = useCurrentGeoChatUserId();
   const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
 
@@ -99,6 +108,11 @@ export function PeopleTab() {
             search.trim() ? 'Nobody available matches that search.' : 'Nobody is available to debate right now.'
           }
           emptyAction={search.trim() ? { label: 'Clear search', onClick: () => setSearch('') } : undefined}
+          signInAction={
+            onRequireSignIn
+              ? { label: 'Sign in', message: 'Sign in to see who is available to debate.', onClick: onRequireSignIn }
+              : undefined
+          }
         >
           <>
             {blockedReason ? (
@@ -113,6 +127,7 @@ export function PeopleTab() {
                   person={person}
                   disabled={buttonsDisabled}
                   disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
+                  onRequireSignIn={onRequireSignIn}
                 />
               ))}
             </ul>
@@ -127,11 +142,17 @@ function PersonRow({
   person,
   disabled,
   disabledReason,
+  onRequireSignIn,
 }: {
   person: DebatePerson;
   disabled: boolean;
   /** Only surfaced on hover, so it explains the greyed-out button without repeating the card. */
   disabledReason: string;
+  /**
+   * Set only when signed out. Pressing Debate then opens Privy instead of sending a request, which
+   * would fail at the token exchange with an error the viewer can do nothing about.
+   */
+  onRequireSignIn?: () => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
 
@@ -146,8 +167,14 @@ function PersonRow({
         </Text>
       </div>
       <HubPillButton
-        onClick={() => createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })}
-        disabled={!person.can_challenge || person.in_debate || disabled}
+        onClick={() =>
+          onRequireSignIn
+            ? onRequireSignIn()
+            : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
+        }
+        // Signed out, the row's own availability flags are about nobody in particular, so they are
+        // not a reason to refuse the press — the press is what starts the sign-in.
+        disabled={!onRequireSignIn && (!person.can_challenge || person.in_debate || disabled)}
         pending={createChallenge.isPending}
         pendingLabel="Requesting…"
         title={disabled ? disabledReason : undefined}

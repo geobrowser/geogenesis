@@ -1110,7 +1110,9 @@ export async function listDebatePeople(
   signal?: AbortSignal
 ) {
   return geoChatRequest<DebatePeopleResponse>('/matchmaking/people', {
-    auth: true,
+    // Attempted anonymously so the hub's People tab can render signed out. geo-chat decides
+    // whether to serve it; a refusal surfaces as the sign-in state rather than an error.
+    auth: 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,
@@ -1146,7 +1148,8 @@ export async function listMatchmakingClaims(
 
   const search = params.toString();
   return geoChatRequest<MatchmakingClaimsResponse>(`/matchmaking/claims${search ? `?${search}` : ''}`, {
-    auth: true,
+    // Same as People above: anonymous read, with geo-chat free to refuse it.
+    auth: 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,

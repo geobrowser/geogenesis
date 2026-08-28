@@ -10,6 +10,9 @@ import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
 
 const mocks = vi.hoisted(() => ({
+  promptSignIn: vi.fn(),
+  /** Privy's answer; the tab's signed-out paths hang off it. */
+  authenticated: true,
   claims: [] as MatchmakingClaim[],
   featuredClaims: [] as Array<{
     claimEntityId: string;
@@ -174,7 +177,7 @@ vi.mock('../hooks', () => ({
     matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: 'account-1' }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
   useLeaveDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
   // Featured rows are hydrated by the per-space debate-claims lookup. Records what it was asked
@@ -236,6 +239,12 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [] }),
+}));
+
+// `usePrivySignIn` reaches for Privy's context, which these suites do not stand up. The signed-out
+// paths assert that it is *called*, so the stub is shared through `mocks.promptSignIn`.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => mocks.promptSignIn,
 }));
 
 function render(ui: ReactElement) {
@@ -306,6 +315,8 @@ const MINE = '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419';
 const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
 beforeEach(() => {
+  // Not a mock fn, so `resetAllMocks` does not restore it.
+  mocks.authenticated = true;
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
   mocks.featuredClaims = [];
@@ -1227,5 +1238,25 @@ describe('ClaimsTab -- Featured', () => {
 
     await waitFor(() => expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument());
     expect(mocks.lastEnabled).toBe(false);
+  });
+
+  // GEO-2725. "My positions" is the viewer's own list, so signed out it can only ever be empty —
+  // an option that looks broken rather than one that says something.
+  it('drops the My positions filter when signed out', async () => {
+    mocks.authenticated = false;
+    render(<ClaimsTab />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Featured/ }));
+
+    expect(screen.queryByRole('button', { name: 'My positions' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'All claims' })).toBeInTheDocument();
+  });
+
+  it('keeps My positions for a signed-in viewer', async () => {
+    render(<ClaimsTab />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Featured/ }));
+
+    expect(screen.getByRole('button', { name: 'My positions' })).toBeInTheDocument();
   });
 });

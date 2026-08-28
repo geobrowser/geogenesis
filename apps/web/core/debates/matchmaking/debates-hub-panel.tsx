@@ -42,6 +42,26 @@ const TABS: { id: DebatesHubTab; label: string }[] = [
   { id: 'requests', label: 'Requests' },
 ];
 
+/**
+ * GEO-2725. Matches and Requests are a particular person's, so signed out they have no possible
+ * contents — not an empty list but a meaningless one. Claims and People describe the world rather
+ * than the viewer, so both read fine anonymously and are what the hub offers before sign-in.
+ */
+const SIGNED_OUT_TABS: DebatesHubTab[] = ['claims', 'people'];
+
+function tabsFor(authenticated: boolean) {
+  return authenticated ? TABS : TABS.filter(tab => SIGNED_OUT_TABS.includes(tab.id));
+}
+
+/**
+ * Signing out with Matches or Requests open would otherwise leave the panel on a tab that is no
+ * longer in the row, showing a tab body with no tab selected.
+ */
+function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHubTab {
+  if (authenticated || SIGNED_OUT_TABS.includes(activeTab)) return activeTab;
+  return 'claims';
+}
+
 function isInteractiveDragTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   return Boolean(
@@ -198,8 +218,10 @@ type SurfaceProps = {
   onClose?: () => void;
 };
 
-function DebatesHubSurface({ activeTab, onTabChange, onClose }: SurfaceProps) {
+function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: SurfaceProps) {
   const { authenticated, ready } = useGeoChatAuth();
+  const tabs = tabsFor(authenticated);
+  const activeTab = visibleTab(requestedTab, authenticated);
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
 
@@ -246,7 +268,7 @@ function DebatesHubSurface({ activeTab, onTabChange, onClose }: SurfaceProps) {
               already fits, and Requests carries the badge, so it is the worst one to lose. */}
           <div className="no-scrollbar overflow-x-auto">
             <div className="relative flex w-max items-center gap-6 pb-2">
-              {TABS.map(tab => (
+              {tabs.map(tab => (
                 <button
                   key={tab.id}
                   type="button"
@@ -288,9 +310,9 @@ function DebatesHubSurface({ activeTab, onTabChange, onClose }: SurfaceProps) {
         data-debates-hub-scroll
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
       >
-        {!ready ? null : !authenticated ? (
-          <HubMessage>Sign in to find people to debate.</HubMessage>
-        ) : (
+        {/* Still gated on `ready`: rendering before Privy has restored the session would show the
+            signed-out tab row for a beat to someone who is in fact signed in. */}
+        {!ready ? null : (
           <HubSwap activeKey={activeTab}>
             {activeTab === 'requests' ? (
               <RequestsTab />

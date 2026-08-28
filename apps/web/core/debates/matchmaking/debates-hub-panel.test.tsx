@@ -9,6 +9,7 @@ import { DebatesHubPanel } from './debates-hub-panel';
 import { debatesHubAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
+  promptSignIn: vi.fn(),
   authenticated: true,
   available: false,
   updateAvailability: vi.fn(),
@@ -62,6 +63,20 @@ vi.mock('~/core/browse/use-browse-sidebar-cache', () => ({
 
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false }),
+}));
+
+// This suite is about the tab row and which body it selects, not the Claims list itself — which
+// reaches for the space allowlist and the knowledge graph through react-query. `HubStickyControls`
+// stays real because the People tab renders it.
+vi.mock('./claims-tab', async () => {
+  const actual = await vi.importActual<typeof import('./claims-tab')>('./claims-tab');
+  return { ...actual, ClaimsTab: () => <div data-testid="claims-tab" /> };
+});
+
+// `usePrivySignIn` reaches for Privy's context, which these suites do not stand up. The signed-out
+// paths assert that it is *called*, so the stub is shared through `mocks.promptSignIn`.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => mocks.promptSignIn,
 }));
 
 function renderOpen(tab: 'requests' | 'matches' | 'claims' | 'people' = 'requests') {
@@ -147,11 +162,35 @@ describe('DebatesHubPanel', () => {
     expect(screen.getByText("Matchmaking isn't available yet.")).toBeInTheDocument();
   });
 
-  it('asks anonymous visitors to sign in', () => {
+  // GEO-2725. The hub used to be one sign-in message end to end. Claims and People describe the
+  // corpus rather than the viewer, so both are readable signed out and are what the row offers.
+  it('offers Claims and People to anonymous visitors, and shows the Claims list', () => {
     mocks.authenticated = false;
     renderOpen();
 
-    expect(screen.getByText('Sign in to find people to debate.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Claims' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
+    expect(screen.queryByText('Sign in to find people to debate.')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Claims' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+  });
+
+  // Matches and Requests are a particular person's, so signed out they have no possible contents.
+  it('leaves Matches and Requests out of the row when signed out', () => {
+    mocks.authenticated = false;
+    renderOpen();
+
+    expect(screen.queryByRole('button', { name: /Matches/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Requests/ })).not.toBeInTheDocument();
+  });
+
+  // Signing out with Matches open would otherwise leave a tab body showing with no tab selected.
+  it('falls back to Claims when signed out on a tab that is no longer offered', () => {
+    mocks.authenticated = false;
+    renderOpen('matches');
+
+    expect(screen.getByRole('button', { name: 'Claims' })).toHaveAttribute('aria-current', 'true');
+    expect(screen.queryByRole('button', { name: /Matches/ })).not.toBeInTheDocument();
   });
 
   // `aria-modal` on the sheet hides the navbar toggle and the backdrop from assistive tech, so

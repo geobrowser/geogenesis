@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { responsePositionLabel } from '~/core/responses/entity-response';
@@ -30,6 +31,7 @@ import {
   featuredClaimIdsBySpace,
   useFeaturedClaims,
 } from '../featured-claims';
+import { useGeoChatAuth } from '../hooks';
 import { useDebateClaimsBySpaces } from '../hooks';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
@@ -58,6 +60,14 @@ const FILTER_OPTIONS: HubFilterOption<ClaimsTabFilter>[] = [
   { value: 'debate_now', label: 'Debate now' },
 ];
 
+/**
+ * "My positions" is the viewer's own list, so signed out it can only ever be empty — an option that
+ * looks broken rather than one that says something. The rest describe the corpus and still answer.
+ */
+function filterOptionsFor(authenticated: boolean) {
+  return authenticated ? FILTER_OPTIONS : FILTER_OPTIONS.filter(option => option.value !== 'mine');
+}
+
 /** Stable identity so the geo-chat lookups don't restart on every render of a non-featured list. */
 const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
 
@@ -73,6 +83,14 @@ const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
  * disallowed — so the sentinel that asks for the next page sits outside the empty state below.
  */
 export function ClaimsTab() {
+  const { authenticated } = useGeoChatAuth();
+  // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
+  // the claim page and the entity vote arrows use it. Passed as `undefined` when signed in so the
+  // card keeps publishing directly.
+  const promptSignIn = usePrivySignIn();
+  const onRequireSignIn = authenticated ? undefined : promptSignIn;
+  const filterOptions = React.useMemo(() => filterOptionsFor(authenticated), [authenticated]);
+
   const [search, setSearch] = React.useState('');
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
   // Featured is where the tab opens. The whole corpus is the wider net but the shallower one — a
@@ -417,7 +435,7 @@ export function ClaimsTab() {
           leading={
             <HubFilterMenu
               label={FILTER_OPTIONS.find(option => option.value === filter)?.label ?? 'All claims'}
-              options={FILTER_OPTIONS}
+              options={filterOptions}
               value={filter}
               onChange={setFilter}
             />
@@ -431,6 +449,11 @@ export function ClaimsTab() {
           error={featured ? featuredError : claimsQuery.error}
           onRetry={() => void (featured ? refetchFeatured() : claimsQuery.refetch())}
           isEmpty={visibleClaims.length === 0}
+          signInAction={
+            onRequireSignIn
+              ? { label: 'Sign in', message: 'Sign in to browse claims to debate.', onClick: onRequireSignIn }
+              : undefined
+          }
           emptyMessage={
             featured
               ? hasFilters
@@ -470,6 +493,7 @@ export function ClaimsTab() {
                 // is in fact standing ready on. The paged rows come with readiness on them, so this
                 // only ever applies to Featured.
                 hideReadinessToggle={featuredReadinessUnresolved}
+                onRequireSignIn={onRequireSignIn}
               />
             ))}
           </HubCardList>
