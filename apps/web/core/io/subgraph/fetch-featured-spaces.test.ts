@@ -234,6 +234,18 @@ describe('fetchFeaturedSpaces', () => {
     graphqlMock.mockImplementation(() => Effect.succeed({ space: { topicId: null } }));
     expect(await fetchFeaturedSpaces()).toEqual([]);
   });
+
+  it('throws when the root query fails, so a failure is not indistinguishable from no featured spaces', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    graphqlMock.mockImplementation((arg: unknown) => {
+      const q = query(arg);
+      if (q.includes('space(id:')) return Effect.fail({ _tag: 'GraphqlRuntimeError' });
+      return Effect.succeed({ entities: [] });
+    });
+
+    await expect(fetchFeaturedSpaces()).rejects.toThrow();
+    consoleError.mockRestore();
+  });
 });
 
 /**

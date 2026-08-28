@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateChallenge, DebatePerson } from '../api';
 
 const mocks = vi.hoisted(() => ({
+  promptSignIn: vi.fn(),
+  /** Privy's answer; the tab's signed-out paths hang off it. */
+  authenticated: true,
   people: [] as DebatePerson[],
   challenge: null as DebateChallenge | null,
   outboundRequest: null as unknown,
@@ -18,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../hooks', () => ({
+  useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'user-a' }),
   useDebateActivity: () => ({
     data: { challenge: mocks.challenge, outbound_request: mocks.outboundRequest, debate: mocks.activeDebate },
   }),
@@ -37,6 +41,12 @@ vi.mock('./hooks', () => ({
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.currentUserId,
+}));
+
+// `usePrivySignIn` reaches for Privy's context, which these suites do not stand up. The signed-out
+// paths assert that it is *called*, so the stub is shared through `mocks.promptSignIn`.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => mocks.promptSignIn,
 }));
 
 const { PeopleTab } = await import('./people-tab');
@@ -75,6 +85,8 @@ const awaitingText = 'You have a debate request awaiting a reply.';
 const card = () => screen.queryByRole('article');
 
 beforeEach(() => {
+  // Not a mock fn, so `resetAllMocks` does not restore it.
+  mocks.authenticated = true;
   mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
   mocks.challenge = null;
   mocks.outboundRequest = null;
@@ -133,7 +145,7 @@ describe('PeopleTab', () => {
     render(<PeopleTab />);
 
     expect(card()).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
   // Matches the Matches tab: a request you're waiting on gets a card rather than a sentence, and
@@ -159,11 +171,11 @@ describe('PeopleTab', () => {
     expect(within(request).getByText('VS')).toBeInTheDocument();
   });
 
-  it('still greys out every Debate button while the request is open', () => {
+  it('still greys out every Request debate button while the request is open', () => {
     mocks.challenge = challenge('requester');
     render(<PeopleTab />);
 
-    for (const button of screen.getAllByRole('button', { name: 'Debate' })) {
+    for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
       expect(button).toBeDisabled();
     }
   });
@@ -205,7 +217,7 @@ describe('PeopleTab', () => {
 
   // The activity payload keeps reporting a challenge as pending until the server says otherwise,
   // so expiry has to be applied here — the same filter every other request surface uses. Without
-  // it the tab sat on an "Expired" card with every Debate button still dead underneath it.
+  // it the tab sat on an "Expired" card with every Request debate button still dead underneath it.
   it('drops an expired challenge instead of waiting for the server to say so', () => {
     mocks.challenge = challenge('requester', -1_000);
     render(<PeopleTab />);
@@ -214,11 +226,11 @@ describe('PeopleTab', () => {
     expect(screen.queryByText('Expired')).not.toBeInTheDocument();
   });
 
-  it('re-enables the Debate buttons once the request has expired', () => {
+  it('re-enables the Request debate buttons once the request has expired', () => {
     mocks.challenge = challenge('requester', -1_000);
     render(<PeopleTab />);
 
-    expect(screen.getAllByRole('button', { name: 'Debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
   it('drops an expired incoming challenge too, sentence and all', () => {
@@ -226,7 +238,7 @@ describe('PeopleTab', () => {
     render(<PeopleTab />);
 
     expect(screen.queryByText(awaitingText)).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
   // The same action the Requests tab offers on this challenge, reachable without leaving People.
@@ -263,5 +275,37 @@ describe('PeopleTab', () => {
     expect(
       screen.getByText('You already have an open request — withdraw it to challenge someone else.')
     ).toBeInTheDocument();
+  });
+
+  // GEO-2725. Signed out the button is the entry to signing in, so it stays live and opens Privy
+  // rather than sending a request that could only fail at the token exchange.
+  it('sends a signed-out visitor to sign in instead of requesting a debate', () => {
+    mocks.authenticated = false;
+    render(<PeopleTab />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Request debate' })[0]);
+
+    expect(mocks.promptSignIn).toHaveBeenCalled();
+    expect(mocks.createChallenge).not.toHaveBeenCalled();
+  });
+
+  // The row's availability flags describe a pairing with somebody, and signed out there is nobody
+  // to pair with — so they are not a reason to refuse the press that starts the sign-in.
+  it('keeps the button live signed out when only the viewer-relative flag is off', () => {
+    mocks.authenticated = false;
+    mocks.people = [{ ...person('user-them', 'Arturas'), can_challenge: false }];
+    render(<PeopleTab />);
+
+    expect(screen.getByRole('button', { name: 'Request debate' })).not.toBeDisabled();
+  });
+
+  // `in_debate` is true of the person, not of any viewer, so signing in would not make them
+  // available — offering the press would spend a login on an answer that does not change.
+  it('still refuses a person already in a debate when signed out', () => {
+    mocks.authenticated = false;
+    mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
+    render(<PeopleTab />);
+
+    expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
   });
 });
