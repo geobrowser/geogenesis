@@ -131,6 +131,7 @@ function SideSummary({
           spaceId={spaceId}
           responseKind={responseKind}
           direction={direction}
+          label={label}
           totalResponders={count}
         />
       )}
