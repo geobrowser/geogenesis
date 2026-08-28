@@ -76,21 +76,24 @@ type BountyCardComponent = (props: { bounty: SpaceBounty }) => React.ReactElemen
  * Column counts follow the container, not the viewport.
  *
  * These grids sit in a column whose width three separate things move — the left nav expanding
- * (200px), the right rail appearing (360px + margin), and the full-screen "View all" route having
- * neither. Only the first of those changes the viewport, so viewport breakpoints cannot express
- * "three across when there is room for three". `auto-fill` reads the container instead, and the
- * minimum track width below is the only number that decides the count.
+ * (200px), the right rail appearing (360px + a 32px margin), and the full-screen "View all" route
+ * having neither. None of the three changes the viewport width, which is the whole reason for
+ * sizing from the container: a viewport breakpoint cannot see any of them, so it cannot express
+ * "three across when there is room for three". `auto-fill` measures the container instead.
  *
  * `auto-fill` rather than `auto-fit`: empty tracks are kept, so a section holding one bounty shows
  * one card rather than one card stretched across the row.
  *
- * The minimums are chosen to land on the intended counts across the widths this column actually
- * takes — 750px with the rail, 900px without:
+ * The count is set by the minimum track width together with the gap — n columns fit when
+ * `n * min + (n - 1) * gap` is within the container. With the 16px gap below, the minimums land on
+ * the intended counts across the widths this column actually takes, 750px with the rail and 900px
+ * without:
  *
- * - 220px → three narrow cards at 750px (needs 692) and still three at 900px (four would need 928).
- * - 340px → two wide cards at 750px (needs 696) and still two at 900px (three would need 1052).
+ * - 220px → three narrow cards at 750px (3 needs 692) and still three at 900px (4 would need 928).
+ * - 340px → two wide cards at 750px (2 needs 696) and still two at 900px (3 would need 1052).
  *
- * Below those widths each drops a column on its own, which is the intended narrow behaviour.
+ * Below those widths each drops a column on its own, which is the intended narrow behaviour. Both
+ * grids therefore depend on `gap-4` staying 16px; changing it moves every threshold above.
  */
 const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4';
 
