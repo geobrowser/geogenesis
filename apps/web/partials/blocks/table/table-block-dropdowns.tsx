@@ -133,7 +133,7 @@ function TableBlockDropdown({
 
   // The dropdown's one scope: this property's values across the table's
   // population, paged in as the user scrolls or searches.
-  const { options, nameOf, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } = useDropdownOptions({
+  const { options, nameOf, isWalking } = useDropdownOptions({
     columnId,
     baseFilterState,
     baseModesByColumn,
@@ -157,49 +157,28 @@ function TableBlockDropdown({
     return options.filter(option => (option.name ?? option.id).toLowerCase().includes(needle));
   }, [options, query]);
 
-  // A search covers the whole scope: while it has no match and more of the
-  // population remains, keep paging until something matches or it's exhausted.
-  React.useEffect(() => {
-    if (!open || !query || visibleOptions.length > 0) return;
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [open, query, visibleOptions.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  // Infinite scroll: reveal the loaded list in steps, then pull the next
-  // population page once everything loaded is on screen.
+  // Infinite scroll reveals the loaded list in steps; loading itself is the
+  // hook's walk, so scrolling never triggers network work.
   const [visibleCount, setVisibleCount] = React.useState(REVEAL_STEP);
   React.useEffect(() => {
     setVisibleCount(REVEAL_STEP);
   }, [query, open]);
   const renderedOptions = React.useMemo(() => visibleOptions.slice(0, visibleCount), [visibleOptions, visibleCount]);
   const hasMoreToReveal = visibleCount < visibleOptions.length;
-  const hasMore = hasMoreToReveal || hasNextPage;
-  const loadMore = React.useCallback(() => {
-    if (hasMoreToReveal) {
-      setVisibleCount(count => count + REVEAL_STEP);
-      return;
-    }
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [hasMoreToReveal, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const revealMore = React.useCallback(() => setVisibleCount(count => count + REVEAL_STEP), []);
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: hasMore,
-    isFetchingNextPage,
-    fetchNextPage: loadMore,
+    hasNextPage: hasMoreToReveal,
+    isFetchingNextPage: false,
+    fetchNextPage: revealMore,
     rootMargin: '120px',
     root: listEl,
   });
 
-  // With no values yet and more of the population still to walk, the dropdown
-  // is scanning: one stable state (bar hidden, "Loading…") rather than a
-  // flicker on every background page. Only an exhausted walk may say the
-  // table has no values.
-  const isScanningEmpty = options.length === 0 && (isFetching || hasNextPage);
-
-  // The search bar hides in exactly two states: while scanning with nothing
-  // to search yet, and a settled short list (everything is already on
-  // screen). While more loads behind existing items — or more pages exist —
-  // it stays, and typing always keeps it.
-  const isSettledShortList = !isFetching && !hasNextPage && options.length <= SEARCH_BAR_THRESHOLD;
-  const showSearch = query.length > 0 || (!isScanningEmpty && !isSettledShortList);
+  // Two stable states while open: walking (the scope is still being read)
+  // and settled. The search bar hides while walking with nothing to search
+  // yet, and on a settled short list (everything is already on screen).
+  const isSettledShortList = !isWalking && options.length <= SEARCH_BAR_THRESHOLD;
+  const showSearch = query.length > 0 || (!(isWalking && options.length === 0) && !isSettledShortList);
 
   const selectedNames = selected.map(id => nameOf(id) ?? '…');
   const pillLabel =
@@ -220,8 +199,6 @@ function TableBlockDropdown({
       return next;
     });
   };
-
-  const isSearchingScope = Boolean(query) && visibleOptions.length === 0 && (isFetching || hasNextPage);
 
   return (
     <Menu
@@ -291,7 +268,7 @@ function TableBlockDropdown({
           )}
           {visibleOptions.length === 0 && (
             <p className="px-2 py-2 text-sm text-grey-04">
-              {isScanningEmpty || isSearchingScope ? 'Loading…' : query ? 'No matches' : 'No values in this table'}
+              {isWalking ? 'Loading…' : query ? 'No matches' : 'No values in this table'}
             </p>
           )}
           {renderedOptions.map(option => {
@@ -310,10 +287,8 @@ function TableBlockDropdown({
               </button>
             );
           })}
-          {hasMore && <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />}
-          {isFetchingNextPage && renderedOptions.length > 0 && (
-            <p className="px-2 pt-1 text-footnote text-grey-04">Loading…</p>
-          )}
+          {hasMoreToReveal && <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />}
+          {isWalking && renderedOptions.length > 0 && <p className="px-2 pt-1 text-footnote text-grey-04">Loading…</p>}
         </div>
       </div>
     </Menu>
