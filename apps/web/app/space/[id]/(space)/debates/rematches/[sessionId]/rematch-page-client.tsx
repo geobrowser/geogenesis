@@ -1555,8 +1555,12 @@ function RematchClaimCard({
       positions={positions}
       readiness={readiness}
       // The picker has no active-debate signal of its own, and it is mid-session anyway: there is
-      // nothing to watch that isn't the session the viewer is already in.
+      // nothing to watch that isn't the session the viewer is already in. The end slot is off
+      // entirely here — a rematch request is its own mutation with its own gating, and the footer
+      // below is the control that sends it, so a second "Request debate" in the header would be a
+      // different button wearing the same words.
       activeDebate={null}
+      hideEndSlot
       // `positions` locates the viewer by geo-chat user id, which is null until the token exchange
       // lands. Until then `serverLocalPosition` reads as "no position" for someone the summaries
       // may already count, and the card would draw them onto a second side.

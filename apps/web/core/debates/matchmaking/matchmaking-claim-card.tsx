@@ -51,6 +51,14 @@ type Props = {
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
   /**
+   * Leaves the end slot out.
+   *
+   * For the one host whose offer is not the card's offer: the rematch picker sends a rematch
+   * request, its own mutation with its own gating, from a control in its footer. A slot offering
+   * `Request debate` above it would be a different button wearing the same words.
+   */
+  hideEndSlot?: boolean;
+  /**
    * Replaces the claim's link to its entity page. The rematch picker opens the side panel instead:
    * following a link there would navigate out of the app shell and abandon the live session.
    */
@@ -103,6 +111,7 @@ export function MatchmakingClaimCard({
   onOpenClaim,
   viewerIdentityPending,
   onRequireSignIn,
+  hideEndSlot,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -122,6 +131,7 @@ export function MatchmakingClaimCard({
           onOpenClaim={onOpenClaim}
           viewerIdentityPending={viewerIdentityPending}
           onRequireSignIn={onRequireSignIn}
+          hideEndSlot={hideEndSlot}
         />
       ) : (
         <UnresolvableControls
@@ -130,6 +140,7 @@ export function MatchmakingClaimCard({
           claim={claim}
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
+          hideEndSlot={hideEndSlot}
         />
       )}
 
@@ -353,6 +364,7 @@ function RespondableControls({
   onOpenClaim,
   viewerIdentityPending,
   onRequireSignIn,
+  hideEndSlot,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -361,6 +373,7 @@ function RespondableControls({
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   onRequireSignIn?: () => void;
+  hideEndSlot?: boolean;
 }) {
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
     useClaimPositionControl({ claim, positions, readiness, viewerIdentityPending, onRequireSignIn });
@@ -375,7 +388,11 @@ function RespondableControls({
         isOnGraph
         onOpenClaim={onOpenClaim}
         isControversial={summary.isControversial}
-        endSlot={<ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />}
+        endSlot={
+          hideEndSlot ? null : (
+            <ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />
+          )
+        }
       />
       <PositionRow
         positions={optimisticPositions}
@@ -504,12 +521,14 @@ function UnresolvableControls({
   readiness,
   activeDebate,
   onOpenClaim,
+  hideEndSlot,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
   onOpenClaim?: () => void;
+  hideEndSlot?: boolean;
 }) {
   return (
     <>
@@ -520,12 +539,14 @@ function UnresolvableControls({
         endSlot={
           /* A live debate is geo-chat state, so it can still be watched without a graph id — but
              the graph cannot resolve this claim, so there is no match to request against it. */
-          <ClaimEndSlot
-            claimId={claim.claim_entity_id}
-            spaceId={claim.space_id}
-            activeDebate={activeDebate}
-            enabled={false}
-          />
+          hideEndSlot ? null : (
+            <ClaimEndSlot
+              claimId={claim.claim_entity_id}
+              spaceId={claim.space_id}
+              activeDebate={activeDebate}
+              enabled={false}
+            />
+          )
         }
       />
       <PositionRow
