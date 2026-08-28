@@ -59,11 +59,8 @@ export const spaceIdAtom = atomWithStorage<string>('onboardingSpaceId', '');
 /**
  * Topic picks from the 'interested-in' step. Onboarding no longer blocks on space
  * creation, so these are persisted for the background PendingPersonalSpaceRunner,
- * which applies them (Geo roles relations, membership proposals) once a real
- * spaceId exists, then clears them. `selectedRoleIdsAtom` is retained (and still
- * consumed by the runner) even though the role-picking step was removed.
+ * which applies them (membership proposals) once a real spaceId exists, then clears them.
  */
-export const selectedRoleIdsAtom = atomWithStorage<string[]>('onboardingSelectedRoles', []);
 export const selectedTopicIdsAtom = atomWithStorage<string[]>('onboardingSelectedTopics', []);
 
 type Step = OnboardingStep;

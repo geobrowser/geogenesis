@@ -1,6 +1,5 @@
 'use client';
 
-import { Position } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -9,11 +8,9 @@ import { Effect } from 'effect';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
 import { requestSpaceMembership } from '~/core/access/request-space-membership';
-import { GEO_ROLES_PROPERTY } from '~/core/constants';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
-import { ID } from '~/core/id';
 import { getSpace } from '~/core/io/queries';
 import { store as jotaiStore } from '~/core/state/jotai-store';
 import { pendingPersonalSpaceAtom, pendingPersonalSpaceId } from '~/core/state/pending-personal-space';
@@ -23,41 +20,12 @@ import {
   upsertRequestedMembershipSpace,
 } from '~/core/state/requested-membership';
 import { useReportError } from '~/core/state/status-bar-store';
-import { storage } from '~/core/sync/use-mutate';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { readRegisteredSpaceId } from '~/core/utils/contracts/create-personal-space-on-chain';
 import { devLog } from '~/core/utils/dev-log';
 import { describeError } from '~/core/utils/error-diagnostics';
 
-import { avatarAtom, nameAtom, selectedRoleIdsAtom, selectedTopicIdsAtom, spaceIdAtom } from './dialog';
-
-/** Links the new personal space entity to each Geo role the user picked during onboarding. */
-function createGeoRoleRelation(spaceId: string, fromEntityId: string, roleEntityId: string) {
-  storage.relations.set({
-    id: ID.createEntityId(),
-    entityId: spaceId,
-    spaceId,
-    renderableType: 'RELATION',
-    verified: false,
-    position: Position.generate(),
-
-    type: {
-      id: GEO_ROLES_PROPERTY,
-      name: 'Geo roles',
-    },
-
-    fromEntity: {
-      id: fromEntityId,
-      name: null,
-    },
-
-    toEntity: {
-      id: roleEntityId,
-      name: null,
-      value: roleEntityId,
-    },
-  });
-}
+import { avatarAtom, nameAtom, selectedTopicIdsAtom, spaceIdAtom } from './dialog';
 
 /**
  * Runs the background `createPersonalSpace` chain for an optimistically
@@ -85,14 +53,12 @@ export function PendingPersonalSpaceRunner() {
 
   const tx = useSmartAccountTransaction();
 
-  // The onboarding role/interest picks are applied once creation resolves. Read
-  // them through a ref so they don't re-trigger the creation effect.
-  const selectedRoleIds = useAtomValue(selectedRoleIdsAtom);
+  // The onboarding interest picks are applied once creation resolves. Read them
+  // through a ref so they don't re-trigger the creation effect.
   const selectedTopicIds = useAtomValue(selectedTopicIdsAtom);
-  const setSelectedRoleIds = useSetAtom(selectedRoleIdsAtom);
   const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
-  const onboardingPicksRef = React.useRef({ roleIds: selectedRoleIds, topicIds: selectedTopicIds });
-  onboardingPicksRef.current = { roleIds: selectedRoleIds, topicIds: selectedTopicIds };
+  const onboardingPicksRef = React.useRef({ topicIds: selectedTopicIds });
+  onboardingPicksRef.current = { topicIds: selectedTopicIds };
 
   // Dedupe: never run two creation chains for the same topic at once (the
   // effect re-fires on every `pending`/atom change).
@@ -280,23 +246,6 @@ export function PendingPersonalSpaceRunner() {
 
         devLog('[onboarding] space created: %s — remapped pending edits, seeded personal-space cache', spaceId);
 
-        // Role relations need the new personal space indexed (getSpace reads it), so unlike
-        // the membership picks they run here, after creation resolves.
-        const { roleIds } = onboardingPicksRef.current;
-        if (roleIds.length > 0) {
-          try {
-            const space = await Effect.runPromise(getSpace(spaceId));
-            if (space) {
-              for (const roleId of roleIds) {
-                createGeoRoleRelation(spaceId, space.entity.id, roleId);
-              }
-            }
-          } catch (error) {
-            console.error('[PendingPersonalSpace] applying role relations failed', error);
-          }
-        }
-
-        setSelectedRoleIds([]);
         setSelectedTopicIds([]);
       } catch (error) {
         // The registry is the authority on whether the account has a space, and
@@ -341,7 +290,6 @@ export function PendingPersonalSpaceRunner() {
     setPending,
     setResolvedSpaceId,
     tx,
-    setSelectedRoleIds,
     setSelectedTopicIds,
   ]);
 

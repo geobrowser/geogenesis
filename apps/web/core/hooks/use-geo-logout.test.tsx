@@ -33,7 +33,6 @@ vi.mock('~/core/state/pending-personal-space', () => ({ pendingPersonalSpaceAtom
 vi.mock('~/partials/onboarding/dialog', () => ({
   avatarAtom: {},
   nameAtom: {},
-  selectedRoleIdsAtom: {},
   selectedTopicIdsAtom: {},
   spaceIdAtom: {},
   stepAtom: {},

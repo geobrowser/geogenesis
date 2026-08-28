@@ -15,7 +15,6 @@ import { pendingPersonalSpaceAtom } from '~/core/state/pending-personal-space';
 import {
   avatarAtom,
   nameAtom,
-  selectedRoleIdsAtom,
   selectedTopicIdsAtom,
   spaceIdAtom,
   stepAtom,
@@ -51,7 +50,6 @@ export function useGeoLogoutCleanup() {
   const setStep = useSetAtom(stepAtom);
   const setDismissedHints = useSetAtom(dismissedHintsAtom);
   const setPending = useSetAtom(pendingPersonalSpaceAtom);
-  const setSelectedRoleIds = useSetAtom(selectedRoleIdsAtom);
   const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
 
   useLogout({
@@ -72,7 +70,6 @@ export function useGeoLogoutCleanup() {
         setStep('start');
         setDismissedHints([]);
         setPending(null);
-        setSelectedRoleIds([]);
         setSelectedTopicIds([]);
         // Bulletproof reset — see the doc comment. `/root` is the public home and
         // drops the user out of any onboarding/pending context they logged out of.
