@@ -199,8 +199,6 @@ export function ClaimExploreFeedCard({
             the offer at the end of the meta row and the share below it are the same distance from
             it, rather than the offer floating 36px out while the number sits 24px in. */}
       <div className="grid grid-cols-[minmax(0,1fr)_220px] gap-x-6 md:grid-cols-1 md:gap-y-4">
-        {/* `min-h-7`: the end slot is empty until the match lookup answers and 28px tall once it
-            fills, so the row holds that height from the start rather than growing under the reader. */}
         {/* The generic card's meta row, class for class: the space, a 6px spacer, then segments
             joined by `MetaDot`, whose own margins carry the spacing. Every difference from it turned
             out to be a difference the eye could see — a flex `gap` instead of those margins, a

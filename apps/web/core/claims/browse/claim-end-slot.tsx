@@ -64,12 +64,18 @@ export function ClaimEndSlot({
     enabled,
   });
 
-  // The explore page's "Rank" CTA, to the class. That button is the same object as this one — a
-  // filled dark pill offering the primary action on a feed card — so it should not be a second
-  // opinion about how one of those looks. It settles the weight question too: 16px at the scale's
-  // default 400, not the 500 that made this read as shouted next to it.
+  // Sized to the row it sits in rather than to itself.
+  //
+  // It was the explore page's "Rank" CTA — 16px in a 28px pill — which is right for a standalone
+  // call to action in a panel and wrong here: the meta row is 14px text about 20px tall, so a 28px
+  // control grew the row by 8px the moment the match lookup answered. That is the layout shift, and
+  // no amount of reserving height fixes it without holding every claim card 8px taller than its
+  // neighbours to no purpose.
+  //
+  // So it follows the Join button instead, which is the control already living in this row: 14px at
+  // `leading-none` in a 20px pill. Same height as its neighbour, so the row cannot grow.
   const base =
-    'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[16px] leading-[13px] transition-colors';
+    'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[14px] leading-none transition-colors';
 
   if (match) {
     return (
@@ -115,7 +121,7 @@ export function ClaimEndSlot({
 
     return (
       <Link href={href} className={cx(base, 'border border-red-01 text-red-01 hover:bg-red-01/5', className)}>
-        <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-red-01" aria-hidden />
+        <span className="size-1 shrink-0 animate-pulse rounded-full bg-red-01" aria-hidden />
         Watch live
       </Link>
     );

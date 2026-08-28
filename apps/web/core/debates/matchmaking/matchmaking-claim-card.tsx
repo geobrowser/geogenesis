@@ -185,10 +185,10 @@ function ClaimHeader({
 
   return (
     <>
-      {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it, and
-          `min-h-7` so the row is already the height of the offer before the match lookup answers —
-          otherwise the card grows a line under anyone who has started reading it. */}
-      <div className="mb-2 flex min-h-7 items-start justify-between gap-3">
+      {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
+          reserved height: the slot is now the height of the chip beside it, so the row does not grow
+          when the match lookup answers. */}
+      <div className="mb-2 flex items-start justify-between gap-3">
         <span className="flex min-w-0 items-center gap-1.5">
           <SpaceChip spaceId={claim.space_id} />
           {isControversial ? <ControversialTag /> : null}
