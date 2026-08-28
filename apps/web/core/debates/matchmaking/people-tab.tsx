@@ -152,7 +152,7 @@ function PersonRow({
         pendingLabel="Requesting…"
         title={disabled ? disabledReason : undefined}
       >
-        {person.in_debate ? 'In a debate' : 'Debate'}
+        {person.in_debate ? 'In a debate' : 'Request debate'}
       </HubPillButton>
     </li>
   );

@@ -32,7 +32,10 @@ export function HubPillButton({
       disabled={disabled || pending}
       aria-busy={pending || undefined}
       className={cx(
-        'inline-flex h-7 items-center justify-center rounded-full px-3 text-metadata transition-colors disabled:opacity-50',
+        // shrink-0 + nowrap because `h-7` is a fixed height: in a flex row a label long enough to
+        // be squeezed wraps to a second line and spills out of the pill. Rows that pair this with
+        // a name already give the name `min-w-0 truncate`, so it absorbs the shrinking instead.
+        'inline-flex h-7 shrink-0 items-center justify-center rounded-full px-3 text-metadata whitespace-nowrap transition-colors disabled:opacity-50',
         variant === 'primary'
           ? 'bg-text text-white hover:bg-text/90'
           : 'border border-grey-02 text-text hover:bg-grey-01',

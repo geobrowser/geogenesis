@@ -27,7 +27,7 @@ export function ProfileDebateButton({ spaceId }: { spaceId: string }) {
         disabled={createChallenge.isPending}
         className="inline-flex h-7 shrink-0 items-center rounded-full bg-text px-2.5 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
       >
-        {createChallenge.isPending ? 'Requesting...' : 'Debate'}
+        {createChallenge.isPending ? 'Requesting...' : 'Request debate'}
       </button>
       {error && (
         <Text as="p" variant="footnote" color="red-01">
