@@ -11,6 +11,7 @@ import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
+import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useComments } from '~/core/hooks/use-comments';
 import { useSpace } from '~/core/hooks/use-space';
@@ -291,7 +292,7 @@ export function DebatesBrowseFeed({
 
   const sidePanel =
     openPanel === 'claims' && activeDebate ? (
-      <DebateClaimsPanel debate={activeDebate} count={0} onClose={closePanel} />
+      <DebateClaimsPanel debate={activeDebate} onClose={closePanel} />
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
       // carrying a half-typed reply across to a different debate's thread.
@@ -343,6 +344,9 @@ function DebateFeedItem({
   // Same arguments as the Comments panel's own useComments, so the two share a
   // cache entry and posting there updates this count without a refetch.
   const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId });
+  // Same query key as the Claims panel's own hook, for the same reason as comments above: the
+  // badge and the panel share one cache entry, so opening the panel doesn't refetch.
+  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -363,7 +367,7 @@ function DebateFeedItem({
     entityId: debate.id,
     spaceId,
     commentCount,
-    claimsCount: 0,
+    claimsCount: claims.totalCount,
     onComment: onOpenComments,
     onClaims: onOpenClaims,
     shareAction,

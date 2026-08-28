@@ -26,6 +26,8 @@ const mocks = vi.hoisted(() => ({
   /** Debate entity ids in "Best" order. Empty = the ranking covers nothing, so recency stands. */
   bestOrderIds: [] as string[],
   bestOrderLoading: false,
+  /** Claims extracted from the transcript, as the count badge sees them. */
+  claimsCount: 0,
   hubOpen: vi.fn(),
   hubClose: vi.fn(),
   /** Whether the debates hub is already showing. */
@@ -130,6 +132,14 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 7, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
+vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
+  useDebateTranscriptClaims: () => ({
+    claims: { all: [], byAuthorSpaceId: new Map(), unattributed: [], totalCount: mocks.claimsCount },
+    isLoading: false,
+    error: null,
+  }),
+}));
+
 // Reaches for next-navigation and Privy context the feed's tests do not stand up.
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: (onComplete?: () => void) => {
@@ -151,6 +161,7 @@ beforeEach(() => {
   mocks.processedIds = null;
   mocks.bestOrderIds = [];
   mocks.bestOrderLoading = false;
+  mocks.claimsCount = 0;
   mocks.mediaLoading = false;
   mocks.mediaError = false;
   mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');
