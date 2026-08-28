@@ -297,6 +297,30 @@ describe('PeopleTab', () => {
     expect(mocks.createChallenge).not.toHaveBeenCalled();
   });
 
+  // Every field in the record is public graph data — positions, debates, wins and join date need no
+  // viewer identity — so a signed-out visitor gets the full context before being asked to sign in.
+  // Only the button is gated.
+  it('shows the record signed out, gating only the button', () => {
+    mocks.authenticated = false;
+    mocks.records = new Map([
+      [
+        'profile-user-them',
+        {
+          positions: 119,
+          debatesArgued: 11,
+          winRate: { percent: 73, wins: 8, of: 11 },
+          joinedAt: new Date(Date.UTC(2026, 0, 29)),
+        },
+      ],
+    ]);
+    render(<PeopleTab />);
+
+    expect(screen.getByText('119 positions')).toBeInTheDocument();
+    expect(screen.getByText('Won 8 of 11 debates')).toBeInTheDocument();
+    expect(screen.getByText('On Geo since Jan 2026')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+  });
+
   // The row's availability flags describe a pairing with somebody, and signed out there is nobody
   // to pair with — so they are not a reason to refuse the press that starts the sign-in.
   it('keeps the button live signed out when only the viewer-relative flag is off', () => {
