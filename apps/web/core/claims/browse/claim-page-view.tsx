@@ -21,6 +21,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { CommentSection } from '~/partials/comments/comments-section';
+
 import { ClaimDebates } from './claim-debates';
 import { positionSummariesFromCounts, viewerResponseFromDirection } from './claim-position-summaries';
 import { ClaimProvenance } from './claim-provenance';
@@ -132,6 +134,12 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
         <ClaimProvenance claimId={entityId} claimRelations={entity.relations} spaceId={spaceId} />
 
         <ClaimRelatedClaims claimId={entityId} spaceId={spaceId} topicIds={topicIds} />
+
+        {/* Last, and in the same `page` variant a regular entity uses — the entity body renders it
+            this way for both the route and the side panel, and only the dedicated comments panel
+            asks for the `panel` variant. Unlike the modules above, this one always renders: an
+            empty thread is an invitation to start it, not an absence to hide. */}
+        <CommentSection entityId={entityId} spaceId={spaceId} />
       </div>
     </div>
   );
