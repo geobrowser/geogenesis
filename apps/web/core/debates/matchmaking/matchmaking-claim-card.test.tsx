@@ -383,12 +383,28 @@ describe('MatchmakingClaimCard', () => {
   });
 
   it('leaves the header empty when there is nothing to offer', () => {
-    // The common case by a wide margin, and it has to cost nothing: no dimmed control, no
-    // placeholder, nothing for the reader to work out.
+    // The common case by a wide margin, and it has to cost nothing the reader can see: no dimmed
+    // control, no placeholder text, nothing to work out.
     renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
     expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Watch/ })).not.toBeInTheDocument();
+  });
+
+  it('holds the offer\u2019s height while there is no offer', () => {
+    // The offer arrives when an account-level lookup answers, which is always after first paint. If
+    // the slot rendered nothing until then, a 20px control would appear in a 13px row and push the
+    // claim down under whoever was reading it. Pinned because this shipped wrong twice: once with
+    // the height reserved on the row, which made every card taller than its neighbours, and once
+    // with a control too tall for the row to begin with.
+    const { container } = renderCard(
+      <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />
+    );
+
+    const reserved = container.querySelector('[aria-hidden="true"].h-5');
+    expect(reserved).not.toBeNull();
+    // Height only. Reserving width would push the space chip around instead.
+    expect(reserved).not.toHaveTextContent(/\S/);
   });
 
   it('says why the offer cannot be taken rather than dimming it silently', () => {

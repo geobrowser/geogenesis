@@ -138,5 +138,17 @@ export function ClaimEndSlot({
     );
   }
 
-  return null;
+  // An empty box of exactly the slot's height, rather than nothing.
+  //
+  // This is the layout shift, and it is the slot's to fix rather than the row's. The offer arrives
+  // when an account-level match lookup answers — after first paint, always — and a 20px control
+  // appearing in a row whose other content is 13px tall pushes everything below it down. Holding
+  // the height here costs nothing horizontally (the slot is `ml-auto` against a left-aligned row)
+  // and keeps the reservation with the thing being reserved for, instead of scattering a `min-h`
+  // across every row that happens to host one.
+  //
+  // The row settles at 20px either way, which is the height it already has whenever the Join pill is
+  // present — so this matches its neighbours in the common case and runs a few pixels taller than a
+  // generic card that has no Join pill.
+  return <span className={cx('h-5 shrink-0', className)} aria-hidden />;
 }
