@@ -146,8 +146,7 @@ function MatchCard({
             Request debate
           </HubPillButton>
           {/* Shown, not just a `title`: native tooltips never appear on touch and are unreliable on
-              a disabled button, which is exactly when the explanation matters. Mirrors
-              `ClaimReadinessToggle`. */}
+              a disabled button, which is exactly when the explanation matters. */}
           {blockedReason ? (
             <Text as="p" variant="footnote" color="grey-04">
               {blockedReason}
