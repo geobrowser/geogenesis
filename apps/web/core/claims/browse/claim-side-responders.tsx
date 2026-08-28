@@ -109,9 +109,13 @@ export function ClaimSideResponders({
 }
 
 /**
- * The list itself, built to match the space editors and members popovers — same width, same
- * scroll cap, same divided rows and counted footer — so a reader meets one list pattern in the
- * app rather than two that do the same job differently.
+ * The list itself: the space editors and members popover pattern — same scroll cap, same divided
+ * rows, same counted footer — so a reader meets one list shape in the app rather than two that do
+ * the same job differently.
+ *
+ * Narrower than those, though. They hang off a page header with the width to spare; this hangs off a
+ * count inside a card, and at 356px it arrived as a slab wider than the column that opened it. A row
+ * is a 32px avatar and a display name, so the box only ever needed to be about that wide.
  */
 function ResponderList({ spaceIds, label, totalCount }: { spaceIds: string[]; label: string; totalCount: number }) {
   const { data: profiles, isLoading } = useQuery({
@@ -121,7 +125,7 @@ function ResponderList({ spaceIds, label, totalCount }: { spaceIds: string[]; la
   });
 
   return (
-    <div className="z-10 w-[356px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
+    <div className="z-10 w-[248px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
       <div className="max-h-[265px] overflow-hidden overflow-y-auto">
         {isLoading || !profiles ? (
           <ResponderRowSkeletons count={Math.min(spaceIds.length, 5)} />

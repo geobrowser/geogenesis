@@ -24,6 +24,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
+import { MetaDot } from './meta-dot';
 import { SpaceThumb } from './space-thumb';
 
 /**
@@ -123,6 +124,7 @@ export function ClaimExploreFeedCard({
   const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
 
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
+
   // Deduped by normalized id and named only where the type has a name — an unnamed one would render
   // as a raw id, which says less than nothing. Mirrors what `BaseExploreFeedCard` does, so a claim
   // and its neighbours in the feed label themselves the same way.
@@ -138,6 +140,36 @@ export function ClaimExploreFeedCard({
     }
     return names;
   }, [item.types]);
+
+  // Assembled rather than laid out inline, because the dots only fall between segments that are
+  // actually there — a claim with no timestamp must not leave a trailing separator.
+  const metaSegments: React.ReactNode[] = [];
+  if (!hideJoinButton && !item.isMemberOrEditor) {
+    metaSegments.push(
+      <ExploreJoinSpaceButton
+        key="join"
+        spaceId={item.spaceId}
+        hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
+        variant="compact"
+        label="Join"
+      />
+    );
+  }
+  if (typeNames.length > 0) {
+    metaSegments.push(
+      <span key="types" className="text-[14px] leading-[13px] tracking-[-0.35px] text-grey-04">
+        {typeNames.join(' · ')}
+      </span>
+    );
+  }
+  if (summary.isControversial) metaSegments.push(<ControversialTag key="controversial" />);
+  if (timeAgo) {
+    metaSegments.push(
+      <span key="time" className="shrink-0 text-[14px] leading-[13px] tracking-[-0.35px] text-grey-04">
+        {timeAgo}
+      </span>
+    );
+  }
 
   return (
     <article ref={setContainer} className="flex flex-col gap-4 border-b border-divider py-4 last:border-b-0">
@@ -161,7 +193,11 @@ export function ClaimExploreFeedCard({
       <div className="grid grid-cols-[minmax(0,1fr)_220px] gap-x-6 md:grid-cols-1 md:gap-y-4">
         {/* `min-h-7`: the end slot is empty until the match lookup answers and 28px tall once it
             fills, so the row holds that height from the start rather than growing under the reader. */}
-        <div className="col-start-1 row-start-1 mb-3 flex min-h-7 min-w-0 flex-wrap items-center gap-x-2 gap-y-1 md:mb-0">
+        {/* The generic card's meta row, built the generic card's way: the space, a 6px spacer, then
+            segments joined by `MetaDot`, whose own margins carry the spacing. Reproducing that with
+            a flex `gap` and a literal "·" is what left the type and the timestamp a different
+            distance apart here than on every card beside it. */}
+        <div className="col-start-1 row-start-1 mb-3 flex min-h-7 min-w-0 flex-wrap items-center gap-y-1 md:mb-0">
           {!hideSpaceLink ? (
             <Link
               href={NavUtils.toSpace(item.spaceId)}
@@ -171,28 +207,13 @@ export function ClaimExploreFeedCard({
               <span className="min-w-0 truncate">{item.spaceName}</span>
             </Link>
           ) : null}
-          {!hideJoinButton && !item.isMemberOrEditor ? (
-            <ExploreJoinSpaceButton
-              spaceId={item.spaceId}
-              hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-              variant="pill"
-              label="Join"
-            />
-          ) : null}
-          {/* The entity's type, the way every other explore card names it. It went out with the
-              topics, which was wrong: a topic is a subject a claim happens to carry, where the type
-              is what the thing *is* — and in a feed of mixed entities that is the first thing a
-              reader needs. */}
-          {typeNames.length > 0 ? (
-            <span className="text-[14px] leading-[13px] tracking-[-0.35px] text-grey-04">
-              · {typeNames.join(' · ')}
-            </span>
-          ) : null}
-          {/* Beside the space, because it says what kind of claim this is. */}
-          {summary.isControversial ? <ControversialTag /> : null}
-          {timeAgo ? (
-            <span className="text-[14px] leading-[13px] tracking-[-0.35px] text-grey-04">· {timeAgo}</span>
-          ) : null}
+          {!hideSpaceLink && metaSegments.length > 0 ? <span className="w-1.5 shrink-0" /> : null}
+          {metaSegments.map((segment, index) => (
+            <React.Fragment key={index}>
+              {index > 0 ? <MetaDot /> : null}
+              {segment}
+            </React.Fragment>
+          ))}
           <ClaimEndSlot
             claimId={item.entityId}
             spaceId={item.spaceId}

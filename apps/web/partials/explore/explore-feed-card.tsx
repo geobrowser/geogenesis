@@ -22,6 +22,7 @@ import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { RankingCardBody } from './explore-ranking-card-body';
+import { MetaDot } from './meta-dot';
 
 type ExploreFeedCardProps = {
   item: ExploreFeedItem;
@@ -45,10 +46,6 @@ function SpaceThumb({ image, name }: { image: string | null; name: string }) {
       <FallbackImage value={image} sizes="24px" className="object-cover" />
     </span>
   );
-}
-
-function MetaDot() {
-  return <span className="mx-[6px] shrink-0 text-[14px] leading-none text-[#2A2B2E]">·</span>;
 }
 
 function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
