@@ -12,14 +12,17 @@ import { useDebatesHub } from './use-debates-hub';
 import { useUnexpiredRequests } from './use-request-countdown';
 
 /**
- * Navbar entry point for the matchmaking hub. Shown to signed-in users once debates are enabled —
- * including those who are not available to debate, since the hub is where they turn it on. Every
- * tab behind it is geo-chat data that needs an identity, so a signed-out visitor has nothing to
- * open it for.
+ * Navbar entry point for the matchmaking hub.
+ *
+ * Shown to everyone, signed in or not (GEO-2725). It used to be hidden signed out, on the grounds
+ * that every tab behind it needed an identity — true until Claims and People became readable
+ * anonymously, at which point hiding it left the one way into them unreachable.
+ *
+ * The badge is still a signed-in thing: it counts requests addressed to somebody. Both lookups
+ * behind it are gated on the session already — `useDebateActivity` on `authenticated`, and the
+ * requests list is read-only here — so signed out nothing is fetched and the count is simply zero.
  */
 export function DebatesHubButton() {
-  // False until Privy has restored the session, so the button stays hidden until we actually know
-  // — appearing late beats flashing in and out for someone who was never signed in.
   const { authenticated } = useGeoChatAuth();
   const { isOpen, toggle } = useDebatesHub();
   const { data: activity } = useDebateActivity();
@@ -28,9 +31,9 @@ export function DebatesHubButton() {
   const { data: requests } = useDebateRequests(false);
   const incoming = useUnexpiredRequests(requests?.incoming ?? []);
 
-  if (!authenticated) return null;
-
-  const requestCount = requests ? incoming.length : (activity?.incoming_request_count ?? 0);
+  // Guarded rather than relying on the lookups being empty: a stale cache from a session that has
+  // since signed out would otherwise badge the button for nobody.
+  const requestCount = !authenticated ? 0 : requests ? incoming.length : (activity?.incoming_request_count ?? 0);
 
   return (
     <button

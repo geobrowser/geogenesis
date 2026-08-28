@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateChallenge, DebatePerson } from '../api';
 
 const mocks = vi.hoisted(() => ({
+  promptSignIn: vi.fn(),
+  /** Privy's answer; the tab's signed-out paths hang off it. */
+  authenticated: true,
   people: [] as DebatePerson[],
   challenge: null as DebateChallenge | null,
   outboundRequest: null as unknown,
@@ -18,6 +21,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../hooks', () => ({
+  useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'user-a' }),
   useDebateActivity: () => ({
     data: { challenge: mocks.challenge, outbound_request: mocks.outboundRequest, debate: mocks.activeDebate },
   }),
@@ -37,6 +41,12 @@ vi.mock('./hooks', () => ({
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.currentUserId,
+}));
+
+// `usePrivySignIn` reaches for Privy's context, which these suites do not stand up. The signed-out
+// paths assert that it is *called*, so the stub is shared through `mocks.promptSignIn`.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => mocks.promptSignIn,
 }));
 
 const { PeopleTab } = await import('./people-tab');
@@ -75,6 +85,8 @@ const awaitingText = 'You have a debate request awaiting a reply.';
 const card = () => screen.queryByRole('article');
 
 beforeEach(() => {
+  // Not a mock fn, so `resetAllMocks` does not restore it.
+  mocks.authenticated = true;
   mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
   mocks.challenge = null;
   mocks.outboundRequest = null;
@@ -263,5 +275,37 @@ describe('PeopleTab', () => {
     expect(
       screen.getByText('You already have an open request — withdraw it to challenge someone else.')
     ).toBeInTheDocument();
+  });
+
+  // GEO-2725. Signed out the button is the entry to signing in, so it stays live and opens Privy
+  // rather than sending a request that could only fail at the token exchange.
+  it('sends a signed-out visitor to sign in instead of requesting a debate', () => {
+    mocks.authenticated = false;
+    render(<PeopleTab />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Request debate' })[0]);
+
+    expect(mocks.promptSignIn).toHaveBeenCalled();
+    expect(mocks.createChallenge).not.toHaveBeenCalled();
+  });
+
+  // The row's availability flags describe a pairing with somebody, and signed out there is nobody
+  // to pair with — so they are not a reason to refuse the press that starts the sign-in.
+  it('keeps the button live signed out when only the viewer-relative flag is off', () => {
+    mocks.authenticated = false;
+    mocks.people = [{ ...person('user-them', 'Arturas'), can_challenge: false }];
+    render(<PeopleTab />);
+
+    expect(screen.getByRole('button', { name: 'Request debate' })).not.toBeDisabled();
+  });
+
+  // `in_debate` is true of the person, not of any viewer, so signing in would not make them
+  // available — offering the press would spend a login on an answer that does not change.
+  it('still refuses a person already in a debate when signed out', () => {
+    mocks.authenticated = false;
+    mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
+    render(<PeopleTab />);
+
+    expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
   });
 });

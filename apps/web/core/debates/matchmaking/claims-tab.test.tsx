@@ -10,6 +10,9 @@ import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
 
 const mocks = vi.hoisted(() => ({
+  promptSignIn: vi.fn(),
+  /** Privy's answer; the tab's signed-out paths hang off it. */
+  authenticated: true,
   claims: [] as MatchmakingClaim[],
   featuredClaims: [] as Array<{
     claimEntityId: string;
@@ -200,7 +203,7 @@ vi.mock('../hooks', () => ({
     matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: 'account-1' }),
   // Read by the end slot's match lookup; the tab's tests do not exercise availability.
   useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
@@ -264,6 +267,12 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
 
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [] }),
+}));
+
+// `usePrivySignIn` reaches for Privy's context, which these suites do not stand up. The signed-out
+// paths assert that it is *called*, so the stub is shared through `mocks.promptSignIn`.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => mocks.promptSignIn,
 }));
 
 function render(ui: ReactElement) {
@@ -334,6 +343,8 @@ const MINE = '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419';
 const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
 beforeEach(() => {
+  // Not a mock fn, so `resetAllMocks` does not restore it.
+  mocks.authenticated = true;
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
   mocks.featuredClaims = [];
@@ -1255,5 +1266,66 @@ describe('ClaimsTab -- Featured', () => {
 
     await waitFor(() => expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument());
     expect(mocks.lastEnabled).toBe(false);
+  });
+
+  // GEO-2725. Both are viewer-relative: "My positions" is the viewer's own list, and "Debate now"
+  // is scored on who is available to debate *you*. Signed out neither has a subject.
+  it('drops the viewer-relative filters when signed out', async () => {
+    mocks.authenticated = false;
+    render(<ClaimsTab />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Featured/ }));
+
+    expect(screen.queryByRole('button', { name: 'My positions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
+    // Featured and All claims describe the corpus, so both stay.
+    expect(screen.getByRole('button', { name: 'All claims' })).toBeInTheDocument();
+  });
+
+  it('keeps both for a signed-in viewer', async () => {
+    render(<ClaimsTab />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Featured/ }));
+
+    expect(screen.getByRole('button', { name: 'My positions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Debate now' })).toBeInTheDocument();
+  });
+
+  // Signing out with a viewer-relative filter selected used to leave the tab querying it
+  // anonymously, with a trigger showing a value no longer in the menu.
+  it('falls back to Featured when the selected filter is hidden by signing out', async () => {
+    const view = render(<ClaimsTab />);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Featured/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
+    expect(screen.getByRole('button', { name: /My positions/ })).toBeInTheDocument();
+
+    mocks.authenticated = false;
+    view.rerender(<ClaimsTab />);
+
+    expect(screen.getByRole('button', { name: /Featured/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /My positions/ })).not.toBeInTheDocument();
+    expect(mocks.lastQuery).not.toMatchObject({ filter: 'mine' });
+  });
+
+  // `debateQueryKeys.claims` is keyed on space and ids but not on the account, and a disabled
+  // react-query observer still returns whatever that key already holds — so asking at all after a
+  // sign-out would draw the previous viewer's response and readiness onto these cards. Asking for
+  // nothing is what makes that unreachable; the fields all have graph-derived fallbacks.
+  it('asks for no per-space readiness while signed out', async () => {
+    mocks.authenticated = false;
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await screen.findByText('Nuclear power is the cheapest clean energy');
+
+    expect(mocks.debateClaimGroups.at(-1)).toEqual([]);
+  });
+
+  it('asks for it again once signed in', async () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await screen.findByText('Nuclear power is the cheapest clean energy');
+
+    expect(mocks.debateClaimGroups.at(-1)).not.toEqual([]);
   });
 });
