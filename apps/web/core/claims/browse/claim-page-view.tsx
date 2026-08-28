@@ -52,7 +52,20 @@ const TOPIC_CHIP_CAP = 3;
 export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId: string }) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
 
-  const responseKind = React.useMemo(() => (entity ? claimResponseKind(entity, spaceId) : 'stance'), [entity, spaceId]);
+  // Hoisted so one lookup answers for the whole page. geo-chat's row and the graph's `Is factual`
+  // are two copies of the same fact and can disagree — while an edit to the flag indexes, most
+  // obviously. Deriving the kind twice let the verdict count one vote kind while the pills
+  // published another, and a response would then never appear in the number above it: the kind is
+  // what selects `voteKind` on both the count query and the write.
+  //
+  // geo-chat's copy wins where it exists, matching every other claim surface; the graph answers for
+  // spaces geo-chat does not index, which have no row at all.
+  const rowQuery = useDebateClaims(spaceId, [entityId], true);
+  const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
+  const responseKind = React.useMemo(
+    () => row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance'),
+    [entity, row?.response_kind, spaceId]
+  );
   const summary = useClaimResponseSummary(entityId, spaceId, responseKind);
 
   const topics = React.useMemo(() => relationsOfType(entity?.relations, TOPICS_PROPERTY_ID), [entity?.relations]);
@@ -127,7 +140,14 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 
         <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
 
-        <ClaimPositionSection entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
+        <ClaimPositionSection
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          summary={summary}
+          row={row}
+          isRowLoading={rowQuery.isLoading}
+        />
 
         <ClaimDebates claimId={entityId} spaceId={spaceId} responseKind={responseKind} />
 
@@ -162,17 +182,18 @@ function ClaimPositionSection({
   spaceId,
   responseKind,
   summary,
+  row,
+  isRowLoading,
 }: {
   entityId: string;
   spaceId: string;
+  /** The page's one effective kind. Deriving a second one here is what let the two diverge. */
   responseKind: 'stance' | 'veracity';
   summary: ClaimResponseSummary;
+  /** geo-chat's row, or null — which for a claim nobody has answered is a settled answer. */
+  row: DebateClaim | null;
+  isRowLoading: boolean;
 }) {
-  // geo-chat's row carries the viewer's server-side response and their readiness. A claim nobody
-  // has answered has no row at all, which is a settled answer rather than a missing one.
-  const rowQuery = useDebateClaims(spaceId, [entityId], true);
-  const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
-
   const claim = React.useMemo(
     () => ({
       id: row?.id ?? entityId,
@@ -191,7 +212,7 @@ function ClaimPositionSection({
 
   const readiness = React.useMemo(
     () => ({
-      response_kind: row?.response_kind ?? responseKind,
+      response_kind: responseKind,
       // Falls back to the on-chain summary. Without it a viewer's own side reads as unselected for
       // as long as geo-chat's row is out — and in a space geo-chat does not index, permanently.
       viewer_response: row?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
@@ -221,7 +242,7 @@ function ClaimPositionSection({
           entityId={entityId}
           spaceId={spaceId}
           canEnable={!row?.active_debate}
-          isLoading={rowQuery.isLoading}
+          isLoading={isRowLoading}
           compact
         />
       </div>
