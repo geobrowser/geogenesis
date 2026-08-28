@@ -171,16 +171,9 @@ function PersonRow({
     // Three columns rather than a flex run, so the button sits in its own track pinned to the top
     // of the row. Sharing a row box with the name made it the tallest thing there, which set the
     // name's line height and left dead space under it once the record lines arrived.
-    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
-      {/* Centred on the name's line box rather than top-aligned. A 32px avatar top-aligned to a
-          20px line sits 6px below the name's centre — aligned to nothing in particular. Centring on
-          the whole column instead would tie it to how many lines the person happens to have, so the
-          avatar would shift against its own name from row to row, and names are what a live list is
-          scanned by. */}
-      <div className="flex h-5 items-center">
-        <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
-          <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
-        </div>
+    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
+      <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
+        <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
         <Text as="p" variant="metadataMedium" className="truncate">
