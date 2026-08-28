@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { responsePositionLabel } from '~/core/responses/entity-response';
@@ -30,6 +31,7 @@ import {
   featuredClaimIdsBySpace,
   useFeaturedClaims,
 } from '../featured-claims';
+import { useGeoChatAuth } from '../hooks';
 import { useDebateClaimsBySpaces } from '../hooks';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
@@ -58,6 +60,24 @@ const FILTER_OPTIONS: HubFilterOption<ClaimsTabFilter>[] = [
   { value: 'debate_now', label: 'Debate now' },
 ];
 
+/**
+ * The two viewer-relative filters leave the menu signed out.
+ *
+ * "My positions" is the viewer's own list, so it could only ever come back empty. "Debate now" is
+ * viewer-relative in a less obvious way — geo-chat scores it on who is available to debate *you*,
+ * excluding anyone you are already pair-blocked with — so with no viewer it is not a stricter
+ * "all claims" but a question with no subject.
+ *
+ * Featured and All claims describe the corpus rather than the viewer, and both still answer.
+ */
+const SIGNED_OUT_HIDDEN_FILTERS: ClaimsTabFilter[] = ['mine', 'debate_now'];
+
+function filterOptionsFor(authenticated: boolean) {
+  return authenticated
+    ? FILTER_OPTIONS
+    : FILTER_OPTIONS.filter(option => !SIGNED_OUT_HIDDEN_FILTERS.includes(option.value));
+}
+
 /** Stable identity so the geo-chat lookups don't restart on every render of a non-featured list. */
 const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
 
@@ -73,12 +93,25 @@ const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
  * disallowed — so the sentinel that asks for the next page sits outside the empty state below.
  */
 export function ClaimsTab() {
+  const { authenticated } = useGeoChatAuth();
+  // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
+  // the claim page and the entity vote arrows use it. Passed as `undefined` when signed in so the
+  // card keeps publishing directly.
+  const promptSignIn = usePrivySignIn();
+  const onRequireSignIn = authenticated ? undefined : promptSignIn;
+  const filterOptions = React.useMemo(() => filterOptionsFor(authenticated), [authenticated]);
+
   const [search, setSearch] = React.useState('');
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
   // Featured is where the tab opens. The whole corpus is the wider net but the shallower one — a
   // curator's pick is a better first thing to put in front of someone than whatever the index
   // ranked highest, and All claims is one option below.
-  const [filter, setFilter] = React.useState<ClaimsTabFilter>('featured');
+  const [selectedFilter, setFilter] = React.useState<ClaimsTabFilter>('featured');
+  // Signing out with a viewer-relative filter selected would otherwise leave the tab querying it
+  // anonymously and showing a trigger value that is no longer in the menu. Derived rather than
+  // reset through an effect so the query, the menu label, the ordering key and the empty state all
+  // read the same value on the very first render after the session goes away.
+  const filter = !authenticated && SIGNED_OUT_HIDDEN_FILTERS.includes(selectedFilter) ? 'featured' : selectedFilter;
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
 
@@ -211,7 +244,17 @@ export function ClaimsTab() {
   // Deliberately the whole allowed set rather than what search currently matches: typing then
   // filters a list that is already loaded instead of restarting a fan-out of per-space requests on
   // every keystroke, and the gateway scopes those lookups hold stay put while it happens.
-  const featuredGroups = React.useMemo(() => featuredClaimIdsBySpace(featuredAllowed), [featuredAllowed]);
+  //
+  // Nothing is asked for signed out, and deliberately not just because the lookup would be
+  // disabled: `debateQueryKeys.claims` is keyed on space and ids but not on the account, and a
+  // disabled react-query observer still hands back whatever that key already holds. Left to it,
+  // the first signed-out render after a sign-out would draw the previous viewer's `viewer_response`
+  // and `viewer_debate_ready` onto these cards. Empty groups mean no key to read, and every field
+  // it would have carried already has the graph-derived fallback below.
+  const featuredGroups = React.useMemo(
+    () => (authenticated ? featuredClaimIdsBySpace(featuredAllowed) : []),
+    [authenticated, featuredAllowed]
+  );
   const featuredRows = useDebateClaimsBySpaces(featuredGroups);
   const featuredReadinessUnresolved = featured && (featuredRows.isLoading || featuredRows.isError);
 
@@ -416,8 +459,8 @@ export function ClaimsTab() {
           facetTopics={facetTopics}
           leading={
             <HubFilterMenu
-              label={FILTER_OPTIONS.find(option => option.value === filter)?.label ?? 'All claims'}
-              options={FILTER_OPTIONS}
+              label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
+              options={filterOptions}
               value={filter}
               onChange={setFilter}
             />
@@ -431,6 +474,11 @@ export function ClaimsTab() {
           error={featured ? featuredError : claimsQuery.error}
           onRetry={() => void (featured ? refetchFeatured() : claimsQuery.refetch())}
           isEmpty={visibleClaims.length === 0}
+          signInAction={
+            onRequireSignIn
+              ? { label: 'Sign in', message: 'Sign in to browse claims to debate.', onClick: onRequireSignIn }
+              : undefined
+          }
           emptyMessage={
             featured
               ? hasFilters
@@ -470,6 +518,7 @@ export function ClaimsTab() {
                 // is in fact standing ready on. The paged rows come with readiness on them, so this
                 // only ever applies to Featured.
                 hideReadinessToggle={featuredReadinessUnresolved}
+                onRequireSignIn={onRequireSignIn}
               />
             ))}
           </HubCardList>
