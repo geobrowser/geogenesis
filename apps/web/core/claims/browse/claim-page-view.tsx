@@ -87,7 +87,11 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
             </div>
           )}
 
-          <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-balance text-text @[560px]:text-[1.75rem]">
+          {/* `text-pretty`, not `text-balance`. Balancing evens every line to the same length,
+              which on a claim — a full sentence running to three or four lines — leaves each one
+              breaking well short of the measure and reads as wrapping early. Pretty only avoids a
+              stranded last word, so the lines fill. */}
+          <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
             {entity.name ?? entity.id}
           </h1>
 
