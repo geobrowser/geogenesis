@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { populationVariablesFromWhere, toDropdownOptions } from './fetch-dropdown-options';
+import { spaceIdsFromWhere, toDropdownOptions } from './fetch-dropdown-options';
 
 describe('toDropdownOptions', () => {
   it('collapses relations to distinct to-entities sorted by name', () => {
@@ -31,30 +31,21 @@ describe('toDropdownOptions', () => {
   });
 });
 
-describe('populationVariablesFromWhere', () => {
-  it('promotes space and type constraints to the top-level connection args', () => {
-    const variables = populationVariablesFromWhere(
-      {
-        AND: [
-          { spaces: [{ equals: 'space-1' }] },
-          { OR: [{ types: [{ id: { equals: 'type-a' } }] }, { types: [{ id: { equals: 'type-b' } }] }] },
-        ],
-      },
-      200
-    );
-
-    // The single space becomes the indexed `spaceId` arg and leaves the filter.
-    expect(variables.spaceId).toBe('space-1');
-    expect(variables.spaceIds).toBeNull();
-    expect(JSON.stringify(variables.filter)).not.toContain('spaceIds');
-    // A multi-type OR is not a plain type clause, so it stays in the filter.
-    expect(variables.typeId).toBeNull();
-    expect(JSON.stringify(variables.filter)).toContain('typeIds');
-    expect(variables.first).toBe(200);
+describe('spaceIdsFromWhere', () => {
+  it('returns undefined for an unscoped block', () => {
+    expect(spaceIdsFromWhere({})).toBeUndefined();
+    expect(spaceIdsFromWhere({ types: [{ id: { equals: 'type-a' } }] })).toBeUndefined();
   });
 
-  it('sends no filter for an empty where', () => {
-    const variables = populationVariablesFromWhere({}, 50);
-    expect(variables).toEqual({ filter: null, spaceId: null, spaceIds: null, typeId: null, typeIds: null, first: 50 });
+  it('uses `is` for one space and `in` for several, wherever they sit in the tree', () => {
+    expect(spaceIdsFromWhere({ spaces: [{ equals: 'space-1' }] })).toEqual({ is: 'space-1' });
+    expect(
+      spaceIdsFromWhere({
+        AND: [
+          { spaces: [{ equals: 'space-1' }, { equals: 'space-2' }] },
+          { OR: [{ types: [{ id: { equals: 'type-a' } }] }, { spaces: [{ equals: 'space-3' }] }] },
+        ],
+      })
+    ).toEqual({ in: ['space-1', 'space-2', 'space-3'] });
   });
 });
