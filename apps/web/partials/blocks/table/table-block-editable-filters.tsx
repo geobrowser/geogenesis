@@ -146,7 +146,12 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
             </SmallButton>
           }
         />
-        {afterFilterTrigger}
+        {afterFilterTrigger && (
+          <>
+            <span className="mx-0.5 h-5 w-px shrink-0 bg-divider" aria-hidden />
+            {afterFilterTrigger}
+          </>
+        )}
         {source.type !== 'COLLECTION' && <QueryModeToggle />}
       </div>
     );
