@@ -87,6 +87,7 @@ import {
 import { restFetch } from './rest';
 import { capSearchQuery } from './search-query';
 import { type SortOrder } from './sort-order';
+import { collapseRelationOrFilter } from './relation-or-filter';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
@@ -240,7 +241,10 @@ export function getAllEntities(
     const topLevelTypeId = typeId ?? extractedTypeId;
     const topLevelTypeIds = topLevelTypeId ? undefined : (typeIds ?? extractedTypeIds);
 
-    let normalizedFilter = filter;
+    // Collapse OR-ed `relations.some` branches before anything else looks at the
+    // filter: the OR form makes Postgres scan until the 30s statement timeout.
+    // See relation-or-filter.ts.
+    let normalizedFilter = collapseRelationOrFilter(filter);
     if (topLevelSpaceId || topLevelSpaceIds) {
       normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
     }
@@ -370,7 +374,8 @@ export function getEntitiesOrderedByPropertyConnection(
   const topLevelTypeIds =
     nonEmptyIds(typeIds) ?? idsFromUuidFilter(extractedTypeIds) ?? (extractedTypeId ? [extractedTypeId] : undefined);
 
-  let normalizedFilter = filter;
+  // See relation-or-filter.ts — same 30s-timeout shape reaches this path too.
+  let normalizedFilter = collapseRelationOrFilter(filter);
   if (topLevelSpaceId || topLevelSpaceIds) {
     normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
   }
