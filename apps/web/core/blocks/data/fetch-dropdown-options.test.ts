@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { inferTargetTypeIds, spaceIdsFromWhere, toDropdownOptions } from './fetch-dropdown-options';
+import { populationVariablesFromWhere, toDropdownOptions } from './fetch-dropdown-options';
 
 describe('toDropdownOptions', () => {
   it('collapses relations to distinct to-entities sorted by name', () => {
@@ -31,44 +31,39 @@ describe('toDropdownOptions', () => {
   });
 });
 
-describe('inferTargetTypeIds', () => {
-  const rel = (id: string, types: string[]) => ({ toEntity: { id, name: id, types: types.map(t => ({ id: t })) } });
-
-  it('returns the types shared by at least half of the distinct values, most common first', () => {
-    const ids = inferTargetTypeIds({
-      relations: [
-        rel('a', ['topic']),
-        rel('b', ['topic', 'industry']),
-        rel('c', ['topic']),
-        rel('d', ['person']),
-        rel('a', ['topic']), // duplicate relation to the same value counts once
-      ],
-    });
-    expect(ids).toEqual(['topic']);
-  });
-
-  it('infers nothing from a single value or when no type reaches the threshold', () => {
-    expect(inferTargetTypeIds({ relations: [rel('a', ['topic'])] })).toEqual([]);
-    expect(inferTargetTypeIds({ relations: [rel('a', ['x']), rel('b', ['y']), rel('c', ['z'])] })).toEqual([]);
-    expect(inferTargetTypeIds({ relations: null })).toEqual([]);
-  });
-});
-
-describe('spaceIdsFromWhere', () => {
-  it('returns undefined for an unscoped block', () => {
-    expect(spaceIdsFromWhere({})).toBeUndefined();
-    expect(spaceIdsFromWhere({ types: [{ id: { equals: 'type-a' } }] })).toBeUndefined();
-  });
-
-  it('uses `is` for one space and `in` for several, wherever they sit in the tree', () => {
-    expect(spaceIdsFromWhere({ spaces: [{ equals: 'space-1' }] })).toEqual({ is: 'space-1' });
-    expect(
-      spaceIdsFromWhere({
+describe('populationVariablesFromWhere', () => {
+  it('promotes space and type constraints to the top-level connection args', () => {
+    const variables = populationVariablesFromWhere(
+      {
         AND: [
-          { spaces: [{ equals: 'space-1' }, { equals: 'space-2' }] },
-          { OR: [{ types: [{ id: { equals: 'type-a' } }] }, { spaces: [{ equals: 'space-3' }] }] },
+          { spaces: [{ equals: 'space-1' }] },
+          { OR: [{ types: [{ id: { equals: 'type-a' } }] }, { types: [{ id: { equals: 'type-b' } }] }] },
         ],
-      })
-    ).toEqual({ in: ['space-1', 'space-2', 'space-3'] });
+      },
+      200,
+      'cursor-1'
+    );
+
+    // The single space becomes the indexed `spaceId` arg and leaves the filter.
+    expect(variables.spaceId).toBe('space-1');
+    expect(variables.spaceIds).toBeNull();
+    expect(JSON.stringify(variables.filter)).not.toContain('spaceIds');
+    // A multi-type OR is not a plain type clause, so it stays in the filter.
+    expect(variables.typeId).toBeNull();
+    expect(JSON.stringify(variables.filter)).toContain('typeIds');
+    expect(variables.first).toBe(200);
+    expect(variables.after).toBe('cursor-1');
+  });
+
+  it('sends no filter for an empty where and starts from the beginning', () => {
+    expect(populationVariablesFromWhere({}, 50)).toEqual({
+      filter: null,
+      spaceId: null,
+      spaceIds: null,
+      typeId: null,
+      typeIds: null,
+      first: 50,
+      after: null,
+    });
   });
 });

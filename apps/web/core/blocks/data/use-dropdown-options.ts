@@ -1,39 +1,40 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { ID } from '~/core/id';
 
-import { type DropdownOption, fetchDropdownOptions } from './fetch-dropdown-options';
+import { type DropdownOption, fetchDropdownOptionsPage } from './fetch-dropdown-options';
 import { filterStateToWhere } from './filter-state-to-where';
 import type { Filter, ModesByColumn } from './filters';
 
 export type { DropdownOption } from './fetch-dropdown-options';
 
-const EMPTY_OPTIONS: DropdownOption[] = [];
-const EMPTY_IDS: string[] = [];
+/** Upper bound on population pages walked for one dropdown (× 200 entities). */
+const MAX_POPULATION_PAGES = 25;
 
 /**
- * Candidate values for one browse-mode dropdown: the to-entities that occur
- * for `columnId` across the table's population — the block's filter with this
- * property's own constraint removed, so the list is not narrowed by what is
- * currently selected. Built with the same where/filter transformers the table
- * query uses. Entities that are selected or are the filter's defaults are
- * always merged in, so a preset is never missing from its own dropdown.
+ * The values of one property across the table's population — the block's
+ * filter with this property's own constraint removed, so the list is not
+ * narrowed by what is currently selected. Loaded page by page on demand
+ * (scrolling, or a search that has not found a match yet). Selected and
+ * filter-default entities are always present so a preset never goes missing.
  */
 export function useDropdownOptions({
   columnId,
   baseFilterState,
   baseModesByColumn,
   pinned,
+  enabled,
 }: {
   columnId: string;
   baseFilterState: Filter[];
   baseModesByColumn: ModesByColumn;
-  /** Ids (with names when known) that must appear regardless of the fetch window. */
+  /** Ids (with names when known) that must appear regardless of what has loaded. */
   pinned: DropdownOption[];
+  enabled: boolean;
 }) {
   const where = React.useMemo(() => {
     const withoutColumn = baseFilterState.filter(f => !(ID.equals(f.columnId, columnId) && !f.isBacklink));
@@ -42,29 +43,43 @@ export function useDropdownOptions({
 
   const whereKey = React.useMemo(() => JSON.stringify(where), [where]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching, isFetchingNextPage, fetchNextPage, hasNextPage } = useInfiniteQuery({
     queryKey: ['data-block', 'dropdown-options', columnId, whereKey],
-    queryFn: ({ signal }) => fetchDropdownOptions({ propertyId: columnId, where, signal }),
+    enabled,
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) =>
+      fetchDropdownOptionsPage({ propertyId: columnId, where, after: pageParam, signal }),
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.hasNextPage && pages.length < MAX_POPULATION_PAGES ? lastPage.endCursor : undefined,
     staleTime: 60_000,
   });
 
-  const fetched = data?.options ?? EMPTY_OPTIONS;
-  const inferredTypeIds = data?.inferredTypeIds ?? EMPTY_IDS;
-
+  // Pinned first, then values in arrival order (each page name-sorted) so
+  // the list never reshuffles under the cursor as pages arrive.
   const options: DropdownOption[] = React.useMemo(() => {
     const byId = new Map<string, DropdownOption>();
-    for (const option of fetched) byId.set(option.id, option);
-    for (const pin of pinned) {
-      const existing = byId.get(pin.id);
-      if (!existing || (!existing.name && pin.name)) byId.set(pin.id, pin);
-    }
-    return [...byId.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
-  }, [fetched, pinned]);
+    const add = (option: DropdownOption) => {
+      const existing = byId.get(option.id);
+      if (!existing) byId.set(option.id, option);
+      else if (!existing.name && option.name) byId.set(option.id, { ...existing, name: option.name });
+    };
+    pinned.forEach(add);
+    for (const page of data?.pages ?? []) page.options.forEach(add);
+    return [...byId.values()];
+  }, [data, pinned]);
 
   const nameOf = React.useCallback(
     (id: string) => options.find(option => ID.equals(option.id, id))?.name ?? null,
     [options]
   );
 
-  return { options, nameOf, isLoading, inferredTypeIds };
+  return {
+    options,
+    nameOf,
+    isLoading,
+    isFetching,
+    isFetchingNextPage,
+    hasNextPage: Boolean(hasNextPage),
+    fetchNextPage,
+  };
 }

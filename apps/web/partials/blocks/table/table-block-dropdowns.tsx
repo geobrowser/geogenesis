@@ -1,7 +1,5 @@
 'use client';
 
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -17,12 +15,8 @@ import type { BlockDropdownConfig } from '~/core/blocks/data/use-block-dropdowns
 import type { DropdownOption } from '~/core/blocks/data/use-dropdown-options';
 import { useDropdownOptions } from '~/core/blocks/data/use-dropdown-options';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
-import { useGlobalSearchSpaceIds } from '~/core/hooks/use-global-search-space-ids';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
-import { useRelationTargetTypeIds } from '~/core/hooks/use-relation-target-type-ids';
 import { ID } from '~/core/id';
-import { E } from '~/core/sync/orm';
-import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { Property } from '~/core/types';
 
 import { CheckboxVisual } from '~/design-system/checkbox';
@@ -33,8 +27,6 @@ import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 
 /** Above this many options the menu gets a search bar. */
 const SEARCH_BAR_THRESHOLD = 20;
-/** Page of globally ranked matches per search, as in the filter value input. */
-const SEARCH_PAGE_SIZE = 25;
 /** Rows revealed per scroll step; the list grows as the sentinel comes into view. */
 const REVEAL_STEP = 25;
 
@@ -61,7 +53,6 @@ type TableBlockDropdownsProps = {
 export function TableBlockDropdowns({
   configs,
   properties,
-  spaceId,
   baseFilterState,
   baseModesByColumn,
   selections,
@@ -86,7 +77,6 @@ export function TableBlockDropdowns({
           key={config.propertyId}
           config={config}
           property={property!}
-          spaceId={spaceId}
           baseFilterState={baseFilterState}
           baseModesByColumn={baseModesByColumn}
           selections={selections}
@@ -105,7 +95,6 @@ export function TableBlockDropdowns({
 function TableBlockDropdown({
   config,
   property,
-  spaceId,
   baseFilterState,
   baseModesByColumn,
   selections,
@@ -113,7 +102,7 @@ function TableBlockDropdown({
   hydrated,
   open,
   onOpenChange,
-}: Omit<TableBlockDropdownsProps, 'configs' | 'properties'> & {
+}: Omit<TableBlockDropdownsProps, 'configs' | 'properties' | 'spaceId'> & {
   config: BlockDropdownConfig;
   property: Property;
   open: boolean;
@@ -121,9 +110,6 @@ function TableBlockDropdown({
 }) {
   const columnId = config.propertyId;
   const label = config.propertyName ?? property.name ?? 'Property';
-  const { store } = useSyncEngine();
-  const cache = useQueryClient();
-  const additionalSpaceIds = useGlobalSearchSpaceIds();
 
   const defaultFilters = React.useMemo(
     () => baseFilterState.filter(f => ID.equals(f.columnId, columnId) && !f.isBacklink),
@@ -145,130 +131,60 @@ function TableBlockDropdown({
     return [...byId.values()];
   }, [defaultFilters, selected]);
 
-  // Values that occur in this table for the property.
-  const {
-    options: tableOptions,
-    isLoading: isTableOptionsLoading,
-    inferredTypeIds,
-  } = useDropdownOptions({
-    columnId,
-    baseFilterState,
-    baseModesByColumn,
-    pinned,
-  });
-
-  // The property's full value universe, as the filter value input resolves
-  // it: entities of the relation's target types via the global search
-  // endpoint (empty query = top-ranked of that type). Without known target
-  // types the universe is open, so only a typed query searches.
-  const { typeIds, waitForFilterTypes } = useRelationTargetTypeIds({
-    propertyId: columnId,
-    spaceId,
-    relationValueTypes: property.relationValueTypes,
-  });
-  // Declared relation value types first; otherwise the types inferred from
-  // the values the property is actually used with, so the universe can still
-  // be paged for properties that never declared one (most space-local ones).
-  const searchTypeIds = typeIds?.length ? typeIds : inferredTypeIds;
-  const hasTargetTypes = searchTypeIds.length > 0;
+  // The dropdown's one scope: this property's values across the table's
+  // population, paged in as the user scrolls or searches.
+  const { options, nameOf, isLoading, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } = useDropdownOptions(
+    {
+      columnId,
+      baseFilterState,
+      baseModesByColumn,
+      pinned,
+      enabled: open,
+    }
+  );
 
   // The option list is its own scroll area (below a fixed search bar), so the
   // sentinel observes intersection with it rather than with the viewport.
   const [listEl, setListEl] = React.useState<HTMLDivElement | null>(null);
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery, 200).trim();
-  const typeIdsKey = searchTypeIds.slice().sort().join(',');
-
-  const {
-    data: searchPages,
-    isFetching: isSearching,
-    isFetchingNextPage: isSearchFetchingNextPage,
-    fetchNextPage: fetchNextSearchPage,
-    hasNextPage: hasNextSearchPage,
-  } = useInfiniteQuery({
-    queryKey: ['data-block', 'dropdown-search', columnId, query, typeIdsKey, additionalSpaceIds],
-    enabled: open && !waitForFilterTypes && (hasTargetTypes || query.length > 0),
-    initialPageParam: 0,
-    queryFn: async ({ pageParam, signal }) => {
-      const { results, rawCount, total } = await E.findFuzzyPage({
-        store,
-        cache,
-        where: {
-          name: { fuzzy: query },
-          ...(searchTypeIds.length ? { types: searchTypeIds.map(id => ({ id: { equals: id } })) } : {}),
-        },
-        first: SEARCH_PAGE_SIZE,
-        skip: pageParam,
-        signal,
-        additionalSpaceIds,
-      });
-      return {
-        rows: results.map((r): DropdownOption => ({ id: r.id, name: r.name })),
-        offset: pageParam,
-        rawCount,
-        total,
-      };
-    },
-    getNextPageParam: lastPage => {
-      // Mirrors the filter value input: the REST total is authoritative when
-      // present; otherwise a short raw page means the end of the result set.
-      const nextOffset = lastPage.offset + SEARCH_PAGE_SIZE;
-      if (typeof lastPage.total === 'number') return nextOffset >= lastPage.total ? undefined : nextOffset;
-      return lastPage.rawCount < SEARCH_PAGE_SIZE ? undefined : nextOffset;
-    },
-    staleTime: 60_000,
-  });
-  const searchOptions = React.useMemo(() => searchPages?.pages.flatMap(p => p.rows) ?? [], [searchPages]);
 
   React.useEffect(() => {
     if (!open) setRawQuery('');
   }, [open]);
 
-  // Stable order under paging: the selection first, then every value used
-  // in the block's spaces (name-sorted), then further search matches in the
-  // server's rank order. Name-sorting the whole list would reshuffle it as
-  // pages arrive.
-  const allOptions = React.useMemo(() => {
-    const seen = new Set<string>();
-    const out: DropdownOption[] = [];
-    const add = (option: DropdownOption) => {
-      if (seen.has(option.id)) return;
-      seen.add(option.id);
-      out.push(option);
-    };
-    const nameFor = (id: string) =>
-      tableOptions.find(o => ID.equals(o.id, id))?.name ?? searchOptions.find(o => ID.equals(o.id, id))?.name ?? null;
-    for (const pin of pinned) add({ id: pin.id, name: pin.name ?? nameFor(pin.id) });
-    tableOptions.forEach(add);
-    searchOptions.forEach(add);
-    return out;
-  }, [pinned, tableOptions, searchOptions]);
-
   const visibleOptions = React.useMemo(() => {
-    if (!query) return allOptions;
+    if (!query) return options;
     const needle = query.toLowerCase();
-    return allOptions.filter(option => (option.name ?? option.id).toLowerCase().includes(needle));
-  }, [allOptions, query]);
+    return options.filter(option => (option.name ?? option.id).toLowerCase().includes(needle));
+  }, [options, query]);
 
-  // Infinite scroll: reveal the already-loaded list in steps, then pull the
-  // next search page once everything loaded is on screen.
+  // A search covers the whole scope: while it has no match and more of the
+  // population remains, keep paging until something matches or it's exhausted.
+  React.useEffect(() => {
+    if (!open || !query || visibleOptions.length > 0) return;
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [open, query, visibleOptions.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Infinite scroll: reveal the loaded list in steps, then pull the next
+  // population page once everything loaded is on screen.
   const [visibleCount, setVisibleCount] = React.useState(REVEAL_STEP);
   React.useEffect(() => {
     setVisibleCount(REVEAL_STEP);
   }, [query, open]);
   const renderedOptions = React.useMemo(() => visibleOptions.slice(0, visibleCount), [visibleOptions, visibleCount]);
   const hasMoreToReveal = visibleCount < visibleOptions.length;
-  const hasMore = hasMoreToReveal || Boolean(hasNextSearchPage);
+  const hasMore = hasMoreToReveal || hasNextPage;
   const loadMore = React.useCallback(() => {
     if (hasMoreToReveal) {
       setVisibleCount(count => count + REVEAL_STEP);
       return;
     }
-    if (hasNextSearchPage && !isSearchFetchingNextPage) void fetchNextSearchPage();
-  }, [hasMoreToReveal, hasNextSearchPage, isSearchFetchingNextPage, fetchNextSearchPage]);
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasMoreToReveal, hasNextPage, isFetchingNextPage, fetchNextPage]);
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: hasMore,
-    isFetchingNextPage: isSearchFetchingNextPage,
+    isFetchingNextPage,
     fetchNextPage: loadMore,
     rootMargin: '120px',
     root: listEl,
@@ -278,15 +194,9 @@ function TableBlockDropdown({
   // to search yet) and a settled short list (everything is already on
   // screen). While more is loading behind existing items — or more pages
   // exist — it stays, and typing always keeps it.
-  const isAnyLoading = isTableOptionsLoading || isSearching || waitForFilterTypes;
-  const isInitialLoading = allOptions.length === 0 && isAnyLoading;
-  const isSettledShortList = !isAnyLoading && !hasNextSearchPage && allOptions.length <= SEARCH_BAR_THRESHOLD;
+  const isInitialLoading = options.length === 0 && isFetching;
+  const isSettledShortList = !isFetching && !hasNextPage && options.length <= SEARCH_BAR_THRESHOLD;
   const showSearch = query.length > 0 || (!isInitialLoading && !isSettledShortList);
-
-  const nameOf = React.useCallback(
-    (id: string) => allOptions.find(option => ID.equals(option.id, id))?.name ?? null,
-    [allOptions]
-  );
 
   const selectedNames = selected.map(id => nameOf(id) ?? '…');
   const pillLabel =
@@ -308,7 +218,7 @@ function TableBlockDropdown({
     });
   };
 
-  const isLoading = isTableOptionsLoading || isSearching || waitForFilterTypes;
+  const isSearchingScope = Boolean(query) && visibleOptions.length === 0 && (isFetching || hasNextPage);
 
   return (
     <Menu
@@ -378,7 +288,7 @@ function TableBlockDropdown({
           )}
           {visibleOptions.length === 0 && (
             <p className="px-2 py-2 text-sm text-grey-04">
-              {isLoading ? 'Loading…' : query ? 'No matches' : 'No values in this table'}
+              {isLoading || isSearchingScope ? 'Loading…' : query ? 'No matches' : 'No values in this table'}
             </p>
           )}
           {renderedOptions.map(option => {
@@ -398,7 +308,7 @@ function TableBlockDropdown({
             );
           })}
           {hasMore && <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />}
-          {(isSearchFetchingNextPage || (isSearching && renderedOptions.length > 0)) && (
+          {isFetchingNextPage && renderedOptions.length > 0 && (
             <p className="px-2 pt-1 text-footnote text-grey-04">Loading…</p>
           )}
         </div>

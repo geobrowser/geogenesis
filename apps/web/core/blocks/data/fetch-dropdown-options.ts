@@ -3,71 +3,133 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { Effect } from 'effect';
 import { parse } from 'graphql';
 
-import type { UuidFilter } from '~/core/gql/graphql';
+import type { EntityFilter, UuidFilter } from '~/core/gql/graphql';
+import { convertWhereConditionToEntityFilter } from '~/core/io/converters';
 import { graphql } from '~/core/io/graphql-client';
+import {
+  extractSingleSpaceIdFromFilter,
+  extractSpaceIdsFromFilter,
+  removeSpaceIdsFromFilter,
+} from '~/core/io/space-filter';
+import {
+  extractSingleTypeIdFromFilter,
+  extractTypeIdsFromFilter,
+  removeTypeIdsFromFilter,
+} from '~/core/io/type-filter';
 import type { WhereCondition } from '~/core/sync/experimental_query-layer';
 
 export type DropdownOption = { id: string; name: string | null };
 
 /**
- * Relations are fetched, not entities: one property can point at the same
- * to-entity from many rows, so the window is sized for relations and then
- * collapsed to distinct to-entities.
+ * A dropdown's scope is the table's population: the entities the block's
+ * filter — minus the dropdown's own property, so the user can widen it —
+ * would show. Its options are the values that property takes across that
+ * population, nothing wider.
+ *
+ * The API cannot execute a nested `relations(fromEntity: <filter>)` query
+ * in reasonable time, so the population is walked page by page with the
+ * same normalized connection query the table runs, and each page's
+ * relations for the property are read by `fromEntityId` (indexed). Pages
+ * are pulled as the user scrolls or searches.
  */
-export const DROPDOWN_OPTIONS_RELATION_WINDOW = 1000;
+export const DROPDOWN_POPULATION_PAGE_SIZE = 200;
+export const DROPDOWN_RELATION_WINDOW = 1000;
 
-type DropdownOptionsResult = {
-  relations: { toEntity: { id: string; name: string | null; types?: { id: string }[] | null } | null }[] | null;
+type PopulationPageResult = {
+  entitiesConnection: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: { id: string }[] } | null;
+};
+type PopulationPageVariables = {
+  filter?: EntityFilter | null;
+  spaceId?: string | null;
+  spaceIds?: UuidFilter | null;
+  typeId?: string | null;
+  typeIds?: UuidFilter | null;
+  first: number;
+  after?: string | null;
 };
 
-export type DropdownOptionsFetch = {
-  options: DropdownOption[];
-  /**
-   * Target types inferred from usage: the types shared by most of the values
-   * the property points at. Used when the property declares no relation value
-   * types, so the search universe can still be paged.
-   */
-  inferredTypeIds: string[];
-};
-type DropdownOptionsVariables = { propertyId: string; spaceIds?: UuidFilter | null; first: number };
-
-/**
- * Every value the property is used with in the block's spaces. Scoping by
- * the relation's space is the indexed path; scoping by a nested entity
- * filter is not (it times out), and sampling the table's population misses
- * rarely-used values. A superset of the table's own rows is fine here: the
- * dropdown exists to widen or narrow a personal view.
- */
-const DROPDOWN_OPTIONS_DOCUMENT = parse(/* GraphQL */ `
-  query DropdownOptions($propertyId: UUID!, $spaceIds: UUIDFilter, $first: Int) {
-    relations(filter: { typeId: { is: $propertyId }, spaceId: $spaceIds }, first: $first) {
-      toEntity {
+const POPULATION_PAGE_DOCUMENT = parse(/* GraphQL */ `
+  query DropdownOptionsPopulation(
+    $filter: EntityFilter
+    $spaceId: UUID
+    $spaceIds: UUIDFilter
+    $typeId: UUID
+    $typeIds: UUIDFilter
+    $first: Int
+    $after: Cursor
+  ) {
+    entitiesConnection(
+      filter: $filter
+      spaceId: $spaceId
+      spaceIds: $spaceIds
+      typeId: $typeId
+      typeIds: $typeIds
+      first: $first
+      after: $after
+    ) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
         id
-        name
-        types {
-          id
-        }
       }
     }
   }
-`) as unknown as TypedDocumentNode<DropdownOptionsResult, DropdownOptionsVariables>;
+`) as unknown as TypedDocumentNode<PopulationPageResult, PopulationPageVariables>;
 
-/** The block's space scope, as a relation `spaceId` filter; undefined when the block is unscoped. */
-export function spaceIdsFromWhere(where: WhereCondition): UuidFilter | undefined {
-  const ids = new Set<string>();
-  const visit = (condition: WhereCondition) => {
-    for (const space of condition.spaces ?? []) if (space.equals) ids.add(space.equals);
-    for (const child of condition.AND ?? []) visit(child);
-    for (const child of condition.OR ?? []) visit(child);
+type RelationsResult = {
+  relations: { toEntity: { id: string; name: string | null } | null }[] | null;
+};
+type RelationsVariables = { propertyId: string; fromEntityIds: string[]; first: number };
+
+const RELATIONS_DOCUMENT = parse(/* GraphQL */ `
+  query DropdownOptionsRelations($propertyId: UUID!, $fromEntityIds: [UUID!], $first: Int) {
+    relations(
+      filter: { typeId: { is: $propertyId }, fromEntityId: { in: $fromEntityIds } }
+      first: $first
+      orderBy: TO_ENTITY_ID_ASC
+    ) {
+      toEntity {
+        id
+        name
+      }
+    }
+  }
+`) as unknown as TypedDocumentNode<RelationsResult, RelationsVariables>;
+
+/**
+ * Same promotion as `core/io/queries.ts`: space/type constraints move to the
+ * top-level connection arguments (the indexed path) and leave the filter.
+ */
+export function populationVariablesFromWhere(
+  where: WhereCondition,
+  first: number,
+  after?: string | null
+): PopulationPageVariables {
+  const filter = Object.keys(where).length === 0 ? undefined : convertWhereConditionToEntityFilter(where);
+  const spaceId = extractSingleSpaceIdFromFilter(filter);
+  const spaceIds = spaceId ? undefined : extractSpaceIdsFromFilter(filter);
+  const typeId = extractSingleTypeIdFromFilter(filter);
+  const typeIds = typeId ? undefined : extractTypeIdsFromFilter(filter);
+
+  let normalized = filter;
+  if (spaceId || spaceIds) normalized = removeSpaceIdsFromFilter(normalized);
+  if (typeId || typeIds) normalized = removeTypeIdsFromFilter(normalized);
+
+  return {
+    filter: normalized ?? null,
+    spaceId: spaceId ?? null,
+    spaceIds: spaceIds ?? null,
+    typeId: typeId ?? null,
+    typeIds: typeIds ?? null,
+    first,
+    after: after ?? null,
   };
-  visit(where);
-  if (ids.size === 0) return undefined;
-  const list = [...ids];
-  return list.length === 1 ? ({ is: list[0] } as UuidFilter) : ({ in: list } as UuidFilter);
 }
 
 /** Distinct to-entities, name-sorted; a later relation never overwrites a known name with null. */
-export function toDropdownOptions(result: DropdownOptionsResult): DropdownOption[] {
+export function toDropdownOptions(result: RelationsResult): DropdownOption[] {
   const byId = new Map<string, DropdownOption>();
   for (const relation of result.relations ?? []) {
     const target = relation.toEntity;
@@ -80,56 +142,49 @@ export function toDropdownOptions(result: DropdownOptionsResult): DropdownOption
   return [...byId.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
 }
 
-/**
- * Types carried by at least half of the distinct values (and by at least two
- * of them), most common first. Nothing is inferred from a single value.
- */
-export function inferTargetTypeIds(result: DropdownOptionsResult): string[] {
-  const typesByEntity = new Map<string, Set<string>>();
-  for (const relation of result.relations ?? []) {
-    const target = relation.toEntity;
-    if (!target?.id) continue;
-    const set = typesByEntity.get(target.id) ?? new Set<string>();
-    for (const type of target.types ?? []) set.add(type.id);
-    typesByEntity.set(target.id, set);
-  }
-  const counts = new Map<string, number>();
-  for (const set of typesByEntity.values()) for (const id of set) counts.set(id, (counts.get(id) ?? 0) + 1);
-  const threshold = Math.max(2, Math.ceil(typesByEntity.size / 2));
-  return [...counts.entries()]
-    .filter(([, count]) => count >= threshold)
-    .sort((a, b) => b[1] - a[1])
-    .map(([id]) => id);
-}
+export type DropdownOptionsPage = {
+  options: DropdownOption[];
+  endCursor: string | null;
+  hasNextPage: boolean;
+};
 
-/**
- * The to-entities `propertyId` is used with across the block's spaces (the
- * spaces come from `where`, the block's filter). This is the vocabulary a
- * browse-mode dropdown offers — "what values exist for this property here" —
- * rather than a declared type list, which space-local properties often lack.
- */
-export function fetchDropdownOptions({
+/** One page of the scope: the property's values across the next slice of the table's population. */
+export function fetchDropdownOptionsPage({
   propertyId,
   where,
+  after,
   signal,
 }: {
   propertyId: string;
   where: WhereCondition;
+  after?: string | null;
   signal?: AbortSignal;
-}): Promise<DropdownOptionsFetch> {
+}): Promise<DropdownOptionsPage> {
   return Effect.runPromise(
-    graphql({
-      query: DROPDOWN_OPTIONS_DOCUMENT,
-      decoder: (result: DropdownOptionsResult) => ({
-        options: toDropdownOptions(result),
-        inferredTypeIds: inferTargetTypeIds(result),
-      }),
-      variables: {
-        propertyId,
-        spaceIds: spaceIdsFromWhere(where) ?? null,
-        first: DROPDOWN_OPTIONS_RELATION_WINDOW,
-      },
-      signal,
+    Effect.gen(function* () {
+      const population = yield* graphql({
+        query: POPULATION_PAGE_DOCUMENT,
+        decoder: (data: PopulationPageResult) => ({
+          ids: (data.entitiesConnection?.nodes ?? []).map(node => node.id),
+          endCursor: data.entitiesConnection?.pageInfo.endCursor ?? null,
+          hasNextPage: data.entitiesConnection?.pageInfo.hasNextPage ?? false,
+        }),
+        variables: populationVariablesFromWhere(where, DROPDOWN_POPULATION_PAGE_SIZE, after),
+        signal,
+      });
+
+      if (population.ids.length === 0) {
+        return { options: [], endCursor: population.endCursor, hasNextPage: false };
+      }
+
+      const options = yield* graphql({
+        query: RELATIONS_DOCUMENT,
+        decoder: toDropdownOptions,
+        variables: { propertyId, fromEntityIds: population.ids, first: DROPDOWN_RELATION_WINDOW },
+        signal,
+      });
+
+      return { options, endCursor: population.endCursor, hasNextPage: population.hasNextPage };
     })
   );
 }
