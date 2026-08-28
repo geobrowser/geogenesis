@@ -51,6 +51,13 @@ export function usePrivySignIn(onComplete?: () => void) {
       requestedRef.current = false;
       onCompleteRef.current?.();
     },
+    // Privy calls this when the attempt fails and when the viewer dismisses the modal. Leaving
+    // the flag set would hand an abandoned press to whatever completion arrived next — a restore,
+    // or a login started somewhere else on the page — which is the same unbidden replay the
+    // arming exists to prevent, just later.
+    onError: () => {
+      requestedRef.current = false;
+    },
   });
 
   return React.useCallback(() => {
