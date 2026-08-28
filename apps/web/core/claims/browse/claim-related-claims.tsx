@@ -87,10 +87,20 @@ export function ClaimRelatedClaims({
   );
 
   const candidateIds = React.useMemo(() => candidates.map(entity => entity.id), [candidates]);
-  const { rankByClaimId } = useClaimsBestOrder(candidateIds, spaceId);
+  const { rankByClaimId, isReady: isRankReady } = useClaimsBestOrder(candidateIds, spaceId);
   // Claims the ranking hasn't scored keep their server order behind the ranked ones, so a topic the
   // feed has barely touched still reads in a sensible sequence rather than arbitrarily.
-  const related = React.useMemo(() => sortClaimsByBest(candidates, rankByClaimId), [candidates, rankByClaimId]);
+  const ordered = React.useMemo(() => sortClaimsByBest(candidates, rankByClaimId), [candidates, rankByClaimId]);
+
+  // A page is only committed to the screen once its ranking is known. The rows and the ranking are
+  // two requests, and rendering on the first meant a page appeared in the server's order and then
+  // resequenced under the reader when the second landed. Holding the previous page until the new
+  // one can be drawn in its final order costs a moment on Next and never reorders anything.
+  const [related, setRelated] = React.useState<Entity[]>([]);
+  React.useEffect(() => {
+    if (!isRankReady) return;
+    setRelated(current => (sameOrder(current, ordered) ? current : ordered));
+  }, [isRankReady, ordered]);
 
   // The page holding this claim shows one card fewer, and a topic with only this claim on its first
   // page would show none at all. Skip forward rather than render an empty gallery on a topic that
@@ -100,11 +110,15 @@ export function ClaimRelatedClaims({
   // Destructured rather than depending on `pages`: the hook returns a fresh object each render, so
   // naming it as a dependency would re-run this on every render. `toNext` is stable for a given
   // page, which is the granularity that matters.
+  //
+  // Keyed on `candidates` rather than the committed list: this asks whether the page that just
+  // arrived has anything to show, which the committed list — still holding the previous page —
+  // cannot answer.
   const { isFirstPage, toNext } = pages;
   React.useEffect(() => {
-    if (!isFirstPage || isLoading || related.length > 0 || !hasNextPage || !endCursor) return;
+    if (!isFirstPage || isLoading || candidates.length > 0 || !hasNextPage || !endCursor) return;
     toNext(endCursor);
-  }, [endCursor, hasNextPage, isFirstPage, isLoading, related.length, toNext]);
+  }, [candidates.length, endCursor, hasNextPage, isFirstPage, isLoading, toNext]);
 
   // One lookup for the whole gallery. The cards read their sides and readiness from geo-chat, the
   // same as they do in the hub — without it every card would draw an empty, un-actionable pair.
@@ -149,6 +163,11 @@ export function ClaimRelatedClaims({
       />
     </section>
   );
+}
+
+/** Whether two pages hold the same claims in the same sequence, so state isn't replaced needlessly. */
+function sameOrder(left: Entity[], right: Entity[]) {
+  return left.length === right.length && left.every((entity, index) => entity.id === right[index]?.id);
 }
 
 function RelatedClaimCard({
