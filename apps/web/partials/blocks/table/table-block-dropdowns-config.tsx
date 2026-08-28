@@ -8,6 +8,7 @@ import type { BlockDropdownConfig } from '~/core/blocks/data/use-block-dropdowns
 import { ID } from '~/core/id';
 import type { Property } from '~/core/types';
 
+import { SmallButton } from '~/design-system/button';
 import { CheckboxVisual } from '~/design-system/checkbox';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { CreateSmall } from '~/design-system/icons/create-small';
@@ -63,13 +64,9 @@ export function TableBlockDropdownsConfigTrigger({
       onCloseAutoFocus={event => event.preventDefault()}
       className="max-w-[280px]"
       trigger={
-        <button
-          type="button"
-          className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-grey-02 bg-grey-01 px-1.5 text-metadata leading-none text-text transition-colors hover:bg-grey-02"
-        >
-          <CreateSmall />
-          <span>Dropdown</span>
-        </button>
+        <SmallButton icon={<CreateSmall />} variant="secondary">
+          Dropdown
+        </SmallButton>
       }
     >
       <div className="flex flex-col p-2">

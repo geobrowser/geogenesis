@@ -1000,14 +1000,19 @@ export function PowerToolsScreen() {
               />
             </>
           )}
-          <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
-          {isEditing && (
-            <TableBlockDropdownsConfigTrigger
-              configs={browseDropdowns.configs}
-              properties={data.properties}
-              toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
-            />
-          )}
+          <TableBlockEditableFilters
+            filterState={effectiveFilterState}
+            setFilterState={effectiveSetFilterState}
+            afterFilterTrigger={
+              isEditing ? (
+                <TableBlockDropdownsConfigTrigger
+                  configs={browseDropdowns.configs}
+                  properties={data.properties}
+                  toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+                />
+              ) : null
+            }
+          />
           <Menu
             open={isColumnMenuOpen}
             onOpenChange={setIsColumnMenuOpen}

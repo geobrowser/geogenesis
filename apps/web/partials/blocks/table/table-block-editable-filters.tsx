@@ -29,11 +29,20 @@ interface TableBlockEditableFiltersProps {
   filterSuggestionSpaceId?: string;
   orderedColumnIds?: string[];
   isEditing?: boolean;
+  /** Rendered right after the "+ Filter" trigger, before the right-aligned query mode toggle. */
+  afterFilterTrigger?: React.ReactNode;
 }
 
 export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPromptHandle, TableBlockEditableFiltersProps>(
   function TableBlockEditableFilters(
-    { filterState, setFilterState, filterSuggestionSpaceId, orderedColumnIds = [], isEditing = true },
+    {
+      filterState,
+      setFilterState,
+      filterSuggestionSpaceId,
+      orderedColumnIds = [],
+      isEditing = true,
+      afterFilterTrigger,
+    },
     ref
   ) {
     const { setFilterState: dbSetFilterState, filterState: dbFilterState, filterableProperties } = useFilters();
@@ -137,6 +146,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
             </SmallButton>
           }
         />
+        {afterFilterTrigger}
         {source.type !== 'COLLECTION' && <QueryModeToggle />}
       </div>
     );

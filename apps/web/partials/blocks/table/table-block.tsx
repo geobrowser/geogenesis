@@ -1123,11 +1123,13 @@ const ConfiguredTableBlock = ({
                         filterSuggestionSpaceId={spaceId}
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}
-                      />
-                      <TableBlockDropdownsConfigTrigger
-                        configs={browseDropdowns.configs}
-                        properties={mergedBlockProperties}
-                        toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+                        afterFilterTrigger={
+                          <TableBlockDropdownsConfigTrigger
+                            configs={browseDropdowns.configs}
+                            properties={mergedBlockProperties}
+                            toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+                          />
+                        }
                       />
                     </>
                   )}
