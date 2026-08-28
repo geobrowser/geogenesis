@@ -7,7 +7,9 @@ import { claimResponseKind } from '~/core/claims/response-kind';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateClaim } from '~/core/debates/api';
 import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
-import { useDebateClaims } from '~/core/debates/hooks';
+import { useDebateActivity, useDebateClaims } from '~/core/debates/hooks';
+import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
+import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -225,7 +227,68 @@ function ClaimPositionSection({
           </Text>
         </div>
       ) : null}
+
+      <ClaimMatchup claimId={entityId} spaceId={spaceId} />
     </section>
+  );
+}
+
+/**
+ * The live half of the position card: someone holding the opposite side is online and ready, so
+ * there is a debate to be had right now.
+ *
+ * Reads the same matches the hub's Matches tab does, narrowed to this claim. A match needs three
+ * things at once — you standing ready, them standing ready, and opposite responses — so this is
+ * absent far more often than it is present, and it stays absent rather than explaining itself.
+ * The readiness switch above is where someone goes to become matchable; repeating that here would
+ * put a second explanation on a card that already carries the control.
+ */
+function ClaimMatchup({ claimId, spaceId }: { claimId: string; spaceId: string }) {
+  const matchesQuery = useMatchmakingMatches(true);
+  const requestsQuery = useDebateRequests(true);
+  const { data: activity } = useDebateActivity(true);
+  const createRequest = useCreateDebateRequest();
+
+  const match = (matchesQuery.data?.matches ?? []).find(
+    candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
+  );
+
+  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  // Only when the server actually says so — a missing field must not block requesting.
+  const unavailable = activity?.available_to_debate === false;
+  const blockedReason = unavailable
+    ? 'Switch yourself to available to send a request.'
+    : outbound
+      ? 'Withdraw your open request to send another.'
+      : undefined;
+  const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
+
+  if (!match) return null;
+
+  return (
+    <div className="mt-3 flex flex-col gap-1 border-t border-divider pt-3">
+      <HubPillButton
+        onClick={() => createRequest.mutate({ space_id: spaceId, claim_entity_id: claimId })}
+        disabled={Boolean(blockedReason)}
+        pending={createRequest.isPending}
+        pendingLabel="Requesting…"
+        className="w-full"
+      >
+        Request debate
+      </HubPillButton>
+      {/* Shown rather than left to a `title`: native tooltips never appear on touch and are
+          unreliable on a disabled button, which is exactly when the explanation matters. */}
+      {blockedReason ? (
+        <Text as="p" variant="footnote" color="grey-04">
+          {blockedReason}
+        </Text>
+      ) : null}
+      {requestError ? (
+        <Text as="p" variant="footnote" color="red-01">
+          {requestError}
+        </Text>
+      ) : null}
+    </div>
   );
 }
 

@@ -141,10 +141,14 @@ function RelatedClaimCard({
 }
 
 /**
- * The share of responses that took the positive side, under the card.
+ * The split on a related claim, as a miniature of the page's own verdict.
  *
- * Present from the first response, like the page's own verdict — absent only on a claim nobody
- * has answered, where there is no split to report.
+ * A bare "0% agree" line under the pills read as a stray label — the number had no scale behind it
+ * and sat at the same weight as everything else on the card. Reusing the verdict's split bar at a
+ * smaller size gives it that scale and ties the gallery to the module above it.
+ *
+ * Present from the first response — absent only on a claim nobody has answered, where there is no
+ * split to report.
  */
 function AgreePercent({
   summary,
@@ -155,14 +159,33 @@ function AgreePercent({
 }) {
   if (summary.percent === null) return null;
 
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const percent = summary.percent;
+
   return (
-    <div className="mt-2 flex items-center gap-2 border-t border-divider pt-2">
-      <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
-        {summary.percent}% {ENTITY_RESPONSE_COPY[responseKind].positiveAction.toLowerCase()}
-      </Text>
-      {summary.isControversial && (
-        <span className="rounded-sm bg-orange/25 px-1.5 py-0.5 text-metadata font-medium text-text">Controversial</span>
-      )}
+    <div className="mt-3 border-t border-divider pt-3">
+      <div
+        className="flex h-1.5 overflow-hidden rounded-full bg-grey-01"
+        role="img"
+        aria-label={`${percent}% ${copy.positiveAction.toLowerCase()}, ${100 - percent}% ${copy.negativeAction.toLowerCase()}`}
+      >
+        <span className="bg-green" style={{ width: `${percent}%` }} />
+        <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
+          <span className="text-text">{percent}%</span> {copy.positiveAction.toLowerCase()}
+        </Text>
+        {summary.isControversial ? (
+          <span className="rounded-sm bg-orange/25 px-1.5 py-0.5 text-metadata font-medium text-text">
+            Controversial
+          </span>
+        ) : (
+          <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
+            {summary.total} {summary.total === 1 ? 'response' : 'responses'}
+          </Text>
+        )}
+      </div>
     </div>
   );
 }

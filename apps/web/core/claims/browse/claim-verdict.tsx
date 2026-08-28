@@ -9,9 +9,8 @@ import { ENTITY_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
-
-import { CLAIM_RESPONSE_OBJECT_TYPE, type ClaimResponseSummary } from './claim-response-summary';
+import { type ClaimResponseSummary } from './claim-response-summary';
+import { ClaimSideResponders } from './claim-side-responders';
 
 /**
  * Where opinion sits on a claim: one number, the split, and who is on each side.
@@ -80,19 +79,19 @@ export function ClaimVerdict({
           swatchClassName="bg-green"
           label={copy.positiveAction}
           count={summary.positive}
+          direction="positive"
           entityId={entityId}
           spaceId={spaceId}
           responseKind={responseKind}
-          viewerSpaceId={viewerSpaceId}
         />
         <SideSummary
           swatchClassName="bg-red-01"
           label={copy.negativeAction}
           count={summary.negative}
+          direction="negative"
           entityId={entityId}
           spaceId={spaceId}
           responseKind={responseKind}
-          viewerSpaceId={viewerSpaceId}
           alignEnd
         />
       </div>
@@ -100,28 +99,24 @@ export function ClaimVerdict({
   );
 }
 
-/**
- * One side of the split. The avatar stack is only drawn on the positive side: `ClaimResponderAvatars`
- * reports everyone who responded rather than everyone on a given side, so rendering it twice would
- * show the same faces under both labels.
- */
+/** One side of the split: its swatch, its count, and the people who took it. */
 function SideSummary({
   swatchClassName,
   label,
   count,
+  direction,
   entityId,
   spaceId,
   responseKind,
-  viewerSpaceId,
   alignEnd = false,
 }: {
   swatchClassName: string;
   label: string;
   count: number;
+  direction: 'positive' | 'negative';
   entityId: string;
   spaceId: string;
   responseKind: ResponseKind;
-  viewerSpaceId?: string | null;
   alignEnd?: boolean;
 }) {
   return (
@@ -130,14 +125,13 @@ function SideSummary({
       <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
         {label} {count}
       </Text>
-      {!alignEnd && count > 0 && (
-        <ClaimResponderAvatars
+      {count > 0 && (
+        <ClaimSideResponders
           entityId={entityId}
           spaceId={spaceId}
-          objectType={CLAIM_RESPONSE_OBJECT_TYPE}
           responseKind={responseKind}
+          direction={direction}
           totalResponders={count}
-          viewerSpaceId={viewerSpaceId}
         />
       )}
     </div>

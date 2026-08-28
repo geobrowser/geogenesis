@@ -278,9 +278,20 @@ function DebateMeta({ debate, totalVotes }: { debate: Entity; totalVotes: number
   if (parts.length === 0) return null;
 
   return (
-    <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
-      {parts.join(' · ')}
-    </Text>
+    // The separator is its own element so it can carry real space on both sides. Joining on a
+    // literal " · " left the parts crowding the dot, which read as one run-on string.
+    <span className="flex flex-wrap items-center text-metadata text-grey-04 tabular-nums">
+      {parts.map((part, index) => (
+        <React.Fragment key={part}>
+          {index > 0 && (
+            <span aria-hidden className="mx-2 text-grey-03">
+              ·
+            </span>
+          )}
+          <span>{part}</span>
+        </React.Fragment>
+      ))}
+    </span>
   );
 }
 
