@@ -195,6 +195,12 @@ export function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
     },
     first: VOTE_FETCH_CAP,
     enabled: debateIds.length > 0,
+    // The debate set is part of the key, so it changes whenever the caller's list does — paging a
+    // browse page, or someone coming online on the People tab. Holding the previous answer keeps
+    // shares on screen for debates that are still there instead of blanking every one of them.
+    // Shares are read per debate id, so a debate not in the previous answer is simply absent, which
+    // is what it was anyway while loading.
+    placeholderData: keepPreviousData,
   });
 
   return React.useMemo(() => {

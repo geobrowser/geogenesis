@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -40,6 +40,10 @@ export function usePersonRecords(personIds: string[]): Map<string, PersonRecord>
   const { data: raw } = useQuery({
     queryKey: ['debates', 'person-records', key],
     enabled: key.length > 0,
+    // The key is the whole list, so one person coming online makes it a different query. Without
+    // this the answer is undefined until the new batch lands and every row's stats blank out and
+    // return — for people whose records were already in hand and had not changed.
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) => {
       const { document, variables, ids } = buildPersonRecordsDocument(key);
       return Effect.runPromise(
