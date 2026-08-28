@@ -151,8 +151,13 @@ export function ClaimExploreFeedCard({
         `md:` rules narrow it. Container queries are not an option here: nothing in the explore feed
         establishes a container, so a `@[640px]:` variant would silently never apply.
       */}
-      <div className="grid grid-cols-[minmax(0,1fr)_220px] gap-x-9 md:grid-cols-1 md:gap-y-4">
-        <div className="col-start-1 row-start-1 mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 md:mb-0">
+      {/* `gap-x-6` to match the right column's `pl-6`, so the rule sits centred in a 24px gutter:
+            the offer at the end of the meta row and the share below it are the same distance from
+            it, rather than the offer floating 36px out while the number sits 24px in. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_220px] gap-x-6 md:grid-cols-1 md:gap-y-4">
+        {/* `min-h-7`: the end slot is empty until the match lookup answers and 28px tall once it
+            fills, so the row holds that height from the start rather than growing under the reader. */}
+        <div className="col-start-1 row-start-1 mb-3 flex min-h-7 min-w-0 flex-wrap items-center gap-x-2 gap-y-1 md:mb-0">
           {!hideSpaceLink ? (
             <Link
               href={NavUtils.toSpace(item.spaceId)}

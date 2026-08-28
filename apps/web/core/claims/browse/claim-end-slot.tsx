@@ -64,10 +64,12 @@ export function ClaimEndSlot({
     enabled,
   });
 
-  // `smallButton` rather than `footnoteMedium`: this is a button, and the footnote scale is 11px at
-  // weight 500 — small enough to squint at and heavy enough to look shouted, which is the worst
-  // pairing for the one control the card most wants pressed.
-  const base = 'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-3 text-smallButton transition-colors';
+  // The explore page's "Rank" CTA, to the class. That button is the same object as this one — a
+  // filled dark pill offering the primary action on a feed card — so it should not be a second
+  // opinion about how one of those looks. It settles the weight question too: 16px at the scale's
+  // default 400, not the 500 that made this read as shouted next to it.
+  const base =
+    'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[16px] leading-[13px] transition-colors';
 
   if (match) {
     return (
@@ -88,7 +90,16 @@ export function ClaimEndSlot({
             'bg-text text-white hover:bg-text/90 disabled:cursor-default disabled:opacity-50'
           )}
         >
-          {isRequesting ? 'Requesting…' : 'Request debate'}
+          {/* Both labels stacked in one grid cell, so the button is always as wide as the longer of
+              them. "Requesting…" is the shorter, and a button that shrinks the moment you press it
+              reads as something having gone wrong. The grid is on this span rather than the button
+              so it cannot fight the button's own `inline-flex`. */}
+          <span className="grid place-items-center">
+            <span className="invisible col-start-1 row-start-1" aria-hidden>
+              Request debate
+            </span>
+            <span className="col-start-1 row-start-1">{isRequesting ? 'Requesting…' : 'Request debate'}</span>
+          </span>
         </button>
         {blockedReason || requestError ? (
           <span className="text-right text-footnote text-grey-04">{blockedReason ?? requestError}</span>
