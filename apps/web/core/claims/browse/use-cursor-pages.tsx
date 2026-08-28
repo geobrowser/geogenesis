@@ -21,25 +21,36 @@ export function useCursorPages() {
   const [trail, setTrail] = React.useState<(string | undefined)[]>([undefined]);
   const [index, setIndex] = React.useState(0);
 
+  // Which way the reader last stepped. A section that filters rows out client-side can land on a
+  // page holding nothing to show, and skipping past it has to continue the way they were going —
+  // advancing after a Previous would walk them back to where they came from.
+  const [direction, setDirection] = React.useState<'forward' | 'back'>('forward');
+
   const toNext = React.useCallback(
     (endCursor: string) => {
       setTrail(current => [...current.slice(0, index + 1), endCursor]);
       setIndex(current => current + 1);
+      setDirection('forward');
     },
     [index]
   );
 
-  const toPrevious = React.useCallback(() => setIndex(current => Math.max(0, current - 1)), []);
+  const toPrevious = React.useCallback(() => {
+    setIndex(current => Math.max(0, current - 1));
+    setDirection('back');
+  }, []);
 
   /** Back to page one — for when the query's inputs change under the pager. */
   const reset = React.useCallback(() => {
     setTrail([undefined]);
     setIndex(0);
+    setDirection('forward');
   }, []);
 
   return {
     cursor: trail[index],
     isFirstPage: index === 0,
+    direction,
     toNext,
     toPrevious,
     reset,

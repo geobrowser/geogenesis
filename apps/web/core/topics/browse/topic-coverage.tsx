@@ -41,14 +41,35 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
     rankInSpaceId: spaceId,
   });
 
-  // Claims are filtered here rather than excluded in the query: the store's filter has no "not this
-  // type" that survives translation, so a page can render short by however many claims it held. The
-  // pager reads `hasNextPage` from the server rather than counting rows, so a short page still steps
-  // correctly — it just shows fewer than the page size.
+  // Claims are filtered here rather than excluded in the query: the entities query takes types to
+  // *include* and has no "not this type" to translate, so a page can come back holding only claims
+  // and render as nothing at all.
   const coverage = React.useMemo(
     () => entities.filter(entity => !entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID)) && entity.name),
     [entities]
   );
+
+  // Step past such a page rather than showing a heading with a pager and no rows. Continues the way
+  // the reader was already going — skipping forward after a Previous would walk them back to the
+  // page they had just left. `entities.length > 0` distinguishes "this page held only claims" from
+  // "this page hasn't arrived", which would otherwise skip the whole section on first load.
+  const { direction, toNext, toPrevious, isFirstPage } = pages;
+  React.useEffect(() => {
+    if (isLoading || isPlaceholderData || coverage.length > 0 || entities.length === 0) return;
+    if (direction === 'forward' && hasNextPage && endCursor) toNext(endCursor);
+    else if (direction === 'back' && !isFirstPage) toPrevious();
+  }, [
+    coverage.length,
+    direction,
+    endCursor,
+    entities.length,
+    hasNextPage,
+    isFirstPage,
+    isLoading,
+    isPlaceholderData,
+    toNext,
+    toPrevious,
+  ]);
 
   if (isLoading && coverage.length === 0) {
     return <Skeleton className="h-[140px] w-full rounded-lg" />;
