@@ -1240,23 +1240,26 @@ describe('ClaimsTab -- Featured', () => {
     expect(mocks.lastEnabled).toBe(false);
   });
 
-  // GEO-2725. "My positions" is the viewer's own list, so signed out it can only ever be empty —
-  // an option that looks broken rather than one that says something.
-  it('drops the My positions filter when signed out', async () => {
+  // GEO-2725. Both are viewer-relative: "My positions" is the viewer's own list, and "Debate now"
+  // is scored on who is available to debate *you*. Signed out neither has a subject.
+  it('drops the viewer-relative filters when signed out', async () => {
     mocks.authenticated = false;
     render(<ClaimsTab />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Featured/ }));
 
     expect(screen.queryByRole('button', { name: 'My positions' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
+    // Featured and All claims describe the corpus, so both stay.
     expect(screen.getByRole('button', { name: 'All claims' })).toBeInTheDocument();
   });
 
-  it('keeps My positions for a signed-in viewer', async () => {
+  it('keeps both for a signed-in viewer', async () => {
     render(<ClaimsTab />);
 
     fireEvent.click(await screen.findByRole('button', { name: /Featured/ }));
 
     expect(screen.getByRole('button', { name: 'My positions' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Debate now' })).toBeInTheDocument();
   });
 });

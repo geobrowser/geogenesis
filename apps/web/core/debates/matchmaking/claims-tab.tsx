@@ -61,11 +61,21 @@ const FILTER_OPTIONS: HubFilterOption<ClaimsTabFilter>[] = [
 ];
 
 /**
- * "My positions" is the viewer's own list, so signed out it can only ever be empty — an option that
- * looks broken rather than one that says something. The rest describe the corpus and still answer.
+ * The two viewer-relative filters leave the menu signed out.
+ *
+ * "My positions" is the viewer's own list, so it could only ever come back empty. "Debate now" is
+ * viewer-relative in a less obvious way — geo-chat scores it on who is available to debate *you*,
+ * excluding anyone you are already pair-blocked with — so with no viewer it is not a stricter
+ * "all claims" but a question with no subject.
+ *
+ * Featured and All claims describe the corpus rather than the viewer, and both still answer.
  */
+const SIGNED_OUT_HIDDEN_FILTERS: ClaimsTabFilter[] = ['mine', 'debate_now'];
+
 function filterOptionsFor(authenticated: boolean) {
-  return authenticated ? FILTER_OPTIONS : FILTER_OPTIONS.filter(option => option.value !== 'mine');
+  return authenticated
+    ? FILTER_OPTIONS
+    : FILTER_OPTIONS.filter(option => !SIGNED_OUT_HIDDEN_FILTERS.includes(option.value));
 }
 
 /** Stable identity so the geo-chat lookups don't restart on every render of a non-featured list. */
