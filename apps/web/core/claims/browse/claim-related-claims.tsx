@@ -39,11 +39,20 @@ const RELATED_PAGE_SIZE = 4;
  * Each page is ranked the way the explore page's "Best" sort ranks everything else, over the rows
  * that page holds.
  *
- * Within the page, deliberately. The ranking helper takes a bounded set of ids, and the query
- * behind it warns against opening the ranking to a scan — an unfiltered ranked connection is
- * several times slower than the filtered one. So the corpus order stays the server's and Best
- * decides what leads the page the reader is looking at. Ranking the whole topic would need the
- * ranked connection to page, which is a server-side change rather than a caller's.
+ * Within the page, and not for want of trying. The obvious better shape is to ask the ranked
+ * connection itself for topic-filtered claims — it takes `spaceIds`, `typeIds`, a `filter` and a
+ * cursor, so on paper it returns the whole topic in Best order with paging built in. Measured
+ * against testnet it does not:
+ *
+ *   * unfiltered, the ranked connection answers in ~0.3s in genuine ranking order
+ *   * with a `relations` filter it takes ~17s, and the rows come back in *id* order — the ranking
+ *     is not applied once the query leaves the ranking index
+ *   * with that filter and `pageInfo` it exceeds the statement timeout outright
+ *
+ * So a topic-filtered ranked query would be slow, and would not even be Best. `claims-best-order`
+ * works because it narrows to a bounded set of ids already in hand, which is a lookup rather than
+ * a scan — the distinction its own comment draws. Ranking a whole topic needs the ranking index to
+ * cover the filter, which is a server-side change rather than a caller's.
  */
 export function ClaimRelatedClaims({
   claimId,
