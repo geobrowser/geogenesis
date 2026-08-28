@@ -38,6 +38,7 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
     topicId,
     first: COVERAGE_PAGE_SIZE,
     after: pages.cursor,
+    rankInSpaceId: spaceId,
   });
 
   // Claims are filtered here rather than excluded in the query: the store's filter has no "not this
@@ -60,7 +61,8 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
       <Text as="h2" variant="smallTitle" color="text" className="mb-3 block">
         Coverage
       </Text>
-      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+      {/* Divided rows rather than bordered cards, matching the explore feed's list rhythm. */}
+      <ul className="m-0 flex list-none flex-col divide-y divide-divider p-0">
         {coverage.map(entity => (
           <li key={entity.id}>
             <CoverageRow entity={entity} spaceId={spaceId} />
@@ -78,6 +80,15 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
   );
 }
 
+/**
+ * One row, built to the explore feed card's shape — same title size and weight, same two-line
+ * clamped description, same dot-separated meta line — so a topic's coverage reads as the same kind
+ * of listing the explore feed already trained people on.
+ *
+ * No thumbnail. The explore card leads with a 60px image, and resolving one here would be a media
+ * lookup per row on a list of eight; the type is the more useful leading signal on a feed that
+ * mixes episodes, tweets and documents.
+ */
 function CoverageRow({ entity, spaceId }: { entity: Entity; spaceId: string }) {
   const kind = primaryTypeName(entity);
   // The row's own space where it has one, so a link from a topic doesn't drop the reader into a
@@ -85,25 +96,18 @@ function CoverageRow({ entity, spaceId }: { entity: Entity; spaceId: string }) {
   const href = NavUtils.toEntity(entity.spaces[0] ?? spaceId, entity.id);
 
   return (
-    <Link
-      href={href}
-      className="flex items-start gap-3 rounded-lg border border-grey-02 bg-white p-3 transition-colors hover:border-grey-03"
-    >
-      {kind && (
-        <span className="mt-0.5 shrink-0 rounded-xs bg-grey-01 px-1.5 py-0.5 text-[0.6875rem] font-medium tracking-wide text-grey-04 uppercase">
-          {kind}
-        </span>
+    <Link href={href} className="flex min-w-0 flex-col gap-1 py-3">
+      <h3 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text hover:underline">
+        {entity.name}
+      </h3>
+      {entity.description && (
+        <p className="line-clamp-2 text-[16px] leading-[20px] tracking-[-0.03em] text-grey-04">{entity.description}</p>
       )}
-      <div className="flex min-w-0 flex-col gap-0.5">
-        <Text as="span" variant="metadataMedium" color="text">
-          {entity.name}
-        </Text>
-        {entity.description && (
-          <Text as="span" variant="metadata" color="grey-04" className="line-clamp-1">
-            {entity.description}
-          </Text>
-        )}
-      </div>
+      {kind && (
+        <div className="mt-0.5 flex items-center text-metadata text-grey-04">
+          <span>{kind}</span>
+        </div>
+      )}
     </Link>
   );
 }

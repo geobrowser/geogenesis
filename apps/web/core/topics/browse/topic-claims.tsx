@@ -29,6 +29,7 @@ export function TopicClaims({ topicId, spaceId }: { topicId: string; spaceId: st
     typeIds: [CLAIM_TYPE_ID],
     first: CLAIMS_PAGE_SIZE,
     after: pages.cursor,
+    rankInSpaceId: spaceId,
   });
 
   const claims = React.useMemo(() => entities.filter(entity => entity.name), [entities]);

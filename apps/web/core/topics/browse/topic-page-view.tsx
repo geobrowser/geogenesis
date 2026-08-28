@@ -5,7 +5,7 @@ import * as React from 'react';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { CURATED_TOPIC_TAG_ID, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
 import { ID } from '~/core/id';
-import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
+import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -17,9 +17,10 @@ import { CommentSection } from '~/partials/comments/comments-section';
 
 import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
 import { TopicClaims } from './topic-claims';
+import { TopicComposition } from './topic-composition';
 import { TopicCoverage } from './topic-coverage';
 import { TopicDebates } from './topic-debates';
-import { TopicVoices } from './topic-voices';
+import { useTopicAncestors } from './use-topic-ancestors';
 
 /** Subtopic chips shown before the rest collapse into a count. */
 const SUBTOPIC_CHIP_CAP = 8;
@@ -74,15 +75,9 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
     [entity?.relations]
   );
 
-  // The topic this one sits under, for the crumb above the title. Topics form a hierarchy through
-  // the same relation, so the parent is whoever names this topic as a subtopic.
-  const { entities: parents } = useQueryEntities({
-    where: {
-      relations: [{ typeOf: { id: { equals: SUBTOPIC_RELATION_TYPE_ID } }, toEntity: { id: { equals: entityId } } }],
-    },
-    first: 1,
-  });
-  const parent = parents[0] ?? null;
+  // The whole path down to this topic, not just the rung above it — a topic can sit several levels
+  // deep, and showing one parent reads as though the hierarchy is flat.
+  const ancestors = useTopicAncestors(entityId);
 
   if (isLoading && !entity) {
     return (
@@ -99,13 +94,24 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
     <div className="@container">
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-6 @[560px]:gap-8 @[560px]:px-5 @[560px]:py-8">
         <header className="flex flex-col gap-3">
-          {parent && (
-            <Link
-              href={NavUtils.toEntity(parent.spaces[0] ?? spaceId, parent.id)}
-              className="w-fit text-metadata text-grey-04 transition-colors hover:text-text"
-            >
-              {parent.name}
-            </Link>
+          {ancestors.length > 0 && (
+            <nav aria-label="Topic path" className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              {ancestors.map((ancestor, index) => (
+                <React.Fragment key={ancestor.id}>
+                  {index > 0 && (
+                    <span aria-hidden className="text-metadata text-grey-03">
+                      ›
+                    </span>
+                  )}
+                  <Link
+                    href={NavUtils.toEntity(ancestor.spaces[0] ?? spaceId, ancestor.id)}
+                    className="text-metadata text-grey-04 transition-colors hover:text-text"
+                  >
+                    {ancestor.name ?? ancestor.id}
+                  </Link>
+                </React.Fragment>
+              ))}
+            </nav>
           )}
 
           <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
@@ -124,6 +130,8 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
           </div>
         </header>
 
+        <TopicComposition topicId={entityId} />
+
         <TopicSubtopics subtopics={subtopics} spaceId={spaceId} />
 
         <TopicDebates topicId={entityId} spaceId={spaceId} />
@@ -131,8 +139,6 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
         <TopicClaims topicId={entityId} spaceId={spaceId} />
 
         <TopicCoverage topicId={entityId} spaceId={spaceId} />
-
-        <TopicVoices topicId={entityId} spaceId={spaceId} />
 
         <CommentSection entityId={entityId} spaceId={spaceId} />
       </div>

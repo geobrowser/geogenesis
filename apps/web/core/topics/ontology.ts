@@ -23,3 +23,15 @@ export const GUESTS_PROPERTY_ID = 'cb60a1a66fb548c9b936200c5c271330';
  * rather than a client one and is flagged on GEO-2722; when it is resolved this should go.
  */
 export const UNNAMED_SUBTOPIC_PROPERTY_ID = '4b5bbddf32b247bab0a6dbbab27f457d';
+
+/**
+ * Content types counted in the composition strip.
+ *
+ * Only the buckets worth naming: measured across topics these are the ones that reach double
+ * figures, and everything else — articles, official documents, papers, datasets, organizations —
+ * runs to one or two links on any given topic and is counted as a remainder instead.
+ */
+export const EPISODE_TYPE_ID = '972d201ad78045689e01543f67b26bee';
+export const NEWS_STORY_TYPE_ID = 'e550fe517e904b2c8fffdf13408f5634';
+export const TWEET_TYPE_ID = 'd6f0506def324d8e9de4976b986e78ec';
+export const POST_TYPE_ID = 'f3d4461486b74d2583d89709c9d84f65';

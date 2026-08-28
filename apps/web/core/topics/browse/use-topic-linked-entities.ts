@@ -5,6 +5,7 @@ import { keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
@@ -16,9 +17,17 @@ import type { Entity } from '~/core/types';
  * section here is the same query narrowed by the type of thing doing the pointing. Claims, episodes,
  * news stories, tweets and official documents all arrive this way.
  *
- * Newest first. The ranked "Best" order would be the better sequence and cannot be used: a
- * topic-filtered ranked query returns rows in id order and takes ~17s (GEO-2720). Recency is the
- * honest fallback until that is fixed.
+ * Ranked by the explore feed's "Best" order, applied to each page.
+ *
+ * Within the page, not across the corpus: asking the ranked connection for a topic-filtered set
+ * returns rows in id order and takes ~17s (GEO-2720), so the ranking can only be applied to ids
+ * already in hand. `claims-best-order` does exactly that, and works on any entity rather than only
+ * claims — anything the feed has scored ranks, and anything it hasn't keeps the server's order
+ * behind the scored ones.
+ *
+ * A page is only handed back once its ranking is known. The rows and the ranking are two requests,
+ * and returning on the first would show a page in the server's order and resequence it under the
+ * reader a moment later — the bug this same pattern fixed on the claim page.
  */
 export function useTopicLinkedEntities({
   topicId,
@@ -26,6 +35,7 @@ export function useTopicLinkedEntities({
   first,
   after,
   enabled = true,
+  rankInSpaceId,
 }: {
   topicId: string;
   /** Narrows to these types. Omit for everything that names the topic. */
@@ -33,6 +43,8 @@ export function useTopicLinkedEntities({
   first: number;
   after?: string;
   enabled?: boolean;
+  /** The space the ranking is read in. Ranking is space-scoped; omit to leave the page unranked. */
+  rankInSpaceId?: string | null;
 }) {
   const where = React.useMemo(
     () => ({
@@ -42,7 +54,13 @@ export function useTopicLinkedEntities({
     [topicId, typeIds]
   );
 
-  const { entities, isLoading, isPlaceholderData, endCursor, hasNextPage } = useQueryEntities({
+  const {
+    entities: page,
+    isLoading,
+    isPlaceholderData,
+    endCursor,
+    hasNextPage,
+  } = useQueryEntities({
     where,
     first,
     after,
@@ -53,7 +71,33 @@ export function useTopicLinkedEntities({
     enabled,
   });
 
-  return { entities: entities as Entity[], isLoading, isPlaceholderData, endCursor, hasNextPage };
+  const pageIds = React.useMemo(() => page.map(entity => entity.id), [page]);
+  const { rankByClaimId, isReady: isRankReady } = useClaimsBestOrder(
+    rankInSpaceId ? pageIds : [],
+    rankInSpaceId ?? null
+  );
+  const ordered = React.useMemo(() => sortClaimsByBest(page as Entity[], rankByClaimId), [page, rankByClaimId]);
+
+  const [committed, setCommitted] = React.useState<Entity[]>([]);
+  React.useEffect(() => {
+    if (!isRankReady) return;
+    setCommitted(current => (sameOrder(current, ordered) ? current : ordered));
+  }, [isRankReady, ordered]);
+
+  return {
+    entities: committed,
+    /** The page as fetched, before ranking — for callers asking "did this page hold anything". */
+    rawEntities: page as Entity[],
+    isLoading: isLoading || !isRankReady,
+    isPlaceholderData,
+    endCursor,
+    hasNextPage,
+  };
+}
+
+/** Whether two pages hold the same rows in the same sequence, so state isn't replaced needlessly. */
+function sameOrder(left: Entity[], right: Entity[]) {
+  return left.length === right.length && left.every((entity, index) => entity.id === right[index]?.id);
 }
 
 /** The first type with a name, which is what a row shows as its kind. */
