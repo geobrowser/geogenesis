@@ -60,13 +60,10 @@ import { useScopedMatchmakingClaims } from '~/core/debates/matchmaking/use-scope
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
-import { useClaimDebateReadiness } from '~/core/debates/use-claim-debate-readiness';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
-
-import { RematchVoicePill } from './rematch-voice';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
@@ -78,6 +75,8 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
+
+import { RematchVoicePill } from './rematch-voice';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -1550,18 +1549,6 @@ function RematchClaimCard({
   // opt-in could stand the viewer up on a claim the switch is refusing.
   const activeDebate = false;
 
-  useReadinessOnFirstPosition({
-    claim: claim.claim,
-    readiness,
-    canEnable: !activeDebate,
-    localPosition,
-    // The optimistic copy exists only while this client's own submission is in flight, so it is
-    // what separates "the viewer just picked this side" from "we just learned the side they already
-    // held" — which is what a position looks like when their identity or geo-chat's copy lands late.
-    pickedHere: optimisticResponse !== undefined,
-    alreadyReady: claimReadiness?.viewer_debate_ready ?? false,
-  });
-
   return (
     <MatchmakingClaimCard
       claim={claim.claim}
@@ -1612,63 +1599,6 @@ function RematchClaimCard({
       }
     />
   );
-}
-
-/**
- * Taking a side here means you want to debate this claim, so readiness follows rather than being a
- * second step the viewer has to find. Deliberately local to the picker: the hub's Claims tab keeps
- * the two separate, where browsing and standing ready really are different intents.
- *
- * Only a side picked while the picker is open counts. Opting in for positions already held on
- * arrival would fire a write per claim on load, and would silently undo a stand-down the viewer
- * made somewhere else. Switching sides doesn't re-fire either, for the same reason.
- *
- * Recorded through the card's own readiness intent rather than sent from here. The two would
- * otherwise both stand the viewer up on the same claim — the switch holds an intent through
- * publishing now, so a viewer who took a side and pressed it would have queued twice — and the
- * intent already owns the wait for geo-chat to catch up, which this used to duplicate.
- */
-function useReadinessOnFirstPosition({
-  claim,
-  readiness,
-  canEnable,
-  localPosition,
-  pickedHere,
-  alreadyReady,
-}: {
-  claim: DebateClaimSummary;
-  readiness: MatchmakingReadiness;
-  /** Must match what the card's switch gates on, so the two can't disagree about the same claim. */
-  canEnable: boolean;
-  localPosition: boolean | null;
-  /** Whether {@link localPosition} is this client's own in-flight submission. */
-  pickedHere: boolean;
-  alreadyReady: boolean;
-}) {
-  const { setReady } = useClaimDebateReadiness({
-    readiness,
-    entityId: claim.claim_entity_id,
-    spaceId: claim.space_id,
-    canEnable,
-  });
-  // Seeded with the position held on mount, so arriving with one is not a transition.
-  const previousPosition = React.useRef(localPosition);
-  const optedIn = React.useRef(false);
-
-  React.useEffect(() => {
-    const previous = previousPosition.current;
-    previousPosition.current = localPosition;
-
-    const justEstablished = previous === null && localPosition !== null;
-    // A position can appear without anyone picking anything: the viewer's id resolves a beat after
-    // mount, or geo-chat's copy of a claim they had already answered lands late. Both look exactly
-    // like a fresh pick from here, and standing them ready for either silently undoes a stand-down
-    // they made elsewhere — the thing this hook is careful not to do.
-    if (!justEstablished || !pickedHere || alreadyReady || optedIn.current) return;
-
-    optedIn.current = true;
-    setReady(true);
-  }, [alreadyReady, localPosition, pickedHere, setReady]);
 }
 
 /** One curated block, collapsible so a long page of recommendations stays scannable. */

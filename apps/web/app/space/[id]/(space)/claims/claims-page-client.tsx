@@ -14,7 +14,6 @@ import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublishedInSpace } from '~/core/claims/publish';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
-import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import {
@@ -80,10 +79,6 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
     }
     return map;
   }, [debateClaimsQuery.data?.claims]);
-  const activeDebates = React.useMemo(
-    () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_debate ? [claim.active_debate] : [])),
-    [debateClaimsQuery.data?.claims]
-  );
   const responseKindsByEntityId = React.useMemo(
     () =>
       new Map(
@@ -135,7 +130,6 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
             claims={claims}
             isLoading={isLoading}
             spaceId={spaceId}
-            debateJoinBlocked={activeDebates.length > 0}
             debateClaimsByEntityId={debateClaimsByEntityId}
             responseKindsByEntityId={responseKindsByEntityId}
             debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
@@ -255,7 +249,6 @@ function ClaimsList({
   claims,
   isLoading,
   spaceId,
-  debateJoinBlocked,
   debateClaimsByEntityId,
   responseKindsByEntityId,
   debateStatus,
@@ -263,7 +256,6 @@ function ClaimsList({
   claims: Entity[];
   isLoading: boolean;
   spaceId: string;
-  debateJoinBlocked: boolean;
   debateClaimsByEntityId: Map<string, DebateClaim>;
   responseKindsByEntityId: Map<string, 'stance' | 'veracity'>;
   debateStatus: string | null;
@@ -301,7 +293,6 @@ function ClaimsList({
           key={claim.id}
           claim={claim}
           spaceId={spaceId}
-          debateJoinBlocked={debateJoinBlocked}
           debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
           responseKind={responseKindsByEntityId.get(claim.id) ?? claimResponseKind(claim, spaceId)}
         />
@@ -324,13 +315,11 @@ function ClaimsList({
 function ClaimListItem({
   claim,
   spaceId,
-  debateJoinBlocked,
   debateClaim,
   responseKind,
 }: {
   claim: Entity;
   spaceId: string;
-  debateJoinBlocked: boolean;
   debateClaim: DebateClaim | null;
   responseKind: 'stance' | 'veracity';
 }) {
@@ -388,16 +377,10 @@ function ClaimListItem({
         readiness={readiness}
         activeDebate={activeDebate}
         footer={
-          <div className="mt-3 flex items-center justify-between gap-3 border-t border-divider pt-3">
-            <ClaimDebateReadiness
-              compact
-              debateClaim={debateClaim}
-              entityId={claim.id}
-              spaceId={spaceId}
-              canEnable={!activeDebate && !debateJoinBlocked}
-            />
-            <ClaimDebateStatus debateClaim={debateClaim} published={published} />
-          </div>
+          /* The readiness switch is gone from here too: a response now carries readiness with it,
+             so a switch would contradict the rule rather than express it. What is left is the one
+             thing this page knows that the rule does not — whether a debate is already under way. */
+          <ClaimDebateStatus debateClaim={debateClaim} published={published} />
         }
       />
     </div>

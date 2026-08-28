@@ -129,7 +129,7 @@ export function ClaimExploreFeedCard({
   const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
 
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-  const sourceCount = useSourceCount(entity?.relations);
+  const sources = useSources(entity?.relations);
   const topicIds = useTopicIds(entity?.relations);
 
   return (
@@ -148,7 +148,7 @@ export function ClaimExploreFeedCard({
         `md:` rules narrow it. Container queries are not an option here: nothing in the explore feed
         establishes a container, so a `@[640px]:` variant would silently never apply.
       */}
-      <div className="grid grid-cols-[minmax(0,1fr)_186px] gap-x-9 md:grid-cols-1 md:gap-y-4">
+      <div className="grid grid-cols-[minmax(0,1fr)_220px] gap-x-9 md:grid-cols-1 md:gap-y-4">
         <div className="col-start-1 row-start-1 mb-3 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 md:mb-0">
           {!hideSpaceLink ? (
             <Link
@@ -221,10 +221,11 @@ export function ClaimExploreFeedCard({
               summary={summary}
             />
           )}
+          <ClaimSources count={sources.count} names={sources.names} spaceId={item.spaceId} entityId={item.entityId} />
         </div>
       </div>
 
-      <ClaimCardActions item={item} enabled={nearViewport} sourceCount={sourceCount} topicIds={topicIds} />
+      <ClaimCardActions item={item} enabled={nearViewport} topicIds={topicIds} />
     </article>
   );
 }
@@ -253,14 +254,14 @@ function ClaimVerdictColumn({
 
   if (tier === 'invite') {
     return (
-      <>
+      <div className="md:flex md:flex-wrap md:items-baseline md:gap-x-1.5">
         <Text as="p" variant="metadataMedium" color="text" className="leading-snug">
           Nobody has answered yet
         </Text>
-        <Text as="p" variant="metadata" color="grey-04" className="mt-2">
+        <Text as="p" variant="metadata" color="grey-04" className="mt-2 md:mt-0">
           Be the first to {copy.positiveAction.toLowerCase()} it.
         </Text>
-      </>
+      </div>
     );
   }
 
@@ -279,12 +280,29 @@ function ClaimVerdictColumn({
 
   const percent = summary.percent ?? 0;
 
+  // One line, then the bar. The share and its verb share a baseline, the faces sit at the far end
+  // of that same line, and the bar runs underneath the width of the column.
+  //
+  // This is now the same arrangement at both widths, which it did not start as: the rail had a
+  // stack and the phone had a band. Two layouts for four elements was one more than the content
+  // justified, and the condensed line turned out to read better in the rail too — the number keeps
+  // its size, the label stops taking a line of its own, and the bar gets the full width to be read
+  // across instead of competing with the faces beside it.
   return (
-    <>
-      <div className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums">{percent}%</div>
-      <Text as="p" variant="metadata" color="grey-04" className="mt-1.5">
-        {copy.positiveAction.toLowerCase()}
-      </Text>
+    <div>
+      <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+        <span className="flex items-baseline gap-1.5">
+          <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums">
+            {percent}%
+          </span>
+          <Text as="span" variant="metadata" color="grey-04">
+            {copy.positiveAction.toLowerCase()}
+          </Text>
+        </span>
+        {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
+            what kind of claim this is rather than adding a second voice to the split. */}
+        <span className="shrink-0">{responders}</span>
+      </div>
       <div
         className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-grey-01"
         role="img"
@@ -293,10 +311,7 @@ function ClaimVerdictColumn({
         <span className="bg-green" style={{ width: `${percent}%` }} />
         <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
       </div>
-      {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
-          what kind of claim this is rather than adding a second voice to the split. */}
-      <div className="mt-3">{responders}</div>
-    </>
+    </div>
   );
 }
 
@@ -310,20 +325,17 @@ function ClaimVerdictColumn({
  * it makes the numbers worth pressing without inventing a second panel UX, and deep-linking to the
  * right section of the claim page is the obvious follow-up.
  *
- * All of it left-aligned in one run, Share last. Sources used to be pushed to the far right, which
- * looked composed on a busy claim and stranded on an ordinary one — two lone items at opposite ends
- * with nothing between them. A row that simply gets shorter reads as having less to say; a row that
- * holds its ends open reads as having lost something.
+ * All of it left-aligned in one run, Share last. Sources used to sit here too, pushed to the far
+ * right — which looked composed on a busy claim and stranded on an ordinary one. They have moved
+ * under the bar in the verdict column, where there is room to name them rather than count them.
  */
 function ClaimCardActions({
   item,
   enabled,
-  sourceCount,
   topicIds,
 }: {
   item: ExploreFeedItem;
   enabled: boolean;
-  sourceCount: number;
   topicIds: string[];
 }) {
   const { openSidePanel } = useEntitySidePanel();
@@ -360,7 +372,7 @@ function ClaimCardActions({
   const actionClassName = 'inline-flex items-center gap-1.5 text-[14px] text-grey-04 transition-colors hover:text-text';
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-divider pt-3">
       {debateCount ? (
         <button
           type="button"
@@ -386,22 +398,6 @@ function ClaimCardActions({
           <span className="tabular-nums">{item.commentCount}</span>
         </Link>
       ) : null}
-      {/* Clickable, like everything else in this row. It counts real articles the claim was lifted
-          from, and a count you cannot follow is a count that raises a question and refuses to
-          answer it. Opens the claim, where `ClaimProvenance` names them — the same holding pattern
-          the debate and related-claim counts use until the side panel gets a proper destination. */}
-      {sourceCount > 0 ? (
-        <button
-          type="button"
-          onClick={open}
-          aria-label={`${sourceCount} ${sourceCount === 1 ? 'source' : 'sources'} for this claim`}
-          className={actionClassName}
-        >
-          <span className="tabular-nums">
-            {sourceCount} {sourceCount === 1 ? 'source' : 'sources'}
-          </span>
-        </button>
-      ) : null}
       <button type="button" onClick={open} className={actionClassName}>
         <ExploreShareIcon />
         <span>Share</span>
@@ -423,15 +419,21 @@ function countLabel(shown: number, hasMore: boolean): string | null {
  * near-identical article titles pointing at one event. Counting the relations rather than their
  * targets would report corroboration that isn't there.
  */
-function useSourceCount(relations: Relation[] | undefined): number {
+function useSources(relations: Relation[] | undefined): { count: number; names: string[] } {
   return React.useMemo(() => {
-    const ids = new Set<string>();
+    // Deduped by target: the same story reaches the graph more than once, and the sample contains
+    // near-identical article titles pointing at one event. Counting relations rather than their
+    // targets would report corroboration that is not there.
+    const byId = new Map<string, string | null>();
     for (const relation of relations ?? []) {
       if (relation.isDeleted === true) continue;
       if (!ID.equals(relation.type.id, SOURCES_PROPERTY_ID)) continue;
-      ids.add(relation.toEntity.id.toLowerCase());
+      const id = relation.toEntity.id.toLowerCase();
+      if (!byId.has(id)) byId.set(id, relation.toEntity.name);
     }
-    return ids.size;
+
+    const names = [...byId.values()].filter((name): name is string => Boolean(name));
+    return { count: byId.size, names };
   }, [relations]);
 }
 
@@ -442,5 +444,60 @@ function useTopicIds(relations: Relation[] | undefined): string[] {
         .filter(relation => relation.isDeleted !== true && ID.equals(relation.type.id, TOPICS_PROPERTY_ID))
         .map(relation => relation.toEntity.id),
     [relations]
+  );
+}
+
+/**
+ * Where the claim came from, under the split it belongs to.
+ *
+ * Named rather than counted. A bare "3 sources" in the actions row raised the obvious question and
+ * declined to answer it; the column has the room to say who, and the names are the part worth
+ * reading — three outlets reporting the same thing independently is corroboration, and corroboration
+ * you cannot see the shape of is just a number.
+ *
+ * Two outlets shown, the rest as an overflow. Measured against testnet, 39% of claims carry a source
+ * and 45% of those carry more than one, up to seven — so the plural case is ordinary and the long
+ * tail is real, which is why this truncates rather than wrapping to four lines in a 220px column.
+ *
+ * Opens the claim, where `ClaimProvenance` lists them in full — the same holding pattern the debate
+ * and related-claim counts use until the side panel gets a proper destination.
+ */
+function ClaimSources({
+  count,
+  names,
+  spaceId,
+  entityId,
+}: {
+  count: number;
+  names: string[];
+  spaceId: string;
+  entityId: string;
+}) {
+  const { openSidePanel } = useEntitySidePanel();
+
+  if (count === 0) return null;
+
+  const shown = names.slice(0, 2);
+  const overflow = count - shown.length;
+
+  return (
+    <button
+      type="button"
+      onClick={() => openSidePanel(entityId, spaceId, false)}
+      aria-label={`${count} ${count === 1 ? 'source' : 'sources'} for this claim`}
+      className="mt-3 block w-full text-left text-grey-04 transition-colors hover:text-text"
+    >
+      <span className="block text-footnoteMedium tabular-nums">
+        {count} {count === 1 ? 'source' : 'sources'}
+      </span>
+      {shown.length > 0 ? (
+        // Clamped rather than truncated to one line: an outlet name cut mid-word says less than two
+        // names and a count of what is left.
+        <span className="mt-0.5 line-clamp-2 block text-footnote">
+          {shown.join(' · ')}
+          {overflow > 0 ? ` +${overflow}` : ''}
+        </span>
+      ) : null}
+    </button>
   );
 }

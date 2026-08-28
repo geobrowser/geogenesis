@@ -6,7 +6,6 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateClaim } from '~/core/debates/api';
-import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -156,7 +155,6 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
           responseKind={responseKind}
           summary={summary}
           row={row}
-          isRowLoading={rowQuery.isLoading}
         />
 
         <ClaimDebates claimId={entityId} spaceId={spaceId} responseKind={responseKind} />
@@ -193,7 +191,6 @@ function ClaimPositionSection({
   responseKind,
   summary,
   row,
-  isRowLoading,
 }: {
   entityId: string;
   spaceId: string;
@@ -202,7 +199,6 @@ function ClaimPositionSection({
   summary: ClaimResponseSummary;
   /** geo-chat's row, or null — which for a claim nobody has answered is a settled answer. */
   row: DebateClaim | null;
-  isRowLoading: boolean;
 }) {
   const claim = React.useMemo(
     () => ({
@@ -240,22 +236,12 @@ function ClaimPositionSection({
 
   return (
     <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
-      {/* Label left, readiness switch right — the same header shape the hub's claim card uses, so
-          the control sits where someone who has used the panel already expects it. `items-start`
-          so the label stays put when the switch stacks an explanation beneath it. */}
-      <div className="mb-2.5 flex items-start justify-between gap-3">
-        <Text as="div" variant="metadataMedium" color="grey-04">
-          Your position
-        </Text>
-        <ClaimDebateReadiness
-          debateClaim={row}
-          entityId={entityId}
-          spaceId={spaceId}
-          canEnable={!row?.active_debate}
-          isLoading={isRowLoading}
-          compact
-        />
-      </div>
+      {/* No readiness switch. Taking a side now stands the viewer ready by itself — see
+          `useAutoDebateReadiness` — so a switch here would show on, refuse to stay off, and make a
+          liar of itself the moment anyone tried. */}
+      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-2.5 block">
+        Your position
+      </Text>
       <PositionRow
         positions={control.optimisticPositions}
         responseKind={readiness.response_kind}

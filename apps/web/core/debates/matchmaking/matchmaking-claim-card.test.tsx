@@ -50,6 +50,10 @@ vi.mock('../hooks', () => ({
 // The end slot asks the hub whether there is a debate to be had. That is one shared query at
 // runtime and a whole auth stack in a test, so it is mocked at the hook rather than under it —
 // `mocks.match` is what decides whether the slot offers anything.
+vi.mock('~/core/debates/use-auto-debate-readiness', () => ({
+  useAutoDebateReadiness: () => {},
+}));
+
 vi.mock('~/core/claims/browse/use-claim-matchup', () => ({
   useClaimMatchup: () => ({
     match: mocks.match,

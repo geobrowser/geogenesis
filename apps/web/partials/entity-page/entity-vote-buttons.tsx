@@ -579,11 +579,14 @@ export function RespondersPopoverContent({
 
   return (
     <div className="max-h-[356px] overflow-y-auto">
+      {/* The verb, not the noun. Every control on a claim says Agree and Disagree, so a list that
+          heads its sections "Agreements" and "Disagreements" makes the reader translate on arrival
+          — and "Verifications"/"Disputes" reads stranger still beside a button marked Verify. */}
       {positiveResponders.length > 0 && (
-        <ResponderSection label={copy.positiveSection} responders={positiveResponders} />
+        <ResponderSection label={copy.positiveAction} responders={positiveResponders} />
       )}
       {negativeResponders.length > 0 && (
-        <ResponderSection label={copy.negativeSection} responders={negativeResponders} />
+        <ResponderSection label={copy.negativeAction} responders={negativeResponders} />
       )}
     </div>
   );

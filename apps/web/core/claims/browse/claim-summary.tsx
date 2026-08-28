@@ -1,12 +1,21 @@
 'use client';
 
 import * as Popover from '@radix-ui/react-popover';
+import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import cx from 'classnames';
+import { Effect } from 'effect';
 
-import { ENTITY_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
+import { getEntityResponders } from '~/core/io/queries';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import {
+  ENTITY_RESPONSE_COPY,
+  type ResponseKind,
+  entityResponderProfilesQueryKey,
+  entityRespondersQueryKey,
+} from '~/core/responses/entity-response';
 
 import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
@@ -132,6 +141,7 @@ export function ClaimResponders({
   label: string;
 }) {
   const [open, setOpen] = React.useState(false);
+  const warm = useWarmResponders(entityId, spaceId, responseKind);
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -140,6 +150,13 @@ export function ClaimResponders({
           type="button"
           title={label}
           aria-label={label}
+          // Opening used to be the first anyone asked, and the list is two round trips deep — who
+          // responded, then who those people are — so it sat on a spinner for both. Hover, focus and
+          // touch are the earliest honest signals of intent, and by the time the popover mounts the
+          // cache usually has both. Nothing is fetched for a card merely scrolled past.
+          onMouseEnter={warm}
+          onFocus={warm}
+          onTouchStart={warm}
           className="flex shrink-0 items-center rounded transition-opacity hover:opacity-80"
         >
           <ClaimResponderAvatars
@@ -170,4 +187,44 @@ export function ClaimResponders({
       </Popover.Portal>
     </Popover.Root>
   );
+}
+
+/**
+ * Fetch the responder list and its profiles before the reader asks for them.
+ *
+ * The same query keys and functions `RespondersPopoverContent` uses, so this warms its cache rather
+ * than becoming a second source, and it is idempotent — both calls are no-ops against fresh data.
+ *
+ * The two requests are sequential by necessity: the profile lookup is keyed on the ids the first one
+ * returns. That is exactly why warming helps. Opening the popover cold meant waiting out a chain two
+ * requests deep, and a list of faces is not worth a spinner that long.
+ */
+function useWarmResponders(entityId: string, spaceId: string, responseKind: ResponseKind) {
+  const queryClient = useQueryClient();
+
+  return React.useCallback(() => {
+    void queryClient
+      .fetchQuery({
+        queryKey: entityRespondersQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
+        queryFn: () =>
+          Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)),
+        staleTime: 30_000,
+      })
+      .then(responders => {
+        const spaceIds = responders?.map(responder => responder.userId) ?? [];
+        if (spaceIds.length === 0) return;
+
+        return queryClient.prefetchQuery({
+          queryKey: [
+            ...entityResponderProfilesQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
+            spaceIds,
+          ],
+          queryFn: () => Effect.runPromise(fetchProfilesBySpaceIds(spaceIds)),
+          staleTime: 30_000,
+        });
+      })
+      // A warm-up that fails is not a failure the reader should hear about — opening the popover
+      // asks again and reports it there.
+      .catch(() => {});
+  }, [entityId, queryClient, responseKind, spaceId]);
 }
