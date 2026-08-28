@@ -29,9 +29,14 @@ export function viewRendersAllEntries(view: DataBlockView): boolean {
  *
  * Equally, this must not key on anything the query ignores. `filterStateKey` would be wrong for
  * that reason: it carries display names resolved asynchronously, so a name arriving would discard
- * the user's accumulated pages for a query that never changed. The filter *mode* is likewise
- * absent: it is an input to `filterStateToWhere`, so `whereKey` already covers it, and keying on it
- * separately would let this reset fire for a query that never changed.
+ * the user's accumulated pages for a query that never changed.
+ *
+ * The filter *mode* is absent for the same reason, though not because `whereKey` encodes it — it
+ * does not. `filterStateToWhere` returns before reading the mode for zero or one filter, and
+ * ignores it for single-filter groups. In exactly those cases `where` is unchanged, so the query
+ * and its result set are unchanged and no reset is warranted; where the mode does change `where`,
+ * `whereKey` picks it up. Keying on the mode directly would reset accumulation for queries that
+ * never changed.
  */
 export function buildAccumulationResetKey(input: {
   isInfiniteScroll: boolean;

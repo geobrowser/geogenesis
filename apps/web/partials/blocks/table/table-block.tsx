@@ -989,7 +989,7 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  if (infiniteScrollDisplay.showSentinel || infiniteScrollDisplay.showSkeleton || infiniteScrollDisplay.showRetry) {
+  if (infiniteScrollDisplay.showSentinel || infiniteScrollDisplay.showSkeleton) {
     EntriesComponent = (
       <>
         {displayEntries.length > 0 && EntriesComponent}
@@ -999,25 +999,6 @@ const ConfiguredTableBlock = ({
             <div className="h-4 w-2/3 animate-pulse rounded-sm bg-divider" />
           </div>
         )}
-        {/*
-          The live region is mounted for the whole life of the list, not only once the failure
-          happens: a region inserted together with its text is not announced by most screen
-          readers, so it has to already be in the DOM when the content appears.
-        */}
-        <div role="status" aria-live="polite" className="flex flex-col items-center text-footnote text-grey-04">
-          {infiniteScrollDisplay.showRetry && (
-            <div className="flex flex-col items-center gap-2 py-4">
-              <span>Couldn&apos;t load more results.</span>
-              <button
-                type="button"
-                onClick={() => void refetchDataBlock?.()}
-                className="text-ctaPrimary hover:underline"
-              >
-                Try again
-              </button>
-            </div>
-          )}
-        </div>
         {infiniteScrollDisplay.showSentinel && (
           <div ref={infiniteScrollSentinelRef} aria-hidden className="h-4 w-full" />
         )}
@@ -1244,6 +1225,29 @@ const ConfiguredTableBlock = ({
             <DataBlockLoadingPlaceholder view={view} items={pageSize} mediaFrame={mediaFrame} />
           ) : (
             EntriesComponent
+          )}
+          {/*
+            Sibling of the list rather than part of it, so the region is in the DOM from the moment
+            the block renders in infinite-scroll mode — through loading, and whether or not the
+            sentinel is mounted. A live region inserted in the same commit as its text is not
+            announced by most screen readers, and a first-page failure is exactly that case: no
+            rows, so no sentinel and no skeleton to have mounted a wrapper earlier.
+          */}
+          {isInfiniteScroll && (
+            <div role="status" aria-live="polite" className="flex flex-col items-center text-footnote text-grey-04">
+              {infiniteScrollDisplay.showRetry && (
+                <div className="flex flex-col items-center gap-2 py-4">
+                  <span>Couldn&apos;t load more results.</span>
+                  <button
+                    type="button"
+                    onClick={() => void refetchDataBlock?.()}
+                    className="text-ctaPrimary hover:underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
+            </div>
           )}
           {hasPagination && (
             <>

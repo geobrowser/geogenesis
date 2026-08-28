@@ -123,9 +123,9 @@ describe('resolveInfiniteScrollDisplay', () => {
 
   // Deliberately does NOT keep fetching, even though more pages exist: the sentinel would sit
   // alone in an empty container with a 1000px root margin, stay intersecting, and walk the entire
-  // source unbounded. This matches the pre-branch behaviour, and the case is not reachable in
-  // browse mode anyway — rows are only hidden from a block by `isEntityVisibleInBlock`, which acts
-  // on entities registered at creation time, and infinite scroll is off while editing.
+  // source unbounded. This matches the pre-branch behaviour. The case is rare rather than
+  // impossible: `isEntityVisibleInBlock` hides entities registered at creation time, and that
+  // registry is module-level, so it outlives the edit session that filled it.
   it('does not auto-walk when a page yields no visible rows', () => {
     expect(resolveInfiniteScrollDisplay({ ...base, hasRows: false })).toEqual({
       showSentinel: false,
