@@ -133,15 +133,13 @@ function TableBlockDropdown({
 
   // The dropdown's one scope: this property's values across the table's
   // population, paged in as the user scrolls or searches.
-  const { options, nameOf, isLoading, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } = useDropdownOptions(
-    {
-      columnId,
-      baseFilterState,
-      baseModesByColumn,
-      pinned,
-      enabled: open,
-    }
-  );
+  const { options, nameOf, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } = useDropdownOptions({
+    columnId,
+    baseFilterState,
+    baseModesByColumn,
+    pinned,
+    enabled: open,
+  });
 
   // The option list is its own scroll area (below a fixed search bar), so the
   // sentinel observes intersection with it rather than with the viewport.
@@ -190,13 +188,18 @@ function TableBlockDropdown({
     root: listEl,
   });
 
-  // The search bar hides in exactly two states: the initial fetch (nothing
-  // to search yet) and a settled short list (everything is already on
-  // screen). While more is loading behind existing items — or more pages
-  // exist — it stays, and typing always keeps it.
-  const isInitialLoading = options.length === 0 && isFetching;
+  // With no values yet and more of the population still to walk, the dropdown
+  // is scanning: one stable state (bar hidden, "Loading…") rather than a
+  // flicker on every background page. Only an exhausted walk may say the
+  // table has no values.
+  const isScanningEmpty = options.length === 0 && (isFetching || hasNextPage);
+
+  // The search bar hides in exactly two states: while scanning with nothing
+  // to search yet, and a settled short list (everything is already on
+  // screen). While more loads behind existing items — or more pages exist —
+  // it stays, and typing always keeps it.
   const isSettledShortList = !isFetching && !hasNextPage && options.length <= SEARCH_BAR_THRESHOLD;
-  const showSearch = query.length > 0 || (!isInitialLoading && !isSettledShortList);
+  const showSearch = query.length > 0 || (!isScanningEmpty && !isSettledShortList);
 
   const selectedNames = selected.map(id => nameOf(id) ?? '…');
   const pillLabel =
@@ -288,7 +291,7 @@ function TableBlockDropdown({
           )}
           {visibleOptions.length === 0 && (
             <p className="px-2 py-2 text-sm text-grey-04">
-              {isLoading || isSearchingScope ? 'Loading…' : query ? 'No matches' : 'No values in this table'}
+              {isScanningEmpty || isSearchingScope ? 'Loading…' : query ? 'No matches' : 'No values in this table'}
             </p>
           )}
           {renderedOptions.map(option => {
