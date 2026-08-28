@@ -83,10 +83,14 @@ describe('DebatesHubButton', () => {
     });
 
     it('shows the same word the button answers to', () => {
+      // No pending count, so everything the button shows is the label — the icon carries no text.
+      // Reading all of it beats picking a span: the first span is the label only until someone adds
+      // a wrapper or moves the count, and then the assertion quietly changes subject. Not selected
+      // by its class either, which would tie this to styling and to the test below that pins it.
       renderButton();
 
       const button = screen.getByRole('button');
-      const visible = button.querySelector('span')?.textContent ?? '';
+      const visible = button.textContent?.trim() ?? '';
 
       // Read back rather than asserted twice over: the point is that the two agree, whichever word
       // is chosen, so this fails if either is edited without the other.
