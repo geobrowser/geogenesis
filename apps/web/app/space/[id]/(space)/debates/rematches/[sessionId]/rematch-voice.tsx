@@ -381,10 +381,7 @@ function VoiceDockBody({
   }
 
   const localRow = (
-    <>
-      <ParticipantIdentity name="You" avatarUrl={local?.avatar_cid} avatarValue={local?.profile_space_id} />
-      <LocalAudioControls room={room} micFailure={micFailure} onMicIntentChange={onMicIntentChange} />
-    </>
+    <LocalRow local={local} room={room} micFailure={micFailure} onMicIntentChange={onMicIntentChange} />
   );
   const opponentRow = <OpponentRow participant={opponentParticipant} opponent={opponent} name={opponentName} />;
   // The mute button can only go dim and grow a tooltip, which says nothing to a keyboard or screen
@@ -475,6 +472,41 @@ function ParticipantIdentity({
   );
 }
 
+/**
+ * The user's own row. Same green ring as the opponent gets: without it the speaking cue reads as a
+ * fact about the other person rather than about who currently has the floor, and there is nothing
+ * to check when you suspect the room cannot hear you.
+ */
+function LocalRow({
+  local,
+  room,
+  micFailure,
+  onMicIntentChange,
+}: {
+  local: DebateRematchParticipant | null;
+  room: Room;
+  micFailure: MediaDeviceFailure | null;
+  onMicIntentChange: (enabled: boolean) => void;
+}) {
+  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
+  // Muting publishes nothing, but it does not retract the active-speaker update that came just
+  // before it, so the ring has to answer to the mute state as well or it can stay lit on a
+  // microphone the room has stopped hearing.
+  const speaking = useIsSpeaking(localParticipant) && isMicrophoneEnabled && !micFailure;
+
+  return (
+    <>
+      <ParticipantIdentity
+        name="You"
+        avatarUrl={local?.avatar_cid}
+        avatarValue={local?.profile_space_id}
+        speaking={speaking}
+      />
+      <LocalAudioControls room={room} micFailure={micFailure} onMicIntentChange={onMicIntentChange} />
+    </>
+  );
+}
+
 function OpponentRow({
   participant,
   opponent,
@@ -510,6 +542,9 @@ function ConnectedOpponentRow({
 }) {
   const speaking = useIsSpeaking(participant);
   const muted = useIsMuted({ participant, source: Track.Source.Microphone });
+  // Muted outranks speaking for the same reason it does on the local row: the server clears
+  // `isSpeaking` only on its next speaker update, so a ring that ignored the mute state would sit
+  // lit beside a chip that has already gone red.
 
   return (
     <>
@@ -517,7 +552,7 @@ function ConnectedOpponentRow({
         name={name}
         avatarUrl={opponent.avatar_cid}
         avatarValue={opponent.profile_space_id}
-        speaking={speaking}
+        speaking={speaking && !muted}
       />
       <OpponentMicChip state={muted ? 'muted' : 'live'} name={name} />
     </>

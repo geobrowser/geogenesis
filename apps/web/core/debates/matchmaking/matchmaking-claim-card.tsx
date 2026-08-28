@@ -60,6 +60,12 @@ type Props = {
    * that only means "don't know yet", which would draw the viewer onto two sides at once.
    */
   viewerIdentityPending?: boolean;
+  /**
+   * Sends a signed-out viewer to Privy instead of publishing. Set by hosts that render to signed-out
+   * viewers — the hub's Claims tab and the claim page — and left unset when signing in is not a
+   * possibility the host has to handle, which keeps the response path unchanged for everyone else.
+   */
+  onRequireSignIn?: () => void;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -88,6 +94,7 @@ export function MatchmakingClaimCard({
   onOpenClaim,
   hideReadinessToggle,
   viewerIdentityPending,
+  onRequireSignIn,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -107,6 +114,7 @@ export function MatchmakingClaimCard({
           onOpenClaim={onOpenClaim}
           hideReadinessToggle={hideReadinessToggle}
           viewerIdentityPending={viewerIdentityPending}
+          onRequireSignIn={onRequireSignIn}
         />
       ) : (
         <UnresolvableControls
@@ -171,23 +179,31 @@ function ClaimHeader({
   );
 }
 
-/** The live case: the side buttons publish the viewer's on-chain response. */
-function RespondableControls({
+/**
+ * The viewer's side of a claim, and everything needed to change it.
+ *
+ * Extracted from the card so surfaces that draw their own layout around the same controls — the
+ * claim page's "Your position" block — publish responses through exactly this path rather than
+ * growing a second copy of the optimistic and indexing handling below, which exists to fix bugs
+ * that are not obvious from the outside.
+ */
+export function useClaimPositionControl({
   claim,
   positions,
   readiness,
-  activeDebate,
-  onOpenClaim,
-  hideReadinessToggle,
   viewerIdentityPending,
+  onRequireSignIn,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
-  onOpenClaim?: () => void;
-  hideReadinessToggle?: boolean;
   viewerIdentityPending?: boolean;
+  /**
+   * What to do when a signed-out visitor presses a side. Given one, the pills stay live while
+   * signed out and pressing prompts sign-in — matching the vote arrows on an entity page. Without
+   * one they stay disabled, which is what the hub's cards have always done.
+   */
+  onRequireSignIn?: () => void;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -258,7 +274,11 @@ function RespondableControls({
   }, [readiness.viewer_response, resetResponseIndexing, responseIndexing]);
 
   const respond = (position: boolean) => {
-    if (!isConnected || isAccountSetupPending) return;
+    if (!isConnected) {
+      onRequireSignIn?.();
+      return;
+    }
+    if (isAccountSetupPending) return;
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
@@ -275,6 +295,44 @@ function RespondableControls({
     return position ? copy.positiveAction : copy.negativeAction;
   };
 
+  return {
+    viewerPosition,
+    optimisticPositions,
+    respond,
+    actionTitle,
+    responseError,
+    /**
+     * False only while the account genuinely cannot publish, never while one is in flight.
+     *
+     * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
+     * control gives a visitor nothing to press and no way to learn what to do about it.
+     */
+    canRespond: (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending,
+  };
+}
+
+/** The live case: the side buttons publish the viewer's on-chain response. */
+function RespondableControls({
+  claim,
+  positions,
+  readiness,
+  activeDebate,
+  onOpenClaim,
+  hideReadinessToggle,
+  viewerIdentityPending,
+  onRequireSignIn,
+}: {
+  claim: DebateClaimSummary;
+  positions: DebateClaimPositionSummary[];
+  readiness: MatchmakingReadiness;
+  activeDebate?: boolean;
+  onOpenClaim?: () => void;
+  hideReadinessToggle?: boolean;
+  viewerIdentityPending?: boolean;
+  onRequireSignIn?: () => void;
+}) {
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
+    useClaimPositionControl({ claim, positions, readiness, viewerIdentityPending, onRequireSignIn });
   return (
     <>
       <ClaimHeader
@@ -295,7 +353,7 @@ function RespondableControls({
         // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
         // overlapping submissions, so there is nothing to protect against — and dimming the pills
         // for the length of an indexing round trip read as the response not having landed.
-        disabled={!isConnected || isAccountSetupPending}
+        disabled={!canRespond}
         titleFor={actionTitle}
       />
       {responseError ? (
@@ -441,7 +499,7 @@ function UnresolvableControls({
   );
 }
 
-function PositionRow({
+export function PositionRow({
   positions,
   responseKind,
   viewerPosition,

@@ -756,7 +756,7 @@ export async function listDebateSharePrompts(
   });
 }
 
-export async function listDebateClaims(
+async function fetchDebateClaims(
   spaceId: string,
   claimIds: string[],
   getPrivyIdentityToken?: GetPrivyIdentityToken,
@@ -770,6 +770,114 @@ export async function listDebateClaims(
     accountKey,
     signal,
   });
+}
+
+/**
+ * How long to hold an id before asking, so a render's worth of rows travels as one request.
+ *
+ * A task, not a microtask: rows fire their queries from effects that react-query schedules, and
+ * those do not reliably land in the same microtask. Ten milliseconds is under a frame, so nothing
+ * waits perceptibly longer, and it is wide enough to catch a table committing its rows.
+ */
+const CLAIM_BATCH_WINDOW_MS = 10;
+
+/** Caps the query string. Fifty ids is roughly 1.7KB of URL; this leaves generous headroom. */
+const CLAIM_BATCH_LIMIT = 100;
+
+type ClaimBatchCaller = {
+  claimIds: string[];
+  resolve: (value: DebateClaimsResponse) => void;
+  reject: (reason: unknown) => void;
+};
+
+type ClaimBatch = {
+  ids: Set<string>;
+  callers: ClaimBatchCaller[];
+  getPrivyIdentityToken?: GetPrivyIdentityToken;
+  accountKey?: string | null;
+};
+
+const pendingClaimBatches = new Map<string, ClaimBatch>();
+
+/**
+ * Concurrent claim reads for one space, collapsed into one request.
+ *
+ * `ClaimDebateButton` renders once per entity row and asks only for its own claim, so a table of
+ * fifty claim entities issued fifty requests to an endpoint that takes all fifty ids at once — and
+ * every one of them made geo-chat resolve claim responses against the Knowledge Graph, which is
+ * exactly the load that endpoint answers 503 to (GEO-2724).
+ *
+ * Coalescing here rather than in the hook is deliberate: every caller keeps its own react-query
+ * cache entry and its own key, so no component changes and no key churn. They only share the fetch.
+ *
+ * Each caller is resolved with the claims **it asked for**, not the union. A caller handed a
+ * superset would be a real behaviour change — `claims-page-client` derives its active debates from
+ * every row in the response, and would pick up rows belonging to a sibling.
+ */
+function batchDebateClaims(
+  spaceId: string,
+  claimIds: string[],
+  getPrivyIdentityToken?: GetPrivyIdentityToken,
+  accountKey?: string | null
+): Promise<DebateClaimsResponse> {
+  // Keyed by account as well as space: two identities must never read one response, and the
+  // endpoint answers differently for each (readiness is per viewer).
+  const key = `${spaceId}\u0000${accountKey ?? ''}`;
+  let batch = pendingClaimBatches.get(key);
+
+  if (!batch) {
+    batch = { ids: new Set(), callers: [], getPrivyIdentityToken, accountKey };
+    pendingClaimBatches.set(key, batch);
+    setTimeout(() => flushClaimBatch(key, spaceId), CLAIM_BATCH_WINDOW_MS);
+  }
+
+  for (const claimId of claimIds) batch.ids.add(claimId);
+
+  return new Promise<DebateClaimsResponse>((resolve, reject) => {
+    batch.callers.push({ claimIds, resolve, reject });
+  });
+}
+
+function flushClaimBatch(key: string, spaceId: string) {
+  const batch = pendingClaimBatches.get(key);
+  if (!batch) return;
+  pendingClaimBatches.delete(key);
+
+  const ids = [...batch.ids];
+  const chunks: string[][] = [];
+  for (let index = 0; index < ids.length; index += CLAIM_BATCH_LIMIT) {
+    chunks.push(ids.slice(index, index + CLAIM_BATCH_LIMIT));
+  }
+
+  // Deliberately unsignalled. One row unmounting must not abort the request its siblings are
+  // waiting on, and a caller that has gone away simply has its own promise settled into a cache
+  // entry nobody reads.
+  Promise.all(chunks.map(chunk => fetchDebateClaims(spaceId, chunk, batch.getPrivyIdentityToken, batch.accountKey)))
+    .then(responses => {
+      const claims = responses.flatMap(response => response.claims);
+      for (const caller of batch.callers) {
+        const wanted = new Set(caller.claimIds);
+        caller.resolve({ claims: claims.filter(claim => wanted.has(claim.claim_entity_id)) });
+      }
+    })
+    .catch(error => {
+      for (const caller of batch.callers) caller.reject(error);
+    });
+}
+
+export async function listDebateClaims(
+  spaceId: string,
+  claimIds: string[],
+  getPrivyIdentityToken?: GetPrivyIdentityToken,
+  accountKey?: string | null,
+  signal?: AbortSignal
+) {
+  // An empty list means "every claim in this space", which is a different question and must not be
+  // folded into a batch of ids — nor answered from one.
+  if (claimIds.length === 0) {
+    return fetchDebateClaims(spaceId, claimIds, getPrivyIdentityToken, accountKey, signal);
+  }
+  return batchDebateClaims(spaceId, claimIds, getPrivyIdentityToken, accountKey);
 }
 
 /**
@@ -1118,7 +1226,11 @@ export async function listDebatePeople(
   signal?: AbortSignal
 ) {
   return geoChatRequest<DebatePeopleResponse>('/matchmaking/people', {
-    auth: true,
+    // Anonymous only when there is genuinely nobody signed in, matching `listDebateClaims`. A flat
+    // 'optional' would also swallow a token-exchange failure for a signed-in viewer and send the
+    // request anonymously — and the anonymous answer would then be cached under their account key,
+    // leaving viewer-relative fields like `can_challenge` quietly wrong with nothing to retry.
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,
@@ -1154,7 +1266,9 @@ export async function listMatchmakingClaims(
 
   const search = params.toString();
   return geoChatRequest<MatchmakingClaimsResponse>(`/matchmaking/claims${search ? `?${search}` : ''}`, {
-    auth: true,
+    // Same as People above: anonymous only with nobody signed in, never as a fallback for a
+    // signed-in viewer whose token exchange failed.
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,
