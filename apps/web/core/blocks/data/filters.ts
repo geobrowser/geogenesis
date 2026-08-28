@@ -205,13 +205,19 @@ function resolveModesByColumn(value: FilterString): ModesByColumn {
   // to those groups so existing blocks retain their behavior after parsing.
   if (value.mode === 'OR' && value.filter) {
     for (const [columnId, filterValue] of Object.entries(value.filter)) {
+      // Keys here must match the `columnId` the parser assigns to the same
+      // filter (a `_relation` entry is parsed with columnId = type.is), since
+      // `modesByColumn` is a raw object lookup. A mismatch would silently
+      // drop a migrated OR back to AND.
       const resolvedColumnId = columnId === '_relation' && 'type' in filterValue ? filterValue.type.is : columnId;
       modesByColumn[resolvedColumnId] = 'OR';
     }
   }
 
-  // Legacy multi-space groups were always transformed as OR, even when the
-  // old global mode was AND. Preserve that quirk for already-published blocks.
+  // Multi-space is always OR in the where-builder regardless of mode, so this
+  // entry is redundant for querying. It is kept so a migrated legacy payload
+  // becomes self-describing on its next write instead of relying on that
+  // special case.
   if ((value.spaceId?.in.length ?? 0) > 1) {
     modesByColumn[SystemIds.SPACE_FILTER] = 'OR';
   }
