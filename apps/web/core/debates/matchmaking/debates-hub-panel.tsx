@@ -4,12 +4,14 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
@@ -247,6 +249,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         </Text>
         <div className="flex min-w-0 items-center gap-1">
           <AvailabilityToggle />
+          <ExpandToWorkspaceLink />
           {onClose ? (
             <button
               type="button"
@@ -328,6 +331,39 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         )}
       </motion.div>
     </div>
+  );
+}
+
+/**
+ * The way out of the panel and into the full-screen hub.
+ *
+ * A plain route link rather than `PrefetchLink`: that one hydrates the *entity* it points at
+ * through the sync engine, and this points at a route with no entity behind it.
+ *
+ * The panel is where everyone already is, so without this the workspace is reachable only by
+ * knowing the URL. A real link rather than a router push, so it opens in a new tab on a modified
+ * click and shows its destination on hover like any other.
+ *
+ * Filters carry across on their own — both layouts read `debatesHubFiltersAtom` — so expanding
+ * continues the search rather than restarting it. The panel closes on the way so it is not left
+ * sitting over the page it just navigated to.
+ */
+function ExpandToWorkspaceLink() {
+  // Reads the hub's own `close` rather than taking it as a prop: this renders inside
+  // `DebatesHubSurface`, which has no `close` in scope, and a bare `close` there resolves to
+  // `window.close` — same call signature, so nothing complains and the panel simply never shuts.
+  const { close } = useDebatesHub();
+
+  return (
+    <Link
+      href="/matchmaking"
+      onClick={close}
+      aria-label="Open full screen"
+      title="Open full screen"
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+    >
+      <ExpandSmall />
+    </Link>
   );
 }
 

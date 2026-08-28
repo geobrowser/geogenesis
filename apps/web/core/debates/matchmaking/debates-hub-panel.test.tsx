@@ -259,6 +259,20 @@ describe('DebatesHubPanel', () => {
 
     expect(screen.queryByRole('button', { name: 'Close debates' })).not.toBeInTheDocument();
   });
+
+  // GEO-2726. Without this the full-screen hub is reachable only by knowing the URL, and the panel
+  // is where everyone already is. Filters ride across on their own — both layouts read the same
+  // atom — so the link carries no state of its own.
+  it('offers a way out to the full-screen hub, and closes the panel on the way', () => {
+    const store = renderOpen();
+
+    const expand = screen.getByRole('link', { name: 'Open full screen' });
+    expect(expand).toHaveAttribute('href', '/matchmaking');
+
+    fireEvent.click(expand);
+
+    expect(store.get(debatesHubAtom)).toBeNull();
+  });
 });
 
 // Accepting a request from the Requests tab now walks the viewer into the debate room; the panel
@@ -271,4 +285,5 @@ it('closes itself once a navigation lands', () => {
   store.rerender();
 
   expect(store.get(debatesHubAtom)).toBeNull();
+
 });
