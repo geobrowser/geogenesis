@@ -224,7 +224,7 @@ export function ClaimExploreFeedCard({
         </div>
 
         {/* Spans all three rows at desktop width, which is what makes the rule full-height. */}
-        <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 md:col-start-1 md:row-span-1 md:row-start-3 md:border-b md:border-l-0 md:pb-4 md:pl-0">
+        <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 md:col-start-1 md:row-span-1 md:row-start-3 md:border-l-0 md:pl-0">
           {summary.isLoading ? null : (
             <ClaimVerdictColumn
               entityId={item.entityId}
@@ -285,16 +285,25 @@ function ClaimVerdictColumn({
   // width to do it; at 220px they would wrap into each other.
   return (
     <div>
-      <span className="flex items-baseline gap-1.5">
-        <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums">
-          {percent}%
+      {/* The claim page's own top row, narrowed for the rail: the share and its verb on one
+          baseline, and — where there is width for it — how many responses that share is *of*. In
+          the 220px rail the count would wrap onto a line of its own, so it stays to the phone,
+          where this module is the claim page's module at the claim page's size. */}
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+        <span className="flex items-baseline gap-1.5">
+          <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums md:text-[2.5rem] md:tracking-[-1px]">
+            {percent}%
+          </span>
+          <Text as="span" variant="metadata" color="grey-04">
+            {copy.positiveAction.toLowerCase()}
+          </Text>
         </span>
-        <Text as="span" variant="metadata" color="grey-04">
-          {copy.positiveAction.toLowerCase()}
+        <Text as="span" variant="metadata" color="grey-04" className="hidden tabular-nums md:block">
+          {summary.total} {summary.total === 1 ? 'response' : 'responses'}
         </Text>
-      </span>
+      </div>
       <div
-        className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-grey-01"
+        className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-grey-01 md:mt-4 md:h-2"
         role="img"
         aria-label={`${percent}% ${copy.positiveAction.toLowerCase()}, ${100 - percent}% ${copy.negativeAction.toLowerCase()}`}
       >

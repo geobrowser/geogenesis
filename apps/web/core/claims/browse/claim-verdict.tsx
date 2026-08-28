@@ -71,16 +71,11 @@ export function ClaimVerdict({
             {copy.positiveAction.toLowerCase()}
           </Text>
         </span>
-        <div className="flex items-center gap-2">
-          {summary.isControversial && (
-            <span className="rounded-sm bg-orange/25 px-1.5 py-0.5 text-metadata font-medium text-text">
-              Controversial
-            </span>
-          )}
-          <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
-            {summary.total} {summary.total === 1 ? 'response' : 'responses'}
-          </Text>
-        </div>
+        {/* No Controversial tag here: it moved up to the hero chips, beside the type and tags, where
+            it says what kind of claim this is. Flagging it in both places said it twice. */}
+        <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
+          {summary.total} {summary.total === 1 ? 'response' : 'responses'}
+        </Text>
       </div>
 
       <div
