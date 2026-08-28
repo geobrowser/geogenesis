@@ -283,7 +283,7 @@ describe('PeopleTab', () => {
     mocks.authenticated = false;
     render(<PeopleTab />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Debate' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Request debate' })[0]);
 
     expect(mocks.promptSignIn).toHaveBeenCalled();
     expect(mocks.createChallenge).not.toHaveBeenCalled();
@@ -296,7 +296,7 @@ describe('PeopleTab', () => {
     mocks.people = [{ ...person('user-them', 'Arturas'), can_challenge: false }];
     render(<PeopleTab />);
 
-    expect(screen.getByRole('button', { name: 'Debate' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Request debate' })).not.toBeDisabled();
   });
 
   // `in_debate` is true of the person, not of any viewer, so signing in would not make them
