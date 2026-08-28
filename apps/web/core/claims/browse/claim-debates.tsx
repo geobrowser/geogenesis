@@ -163,7 +163,17 @@ export function ClaimDebates({
   );
 }
 
-export type WinnerShare = { spaceId: string; percent: number; totalVotes: number };
+export type WinnerShare = {
+  spaceId: string;
+  percent: number;
+  totalVotes: number;
+  /**
+   * Several debaters share the top count, so `spaceId` is one of them rather than the winner.
+   * The leader is picked with a strict `>`, which on a tie keeps whichever was counted first —
+   * fine for "who is ahead", wrong for anything that derives a win from it.
+   */
+  tied: boolean;
+};
 
 /**
  * Who each debate's viewers picked as the winner, as a share of that debate's votes.
@@ -235,10 +245,12 @@ export function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
       });
 
       const leaderHex = entries[leaderIndex]![0];
+      const leaderCount = entries[leaderIndex]![1];
       shares.set(debateId, {
         spaceId: spaceIdByHex.get(leaderHex) ?? leaderHex,
         percent: percentages[leaderIndex] ?? 0,
         totalVotes,
+        tied: entries.filter(([, count]) => count === leaderCount).length > 1,
       });
     }
     return shares;

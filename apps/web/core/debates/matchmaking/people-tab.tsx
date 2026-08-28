@@ -18,6 +18,9 @@ import { HubStickyControls } from './claims-tab';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
+import type { PersonRecord } from './person-record';
+import { PersonRecordLine } from './person-record-line';
+import { usePersonRecords } from './use-person-records';
 import { useUnexpiredRequests } from './use-request-countdown';
 
 /**
@@ -47,6 +50,10 @@ export function PeopleTab() {
     if (!term) return allPeople;
     return allPeople.filter(person => speakerLabel(person).toLowerCase().includes(term));
   }, [allPeople, search]);
+
+  // Keyed on everyone available rather than on the filtered list, so typing in the search box
+  // re-slices a batch that is already cached instead of firing a request per keystroke.
+  const records = usePersonRecords(React.useMemo(() => allPeople.map(person => person.profile_space_id), [allPeople]));
 
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
   // A challenge stays `pending` in the activity payload until the server says otherwise, so its own
@@ -125,6 +132,7 @@ export function PeopleTab() {
                 <PersonRow
                   key={person.user_id}
                   person={person}
+                  record={records.get(person.profile_space_id) ?? null}
                   disabled={buttonsDisabled}
                   disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
                   onRequireSignIn={onRequireSignIn}
@@ -140,11 +148,14 @@ export function PeopleTab() {
 
 function PersonRow({
   person,
+  record,
   disabled,
   disabledReason,
   onRequireSignIn,
 }: {
   person: DebatePerson;
+  /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
+  record: PersonRecord | null;
   disabled: boolean;
   /** Only surfaced on hover, so it explains the greyed-out button without repeating the card. */
   disabledReason: string;
@@ -157,14 +168,18 @@ function PersonRow({
   const createChallenge = useCreateDebateChallenge();
 
   return (
-    <li className="flex items-center justify-between gap-3 border-b border-grey-02 py-2.5 last:border-b-0">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
-          <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
-        </div>
+    // Three columns rather than a flex run, so the button sits in its own track pinned to the top
+    // of the row. Sharing a row box with the name made it the tallest thing there, which set the
+    // name's line height and left dead space under it once the record lines arrived.
+    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
+      <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
+        <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
+      </div>
+      <div className="flex min-w-0 flex-col gap-0.5">
         <Text as="p" variant="metadataMedium" className="truncate">
           {speakerLabel(person)}
         </Text>
+        {record && <PersonRecordLine record={record} />}
       </div>
       <HubPillButton
         onClick={() =>

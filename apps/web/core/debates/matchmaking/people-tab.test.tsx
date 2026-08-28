@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   cancelChallenge: vi.fn(),
   cancelPending: false,
   cancelError: null as Error | null,
+  records: new Map<string, unknown>(),
 }));
 
 vi.mock('../hooks', () => ({
@@ -37,6 +38,12 @@ vi.mock('../hooks', () => ({
 vi.mock('./hooks', () => ({
   useDebatePeople: () => ({ data: { people: mocks.people }, isLoading: false, error: null }),
   useDebateRequests: () => ({ data: { incoming: [], outbound: null }, isLoading: false, error: null }),
+}));
+
+// The record is fetched once for the whole list through react-query; these tests render the tab
+// without a client, and the row's own behaviour is what they are about.
+vi.mock('./use-person-records', () => ({
+  usePersonRecords: () => mocks.records,
 }));
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
@@ -96,6 +103,7 @@ beforeEach(() => {
   mocks.cancelChallenge.mockReset();
   mocks.cancelPending = false;
   mocks.cancelError = null;
+  mocks.records = new Map();
 });
 
 afterEach(cleanup);
