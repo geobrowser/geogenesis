@@ -175,7 +175,7 @@ export function DebateExploreFeedCard({
  */
 function DebateCardExtras({ debate, active }: { debate: Debate; active: boolean }) {
   const [claimsOpen, setClaimsOpen] = React.useState(false);
-  const { claims } = useDebateTranscriptClaims(debate.id);
+  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
   const shareAction = useDebateShareAction(debate, active);
   const shareUnavailable = shareAction.state === 'preparing' || shareAction.state === 'sharing';
 

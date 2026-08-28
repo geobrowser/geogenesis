@@ -661,19 +661,21 @@ export function getDebateVoteEntities(debateEntityId: string, signal?: AbortCont
 /**
  * Every claim extracted from a debate's transcript, grouped by the speaker it's attributed to.
  *
- * Walks Debate → Transcripts → Blocks → (Authors, Claims) in one request. Attribution comes from
- * the text block rather than the claim; see `debate-transcript-claims-document.ts` for why.
+ * Walks Debate → Transcripts → Blocks → (Authors, Claims) in one request, scoped to the debate's
+ * publication space. Attribution comes from the text block rather than the claim, and the scoping
+ * is what keeps a stranger's relation out of it; see `debate-transcript-claims-document.ts`.
  */
-export function getDebateTranscriptClaims(debateEntityId: string, signal?: AbortController['signal']) {
+export function getDebateTranscriptClaims(debateEntityId: string, spaceId: string, signal?: AbortController['signal']) {
   return graphql({
     query: debateTranscriptClaimsDocument,
-    decoder: groupTranscriptClaims,
+    decoder: data => groupTranscriptClaims(data, spaceId),
     variables: {
       id: debateEntityId,
       transcriptsPropertyId: DEBATE_TRANSCRIPTS_PROPERTY_ID,
       blocksPropertyId: BLOCKS_PROPERTY_ID,
       authorsPropertyId: AUTHORS_PROPERTY_ID,
       claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
+      spaceId,
     },
     signal,
   });

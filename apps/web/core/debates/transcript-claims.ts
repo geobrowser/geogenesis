@@ -64,7 +64,7 @@ function presentRelations<T>(
  * turns should still be one row. Deduping globally rather than per-block also means a claim quoted
  * by both debaters is attributed to whoever said it first rather than counted twice.
  */
-export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery): DebateTranscriptClaims {
+export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId: string): DebateTranscriptClaims {
   const all: TranscriptClaim[] = [];
   const byAuthorSpaceId = new Map<string, TranscriptClaim[]>();
   const unattributed: TranscriptClaim[] = [];
@@ -89,9 +89,14 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery): Debate
 
         seenClaimIds.add(key);
 
-        const spaceId = (claimEntity.spaceIds ?? []).find((id): id is string => typeof id === 'string') ?? null;
+        // The debate's space when the claim lives there, which it does for anything we published,
+        // rather than whichever space `spaceIds` happens to list first. A claim also curated into
+        // someone else's space would otherwise hand its row that space, and the row's link and
+        // response would follow it out of the debate this panel is showing.
+        const homeSpaces = (claimEntity.spaceIds ?? []).filter((id): id is string => typeof id === 'string');
+        const claimSpaceId = homeSpaces.find(id => uuidToHex(id) === uuidToHex(spaceId)) ?? homeSpaces[0] ?? null;
 
-        const row: TranscriptClaim = { id: claimEntity.id, text, spaceId };
+        const row: TranscriptClaim = { id: claimEntity.id, text, spaceId: claimSpaceId };
 
         all.push(row);
 

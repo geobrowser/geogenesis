@@ -17,6 +17,11 @@ import { parse } from 'graphql';
  * One round trip for the whole transcript. `position` comes back on both relation lists so the
  * caller can restore transcript order — `relationsList` is not ordered by it.
  *
+ * Every hop is filtered to the debate's publication space, the way the app's own entity query
+ * scopes the relations it displays. Relations are space-attributed and anyone may publish one in
+ * their own space pointing at any entity, so an unscoped traversal would let a stranger's `Claims`
+ * relation on a debater's text block appear in this panel as something that debater said.
+ *
  * Hand-written rather than generated so it doesn't require regenerating `gql.ts`.
  */
 const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
@@ -26,22 +31,23 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
     $blocksPropertyId: UUID!
     $authorsPropertyId: UUID!
     $claimsPropertyId: UUID!
+    $spaceId: UUID!
   ) {
     entity(id: $id) {
-      transcripts: relationsList(filter: { typeId: { is: $transcriptsPropertyId } }) {
+      transcripts: relationsList(filter: { typeId: { is: $transcriptsPropertyId }, spaceId: { is: $spaceId } }) {
         position
         toEntity {
           id
-          blocks: relationsList(filter: { typeId: { is: $blocksPropertyId } }) {
+          blocks: relationsList(filter: { typeId: { is: $blocksPropertyId }, spaceId: { is: $spaceId } }) {
             position
             toEntity {
               id
-              authors: relationsList(filter: { typeId: { is: $authorsPropertyId } }) {
+              authors: relationsList(filter: { typeId: { is: $authorsPropertyId }, spaceId: { is: $spaceId } }) {
                 toEntity {
                   id
                 }
               }
-              claims: relationsList(filter: { typeId: { is: $claimsPropertyId } }) {
+              claims: relationsList(filter: { typeId: { is: $claimsPropertyId }, spaceId: { is: $spaceId } }) {
                 position
                 toEntity {
                   id
@@ -90,6 +96,7 @@ type DebateTranscriptClaimsVariables = {
   blocksPropertyId: string;
   authorsPropertyId: string;
   claimsPropertyId: string;
+  spaceId: string;
 };
 
 export const debateTranscriptClaimsDocument = parse(DEBATE_TRANSCRIPT_CLAIMS_SOURCE) as TypedDocumentNode<

@@ -8,6 +8,9 @@ const ARTURAS = 'cc31e40f74231d530f1b5d0fc1cd94d8';
 
 const SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
 
+/** The traversal is scoped to the debate's publication space; these fixtures all live in one. */
+const group = (data: DebateTranscriptClaimsQuery) => groupTranscriptClaims(data, SPACE);
+
 type Claim = {
   id: string;
   name?: string | null;
@@ -58,7 +61,7 @@ function response(blocks: Block[], transcriptPosition = 'a0'): DebateTranscriptC
 
 describe('groupTranscriptClaims', () => {
   it('groups a turn’s claims under the block author, not the claim', () => {
-    const grouped = groupTranscriptClaims(
+    const grouped = group(
       response([
         { id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }, { id: 'claim-2' }] },
         { id: 'block-2', author: ARTURAS, claims: [{ id: 'claim-3' }] },
@@ -71,13 +74,13 @@ describe('groupTranscriptClaims', () => {
   });
 
   it('matches a participant whose space id is dashed rather than hex', () => {
-    const grouped = groupTranscriptClaims(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));
+    const grouped = group(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));
 
     expect(claimsForParticipant(grouped, 'f3dab79c-b5a3-d9d1-7596-56dd5361d1c6')).toHaveLength(1);
   });
 
   it('orders blocks and claims by position rather than list order', () => {
-    const grouped = groupTranscriptClaims(
+    const grouped = group(
       response([
         { id: 'block-late', position: 'a2', author: PRESTON, claims: [{ id: 'claim-third' }] },
         {
@@ -100,7 +103,7 @@ describe('groupTranscriptClaims', () => {
   });
 
   it('counts a claim once when the graph returns it twice', () => {
-    const grouped = groupTranscriptClaims(
+    const grouped = group(
       response([
         { id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }, { id: 'claim-1' }] },
         { id: 'block-2', author: PRESTON, claims: [{ id: 'claim-1' }] },
@@ -112,7 +115,7 @@ describe('groupTranscriptClaims', () => {
   });
 
   it('attributes a claim repeated by the other debater to whoever said it first', () => {
-    const grouped = groupTranscriptClaims(
+    const grouped = group(
       response([
         { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
         { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-1' }] },
@@ -124,7 +127,7 @@ describe('groupTranscriptClaims', () => {
   });
 
   it('drops claims with no text, since the text is the name', () => {
-    const grouped = groupTranscriptClaims(
+    const grouped = group(
       response([
         {
           id: 'block-1',
@@ -139,7 +142,7 @@ describe('groupTranscriptClaims', () => {
   });
 
   it('collects claims from a block with no author as unattributed', () => {
-    const grouped = groupTranscriptClaims(response([{ id: 'block-1', author: null, claims: [{ id: 'claim-1' }] }]));
+    const grouped = group(response([{ id: 'block-1', author: null, claims: [{ id: 'claim-1' }] }]));
 
     expect(grouped.totalCount).toBe(1);
     expect(grouped.byAuthorSpaceId.size).toBe(0);
@@ -147,15 +150,15 @@ describe('groupTranscriptClaims', () => {
   });
 
   it('returns an empty grouping for a debate with no transcript', () => {
-    expect(groupTranscriptClaims({ entity: { transcripts: [] } }).totalCount).toBe(0);
-    expect(groupTranscriptClaims({ entity: null }).totalCount).toBe(0);
-    expect(groupTranscriptClaims({ entity: { transcripts: null } }).totalCount).toBe(0);
+    expect(group({ entity: { transcripts: [] } }).totalCount).toBe(0);
+    expect(group({ entity: null }).totalCount).toBe(0);
+    expect(group({ entity: { transcripts: null } }).totalCount).toBe(0);
   });
 });
 
 describe('unmatchedClaims', () => {
   it('surfaces claims by an author who is not a participant', () => {
-    const grouped = groupTranscriptClaims(
+    const grouped = group(
       response([
         { id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] },
         { id: 'block-2', author: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', claims: [{ id: 'claim-2' }] },
@@ -170,7 +173,7 @@ describe('unmatchedClaims', () => {
   // end — an A/B/A transcript surfaced as A/A/B.
   it('keeps transcript order across unknown authors and unauthored claims', () => {
     const STRANGER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-    const grouped = groupTranscriptClaims(
+    const grouped = group(
       response([
         { id: 'block-1', position: 'a1', author: STRANGER, claims: [{ id: 'claim-1' }] },
         { id: 'block-2', position: 'a2', author: null, claims: [{ id: 'claim-2' }] },
@@ -183,7 +186,7 @@ describe('unmatchedClaims', () => {
 
   it('leaves a participant’s claims out while keeping the rest in transcript order', () => {
     const STRANGER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-    const grouped = groupTranscriptClaims(
+    const grouped = group(
       response([
         { id: 'block-1', position: 'a1', author: STRANGER, claims: [{ id: 'claim-1' }] },
         { id: 'block-2', position: 'a2', author: PRESTON, claims: [{ id: 'claim-mine' }] },
@@ -195,7 +198,7 @@ describe('unmatchedClaims', () => {
   });
 
   it('includes unattributed claims and finds nothing when every author is a participant', () => {
-    const grouped = groupTranscriptClaims(
+    const grouped = group(
       response([
         { id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] },
         { id: 'block-2', author: null, claims: [{ id: 'claim-2' }] },
@@ -204,7 +207,7 @@ describe('unmatchedClaims', () => {
 
     expect(unmatchedClaims(grouped, [PRESTON]).map(claim => claim.id)).toEqual(['claim-2']);
     expect(
-      unmatchedClaims(groupTranscriptClaims(response([{ id: 'b', author: PRESTON, claims: [] }])), [
+      unmatchedClaims(group(response([{ id: 'b', author: PRESTON, claims: [] }])), [
         'f3dab79c-b5a3-d9d1-7596-56dd5361d1c6',
       ])
     ).toEqual([]);
@@ -213,7 +216,7 @@ describe('unmatchedClaims', () => {
 
 describe('claim space', () => {
   it('carries the claim’s own space, which is where its responses are published', () => {
-    const grouped = groupTranscriptClaims(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));
+    const grouped = group(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));
 
     expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(SPACE);
   });
@@ -221,9 +224,7 @@ describe('claim space', () => {
   // Both the link target and the row's actions are space-scoped, so a claim the graph reports no
   // space for has nothing correct to point at and the panel renders it as inert text.
   it('leaves a claim with no space unlinkable rather than guessing one', () => {
-    const grouped = groupTranscriptClaims(
-      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', spaceId: null }] }])
-    );
+    const grouped = group(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', spaceId: null }] }]));
 
     expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBeNull();
   });
@@ -231,7 +232,7 @@ describe('claim space', () => {
 
 describe('all', () => {
   it('lists every claim once, in transcript order, matching totalCount', () => {
-    const grouped = groupTranscriptClaims(
+    const grouped = group(
       response([
         { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
         { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-2' }, { id: 'claim-1' }] },
@@ -240,5 +241,54 @@ describe('all', () => {
 
     expect(grouped.all.map(claim => claim.id)).toEqual(['claim-1', 'claim-2']);
     expect(grouped.totalCount).toBe(grouped.all.length);
+  });
+});
+
+describe('space scoping', () => {
+  // Relations are space-attributed and anyone may publish one in their own space pointing at any
+  // entity, so the traversal is filtered to the debate's publication space. The claim's own row has
+  // to follow that space too: a claim also curated elsewhere would otherwise hand its link and its
+  // response controls a space outside the debate being shown.
+  it('prefers the debate’s space over whichever space the claim lists first', () => {
+    const OTHER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const grouped = groupTranscriptClaims(
+      {
+        entity: {
+          transcripts: [
+            {
+              position: 'a0',
+              toEntity: {
+                id: 'transcript-1',
+                blocks: [
+                  {
+                    position: 'a0',
+                    toEntity: {
+                      id: 'block-1',
+                      authors: [{ position: 'a0', toEntity: { id: PRESTON } }],
+                      claims: [
+                        { position: 'a0', toEntity: { id: 'claim-1', name: 'Claim one', spaceIds: [OTHER, SPACE] } },
+                      ],
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      },
+      SPACE
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(SPACE);
+  });
+
+  it('falls back to the claim’s own space when it does not live in the debate’s', () => {
+    const OTHER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const grouped = groupTranscriptClaims(
+      response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1', spaceId: OTHER }] }]),
+      SPACE
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)[0].spaceId).toBe(OTHER);
   });
 });

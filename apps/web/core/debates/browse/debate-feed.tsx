@@ -314,7 +314,7 @@ function DebateFeedItem({
   const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId });
   // Same query key as the Claims panel's own hook, for the same reason as comments above: the
   // badge and the panel share one cache entry, so opening the panel doesn't refetch.
-  const { claims } = useDebateTranscriptClaims(debate.id);
+  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
 
   React.useEffect(() => {
     const element = itemRef.current;

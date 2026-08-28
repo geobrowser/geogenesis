@@ -35,7 +35,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
   // Same query key as the player's hook, so voting in either place updates both.
   const votes = useDebateVotes(debate);
   // Same query key as the feed's count badge, so opening the panel doesn't refetch.
-  const { claims, isLoading, error } = useDebateTranscriptClaims(debate.id);
+  const { claims, isLoading, error } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
 
   // Every claim a debate publishes lands in the debate's own space, so one lookup covers the panel.
   const claimsSpaceId = React.useMemo(
