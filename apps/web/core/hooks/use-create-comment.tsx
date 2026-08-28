@@ -1,7 +1,7 @@
 'use client';
 
 import { isRevertedUserOperationError } from '@geogenesis/auth/account';
-import { IdUtils, Ops, type Op } from '@geoprotocol/geo-sdk/lite';
+import { IdUtils, Ops } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -232,27 +232,13 @@ export function useCreateComment(targetEntityId: string) {
             ]
           : [];
 
-        let ops: Op[];
-        try {
-          const result = Ops.comments.create({
-            id: commentEntityId,
-            content: text,
-            replyTo: replyToTarget,
-            resolved: false,
-            replyToRelations,
-          });
-          ops = result.ops;
-        } catch (err) {
-          console.error('[useCreateComment] Ops.comments.create failed:', err);
-          // Roll back the optimistic row since we never produced ops to publish.
-          queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
-            old.filter(c => c.id !== commentEntityId)
-          );
-          const { message, retry } = toUserFacingError(err, 'Failed to create comment: ');
-          reportError(message, retry);
-          setError(err as Error);
-          return null;
-        }
+        const { ops } = Ops.comments.create({
+          id: commentEntityId,
+          content: text,
+          replyTo: replyToTarget,
+          resolved: false,
+          replyToRelations,
+        });
 
         const publish = Effect.gen(function* () {
           if (ops.length === 0) {
@@ -406,6 +392,9 @@ export function useCreateComment(targetEntityId: string) {
         return { id: commentEntityId, published: true };
       } catch (err) {
         console.error('[useCreateComment] Error creating comment:', err);
+        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
+          old.filter(c => c.id !== commentEntityId)
+        );
         const { message, retry } = toUserFacingError(err, 'Failed to create comment: ');
         reportError(message, retry);
         setError(err as Error);
