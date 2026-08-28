@@ -19,6 +19,7 @@ import { Text } from '~/design-system/text';
 
 import { positionSummariesFromCounts } from './claim-position-summaries';
 import { useClaimResponseSummary } from './claim-response-summary';
+import { CursorPager, useCursorPages } from './use-cursor-pages';
 
 /**
  * A way out of the page, not a directory — and how many more arrive each time the reader asks.
@@ -47,11 +48,13 @@ export function ClaimRelatedClaims({
   spaceId: string;
   topicIds: string[];
 }) {
-  // Cursor paging rather than a growing `first`, so asking for more fetches only the rows past the
-  // ones already on screen. `hasNextPage` is the server's own answer, which matters here more than
-  // for the debates list: this claim is filtered out of its own results below, so counting rows to
-  // infer a further page would be off by one exactly when the page contains it.
-  const [cursor, setCursor] = React.useState<string | undefined>();
+  // A page at a time rather than an accumulating gallery: appending pushes everything below down
+  // the page as the reader loads more, where swapping keeps the layout where they left it.
+  //
+  // `hasNextPage` is the server's own answer, which matters more here than in the debates list:
+  // this claim is filtered out of its own results below, so counting rows to infer a further page
+  // would be off by one exactly on the page that contains it.
+  const pages = useCursorPages();
   const {
     entities: page,
     isLoading,
@@ -64,35 +67,32 @@ export function ClaimRelatedClaims({
       relations: [{ typeOf: { id: { equals: TOPICS_PROPERTY_ID } }, toEntity: { id: { in: topicIds } } }],
     },
     first: RELATED_PAGE_SIZE,
-    after: cursor,
+    after: pages.cursor,
     orderBy: [EntitiesOrderBy.UpdatedAtDesc],
+    // Holds the page being read while the next one loads, so stepping through doesn't blink the
+    // gallery out and collapse the layout the pager exists to keep still.
     placeholderData: keepPreviousData,
     enabled: topicIds.length > 0,
   });
 
-  const [seen, setSeen] = React.useState<Entity[]>([]);
-  React.useEffect(() => {
-    setSeen(current => {
-      const next = new Map(current.map(entity => [entity.id, entity]));
-      for (const entity of page) next.set(entity.id, entity);
-      return next.size === current.length ? current : [...next.values()];
-    });
-  }, [page]);
-
   const related = React.useMemo(
-    () => seen.filter(entity => !ID.equals(entity.id, claimId) && entity.name),
-    [claimId, seen]
+    () => page.filter(entity => !ID.equals(entity.id, claimId) && entity.name),
+    [claimId, page]
   );
 
-  // A page can arrive holding nothing this section can show — most obviously the page containing
-  // this claim itself, which is filtered out above. Left alone the section would hide on a topic
-  // that does have other claims, just further down. Advance rather than render an empty shell with
-  // a button; each step moves the cursor forward, so this settles on the first page with rows or
-  // at the end of the list.
+  // The page holding this claim shows one card fewer, and a topic with only this claim on its first
+  // page would show none at all. Skip forward rather than render an empty gallery on a topic that
+  // does have neighbours further down — only from the first page, since past that the reader
+  // navigated here and needs the pager to get back.
+  //
+  // Destructured rather than depending on `pages`: the hook returns a fresh object each render, so
+  // naming it as a dependency would re-run this on every render. `toNext` is stable for a given
+  // page, which is the granularity that matters.
+  const { isFirstPage, toNext } = pages;
   React.useEffect(() => {
-    if (isLoading || related.length > 0 || !hasNextPage || !endCursor) return;
-    setCursor(endCursor);
-  }, [endCursor, hasNextPage, isLoading, related.length]);
+    if (!isFirstPage || isLoading || related.length > 0 || !hasNextPage || !endCursor) return;
+    toNext(endCursor);
+  }, [endCursor, hasNextPage, isFirstPage, isLoading, related.length, toNext]);
 
   // One lookup for the whole gallery. The cards read their sides and readiness from geo-chat, the
   // same as they do in the hub — without it every card would draw an empty, un-actionable pair.
@@ -105,8 +105,9 @@ export function ClaimRelatedClaims({
   }, [rowsQuery.data?.claims]);
 
   // Nothing to show and nothing left to fetch. While a further page exists the effect above is
-  // still walking toward it, and hiding now would flash the section out and back in.
-  if (related.length === 0) return null;
+  // still walking toward it, and hiding now would flash the section out and back in. Past the
+  // first page an empty one keeps its pager, so the reader can step back.
+  if (related.length === 0 && pages.isFirstPage) return null;
 
   return (
     <section aria-label="Related claims">
@@ -127,16 +128,13 @@ export function ClaimRelatedClaims({
           />
         ))}
       </div>
-      {hasNextPage && endCursor && (
-        <button
-          type="button"
-          onClick={() => setCursor(endCursor)}
-          disabled={isLoading}
-          className="mt-3 text-metadata text-grey-04 transition-colors hover:text-text disabled:opacity-60"
-        >
-          {isLoading ? 'Loading…' : 'Show more claims'}
-        </button>
-      )}
+      <CursorPager
+        isFirstPage={pages.isFirstPage}
+        hasNextPage={hasNextPage}
+        isLoading={isLoading}
+        onPrevious={pages.toPrevious}
+        onNext={() => endCursor && pages.toNext(endCursor)}
+      />
     </section>
   );
 }

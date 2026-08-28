@@ -28,6 +28,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { CursorPager, useCursorPages } from './use-cursor-pages';
 import { useDebateKeyframes } from './use-debate-keyframes';
 
 /**
@@ -60,12 +61,12 @@ export function ClaimDebates({
   /** Labels each debater's side in the claim's own vocabulary — Agree/Disagree or Verify/Dispute. */
   responseKind: 'stance' | 'veracity';
 }) {
-  // Cursor paging rather than a growing `first`: raising the limit refetches every row already on
-  // screen to add a handful, where `after` asks only for the ones past them. `hasNextPage` answers
-  // "is there more" outright, so nothing has to be over-fetched to infer it.
-  const [cursor, setCursor] = React.useState<string | undefined>();
+  // A page at a time rather than an accumulating list: appending pushes everything below the
+  // section down the page as the reader loads more, where swapping keeps the layout where they
+  // left it.
+  const pages = useCursorPages();
   const {
-    entities: page,
+    entities: debates,
     isLoading,
     endCursor,
     hasNextPage,
@@ -76,20 +77,11 @@ export function ClaimDebates({
       relations: [{ typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { equals: claimId } } }],
     },
     first: DEBATE_PAGE_SIZE,
-    after: cursor,
+    after: pages.cursor,
+    // Holds the page being read while the next one loads, so stepping through doesn't blink the
+    // section out and collapse the layout the pager exists to keep still.
     placeholderData: keepPreviousData,
   });
-
-  // Pages accumulate: the query returns one page at a time, and the section shows every debate
-  // fetched so far. Keyed by id so a row arriving in two pages is held once.
-  const [debates, setDebates] = React.useState<Entity[]>([]);
-  React.useEffect(() => {
-    setDebates(current => {
-      const next = new Map(current.map(debate => [debate.id, debate]));
-      for (const debate of page) next.set(debate.id, debate);
-      return next.size === current.length ? current : [...next.values()];
-    });
-  }, [page]);
 
   const sidesByDebateId = React.useMemo(() => {
     const map = new Map<string, DebateSide[]>();
@@ -118,13 +110,13 @@ export function ClaimDebates({
   const winnerShareByDebateId = useWinnerShares(debateIds);
   const keyframeByDebateId = useDebateKeyframes(debates);
 
-  // Only while there is nothing to show. Once a page has landed the list stays put and the next
-  // one appends beneath it, rather than collapsing back to a skeleton on every "Show more".
   if (isLoading && debates.length === 0) {
     return <Skeleton className="h-[120px] w-full rounded-lg" />;
   }
 
-  if (debates.length === 0) return null;
+  // Only on the first page: further in, an empty page still needs its pager so the reader can get
+  // back out.
+  if (debates.length === 0 && pages.isFirstPage) return null;
 
   return (
     <section aria-label="Debates on this claim">
@@ -146,16 +138,13 @@ export function ClaimDebates({
           </li>
         ))}
       </ul>
-      {hasNextPage && endCursor && (
-        <button
-          type="button"
-          onClick={() => setCursor(endCursor)}
-          disabled={isLoading}
-          className="mt-3 text-metadata text-grey-04 transition-colors hover:text-text disabled:opacity-60"
-        >
-          {isLoading ? 'Loading…' : 'Show more debates'}
-        </button>
-      )}
+      <CursorPager
+        isFirstPage={pages.isFirstPage}
+        hasNextPage={hasNextPage}
+        isLoading={isLoading}
+        onPrevious={pages.toPrevious}
+        onNext={() => endCursor && pages.toNext(endCursor)}
+      />
     </section>
   );
 }
