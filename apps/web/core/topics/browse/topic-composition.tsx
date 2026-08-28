@@ -9,6 +9,7 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
 
@@ -37,6 +38,8 @@ const TOPIC_COMPOSITION_SOURCE = /* GraphQL */ `
     $news: [UUID!]
     $tweet: [UUID!]
     $post: [UUID!]
+    $debate: [UUID!]
+    $debateClaimsPropertyId: UUID!
   ) {
     total: relationsConnection(filter: { typeId: { is: $topicsPropertyId }, toEntityId: { is: $topicId } }) {
       totalCount
@@ -86,10 +89,32 @@ const TOPIC_COMPOSITION_SOURCE = /* GraphQL */ `
     ) {
       totalCount
     }
+    # Debates are the one bucket that isn't a \`Topics\` relation, so it can't be an aliased count
+    # over the same connection as the rest. A Debate carries \`Claims\` and never \`Topics\`, which
+    # means the link to a topic is two hops — debate to claim, claim to topic — expressed here as a
+    # nested filter on the far end of the relation.
+    #
+    # Asked of entities rather than relations because the count has to be of debates, not of links:
+    # one debate arguing three of a topic's claims is three \`Claims\` relations and would inflate
+    # the bar threefold. Measured 5 relations against 4 debates on \`AI regulation\`, so the
+    # difference is real rather than theoretical.
+    debates: entitiesConnection(
+      filter: {
+        typeIds: { overlaps: $debate }
+        relations: {
+          some: {
+            typeId: { is: $debateClaimsPropertyId }
+            toEntity: { relations: { some: { typeId: { is: $topicsPropertyId }, toEntityId: { is: $topicId } } } }
+          }
+        }
+      }
+    ) {
+      totalCount
+    }
   }
 `;
 
-const topicCompositionDocument = parse(TOPIC_COMPOSITION_SOURCE) as TypedDocumentNode<any, any>;
+export const topicCompositionDocument = parse(TOPIC_COMPOSITION_SOURCE) as TypedDocumentNode<any, any>;
 
 type CompositionResponse = Record<string, { totalCount?: number | null } | null | undefined>;
 
@@ -109,6 +134,7 @@ export function useTopicComposition(topicId: string) {
             news: response.news?.totalCount ?? 0,
             tweets: response.tweets?.totalCount ?? 0,
             posts: response.posts?.totalCount ?? 0,
+            debates: response.debates?.totalCount ?? 0,
           }),
           variables: {
             topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
@@ -118,6 +144,8 @@ export function useTopicComposition(topicId: string) {
             news: [ID.uuidToHex(NEWS_STORY_TYPE_ID)],
             tweet: [ID.uuidToHex(TWEET_TYPE_ID)],
             post: [ID.uuidToHex(POST_TYPE_ID)],
+            debate: [ID.uuidToHex(DEBATE_TYPE_ID)],
+            debateClaimsPropertyId: ID.uuidToHex(DEBATE_CLAIMS_PROPERTY_ID),
           },
           signal,
         })
@@ -142,9 +170,12 @@ export function TopicComposition({ topicId }: { topicId: string }) {
   const buckets = React.useMemo<Bucket[]>(() => {
     if (!counts) return [];
 
+    // Ordered as the page is — debates, then claims, then the kinds that make up Coverage — so the
+    // strip reads as a map of what is below it rather than an unrelated ranking.
     const named: Bucket[] = [
-      { key: 'episodes', label: 'episodes', count: counts.episodes, className: 'bg-ctaPrimary' },
+      { key: 'debates', label: 'debates', count: counts.debates, className: 'bg-purple' },
       { key: 'claims', label: 'claims', count: counts.claims, className: 'bg-green' },
+      { key: 'episodes', label: 'episodes', count: counts.episodes, className: 'bg-ctaPrimary' },
       { key: 'news', label: 'news stories', count: counts.news, className: 'bg-orange' },
       { key: 'tweets', label: 'posts', count: counts.tweets + counts.posts, className: 'bg-red-01' },
     ].filter(bucket => bucket.count > 0);
@@ -152,15 +183,24 @@ export function TopicComposition({ topicId }: { topicId: string }) {
     // Everything the named buckets don't cover — articles, official documents, papers, datasets and
     // the rest of the tail. Counted as a remainder rather than queried type by type: the tail is
     // long and each type in it is worth one or two links on a given topic.
-    const remainder = counts.total - named.reduce((sum, bucket) => sum + bucket.count, 0);
+    //
+    // Debates are excluded from the subtraction because they are not `Topics` relations and so were
+    // never part of `total`. Counting them here would eat into the remainder and shrink a bar that
+    // has nothing to do with them.
+    const remainder =
+      counts.total - named.filter(b => b.key !== 'debates').reduce((sum, bucket) => sum + bucket.count, 0);
     if (remainder > 0) {
       named.push({ key: 'other', label: 'other', count: remainder, className: 'bg-grey-03' });
     }
     return named;
   }, [counts]);
 
+  // For the same reason: the bar is divided by everything it draws, and debates are additional to
+  // the `Topics` relations `total` counts rather than a slice of them.
+  const denominator = (counts?.total ?? 0) + (counts?.debates ?? 0);
+
   if (isLoading) return <Skeleton className="h-[52px] w-full rounded-lg" />;
-  if (!counts || counts.total === 0 || buckets.length === 0) return null;
+  if (!counts || denominator === 0 || buckets.length === 0) return null;
 
   return (
     <section aria-label="What this topic holds">
@@ -169,7 +209,7 @@ export function TopicComposition({ topicId }: { topicId: string }) {
           <span
             key={bucket.key}
             className={bucket.className}
-            style={{ width: `${(100 * bucket.count) / counts.total}%` }}
+            style={{ width: `${(100 * bucket.count) / denominator}%` }}
           />
         ))}
       </div>

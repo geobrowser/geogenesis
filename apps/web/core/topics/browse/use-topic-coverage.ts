@@ -29,7 +29,11 @@ const FRAGMENT = 'TopicCoverageFragment';
  * Asked of `relationsConnection` rather than of entities, which is what makes this one request
  * instead of three problems. The relation is the thing being counted, so the connection can filter
  * on both ends at once — `typeId` for the `Topics` relation, `fromEntity.typeIds` for the kind of
- * thing pointing — and hand back the rows, a real total and a cursor together.
+ * thing pointing — and hand back the rows and a cursor together.
+ *
+ * No `totalCount`. The connection will answer with one, but a bare number beside the heading said
+ * nothing a reader could use — the composition strip above already says how much of what a topic
+ * holds — and asking for it is a second scan of the filtered set per page.
  *
  * `overlaps`, not `containedBy`. The two agree on today's data because these entities carry exactly
  * one type each, but they mean different things: `containedBy` requires the entity's types to be a
@@ -66,7 +70,6 @@ const TOPIC_COVERAGE_SOURCE = /* GraphQL */ `
         fromEntity: { typeIds: { overlaps: $typeIds } }
       }
     ) {
-      totalCount
       pageInfo {
         hasNextPage
         endCursor
@@ -86,16 +89,14 @@ export const topicCoverageDocument = parse(TOPIC_COVERAGE_SOURCE) as TypedDocume
 export type TopicCoveragePage = {
   /** Card rows, still missing the parts only a space lookup can answer. */
   rows: ExploreFeedRow[];
-  totalCount: number;
   endCursor: string | null;
   hasNextPage: boolean;
 };
 
-const EMPTY_PAGE: TopicCoveragePage = { rows: [], totalCount: 0, endCursor: null, hasNextPage: false };
+const EMPTY_PAGE: TopicCoveragePage = { rows: [], endCursor: null, hasNextPage: false };
 
 type CoverageResponse = {
   relationsConnection?: {
-    totalCount?: number | null;
     pageInfo?: { hasNextPage?: boolean | null; endCursor?: string | null } | null;
     nodes?: ({ fromEntity?: unknown } | null)[] | null;
   } | null;
@@ -121,7 +122,6 @@ function decodeCoverage(response: CoverageResponse): TopicCoveragePage {
     // No member/editor spaces: Coverage has no membership context, and the card is rendered with
     // its Join button hidden rather than shown in a state this query cannot determine.
     rows: buildExploreFeedRows(entities, openableSpaceIds, new Set()),
-    totalCount: connection?.totalCount ?? 0,
     endCursor: connection?.pageInfo?.endCursor ?? null,
     hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
   };

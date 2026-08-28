@@ -66,8 +66,10 @@ describe('the topic coverage document', () => {
     );
   });
 
-  it('pages with a cursor and reports a real total', () => {
+  it('pages with a cursor, and asks for no total it does not render', () => {
+    // `totalCount` is a second scan of the filtered set on every page. Nothing shows it — the
+    // composition strip is what says how much a topic holds.
     const root = fields(operation(topicCoverageDocument).selectionSet.selections)[0];
-    expect(names(root)).toEqual(['nodes', 'pageInfo', 'totalCount']);
+    expect(names(root)).toEqual(['nodes', 'pageInfo']);
   });
 });

@@ -61,16 +61,9 @@ export function TopicCoverage({ topicId }: { topicId: string }) {
 
   return (
     <section aria-label="Coverage">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <Text as="h2" variant="mediumTitle" color="text">
-          Coverage
-        </Text>
-        {/* A real total rather than a "there is more": `relationsConnection` counts the filtered set
-            in the same request that returns the rows. */}
-        <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
-          {page.totalCount}
-        </Text>
-      </div>
+      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
+        Coverage
+      </Text>
       {/* Cards as direct siblings, exactly as the feed renders them: their bottom rule is a
           `last:border-b-0` on the card itself, so a wrapper around each one would leave a rule
           hanging under the final row.
