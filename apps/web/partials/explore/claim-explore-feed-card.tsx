@@ -14,7 +14,7 @@ import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID, SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
+import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
@@ -129,7 +129,6 @@ export function ClaimExploreFeedCard({
   const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
 
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-  const sourceCount = useSourceCount(entity?.relations);
   const topicIds = useTopicIds(entity?.relations);
 
   return (
@@ -221,7 +220,6 @@ export function ClaimExploreFeedCard({
               summary={summary}
             />
           )}
-          <ClaimSources count={sourceCount} spaceId={item.spaceId} entityId={item.entityId} />
         </div>
       </div>
 
@@ -330,9 +328,14 @@ function ClaimVerdictColumn({
  * it makes the numbers worth pressing without inventing a second panel UX, and deep-linking to the
  * right section of the claim page is the obvious follow-up.
  *
- * All of it left-aligned in one run, Share last. Sources used to sit here too, pushed to the far
- * right — which looked composed on a busy claim and stranded on an ordinary one. They have moved
- * under the bar in the verdict column, where there is room to name them rather than count them.
+ * All of it left-aligned in one run, Share last, and no rule above it. The card already ends at a
+ * divider of its own, so a second line a few pixels up boxed the actions in for no reason — and on
+ * a claim with nothing but Share it drew a lot of attention to very little.
+ *
+ * Sources used to sit here as a count and briefly moved to the verdict column. They are off the
+ * card entirely now: a `Sources` relation names the article's headline rather than its outlet —
+ * a median of 73 characters — so there was never a version of this that read well at card size.
+ * `ClaimProvenance` on the claim page has the width to do it properly.
  */
 function ClaimCardActions({
   item,
@@ -377,7 +380,7 @@ function ClaimCardActions({
   const actionClassName = 'inline-flex items-center gap-1.5 text-[14px] text-grey-04 transition-colors hover:text-text';
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-divider pt-3">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       {debateCount ? (
         <button
           type="button"
@@ -417,28 +420,6 @@ function countLabel(shown: number, hasMore: boolean): string | null {
   return hasMore ? `${shown}+` : String(shown);
 }
 
-/**
- * How many distinct things this claim was lifted from.
- *
- * Deduped by target: the same story reaches the graph more than once, and the sample contains
- * near-identical article titles pointing at one event. Counting the relations rather than their
- * targets would report corroboration that isn't there.
- */
-function useSourceCount(relations: Relation[] | undefined): number {
-  return React.useMemo(() => {
-    // Deduped by target: the same story reaches the graph more than once, and the sample contains
-    // near-identical article titles pointing at one event. Counting relations rather than their
-    // targets would report corroboration that is not there.
-    const ids = new Set<string>();
-    for (const relation of relations ?? []) {
-      if (relation.isDeleted === true) continue;
-      if (!ID.equals(relation.type.id, SOURCES_PROPERTY_ID)) continue;
-      ids.add(relation.toEntity.id.toLowerCase());
-    }
-    return ids.size;
-  }, [relations]);
-}
-
 function useTopicIds(relations: Relation[] | undefined): string[] {
   return React.useMemo(
     () =>
@@ -446,38 +427,5 @@ function useTopicIds(relations: Relation[] | undefined): string[] {
         .filter(relation => relation.isDeleted !== true && ID.equals(relation.type.id, TOPICS_PROPERTY_ID))
         .map(relation => relation.toEntity.id),
     [relations]
-  );
-}
-
-/**
- * Where the claim came from, under the split it belongs to.
- *
- * A count, not a list — and that is a concession to the data rather than a preference. A `Sources`
- * relation points at an Article whose name is the article's *headline*: a median of 73 characters
- * and up to 128, not an outlet. There is no publisher field to read instead. So "Reuters · Kyiv
- * Independent" is not something this card can render; what it would actually print is two truncated
- * headlines stacked in a 220px column, which buries the verdict above it and still does not tell
- * you who reported the story.
- *
- * The count is worth keeping on its own. 39% of claims carry a source and 45% of those carry more
- * than one, up to seven — and several outlets reporting the same thing independently is
- * corroboration, which is a fact about the claim even when the titles are unreadable at this size.
- *
- * Opens the claim, where `ClaimProvenance` has the width to list them properly.
- */
-function ClaimSources({ count, spaceId, entityId }: { count: number; spaceId: string; entityId: string }) {
-  const { openSidePanel } = useEntitySidePanel();
-
-  if (count === 0) return null;
-
-  return (
-    <button
-      type="button"
-      onClick={() => openSidePanel(entityId, spaceId, false)}
-      aria-label={`${count} ${count === 1 ? 'source' : 'sources'} for this claim`}
-      className="mt-3 block text-footnoteMedium text-grey-04 tabular-nums transition-colors hover:text-text"
-    >
-      {count} {count === 1 ? 'source' : 'sources'}
-    </button>
   );
 }

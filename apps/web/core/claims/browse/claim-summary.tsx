@@ -154,8 +154,11 @@ export function ClaimSideSummary({
   return (
     <div className={cx('flex min-w-0 items-center gap-2', alignEnd && 'justify-end')}>
       <span className={cx('size-2 shrink-0 rounded-xs', swatchClassName)} aria-hidden />
+      {/* Count first, and the verb lowercase: "12 agree" is a sentence, where "Agree 12" is a label
+          with a number stuck to it. It also matches the share directly above — "68% agree" — so the
+          three lines of the verdict read in one voice instead of two. */}
       <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
-        {label} {count}
+        {count} {label.toLowerCase()}
       </Text>
       {count > 0 && (
         <ClaimSideResponders
