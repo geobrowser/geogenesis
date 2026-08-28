@@ -157,15 +157,23 @@ export function ClaimExploreFeedCard({
   }
   if (typeNames.length > 0) {
     metaSegments.push(
-      <span key="types" className="text-[14px] leading-[13px] tracking-[-0.35px] text-grey-04">
-        {typeNames.join(' · ')}
+      <span
+        key="types"
+        className="inline-flex min-w-0 flex-wrap items-center text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04"
+      >
+        {typeNames.map((name, index) => (
+          <React.Fragment key={name}>
+            {index > 0 ? <MetaDot /> : null}
+            <span className="truncate">{name}</span>
+          </React.Fragment>
+        ))}
       </span>
     );
   }
   if (summary.isControversial) metaSegments.push(<ControversialTag key="controversial" />);
   if (timeAgo) {
     metaSegments.push(
-      <span key="time" className="shrink-0 text-[14px] leading-[13px] tracking-[-0.35px] text-grey-04">
+      <span key="time" className="shrink-0 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
         {timeAgo}
       </span>
     );
@@ -193,15 +201,17 @@ export function ClaimExploreFeedCard({
       <div className="grid grid-cols-[minmax(0,1fr)_220px] gap-x-6 md:grid-cols-1 md:gap-y-4">
         {/* `min-h-7`: the end slot is empty until the match lookup answers and 28px tall once it
             fills, so the row holds that height from the start rather than growing under the reader. */}
-        {/* The generic card's meta row, built the generic card's way: the space, a 6px spacer, then
-            segments joined by `MetaDot`, whose own margins carry the spacing. Reproducing that with
-            a flex `gap` and a literal "·" is what left the type and the timestamp a different
-            distance apart here than on every card beside it. */}
-        <div className="col-start-1 row-start-1 mb-3 flex min-h-7 min-w-0 flex-wrap items-center gap-y-1 md:mb-0">
+        {/* The generic card's meta row, class for class: the space, a 6px spacer, then segments
+            joined by `MetaDot`, whose own margins carry the spacing. Every difference from it turned
+            out to be a difference the eye could see — a flex `gap` instead of those margins, a
+            missing `font-normal`, a `min-h` reserving the end slot's height that also held the row
+            8px taller than the same row on every neighbouring card. The only thing added is the
+            slot at the end. */}
+        <div className="col-start-1 row-start-1 mb-3 flex min-w-0 flex-wrap items-center gap-y-2 md:mb-0">
           {!hideSpaceLink ? (
             <Link
               href={NavUtils.toSpace(item.spaceId)}
-              className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] tracking-[-0.35px] text-text hover:underline"
+              className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
             >
               <SpaceThumb image={item.spaceImage} name={item.spaceName} />
               <span className="min-w-0 truncate">{item.spaceName}</span>
