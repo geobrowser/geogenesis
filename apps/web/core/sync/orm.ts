@@ -241,6 +241,17 @@ export class E {
       types,
       values: values,
       relations: relations,
+      /**
+       * Carried rather than derived. Everything above is rebuilt from the merged values and
+       * relations, but timestamps are server metadata with no local counterpart, so reconstructing
+       * the entity without them silently strips what the query fetched.
+       *
+       * That matters because consumers read a missing timestamp as "not hydrated yet" and fall back
+       * to their own per-row fetch — the remote is preferred, and the local copy is the fallback so
+       * an entity already in the store keeps whatever it had.
+       */
+      createdAt: remoteEntity.createdAt ?? localEntity.createdAt,
+      updatedAt: remoteEntity.updatedAt ?? localEntity.updatedAt,
     };
   }
 
