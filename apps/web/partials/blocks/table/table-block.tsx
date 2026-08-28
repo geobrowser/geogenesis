@@ -11,8 +11,12 @@ import { produce } from 'immer';
 
 import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
-import type { DataBlockView } from '~/core/blocks/data/data-block-view';
 import { Filter, FilterMode } from '~/core/blocks/data/filters';
+import {
+  buildAccumulationResetKey,
+  resolveInfiniteScrollDisplay,
+  viewRendersAllEntries,
+} from '~/core/blocks/data/infinite-scroll-display';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import { Source } from '~/core/blocks/data/source';
 import { useBlockInfiniteScroll } from '~/core/blocks/data/use-block-infinite-scroll';
@@ -550,12 +554,6 @@ function TableBlockQuerySetup({ spaceId, onCompleteQuerySetup }: Props) {
   );
 }
 
-/**
- * Views whose renderer draws every entry it is given, so accumulating pages actually grows the
- * list. TABLE is absent deliberately: `TableBlockTable` paginates internally at a fixed 9 rows.
- */
-const INFINITE_SCROLLABLE_VIEWS = new Set<DataBlockView>(['LIST', 'BULLETED_LIST', 'GALLERY', 'PILL', 'EXPLORE']);
-
 const ConfiguredTableBlock = ({
   spaceId,
   blockId,
@@ -581,6 +579,10 @@ const ConfiguredTableBlock = ({
     isLoading,
     isFetched,
     isPlaceholderData,
+    error: dataBlockError,
+    refetch: refetchDataBlock,
+    filterStateKey,
+    sortKey,
     hasNextPage,
     hasPreviousPage,
     pageNumber,
@@ -746,22 +748,27 @@ const ConfiguredTableBlock = ({
   // one page at a time while the user sees nine rows. Allowlist rather than deny TABLE, so a
   // view added later has to opt in instead of silently inheriting that.
   const infiniteScrollProperty = useBlockInfiniteScroll();
-  const viewRendersAllEntries = INFINITE_SCROLLABLE_VIEWS.has(view);
-  const isInfiniteScroll = infiniteScrollProperty && viewRendersAllEntries && !isEditing;
+  const isInfiniteScroll = infiniteScrollProperty && viewRendersAllEntries(view) && !isEditing;
 
   const [rowPages, setRowPages] = React.useState<RowPage[]>([]);
 
+  // A failed page never lands in `rowPages`, so without this the block cannot tell "no results"
+  // from "the fetch never came back" — see `resolveInfiniteScrollDisplay`.
+  const hasInfiniteScrollError = isInfiniteScroll && dataBlockError != null;
+
   const accumulationResetKey = React.useMemo(
     () =>
-      JSON.stringify({
+      buildAccumulationResetKey({
         isInfiniteScroll,
         pageSize,
-        sourceKey: source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO',
-        filters: activeFilters.map(f => ({ c: f.columnId, v: f.value })),
+        sourceKey: JSON.stringify(
+          source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO'
+        ),
+        filterStateKey,
         filterMode: activeFilterMode,
-        sort: sortState ?? null,
+        sortKey,
       }),
-    [isInfiniteScroll, pageSize, source, activeFilters, activeFilterMode, sortState]
+    [isInfiniteScroll, pageSize, source, filterStateKey, activeFilterMode, sortKey]
   );
 
   // `setPage(0)` only lands on the next render, so between the reset and that render `pageNumber`
@@ -785,6 +792,9 @@ const ConfiguredTableBlock = ({
   React.useEffect(() => {
     if (!isInfiniteScroll) return;
     if (!isFetched || isPlaceholderData) return;
+    // A failed fetch settles as `isFetched` with the local-store fallback, so committing here
+    // would bank an empty page as loaded and never retry it.
+    if (hasInfiniteScrollError) return;
     if (awaitingPageResetRef.current) {
       // Nothing to wait for once we are actually on page 0 — that is the reset having landed
       // (or it never moved us, because we were already there).
@@ -793,7 +803,7 @@ const ConfiguredTableBlock = ({
     }
     const realRows = entries.filter(row => !row.placeholder);
     setRowPages(prev => upsertRowPage(prev, pageNumber, realRows));
-  }, [isInfiniteScroll, isFetched, isPlaceholderData, pageNumber, entries]);
+  }, [isInfiniteScroll, isFetched, isPlaceholderData, hasInfiniteScrollError, pageNumber, entries]);
 
   const accumulatedEntries = React.useMemo(() => flattenRowPages(rowPages), [rowPages]);
 
@@ -806,7 +816,7 @@ const ConfiguredTableBlock = ({
   }, [hasNextPage, hasCurrentPage, isPlaceholderData, setPage]);
 
   const infiniteScrollSentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: isInfiniteScroll && hasNextPage,
+    hasNextPage: isInfiniteScroll && hasNextPage && !hasInfiniteScrollError,
     isFetchingNextPage,
     fetchNextPage: fetchNextInfinitePage,
     rootMargin: '1000px',
@@ -818,12 +828,24 @@ const ConfiguredTableBlock = ({
       ? accumulatedEntries
       : entries.filter(row => !row.placeholder);
 
+  const infiniteScrollDisplay = resolveInfiniteScrollDisplay({
+    isInfiniteScroll,
+    hasRows: displayEntries.length > 0,
+    hasNextPage,
+    hasError: hasInfiniteScrollError,
+    isFetchingNextPage,
+    isFetched,
+    isLoading,
+    isCollection: source.type === 'COLLECTION',
+  });
+
   // Show pagination if:
   // 1. There are multiple pages currently (hasPreviousPage, hasNextPage, or totalPages > 1)
   // 2. OR filters are active and unfiltered data had multiple pages
-  // Never in infinite-scroll browse mode.
+  // Never in infinite-scroll browse mode — except when infinite scroll has errored, where the
+  // pager is the only way forward if retrying keeps failing.
   const hasPagination =
-    !isInfiniteScroll &&
+    (!isInfiniteScroll || hasInfiniteScrollError) &&
     (hasPreviousPage || hasNextPage || totalPages > 1 || (activeFilters.length > 0 && hasMultiplePagesWhenUnfiltered));
 
   let EntriesComponent = (
@@ -966,25 +988,41 @@ const ConfiguredTableBlock = ({
     );
   }
 
-  if (isInfiniteScroll && displayEntries.length > 0) {
+  if (
+    infiniteScrollDisplay.showSentinel ||
+    infiniteScrollDisplay.showSkeleton ||
+    infiniteScrollDisplay.showRetry
+  ) {
     EntriesComponent = (
       <>
-        {EntriesComponent}
-        {isFetchingNextPage && (
+        {displayEntries.length > 0 && EntriesComponent}
+        {infiniteScrollDisplay.showSkeleton && (
           <div className="flex flex-col gap-3 py-4" aria-hidden>
             <div className="h-4 w-1/3 animate-pulse rounded-sm bg-divider" />
             <div className="h-4 w-2/3 animate-pulse rounded-sm bg-divider" />
           </div>
         )}
-        <div ref={infiniteScrollSentinelRef} aria-hidden className="h-4 w-full" />
+        {infiniteScrollDisplay.showRetry && (
+          <div className="flex flex-col items-center gap-2 py-4 text-footnote text-grey-04">
+            <span>Couldn&apos;t load more results.</span>
+            <button type="button" onClick={() => void refetchDataBlock()} className="text-ctaPrimary hover:underline">
+              Try again
+            </button>
+          </div>
+        )}
+        {infiniteScrollDisplay.showSentinel && (
+          <div ref={infiniteScrollSentinelRef} aria-hidden className="h-4 w-full" />
+        )}
       </>
     );
   }
 
   // In infinite-scroll mode the current page's `entries` can momentarily be
   // empty (e.g. a trailing empty page) while accumulated rows are still shown —
-  // gate on `displayEntries` so the empty state can't clobber the populated list.
-  if (source.type !== 'COLLECTION' && displayEntries.length === 0 && isFetched && !isLoading) {
+  // `showEmptyState` gates on the rows actually being displayed so the placeholder can't
+  // clobber a populated list, and stays false on a failed fetch so a timeout isn't
+  // presented to the user as "nothing matched".
+  if (infiniteScrollDisplay.showEmptyState) {
     EntriesComponent = (
       <div className="flex min-h-[200px] flex-col justify-center rounded-lg bg-grey-01">
         <div className="flex flex-col items-center justify-center gap-4 p-4 text-lg">

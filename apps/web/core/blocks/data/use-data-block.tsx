@@ -196,6 +196,8 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isPlaceholderData: isQueryEntitiesPlaceholder,
     endCursor: queriedEndCursor,
     hasNextPage: queriedHasNextPage,
+    error: queriedError,
+    refetch: refetchQueriedEntities,
   } = useQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
@@ -456,6 +458,23 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isLoading,
     isFetched,
     isPlaceholderData,
+
+    /**
+     * A failed remote fetch settles as `isFetched` with the local-store fallback, so callers
+     * rendering an empty state need this to tell "nothing matched" from "the query never came
+     * back". Only the GEO/SPACES query reports one today; COLLECTION and RELATIONS do not.
+     */
+    error: queriedError,
+    /** Retry after `error` — without it a failed fetch reads as "fetched, zero results" forever. */
+    refetch: refetchQueriedEntities,
+
+    /**
+     * The serialized query identity. Exposed so callers that cache derived per-query state can
+     * invalidate on exactly the same signal the query itself keys on, rather than re-deriving a
+     * projection of the filter/sort state that can silently drift from it.
+     */
+    filterStateKey,
+    sortKey,
 
     name: entity?.name ?? null,
     setName,

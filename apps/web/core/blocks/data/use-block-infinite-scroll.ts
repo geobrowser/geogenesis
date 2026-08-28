@@ -29,6 +29,8 @@ export function useBlockInfiniteScroll(): boolean {
   const infiniteScrollValues = useValues({
     includeDeleted: true,
     selector: value =>
+      // Without the emptiness check a block whose Blocks relation hasn't resolved matches on `''`.
+      blocksRelationEntityId !== '' &&
       value.entity.id === blocksRelationEntityId &&
       ID.equals(value.property.id, DATA_BLOCK_INFINITE_SCROLL_PROPERTY_ID) &&
       value.spaceId === spaceId,
