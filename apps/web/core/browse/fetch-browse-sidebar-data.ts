@@ -30,6 +30,7 @@ export type BrowseSidebarData = {
   documentationImage: string | null;
   /** Personal space id used for membership/editor GraphQL (same as browse “member space”). */
   personalSpaceId: string | null;
+  featuredError?: boolean;
 };
 
 function toBrowseSpaceRow(space: FeaturedSpace): BrowseSpaceRow {
@@ -104,7 +105,7 @@ async function fetchBrowseSidebarSources(memberSpaceId: string) {
 async function buildBrowseSidebarDataFromSources(
   memberSpaceId: string,
   { editorIds, memberSpaces, pendingMemberIds, pendingEditorIds }: BrowseSidebarSources,
-  featuredSpaces: FeaturedSpace[]
+  { featured: featuredSpaces, error: featuredError }: ResolvedFeaturedSpaces
 ): Promise<BrowseSidebarData> {
   const editorIdSet = new Set(editorIds);
   const pendingMemberIdSet = new Set(pendingMemberIds);
@@ -159,6 +160,7 @@ async function buildBrowseSidebarDataFromSources(
     memberOf,
     documentationImage: rows.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
     personalSpaceId: memberSpaceId,
+    featuredError,
   };
 }
 
@@ -171,15 +173,20 @@ type BrowseSidebarSources = {
 
 type FeaturedSpacesSource = FeaturedSpace[] | PromiseLike<FeaturedSpace[]>;
 
-function resolveFeaturedSpaces(source?: FeaturedSpacesSource): Promise<FeaturedSpace[]> {
+type ResolvedFeaturedSpaces = { featured: FeaturedSpace[]; error: boolean };
+
+function resolveFeaturedSpaces(source?: FeaturedSpacesSource): Promise<ResolvedFeaturedSpaces> {
   const promise = source ? Promise.resolve(source) : fetchFeaturedSpaces();
-  return promise.catch(error => {
-    // Cancellation must keep propagating so query consumers do not replace a
-    // cancelled request with a successful-but-empty sidebar response.
-    if (error instanceof AbortError || (error instanceof Error && error.name === 'AbortError')) throw error;
-    console.error('Unable to load Featured spaces for the Browse sidebar', error);
-    return [];
-  });
+  return promise.then(
+    featured => ({ featured, error: false }),
+    error => {
+      // Cancellation must keep propagating so query consumers do not replace a
+      // cancelled request with a successful-but-empty sidebar response.
+      if (error instanceof AbortError || (error instanceof Error && error.name === 'AbortError')) throw error;
+      console.error('Unable to load Featured spaces for the Browse sidebar', error);
+      return { featured: [], error: true };
+    }
+  );
 }
 
 /**
@@ -193,34 +200,32 @@ export async function fetchBrowseSidebarData(
   const featuredSpacesPromise = resolveFeaturedSpaces(featuredSpacesSource);
 
   if (!memberSpaceId) {
-    const [featuredSpaces, documentationRows] = await Promise.all([
+    const [featured, documentationRows] = await Promise.all([
       featuredSpacesPromise,
       fetchSpaceRows([DOCUMENTATION_SPACE_ID]),
     ]);
     return {
-      featured: featuredSpaces.map(toBrowseSpaceRow),
+      featured: featured.featured.map(toBrowseSpaceRow),
       editorOf: [],
       memberOf: [],
       documentationImage: documentationRows.get(DOCUMENTATION_SPACE_ID)?.image ?? null,
       personalSpaceId: null,
+      featuredError: featured.error,
     };
   }
 
-  const [sources, featuredSpaces] = await Promise.all([
-    fetchBrowseSidebarSources(memberSpaceId),
-    featuredSpacesPromise,
-  ]);
-  return buildBrowseSidebarDataFromSources(memberSpaceId, sources, featuredSpaces);
+  const [sources, featured] = await Promise.all([fetchBrowseSidebarSources(memberSpaceId), featuredSpacesPromise]);
+  return buildBrowseSidebarDataFromSources(memberSpaceId, sources, featured);
 }
 
 export async function fetchBrowseSidebarDataWithMemberSpaces(
   memberSpaceId: string,
   featuredSpacesSource?: FeaturedSpacesSource
 ): Promise<{ sidebar: BrowseSidebarData; memberSpaces: Space[] }> {
-  const [sources, featuredSpaces] = await Promise.all([
+  const [sources, featured] = await Promise.all([
     fetchBrowseSidebarSources(memberSpaceId),
     resolveFeaturedSpaces(featuredSpacesSource),
   ]);
-  const sidebar = await buildBrowseSidebarDataFromSources(memberSpaceId, sources, featuredSpaces);
+  const sidebar = await buildBrowseSidebarDataFromSources(memberSpaceId, sources, featured);
   return { sidebar, memberSpaces: sources.memberSpaces };
 }

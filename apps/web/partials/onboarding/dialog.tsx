@@ -112,6 +112,7 @@ export const OnboardingDialog = () => {
 
   const [selectedTopicIds, setSelectedTopicIds] = useAtom(selectedTopicIdsAtom);
   const [featuredSpaces, setFeaturedSpaces] = useState<BrowseSpaceRow[]>([]);
+  const [featuredStatus, setFeaturedStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
 
   const [step, setStep] = useAtom(stepAtom);
   const [entityMatchCandidates, setEntityMatchCandidates] = useState<SearchResult[]>([]);
@@ -158,19 +159,28 @@ export const OnboardingDialog = () => {
     return () => clearTimeout(timeout);
   }, [step, destination, router, setStep, dismissOnboarding]);
 
-  // Fetch featured spaces if the step is 'interested-in'. This is the same
-  // featured-space traversal the Browse sidebar uses, so there's no local
-  // fallback list to fall back to — an empty step just shows no topics.
-  useEffect(() => {
-    if (step !== 'interested-in') return;
-
+  // Fetch featured spaces for the 'interested-in' step. This is the same featured-space
+  // traversal the Browse sidebar uses. `featuredError` distinguishes a failed fetch from a
+  // genuinely empty result, so the step can offer a retry instead of dead-ending on an empty
+  // card (Create profile requires a pick, and onboarding can't be dismissed.
+  const loadFeaturedSpaces = React.useCallback(() => {
+    setFeaturedStatus('loading');
     fetchBrowseSidebarData(undefined)
-      .then(data => setFeaturedSpaces(data.featured))
+      .then(data => {
+        setFeaturedSpaces(data.featured);
+        setFeaturedStatus(data.featuredError ? 'error' : 'loaded');
+      })
       .catch(error => {
         console.error('[onboarding] failed to load featured spaces', error);
         setFeaturedSpaces([]);
+        setFeaturedStatus('error');
       });
-  }, [step]);
+  }, []);
+
+  useEffect(() => {
+    if (step !== 'interested-in') return;
+    loadFeaturedSpaces();
+  }, [step, loadFeaturedSpaces]);
 
   const address = smartAccount?.account.address;
 
@@ -272,6 +282,8 @@ export const OnboardingDialog = () => {
                 handleSelectTopics={handleSelectTopics}
                 onCompleteOnboard={onCompleteOnboard}
                 featuredSpaces={featuredSpaces}
+                status={featuredStatus}
+                onRetry={loadFeaturedSpaces}
               />
             )}
             {effectiveStep === 'completed' && <StepComplete />}
@@ -723,12 +735,20 @@ function StepInterestedIn({
   selectedTopicIds,
   onCompleteOnboard,
   featuredSpaces,
+  status,
+  onRetry,
 }: {
   handleSelectTopics: (id: string) => void;
   selectedTopicIds: string[];
   onCompleteOnboard: () => void;
   featuredSpaces: BrowseSpaceRow[];
+  status: 'loading' | 'loaded' | 'error';
+  onRetry: () => void;
 }) {
+  const isLoading = status === 'loading';
+  const isError = status === 'error';
+  const canCreateProfile = featuredSpaces.length > 0 ? selectedTopicIds.length > 0 : true;
+
   return (
     <div className="flex h-full flex-col justify-between">
       <StepContents childKey="interested-in">
@@ -745,38 +765,59 @@ function StepInterestedIn({
           </Text>
         </div>
       </StepContents>
-      <div className="flex h-full flex-wrap content-start items-start justify-center gap-1 pt-[32px]">
-        {featuredSpaces.map(featuredSpace => {
-          return (
-            <div
-              key={`interested-topic-${featuredSpace.id}`}
-              role="button"
-              onClick={() => handleSelectTopics(featuredSpace.id)}
-              className={`flex cursor-pointer items-center justify-start rounded-[40px] border px-4 py-3 ${selectedTopicIds.includes(featuredSpace.id) ? 'border-[#2A2B2E]' : 'border-grey-02'}`}
-            >
-              <div className="relative mr-[10px] h-4 w-4">
-                <FallbackImage
-                  value={featuredSpace.image ?? ''}
-                  sizes="16px"
-                  className="max-h-4 max-w-4 rounded-full bg-red-01"
-                />
-              </div>
+      {isLoading ? (
+        <div className="flex h-full items-center justify-center pt-[32px]">
+          <Dots />
+        </div>
+      ) : isError ? (
+        <div className="flex h-full flex-col items-center justify-center gap-2 pt-[32px] text-center">
+          <Text as="p" variant="body" className="text-[16px] leading-5 font-normal text-grey-04">
+            We couldn&apos;t load spaces to join. Check your connection and try again.
+          </Text>
+        </div>
+      ) : (
+        <div className="flex h-full flex-wrap content-start items-start justify-center gap-1 pt-[32px]">
+          {featuredSpaces.map(featuredSpace => {
+            return (
+              <div
+                key={`interested-topic-${featuredSpace.id}`}
+                role="button"
+                onClick={() => handleSelectTopics(featuredSpace.id)}
+                className={`flex cursor-pointer items-center justify-start rounded-[40px] border px-4 py-3 ${selectedTopicIds.includes(featuredSpace.id) ? 'border-[#2A2B2E]' : 'border-grey-02'}`}
+              >
+                <div className="relative mr-[10px] h-4 w-4">
+                  <FallbackImage
+                    value={featuredSpace.image ?? ''}
+                    sizes="16px"
+                    className="max-h-4 max-w-4 rounded-full bg-red-01"
+                  />
+                </div>
 
-              <span className="text-[16px] leading-[10px] font-normal text-[#2A2B2E]">{featuredSpace.name}</span>
-            </div>
-          );
-        })}
-      </div>
-      <Button
-        onClick={onCompleteOnboard}
-        disabled={selectedTopicIds.length === 0}
-        className={cx(
-          'min-h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal',
-          selectedTopicIds.length > 0 && 'bg-ctaHover'
-        )}
-      >
-        Create profile
-      </Button>
+                <span className="text-[16px] leading-[10px] font-normal text-[#2A2B2E]">{featuredSpace.name}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {isError ? (
+        <Button
+          onClick={onRetry}
+          className="min-h-6 w-full rounded-md bg-ctaHover pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal"
+        >
+          Try again
+        </Button>
+      ) : (
+        <Button
+          onClick={onCompleteOnboard}
+          disabled={isLoading || !canCreateProfile}
+          className={cx(
+            'min-h-6 w-full rounded-md pt-0 pr-0 pb-0 pl-0 text-[1rem] leading-4 font-normal',
+            !isLoading && canCreateProfile && 'bg-ctaHover'
+          )}
+        >
+          Create profile
+        </Button>
+      )}
     </div>
   );
 }
