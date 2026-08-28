@@ -139,16 +139,20 @@ function EditorFooter({
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */
-function useCustomBrowseView(entityId: string, spaceId: string): 'claim' | 'topic' | null {
+function useCustomBrowseView(entityId: string, spaceId: string): 'claim' | 'topic' | 'generic' | 'pending' {
   const isEditing = useUserIsEditing(spaceId);
-  const { entity } = useQueryEntity({ id: entityId });
+  const { entity, isLoading } = useQueryEntity({ id: entityId });
 
-  if (isEditing || !entity) return null;
+  if (isEditing) return 'generic';
+  // The types decide which page this is, so until they are known there is no page to draw. Falling
+  // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
+  // replaced it a moment later, which read as the page loading twice.
+  if (!entity) return isLoading ? 'pending' : 'generic';
   if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
   // After Claim, so an entity typed as both reads as the narrower of the two — a claim is a thing
   // to take a side on, which is more specific than a subject heading.
   if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
-  return null;
+  return 'generic';
 }
 
 export function EntityPageBody(props: EntityPageBodyProps) {
@@ -173,6 +177,10 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   //
   // Placed here rather than in the entity route's template strategy so the side panel is covered
   // too: both surfaces render through this component, and the strategy only sees the route.
+  // Nothing rather than the wrong page. A blank moment is shorter and quieter than drawing the
+  // generic value sheet and swapping it out from under the reader.
+  if (customView === 'pending') return null;
+
   if (customView === 'claim') {
     return <ClaimPageView entityId={entityId} spaceId={spaceId} />;
   }

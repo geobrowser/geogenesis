@@ -37,11 +37,21 @@ function useParentTopic(childId: string | null): Entity | null {
         },
       ],
     },
-    first: 1,
+    // More than one, deliberately. A topic can be a subtopic of several — the hierarchy is a graph,
+    // not a tree — and asking for one hands back whichever the query happened to order first, which
+    // is what made the same topic show different paths on different loads.
+    first: 10,
     enabled: Boolean(childId),
   });
 
-  return entities[0] ?? null;
+  // Pick the same parent every time. Ordering by id is arbitrary but *stable*, which is the property
+  // that matters: a breadcrumb that changes between visits is worse than one that picks a defensible
+  // branch and sticks to it. A curated-parent preference would be better and needs the tag on the
+  // candidates, which this projection doesn't carry.
+  return React.useMemo(() => {
+    if (entities.length === 0) return null;
+    return [...entities].sort((a, b) => a.id.localeCompare(b.id))[0] ?? null;
+  }, [entities]);
 }
 
 /**
