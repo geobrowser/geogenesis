@@ -303,7 +303,10 @@ function ClaimVerdictColumn({
       </div>
       {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
           what kind of claim this is rather than adding a second voice to the split. */}
-      <div className="mt-3 flex flex-col gap-1.5">
+      {/* Stacked in the desktop rail, which is 220px and cannot hold both. Side by side on a phone,
+          where the column is the full width of the card — agree left, disagree pushed right, the
+          same arrangement the claim page uses when it has the room. */}
+      <div className="mt-3 flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
         <ClaimSideSummary
           swatchClassName="bg-green"
           label={copy.positiveAction}
