@@ -44,18 +44,22 @@ function BountyGeoIcon() {
   );
 }
 
-export const CARD_WIDTH_PX = 249;
 export const COMPLETED_CARD_HEIGHT_PX = 143;
 export const IN_PROGRESS_CARD_HEIGHT_PX = 110;
-export const AVAILABLE_CARD_WIDTH_PX = 378;
 export const AVAILABLE_CARD_HEIGHT_PX = 240;
 const CARD_PADDING_PX = 20;
 
-function cardStyle(height: number, width: number = CARD_WIDTH_PX): React.CSSProperties {
-  return { boxSizing: 'border-box', width, height, padding: CARD_PADDING_PX };
+/**
+ * Height is fixed — the rows are meant to line up, and the clamps below are tuned to it. Width is
+ * not: a card fills whatever column the grid gives it (see the grid classes in
+ * `community-bounties-sections`). A fixed width is what put both grids one column short — the
+ * cards asked for more than the content column had and wrapped early.
+ */
+function cardStyle(height: number): React.CSSProperties {
+  return { boxSizing: 'border-box', height, padding: CARD_PADDING_PX };
 }
 
-const CARD_CLASS = 'flex flex-col overflow-hidden rounded-lg border border-grey-02 bg-white text-left';
+const CARD_CLASS = 'flex w-full flex-col overflow-hidden rounded-lg border border-grey-02 bg-white text-left';
 
 const CARD_INTERACTIVE_CLASS =
   'cursor-pointer transition-colors duration-150 hover:border-grey-03 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text';
@@ -67,19 +71,17 @@ const CARD_INTERACTIVE_CLASS =
 function BountyCardShell({
   bounty,
   height,
-  width,
   className,
   children,
 }: {
   bounty: SpaceBounty;
   height: number;
-  width?: number;
   className?: string;
   children: React.ReactNode;
 }) {
   const { openSidePanel } = useEntitySidePanel();
 
-  const style = cardStyle(height, width);
+  const style = cardStyle(height);
   const classes = [CARD_CLASS, CARD_INTERACTIVE_CLASS, className].filter(Boolean).join(' ');
 
   const open = () => {
@@ -290,7 +292,7 @@ export function AvailableBountyCard({
   onRegisterInterest: (bounty: SpaceBounty) => void;
 }) {
   return (
-    <BountyCardShell bounty={bounty} height={AVAILABLE_CARD_HEIGHT_PX} width={AVAILABLE_CARD_WIDTH_PX}>
+    <BountyCardShell bounty={bounty} height={AVAILABLE_CARD_HEIGHT_PX}>
       <div className="flex shrink-0 items-center justify-between gap-3">
         <BudgetBadge budget={bounty.budget} />
         <InterestButton
