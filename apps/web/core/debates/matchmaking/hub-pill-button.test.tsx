@@ -11,7 +11,8 @@ describe('HubPillButton', () => {
   /**
    * The pill is a fixed `h-7`. In a flex row — the People tab pairs one with a person's name —
    * a label long enough to be squeezed wraps to a second line and spills out of that height.
-   * Rows already give the name `min-w-0 truncate` so it can absorb the shrinking instead.
+   * nowrap is what prevents it: min-content becomes max-content, so a flex item's default
+   * `min-width: auto` stops the row squeezing the pill, and the name truncates instead.
    */
   it('holds its width and keeps its label on one line', () => {
     render(<HubPillButton>Request debate</HubPillButton>);

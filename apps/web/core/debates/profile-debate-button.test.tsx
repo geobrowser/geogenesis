@@ -42,6 +42,17 @@ describe('ProfileDebateButton', () => {
     expect(mocks.createChallenge).toHaveBeenCalledWith({ recipient_profile_space_id: 'profile-them' });
   });
 
+  /**
+   * This sits at the end of the profile name row. `h-7` is fixed and the button's own `shrink-0`
+   * only governs height (its wrapper is `flex-col`), so without nowrap a long display name
+   * squeezed the pill until "Request debate" wrapped and spilled out of it.
+   */
+  it('keeps its label on one line however long the name beside it is', () => {
+    render(<ProfileDebateButton spaceId="profile-them" />);
+
+    expect(screen.getByRole('button')).toHaveClass('whitespace-nowrap', 'h-7');
+  });
+
   it('reports the request in flight', () => {
     mocks.isPending = true;
     render(<ProfileDebateButton spaceId="profile-them" />);

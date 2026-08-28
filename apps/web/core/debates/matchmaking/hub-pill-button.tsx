@@ -32,9 +32,12 @@ export function HubPillButton({
       disabled={disabled || pending}
       aria-busy={pending || undefined}
       className={cx(
-        // shrink-0 + nowrap because `h-7` is a fixed height: in a flex row a label long enough to
-        // be squeezed wraps to a second line and spills out of the pill. Rows that pair this with
-        // a name already give the name `min-w-0 truncate`, so it absorbs the shrinking instead.
+        // `h-7` is a fixed height, so a label that wraps to a second line spills out of the pill.
+        // nowrap is what prevents that: it makes min-content equal max-content, and a flex item's
+        // default `min-width: auto` then stops the row from squeezing the pill at all — the name
+        // beside it absorbs the shrinking instead, which is why rows give it `min-w-0 truncate`.
+        // shrink-0 is redundant today and kept only to survive a later `min-w-0` on this button,
+        // which would defeat the `min-width: auto` this leans on.
         'inline-flex h-7 shrink-0 items-center justify-center rounded-full px-3 text-metadata whitespace-nowrap transition-colors disabled:opacity-50',
         variant === 'primary'
           ? 'bg-text text-white hover:bg-text/90'
