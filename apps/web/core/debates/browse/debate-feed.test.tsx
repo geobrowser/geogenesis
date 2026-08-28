@@ -223,7 +223,9 @@ describe('DebatesBrowseFeed video sharing', () => {
 
     const heading = screen.getByRole('heading', { name: 'Debates are useful' });
     expect(screen.getByRole('button', { name: 'Join a debate' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('size-8', 'justify-center', '-mb-3');
+    // The feed carried its own back arrow on mobile because it covers the navbar there. The
+    // browser's own back is the way out now, so nothing in the feed should offer a second one.
+    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
     const feedItem = heading.closest('section');
     assert(feedItem, 'Expected the debate heading to be rendered inside a feed item');
     // `pt-5` is the design's 20px gap under the navbar; `md:py-3` overrides it on mobile.

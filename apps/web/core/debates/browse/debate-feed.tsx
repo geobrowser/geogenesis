@@ -20,7 +20,6 @@ import { useQueryEntities } from '~/core/sync/use-store';
 
 import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
-import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
@@ -393,16 +392,6 @@ function DebateFeedItem({
           className="relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
           style={DEBATE_COLUMN_STYLE}
         >
-          {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
-              here are desktop-first (md = max-width:767px), so md: targets mobile. */}
-          <button
-            type="button"
-            aria-label="Back"
-            onClick={() => window.history.back()}
-            className="-mb-3 hidden size-8 items-center justify-center text-text md:flex"
-          >
-            <ArrowLeft />
-          </button>
           <div className="md:mt-4">
             <DebateTitleHeader
               key={debate.claim.claim}
