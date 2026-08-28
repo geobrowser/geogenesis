@@ -54,7 +54,11 @@ vi.mock('~/core/debates/use-auto-debate-readiness', () => ({
   useAutoDebateReadiness: () => {},
 }));
 
-vi.mock('~/core/claims/browse/use-claim-matchup', () => ({
+vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
+  // Only the lookup is stubbed. `withMatchParticipants` stays real, so the card's merge of the
+  // match's participants into the pills runs here rather than being mocked away — and a whole-module
+  // mock would have left it undefined, which is how this broke.
+  ...(await importOriginal<typeof import('~/core/claims/browse/use-claim-matchup')>()),
   useClaimMatchup: () => ({
     match: mocks.match,
     blockedReason: mocks.blockedReason,

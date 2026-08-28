@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
+import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
 import { useAutoDebateReadiness } from '~/core/debates/use-auto-debate-readiness';
 import {
   useEntityResponse,
@@ -244,6 +245,18 @@ export function useClaimPositionControl({
   const copy = ENTITY_RESPONSE_COPY[readiness.response_kind];
   const [responseError, setResponseError] = React.useState<string | null>(null);
 
+  // The offer and the faces it implies, from one fact. Same shared query the end slot reads, so this
+  // costs nothing beyond the merge.
+  const { match } = useClaimMatchup({
+    claimId: claim.claim_entity_id,
+    spaceId: claim.space_id,
+    enabled: isResolvableClaim(claim),
+  });
+  const positionsWithOpponents = React.useMemo(
+    () => withMatchParticipants(positions, match?.positions),
+    [match?.positions, positions]
+  );
+
   // Taking a side *is* offering to argue it. The switch that used to say so is gone, so the rule
   // lives with the control that publishes the response — which means every surface drawing these
   // pills gets it, and none of them has to remember to.
@@ -274,9 +287,9 @@ export function useClaimPositionControl({
   const optimisticPositions = React.useMemo(
     () =>
       viewerIdentityPending
-        ? positions
+        ? positionsWithOpponents
         : withViewerPosition({
-            positions,
+            positions: positionsWithOpponents,
             responseKind: readiness.response_kind,
             serverPosition: readiness.viewer_response?.position ?? null,
             viewerPosition,
@@ -286,7 +299,7 @@ export function useClaimPositionControl({
           }),
     [
       personalSpaceId,
-      positions,
+      positionsWithOpponents,
       readiness.response_kind,
       readiness.viewer_response?.position,
       viewerIdentityPending,

@@ -1,5 +1,6 @@
 'use client';
 
+import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { useDebateActivity } from '~/core/debates/hooks';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
 import { ID } from '~/core/id';
@@ -51,4 +52,41 @@ export function useClaimMatchup({
     requestError: createRequest.error instanceof Error ? createRequest.error.message : null,
     request: () => createRequest.mutate({ space_id: spaceId, claim_entity_id: claimId }),
   };
+}
+
+/**
+ * Put the opponent's face on the side the match is against.
+ *
+ * The offer and the faces come from two different places, and that is deliberate rather than an
+ * oversight to unify: the counts under the pills are on-chain totals, so they agree with the
+ * percentage above them, while the faces are geo-chat's `online_choices` — who is here and
+ * available *right now*. Neither can replace the other.
+ *
+ * But they can disagree, and when they do the card is incoherent: it offers a debate on a side
+ * showing nobody to debate. That happens because the matches lookup is one shared account-level
+ * query while `online_choices` rides a per-claim row — so the offer can land first, and on a claim
+ * geo-chat has no row for it lands alone.
+ *
+ * The match already carries the participants the server based it on, in the same shape. So where a
+ * side has no faces and the match has some, the match's are used. Counts are left alone, because
+ * those are the on-chain ones and the percentage is drawn from them.
+ */
+export function withMatchParticipants(
+  positions: DebateClaimPositionSummary[],
+  matchPositions: DebateClaimPositionSummary[] | undefined
+): DebateClaimPositionSummary[] {
+  if (!matchPositions || matchPositions.length === 0) return positions;
+
+  return positions.map(side => {
+    if (side.participants.length > 0) return side;
+
+    const fromMatch = matchPositions.find(candidate => candidate.position === side.position);
+    if (!fromMatch || fromMatch.participants.length === 0) return side;
+
+    return {
+      ...side,
+      participants: fromMatch.participants,
+      present_count: fromMatch.present_count ?? fromMatch.participants.length,
+    };
+  });
 }
