@@ -604,7 +604,9 @@ export function BlockDragHandle({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
         >
-          <Plus />
+          <span aria-hidden="true" className="flex size-[15px] -translate-y-px [&>svg]:size-full">
+            <Plus />
+          </span>
         </button>
       ) : null}
       <Menu

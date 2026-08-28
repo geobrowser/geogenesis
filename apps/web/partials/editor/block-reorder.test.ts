@@ -72,6 +72,7 @@ describe('BlockDragHandle', () => {
     expect(addButton.compareDocumentPosition(dragButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(hoverCluster).toHaveAttribute('data-block-drag-handle');
     expect(hoverCluster).toHaveClass('w-[60px]');
+    expect(addButton.firstElementChild).toHaveClass('size-[15px]', '-translate-y-px');
 
     fireEvent.click(addButton);
     expect(onInsertBelow).toHaveBeenCalledOnce();
