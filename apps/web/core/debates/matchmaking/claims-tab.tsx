@@ -244,7 +244,17 @@ export function ClaimsTab() {
   // Deliberately the whole allowed set rather than what search currently matches: typing then
   // filters a list that is already loaded instead of restarting a fan-out of per-space requests on
   // every keystroke, and the gateway scopes those lookups hold stay put while it happens.
-  const featuredGroups = React.useMemo(() => featuredClaimIdsBySpace(featuredAllowed), [featuredAllowed]);
+  //
+  // Nothing is asked for signed out, and deliberately not just because the lookup would be
+  // disabled: `debateQueryKeys.claims` is keyed on space and ids but not on the account, and a
+  // disabled react-query observer still hands back whatever that key already holds. Left to it,
+  // the first signed-out render after a sign-out would draw the previous viewer's `viewer_response`
+  // and `viewer_debate_ready` onto these cards. Empty groups mean no key to read, and every field
+  // it would have carried already has the graph-derived fallback below.
+  const featuredGroups = React.useMemo(
+    () => (authenticated ? featuredClaimIdsBySpace(featuredAllowed) : []),
+    [authenticated, featuredAllowed]
+  );
   const featuredRows = useDebateClaimsBySpaces(featuredGroups);
   const featuredReadinessUnresolved = featured && (featuredRows.isLoading || featuredRows.isError);
 

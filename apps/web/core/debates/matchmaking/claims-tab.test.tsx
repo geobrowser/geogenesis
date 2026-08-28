@@ -1279,4 +1279,25 @@ describe('ClaimsTab -- Featured', () => {
     expect(screen.queryByRole('button', { name: /My positions/ })).not.toBeInTheDocument();
     expect(mocks.lastQuery).not.toMatchObject({ filter: 'mine' });
   });
+
+  // `debateQueryKeys.claims` is keyed on space and ids but not on the account, and a disabled
+  // react-query observer still returns whatever that key already holds — so asking at all after a
+  // sign-out would draw the previous viewer's response and readiness onto these cards. Asking for
+  // nothing is what makes that unreachable; the fields all have graph-derived fallbacks.
+  it('asks for no per-space readiness while signed out', async () => {
+    mocks.authenticated = false;
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await screen.findByText('Nuclear power is the cheapest clean energy');
+
+    expect(mocks.debateClaimGroups.at(-1)).toEqual([]);
+  });
+
+  it('asks for it again once signed in', async () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await screen.findByText('Nuclear power is the cheapest clean energy');
+
+    expect(mocks.debateClaimGroups.at(-1)).not.toEqual([]);
+  });
 });
