@@ -4,18 +4,28 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { Effect } from 'effect';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 
+import { requestSpaceMembership } from '~/core/access/request-space-membership';
 import { useCreatePersonalSpace } from '~/core/hooks/use-create-personal-space';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { getSpace } from '~/core/io/queries';
+import { store as jotaiStore } from '~/core/state/jotai-store';
 import { pendingPersonalSpaceAtom, pendingPersonalSpaceId } from '~/core/state/pending-personal-space';
+import {
+  removeRequestedMembershipSpace,
+  requestedMembershipSpacesAtom,
+  upsertRequestedMembershipSpace,
+} from '~/core/state/requested-membership';
 import { useReportError } from '~/core/state/status-bar-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { readRegisteredSpaceId } from '~/core/utils/contracts/create-personal-space-on-chain';
 import { devLog } from '~/core/utils/dev-log';
 import { describeError } from '~/core/utils/error-diagnostics';
 
-import { avatarAtom, nameAtom, spaceIdAtom } from './dialog';
+import { avatarAtom, nameAtom, selectedTopicIdsAtom, spaceIdAtom } from './dialog';
 
 /**
  * Runs the background `createPersonalSpace` chain for an optimistically
@@ -26,8 +36,7 @@ import { avatarAtom, nameAtom, spaceIdAtom } from './dialog';
  *
  * On resolve it remaps the user's local `pending:` edits to the real spaceId,
  * seeds the `usePersonalSpaceId` cache (so `isRegistered` flips true with no
- * indexer-refetch race), and silently swaps the URL if the user is sitting on
- * the optimistic page.
+ * indexer-refetch race), and clears pending so the optimistic page can redirect.
  */
 export function PendingPersonalSpaceRunner() {
   const [pending, setPending] = useAtom(pendingPersonalSpaceAtom);
@@ -41,6 +50,15 @@ export function PendingPersonalSpaceRunner() {
   const { store } = useSyncEngine();
   const queryClient = useQueryClient();
   const reportError = useReportError();
+
+  const tx = useSmartAccountTransaction();
+
+  // The onboarding interest picks are applied once creation resolves. Read them
+  // through a ref so they don't re-trigger the creation effect.
+  const selectedTopicIds = useAtomValue(selectedTopicIdsAtom);
+  const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
+  const onboardingPicksRef = React.useRef({ topicIds: selectedTopicIds });
+  onboardingPicksRef.current = { topicIds: selectedTopicIds };
 
   // Dedupe: never run two creation chains for the same topic at once (the
   // effect re-fires on every `pending`/atom change).
@@ -73,7 +91,11 @@ export function PendingPersonalSpaceRunner() {
     // unregistered until a reload. runningRef alone is the dedupe, released in a
     // finally. Re-entry is safe because creation is idempotent — it returns the
     // existing id when registration already landed.
+    let resolved = false;
     const resolve = (spaceId: string) => {
+      if (resolved) return;
+      resolved = true;
+
       // Flip every signal in one synchronous batch so the user never sees an
       // in-between frame (registered but still "pending"). The pending page
       // redirects itself onto the real space the moment `setPending(null)`
@@ -91,6 +113,122 @@ export function PendingPersonalSpaceRunner() {
       void queryClient.invalidateQueries({ queryKey: ['profile', address] });
     };
 
+    type MembershipTarget = { id: string; name?: string; image?: string | null };
+
+    let flipped = false;
+    let seededIds: string[] = [];
+    const flipPendingOptimistically = async (): Promise<MembershipTarget[]> => {
+      if (flipped) return [];
+      flipped = true;
+
+      const { topicIds } = onboardingPicksRef.current;
+      if (topicIds.length === 0) return [];
+
+      seededIds = [...topicIds];
+      const requestedAt = Date.now();
+      jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+        topicIds.reduce(
+          (next, id) =>
+            upsertRequestedMembershipSpace(next, {
+              id,
+              ownerId: address,
+              requestedAt,
+            }),
+          prev
+        )
+      );
+      void queryClient.invalidateQueries({ queryKey: ['browse-sidebar-data'] });
+
+      const targets = (
+        await Promise.all(
+          topicIds.map(async targetSpaceId => {
+            try {
+              const targetSpace = await Effect.runPromise(getSpace(targetSpaceId));
+              if (!targetSpace?.address) {
+                jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+                  removeRequestedMembershipSpace(prev, targetSpaceId, address)
+                );
+                return null;
+              }
+              const target: MembershipTarget = {
+                id: targetSpaceId,
+                name: targetSpace.entity.name ?? undefined,
+                image: targetSpace.entity.image,
+              };
+              jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+                upsertRequestedMembershipSpace(prev, {
+                  id: target.id,
+                  ownerId: address,
+                  requestedAt,
+                  name: target.name,
+                  image: target.image,
+                })
+              );
+              return target;
+            } catch (error) {
+              console.error('[PendingPersonalSpace] failed to load target space', targetSpaceId, error);
+              jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+                removeRequestedMembershipSpace(prev, targetSpaceId, address)
+              );
+              return null;
+            }
+          })
+        )
+      ).filter((t): t is NonNullable<typeof t> => t !== null);
+
+      return targets;
+    };
+
+    // Fire the actual membership request txs once the personal space is on-chain. The
+    // pending rows already show (address-scoped, above); drop that row whether the
+    // request succeeds (personalSpaceId-scoped bridge takes over) or fails.
+    let requestsFired = false;
+    const fireMembershipRequests = async (spaceId: string, targets: MembershipTarget[]) => {
+      if (requestsFired) return;
+      requestsFired = true;
+
+      await Promise.all(
+        targets.map(async target => {
+          try {
+            await requestSpaceMembership({
+              spaceId: target.id,
+              personalSpaceId: spaceId,
+              tx,
+              queryClient,
+              space: { name: target.name, image: target.image },
+            });
+          } catch (error) {
+            console.error('[PendingPersonalSpace] membership proposal failed for', target.id, error);
+          } finally {
+            jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+              removeRequestedMembershipSpace(prev, target.id, address)
+            );
+          }
+        })
+      );
+    };
+
+    // Drop every row we seeded — creation failed.
+    const rollbackPending = () => {
+      if (seededIds.length === 0) return;
+      jotaiStore.set(requestedMembershipSpacesAtom, prev =>
+        seededIds.reduce((next, id) => removeRequestedMembershipSpace(next, id, address), prev)
+      );
+    };
+
+    const targetsPromise = flipPendingOptimistically();
+
+    // Once the space is on-chain, turn the seeded pending rows into real requests — or
+    // roll them back if enrich failed.
+    const settleMembership = (spaceId: string) =>
+      void targetsPromise.then(
+        targets => fireMembershipRequests(spaceId, targets),
+        error => {
+          console.error('[PendingPersonalSpace] interest-space enrich failed', error);
+          rollbackPending();
+        }
+      );
+
     void (async () => {
       try {
         devLog('[onboarding] background space creation started, topicId=%s', topicId);
@@ -98,12 +236,17 @@ export function PendingPersonalSpaceRunner() {
           spaceName: name,
           spaceImage: avatar || undefined,
           topicId,
+          onRegistered: registeredSpaceId => {
+            resolve(registeredSpaceId);
+            settleMembership(registeredSpaceId);
+          },
         });
 
         if (!spaceId) throw new Error('Creating space failed');
 
-        resolve(spaceId);
         devLog('[onboarding] space created: %s — remapped pending edits, seeded personal-space cache', spaceId);
+
+        setSelectedTopicIds([]);
       } catch (error) {
         // The registry is the authority on whether the account has a space, and
         // several failures land *after* registration succeeds (a publish retry
@@ -115,12 +258,16 @@ export function PendingPersonalSpaceRunner() {
           if (registered) {
             console.warn('[PendingPersonalSpace] creation reported an error but the space is registered', error);
             resolve(registered);
+            settleMembership(registered);
             return;
           }
         } catch {
           // Fall through to the real failure path below.
         }
 
+        // Creation genuinely failed: drop every optimistic pending row we seeded, even if
+        // enrich is still in flight or rejected (seededIds, not enrich results).
+        void targetsPromise.then(rollbackPending, rollbackPending);
         console.error('[PendingPersonalSpace] creation failed', error);
         setPending({ topicId, address, status: 'failed' });
         reportError(`Account setup failed: ${describeError(error)}`, () => {
@@ -142,6 +289,8 @@ export function PendingPersonalSpaceRunner() {
     reportError,
     setPending,
     setResolvedSpaceId,
+    tx,
+    setSelectedTopicIds,
   ]);
 
   return null;
