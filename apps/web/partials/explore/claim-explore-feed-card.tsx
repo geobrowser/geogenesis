@@ -129,7 +129,7 @@ export function ClaimExploreFeedCard({
   const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
 
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-  const sources = useSources(entity?.relations);
+  const sourceCount = useSourceCount(entity?.relations);
   const topicIds = useTopicIds(entity?.relations);
 
   return (
@@ -221,7 +221,7 @@ export function ClaimExploreFeedCard({
               summary={summary}
             />
           )}
-          <ClaimSources count={sources.count} names={sources.names} spaceId={item.spaceId} entityId={item.entityId} />
+          <ClaimSources count={sourceCount} spaceId={item.spaceId} entityId={item.entityId} />
         </div>
       </div>
 
@@ -419,21 +419,18 @@ function countLabel(shown: number, hasMore: boolean): string | null {
  * near-identical article titles pointing at one event. Counting the relations rather than their
  * targets would report corroboration that isn't there.
  */
-function useSources(relations: Relation[] | undefined): { count: number; names: string[] } {
+function useSourceCount(relations: Relation[] | undefined): number {
   return React.useMemo(() => {
     // Deduped by target: the same story reaches the graph more than once, and the sample contains
     // near-identical article titles pointing at one event. Counting relations rather than their
     // targets would report corroboration that is not there.
-    const byId = new Map<string, string | null>();
+    const ids = new Set<string>();
     for (const relation of relations ?? []) {
       if (relation.isDeleted === true) continue;
       if (!ID.equals(relation.type.id, SOURCES_PROPERTY_ID)) continue;
-      const id = relation.toEntity.id.toLowerCase();
-      if (!byId.has(id)) byId.set(id, relation.toEntity.name);
+      ids.add(relation.toEntity.id.toLowerCase());
     }
-
-    const names = [...byId.values()].filter((name): name is string => Boolean(name));
-    return { count: byId.size, names };
+    return ids.size;
   }, [relations]);
 }
 
@@ -450,54 +447,32 @@ function useTopicIds(relations: Relation[] | undefined): string[] {
 /**
  * Where the claim came from, under the split it belongs to.
  *
- * Named rather than counted. A bare "3 sources" in the actions row raised the obvious question and
- * declined to answer it; the column has the room to say who, and the names are the part worth
- * reading — three outlets reporting the same thing independently is corroboration, and corroboration
- * you cannot see the shape of is just a number.
+ * A count, not a list — and that is a concession to the data rather than a preference. A `Sources`
+ * relation points at an Article whose name is the article's *headline*: a median of 73 characters
+ * and up to 128, not an outlet. There is no publisher field to read instead. So "Reuters · Kyiv
+ * Independent" is not something this card can render; what it would actually print is two truncated
+ * headlines stacked in a 220px column, which buries the verdict above it and still does not tell
+ * you who reported the story.
  *
- * Two outlets shown, the rest as an overflow. Measured against testnet, 39% of claims carry a source
- * and 45% of those carry more than one, up to seven — so the plural case is ordinary and the long
- * tail is real, which is why this truncates rather than wrapping to four lines in a 220px column.
+ * The count is worth keeping on its own. 39% of claims carry a source and 45% of those carry more
+ * than one, up to seven — and several outlets reporting the same thing independently is
+ * corroboration, which is a fact about the claim even when the titles are unreadable at this size.
  *
- * Opens the claim, where `ClaimProvenance` lists them in full — the same holding pattern the debate
- * and related-claim counts use until the side panel gets a proper destination.
+ * Opens the claim, where `ClaimProvenance` has the width to list them properly.
  */
-function ClaimSources({
-  count,
-  names,
-  spaceId,
-  entityId,
-}: {
-  count: number;
-  names: string[];
-  spaceId: string;
-  entityId: string;
-}) {
+function ClaimSources({ count, spaceId, entityId }: { count: number; spaceId: string; entityId: string }) {
   const { openSidePanel } = useEntitySidePanel();
 
   if (count === 0) return null;
-
-  const shown = names.slice(0, 2);
-  const overflow = count - shown.length;
 
   return (
     <button
       type="button"
       onClick={() => openSidePanel(entityId, spaceId, false)}
       aria-label={`${count} ${count === 1 ? 'source' : 'sources'} for this claim`}
-      className="mt-3 block w-full text-left text-grey-04 transition-colors hover:text-text"
+      className="mt-3 block text-footnoteMedium text-grey-04 tabular-nums transition-colors hover:text-text"
     >
-      <span className="block text-footnoteMedium tabular-nums">
-        {count} {count === 1 ? 'source' : 'sources'}
-      </span>
-      {shown.length > 0 ? (
-        // Clamped rather than truncated to one line: an outlet name cut mid-word says less than two
-        // names and a count of what is left.
-        <span className="mt-0.5 line-clamp-2 block text-footnote">
-          {shown.join(' · ')}
-          {overflow > 0 ? ` +${overflow}` : ''}
-        </span>
-      ) : null}
+      {count} {count === 1 ? 'source' : 'sources'}
     </button>
   );
 }
