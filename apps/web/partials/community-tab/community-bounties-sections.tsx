@@ -94,11 +94,19 @@ type BountyCardComponent = (props: { bounty: SpaceBounty }) => React.ReactElemen
  *
  * Below those widths each drops a column on its own, which is the intended narrow behaviour. Both
  * grids therefore depend on `gap-4` staying 16px; changing it moves every threshold above.
+ *
+ * `min(<minimum>, 100%)` rather than the bare minimum: `auto-fill` always lays down at least one
+ * track, and a bare minimum is a floor that track cannot go below — so a container narrower than
+ * the minimum gets one oversized track that overflows it. The full-screen route reaches that on a
+ * phone (`px-6` leaves 327px at a 375px viewport) and clips the overflow rather than scrolling it,
+ * since its wrapper is `overflow-hidden`. Capping at `100%` lets the last column shrink to the
+ * container. It changes nothing above the minimum, where `min()` resolves to the minimum itself,
+ * so every threshold listed above is untouched.
  */
-const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4';
+const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(min(220px,100%),1fr))] gap-4';
 
 /** Available cards carry a description, so they are given roughly half again the room. */
-const AVAILABLE_GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-4';
+const AVAILABLE_GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-4';
 
 function BountyGrid({
   bounties,
