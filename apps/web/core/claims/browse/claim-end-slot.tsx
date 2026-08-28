@@ -39,6 +39,7 @@ export function ClaimEndSlot({
   activeDebate,
   pastDebate,
   enabled = true,
+  variant = 'inline',
   className,
 }: {
   claimId: string;
@@ -56,6 +57,15 @@ export function ClaimEndSlot({
   pastDebate?: { id: string; name: string | null } | null;
   /** False where the host cannot resolve the claim on the graph, so there is nothing to request. */
   enabled?: boolean;
+  /**
+   * How the slot sits in its host.
+   *
+   * `inline` ends a meta row, where the offer is one item among several and has to be the height of
+   * its neighbours. `block` stands under the position pills on the claim page, where it is the next
+   * thing you do after taking a side — so it takes their full width and their height, and reads as
+   * the continuation of that row rather than a control that wandered in.
+   */
+  variant?: 'inline' | 'block';
   className?: string;
 }) {
   const { match, blockedReason, isRequesting, requestError, request } = useClaimMatchup({
@@ -74,12 +84,17 @@ export function ClaimEndSlot({
   //
   // So it follows the Join button instead, which is the control already living in this row: 14px at
   // `leading-none` in a 20px pill. Same height as its neighbour, so the row cannot grow.
-  const base =
-    'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full px-2.5 text-[14px] leading-none transition-colors';
+  const base = cx(
+    'items-center gap-1.5 rounded-full transition-colors',
+    variant === 'block'
+      ? // The position pills' own metrics: `min-h-7` and `text-button`, full width beneath them.
+        'flex min-h-7 w-full justify-center px-3 text-button'
+      : 'inline-flex h-5 shrink-0 px-2.5 text-[14px] leading-none'
+  );
 
   if (match) {
     return (
-      <span className={cx('flex shrink-0 flex-col items-end gap-1', className)}>
+      <span className={cx('flex flex-col gap-1', variant === 'block' ? 'w-full' : 'shrink-0 items-end', className)}>
         <button
           type="button"
           onClick={request}
@@ -108,7 +123,9 @@ export function ClaimEndSlot({
           </span>
         </button>
         {blockedReason || requestError ? (
-          <span className="text-right text-footnote text-grey-04">{blockedReason ?? requestError}</span>
+          <span className={cx('text-footnote text-grey-04', variant === 'block' ? 'text-left' : 'text-right')}>
+            {blockedReason ?? requestError}
+          </span>
         ) : null}
       </span>
     );
@@ -150,5 +167,9 @@ export function ClaimEndSlot({
   // The row settles at 20px either way, which is the height it already has whenever the Join pill is
   // present — so this matches its neighbours in the common case and runs a few pixels taller than a
   // generic card that has no Join pill.
+  // Nothing to reserve where the slot is a block: it sits under the pills rather than inside a row
+  // whose height it would otherwise change.
+  if (variant === 'block') return null;
+
   return <span className={cx('h-5 shrink-0', className)} aria-hidden />;
 }

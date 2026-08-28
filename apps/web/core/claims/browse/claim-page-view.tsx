@@ -256,7 +256,13 @@ function ClaimPositionSection({
        * does: taking a side and being offered a debate on it are one sequence, and the offer only
        * exists because of the side directly above it. Reading it beside the title asked the reader
        * to connect two things a screen apart. */}
-      <ClaimEndSlot claimId={entityId} spaceId={spaceId} activeDebate={row?.active_debate} className="mt-3" />
+      <ClaimEndSlot
+        claimId={entityId}
+        spaceId={spaceId}
+        activeDebate={row?.active_debate}
+        variant="block"
+        className="mt-2"
+      />
     </section>
   );
 }
