@@ -45,6 +45,7 @@ import { Text } from '~/design-system/text';
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { createPropertyRelation, writeValue } from '~/partials/blocks/table/change-entry';
 import { TableBlockDropdowns } from '~/partials/blocks/table/table-block-dropdowns';
+import { TableBlockDropdownsConfig } from '~/partials/blocks/table/table-block-dropdowns-config';
 import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
 import { TableBlockFilterGroupPill, groupFilters } from '~/partials/blocks/table/table-block-filter-pill';
 import { Editor } from '~/partials/editor/editor';
@@ -997,6 +998,13 @@ export function PowerToolsScreen() {
             </>
           )}
           <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
+          {isEditing && (
+            <TableBlockDropdownsConfig
+              configs={browseDropdowns.configs}
+              properties={data.properties}
+              toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+            />
+          )}
           <Menu
             open={isColumnMenuOpen}
             onOpenChange={setIsColumnMenuOpen}

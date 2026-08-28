@@ -77,6 +77,7 @@ import { type QuerySetupTypePick, QuerySetupTypesSelectEntityPopover } from './q
 import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockDropdowns } from './table-block-dropdowns';
+import { TableBlockDropdownsConfig } from './table-block-dropdowns-config';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import TableBlockExploreItemsDnd from './table-block-explore-items-dnd';
@@ -1026,8 +1027,6 @@ const ConfiguredTableBlock = ({
                 toggleProperty={toggleProperty}
                 hideAllShownPropertyColumns={hideAllShownPropertyColumns}
                 reorderShownPropertyRelations={reorderShownPropertyRelations}
-                dropdownPropertyIds={browseDropdowns.configs.map(d => d.propertyId)}
-                toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                 disabled={!canEdit}
               />
             )}
@@ -1124,6 +1123,11 @@ const ConfiguredTableBlock = ({
                         filterSuggestionSpaceId={spaceId}
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}
+                      />
+                      <TableBlockDropdownsConfig
+                        configs={browseDropdowns.configs}
+                        properties={mergedBlockProperties}
+                        toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                       />
                     </>
                   )}
