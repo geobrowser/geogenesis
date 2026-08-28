@@ -56,6 +56,8 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
   const topics = React.useMemo(() => relationsOfType(entity?.relations, TOPICS_PROPERTY_ID), [entity?.relations]);
   const tags = React.useMemo(() => relationsOfType(entity?.relations, TAG_PROPERTY_ID), [entity?.relations]);
   const topicIds = React.useMemo(() => topics.map(topic => topic.toEntity.id), [topics]);
+  // Named types only: an unnamed one would render as a raw id, which says less than no chip.
+  const typeName = entity?.types.find(type => type.name)?.name ?? null;
 
   if (isLoading && !entity) {
     return (
@@ -74,19 +76,6 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
       <div className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-6 @[560px]:gap-8 @[560px]:px-5 @[560px]:py-8">
         {/* Hero */}
         <header className="flex flex-col gap-3">
-          {tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {tags.map(tag => (
-                <span
-                  key={tag.id}
-                  className="inline-flex max-w-full items-center rounded-sm bg-grey-01 px-2 py-0.5 text-metadata font-medium text-grey-04"
-                >
-                  <span className="truncate">{tag.toEntity.name ?? tag.toEntity.id}</span>
-                </span>
-              ))}
-            </div>
-          )}
-
           {/* `text-pretty`, not `text-balance`. Balancing evens every line to the same length,
               which on a claim — a full sentence running to three or four lines — leaves each one
               breaking well short of the measure and reads as wrapping early. Pretty only avoids a
@@ -101,24 +90,37 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
             </Text>
           )}
 
-          {topics.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {topics.slice(0, TOPIC_CHIP_CAP).map(topic => (
-                <Link
-                  key={topic.id}
-                  href={NavUtils.toEntity(spaceId, topic.toEntity.id)}
-                  className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text transition-colors hover:border-grey-03"
-                >
-                  <span className="truncate">{topic.toEntity.name ?? topic.toEntity.id}</span>
-                </Link>
+          {/* What this is on the left, what it's about on the right. The two answer different
+              questions, so pushing them to opposite ends reads faster than one undifferentiated
+              run of chips — and `flex-wrap` lets the topics drop to their own line in the side
+              panel rather than crushing the type against them. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              {typeName && <MetaChip>{typeName}</MetaChip>}
+              {tags.map(tag => (
+                <MetaChip key={tag.id}>{tag.toEntity.name ?? tag.toEntity.id}</MetaChip>
               ))}
-              {topics.length > TOPIC_CHIP_CAP && (
-                <span className="inline-flex items-center rounded-md bg-grey-01 px-2 py-1 text-[0.8125rem] text-grey-04 tabular-nums">
-                  +{topics.length - TOPIC_CHIP_CAP}
-                </span>
-              )}
             </div>
-          )}
+
+            {topics.length > 0 && (
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                {topics.slice(0, TOPIC_CHIP_CAP).map(topic => (
+                  <Link
+                    key={topic.id}
+                    href={NavUtils.toEntity(spaceId, topic.toEntity.id)}
+                    className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text transition-colors hover:border-grey-03"
+                  >
+                    <span className="truncate">{topic.toEntity.name ?? topic.toEntity.id}</span>
+                  </Link>
+                ))}
+                {topics.length > TOPIC_CHIP_CAP && (
+                  <span className="inline-flex items-center rounded-md bg-grey-01 px-2 py-1 text-[0.8125rem] text-grey-04 tabular-nums">
+                    +{topics.length - TOPIC_CHIP_CAP}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </header>
 
         <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
@@ -297,6 +299,15 @@ function ClaimMatchup({ claimId, spaceId }: { claimId: string; spaceId: string }
         </Text>
       ) : null}
     </div>
+  );
+}
+
+/** The neutral chip the type and tags share, so the left of the row reads as one group. */
+function MetaChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex max-w-full items-center rounded-sm bg-grey-01 px-2 py-0.5 text-metadata font-medium text-grey-04">
+      <span className="truncate">{children}</span>
+    </span>
   );
 }
 
