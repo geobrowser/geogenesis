@@ -163,7 +163,7 @@ function TopicSubtopics({ subtopics, spaceId }: { subtopics: Relation[]; spaceId
 
   return (
     <section aria-label="Subtopics">
-      <Text as="h2" variant="smallTitle" color="text" className="mb-3 block">
+      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
         Subtopics
       </Text>
       <div className="flex flex-wrap gap-1.5">

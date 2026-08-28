@@ -43,7 +43,7 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
   return (
     <section aria-label="Coverage">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <Text as="h2" variant="smallTitle" color="text">
+        <Text as="h2" variant="mediumTitle" color="text">
           Coverage
         </Text>
         {/* A real total rather than a "there is more": `relationsConnection` counts the filtered set
@@ -72,9 +72,8 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
 }
 
 /**
- * One row, built to the explore feed card's shape — same title size and weight, same two-line
- * clamped description — so a topic's coverage reads as the listing the explore feed already
- * trained people on.
+ * One row: the entity's name at the size an entity name is set everywhere else, a clamped
+ * description, and its kind as a chip.
  *
  * No thumbnail. The explore card leads with a 60px image, and resolving one here would be a media
  * lookup per row; the type is the more useful leading signal on a feed mixing episodes, tweets and
@@ -87,16 +86,19 @@ function CoverageRow({ item, spaceId }: { item: CoverageItem; spaceId: string })
 
   return (
     <Link href={href} className="flex min-w-0 flex-col gap-1 py-3">
-      <h3 className="text-[19px] leading-[23px] font-semibold tracking-[-0.02em] text-text hover:underline">
+      <Text as="h3" variant="cardEntityTitle" color="text" className="hover:underline">
         {item.name}
-      </h3>
+      </Text>
       {item.description && (
         <p className="line-clamp-2 text-[16px] leading-[20px] tracking-[-0.03em] text-grey-04">{item.description}</p>
       )}
+      {/* A chip rather than a line of grey text: on a feed mixing episodes, tweets and official
+          documents the kind is the row's leading signal, and set as metadata it read as part of the
+          description rather than a label on it. */}
       {item.kind && (
-        <Text as="span" variant="metadata" color="grey-04" className="mt-0.5">
+        <span className="mt-1 flex h-6 w-fit items-center rounded border border-grey-02 bg-white px-1.5 text-metadata text-grey-04">
           {item.kind}
-        </Text>
+        </span>
       )}
     </Link>
   );

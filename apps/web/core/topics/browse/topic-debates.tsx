@@ -108,7 +108,7 @@ export function TopicDebates({ topicId, spaceId }: { topicId: string; spaceId: s
 
   return (
     <section aria-label="Debates on this topic">
-      <Text as="h2" variant="smallTitle" color="text" className="mb-3 block">
+      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
         Debates
       </Text>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">

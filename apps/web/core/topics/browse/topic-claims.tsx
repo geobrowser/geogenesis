@@ -42,7 +42,7 @@ export function TopicClaims({ topicId, spaceId }: { topicId: string; spaceId: st
 
   return (
     <section aria-label="Claims on this topic">
-      <Text as="h2" variant="smallTitle" color="text" className="mb-3 block">
+      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
         Claims
       </Text>
       <div className="grid grid-cols-1 gap-3 @[560px]:grid-cols-2">
