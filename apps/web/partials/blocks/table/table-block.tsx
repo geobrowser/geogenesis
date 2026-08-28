@@ -1006,6 +1006,15 @@ const ConfiguredTableBlock = ({
     );
   }
 
+  // With no rows to show, every view-specific branch above is skipped (each requires
+  // `displayEntries.length > 0`) and `EntriesComponent` is still the default `TableBlockTable` —
+  // which renders its own "nothing here" placeholder on `isEmpty && isFetched && !isLoading`. That
+  // would put the exact message `showEmptyState: false` exists to suppress directly above the
+  // retry, and in the wrong renderer for a LIST or GALLERY block. Show only the retry.
+  if (infiniteScrollDisplay.showRetry && displayEntries.length === 0) {
+    EntriesComponent = <></>;
+  }
+
   // In infinite-scroll mode the current page's `entries` can momentarily be
   // empty (e.g. a trailing empty page) while accumulated rows are still shown —
   // `showEmptyState` gates on the rows actually being displayed so the placeholder can't
