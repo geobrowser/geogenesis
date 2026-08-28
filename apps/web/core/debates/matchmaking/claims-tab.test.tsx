@@ -4,10 +4,12 @@ import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@
 
 import type { ReactElement } from 'react';
 
+import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
+import { DEBATES_HUB_DEFAULT_FILTERS, debatesHubFiltersAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -315,6 +317,11 @@ const MINE = '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419';
 const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 
 beforeEach(() => {
+  // The filter set moved out of the component and into `debatesHubFiltersAtom`, so it now outlives
+  // an unmount — which is the whole point of it (the panel and the full-screen hub are one
+  // session), and which means each test has to start from the default rather than inherit whatever
+  // the previous one narrowed to.
+  getDefaultStore().set(debatesHubFiltersAtom, DEBATES_HUB_DEFAULT_FILTERS);
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
   mocks.hasNextPage = false;
@@ -1299,5 +1306,42 @@ describe('ClaimsTab -- Featured', () => {
     await screen.findByText('Nuclear power is the cheapest clean energy');
 
     expect(mocks.debateClaimGroups.at(-1)).not.toEqual([]);
+  });
+
+  // GEO-2726. The workspace holds the same three narrowings open in a rail instead of behind the
+  // panel's menus, so the menu row goes rather than both being on screen.
+  it('renders the facet rail instead of the filter menus in the workspace layout', async () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab layout="workspace" />);
+    await screen.findByText('Nuclear power is the cheapest clean energy');
+
+    expect(screen.getByTestId('hub-facet-rail')).toBeInTheDocument();
+    // The rail carries the filter as a set of rows, so the menu trigger is gone.
+    expect(screen.queryByRole('button', { name: /^Any space/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Featured' })).toBeInTheDocument();
+  });
+
+  it('keeps the filter menus and no rail in the panel layout', async () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await screen.findByText('Nuclear power is the cheapest clean energy');
+
+    expect(screen.queryByTestId('hub-facet-rail')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Featured/ })).toBeInTheDocument();
+  });
+
+  // The filter set is the session, not the layout: expanding has to continue a search rather than
+  // restart it, which is why it lives in an atom both layouts read.
+  it('carries the filter set from the panel into the workspace', async () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    const panel = render(<ClaimsTab />);
+    await screen.findByText('Nuclear power is the cheapest clean energy');
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nuclear' } });
+    panel.unmount();
+
+    render(<ClaimsTab layout="workspace" />);
+
+    expect(screen.getByLabelText('Search claims')).toHaveValue('nuclear');
   });
 });

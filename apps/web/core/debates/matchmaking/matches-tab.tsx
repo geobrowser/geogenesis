@@ -25,7 +25,14 @@ import type { DebatesHubTab } from '~/atoms';
  * Topics are Knowledge Graph data geo-chat doesn't model — `match.topics` is always empty, so this
  * tab filters by space only.
  */
-export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) => void }) {
+/** `dense` is the live rail — see the note on `RequestsTab`. */
+export function MatchesTab({
+  onTabChange,
+  dense = false,
+}: {
+  onTabChange: (tab: DebatesHubTab) => void;
+  dense?: boolean;
+}) {
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
 
   const matchesQuery = useMatchmakingMatches(true);
@@ -59,15 +66,23 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
       {/* One pinned header rather than a pinned card above scrolling filters: two stickies would
           both claim `top-0` and overlap, and the outbound card is conditional so the filters
           couldn't be offset by a known height. */}
-      <HubStickyControls>
-        {outbound ? <OutboundRequestCard request={outbound} /> : null}
-        <SpaceTopicFilters
-          spaceIds={spaceIds}
-          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-          onSpacesClear={() => setSpaceIds([])}
-          facetSpaces={facetSpaces}
-        />
-      </HubStickyControls>
+      {dense ? (
+        outbound ? (
+          <div className="px-4 pb-2">
+            <OutboundRequestCard request={outbound} />
+          </div>
+        ) : null
+      ) : (
+        <HubStickyControls>
+          {outbound ? <OutboundRequestCard request={outbound} /> : null}
+          <SpaceTopicFilters
+            spaceIds={spaceIds}
+            onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+            onSpacesClear={() => setSpaceIds([])}
+            facetSpaces={facetSpaces}
+          />
+        </HubStickyControls>
+      )}
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState

@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtom } from 'jotai';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
@@ -35,6 +36,7 @@ import { useGeoChatAuth } from '../hooks';
 import { useDebateClaimsBySpaces } from '../hooks';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { HubFacetRail } from './hub-facet-rail';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
@@ -42,6 +44,7 @@ import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { countBy, keepSelectableTopics, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useStableListOrder } from './use-stable-list-order';
+import { type DebatesHubFilters, debatesHubFiltersAtom } from '~/atoms';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -92,7 +95,10 @@ const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
  * query to go into. That makes it a page-local filter — a page can come back mostly or entirely
  * disallowed — so the sentinel that asks for the next page sits outside the empty state below.
  */
-export function ClaimsTab() {
+export type ClaimsLayout = 'panel' | 'workspace';
+
+export function ClaimsTab({ layout = 'panel' }: { layout?: ClaimsLayout } = {}) {
+  const workspace = layout === 'workspace';
   const { authenticated } = useGeoChatAuth();
   // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
   // the claim page and the entity vote arrows use it. Passed as `undefined` when signed in so the
@@ -101,19 +107,52 @@ export function ClaimsTab() {
   const onRequireSignIn = authenticated ? undefined : promptSignIn;
   const filterOptions = React.useMemo(() => filterOptionsFor(authenticated), [authenticated]);
 
-  const [search, setSearch] = React.useState('');
+  // Held in an atom rather than locally so the panel and the full-screen workspace are two layouts
+  // over one session: expanding continues the search someone is in the middle of instead of
+  // restarting it. See `debatesHubFiltersAtom`.
+  const [filters, setFilters] = useAtom(debatesHubFiltersAtom);
+  const { search, spaceIds, topicIds } = filters;
+  const selectedFilter = filters.filter;
+
+  // Each setter returns `current` untouched when the value did not actually change.
+  //
+  // `useState` bails out on an identical value for free, and two effects below lean on it hard:
+  // the space effect re-runs whenever `spaceShowsClaims` is rebuilt and hands back the *same* array
+  // when nothing was dropped. Spreading into a fresh object regardless would make every one of
+  // those a real state change, and the effect that caused it would run again on the render it
+  // caused — a loop that takes the worker down rather than just spinning.
+  const setFilterField = React.useCallback(
+    <K extends keyof DebatesHubFilters>(key: K, next: React.SetStateAction<DebatesHubFilters[K]>) =>
+      setFilters(current => {
+        const value =
+          typeof next === 'function'
+            ? (next as (prev: DebatesHubFilters[K]) => DebatesHubFilters[K])(current[key])
+            : next;
+        return value === current[key] ? current : { ...current, [key]: value };
+      }),
+    [setFilters]
+  );
+
+  const setSearch = React.useCallback((next: string) => setFilterField('search', next), [setFilterField]);
+  const setFilter = React.useCallback((next: ClaimsTabFilter) => setFilterField('filter', next), [setFilterField]);
+  const setSpaceIds = React.useCallback(
+    (next: React.SetStateAction<string[]>) => setFilterField('spaceIds', next),
+    [setFilterField]
+  );
+  const setTopicIds = React.useCallback(
+    (next: React.SetStateAction<string[]>) => setFilterField('topicIds', next),
+    [setFilterField]
+  );
+
   const [debouncedSearch, setDebouncedSearch] = React.useState('');
   // Featured is where the tab opens. The whole corpus is the wider net but the shallower one — a
   // curator's pick is a better first thing to put in front of someone than whatever the index
   // ranked highest, and All claims is one option below.
-  const [selectedFilter, setFilter] = React.useState<ClaimsTabFilter>('featured');
   // Signing out with a viewer-relative filter selected would otherwise leave the tab querying it
   // anonymously and showing a trigger value that is no longer in the menu. Derived rather than
   // reset through an effect so the query, the menu label, the ordering key and the empty state all
   // read the same value on the very first render after the session goes away.
   const filter = !authenticated && SIGNED_OUT_HIDDEN_FILTERS.includes(selectedFilter) ? 'featured' : selectedFilter;
-  const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
-  const [topicIds, setTopicIds] = React.useState<string[]>([]);
 
   React.useEffect(() => {
     const timeout = setTimeout(() => setDebouncedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
@@ -437,94 +476,145 @@ export function ClaimsTab() {
     fetchNextPage: claimsQuery.fetchNextPage,
   });
 
+  const searchInput = (
+    <Input
+      withSearchIcon
+      value={search}
+      onChange={event => setSearch(event.currentTarget.value)}
+      placeholder="Search claims"
+      aria-label="Search claims"
+    />
+  );
+
+  // The rail holds the same three narrowings the panel keeps behind menus, so the workspace drops
+  // the menu row rather than showing both.
+  const facetRail = (
+    <HubFacetRail
+      filterOptions={filterOptions}
+      filter={filter}
+      onFilterChange={setFilter}
+      facetSpaces={facetSpaces}
+      spaceIds={spaceIds}
+      onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+      onSpacesClear={() => setSpaceIds([])}
+      facetTopics={facetTopics}
+      topicIds={topicIds}
+      onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+      onTopicsClear={() => setTopicIds([])}
+    />
+  );
+
   return (
-    <div className="flex flex-col">
-      <HubStickyControls>
-        <Input
-          withSearchIcon
-          value={search}
-          onChange={event => setSearch(event.currentTarget.value)}
-          placeholder="Search claims"
-          aria-label="Search claims"
-        />
-
-        <SpaceTopicFilters
-          spaceIds={spaceIds}
-          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-          onSpacesClear={() => setSpaceIds([])}
-          topicIds={topicIds}
-          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
-          onTopicsClear={() => setTopicIds([])}
-          facetSpaces={facetSpaces}
-          facetTopics={facetTopics}
-          leading={
-            <HubFilterMenu
-              label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
-              options={filterOptions}
-              value={filter}
-              onChange={setFilter}
-            />
-          }
-        />
-      </HubStickyControls>
-
-      <div className="flex flex-col gap-3 px-4 py-3">
-        <HubQueryState
-          isLoading={spacesPending || (featured ? featuredLoading : claimsQuery.isLoading)}
-          error={featured ? featuredError : claimsQuery.error}
-          onRetry={() => void (featured ? refetchFeatured() : claimsQuery.refetch())}
-          isEmpty={visibleClaims.length === 0}
-          signInAction={
-            onRequireSignIn
-              ? { label: 'Sign in', message: 'Sign in to browse claims to debate.', onClick: onRequireSignIn }
-              : undefined
-          }
-          emptyMessage={
-            featured
-              ? hasFilters
-                ? 'No featured claims match these filters.'
-                : 'No claims have been featured yet.'
-              : hasFilters
-                ? 'No claims match these filters.'
-                : 'No debatable claims yet.'
-          }
-          emptyAction={
-            hasFilters
-              ? {
-                  label: 'Clear filters',
-                  onClick: () => {
-                    setSearch('');
-                    if (!featured) setFilter('all');
-                    setSpaceIds([]);
-                    setTopicIds([]);
-                  },
-                }
-              : undefined
-          }
+    <div className={workspace ? 'flex min-w-0 gap-8' : 'flex flex-col'}>
+      {workspace && (
+        /* First zone to go on a laptop: the centre is the work, and every narrowing in here is
+           still reachable from the menus the panel uses — which is what the narrow layout falls
+           back to. */
+        <aside
+          aria-label="Filters"
+          // Measured against the *workspace* container by name, the same one the live rail reads.
+          // An unnamed query here would resolve to whichever container happened to be nearest —
+          // which is how the rail ended up hidden while the layout still reserved a column for it.
+          className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-60 shrink-0 self-start overflow-y-auto @[72rem]/hub:block"
+          data-testid="hub-facet-rail"
         >
-          {/* One list, in the server's order. Splitting out the claims you'd already answered
+          {facetRail}
+        </aside>
+      )}
+
+      {/* Its own container, named, so the card grid reflows on the width the cards actually get
+          rather than on the workspace's. `min-w-0` is what lets it shrink below its content. */}
+      <div className={workspace ? '@container/claims flex min-w-0 flex-1 flex-col' : 'contents'}>
+        <HubStickyControls workspaceStickyOffset={workspace}>
+          {searchInput}
+
+          {!workspace && (
+            <SpaceTopicFilters
+              spaceIds={spaceIds}
+              onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+              onSpacesClear={() => setSpaceIds([])}
+              topicIds={topicIds}
+              onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+              onTopicsClear={() => setTopicIds([])}
+              facetSpaces={facetSpaces}
+              facetTopics={facetTopics}
+              leading={
+                <HubFilterMenu
+                  label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
+                  options={filterOptions}
+                  value={filter}
+                  onChange={setFilter}
+                />
+              }
+            />
+          )}
+        </HubStickyControls>
+
+        <div className="flex flex-col gap-3 px-4 py-3">
+          <HubQueryState
+            isLoading={spacesPending || (featured ? featuredLoading : claimsQuery.isLoading)}
+            error={featured ? featuredError : claimsQuery.error}
+            onRetry={() => void (featured ? refetchFeatured() : claimsQuery.refetch())}
+            isEmpty={visibleClaims.length === 0}
+            signInAction={
+              onRequireSignIn
+                ? { label: 'Sign in', message: 'Sign in to browse claims to debate.', onClick: onRequireSignIn }
+                : undefined
+            }
+            emptyMessage={
+              featured
+                ? hasFilters
+                  ? 'No featured claims match these filters.'
+                  : 'No claims have been featured yet.'
+                : hasFilters
+                  ? 'No claims match these filters.'
+                  : 'No debatable claims yet.'
+            }
+            emptyAction={
+              hasFilters
+                ? {
+                    label: 'Clear filters',
+                    onClick: () => {
+                      setSearch('');
+                      if (!featured) setFilter('all');
+                      setSpaceIds([]);
+                      setTopicIds([]);
+                    },
+                  }
+                : undefined
+            }
+          >
+            {/* One list, in the server's order. Splitting out the claims you'd already answered
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
-          <HubCardList>
-            {visibleClaims.map(entry => (
-              <MatchmakingClaimCard
-                key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
-                claim={entry.claim}
-                positions={entry.positions}
-                readiness={entry}
-                activeDebate={entry.active_debate}
-                // Featured rows carry `viewer_debate_ready: false` until geo-chat's per-space lookup
-                // lands, and a switch drawn from that would report "not ready" on a claim the viewer
-                // is in fact standing ready on. The paged rows come with readiness on them, so this
-                // only ever applies to Featured.
-                hideReadinessToggle={featuredReadinessUnresolved}
-                onRequireSignIn={onRequireSignIn}
-              />
-            ))}
-          </HubCardList>
-        </HubQueryState>
+            <HubCardList
+              className={
+                workspace
+                  ? // Reflows on the centre column's own width, not the viewport's, so the rails
+                    // collapsing gives the grid its columns back without a second breakpoint set.
+                    'grid grid-cols-1 gap-3 @[30rem]/claims:grid-cols-2 @[46rem]/claims:grid-cols-3'
+                  : undefined
+              }
+            >
+              {visibleClaims.map(entry => (
+                <MatchmakingClaimCard
+                  key={`${entry.claim.space_id}:${entry.claim.claim_entity_id}`}
+                  claim={entry.claim}
+                  positions={entry.positions}
+                  readiness={entry}
+                  activeDebate={entry.active_debate}
+                  // Featured rows carry `viewer_debate_ready: false` until geo-chat's per-space lookup
+                  // lands, and a switch drawn from that would report "not ready" on a claim the viewer
+                  // is in fact standing ready on. The paged rows come with readiness on them, so this
+                  // only ever applies to Featured.
+                  hideReadinessToggle={featuredReadinessUnresolved}
+                  onRequireSignIn={onRequireSignIn}
+                />
+              ))}
+            </HubCardList>
+          </HubQueryState>
 
-        {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
+          {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
           the empty state deliberately: the space allowlist and the topic filter both run over the
           loaded pages, so a page can arrive with nothing to show — and with the sentinel rendered
           only alongside results, the list would stop at the first such page and report "no claims"
@@ -534,9 +624,10 @@ export function ClaimsTab() {
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-        {claimsQuery.hasNextPage ? (
-          <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
-        ) : null}
+          {claimsQuery.hasNextPage ? (
+            <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
+          ) : null}
+        </div>
       </div>
     </div>
   );
@@ -550,9 +641,25 @@ export function ClaimsTab() {
  * can't see. The tab row above it is already fixed — it sits outside the panel's scroll container
  * — so this is the only piece that needed pinning here.
  */
-export function HubStickyControls({ children }: { children: React.ReactNode }) {
+export function HubStickyControls({
+  children,
+  workspaceStickyOffset = false,
+}: {
+  children: React.ReactNode;
+  workspaceStickyOffset?: boolean;
+}) {
   return (
-    <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3">{children}</div>
+    <div
+      className={cx(
+        'sticky z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3',
+        // The panel's scroll container starts at the controls, so `top-0` pins them there. In the
+        // workspace the page itself scrolls under a fixed navbar and a pinned page header, so the
+        // same `top-0` would slide the search under both.
+        workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0'
+      )}
+    >
+      {children}
+    </div>
   );
 }
 

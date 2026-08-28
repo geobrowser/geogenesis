@@ -36,6 +36,37 @@ export type DebatesHubTab = 'requests' | 'matches' | 'claims' | 'people';
 /** `null` while the debates matchmaking hub is closed. */
 export const debatesHubAtom = atom<{ tab: DebatesHubTab } | null>(null);
 
+/** Featured is the tab's own source rather than one of geo-chat's filters — see `claims-tab.tsx`. */
+export type DebatesHubClaimsFilter = 'featured' | 'all' | 'mine' | 'debate_now';
+
+/**
+ * What the viewer has narrowed the claims corpus to, held outside the tab that renders it.
+ *
+ * GEO-2726. The panel and the full-screen workspace are two layouts over one session, so expanding
+ * has to continue the search someone was in the middle of rather than restart it. Local state in
+ * `ClaimsTab` could not survive that hop: the panel unmounts as the route mounts.
+ *
+ * Deliberately not persisted. It describes a sitting, not a preference, and a filter set restored
+ * days later would open the hub onto a sparse page nobody asked for.
+ */
+export type DebatesHubFilters = {
+  search: string;
+  filter: DebatesHubClaimsFilter;
+  spaceIds: string[];
+  topicIds: string[];
+};
+
+export const DEBATES_HUB_DEFAULT_FILTERS: DebatesHubFilters = {
+  // Featured is where the corpus opens, in both layouts — a curator's pick beats whatever the
+  // index ranked highest as the first thing to put in front of someone.
+  filter: 'featured',
+  search: '',
+  spaceIds: [],
+  topicIds: [],
+};
+
+export const debatesHubFiltersAtom = atom<DebatesHubFilters>(DEBATES_HUB_DEFAULT_FILTERS);
+
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 
 // Set to `Date.now()` whenever a ranking "Create new" entity is published. The
