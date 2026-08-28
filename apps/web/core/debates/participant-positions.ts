@@ -1,7 +1,7 @@
 'use client';
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -210,6 +210,27 @@ export function useParticipantPositions(participants: DebateRematchParticipant[]
     // can respond somewhere it doesn't, and that claim should still turn up. A slow poll covers it.
     refetchInterval: foreground ? PARTICIPANT_POSITIONS_POLL_MS : false,
     staleTime: 5_000,
+    /**
+     * Hold the last list while a new one is fetched (GEO-2599). Preston: "randomly the positions
+     * also dissapear. I just lost all of Dovile's positions without doing anything whilst I was
+     * typing."
+     *
+     * Without this, `query.data` is `undefined` for any key the cache has not seen, and `byClaim`
+     * below collapses to an empty map — so the whole list blanks rather than showing the previous
+     * answer. The trigger does not have to be a real change: `enabled` is `profileSpaceIds.length >
+     * 0`, so a session refetch that momentarily yields no participants swaps to the empty-ids key,
+     * which has no data, and every position vanishes with nothing having actually happened.
+     *
+     * Stale rows cannot leak to the wrong people, which is what makes this safe rather than merely
+     * nicer: every read goes through `participantSidesOn`, which matches on the *current*
+     * participants' profile space ids, so a row belonging to someone no longer here is filtered out
+     * rather than displayed.
+     *
+     * Note the key itself is already stable — `profileSpaceIds` is deduped and sorted, and React
+     * Query hashes keys structurally, so a session refetch returning an equal-but-new array is the
+     * same cache entry. This is for the cases where the key genuinely differs.
+     */
+    placeholderData: keepPreviousData,
   });
 
   const byClaim = React.useMemo(() => groupParticipantPositions(query.data ?? []), [query.data]);

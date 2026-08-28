@@ -2543,6 +2543,30 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.enqueueRecording).not.toHaveBeenCalled();
   });
 
+  it('starts capturing during preflight rather than waiting for the recording window to open', async () => {
+    // GEO-2644. The recorder used to be scheduled for `startAtMs`, so the encoder's own warmup
+    // happened at t=0 and every recording began fractionally after the window it is measured
+    // against. Capture has to be running *before* the window opens; the server trims the
+    // pre-window head, so starting early costs nothing and padding the head is what it avoids.
+    installRecordingMocks();
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preflight',
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      started_at: null,
+      // Ten seconds after the synchronized clock, so the window is still firmly shut.
+      preflight_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
+    // Recording, but the debate has not started — nothing is uploaded until the window closes.
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+  });
+
   it('shows connection state without exposing the connection deadline', async () => {
     mocks.debate = {
       ...completedDebate(),
