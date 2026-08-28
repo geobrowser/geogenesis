@@ -54,6 +54,15 @@ describe('buildPersonRecordsDocument', () => {
     expect(variables.p1).toBeUndefined();
   });
 
+  // Aliases are positional, so dropping an unusable id compacts every index after it. Decoding
+  // against the caller's original list would then read one person's public record onto another's
+  // row — the ids the document was built from are returned so the two cannot drift apart.
+  it('reports the ids it queried, in alias order', () => {
+    const { ids } = buildPersonRecordsDocument(['not-a-hex-id', A, B]);
+
+    expect(ids).toEqual([A, B]);
+  });
+
   it('still parses with nobody listed', () => {
     expect(() => buildPersonRecordsDocument([])).not.toThrow();
   });
@@ -92,6 +101,41 @@ describe('readPersonRecords', () => {
     );
 
     expect(records.get(A)?.debateIds).toEqual(['d1']);
+  });
+
+  // The round trip an unusable id used to break: `A` is queried as `p0`, so decoding against the
+  // caller's list would have handed `A`'s record to the invalid id and left `A` empty.
+  it('keeps each record with the person it belongs to when an id was dropped', () => {
+    const { ids } = buildPersonRecordsDocument(['not-a-hex-id', A]);
+    const records = readPersonRecords(
+      {
+        p0_positions: { totalCount: 16 },
+        p0_supported: { totalCount: 1, nodes: [{ fromEntityId: 'd1' }] },
+        p0_opposed: { totalCount: 0, nodes: [] },
+        p0_joined: { createdAt: '1769726933' },
+      },
+      ids
+    );
+
+    expect(records.get(A)?.positions).toBe(16);
+    expect(records.has('not-a-hex-id')).toBe(false);
+  });
+
+  // A page that came back full is only short if the server says there is more. Someone sitting on
+  // exactly the page size would otherwise have their record withheld forever.
+  it('does not call a complete page truncated', () => {
+    const nodes = Array.from({ length: 100 }, (_, i) => ({ fromEntityId: `d${i}` }));
+    const full = readPersonRecords(
+      { p0_positions: { totalCount: 0 }, p0_supported: { totalCount: 100, nodes }, p0_joined: {} },
+      [A]
+    );
+    const short = readPersonRecords(
+      { p0_positions: { totalCount: 0 }, p0_supported: { totalCount: 137, nodes }, p0_joined: {} },
+      [A]
+    );
+
+    expect(full.get(A)?.truncated).toBe(false);
+    expect(short.get(A)?.truncated).toBe(true);
   });
 
   it('reads a missing person as an empty record rather than dropping the row', () => {

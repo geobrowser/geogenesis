@@ -41,21 +41,33 @@ export function usePersonRecords(personIds: string[]): Map<string, PersonRecord>
     queryKey: ['debates', 'person-records', key],
     enabled: key.length > 0,
     queryFn: ({ signal }) => {
-      const { document, variables } = buildPersonRecordsDocument(key);
+      const { document, variables, ids } = buildPersonRecordsDocument(key);
       return Effect.runPromise(
         graphql({
           query: document,
           variables,
           signal,
-          decoder: (response: PersonRecordsQuery) => readPersonRecords(response, key),
+          // Decoded against the ids the document was built from, not `key`: aliases are positional,
+          // so an id the builder could not use shifts every alias after it.
+          decoder: (response: PersonRecordsQuery) => readPersonRecords(response, ids),
         })
       );
     },
   });
 
+  // Truncated records are excluded: their rate is withheld anyway, so their debates would only
+  // spend room under the vote cap below without ever producing a number.
+  //
+  // That cap is a real ceiling on this. `useWinnerShares` was written for a five-debate browse page
+  // and answers with an empty map once its combined result reaches 500 votes, which here would drop
+  // the win rate from every row at once rather than from the rows responsible. It fails toward
+  // omission rather than toward a wrong number, which is the right direction, but the union of
+  // every listed person's lifetime debates does grow with the graph. The graph holds 47 debate
+  // votes today against a cap of 500; when that stops being true this needs a bounded, paginated
+  // fetch of its own — shared with the record page, which wants the same set.
   const debateIds = React.useMemo(() => {
     if (!raw) return [];
-    return [...new Set([...raw.values()].flatMap(record => record.debateIds))];
+    return [...new Set([...raw.values()].filter(record => !record.truncated).flatMap(record => record.debateIds))];
   }, [raw]);
 
   const winnerByDebateId = useWinnerShares(debateIds);
@@ -89,9 +101,14 @@ export function readPersonRecords(response: PersonRecordsQuery, personIds: strin
       }
     }
 
-    // Either side coming back full means the other pages were never read, so what is here is a
-    // subset. Reported rather than counted — see `derivePersonRecord`.
-    const truncated = [supported, opposed].some(side => (side?.nodes?.length ?? 0) >= DEBATE_RELATIONS_PER_SIDE);
+    // A side is short only if the server says it holds more than came back. Treating a full page as
+    // truncated would permanently withhold the record of anyone sitting on exactly the page size.
+    // `totalCount` is the authority; the cap is the fallback for when it is missing.
+    const truncated = [supported, opposed].some(side => {
+      const loaded = side?.nodes?.length ?? 0;
+      const total = side?.totalCount;
+      return typeof total === 'number' ? loaded < total : loaded >= DEBATE_RELATIONS_PER_SIDE;
+    });
 
     records.set(personId, {
       positions: positions?.totalCount ?? 0,

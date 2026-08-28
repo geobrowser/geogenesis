@@ -54,6 +54,12 @@ export function personAlias(index: number, field: 'positions' | 'supported' | 'o
 export function buildPersonRecordsDocument(personIds: string[]): {
   document: TypedDocumentNode<PersonRecordsQuery, PersonRecordsVariables>;
   variables: PersonRecordsVariables;
+  /**
+   * The ids this document actually asks about, in alias order. Returned rather than re-derived
+   * because aliases are positional: dropping an unusable id compacts every index after it, so
+   * decoding against the caller's original list would read one person's record onto another's row.
+   */
+  ids: string[];
 } {
   const ids = personIds.filter(id => ID_PATTERN.test(id));
 
@@ -102,5 +108,6 @@ export function buildPersonRecordsDocument(personIds: string[]): {
   return {
     document: parse(source) as TypedDocumentNode<PersonRecordsQuery, PersonRecordsVariables>,
     variables,
+    ids,
   };
 }

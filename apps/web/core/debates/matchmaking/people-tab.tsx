@@ -168,9 +168,10 @@ function PersonRow({
   const createChallenge = useCreateDebateChallenge();
 
   return (
-    // Three columns rather than a flex run, so the button sits in its own track pinned to the top
-    // of the row. Sharing a row box with the name made it the tallest thing there, which set the
-    // name's line height and left dead space under it once the record lines arrived.
+    // Three columns rather than a flex run, so the button sits in its own track instead of sharing a
+    // row box with the name — where it was the tallest thing and set the name's line height. All
+    // three tracks centre on the row: hanging them from the top clustered everything up there and
+    // left the join date trailing under an empty right-hand side.
     <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
       <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
         <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
