@@ -129,6 +129,21 @@ export function ClaimExploreFeedCard({
   const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
 
   const timeAgo = formatExploreRelativeTime(item.createdAtSec);
+  // Deduped by normalized id and named only where the type has a name — an unnamed one would render
+  // as a raw id, which says less than nothing. Mirrors what `BaseExploreFeedCard` does, so a claim
+  // and its neighbours in the feed label themselves the same way.
+  const typeNames = React.useMemo(() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const type of item.types) {
+      if (!type.name) continue;
+      const key = type.id.replace(/-/g, '').toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(type.name);
+    }
+    return names;
+  }, [item.types]);
   const topicIds = useTopicIds(entity?.relations);
 
   return (
@@ -166,10 +181,19 @@ export function ClaimExploreFeedCard({
               label="Join"
             />
           ) : null}
+          {/* The entity's type, the way every other explore card names it. It went out with the
+              topics, which was wrong: a topic is a subject a claim happens to carry, where the type
+              is what the thing *is* — and in a feed of mixed entities that is the first thing a
+              reader needs. */}
+          {typeNames.length > 0 ? (
+            <span className="text-[14px] leading-[13px] tracking-[-0.35px] text-grey-04">
+              · {typeNames.join(' · ')}
+            </span>
+          ) : null}
           {/* Beside the space, because it says what kind of claim this is. */}
           {summary.isControversial ? <ControversialTag /> : null}
           {timeAgo ? (
-            <span className="text-[12px] leading-[13px] tracking-[-0.35px] text-grey-04">· {timeAgo}</span>
+            <span className="text-[14px] leading-[13px] tracking-[-0.35px] text-grey-04">· {timeAgo}</span>
           ) : null}
           <ClaimEndSlot
             claimId={item.entityId}
