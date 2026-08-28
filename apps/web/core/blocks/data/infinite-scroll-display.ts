@@ -23,30 +23,24 @@ export function viewRendersAllEntries(view: DataBlockView): boolean {
  *
  * `whereKey` and `sortKey` come straight from `useDataBlock` and are the serialized query identity.
  * Re-deriving them here — projecting a few fields off each filter — is how this drifted before:
- * `valueType`, `isBacklink`, `relationValueTypes` and `typesRelationSpaceId` all change the emitted
- * `where` clause without touching `columnId` or `value`, so a filter swap could re-run the query
+ * `valueType`, `isBacklink` and `typesRelationSpaceId` all change the emitted `where` clause
+ * without touching `columnId` or `value`, so a filter swap could re-run the query
  * while leaving this key byte-identical, stranding the previous filter's rows in the list.
  *
  * Equally, this must not key on anything the query ignores. `filterStateKey` would be wrong for
  * that reason: it carries display names resolved asynchronously, so a name arriving would discard
- * the user's accumulated pages for a query that never changed.
+ * the user's accumulated pages for a query that never changed. The filter *mode* is likewise
+ * absent: it is an input to `filterStateToWhere`, so `whereKey` already covers it, and keying on it
+ * separately would let this reset fire for a query that never changed.
  */
 export function buildAccumulationResetKey(input: {
   isInfiniteScroll: boolean;
   pageSize: number;
   sourceKey: string;
   whereKey: string;
-  filterMode: string;
   sortKey: string;
 }): string {
-  return JSON.stringify([
-    input.isInfiniteScroll,
-    input.pageSize,
-    input.sourceKey,
-    input.whereKey,
-    input.filterMode,
-    input.sortKey,
-  ]);
+  return JSON.stringify([input.isInfiniteScroll, input.pageSize, input.sourceKey, input.whereKey, input.sortKey]);
 }
 
 export type InfiniteScrollDisplay = {
@@ -63,10 +57,9 @@ export type InfiniteScrollDisplay = {
 /**
  * The one place that decides what renders beneath (or instead of) an infinite-scroll list.
  *
- * These four outcomes used to be three conditionals in `table-block.tsx` evaluated in an order
- * that mattered — the empty-state branch ran last and replaced the whole component, so it could
- * clobber a sentinel the earlier branch had just mounted. Deciding them together removes that
- * ordering hazard and makes the states testable without rendering the block.
+ * These four outcomes were three conditionals in `table-block.tsx`, each with its own gate.
+ * Deciding them together makes the states enumerable and testable without rendering the block,
+ * which is otherwise impractical: nothing in the repo renders `ConfiguredTableBlock`.
  *
  * The distinction this exists to draw: a failed fetch and an empty result look identical from the
  * outside. React Query settles an error as `isFetched` with `data === undefined`, so the block
@@ -79,6 +72,11 @@ export function resolveInfiniteScrollDisplay(input: {
   /** Whether the list currently has any rows to show (accumulated or current-page). */
   hasRows: boolean;
   hasNextPage: boolean;
+  /**
+   * Scoped to infinite scroll by the caller. An ordinary paginated block still renders the empty
+   * placeholder on a failed fetch; `useDataBlock` now exposes the signal to fix that, but doing so
+   * changes every data block and belongs in its own change.
+   */
   hasError: boolean;
   /** A later page was requested and has not been recorded yet. */
   isFetchingNextPage: boolean;
@@ -108,9 +106,10 @@ export function resolveInfiniteScrollDisplay(input: {
   // Note there is deliberately no "no rows but more pages exist, so keep walking" branch. It would
   // be an unbounded auto-fetch — the sentinel sits alone in an empty container with a 1000px root
   // margin, so it stays intersecting and re-fires as fast as responses arrive, walking the entire
-  // source. The case it would serve is not reachable in practice either: rows are only hidden from
-  // a block by `isEntityVisibleInBlock`, which acts on entities registered at creation time, and
-  // infinite scroll is off while editing.
+  // source. The alternative, taken here, is that such a page reports the empty placeholder while
+  // the query still claims more pages. That is wrong-looking but bounded, and it is what shipped
+  // before this branch. It is rare rather than impossible: `isEntityVisibleInBlock` hides entities
+  // registered at creation time, and that registry outlives the edit session that filled it.
   return {
     showSentinel: hasRows && hasNextPage,
     showSkeleton: hasRows && isFetchingNextPage,

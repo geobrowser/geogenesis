@@ -766,10 +766,9 @@ const ConfiguredTableBlock = ({
           source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO'
         ),
         whereKey,
-        filterMode: activeFilterMode,
         sortKey,
       }),
-    [isInfiniteScroll, pageSize, source, whereKey, activeFilterMode, sortKey]
+    [isInfiniteScroll, pageSize, source, whereKey, sortKey]
   );
 
   // `setPage(0)` only lands on the next render, so between the reset and that render `pageNumber`
@@ -1000,14 +999,25 @@ const ConfiguredTableBlock = ({
             <div className="h-4 w-2/3 animate-pulse rounded-sm bg-divider" />
           </div>
         )}
-        {infiniteScrollDisplay.showRetry && (
-          <div className="flex flex-col items-center gap-2 py-4 text-footnote text-grey-04" role="status">
-            <span>Couldn&apos;t load more results.</span>
-            <button type="button" onClick={() => void refetchDataBlock?.()} className="text-ctaPrimary hover:underline">
-              Try again
-            </button>
-          </div>
-        )}
+        {/*
+          The live region is mounted for the whole life of the list, not only once the failure
+          happens: a region inserted together with its text is not announced by most screen
+          readers, so it has to already be in the DOM when the content appears.
+        */}
+        <div role="status" aria-live="polite" className="flex flex-col items-center text-footnote text-grey-04">
+          {infiniteScrollDisplay.showRetry && (
+            <div className="flex flex-col items-center gap-2 py-4">
+              <span>Couldn&apos;t load more results.</span>
+              <button
+                type="button"
+                onClick={() => void refetchDataBlock?.()}
+                className="text-ctaPrimary hover:underline"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+        </div>
         {infiniteScrollDisplay.showSentinel && (
           <div ref={infiniteScrollSentinelRef} aria-hidden className="h-4 w-full" />
         )}

@@ -31,7 +31,6 @@ describe('buildAccumulationResetKey', () => {
     pageSize: 25,
     sourceKey: '"GEO"',
     whereKey: '{"values":[{"property":"a","value":"b"}]}',
-    filterMode: 'AND',
     sortKey: 'null',
   };
 
@@ -39,10 +38,10 @@ describe('buildAccumulationResetKey', () => {
     expect(buildAccumulationResetKey(base)).toBe(buildAccumulationResetKey({ ...base }));
   });
 
-  // The regression this exists to prevent: the key used to project each filter down to
-  // {columnId, value}, so a filter whose valueType or isBacklink changed re-ran the query while
-  // leaving accumulated pages from the previous filter on screen.
-  it('changes when the query identity changes but the column and value do not', () => {
+  // This only pins that distinct query identities produce distinct keys. The regression it is
+  // named for — the caller passing a projection of the filter state instead of the query's own
+  // identity — lives in `table-block.tsx`, which has no test harness, so it is not covered here.
+  it('changes when the query identity changes', () => {
     const asRelation = buildAccumulationResetKey({
       ...base,
       whereKey: '{"relations":[{"property":"a","toEntity":"b"}]}',
@@ -54,7 +53,6 @@ describe('buildAccumulationResetKey', () => {
   it.each([
     ['pageSize', { pageSize: 50 }],
     ['sourceKey', { sourceKey: '"other-space"' }],
-    ['filterMode', { filterMode: 'OR' }],
     ['sortKey', { sortKey: '{"columnId":"a","direction":"ASC"}' }],
     ['isInfiniteScroll', { isInfiniteScroll: false }],
   ])('changes when %s changes', (_label, override) => {
@@ -62,8 +60,8 @@ describe('buildAccumulationResetKey', () => {
   });
 
   it('does not collide when two fields swap values', () => {
-    const a = buildAccumulationResetKey({ ...base, sourceKey: 'x', filterMode: 'y' });
-    const b = buildAccumulationResetKey({ ...base, sourceKey: 'y', filterMode: 'x' });
+    const a = buildAccumulationResetKey({ ...base, sourceKey: 'x', sortKey: 'y' });
+    const b = buildAccumulationResetKey({ ...base, sourceKey: 'y', sortKey: 'x' });
     expect(a).not.toBe(b);
   });
 });
@@ -135,6 +133,14 @@ describe('resolveInfiniteScrollDisplay', () => {
       showRetry: false,
       showEmptyState: true,
     });
+  });
+
+  // Pins the `hasRows` half of `showSkeleton`: with nothing rendered above it the skeleton is the
+  // whole list, which reads as a permanently loading block rather than a finished empty one.
+  it('does not show a bare skeleton when there are no rows to append to', () => {
+    expect(resolveInfiniteScrollDisplay({ ...base, hasRows: false, isFetchingNextPage: true }).showSkeleton).toBe(
+      false
+    );
   });
 
   it('shows the placeholder only when there is genuinely nothing more to fetch', () => {

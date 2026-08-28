@@ -475,6 +475,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
      * query is keyed purely on its content, so two blocks with identical `where`/page/sort share a
      * cache entry. Without this scoping a COLLECTION or RELATIONS block would report the failure of
      * an unrelated GEO block that happened to issue the same query.
+     *
+     * The corollary is that only GEO/SPACES blocks can report a failure at all. A COLLECTION block
+     * with infinite scroll on whose page fetch fails still stops silently — `useCollection` has no
+     * error surface to forward. Fixing that means giving it one.
      */
     error: source.type === 'GEO' || source.type === 'SPACES' ? queriedError : null,
     /** Retry after `error` — without it a failed fetch reads as "fetched, zero results" forever. */
