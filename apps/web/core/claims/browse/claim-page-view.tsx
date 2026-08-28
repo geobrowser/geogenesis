@@ -94,16 +94,9 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
               which on a claim — a full sentence running to three or four lines — leaves each one
               breaking well short of the measure and reads as wrapping early. Pretty only avoids a
               stranded last word, so the lines fill. */}
-          {/* The claim, and what it offers the reader — the same slot the cards end their meta row
-              with, in the same relative position, so the offer is where anyone arriving from a card
-              already expects it. `items-start` keeps the slot on the first line of a claim that
-              runs to three. */}
-          <div className="flex items-start justify-between gap-4">
-            <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
-              {entity.name ?? entity.id}
-            </h1>
-            <ClaimEndSlot claimId={entityId} spaceId={spaceId} activeDebate={row?.active_debate} className="mt-1" />
-          </div>
+          <h1 className="text-[1.5rem] leading-[1.3] font-semibold tracking-[-0.4px] text-pretty text-text @[560px]:text-[1.75rem]">
+            {entity.name ?? entity.id}
+          </h1>
 
           {entity.description && (
             <Text as="p" variant="body" color="grey-04">
@@ -257,6 +250,13 @@ function ClaimPositionSection({
           </Text>
         </div>
       ) : null}
+      {/* Under the pills rather than up in the hero.
+       *
+       * On a card the offer ends the meta row because the card has no better place for it. A page
+       * does: taking a side and being offered a debate on it are one sequence, and the offer only
+       * exists because of the side directly above it. Reading it beside the title asked the reader
+       * to connect two things a screen apart. */}
+      <ClaimEndSlot claimId={entityId} spaceId={spaceId} activeDebate={row?.active_debate} className="mt-3" />
     </section>
   );
 }

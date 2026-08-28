@@ -31,14 +31,15 @@ import {
   featuredClaimIdsBySpace,
   useFeaturedClaims,
 } from '../featured-claims';
-import { useGeoChatAuth } from '../hooks';
-import { useDebateClaimsBySpaces } from '../hooks';
+import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
+import { OutboundRequestCard } from './outbound-request-card';
 import { countBy, keepSelectableTopics, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useStableListOrder } from './use-stable-list-order';
@@ -99,6 +100,13 @@ export function ClaimsTab() {
   // card keeps publishing directly.
   const promptSignIn = usePrivySignIn();
   const onRequireSignIn = authenticated ? undefined : promptSignIn;
+
+  // The account's open request, from the same two sources the Matches tab reads it from — the
+  // requests lookup, or the activity payload where that has not landed. Gated on being signed in:
+  // a signed-out visitor has no request to have sent.
+  const requestsQuery = useDebateRequests(authenticated);
+  const { data: activity } = useDebateActivity(authenticated);
+  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
   const filterOptions = React.useMemo(() => filterOptionsFor(authenticated), [authenticated]);
 
   const [search, setSearch] = React.useState('');
@@ -439,6 +447,13 @@ export function ClaimsTab() {
   return (
     <div className="flex flex-col">
       <HubStickyControls>
+        {/* Pinned above the filters, the way the Matches tab pins it. A request sent from here used
+            to vanish the moment it was sent — the card that sent it looks exactly as it did before,
+            and the only evidence was on another tab. It rides inside the sticky block rather than
+            above it because two stickies would both claim `top-0` and overlap, and this one is
+            conditional so the filters could not be offset by a known height. */}
+        {outbound ? <OutboundRequestCard request={outbound} /> : null}
+
         <Input
           withSearchIcon
           value={search}
