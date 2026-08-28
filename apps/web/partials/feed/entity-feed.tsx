@@ -281,6 +281,16 @@ export function EntityFeed({
     enabled: responseTargets.length > 0,
   });
   const responseBatchReady = responseTargets.length === 0 || responseBatch.isSuccess;
+  /**
+   * A failed batch hands the rows back rather than holding them.
+   *
+   * `EntityVoteButtons` renders a skeleton while `managed && !ready`, and disables its own query
+   * whenever `managed` — so leaving the boundary up after the retries are exhausted would leave
+   * every control in the feed a skeleton indefinitely, with no error surfaced and nothing to retry.
+   * Dropping the boundary puts each row back on the query it would have run anyway: more requests,
+   * but the counts appear.
+   */
+  const responseBatchFailed = responseBatch.isError;
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
@@ -432,16 +442,22 @@ export function EntityFeed({
         ) : items.length === 0 ? (
           <p className="text-browseMenu text-grey-04">No entities match these filters yet.</p>
         ) : (
-          <ClaimResponseBatchBoundary ready={responseBatchReady}>
-            {items.map(item => (
+          (() => {
+            const cards = items.map(item => (
               <ExploreFeedCard
                 key={`${item.entityId}-${item.spaceId}`}
                 item={item}
                 hideSpaceLink={lockedSpaceId != null}
                 hideJoinButton={lockedSpaceId != null}
               />
-            ))}
-          </ClaimResponseBatchBoundary>
+            ));
+
+            return responseBatchFailed ? (
+              cards
+            ) : (
+              <ClaimResponseBatchBoundary ready={responseBatchReady}>{cards}</ClaimResponseBatchBoundary>
+            );
+          })()
         )}
         <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
         {isFetchingNextPage ? (
