@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   setMicrophoneEnabled: vi.fn(),
   isMicrophoneEnabled: true,
   isSpeaking: false,
+  localIsSpeaking: false,
   isMuted: false,
   /** Props of every `<LiveKitRoom>` mount, so tests can drive its callbacks. */
   livekitRoomProps: [] as Array<Record<string, unknown>>,
@@ -67,9 +68,10 @@ vi.mock('@livekit/components-react', () => ({
   useAudioPlayback: () => ({ canPlayAudio: mocks.canPlayAudio, startAudio: mocks.startAudio }),
   useConnectionState: () => mocks.connectionState,
   useIsMuted: () => mocks.isMuted,
-  useIsSpeaking: () => mocks.isSpeaking,
+  useIsSpeaking: (participant?: { identity?: string }) =>
+    participant?.identity === 'me' ? mocks.localIsSpeaking : mocks.isSpeaking,
   useLocalParticipant: () => ({
-    localParticipant: { setMicrophoneEnabled: mocks.setMicrophoneEnabled },
+    localParticipant: { identity: 'me', setMicrophoneEnabled: mocks.setMicrophoneEnabled },
     isMicrophoneEnabled: mocks.isMicrophoneEnabled,
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
@@ -212,6 +214,11 @@ async function flushOwnership() {
   });
 }
 
+/** The avatar box next to a name in the dock — the element that carries the speaking ring. */
+function avatarFor(name: string) {
+  return screen.getByText(name).previousElementSibling;
+}
+
 function setVisibility(state: DocumentVisibilityState) {
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
 }
@@ -279,6 +286,7 @@ beforeEach(() => {
   mocks.setMicrophoneEnabled.mockReset();
   mocks.isMicrophoneEnabled = true;
   mocks.isSpeaking = false;
+  mocks.localIsSpeaking = false;
   mocks.isMuted = false;
   mocks.livekitRoomProps = [];
   mocks.livekitRoomMounts = [];
@@ -355,11 +363,42 @@ describe('RematchVoicePill', () => {
   it('shows the opponent as muted when they mute themselves', async () => {
     mocks.remoteParticipants = [{ identity: 'them' }];
     mocks.isMuted = true;
+    // A speaker update that arrives just before the mute leaves `isSpeaking` set until the next
+    // one; the row must not contradict itself in that window.
+    mocks.isSpeaking = true;
     render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
     const chip = screen.getByRole('img', { name: 'Salina is muted' });
     expect(chip).toBeInTheDocument();
     expect(chip).toHaveClass('bg-errorTertiary');
+    expect(avatarFor('Salina')).not.toHaveClass('ring-green');
+  });
+
+  it('rings the speaking participant, whichever side is talking', async () => {
+    mocks.remoteParticipants = [{ identity: 'them' }];
+    mocks.localIsSpeaking = true;
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    expect(avatarFor('You')).toHaveClass('ring-green');
+    expect(avatarFor('Salina')).not.toHaveClass('ring-green');
+
+    cleanup();
+    mocks.localIsSpeaking = false;
+    mocks.isSpeaking = true;
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    expect(avatarFor('Salina')).toHaveClass('ring-green');
+    expect(avatarFor('You')).not.toHaveClass('ring-green');
+  });
+
+  // Muting does not retract the active-speaker update that preceded it, so a stale one would
+  // otherwise leave the ring lit on a microphone nobody can hear.
+  it('drops the local ring the moment the microphone is off', async () => {
+    mocks.localIsSpeaking = true;
+    mocks.isMicrophoneEnabled = false;
+    render(<RematchVoicePill session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    expect(avatarFor('You')).not.toHaveClass('ring-green');
   });
 
   it('mutes and unmutes the local microphone', async () => {
