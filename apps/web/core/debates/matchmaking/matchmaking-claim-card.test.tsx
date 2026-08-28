@@ -181,7 +181,6 @@ function participant(id: string) {
   } as DebateClaimPositionSummary['participants'][number];
 }
 
-
 function renderCard(card: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={queryClient}>{card}</QueryClientProvider>);
@@ -426,16 +425,15 @@ describe('MatchmakingClaimCard', () => {
     expect(screen.getByText('Claim unavailable')).toBeInTheDocument();
   });
 
-  it('scales the footer to the number of responses', () => {
-    // Two responses is the median claim. A percentage here would read "100%" off a sample of two,
-    // so the card reports the tally and no rate.
+  it('reports the share from the first response onward', () => {
+    // Two responses is the median claim, and it gets a real percentage. What keeps "100%" from
+    // reading as a verdict is the responder cluster beside it, not the withholding of the number.
     mocks.summaryPositive = 2;
     mocks.summaryNegative = 0;
     const { unmount } = renderCard(
       <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />
     );
-    expect(screen.getByText('2 agree · 0 disagree')).toBeInTheDocument();
-    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+    expect(screen.getByText('100%')).toBeInTheDocument();
     unmount();
 
     mocks.summaryPositive = 9;

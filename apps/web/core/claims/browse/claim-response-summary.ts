@@ -55,29 +55,32 @@ export type ClaimResponseSummary = {
 };
 
 /**
- * How much of a verdict the evidence actually supports.
+ * Whether there is a split to draw at all.
  *
- * Measured against testnet, 93% of claims with any response at all are unanimous, the median claim
- * has two responses, and only 2% reach the floor above. A percentage rendered from the first
- * response is therefore almost always "100%" standing on a sample of two — a rate where there is
- * only a tally, stated in the loudest type on the surface.
+ * Two states, not three:
  *
- * So the presentation scales with the population rather than the presence of one:
+ *   - `invite`  nobody has answered. `percent` is null, there is nothing to divide, and the honest
+ *               thing to show is an invitation rather than a 0%.
+ *   - `full`    somebody has. Draw the share and the bar.
  *
- *   - `invite`  nobody has answered. There is nothing to divide and an invitation to extend.
- *   - `counts`  answered, but below the floor. Report the tally and no rate: "7 verify · 2 dispute"
- *               says everything true about four responses without implying a proportion.
- *   - `full`    enough responders to characterise the split, so the share, the bar and the
- *               Controversial band all mean what they appear to mean.
+ * An earlier version withheld the percentage below the response floor and printed a tally instead,
+ * on the grounds that 93% of answered claims are unanimous and the median has two responses — so a
+ * "100%" is usually standing on a sample of two. The reasoning about the data holds; the remedy was
+ * wrong twice over. It made a column of cards look arbitrary, some with a bar and some without, so
+ * the caution read as inconsistency rather than as care. And it was solving a problem the layout
+ * already solves: the responder cluster sits directly beneath the number and says how many people
+ * it is a percentage *of*. The sample size is shown, so the rate does not have to hedge.
+ *
+ * The floor still governs `isControversial` above, which is the one claim that genuinely needs a
+ * population behind it — a 1–1 split is not a contested claim, it is two people.
  *
  * One helper for every surface deliberately: the card, the feed and the claim page draw the same
- * number, and a tier decided twice is a tier that will eventually disagree with itself.
+ * number, and a rule decided twice is a rule that will eventually disagree with itself.
  */
-export type ClaimSummaryTier = 'invite' | 'counts' | 'full';
+export type ClaimSummaryTier = 'invite' | 'full';
 
 export function claimSummaryTier(total: number): ClaimSummaryTier {
-  if (total <= 0) return 'invite';
-  return total >= CLAIM_RESPONSE_FLOOR ? 'full' : 'counts';
+  return total <= 0 ? 'invite' : 'full';
 }
 
 /**

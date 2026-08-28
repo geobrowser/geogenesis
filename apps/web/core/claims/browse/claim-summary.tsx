@@ -65,18 +65,6 @@ export function ClaimSummary({
     />
   );
 
-  if (tier === 'counts') {
-    return (
-      <div className={cx('flex flex-wrap items-center justify-between gap-x-3 gap-y-1', className)}>
-        <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
-          {summary.positive} {copy.positiveAction.toLowerCase()} · {summary.negative}{' '}
-          {copy.negativeAction.toLowerCase()}
-        </Text>
-        {responders}
-      </div>
-    );
-  }
-
   const percent = summary.percent ?? 0;
 
   return (

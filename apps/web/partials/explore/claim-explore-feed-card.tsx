@@ -277,21 +277,6 @@ function ClaimVerdictColumn({
     />
   );
 
-  // Below the floor there is a tally and no rate. 93% of answered claims are unanimous and the
-  // median has two responses, so a percentage here would almost always be "100%" off a sample of
-  // two — stated in the largest type on the card.
-  if (tier === 'counts') {
-    return (
-      <>
-        <Text as="p" variant="metadataMedium" color="text" className="tabular-nums">
-          {summary.positive} {copy.positiveAction.toLowerCase()} · {summary.negative}{' '}
-          {copy.negativeAction.toLowerCase()}
-        </Text>
-        <div className="mt-3">{responders}</div>
-      </>
-    );
-  }
-
   const percent = summary.percent ?? 0;
 
   return (

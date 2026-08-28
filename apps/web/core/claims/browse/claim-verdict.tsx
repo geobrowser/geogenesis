@@ -57,44 +57,6 @@ export function ClaimVerdict({
     );
   }
 
-  // Answered, but not by enough people to characterise a split. Report the tally at the weight a
-  // tally deserves: no bar, and above all no percentage, which would state a rate where there is
-  // only a count.
-  if (tier === 'counts') {
-    return (
-      <section aria-label="Response summary" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          <SideSummary
-            swatchClassName="bg-green"
-            label={copy.positiveAction}
-            count={summary.positive}
-            direction="positive"
-            entityId={entityId}
-            spaceId={spaceId}
-            responseKind={responseKind}
-            viewerDirection={summary.viewerDirection}
-            viewerSpaceId={summary.viewerSpaceId}
-          />
-          <SideSummary
-            swatchClassName="bg-red-01"
-            label={copy.negativeAction}
-            count={summary.negative}
-            direction="negative"
-            entityId={entityId}
-            spaceId={spaceId}
-            responseKind={responseKind}
-            viewerDirection={summary.viewerDirection}
-            viewerSpaceId={summary.viewerSpaceId}
-            alignEnd
-          />
-        </div>
-        <Text as="p" variant="footnote" color="grey-04" className="mt-3">
-          {summary.total === 1 ? '1 response' : `${summary.total} responses`} so far — too few to call the split.
-        </Text>
-      </section>
-    );
-  }
-
   const percent = summary.percent ?? 0;
 
   return (
