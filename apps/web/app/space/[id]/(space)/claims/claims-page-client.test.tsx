@@ -194,27 +194,6 @@ describe('ClaimsPageClient', () => {
     expect(mocks.setIsReviewOpen).toHaveBeenCalledWith(true);
   });
 
-  it('enables the readiness switch after a refetch exposes the viewer response', () => {
-    claims = [publishedClaim()];
-    debateClaimsResponse = {
-      claims: [debateClaim({ viewer_response: null })],
-    };
-
-    const { rerender } = renderClaims();
-
-    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
-
-    debateClaimsResponse = {
-      claims: [debateClaim({ viewer_response: { position: true, position_label: 'Agree' } })],
-    };
-    rerender(<ClaimsPageClient spaceId="space-1" />);
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
-
-    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
-  });
-
   it('batches the active response kind for all visible claims and defers their individual requests', () => {
     claims = Array.from({ length: 50 }, (_, index) => publishedClaim(`claim-${index}`, `Claim ${index}`));
     debateClaimsResponse = {
@@ -241,7 +220,6 @@ describe('ClaimsPageClient', () => {
     expect((mocks.responseBatchCalls[0] as { targets: unknown[] }).targets).toHaveLength(50);
     expect(screen.getAllByTestId('entity-response-skeleton')).toHaveLength(50);
     expect(screen.queryByTestId('entity-response-buttons')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('switch', { name: 'Debate' })).toHaveLength(50);
   });
 
   it('keeps every published claim responsive when geo-chat has not hydrated its readiness snapshot yet', () => {
@@ -270,8 +248,6 @@ describe('ClaimsPageClient', () => {
     });
     expect(screen.getAllByTestId('entity-response-buttons')).toHaveLength(2);
     expect(screen.getAllByTestId('entity-response-buttons')[1]).toHaveAttribute('data-response-kind', 'veracity');
-    expect(screen.getAllByRole('switch', { name: 'Debate' })).toHaveLength(2);
-    expect(screen.getAllByRole('switch', { name: 'Debate' })[1]).toBeDisabled();
   });
 
   it('retries only the page response batch after its retries are exhausted', () => {
@@ -287,41 +263,14 @@ describe('ClaimsPageClient', () => {
     expect(mocks.refetchResponseBatch).toHaveBeenCalledOnce();
   });
 
-  it('renders backend response labels and one leave-readiness toggle', () => {
-    claims = [publishedClaim()];
-    debateClaimsResponse = {
-      claims: [
-        debateClaim({
-          viewer_response: { position: true, position_label: 'Verify' },
-          viewer_debate_ready: true,
-          response_kind: 'veracity',
-          online_choices: [],
-        }),
-      ],
-    };
-
-    renderClaims();
-
-    expect(screen.queryByText('Ready to debate')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
-    expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
-  });
-
-  it('keeps readiness clickable while joining but unavailable for unpublished or debating claims', () => {
+  it('tells the viewer to publish before an unpublished claim offers a debate', () => {
     const published = publishedClaim();
     claims = [published];
     debateClaimsResponse = {
       claims: [debateClaim()],
     };
-    joinPending = true;
-
     const { rerender } = renderClaims();
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeEnabled();
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-busy', 'true');
-
-    joinPending = false;
     claims = [
       {
         ...published,
@@ -346,7 +295,6 @@ describe('ClaimsPageClient', () => {
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
     expect(screen.getByText('Debate in progress')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
   });
 });
 

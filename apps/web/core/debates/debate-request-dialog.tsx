@@ -50,7 +50,7 @@ type DebateRequestDialogProps = {
   eyebrow?: React.ReactNode;
   /** GEO-2430: a text action beside the "Debate format" heading, e.g. "Dismiss forever". */
   formatAction?: { label: string; onClick: () => void };
-  /** Rendered centred under the claim, e.g. the claim's Debate toggle. */
+  /** Rendered centred under the claim, e.g. the claim's response control. */
   headerNote?: React.ReactNode;
   /** GEO-2430: overflow ("…") menu anchored to the participants card, e.g. to block a user. */
   overflowMenu?: React.ReactNode;

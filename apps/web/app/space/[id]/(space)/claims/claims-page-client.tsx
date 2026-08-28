@@ -9,8 +9,8 @@ import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/
 import { isClaimPublishedInSpace } from '~/core/claims/publish';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
-import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
 import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
+import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import { useDebateClaims } from '~/core/debates/hooks';
 import {
   ClaimResponseBatchBoundary,
@@ -321,6 +321,9 @@ function ClaimListItem({
   const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
   const published = isClaimPublishedInSpace(claim, spaceId);
   const activeDebate = debateClaim?.active_debate ?? null;
+  // Kept when the Debate toggle went (GEO-2740): the toggle drew this side effect, but the
+  // snapshot it retires is what drives the notification that now creates readiness server-side.
+  useRetireConfirmedResponseIndexing({ debateClaim, entityId: claim.id, spaceId });
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
@@ -339,13 +342,6 @@ function ClaimListItem({
       {published && (
         <div className="mt-3 flex items-center gap-4">
           <DebateEntityResponseControls entityId={claim.id} spaceId={spaceId} responseKind={responseKind} />
-          <ClaimDebateReadiness
-            compact
-            debateClaim={debateClaim}
-            entityId={claim.id}
-            spaceId={spaceId}
-            canEnable={!activeDebate && !debateJoinBlocked}
-          />
         </div>
       )}
 

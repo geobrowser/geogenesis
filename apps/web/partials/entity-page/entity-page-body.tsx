@@ -135,7 +135,7 @@ function EditorFooter({
  * Editing always falls through to the generic page: these are read surfaces with no property editor
  * behind them, so an editor who lost the value sheet would have no way to change the entity.
  *
- * Unscoped, matching how `EntityVoteButtons` and `ClaimDebateButton` read the same flag. `types` is
+ * Unscoped, matching how `EntityVoteButtons` reads the same flag. `types` is
  * derived across every space either way, so this is about consistency with the controls the pages
  * render rather than about reaching a type a scoped read would miss.
  */

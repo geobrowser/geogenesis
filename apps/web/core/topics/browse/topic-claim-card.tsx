@@ -68,8 +68,6 @@ export function TopicClaimCard({ claim, fallbackSpaceId }: { claim: Entity; fall
         viewer_debate_ready: row?.viewer_debate_ready ?? false,
         readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
       }}
-      activeDebate={Boolean(row?.active_debate)}
-      hideReadinessToggle={row === null && rowQuery.isLoading}
       footer={<ClaimSplit summary={summary} responseKind={responseKind} />}
     />
   );
