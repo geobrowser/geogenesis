@@ -11,12 +11,16 @@ import { type ResponseKind, entityResponseCountsQueryKey } from '~/core/response
 export const CLAIM_RESPONSE_OBJECT_TYPE = 0;
 
 /**
- * How many responses a claim needs before its split is worth reporting.
+ * How many responses a claim needs before it can be called contested.
  *
- * One-vs-one is 50%, so an unguarded "controversial" band lands on nearly every barely-touched
- * claim — loudest exactly where the data is thinnest, and marking brand-new claims as contested,
- * which is backwards. The same floor suppresses the bare percentage: "100% agree" off a single
- * response says less than showing nothing.
+ * One-vs-one is 50%, so an unguarded band lands on nearly every barely-touched claim — loudest
+ * exactly where the data is thinnest, and marking brand-new claims as contested, which is
+ * backwards.
+ *
+ * Scoped to the tag, deliberately. The floor used to gate the percentage too, which meant the
+ * whole verdict disappeared on any claim with fewer than ten responses — i.e. almost all of them
+ * — and hid the page's most important module in the name of precision nobody asked for. A split
+ * off four responses is worth showing; calling it *controversial* is not.
  */
 export const CLAIM_RESPONSE_FLOOR = 10;
 
@@ -27,32 +31,33 @@ export type ClaimResponseSummary = {
   positive: number;
   negative: number;
   total: number;
-  /** Whole-percent share of positive responses. Null until the floor is cleared. */
+  /** Whole-percent share of positive responses. Null only when nobody has responded at all. */
   percent: number | null;
+  /** Whether there are enough responses to characterize the split, rather than just report it. */
+  meetsFloor: boolean;
   isControversial: boolean;
   isLoading: boolean;
 };
 
 /**
- * The split, or null where there isn't enough behind it to report one.
+ * The split, or null where there is nothing to divide.
  *
- * Pure so the floor and the band can be tested without a query. `percent` is null rather than 0
- * below the floor because the two mean different things and the caller renders them differently:
- * nothing at all, versus a genuine 0%.
+ * Pure so the floor and the band can be tested without a query. `percent` is null rather than 0 on
+ * an untouched claim because the two mean different things and callers render them differently:
+ * no module at all, versus a genuine 0%.
  */
-export function summarizeClaimResponses(
-  positive: number,
-  negative: number
-): Pick<ClaimResponseSummary, 'positive' | 'negative' | 'total' | 'percent' | 'isControversial'> {
+export function summarizeClaimResponses(positive: number, negative: number): Omit<ClaimResponseSummary, 'isLoading'> {
   const total = positive + negative;
-  const percent = total >= CLAIM_RESPONSE_FLOOR ? Math.round((100 * positive) / total) : null;
+  const percent = total > 0 ? Math.round((100 * positive) / total) : null;
+  const meetsFloor = total >= CLAIM_RESPONSE_FLOOR;
 
   return {
     positive,
     negative,
     total,
     percent,
-    isControversial: percent !== null && percent >= CONTROVERSIAL_LOW && percent <= CONTROVERSIAL_HIGH,
+    meetsFloor,
+    isControversial: meetsFloor && percent !== null && percent >= CONTROVERSIAL_LOW && percent <= CONTROVERSIAL_HIGH,
   };
 }
 

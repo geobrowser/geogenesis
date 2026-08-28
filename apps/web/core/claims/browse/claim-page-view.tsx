@@ -10,7 +10,6 @@ import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { ID } from '~/core/id';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
@@ -138,9 +137,10 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 /**
  * Taking a side, and standing ready to argue it.
  *
- * One card, stacked, because the two are a sequence rather than two independent choices: the
- * readiness switch can only be turned *on* for a claim you have already responded to. Side by side
- * they read as two controls that mysteriously disable each other.
+ * Both live in one card, with the readiness switch in the header's top right and the side pills
+ * beneath — the same arrangement the hub's claim card uses, so the switch is where anyone who has
+ * used the panel already looks for it. They belong together because they are a sequence: readiness
+ * can only be turned *on* for a claim you have already responded to.
  *
  * The pills and the publishing behind them come from the hub's own control, so a response taken
  * here goes through exactly the path a response taken in the panel does — including the optimistic
@@ -191,13 +191,25 @@ function ClaimPositionSection({
   );
 
   const control = useClaimPositionControl({ claim, positions, readiness });
-  const copy = ENTITY_RESPONSE_COPY[readiness.response_kind];
 
   return (
     <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
-      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-2.5">
-        Your position
-      </Text>
+      {/* Label left, readiness switch right — the same header shape the hub's claim card uses, so
+          the control sits where someone who has used the panel already expects it. `items-start`
+          so the label stays put when the switch stacks an explanation beneath it. */}
+      <div className="mb-2.5 flex items-start justify-between gap-3">
+        <Text as="div" variant="metadataMedium" color="grey-04">
+          Your position
+        </Text>
+        <ClaimDebateReadiness
+          debateClaim={row}
+          entityId={entityId}
+          spaceId={spaceId}
+          canEnable={!row?.active_debate}
+          isLoading={rowQuery.isLoading}
+          compact
+        />
+      </div>
       <PositionRow
         positions={control.optimisticPositions}
         responseKind={readiness.response_kind}
@@ -213,25 +225,6 @@ function ClaimPositionSection({
           </Text>
         </div>
       ) : null}
-
-      <div className="mt-4 flex items-center justify-between gap-3 border-t border-divider pt-4">
-        <div className="min-w-0">
-          <Text as="div" variant="metadataMedium" color="text">
-            Ready to debate this
-          </Text>
-          <Text as="p" variant="metadata" color="grey-04" className="mt-0.5">
-            {`We'll match you with someone who picked ${copy.negativeAction.toLowerCase()}.`}
-          </Text>
-        </div>
-        <ClaimDebateReadiness
-          debateClaim={row}
-          entityId={entityId}
-          spaceId={spaceId}
-          canEnable={!row?.active_debate}
-          isLoading={rowQuery.isLoading}
-          compact
-        />
-      </div>
     </section>
   );
 }

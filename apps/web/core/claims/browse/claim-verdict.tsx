@@ -16,9 +16,9 @@ import { CLAIM_RESPONSE_OBJECT_TYPE, type ClaimResponseSummary } from './claim-r
 /**
  * Where opinion sits on a claim: one number, the split, and who is on each side.
  *
- * Renders nothing until the response floor is cleared. A claim with two responses has a
- * percentage the arithmetic will happily produce and the reader should not be shown — the module
- * being absent is the honest state, and the response control above still reports the raw counts.
+ * Renders from the first response onward. Only a claim nobody has answered has nothing to divide,
+ * and that is the one case this is absent for — the response floor governs whether the split can
+ * be called *controversial*, not whether it can be shown at all.
  */
 export function ClaimVerdict({
   entityId,

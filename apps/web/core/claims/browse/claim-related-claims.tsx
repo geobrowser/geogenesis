@@ -143,8 +143,8 @@ function RelatedClaimCard({
 /**
  * The share of responses that took the positive side, under the card.
  *
- * Absent below the response floor, for the reason the page's own verdict is: a percentage off a
- * handful of responses describes who happened to show up rather than the claim.
+ * Present from the first response, like the page's own verdict — absent only on a claim nobody
+ * has answered, where there is no split to report.
  */
 function AgreePercent({
   summary,

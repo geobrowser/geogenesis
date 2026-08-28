@@ -118,7 +118,7 @@ export function ClaimDebates({
   );
 }
 
-type WinnerShare = { spaceId: string; percent: number };
+type WinnerShare = { spaceId: string; percent: number; totalVotes: number };
 
 /**
  * Who each debate's viewers picked as the winner, as a share of that debate's votes.
@@ -160,7 +160,11 @@ function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
       const [leaderSpaceId, leaderCount] = [...byWinner.entries()].reduce((best, entry) =>
         entry[1] > best[1] ? entry : best
       );
-      shares.set(debateId, { spaceId: leaderSpaceId, percent: Math.round((100 * leaderCount) / total) });
+      shares.set(debateId, {
+        spaceId: leaderSpaceId,
+        percent: Math.round((100 * leaderCount) / total),
+        totalVotes: total,
+      });
     }
     return shares;
   }, [votes]);
@@ -190,10 +194,14 @@ function DebateRow({
       href={NavUtils.toEntity(spaceId, debate.id)}
       className="flex items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 transition-colors hover:border-grey-03"
     >
-      {/* The still the debate was published with. A debate whose video predates keyframe capture
-          keeps the neutral tile rather than an image element pointed at nothing. */}
-      <span className="relative block aspect-video w-20 shrink-0 overflow-hidden rounded-md bg-grey-01 @[420px]:w-24">
-        {keyframeUrl && <GeoImage value={keyframeUrl} alt="" fill sizes="96px" className="object-cover" />}
+      {/* The still the debate was published with, in the shape the video actually is. The `Debate
+          videos` property declares 540 × 820 — portrait, not the landscape a video thumbnail
+          usually implies — so a 16:9 tile would letterbox every still it ever showed.
+
+          A debate whose video predates keyframe capture keeps the neutral tile rather than an
+          image element pointed at nothing. */}
+      <span className="relative block aspect-[540/820] w-12 shrink-0 overflow-hidden rounded-md bg-grey-01 @[420px]:w-14">
+        {keyframeUrl && <GeoImage value={keyframeUrl} alt="" fill sizes="56px" className="object-cover" />}
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {sides.length > 0 ? (
@@ -229,14 +237,67 @@ function DebateRow({
             {debate.name ?? 'Debate'}
           </Text>
         )}
-        {winnerShare && (
-          <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
-            {winnerShare.percent}% picked {nameFor(winnerShare.spaceId)}
-          </Text>
-        )}
+        <DebateMeta debate={debate} totalVotes={winnerShare?.totalVotes ?? 0} />
       </div>
+
+      {/* The outcome as its own column, so the eye can run down the percentages instead of hunting
+          for them at the end of each row. */}
+      {winnerShare && (
+        <div className="shrink-0 text-right">
+          <Text as="div" variant="metadataMedium" color="text" className="tabular-nums">
+            {winnerShare.percent}%
+          </Text>
+          <Text as="div" variant="metadata" color="grey-04" className="truncate">
+            {nameFor(winnerShare.spaceId)}
+          </Text>
+        </div>
+      )}
     </Link>
   );
+}
+
+/**
+ * Date and vote count under the debaters.
+ *
+ * Deliberately no duration: a debate's turn lengths live on geo-chat's record and were never
+ * published to the graph, so there is nothing here to read one from. Showing a made-up or
+ * zero-length runtime would be worse than leaving it out.
+ *
+ * Each part is dropped when it has nothing behind it, so the line never renders as a bare
+ * separator — an unpublished date and an unvoted debate together mean no line at all.
+ */
+function DebateMeta({ debate, totalVotes }: { debate: Entity; totalVotes: number }) {
+  const parts: string[] = [];
+
+  const published = debateDate(debate);
+  if (published) {
+    parts.push(published.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }));
+  }
+  if (totalVotes > 0) parts.push(`${totalVotes} ${totalVotes === 1 ? 'vote' : 'votes'}`);
+
+  if (parts.length === 0) return null;
+
+  return (
+    <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
+      {parts.join(' · ')}
+    </Text>
+  );
+}
+
+/**
+ * When the debate was published, as a date.
+ *
+ * `createdAt` and `updatedAt` are typed as "unix seconds or ISO 8601, varies by backend", so both
+ * shapes are handled rather than assumed. `createdAt` is the one that means "when this debate
+ * happened" — `updatedAt` moves whenever anything touches the entity, including a backlink from
+ * some unrelated edit.
+ */
+function debateDate(debate: Entity): Date | null {
+  const raw = debate.createdAt ?? debate.updatedAt;
+  if (raw === undefined || raw === null) return null;
+
+  const date = typeof raw === 'number' ? new Date(raw * 1000) : new Date(/^\d+$/.test(raw) ? Number(raw) * 1000 : raw);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function relationTargets(relations: Relation[], propertyId: string): string[] {
