@@ -604,7 +604,9 @@ export function BlockDragHandle({
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
         >
-          <Plus />
+          <span aria-hidden="true" className="flex size-[15px] -translate-y-px [&>svg]:size-full">
+            <Plus />
+          </span>
         </button>
       ) : null}
       <Menu
@@ -875,6 +877,11 @@ export function insertTextBlockBelow(editor: Editor, childIndex: number): boolea
   if (childIndex < 0 || childIndex >= doc.childCount) return false;
 
   const insertPosition = positionBeforeChild(doc, childIndex + 1);
+  // The plus button lives outside ProseMirror. Restore DOM focus before the
+  // insertion transaction so focus-dependent decorations (notably the empty
+  // block slash hint) are calculated for the newly inserted paragraph.
+  editor.view.focus();
+
   return editor
     .chain()
     .insertContentAt(insertPosition, { type: 'paragraph' })
