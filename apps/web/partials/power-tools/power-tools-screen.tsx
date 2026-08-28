@@ -45,7 +45,10 @@ import { Text } from '~/design-system/text';
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { createPropertyRelation, writeValue } from '~/partials/blocks/table/change-entry';
 import { TableBlockDropdowns } from '~/partials/blocks/table/table-block-dropdowns';
-import { TableBlockDropdownsConfig } from '~/partials/blocks/table/table-block-dropdowns-config';
+import {
+  TableBlockDropdownsConfigChips,
+  TableBlockDropdownsConfigTrigger,
+} from '~/partials/blocks/table/table-block-dropdowns-config';
 import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
 import { TableBlockFilterGroupPill, groupFilters } from '~/partials/blocks/table/table-block-filter-pill';
 import { Editor } from '~/partials/editor/editor';
@@ -999,7 +1002,7 @@ export function PowerToolsScreen() {
           )}
           <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
           {isEditing && (
-            <TableBlockDropdownsConfig
+            <TableBlockDropdownsConfigTrigger
               configs={browseDropdowns.configs}
               properties={data.properties}
               toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
@@ -1074,9 +1077,16 @@ export function PowerToolsScreen() {
         </div>
       )}
 
-      {hasActiveFilters && (
+      {(hasActiveFilters || (isEditing && browseDropdowns.configs.length > 0)) && (
         <div className="flex items-center gap-2 border-b border-grey-02 px-4 py-2">
           <div className="flex flex-wrap items-center gap-1.5">
+            {isEditing && (
+              <TableBlockDropdownsConfigChips
+                configs={browseDropdowns.configs}
+                properties={data.properties}
+                toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+              />
+            )}
             {filterGroups.map(group => (
               <React.Fragment key={group.columnId}>
                 <TableBlockFilterGroupPill

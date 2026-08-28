@@ -77,7 +77,7 @@ import { type QuerySetupTypePick, QuerySetupTypesSelectEntityPopover } from './q
 import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import { TableBlockContextMenu } from './table-block-context-menu';
 import { TableBlockDropdowns } from './table-block-dropdowns';
-import { TableBlockDropdownsConfig } from './table-block-dropdowns-config';
+import { TableBlockDropdownsConfigChips, TableBlockDropdownsConfigTrigger } from './table-block-dropdowns-config';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import TableBlockExploreItemsDnd from './table-block-explore-items-dnd';
@@ -1124,7 +1124,7 @@ const ConfiguredTableBlock = ({
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}
                       />
-                      <TableBlockDropdownsConfig
+                      <TableBlockDropdownsConfigTrigger
                         configs={browseDropdowns.configs}
                         properties={mergedBlockProperties}
                         toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
@@ -1154,8 +1154,13 @@ const ConfiguredTableBlock = ({
                     ))}
                 </div>
 
-                {isEditing && filterGroupsForToolbarPills.length > 0 && (
+                {isEditing && (filterGroupsForToolbarPills.length > 0 || browseDropdowns.configs.length > 0) && (
                   <div className="flex flex-wrap items-center gap-2">
+                    <TableBlockDropdownsConfigChips
+                      configs={browseDropdowns.configs}
+                      properties={mergedBlockProperties}
+                      toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+                    />
                     {filterGroupsForToolbarPills.map(group => (
                       <React.Fragment key={group.columnId}>
                         <TableBlockFilterGroupPill
