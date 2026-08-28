@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
+import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
@@ -49,6 +50,8 @@ import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useStableListOrder } from './use-stable-list-order';
 
 const SEARCH_DEBOUNCE_MS = 250;
+/** Long enough to absorb a run of ticks, short enough not to feel like lag on a single one. */
+const SELECTION_DEBOUNCE_MS = 350;
 
 /**
  * GEO-2683. `featured` is the tab's own, not one of geo-chat's: the index has no notion of the tag,
@@ -145,9 +148,16 @@ export function ClaimsTab() {
   // Featured draws its own list, so the index isn't asked for one. The query keeps saying `all`
   // rather than going undefined: switching to Featured and back then lands on the pages already
   // cached instead of paging the corpus again from the top.
+  // Debounced like the search box, and for the same reason. The menu stays open across ticks, so
+  // picking three topics fired three requests and threw two away — each competing for a backend
+  // that takes seconds to answer once topics are involved (GEO-2721). The menu still reflects the
+  // tick instantly; only the request waits.
+  const debouncedTopicIds = useDebouncedValue(topicIds, SELECTION_DEBOUNCE_MS);
+  const debouncedSpaceIds = useDebouncedValue(spaceIds, SELECTION_DEBOUNCE_MS);
+
   const query = React.useMemo<Omit<MatchmakingClaimsQuery, 'spaceIds' | 'spaceId'>>(
-    () => ({ search: debouncedSearch || null, topicIds, filter: featured ? 'all' : filter }),
-    [debouncedSearch, featured, filter, topicIds]
+    () => ({ search: debouncedSearch || null, topicIds: debouncedTopicIds, filter: featured ? 'all' : filter }),
+    [debouncedSearch, debouncedTopicIds, featured, filter]
   );
 
   const scope = React.useMemo(
@@ -159,7 +169,7 @@ export function ClaimsTab() {
   // once, for both pickers — see `useScopedMatchmakingClaims`. Featured passes `unusable`: it draws
   // its own list, so there is nothing worth asking the index for, and the masking that comes with
   // it also keeps the paging sentinel off a list that has no next page.
-  const claimsQuery = useScopedMatchmakingClaims(query, scope, spaceIds, featured);
+  const claimsQuery = useScopedMatchmakingClaims(query, scope, debouncedSpaceIds, featured);
   const { pages, facets } = claimsQuery;
 
   const serverClaims = React.useMemo(
@@ -423,6 +433,7 @@ export function ClaimsTab() {
           onTopicsClear={() => setTopicIds([])}
           facetSpaces={facetSpaces}
           facetTopics={facetTopics}
+          countsPending={claimsQuery.countsPending}
           leading={
             <HubFilterMenu
               label={FILTER_OPTIONS.find(option => option.value === filter)?.label ?? 'All claims'}
@@ -558,6 +569,8 @@ type SpaceTopicFiltersProps = {
   /** Ordered as they should be shown, and carrying the counts the rows display. */
   facetSpaces: { id: string; count: number }[];
   facetTopics?: { id: string; name: string | null; count: number }[];
+  /** Hide both menus' counts: the ones in hand describe a filter the viewer has moved on from. */
+  countsPending?: boolean;
   /** Rendered before the space filter — the Claims tab puts its position filter here. */
   leading?: React.ReactNode;
   /**
@@ -584,6 +597,7 @@ export function SpaceTopicFilters({
   onTopicsClear,
   facetSpaces,
   facetTopics,
+  countsPending,
   leading,
   topicAtEnd,
 }: SpaceTopicFiltersProps) {
@@ -637,6 +651,7 @@ export function SpaceTopicFilters({
         onToggle={onSpaceToggle}
         onClear={onSpacesClear}
         clearLabel="Any space"
+        countsPending={countsPending}
         showImages
       />
       {facetTopics && topicIds && onTopicToggle && onTopicsClear ? (
@@ -651,6 +666,7 @@ export function SpaceTopicFilters({
             onToggle={onTopicToggle}
             onClear={onTopicsClear}
             clearLabel="Any topic"
+            countsPending={countsPending}
           />
         </div>
       ) : null}

@@ -132,6 +132,8 @@ type MultiProps<T extends string> = {
   clearLabel: string;
   showImages?: boolean;
   labelPending?: boolean;
+  /** Hide the counts: the ones in hand answer a filter the viewer has already moved on from. */
+  countsPending?: boolean;
 };
 
 /**
@@ -153,6 +155,7 @@ export function HubMultiFilterMenu<T extends string>({
   clearLabel,
   showImages,
   labelPending,
+  countsPending,
 }: MultiProps<T>) {
   const [open, setOpen] = React.useState(false);
   const selected = new Set<string>(values);
@@ -231,7 +234,7 @@ export function HubMultiFilterMenu<T extends string>({
                 {option.label}
               </Text>
             )}
-            {option.count === undefined ? null : (
+            {option.count === undefined || countsPending ? null : (
               <Text variant="footnote" className="ml-auto shrink-0 text-grey-04!">
                 {formatFacetCount(option.count)}
               </Text>

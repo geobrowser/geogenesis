@@ -780,9 +780,12 @@ describe('topic menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
+    // The selection is debounced before it reaches the query, so the menu it describes arrives a
+    // beat later — see `SELECTION_DEBOUNCE_MS`.
+    // The reported bug: Health stayed on the menu, and picking it showed nothing at all. Waited on
+    // rather than AI, which is present either way — the disappearance is what the pick causes.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Health/ })).toBeNull());
     expect(screen.getByRole('button', { name: /^AI/ })).toBeInTheDocument();
-    // The reported bug: Health stayed on the menu, and picking it showed nothing at all.
-    expect(screen.queryByRole('button', { name: /^Health/ })).toBeNull();
   });
 
   // The report that reopened this: filter to a space, and topics appeared only as you scrolled,
@@ -886,8 +889,9 @@ describe('topic menu', () => {
 
     // geo-chat ORs the space parameters together, so sending the scope alongside the pick would
     // widen the query straight back out to every eligible space.
-    // The menu's option values are the facet's own ids, which is what goes back out.
-    expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] });
+    // The menu's option values are the facet's own ids, which is what goes back out. Debounced,
+    // so the request follows the tick rather than riding it.
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
   });
 
   it('asks the server to do the topic filtering', async () => {
@@ -899,7 +903,7 @@ describe('topic menu', () => {
 
     // Filtering here would only ever narrow the pages already loaded, which is the same bug in
     // the list that the menu had.
-    expect(mocks.lastQuery).toMatchObject({ topicIds: [AI.id] });
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ topicIds: [AI.id] }));
   });
 
   // The scope goes out as `spaceIds`, and it isn't known until the allowlist and the publishable

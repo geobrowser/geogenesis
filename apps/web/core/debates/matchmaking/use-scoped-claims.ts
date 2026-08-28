@@ -31,6 +31,15 @@ export type ScopedClaims = {
   facetsSettled: boolean;
   /** Nothing this query could return is showable, so it was never asked. */
   unusable: boolean;
+  /**
+   * The facets in hand answer a filter the viewer has since moved on from.
+   *
+   * They keep being rendered — blanking the menu under the cursor is worse than a beat of staleness
+   * — but their *counts* must not be, because a count is the one part that is provably wrong: a
+   * topic facet is co-occurrence, so a stale one can show an option counted above the selection
+   * itself, which is impossible for a real answer. Callers hide the numbers while this is true.
+   */
+  countsPending: boolean;
   /** Already masked: a sentinel rendered on this can't page a corpus the caller can't show. */
   hasNextPage: boolean;
   isLoading: boolean;
@@ -96,11 +105,17 @@ export function useScopedMatchmakingClaims(
   const facetsSettled =
     !scope.pending && (unusable || (facets !== undefined && !claimsQuery.isLoading && !claimsQuery.isPlaceholderData));
 
+  // Placeholder data is the previous key's answer, and since GEO-2696 a topic facet is narrowed by
+  // the topic selection — so on a filter change the held counts don't merely lag, they describe a
+  // question the viewer is no longer asking.
+  const countsPending = claimsQuery.isPlaceholderData || claimsQuery.isLoading;
+
   return {
     pages,
     facets,
     facetsSettled,
     unusable,
+    countsPending,
     hasNextPage: !masked && Boolean(claimsQuery.hasNextPage),
     isLoading: claimsQuery.isLoading,
     isFetchingNextPage: claimsQuery.isFetchingNextPage,
