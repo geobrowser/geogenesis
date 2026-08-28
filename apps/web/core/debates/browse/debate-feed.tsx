@@ -17,10 +17,11 @@ import { useComments } from '~/core/hooks/use-comments';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
-import { ArrowLeft } from '~/design-system/icons/arrow-left';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
@@ -393,20 +394,12 @@ function DebateFeedItem({
           className="relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
           style={DEBATE_COLUMN_STYLE}
         >
-          {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
-              here are desktop-first (md = max-width:767px), so md: targets mobile. */}
-          <button
-            type="button"
-            aria-label="Back"
-            onClick={() => window.history.back()}
-            className="-mb-3 hidden size-8 items-center justify-center text-text md:flex"
-          >
-            <ArrowLeft />
-          </button>
           <div className="md:mt-4">
             <DebateTitleHeader
               key={debate.claim.claim}
               claim={debate.claim.claim}
+              claimEntityId={debate.claim.claim_entity_id}
+              spaceId={spaceId}
               spaceName={spaceName}
               spaceImage={spaceImage}
               topics={topics}
@@ -438,12 +431,16 @@ function DebateFeedItem({
 
 function DebateTitleHeader({
   claim,
+  claimEntityId,
+  spaceId,
   spaceName,
   spaceImage,
   topics,
   onOpenJoin,
 }: {
   claim: string;
+  claimEntityId: string;
+  spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
   topics: string[];
@@ -473,12 +470,17 @@ function DebateTitleHeader({
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
-            <Avatar avatarUrl={spaceImage} value={spaceName} size={16} />
-          </span>
-          <Text as="span" variant="metadata" color="text" className="truncate !leading-[13px] !tracking-[-0.35px]">
-            {spaceName}
-          </Text>
+          {/* `min-w-0` again on the anchor: the truncation chain runs parent → anchor → text, and
+              a link left at its default `min-width: auto` would refuse to shrink and push the
+              topics off the row instead of ellipsing the name. */}
+          <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center gap-1.5 hover:underline">
+            <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
+              <Avatar avatarUrl={spaceImage} value={spaceName} size={16} />
+            </span>
+            <Text as="span" variant="metadata" color="text" className="truncate !leading-[13px] !tracking-[-0.35px]">
+              {spaceName}
+            </Text>
+          </Link>
           {topics.map(topic => (
             <React.Fragment key={topic}>
               <Text as="span" variant="metadata" color="grey-04" className="!leading-[13px] !tracking-[-0.35px]">
@@ -516,7 +518,14 @@ function DebateTitleHeader({
           isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
         }`}
       >
-        {claim}
+        <Link
+          href={NavUtils.toEntity(spaceId, claimEntityId)}
+          entityId={claimEntityId}
+          spaceId={spaceId}
+          className="hover:underline"
+        >
+          {claim}
+        </Link>
       </h2>
       {isClaimOverflowing && (
         <button
