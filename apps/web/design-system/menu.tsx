@@ -22,6 +22,12 @@ interface Props {
   viewportClassName?: string;
   asChild?: boolean;
   modal?: boolean;
+  /**
+   * Radix returns focus to the trigger when a popover closes. When sibling
+   * menus are switched between, that focus move lands outside the newly
+   * opened menu and dismisses it — pass `e => e.preventDefault()` to opt out.
+   */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /** Outer shell: opaque + clips corners so overscroll never reveals “holes” behind the panel. */
@@ -55,6 +61,7 @@ export function Menu({
   className = '',
   viewportClassName,
   modal = false,
+  onCloseAutoFocus,
 }: Props) {
   const triggerRef = React.useRef<HTMLButtonElement>(null);
   const [contentElement, setContentElement] = React.useState<HTMLDivElement | null>(null);
@@ -86,6 +93,7 @@ export function Menu({
         collisionPadding={8}
         className={cx(shellStyles({ align: adaptiveAlign }), className)}
         onWheel={onMenuWheel}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         <div ref={scrollRef} className={viewportClassName ?? defaultScrollViewportClass}>
           {children}
