@@ -12,13 +12,13 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
-import { ENTITY_RESPONSE_COPY, responsePositionLabel } from '~/core/responses/entity-response';
+import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
 import { Text } from '~/design-system/text';
 
-import { positionSummariesFromCounts } from './claim-position-summaries';
+import { positionSummariesFromCounts, viewerResponseFromDirection } from './claim-position-summaries';
 import { useClaimResponseSummary } from './claim-response-summary';
 import { CursorPager, useCursorPages } from './use-cursor-pages';
 
@@ -213,11 +213,10 @@ function RelatedClaimCard({
     [responseKind, row, summary.negative, summary.positive]
   );
 
-  const viewerResponse = React.useMemo(() => {
-    if (summary.viewerDirection === null) return null;
-    const position = summary.viewerDirection === 'positive';
-    return { position, position_label: responsePositionLabel(responseKind, position) };
-  }, [responseKind, summary.viewerDirection]);
+  const viewerResponse = React.useMemo(
+    () => viewerResponseFromDirection(summary.viewerDirection, responseKind),
+    [responseKind, summary.viewerDirection]
+  );
 
   return (
     <MatchmakingClaimCard

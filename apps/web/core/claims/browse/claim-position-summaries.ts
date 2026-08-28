@@ -1,5 +1,25 @@
-import type { DebateClaim, DebateClaimPositionSummary } from '~/core/debates/api';
-import { responsePositionLabel } from '~/core/responses/entity-response';
+import type { DebateClaim, DebateClaimPositionSummary, DebateResponseSummary } from '~/core/debates/api';
+import { type ActiveResponseDirection, responsePositionLabel } from '~/core/responses/entity-response';
+
+/**
+ * The viewer's response in the shape the hub's controls read, built from the on-chain summary.
+ *
+ * geo-chat's row is the usual source, and it is not always available: it lags the response while
+ * indexing, and in a space geo-chat does not index there is never a row at all. Reading an absent
+ * row as "no response" leaves the viewer's own side drawn unselected — and a click on it publishes
+ * the response they already hold instead of clearing it.
+ *
+ * The on-chain summary resolves independently of geo-chat, so it can stand in for both cases.
+ */
+export function viewerResponseFromDirection(
+  direction: ActiveResponseDirection | null,
+  responseKind: 'stance' | 'veracity'
+): DebateResponseSummary | null {
+  if (direction === null) return null;
+
+  const position = direction === 'positive';
+  return { position, position_label: responsePositionLabel(responseKind, position) };
+}
 
 /**
  * The two sides of a claim, in the shape the hub's position controls read.

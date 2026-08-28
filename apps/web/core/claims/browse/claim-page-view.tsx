@@ -22,10 +22,10 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { ClaimDebates } from './claim-debates';
-import { positionSummariesFromCounts } from './claim-position-summaries';
+import { positionSummariesFromCounts, viewerResponseFromDirection } from './claim-position-summaries';
 import { ClaimProvenance } from './claim-provenance';
 import { ClaimRelatedClaims } from './claim-related-claims';
-import { useClaimResponseSummary } from './claim-response-summary';
+import { type ClaimResponseSummary, useClaimResponseSummary } from './claim-response-summary';
 import { ClaimVerdict } from './claim-verdict';
 
 /** Topic chips shown inline before the rest collapse into a count. */
@@ -125,13 +125,7 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 
         <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
 
-        <ClaimPositionSection
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          positive={summary.positive}
-          negative={summary.negative}
-        />
+        <ClaimPositionSection entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
 
         <ClaimDebates claimId={entityId} spaceId={spaceId} responseKind={responseKind} />
 
@@ -159,14 +153,12 @@ function ClaimPositionSection({
   entityId,
   spaceId,
   responseKind,
-  positive,
-  negative,
+  summary,
 }: {
   entityId: string;
   spaceId: string;
   responseKind: 'stance' | 'veracity';
-  positive: number;
-  negative: number;
+  summary: ClaimResponseSummary;
 }) {
   // geo-chat's row carries the viewer's server-side response and their readiness. A claim nobody
   // has answered has no row at all, which is a settled answer rather than a missing one.
@@ -185,18 +177,20 @@ function ClaimPositionSection({
   );
 
   const positions = React.useMemo(
-    () => positionSummariesFromCounts(positive, negative, responseKind, row),
-    [negative, positive, responseKind, row]
+    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, row),
+    [responseKind, row, summary.negative, summary.positive]
   );
 
   const readiness = React.useMemo(
     () => ({
       response_kind: row?.response_kind ?? responseKind,
-      viewer_response: row?.viewer_response ?? null,
+      // Falls back to the on-chain summary. Without it a viewer's own side reads as unselected for
+      // as long as geo-chat's row is out — and in a space geo-chat does not index, permanently.
+      viewer_response: row?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
       viewer_debate_ready: row?.viewer_debate_ready ?? false,
       readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
     }),
-    [responseKind, row]
+    [responseKind, row, summary.viewerDirection]
   );
 
   // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the vote
