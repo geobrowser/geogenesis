@@ -9,34 +9,24 @@ import {
 } from '~/core/claims/browse/claim-position-summaries';
 import { claimSummaryTier, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSideSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { ID } from '~/core/id';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
-import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
-import type { Relation } from '~/core/types';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Megaphone } from '~/design-system/icons/megaphone';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-import { ExploreClaimsIcon } from './explore-claims-icon';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { ExploreShareIcon } from './explore-share-icon';
 import { SpaceThumb } from './space-thumb';
-
-/** Enough to report a count and know whether there are more; nothing here needs the whole list. */
-const COUNT_PAGE_SIZE = 6;
 
 /**
  * A Claim in the explore feed.
@@ -144,7 +134,6 @@ export function ClaimExploreFeedCard({
     }
     return names;
   }, [item.types]);
-  const topicIds = useTopicIds(entity?.relations);
 
   return (
     <article ref={setContainer} className="flex flex-col gap-4 border-b border-divider py-4 last:border-b-0">
@@ -247,7 +236,7 @@ export function ClaimExploreFeedCard({
         </div>
       </div>
 
-      <ClaimCardActions item={item} enabled={nearViewport} topicIds={topicIds} />
+      <ClaimCardActions item={item} />
     </article>
   );
 }
@@ -343,113 +332,35 @@ function ClaimVerdictColumn({
 }
 
 /**
- * What else there is of this claim: debates, neighbours, comments, a way to pass it on.
+ * Comments and Share, the way every explore card carries them.
  *
- * Each glyph renders only when it has something to report. A row of zeroes advertises emptiness,
- * where a short row simply says less — and on this data most rows are short.
+ * This row briefly also counted debates and related claims. Both are gone, and the coverage numbers
+ * are why: there are 33 debates in the graph against 311,047 claims, so the megaphone rendered on
+ * roughly one card in six thousand, and related claims resolve through topics, which 15% of claims
+ * carry. Two glyphs that are almost never there is not a feature — it is a row of chrome under every
+ * card, bought so a handful of cards can say something the card already says better.
  *
- * Every item opens the claim in the side panel. That is deliberately the whole interaction for now:
- * it makes the numbers worth pressing without inventing a second panel UX, and deep-linking to the
- * right section of the claim page is the obvious follow-up.
+ * Because it does say it better: a debate on this claim surfaces in the end slot as *Watch live* or
+ * *Watch the debate*, at the top of the card, as something to press. A count of them down here was
+ * the weaker rendering of the same fact.
  *
- * All of it left-aligned in one run, Share last, and no rule above it. The card already ends at a
- * divider of its own, so a second line a few pixels up boxed the actions in for no reason — and on
- * a claim with nothing but Share it drew a lot of attention to very little.
- *
- * Sources used to sit here as a count and briefly moved to the verdict column. They are off the
- * card entirely now: a `Sources` relation names the article's headline rather than its outlet —
- * a median of 73 characters — so there was never a version of this that read well at card size.
- * `ClaimProvenance` on the claim page has the width to do it properly.
+ * Dropping them takes two per-card graph queries out of the feed with them.
  */
-function ClaimCardActions({
-  item,
-  enabled,
-  topicIds,
-}: {
-  item: ExploreFeedItem;
-  enabled: boolean;
-  topicIds: string[];
-}) {
-  const { openSidePanel } = useEntitySidePanel();
-
-  const { entities: debates, hasNextPage: moreDebates } = useQueryEntities({
-    where: {
-      types: [{ id: { equals: DEBATE_TYPE_ID } }],
-      spaces: [{ equals: item.spaceId }],
-      relations: [
-        { typeOf: { id: { equals: DEBATE_CLAIMS_PROPERTY_ID } }, toEntity: { id: { equals: item.entityId } } },
-      ],
-    },
-    first: COUNT_PAGE_SIZE,
-    enabled,
-  });
-
-  // Only asked for when the claim actually carries topics, which is 15% of them — so this query
-  // never runs for the great majority of cards in the feed.
-  const { entities: related, hasNextPage: moreRelated } = useQueryEntities({
-    where: {
-      types: [{ id: { equals: CLAIM_TYPE_ID } }],
-      spaces: [{ equals: item.spaceId }],
-      relations: [{ typeOf: { id: { equals: TOPICS_PROPERTY_ID } }, toEntity: { id: { in: topicIds } } }],
-    },
-    first: COUNT_PAGE_SIZE,
-    enabled: enabled && topicIds.length > 0,
-  });
-
-  const debateCount = countLabel(debates.length, moreDebates);
-  // This claim is in its own topic results, so it is filtered out before counting.
-  const relatedCount = countLabel(related.filter(entity => !ID.equals(entity.id, item.entityId)).length, moreRelated);
-
-  const open = () => openSidePanel(item.entityId, item.spaceId, false);
+function ClaimCardActions({ item }: { item: ExploreFeedItem }) {
   const actionClassName = 'inline-flex items-center gap-1.5 text-[14px] text-grey-04 transition-colors hover:text-text';
 
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      {debateCount ? (
-        <button
-          type="button"
-          onClick={open}
-          aria-label={`${debateCount} debates on this claim`}
-          className={actionClassName}
-        >
-          <span className="block size-3.5 shrink-0">
-            <Megaphone />
-          </span>
-          <span className="tabular-nums">{debateCount}</span>
-        </button>
-      ) : null}
-      {relatedCount ? (
-        <button type="button" onClick={open} aria-label={`${relatedCount} related claims`} className={actionClassName}>
-          <ExploreClaimsIcon />
-          <span className="tabular-nums">{relatedCount}</span>
-        </button>
-      ) : null}
       {item.commentCount > 0 ? (
         <Link href={`${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`} className={actionClassName}>
           <ExploreCommentsIcon />
           <span className="tabular-nums">{item.commentCount}</span>
         </Link>
       ) : null}
-      <button type="button" onClick={open} className={actionClassName}>
+      <button type="button" className={actionClassName}>
         <ExploreShareIcon />
         <span>Share</span>
       </button>
     </div>
-  );
-}
-
-/** `6` where the page filled and there may be more, so a count never claims to be the whole set. */
-function countLabel(shown: number, hasMore: boolean): string | null {
-  if (shown === 0) return null;
-  return hasMore ? `${shown}+` : String(shown);
-}
-
-function useTopicIds(relations: Relation[] | undefined): string[] {
-  return React.useMemo(
-    () =>
-      (relations ?? [])
-        .filter(relation => relation.isDeleted !== true && ID.equals(relation.type.id, TOPICS_PROPERTY_ID))
-        .map(relation => relation.toEntity.id),
-    [relations]
   );
 }
