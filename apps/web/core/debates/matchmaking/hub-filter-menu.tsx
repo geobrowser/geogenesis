@@ -234,7 +234,13 @@ export function HubMultiFilterMenu<T extends string>({
                 {option.label}
               </Text>
             )}
-            {option.count === undefined || countsPending ? null : (
+            {option.count === undefined ? null : countsPending ? (
+              // Held as a skeleton rather than removed: the number is coming back, and taking the
+              // column away and putting it back makes every row twitch on each tick.
+              <span className="ml-auto shrink-0">
+                <Skeleton className="h-[1em] w-5" aria-label="Loading count" />
+              </span>
+            ) : (
               <Text variant="footnote" className="ml-auto shrink-0 text-grey-04!">
                 {formatFacetCount(option.count)}
               </Text>

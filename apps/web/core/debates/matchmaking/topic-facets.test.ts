@@ -117,6 +117,37 @@ describe('orderFacetOptions', () => {
     expect(orderFacetOptions(options, ['a']).map(o => o.id)).toEqual(['a', 'b', 'c']);
   });
 
+  // Selected rows are the ones being worked with, and their counts move on every tick — so
+  // ordering them by count made the already-chosen ones jump around as another was added.
+  it('holds selected options in the order they were picked, not by count', () => {
+    const picked = [
+      { id: 'a', count: 1 },
+      { id: 'b', count: 9 },
+      { id: 'c', count: 5 },
+    ];
+    expect(orderFacetOptions(picked, ['c', 'a']).map(o => o.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  // And the order survives the counts moving underneath them, which is what a tick does.
+  it('keeps that order when the counts change', () => {
+    const before = orderFacetOptions(
+      [
+        { id: 'a', count: 1 },
+        { id: 'b', count: 9 },
+      ],
+      ['b', 'a']
+    ).map(o => o.id);
+    const after = orderFacetOptions(
+      [
+        { id: 'a', count: 40 },
+        { id: 'b', count: 2 },
+      ],
+      ['b', 'a']
+    ).map(o => o.id);
+    expect(before).toEqual(['b', 'a']);
+    expect(after).toEqual(before);
+  });
+
   it('keeps equal counts in a stable order rather than whatever order they arrived in', () => {
     const tied = [
       { id: 'z', count: 3 },

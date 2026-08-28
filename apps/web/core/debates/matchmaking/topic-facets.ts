@@ -90,11 +90,17 @@ export function formatFacetCount(count: number): string {
  * with stay put and the ordering applies to what's left.
  */
 export function orderFacetOptions<T extends { id: string; count: number }>(options: T[], selected: string[]): T[] {
-  const picked = new Set(selected);
+  // Selected options hold the order they were picked in, not their count order. Pinning them to the
+  // top isn't enough on its own: their counts change with every tick, so ordering them by count
+  // reshuffled the ones already chosen each time another was added — the rows least expected to
+  // move, since they're the ones being worked with.
+  const pickedAt = new Map(selected.map((id, index) => [id, index]));
   return [...options].sort((a, b) => {
-    const aPicked = picked.has(a.id);
-    const bPicked = picked.has(b.id);
-    if (aPicked !== bPicked) return aPicked ? -1 : 1;
+    const aPicked = pickedAt.get(a.id);
+    const bPicked = pickedAt.get(b.id);
+    if (aPicked !== undefined && bPicked !== undefined) return aPicked - bPicked;
+    if (aPicked !== undefined) return -1;
+    if (bPicked !== undefined) return 1;
     if (a.count !== b.count) return b.count - a.count;
     return a.id.localeCompare(b.id);
   });
