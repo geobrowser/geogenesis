@@ -7,10 +7,21 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import {
+  type ExploreCardEntity,
+  type ExploreFeedRow,
+  buildExploreFeedRows,
+  decodeExploreCardEntity,
+} from '~/core/explore/explore-card-item';
+import { exploreCardNodeFields, exploreCardPropertyFragment } from '~/core/explore/explore-card-selection';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
+import { normId } from '~/core/utils/norm-id';
+import { validateSpaceId } from '~/core/utils/utils';
 
 import { COVERAGE_TYPE_IDS } from '../ontology';
+
+const FRAGMENT = 'TopicCoverageFragment';
 
 /**
  * Coverage of a topic: everything published elsewhere that names it.
@@ -32,8 +43,19 @@ import { COVERAGE_TYPE_IDS } from '../ontology';
  * Filtering server-side is also what keeps `Claim relation` out. It is the single largest carrier of
  * `Topics` in the graph — 830 of a 2,000-relation sample — and excluding claims by type client-side
  * never touched it, so roughly two in five coverage rows were claim plumbing.
+ *
+ * The per-entity selection is the explore feed's own, so these rows decode into exactly the item an
+ * `ExploreFeedCard` renders — the same title, description, thumbnail, type list, timestamp and
+ * comment count, resolved by the same code rather than by an approximation of it.
+ *
+ * It is requested unscoped, unlike on the feed. A topic gathers across every space in the graph, so
+ * there is no space list to narrow the values and relations to before the rows say which spaces they
+ * came from. What bounds the payload is the property and relation-type narrowing, which still
+ * applies; the decoder scopes each row to its own display space afterwards.
  */
 const TOPIC_COVERAGE_SOURCE = /* GraphQL */ `
+  ${exploreCardPropertyFragment(FRAGMENT)}
+
   query TopicCoverage($topicsPropertyId: UUID!, $topicId: UUID!, $typeIds: [UUID!], $first: Int, $after: Cursor) {
     relationsConnection(
       first: $first
@@ -51,57 +73,59 @@ const TOPIC_COVERAGE_SOURCE = /* GraphQL */ `
       }
       nodes {
         fromEntity {
-          id
-          name
-          description
-          spaceIds
-          types {
-            id
-            name
-          }
+          ${exploreCardNodeFields(FRAGMENT, { scopeListsToSpaces: false })}
         }
       }
     }
   }
 `;
 
-const topicCoverageDocument = parse(TOPIC_COVERAGE_SOURCE) as TypedDocumentNode<any, any>;
-
-export type CoverageItem = {
-  id: string;
-  name: string | null;
-  description: string | null;
-  spaceIds: string[];
-  /** The first named type, which is what a row shows as its kind. */
-  kind: string | null;
-};
+/** Exported for the test that holds it to the same per-entity selection the explore feed uses. */
+export const topicCoverageDocument = parse(TOPIC_COVERAGE_SOURCE) as TypedDocumentNode<any, any>;
 
 export type TopicCoveragePage = {
-  items: CoverageItem[];
+  /** Card rows, still missing the parts only a space lookup can answer. */
+  rows: ExploreFeedRow[];
   totalCount: number;
   endCursor: string | null;
   hasNextPage: boolean;
 };
 
-const EMPTY_PAGE: TopicCoveragePage = { items: [], totalCount: 0, endCursor: null, hasNextPage: false };
+const EMPTY_PAGE: TopicCoveragePage = { rows: [], totalCount: 0, endCursor: null, hasNextPage: false };
 
 type CoverageResponse = {
   relationsConnection?: {
     totalCount?: number | null;
     pageInfo?: { hasNextPage?: boolean | null; endCursor?: string | null } | null;
-    nodes?:
-      | ({
-          fromEntity?: {
-            id?: string | null;
-            name?: string | null;
-            description?: string | null;
-            spaceIds?: (string | null)[] | null;
-            types?: ({ id?: string | null; name?: string | null } | null)[] | null;
-          } | null;
-        } | null)[]
-      | null;
+    nodes?: ({ fromEntity?: unknown } | null)[] | null;
   } | null;
 };
+
+function decodeCoverage(response: CoverageResponse): TopicCoveragePage {
+  const connection = response.relationsConnection;
+
+  const entities: ExploreCardEntity[] = [];
+  for (const node of connection?.nodes ?? []) {
+    const decoded = decodeExploreCardEntity(node?.fromEntity);
+    if (decoded) entities.push(decoded);
+  }
+
+  // The spaces these rows themselves named, which is the only space list this query can have. It
+  // makes the builder prefer a space a reader can actually open over whichever the entity happened
+  // to list first — the same preference the old hand-rolled row expressed as `find(validateSpaceId)`.
+  const openableSpaceIds = new Set(
+    entities.flatMap(entity => entity.spaces.filter(validateSpaceId).map(normId))
+  );
+
+  return {
+    // No member/editor spaces: Coverage has no membership context, and the card is rendered with
+    // its Join button hidden rather than shown in a state this query cannot determine.
+    rows: buildExploreFeedRows(entities, openableSpaceIds, new Set()),
+    totalCount: connection?.totalCount ?? 0,
+    endCursor: connection?.pageInfo?.endCursor ?? null,
+    hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
+  };
+}
 
 export function useTopicCoverage({ topicId, first, after }: { topicId: string; first: number; after?: string }) {
   const { data, isLoading, isPlaceholderData } = useQuery({
@@ -110,27 +134,7 @@ export function useTopicCoverage({ topicId, first, after }: { topicId: string; f
       Effect.runPromise(
         graphql({
           query: topicCoverageDocument,
-          decoder: (response: CoverageResponse): TopicCoveragePage => {
-            const connection = response.relationsConnection;
-            return {
-              items: (connection?.nodes ?? []).flatMap(node => {
-                const entity = node?.fromEntity;
-                if (!entity?.id || !entity.name) return [];
-                return [
-                  {
-                    id: entity.id,
-                    name: entity.name,
-                    description: entity.description ?? null,
-                    spaceIds: (entity.spaceIds ?? []).filter((id): id is string => Boolean(id)),
-                    kind: (entity.types ?? []).find(type => type?.name)?.name ?? null,
-                  },
-                ];
-              }),
-              totalCount: connection?.totalCount ?? 0,
-              endCursor: connection?.pageInfo?.endCursor ?? null,
-              hasNextPage: connection?.pageInfo?.hasNextPage ?? false,
-            };
-          },
+          decoder: decodeCoverage,
           variables: {
             topicsPropertyId: ID.uuidToHex(TOPICS_PROPERTY_ID),
             topicId: ID.uuidToHex(topicId),

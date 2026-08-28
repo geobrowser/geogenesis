@@ -138,7 +138,7 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
 
         <TopicClaims topicId={entityId} spaceId={spaceId} />
 
-        <TopicCoverage topicId={entityId} spaceId={spaceId} />
+        <TopicCoverage topicId={entityId} />
 
         <CommentSection entityId={entityId} spaceId={spaceId} />
       </div>

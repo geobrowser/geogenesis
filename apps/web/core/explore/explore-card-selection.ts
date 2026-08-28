@@ -3,6 +3,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 
+import { COMMENT_RELATION_TYPE_ID } from './explore-card-item';
 import {
   EXPLORE_AVATAR_PROPERTY_ID,
   EXPLORE_COVER_PROPERTY_ID,
@@ -33,8 +34,6 @@ const CARD_RELATION_TYPE_IDS = [
 const valuePropertyIdList = CARD_VALUE_PROPERTY_IDS.map(id => `"${id}"`).join(', ');
 const relationTypeIdList = CARD_RELATION_TYPE_IDS.map(id => `"${id}"`).join(', ');
 
-/** Comment relation type — `backlinks` through it is how a card gets its comment count. */
-const COMMENT_RELATION_TYPE_ID = '310d4a240e5b451cb2151bfce40d0fe6';
 
 /**
  * The per-entity selection every Explore feed card decodes, shared by all the feed
@@ -65,13 +64,29 @@ export function exploreCardPropertyFragment(fragmentName: string): string {
   `;
 }
 
-/**
- * Fields selected inside `nodes { ... }`. `$spaceIdsForLists` must be declared by the
- * caller's query as `[UUID!]!` — the values/relations lists are space-scoped so a
- * multi-space feed still decodes cover/avatar/description without pulling every
- * unrelated value.
- */
-export function exploreCardNodeFields(fragmentName: string): string {
+type ExploreCardNodeFieldOptions = {
+  /**
+   * Whether the values/relations lists are narrowed to `$spaceIdsForLists`, which the caller's
+   * query must then declare as `[UUID!]!`.
+   *
+   * On by default, and the right answer for the feeds: they already know which spaces they are
+   * scoped to, and narrowing server-side is what stops a multi-space page pulling every unrelated
+   * value on every entity.
+   *
+   * Off for callers that cannot know the spaces before the rows come back — a topic's Coverage
+   * gathers across every space in the graph, so there is no list to scope to. Dropping the clause is
+   * safe rather than merely tolerable: the lists are still narrowed by property and relation type,
+   * which is what bounds them, and the decoder scopes to the display space afterwards regardless.
+   */
+  scopeListsToSpaces?: boolean;
+};
+
+/** Fields selected inside `nodes { ... }`. */
+export function exploreCardNodeFields(fragmentName: string, options: ExploreCardNodeFieldOptions = {}): string {
+  const { scopeListsToSpaces = true } = options;
+  const spaceClause = scopeListsToSpaces ? 'spaceId: { in: $spaceIdsForLists }' : '';
+  const toEntityValuesFilter = scopeListsToSpaces ? '(filter: { spaceId: { in: $spaceIdsForLists } })' : '';
+
   return /* GraphQL */ `
     id
     name
@@ -89,7 +104,7 @@ export function exploreCardNodeFields(fragmentName: string): string {
     }
 
     valuesList(filter: {
-      spaceId: { in: $spaceIdsForLists }
+      ${spaceClause}
       propertyId: { in: [${valuePropertyIdList}] }
     }) {
       spaceId
@@ -111,7 +126,7 @@ export function exploreCardNodeFields(fragmentName: string): string {
     }
 
     relationsList(filter: {
-      spaceId: { in: $spaceIdsForLists }
+      ${spaceClause}
       typeId: { in: [${relationTypeIdList}] }
     }) {
       id
@@ -129,7 +144,7 @@ export function exploreCardNodeFields(fragmentName: string): string {
         types {
           id
         }
-        valuesList(filter: { spaceId: { in: $spaceIdsForLists } }) {
+        valuesList${toEntityValuesFilter} {
           spaceId
           propertyId
           text

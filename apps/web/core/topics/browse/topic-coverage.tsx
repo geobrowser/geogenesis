@@ -1,14 +1,17 @@
 'use client';
 
-import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pages';
-import { SpaceChip } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { NavUtils, validateSpaceId } from '~/core/utils/utils';
+import * as React from 'react';
 
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
+import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pages';
+import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
+import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { type CoverageItem, useTopicCoverage } from './use-topic-coverage';
+import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
+
+import { useTopicCoverage } from './use-topic-coverage';
 
 const COVERAGE_PAGE_SIZE = 8;
 
@@ -26,8 +29,13 @@ const COVERAGE_PAGE_SIZE = 8;
  *
  * Claims are the exception and have their own section: they are the only rows a reader can act on
  * rather than read.
+ *
+ * The rows are `ExploreFeedCard` itself, not a lookalike. Coverage is the explore feed narrowed to
+ * one topic, so it should be the same card — thumbnail, space, type list, timestamp, vote and
+ * comment row — and the version this section drew by hand had already drifted: no image, no
+ * timestamp, no actions, a type chip where the feed sets a dotted meta line.
  */
-export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: string }) {
+export function TopicCoverage({ topicId }: { topicId: string }) {
   const pages = useCursorPages();
   const { page, isLoading, isPlaceholderData } = useTopicCoverage({
     topicId,
@@ -35,11 +43,21 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
     after: pages.cursor,
   });
 
-  if (isLoading && page.items.length === 0) {
+  // A topic gathers across spaces, so these are routinely spaces the viewer has never opened and the
+  // browse sidebar cannot name. Looked up for the page in one batch rather than per card.
+  const spaceIds = React.useMemo(() => [...new Set(page.rows.map(row => row.spaceId))], [page.rows]);
+  const { labelsById } = useSpaceLabels(spaceIds);
+
+  const items = React.useMemo(
+    () => page.rows.map(row => toFeedItem(row, spaceLabel(labelsById, row.spaceId))),
+    [labelsById, page.rows]
+  );
+
+  if (isLoading && items.length === 0) {
     return <Skeleton className="h-[140px] w-full rounded-lg" />;
   }
 
-  if (page.items.length === 0) return null;
+  if (items.length === 0) return null;
 
   return (
     <section aria-label="Coverage">
@@ -53,14 +71,18 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
           {page.totalCount}
         </Text>
       </div>
-      {/* Divided rows rather than bordered cards, matching the explore feed's list rhythm. */}
-      <ul className="m-0 flex list-none flex-col divide-y divide-divider p-0">
-        {page.items.map(item => (
-          <li key={item.id}>
-            <CoverageRow item={item} spaceId={spaceId} />
-          </li>
+      {/* Cards as direct siblings, exactly as the feed renders them: their bottom rule is a
+          `last:border-b-0` on the card itself, so a wrapper around each one would leave a rule
+          hanging under the final row.
+
+          No Join button either. The feed shows one for spaces the viewer isn't in, but it knows
+          that from membership data this query has no way to ask for — so rather than render the
+          control in a state derived from a default, it isn't offered here. */}
+      <div>
+        {items.map(item => (
+          <ExploreFeedCard key={`${item.entityId}-${item.spaceId}`} item={item} hideJoinButton />
         ))}
-      </ul>
+      </div>
       <CursorPager
         isFirstPage={pages.isFirstPage}
         hasNextPage={page.hasNextPage}
@@ -73,45 +95,21 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
 }
 
 /**
- * One row: the entity's name at the size an entity name is set everywhere else, a clamped
- * description, and its kind as a chip.
+ * A row plus its space's name and thumbnail.
  *
- * No thumbnail. The explore card leads with a 60px image, and resolving one here would be a media
- * lookup per row; the type is the more useful leading signal on a feed mixing episodes, tweets and
- * official documents.
+ * `hasPendingMembershipRequest` is false because the Join button it belongs to is hidden — the flag
+ * only ever changes that button's label.
  */
-function CoverageRow({ item, spaceId }: { item: CoverageItem; spaceId: string }) {
-  // The row's own space where it has one, so a link from a topic doesn't drop the reader into a
-  // space the entity holds nothing in. A topic gathers across spaces, so this is routinely not the
-  // space in the route — which is why the chip below is worth showing at all.
-  const space = item.spaceIds.find(validateSpaceId) ?? null;
-  const href = NavUtils.toEntity(space ?? spaceId, item.id);
-
-  return (
-    <Link href={href} className="flex min-w-0 flex-col gap-1 py-3">
-      <Text as="h3" variant="cardEntityTitle" color="text" className="hover:underline">
-        {item.name}
-      </Text>
-      {item.description && (
-        <p className="line-clamp-2 text-[16px] leading-[20px] tracking-[-0.03em] text-grey-04">{item.description}</p>
-      )}
-      {/* What it is and where it came from, together. Chips rather than a line of grey text: on a
-          feed mixing episodes, tweets and official documents drawn from several spaces, these are
-          the row's leading signals, and set as metadata under the description they read as part of
-          the description rather than labels on it.
-          
-          The space is the same chip a claim card draws, so one space reads identically wherever it
-          appears. */}
-      {(item.kind || space) && (
-        <div className="mt-1 flex flex-wrap items-center gap-2">
-          {item.kind && (
-            <span className="flex h-6 items-center rounded border border-grey-02 bg-white px-1.5 text-metadata text-grey-04">
-              {item.kind}
-            </span>
-          )}
-          {space && <SpaceChip spaceId={space} />}
-        </div>
-      )}
-    </Link>
-  );
+function toFeedItem(
+  row: Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>,
+  label: SpaceLabel | undefined
+): ExploreFeedItem {
+  return {
+    ...row,
+    // The same last resort the feed uses when a space has no name yet: an id fragment, which at
+    // least differs between two spaces where a shared placeholder would not.
+    spaceName: label?.name ?? row.spaceId.slice(0, 8),
+    spaceImage: label?.image ?? null,
+    hasPendingMembershipRequest: false,
+  };
 }
