@@ -41,7 +41,7 @@ import { useDebateKeyframes } from './use-debate-keyframes';
  */
 const DEBATE_PAGE_SIZE = 5;
 
-type DebateSide = { spaceId: string; position: boolean };
+export type DebateSide = { spaceId: string; position: boolean };
 
 /**
  * How many votes are fetched for the whole section before the shares are withheld.
@@ -163,7 +163,7 @@ export function ClaimDebates({
   );
 }
 
-type WinnerShare = { spaceId: string; percent: number; totalVotes: number };
+export type WinnerShare = { spaceId: string; percent: number; totalVotes: number };
 
 /**
  * Who each debate's viewers picked as the winner, as a share of that debate's votes.
@@ -177,7 +177,7 @@ type WinnerShare = { spaceId: string; percent: number; totalVotes: number };
  * counting the entities would let a single account inflate a total and, with it, decide the winner.
  * `voteSharePercentages` then rounds by largest remainder so the shares add to 100.
  */
-function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
+export function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
   const { entities: votes } = useQueryEntities({
     where: {
       types: [{ id: { equals: VOTE_TYPE_ID } }],
@@ -245,7 +245,7 @@ function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
   }, [votes]);
 }
 
-function DebateRow({
+export function DebateRow({
   debate,
   spaceId,
   sides,
@@ -386,7 +386,7 @@ function debateDate(debate: Entity): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function relationTargets(relations: Relation[], propertyId: string): string[] {
+export function relationTargets(relations: Relation[], propertyId: string): string[] {
   return relations
     .filter(relation => relation.isDeleted !== true && ID.equals(relation.type.id, propertyId))
     .map(relation => relation.toEntity.id);
