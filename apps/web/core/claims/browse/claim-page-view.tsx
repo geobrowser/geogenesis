@@ -7,6 +7,7 @@ import { claimResponseKind } from '~/core/claims/response-kind';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateActivity, useDebateClaims } from '~/core/debates/hooks';
+import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
@@ -227,6 +228,7 @@ function ClaimPositionSection({
   // See claims-page-client: retiring the optimistic snapshot outlived the toggle that used to own
   // it, because `claim-response-summary` on this page reads that snapshot for display.
   useRetireConfirmedResponseIndexing({ debateClaim: row, entityId, spaceId });
+  useBackfillReadinessForHeldPosition({ debateClaim: row, entityId, spaceId });
 
   return (
     <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
