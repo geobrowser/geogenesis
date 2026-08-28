@@ -80,6 +80,54 @@ describe('derivePersonRecord', () => {
 
 // "0 debates · 0% won" reads as failure; absence reads as new. New people arrive continuously, so
 // this is a permanent case rather than a beta one.
+// The indexer writes UUIDs dashed; the graph query and the presence feed write them dashless. An
+// exact match across that boundary finds nothing and reports a real record as 0%.
+describe('id formats across services', () => {
+  const DASHED_PERSON = '11111111-1111-1111-1111-111111111111';
+  const HEX_PERSON = '11111111111111111111111111111111';
+  const DASHED_DEBATE = '22222222-2222-2222-2222-222222222222';
+  const HEX_DEBATE = '22222222222222222222222222222222';
+
+  it('finds the debate when the winner map is keyed dashed', () => {
+    const result = derivePersonRecord({
+      personId: HEX_PERSON,
+      positions: 0,
+      debateIds: [HEX_DEBATE],
+      truncated: false,
+      createdAt: JAN_2026,
+      winnerByDebateId: new Map([[DASHED_DEBATE, share(HEX_PERSON)]]),
+    });
+
+    expect(result.winRate).toEqual({ percent: 100, wins: 1, of: 1 });
+  });
+
+  it('credits the win when the winner id is dashed and the person id is not', () => {
+    const result = derivePersonRecord({
+      personId: HEX_PERSON,
+      positions: 0,
+      debateIds: [HEX_DEBATE],
+      truncated: false,
+      createdAt: JAN_2026,
+      winnerByDebateId: new Map([[HEX_DEBATE, share(DASHED_PERSON)]]),
+    });
+
+    expect(result.winRate).toEqual({ percent: 100, wins: 1, of: 1 });
+  });
+
+  it('still does not credit a different person written dashed', () => {
+    const result = derivePersonRecord({
+      personId: HEX_PERSON,
+      positions: 0,
+      debateIds: [HEX_DEBATE],
+      truncated: false,
+      createdAt: JAN_2026,
+      winnerByDebateId: new Map([[HEX_DEBATE, share('33333333-3333-3333-3333-333333333333')]]),
+    });
+
+    expect(result.winRate).toEqual({ percent: 0, wins: 0, of: 1 });
+  });
+});
+
 describe('omit, never zero', () => {
   it('leaves out every stat someone has not started', () => {
     const result = record();

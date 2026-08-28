@@ -1,4 +1,5 @@
 import type { WinnerShare } from '~/core/claims/browse/claim-debates';
+import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 
 /**
  * What a People row says about someone, after every "omit, never zero" rule has been applied.
@@ -59,13 +60,21 @@ export function derivePersonRecord({
 
   const debatesArgued = debateIds.length;
 
+  // Both joins below cross a service boundary, and the two sides do not agree on how a UUID is
+  // written: the indexer returns them dashed, while the graph query and the matchmaking presence
+  // feed return them dashless. An exact match would silently find nothing — no share for any debate,
+  // or a real winner who never equals the person — and quietly report a 0% win rate. Canonicalised
+  // once here rather than trusted to line up.
+  const sharesByDebateId = new Map<string, WinnerShare>();
+  for (const [id, share] of winnerByDebateId) sharesByDebateId.set(uuidToHex(id), share);
+
   let wins = 0;
   let judged = 0;
   for (const debateId of debateIds) {
-    const share = winnerByDebateId.get(debateId);
+    const share = sharesByDebateId.get(uuidToHex(debateId));
     if (!share || share.totalVotes === 0) continue;
     judged += 1;
-    if (!share.tied && share.spaceId === personId) wins += 1;
+    if (!share.tied && idEquals(share.spaceId, personId)) wins += 1;
   }
 
   return {
