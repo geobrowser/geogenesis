@@ -25,7 +25,8 @@ import { PositionBox } from '~/design-system/position-box';
 import { onChangeEntryFn, onLinkEntryFn } from './change-entry';
 
 const MOUSE_ACTIVATION = { distance: 10 };
-const TOUCH_ACTIVATION = { delay: 450, tolerance: 12 };
+/** Kept in step with `ranking-my-ranking-dnd`, where the reasoning for these numbers lives. */
+const TOUCH_ACTIVATION = { delay: 250, tolerance: 6 };
 
 export type RenderItemProps = {
   row: Row;
