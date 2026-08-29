@@ -3,7 +3,6 @@
 import * as React from 'react';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { claimResponseKind } from '~/core/claims/response-kind';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
@@ -26,7 +25,6 @@ import { ClaimDebates } from './claim-debates';
 import { ClaimEndSlot } from './claim-end-slot';
 import { ClaimProvenance } from './claim-provenance';
 import { ClaimRelatedClaims } from './claim-related-claims';
-import type { ClaimResponseSummary } from './claim-response-summary';
 import { ControversialTag } from './claim-summary';
 import { ClaimVerdict } from './claim-verdict';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
@@ -189,7 +187,7 @@ function ClaimPositionSection({
   /** geo-chat's row, or null — which for a claim nobody has answered is a settled answer. */
   row: DebateClaim | null;
 }) {
-  const { responseKind, claim, positions, readiness } = state;
+  const { claim, positions, readiness } = state;
 
   // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the vote
   // arrows on an entity page do — and through the same hook, which also keeps Privy's session

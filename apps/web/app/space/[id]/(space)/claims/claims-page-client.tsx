@@ -4,15 +4,10 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import {
-  positionSummariesFromCounts,
-  viewerResponseFromDirection,
-} from '~/core/claims/browse/claim-position-summaries';
-import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { resolveClaimResponseKind, useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import { buildClaimDraft } from '~/core/claims/claim-draft';
 import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublishedInSpace } from '~/core/claims/publish';
-import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
@@ -88,7 +83,7 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
           .filter(isPublishedHere)
           .map(claim => [
             claim.id,
-            debateClaimsByEntityId.get(claim.id)?.response_kind ?? claimResponseKind(claim, spaceId),
+            resolveClaimResponseKind(debateClaimsByEntityId.get(claim.id) ?? null, claim, spaceId),
           ])
       ),
     [claims, debateClaimsByEntityId, isPublishedHere, spaceId]
@@ -133,7 +128,6 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
             isLoading={isLoading}
             spaceId={spaceId}
             debateClaimsByEntityId={debateClaimsByEntityId}
-            responseKindsByEntityId={responseKindsByEntityId}
             debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
           />
         </ClaimResponseBatchBoundary>
@@ -252,14 +246,12 @@ function ClaimsList({
   isLoading,
   spaceId,
   debateClaimsByEntityId,
-  responseKindsByEntityId,
   debateStatus,
 }: {
   claims: Entity[];
   isLoading: boolean;
   spaceId: string;
   debateClaimsByEntityId: Map<string, DebateClaim>;
-  responseKindsByEntityId: Map<string, 'stance' | 'veracity'>;
   debateStatus: string | null;
 }) {
   if (isLoading && claims.length === 0) {
@@ -296,7 +288,6 @@ function ClaimsList({
           claim={claim}
           spaceId={spaceId}
           debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
-          responseKind={responseKindsByEntityId.get(claim.id) ?? claimResponseKind(claim, spaceId)}
         />
       ))}
     </div>
@@ -318,16 +309,13 @@ function ClaimListItem({
   claim,
   spaceId,
   debateClaim,
-  responseKind,
 }: {
   claim: Entity;
   spaceId: string;
   debateClaim: DebateClaim | null;
-  responseKind: 'stance' | 'veracity';
 }) {
   const published = isClaimPublishedInSpace(claim, spaceId);
   const activeDebate = debateClaim?.active_debate ?? null;
-  const summary = useClaimResponseSummary(claim.id, spaceId, responseKind);
 
   // Kept when the Debate toggle went (GEO-2740): the toggle drew this side effect, but the
   // snapshot it retires is what drives the notification that now creates readiness server-side.
@@ -336,32 +324,16 @@ function ClaimListItem({
   // the hook.
   useBackfillReadinessForHeldPosition({ debateClaim, entityId: claim.id, spaceId });
 
-  const claimSummary = React.useMemo(
-    () => ({
-      id: debateClaim?.id ?? claim.id,
-      space_id: spaceId,
-      claim_entity_id: claim.id,
-      claim: claim.name ?? claim.id,
-      description: claim.description,
-    }),
-    [claim.description, claim.id, claim.name, debateClaim?.id, spaceId]
-  );
-
-  const positions = React.useMemo(
-    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, debateClaim),
-    [debateClaim, responseKind, summary.negative, summary.positive]
-  );
-
-  const readiness = React.useMemo(
-    () => ({
-      response_kind: responseKind,
-      viewer_response:
-        debateClaim?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
-      viewer_debate_ready: debateClaim?.viewer_debate_ready ?? false,
-      readiness_disabled_reason: debateClaim?.readiness_disabled_reason ?? null,
-    }),
-    [debateClaim, responseKind, summary.viewerDirection]
-  );
+  // The page resolved the kind already, to batch its response reads; the hook resolves it again from
+  // the same two inputs and by construction gets the same answer.
+  const state = useClaimResponseState({
+    claimId: claim.id,
+    spaceId,
+    row: debateClaim,
+    entity: claim,
+    title: claim.name ?? claim.id,
+    description: claim.description,
+  });
 
   // A draft has no on-chain identity to respond to or debate over, so the card would offer controls
   // that cannot work. Say what to do about it instead.
@@ -383,9 +355,9 @@ function ClaimListItem({
   // and the sentence was the half you could not press.
   return (
     <MatchmakingClaimCard
-      claim={claimSummary}
-      positions={positions}
-      readiness={readiness}
+      claim={state.claim}
+      positions={state.positions}
+      readiness={state.readiness}
       activeDebate={activeDebate}
     />
   );

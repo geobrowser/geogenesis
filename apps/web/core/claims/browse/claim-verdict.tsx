@@ -8,13 +8,13 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { type ClaimResponseSummary, claimSummaryTier } from './claim-response-summary';
-import { ClaimSideSummary } from './claim-summary';
+import { ClaimSides, ClaimSplitBar } from './claim-summary';
 
 /**
  * Where opinion sits on a claim: one number, the split, and who is on each side.
  *
- * Scaled to the evidence, through the same `claimSummaryTier` every card reads — so the page and a
- * card describing the same claim cannot say different things about it.
+ * Reads the same `claimSummaryTier` every card reads, so the page and a card describing the same
+ * claim cannot say different things about it.
  *
  * At zero it invites a first response rather than rendering nothing at all, which is what it used
  * to do on the state most claims are in. From the first response the share is shown, however small
@@ -78,40 +78,16 @@ export function ClaimVerdict({
         </Text>
       </div>
 
-      <div
-        className="mt-4 flex h-2 overflow-hidden rounded-full bg-grey-01"
-        role="img"
-        aria-label={`${percent}% ${copy.positiveAction.toLowerCase()}, ${100 - percent}% ${copy.negativeAction.toLowerCase()}`}
-      >
-        <span className="bg-green" style={{ width: `${percent}%` }} />
-        <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
-      </div>
+      <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-4 h-2" />
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <ClaimSideSummary
-          swatchClassName="bg-green"
-          label={copy.positiveAction}
-          count={summary.positive}
-          direction="positive"
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          viewerDirection={summary.viewerDirection}
-          viewerSpaceId={summary.viewerSpaceId}
-        />
-        <ClaimSideSummary
-          swatchClassName="bg-red-01"
-          label={copy.negativeAction}
-          count={summary.negative}
-          direction="negative"
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          viewerDirection={summary.viewerDirection}
-          viewerSpaceId={summary.viewerSpaceId}
-          alignEnd
-        />
-      </div>
+      <ClaimSides
+        entityId={entityId}
+        spaceId={spaceId}
+        responseKind={responseKind}
+        summary={summary}
+        className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2"
+        alignSecondEnd
+      />
     </section>
   );
 }

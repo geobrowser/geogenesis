@@ -77,14 +77,7 @@ export function ClaimSummary({
 
   return (
     <div className={className}>
-      <div
-        className="flex h-1.5 overflow-hidden rounded-full bg-grey-01"
-        role="img"
-        aria-label={`${percent}% ${copy.positiveAction.toLowerCase()}, ${100 - percent}% ${copy.negativeAction.toLowerCase()}`}
-      >
-        <span className="bg-green" style={{ width: `${percent}%` }} />
-        <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
-      </div>
+      <ClaimSplitBar percent={percent} responseKind={responseKind} className="h-1.5" />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="flex items-center gap-1.5">
           <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
@@ -96,6 +89,96 @@ export function ClaimSummary({
         </span>
         {responders}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The split itself: green for the positive side, red for the negative.
+ *
+ * Its own component because it was written out three times — the claim page's verdict, the explore
+ * card's rail and the compact card summary — each with its own copy of the same `role="img"` and
+ * the same `100 - percent` arithmetic in the label. Three copies of an accessible name is three
+ * chances for a screen reader to be told something the sighted reader is not.
+ *
+ * Height is the caller's, because that genuinely differs: 8px where the page has room for it, 6px
+ * in a card. Everything else is the same everywhere and now says so.
+ */
+export function ClaimSplitBar({
+  percent,
+  responseKind,
+  className,
+}: {
+  percent: number;
+  responseKind: ResponseKind;
+  className?: string;
+}) {
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+
+  return (
+    <div
+      className={cx('flex overflow-hidden rounded-full bg-grey-01', className)}
+      role="img"
+      aria-label={`${percent}% ${copy.positiveAction.toLowerCase()}, ${100 - percent}% ${copy.negativeAction.toLowerCase()}`}
+    >
+      <span className="bg-green" style={{ width: `${percent}%` }} />
+      <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
+    </div>
+  );
+}
+
+/**
+ * Both sides of the split, with their counts and their faces.
+ *
+ * The pair rather than two calls, because the eleven props they share were being written out twice
+ * — identically — and a claim whose two sides were handed different ids or a different viewer would
+ * be wrong in a way nothing would catch.
+ *
+ * The arrangement is the caller's: the page has the width to push them to opposite ends, the
+ * explore rail is 220px and stacks them.
+ */
+export function ClaimSides({
+  entityId,
+  spaceId,
+  responseKind,
+  summary,
+  className,
+  alignSecondEnd = false,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  summary: ClaimResponseSummary;
+  className?: string;
+  /** True where the two sit on one row with room between them, so the second reads as its end. */
+  alignSecondEnd?: boolean;
+}) {
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const shared = {
+    entityId,
+    spaceId,
+    responseKind,
+    viewerDirection: summary.viewerDirection,
+    viewerSpaceId: summary.viewerSpaceId,
+  };
+
+  return (
+    <div className={className}>
+      <ClaimSideSummary
+        {...shared}
+        swatchClassName="bg-green"
+        label={copy.positiveAction}
+        count={summary.positive}
+        direction="positive"
+      />
+      <ClaimSideSummary
+        {...shared}
+        swatchClassName="bg-red-01"
+        label={copy.negativeAction}
+        count={summary.negative}
+        direction="negative"
+        alignEnd={alignSecondEnd}
+      />
     </div>
   );
 }

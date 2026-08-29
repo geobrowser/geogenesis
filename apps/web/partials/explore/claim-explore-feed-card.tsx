@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { ClaimSideSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
+import { ClaimSides, ClaimSplitBar, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaims } from '~/core/debates/hooks';
@@ -256,43 +256,19 @@ function ClaimVerdictColumn({
           {summary.total} {summary.total === 1 ? 'response' : 'responses'}
         </Text>
       </div>
-      <div
-        className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-grey-01 md:mt-4 md:h-2"
-        role="img"
-        aria-label={`${percent}% ${copy.positiveAction.toLowerCase()}, ${100 - percent}% ${copy.negativeAction.toLowerCase()}`}
-      >
-        <span className="bg-green" style={{ width: `${percent}%` }} />
-        <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
-      </div>
+      <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-3 h-1.5 md:mt-4 md:h-2" />
       {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
           what kind of claim this is rather than adding a second voice to the split. */}
       {/* Stacked in the desktop rail, which is 220px and cannot hold both. Side by side on a phone,
           where the column is the full width of the card — agree left, disagree pushed right, the
           same arrangement the claim page uses when it has the room. */}
-      <div className="mt-3 flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
-        <ClaimSideSummary
-          swatchClassName="bg-green"
-          label={copy.positiveAction}
-          count={summary.positive}
-          direction="positive"
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          viewerDirection={summary.viewerDirection}
-          viewerSpaceId={summary.viewerSpaceId}
-        />
-        <ClaimSideSummary
-          swatchClassName="bg-red-01"
-          label={copy.negativeAction}
-          count={summary.negative}
-          direction="negative"
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          viewerDirection={summary.viewerDirection}
-          viewerSpaceId={summary.viewerSpaceId}
-        />
-      </div>
+      <ClaimSides
+        entityId={entityId}
+        spaceId={spaceId}
+        responseKind={responseKind}
+        summary={summary}
+        className="mt-3 flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4"
+      />
     </div>
   );
 }

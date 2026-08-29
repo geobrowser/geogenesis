@@ -5,7 +5,6 @@ import { keepPreviousData } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
 import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaims } from '~/core/debates/hooks';
@@ -17,8 +16,7 @@ import type { Entity } from '~/core/types';
 
 import { Text } from '~/design-system/text';
 
-import { positionSummariesFromCounts, viewerResponseFromDirection } from './claim-position-summaries';
-import { useClaimResponseSummary } from './claim-response-summary';
+import { useClaimResponseState } from './use-claim-response-state';
 import { CursorPager, useCursorPages } from './use-cursor-pages';
 
 /**
@@ -195,44 +193,23 @@ function RelatedClaimCard({
 }: {
   entity: Entity;
   spaceId: string;
+  /** geo-chat's row, from the gallery's single lookup. Null until it lands, and in unindexed spaces. */
   row: DebateClaim | null;
-  /** The gallery's single lookup settles for every card at once, so this is the honest per-card
-   * answer to "is there no row, or has it not arrived yet". */
 }) {
-  // geo-chat only has a row once someone has taken a side, so the response kind falls back to what
-  // the claim's own "Is factual" value implies — the same fallback the hub's Featured list uses.
-  const responseKind = row?.response_kind ?? claimResponseKind(entity, spaceId);
-  const summary = useClaimResponseSummary(entity.id, spaceId, responseKind);
-
-  const positions = React.useMemo(
-    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, row),
-    [responseKind, row, summary.negative, summary.positive]
-  );
-
-  const viewerResponse = React.useMemo(
-    () => viewerResponseFromDirection(summary.viewerDirection, responseKind),
-    [responseKind, summary.viewerDirection]
-  );
+  const state = useClaimResponseState({
+    claimId: entity.id,
+    spaceId,
+    row,
+    entity,
+    title: entity.name ?? entity.id,
+    description: entity.description,
+  });
 
   return (
     <MatchmakingClaimCard
-      claim={{
-        id: row?.id ?? entity.id,
-        space_id: spaceId,
-        claim_entity_id: entity.id,
-        claim: entity.name ?? entity.id,
-        description: entity.description,
-      }}
-      positions={positions}
-      readiness={{
-        response_kind: responseKind,
-        // Falls back to the on-chain summary, which resolves independently of geo-chat's batch.
-        // Treating an unarrived row as "no response" drew the viewer's own side unselected, and a
-        // click on it republished the response they already held instead of clearing it.
-        viewer_response: row?.viewer_response ?? viewerResponse,
-        viewer_debate_ready: row?.viewer_debate_ready ?? false,
-        readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-      }}
+      claim={state.claim}
+      positions={state.positions}
+      readiness={state.readiness}
       activeDebate={row?.active_debate ?? null}
     />
   );

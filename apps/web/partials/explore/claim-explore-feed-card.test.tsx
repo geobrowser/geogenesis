@@ -79,11 +79,12 @@ vi.mock('~/core/claims/browse/claim-end-slot', () => ({
   ),
 }));
 
-vi.mock('~/core/claims/browse/claim-summary', () => ({
-  ClaimSideSummary: ({ label, count }: { label: string; count: number }) => (
-    <div data-testid="side-summary">{`${count} ${label}`}</div>
-  ),
-  ControversialTag: () => <span data-testid="controversial">Controversial</span>,
+// Only the leaf that reaches the network. Mocking the whole `claim-summary` module — which is what
+// this suite did first — stubbed out the split bar, the two sides and the tag, so the verdict the
+// card is *for* was never rendered here; and it broke outright the moment two more components were
+// shared into that module. The responder faces are covered by their own suite.
+vi.mock('~/core/claims/browse/claim-side-responders', () => ({
+  ClaimSideResponders: ({ label }: { label: string }) => <div data-testid={`responders-${label}`} />,
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
@@ -235,7 +236,7 @@ describe('ClaimExploreFeedCard', () => {
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
 
-    expect(screen.queryByTestId('side-summary')).toBeNull();
+    expect(screen.queryByText(/agree$/i)).toBeNull();
     // An empty 220px cell behind a vertical rule reads as something failing to load.
     expect(document.querySelector('.border-l')).toBeNull();
   });
@@ -264,7 +265,7 @@ describe('ClaimExploreFeedCard', () => {
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
 
-    const verdict = screen.getAllByTestId('side-summary')[0].closest('div.border-l') as HTMLElement;
+    const verdict = screen.getByText('9 agree').closest('div.border-l') as HTMLElement;
     expect(verdict).not.toBeNull();
     expect(verdict).toHaveClass('md:border-l-0');
     expect(verdict.className).not.toContain('md:border-t');
@@ -277,8 +278,9 @@ describe('ClaimExploreFeedCard', () => {
     scrollIntoRange();
 
     expect(screen.getByText('75%')).toBeInTheDocument();
-    expect(screen.getByText('9 Agree')).toBeInTheDocument();
-    expect(screen.getByText('3 Disagree')).toBeInTheDocument();
+    // Count first and the verb lowercase, matching the share above it: "75% agree", "9 agree".
+    expect(screen.getByText('9 agree')).toBeInTheDocument();
+    expect(screen.getByText('3 disagree')).toBeInTheDocument();
   });
 
   it('flags a contested claim beside the space rather than in the verdict', () => {
@@ -287,8 +289,8 @@ describe('ClaimExploreFeedCard', () => {
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
 
-    const tag = screen.getByTestId('controversial');
     // Beside the space chip, which is what the meta row is for — not a second voice in the split.
-    expect(tag.closest('div')?.textContent).toContain('Global Politics');
+    const metaRow = screen.getByText('Global Politics').closest('div') as HTMLElement;
+    expect(metaRow.textContent).toContain('Controversial');
   });
 });

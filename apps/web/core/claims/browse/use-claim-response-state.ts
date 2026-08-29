@@ -51,6 +51,25 @@ export type ClaimResponseState = {
  * viewport observer, the topic page fetches per card because its claims span spaces. What must not
  * differ is what happens to them afterwards, which is all of this.
  */
+/**
+ * Which vocabulary a claim uses, from the two sources that can answer.
+ *
+ * geo-chat's copy wins where it has a row; the graph answers for the spaces it does not index. The
+ * order matters and has to be the same everywhere, because this kind selects `voteKind` on both the
+ * count query and the write — a surface that resolved it differently would count one vote kind
+ * while publishing another, which is a bug this codebase has already had.
+ *
+ * Exported for the space claims page, which needs every claim's kind before it renders any of them
+ * in order to batch the response reads. Everything else gets it from {@link useClaimResponseState}.
+ */
+export function resolveClaimResponseKind(
+  row: Pick<DebateClaim, 'response_kind'> | null,
+  entity: Entity | null,
+  spaceId: string
+): 'stance' | 'veracity' {
+  return row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance');
+}
+
 export function useClaimResponseState({
   claimId,
   spaceId,
@@ -72,10 +91,7 @@ export function useClaimResponseState({
   /** False to hold the response reads back — a feed card below the fold. */
   enabled?: boolean;
 }): ClaimResponseState {
-  // geo-chat's copy wins where it has a row; the graph answers for the spaces it does not index.
-  // The order matters and has to be the same everywhere, because this kind selects the vote kind on
-  // both the count query and the write.
-  const responseKind = row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance');
+  const responseKind = resolveClaimResponseKind(row, entity, spaceId);
   const isResponseKindResolved = row !== null || entity !== null;
 
   const summary = useClaimResponseSummary(claimId, spaceId, responseKind, enabled);

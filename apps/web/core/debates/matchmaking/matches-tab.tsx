@@ -78,7 +78,7 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           emptyMessage={
             activity?.available_to_debate === false
               ? 'You’re marked unavailable, so nobody can be matched with you.'
-              : 'Matches appear once you’ve turned Debate on for a claim and someone holding the opposite position is online and ready too.'
+              : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
           }
           emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
         >
