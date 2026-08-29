@@ -13,6 +13,7 @@ import {
   entityResponseCountsQueryKey,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
+import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 
 /** Entity responses rather than relation responses, matching what `EntityVoteButtons` asks for. */
 export const CLAIM_RESPONSE_OBJECT_TYPE = 0;
@@ -139,10 +140,19 @@ export function useClaimResponseSummary(
 ): ClaimResponseSummary {
   const { personalSpaceId } = usePersonalSpaceId();
 
+  // A page that batches its claims — the space claims list, which asks for up to fifty at once —
+  // primes exactly these two keys from one request. Asking here as well is not wrong, because the
+  // primed cache answers it; but before the batch lands there is nothing to answer from, and fifty
+  // rows would each fire their own pair first. So while a batch is managing this subtree, the
+  // individual reads stand down and wait for it. `EntityVoteButtons` has always done this, and the
+  // deferral was lost when the claim card replaced it on that page.
+  const responseBatch = useClaimResponseBatchState();
+
   const { data, isLoading } = useQuery({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
     queryFn: () =>
       Effect.runPromise(getEntityResponseCounts(entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)),
+    enabled: !responseBatch.managed,
     staleTime: 30_000,
   });
 
@@ -155,7 +165,7 @@ export function useClaimResponseSummary(
         getUserEntityResponse(personalSpaceId, entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)
       );
     },
-    enabled: Boolean(personalSpaceId),
+    enabled: Boolean(personalSpaceId) && !responseBatch.managed,
     staleTime: 30_000,
   });
 
@@ -176,7 +186,9 @@ export function useClaimResponseSummary(
 
   return {
     ...summarizeClaimResponses(positive, negative),
-    isLoading,
+    // Under a batch the individual query never runs, so its `isLoading` is false from the start —
+    // the batch's own readiness is what says whether there is anything to draw yet.
+    isLoading: responseBatch.managed ? !responseBatch.ready : isLoading,
     viewerDirection: activeDirection ?? null,
     viewerSpaceId: personalSpaceId ?? null,
   };

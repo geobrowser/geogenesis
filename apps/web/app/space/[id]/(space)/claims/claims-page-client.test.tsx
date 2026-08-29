@@ -12,6 +12,16 @@ import type { Entity, Relation } from '~/core/types';
 
 import { ClaimsPageClient } from './claims-page-client';
 
+// The rows render the shared claim card now, whose response controls reach this module. Its
+// top-level `atomWithStorage` runs on import, and under Node's own webstorage — which shadows
+// jsdom's with an object that has no getItem — that import takes the suite down before a test runs.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: () => false,
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+}));
+
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   nameSet: vi.fn(),
@@ -37,8 +47,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace, push: vi.fn() }),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingState: () => 'idle',
@@ -78,13 +87,31 @@ vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   },
 }));
 
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: ({ responseKind }: { responseKind: string }) =>
+// The row derives its position summaries from this; the hook reaches the personal-space lookup and
+// through it Wagmi, which this suite has no provider for. The page's own batching is what these
+// tests are about, and that is stubbed separately below.
+vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>()),
+  useClaimResponseSummary: () => ({
+    positive: 0,
+    negative: 0,
+    total: 0,
+    percent: null,
+    meetsFloor: false,
+    isControversial: false,
+    isLoading: false,
+    viewerDirection: null,
+    viewerSpaceId: null,
+  }),
+}));
+
+vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
+  MatchmakingClaimCard: ({ claim, readiness }: { claim: { claim: string }; readiness: { response_kind: string } }) =>
     !responseBatchReady ? (
       <div data-testid="entity-response-skeleton">Response skeleton</div>
     ) : (
-      <div data-testid="entity-response-buttons" data-response-kind={responseKind}>
-        Entity response buttons
+      <div data-testid="entity-response-buttons" data-response-kind={readiness.response_kind}>
+        {claim.claim}
       </div>
     ),
 }));
@@ -286,7 +313,8 @@ describe('ClaimsPageClient', () => {
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
     expect(screen.getByText('Publish this claim before starting a debate.')).toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
+    // A draft has no on-chain identity to respond to, so it gets the notice instead of the card.
+    expect(screen.queryByTestId('entity-response-buttons')).not.toBeInTheDocument();
 
     claims = [published];
     debateClaimsResponse = {
@@ -294,7 +322,11 @@ describe('ClaimsPageClient', () => {
     };
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
-    expect(screen.getByText('Debate in progress')).toBeInTheDocument();
+    // "Debate in progress" is gone. The card's end slot turns the same `active_debate` into a
+    // "Watch live" link, so the page no longer prints a sentence describing it — one fact, one
+    // rendering, and the rendering you can press.
+    expect(screen.queryByText('Debate in progress')).not.toBeInTheDocument();
+    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
   });
 });
 

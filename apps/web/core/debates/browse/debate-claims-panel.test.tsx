@@ -91,6 +91,12 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
 
+// The panel resolves the claim entities to answer the response vocabulary where geo-chat has no
+// row. That is a graph read, and these suites are about grouping and ordering.
+vi.mock('~/core/sync/use-store', () => ({
+  useQueryEntities: () => ({ entities: [], isLoading: false }),
+}));
+
 vi.mock('~/core/debates/hooks', () => ({
   useDebateClaims: () => ({ data: { claims: [] }, isLoading: false, isError: false, error: null }),
 }));

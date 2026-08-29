@@ -8,6 +8,7 @@ import {
 } from '~/core/claims/browse/claim-position-summaries';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
+import { claimResponseKind } from '~/core/claims/response-kind';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaims } from '~/core/debates/hooks';
@@ -17,6 +18,8 @@ import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/c
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { useQueryEntities } from '~/core/sync/use-store';
+import type { Entity } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -55,6 +58,22 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
   // One lookup for every row rather than one per row. It answers the vocabulary each claim is
   // argued in — Verify/Dispute for a factual claim, Agree/Disagree otherwise — which is the whole
   // reason these rows now carry labelled pills instead of two unlabelled chevrons.
+  // The graph's answer to the same question, for claims geo-chat has no row for — a space it does
+  // not index has none at all, and `useDebateClaims` is disabled outright when there are no ids.
+  // Without this a factual claim fell back to Agree/Disagree and published a *stance* response,
+  // which is the "count one vote kind while publishing another" failure the claim page's own note
+  // describes. One batch for the panel rather than a lookup per row.
+  const { entities: claimEntities } = useQueryEntities({
+    where: { id: { in: claimIds } },
+    first: claimIds.length || 1,
+    enabled: claimIds.length > 0,
+  });
+  const entitiesByClaimId = React.useMemo(() => {
+    const map = new Map<string, Entity>();
+    for (const entity of claimEntities) map.set(entity.id, entity);
+    return map;
+  }, [claimEntities]);
+
   const rowsQuery = useDebateClaims(claimsSpaceId, claimIds, claimIds.length > 0);
   const rowsByClaimId = React.useMemo(() => {
     const map = new Map<string, DebateClaim>();
@@ -126,6 +145,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
                   : sortClaimsByBest(claimsForParticipant(claims, participant.profile_space_id), rankByClaimId)
               }
               rowsByClaimId={rowsByClaimId}
+              entitiesByClaimId={entitiesByClaimId}
               isLoading={isOrdering}
               error={error}
             />
@@ -138,7 +158,13 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
             <Text as="span" variant="smallTitle" color="text">
               Other claims
             </Text>
-            <ClaimList claims={orphaned} rowsByClaimId={rowsByClaimId} isLoading={false} error={null} />
+            <ClaimList
+              claims={orphaned}
+              rowsByClaimId={rowsByClaimId}
+              entitiesByClaimId={entitiesByClaimId}
+              isLoading={false}
+              error={null}
+            />
           </article>
         )}
       </div>
@@ -149,11 +175,13 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
 function ClaimList({
   claims,
   rowsByClaimId,
+  entitiesByClaimId,
   isLoading,
   error,
 }: {
   claims: TranscriptClaim[];
   rowsByClaimId: Map<string, DebateClaim>;
+  entitiesByClaimId: Map<string, Entity>;
   isLoading: boolean;
   error: Error | null;
 }) {
@@ -183,7 +211,11 @@ function ClaimList({
       <ul className="mt-4 space-y-3">
         {visible.map(claim => (
           <li key={claim.id}>
-            <ClaimRow claim={claim} row={rowsByClaimId.get(claim.id) ?? null} />
+            <ClaimRow
+              claim={claim}
+              row={rowsByClaimId.get(claim.id) ?? null}
+              entity={entitiesByClaimId.get(claim.id) ?? null}
+            />
           </li>
         ))}
       </ul>
@@ -214,7 +246,7 @@ function ClaimList({
  * controls are space-scoped, so there is nothing correct to point either one at — better a dead row
  * than one that navigates somewhere wrong or publishes a response into the wrong space.
  */
-function ClaimRow({ claim, row }: { claim: TranscriptClaim; row: DebateClaim | null }) {
+function ClaimRow({ claim, row, entity }: { claim: TranscriptClaim; row: DebateClaim | null; entity: Entity | null }) {
   if (claim.spaceId === null) {
     return (
       <Text as="p" variant="metadata" color="text">
@@ -230,7 +262,7 @@ function ClaimRow({ claim, row }: { claim: TranscriptClaim; row: DebateClaim | n
           {claim.text}
         </Text>
       </Link>
-      <PanelClaimControls claimId={claim.id} spaceId={claim.spaceId} row={row} />
+      <PanelClaimControls claimId={claim.id} spaceId={claim.spaceId} row={row} entity={entity} />
     </>
   );
 }
@@ -247,10 +279,21 @@ function ClaimRow({ claim, row }: { claim: TranscriptClaim; row: DebateClaim | n
  * through the same path, and the same evidence-scaled summary as the hub, the topic page and the
  * feed.
  */
-function PanelClaimControls({ claimId, spaceId, row }: { claimId: string; spaceId: string; row: DebateClaim | null }) {
-  // geo-chat's row is the usual source of the vocabulary; a space it does not index has no row, and
-  // Agree/Disagree is the right default for a claim nothing has said otherwise about.
-  const responseKind = row?.response_kind ?? 'stance';
+function PanelClaimControls({
+  claimId,
+  spaceId,
+  row,
+  entity,
+}: {
+  claimId: string;
+  spaceId: string;
+  row: DebateClaim | null;
+  entity: Entity | null;
+}) {
+  // geo-chat's copy wins where it has a row; the graph answers for the spaces it does not index.
+  // The same order every other claim surface resolves this in — and it has to be, because this kind
+  // selects the vote kind on both the count query and the write.
+  const responseKind = row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance');
   const summary = useClaimResponseSummary(claimId, spaceId, responseKind);
 
   const claim = React.useMemo(

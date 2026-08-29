@@ -122,9 +122,22 @@ export function ClaimEndSlot({
             <span className="col-start-1 row-start-1">{isRequesting ? 'Requesting…' : 'Request debate'}</span>
           </span>
         </button>
-        {blockedReason || requestError ? (
+        {/* A blocked reason is a standing condition the reader can see for themselves, so it is
+            ordinary text. A failed request is an event that happens after they press, with nothing
+            on screen to mark it — `role="alert"` is what makes it reach anyone not watching this
+            corner. The Matches tab's old button announced it; losing that when the button moved
+            would have been a silent regression. */}
+        {blockedReason ? (
           <span className={cx('text-footnote text-grey-04', variant === 'block' ? 'text-left' : 'text-right')}>
-            {blockedReason ?? requestError}
+            {blockedReason}
+          </span>
+        ) : null}
+        {requestError ? (
+          <span
+            role="alert"
+            className={cx('text-footnote text-red-01', variant === 'block' ? 'text-left' : 'text-right')}
+          >
+            {requestError}
           </span>
         ) : null}
       </span>

@@ -34,9 +34,10 @@ import { ClaimSideResponders } from './claim-side-responders';
  * related-claims gallery and the explore feed cannot drift apart — and cannot disagree with the
  * claim page, which reads the same tier from the same helper.
  *
- * The three tiers are `claimSummaryTier`'s, and the reason they exist is written there. What this
- * adds is the shape of each: an invitation carries no bar, a tally carries no percentage, and only
- * a claim past the floor gets the full treatment.
+ * Two states, `claimSummaryTier`'s, and the reason is written there: nothing at all where nobody
+ * has answered, and the share with its bar from the first response onward. There is no
+ * below-the-floor tally — an earlier revision had one, and the floor now governs only the
+ * Controversial band.
  */
 export function ClaimSummary({
   entityId,

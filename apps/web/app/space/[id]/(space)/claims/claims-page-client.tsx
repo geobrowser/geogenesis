@@ -378,34 +378,15 @@ function ClaimListItem({
     );
   }
 
+  // No footer. `ClaimDebateStatus` used to print "Debate in progress" here from `active_debate` —
+  // the same value the card's end slot now turns into a "Watch live" link. One fact, stated twice,
+  // and the sentence was the half you could not press.
   return (
-    <div>
-      <MatchmakingClaimCard
-        claim={claimSummary}
-        positions={positions}
-        readiness={readiness}
-        activeDebate={activeDebate}
-        footer={
-          /* The readiness switch is gone from here too — the Debate toggle is being retired. What
-             is left is the one thing this page knows that the card does not: whether a debate on
-             this claim is already under way. */
-          <ClaimDebateStatus debateClaim={debateClaim} published={published} />
-        }
-      />
-    </div>
+    <MatchmakingClaimCard
+      claim={claimSummary}
+      positions={positions}
+      readiness={readiness}
+      activeDebate={activeDebate}
+    />
   );
-}
-
-function ClaimDebateStatus({ debateClaim, published }: { debateClaim: DebateClaim | null; published: boolean }) {
-  if (!published) return null;
-
-  if (debateClaim?.active_debate) {
-    return (
-      <Text as="p" variant="body" color="grey-04" className="mt-3">
-        Debate {debateClaim.active_debate.status.replace('_', ' ')}
-      </Text>
-    );
-  }
-
-  return null;
 }

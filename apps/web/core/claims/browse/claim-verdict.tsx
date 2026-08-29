@@ -16,11 +16,11 @@ import { ClaimSideSummary } from './claim-summary';
  * Scaled to the evidence, through the same `claimSummaryTier` every card reads — so the page and a
  * card describing the same claim cannot say different things about it.
  *
- * The tier matters most here, because this is where the number is loudest. A 40px "100%" is a
- * strong statement, and on the measured data it was usually standing on two responses: 93% of
- * answered claims are unanimous and only 2% reach the floor. Below the floor the module now reports
- * the tally at the weight a tally deserves and keeps the percentage out of it; at zero it invites a
- * first response rather than rendering nothing at all.
+ * At zero it invites a first response rather than rendering nothing at all, which is what it used
+ * to do on the state most claims are in. From the first response the share is shown, however small
+ * the sample: 93% of answered claims are unanimous and the median has two responses, so a "100%"
+ * here is usually standing on very little — and what keeps that honest is the responder counts
+ * directly beneath it, not withholding the number.
  */
 export function ClaimVerdict({
   entityId,

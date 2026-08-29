@@ -155,8 +155,27 @@ vi.mock('~/core/debates/api', async importOriginal => {
   };
 });
 
+// The card reports its own responses, which reaches the personal-space lookup and through it
+// Wagmi. This suite is about the picker's claim list and its request flow.
+vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>()),
+  useClaimResponseSummary: () => ({
+    positive: 0,
+    negative: 0,
+    total: 0,
+    percent: null,
+    meetsFloor: false,
+    isControversial: false,
+    isLoading: false,
+    viewerDirection: null,
+    viewerSpaceId: null,
+  }),
+}));
+
 vi.mock('~/core/debates/hooks', () => ({
   useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
+  // Read by the match lookup above; the picker never shows an offer, so this only answers "no".
+  useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
   // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
   // arrive through the id lookup.
   useDebateRematchClaims: () => ({
@@ -313,6 +332,12 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 // The card's Debate toggle publishes readiness through this.
 vi.mock('~/core/debates/matchmaking/hooks', () => ({
   useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
+  // The shared position control asks whether this claim has a match, to put the opponent's face on
+  // the opposing side. The picker hides its own end slot — a rematch request is a different
+  // mutation — so there is never an offer here, and these only have to answer "no".
+  useMatchmakingMatches: () => ({ data: { matches: [] }, isLoading: false, error: null }),
+  useDebateRequests: () => ({ data: { inbound: [], outbound: null }, isLoading: false, error: null }),
+  useCreateDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   // The All tab is the hub's Claims query. Its arguments are what the tests below inspect.
   useMatchmakingClaims: (
     query: { search: string | null; spaceIds?: string[] | null; topicIds?: string[] | null },
@@ -2243,7 +2268,6 @@ describe('DebateRematchPageClient', () => {
       await showAllClaims();
       expect(scoped()).toEqual([SPACE_1, SPACE_2, 'profile-local', 'profile-remote']);
     });
-
   });
 
   // geo-chat answers the browsed lookup in id-sorted batches, so a list laid out in response order
@@ -2609,7 +2633,6 @@ describe('DebateRematchPageClient', () => {
     expect(button).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
   });
-
 });
 
 /** The latest arguments the picker handed its browsed-claims page query. */
