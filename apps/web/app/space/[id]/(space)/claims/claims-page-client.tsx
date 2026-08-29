@@ -310,9 +310,9 @@ function ClaimsList({
  * a topic chip group nothing else showed. The response controls in particular were the entity-row
  * chevrons, which name neither side; on a page that is nothing but claims, that is exactly backwards.
  *
- * The readiness switch stays here, unlike on the browse-mode surfaces. This is the page an editor
- * comes to in order to stage claims for debate, so the control belongs to the task — and it is the
- * one place it has not lost a home.
+ * No readiness switch: GEO-2740 removed the per-claim Debate toggle from the product. An earlier
+ * revision of this work kept one here on the grounds that this is where an editor stages claims for
+ * debate, which stopped being possible when the control stopped existing.
  */
 function ClaimListItem({
   claim,

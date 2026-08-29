@@ -20,7 +20,10 @@ const mocks = vi.hoisted(() => ({
   /** Props every rendered response control received, in render order. */
   responseControlProps: [] as Array<Record<string, unknown>>,
   rankByClaimId: new Map<string, number>(),
-  entitiesLoading: false,
+  /** What the batched entity lookup resolves to. Empty means it answered with nothing. */
+  claimEntities: [] as Array<{ id: string }>,
+  /** Every set of per-space groups the row lookup was asked for. */
+  rowGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -97,11 +100,16 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn()
 // The panel resolves the claim entities to answer the response vocabulary where geo-chat has no
 // row. That is a graph read, and these suites are about grouping and ordering.
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: () => ({ entities: [], isLoading: mocks.entitiesLoading }),
+  useQueryEntities: () => ({ entities: mocks.claimEntities, isLoading: false }),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateClaims: () => ({ data: { claims: [] }, isLoading: false, isError: false, error: null }),
+  // Grouped per space, since a debate can quote a claim that lives somewhere else. `rowGroups`
+  // records what the panel asked for, so the suite can assert it did not flatten them into one.
+  useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
+    mocks.rowGroups.push(groups);
+    return { claims: [], isLoading: false, isError: false };
+  },
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
@@ -162,7 +170,8 @@ beforeEach(() => {
   mocks.error = null;
   mocks.responseControlProps.length = 0;
   mocks.rankByClaimId = new Map();
-  mocks.entitiesLoading = false;
+  mocks.claimEntities = [];
+  mocks.rowGroups = [];
   mocks.rankingReady = true;
 });
 
@@ -221,21 +230,37 @@ describe('DebateClaimsPanel', () => {
 
   // Both the link and the response target are space-scoped, so a claim with no space has nothing
   // correct to point at. Showing the text without controls beats guessing a space.
-  it('will not let anyone answer before the claim\u2019s vocabulary is known', () => {
+  it('asks each claim\u2019s own space for its row, not the first space it saw', () => {
+    // `TranscriptClaim.spaceId` is allowed to differ per claim — a debate that quotes an external
+    // claim has at least two. Sending the whole list to one space returns nothing for the rest, and
+    // those rows lose their vocabulary and their available participants without saying so.
+    mocks.claims = grouped({
+      [PRESTON_SPACE]: [claim('claim-1', 'Local.'), claim('claim-2', 'External.', { spaceId: 'space-other' })],
+    });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    const groups = mocks.rowGroups.at(-1) ?? [];
+    expect(groups).toHaveLength(2);
+    expect(groups.find(group => group.spaceId === CLAIM_SPACE)?.claimIds).toEqual(['claim-1']);
+    expect(groups.find(group => group.spaceId === 'space-other')?.claimIds).toEqual(['claim-2']);
+  });
+
+  it('will not let anyone answer before the claim’s vocabulary is known', () => {
     // `stance` is the fallback while the entity batch is in flight, so the pills would say Agree and
     // Disagree on a claim that wants Verify and Dispute — and a click inside that window publishes a
     // stance response against a factual claim. The kind selects `voteKind` on the write, so this is
     // not a labelling problem; it is the wrong vote.
-    mocks.entitiesLoading = true;
     mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'One.')] });
 
     const { unmount } = render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
     expect(screen.getByTestId('position-row').getAttribute('data-disabled')).toBe('true');
     unmount();
 
-    // Settled, whether or not the batch found anything: a lookup that comes back empty has still
-    // answered, and geo-chat's row would have answered sooner.
-    mocks.entitiesLoading = false;
+    // Answered, not merely settled. A graph timeout stops the batch loading too, and reading that
+    // as "no factual flag" is the same wrong vote with a longer fuse — so it takes an actual entity
+    // (or geo-chat's row, which would have answered sooner).
+    mocks.claimEntities = [{ id: 'claim-1' }];
     render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
     expect(screen.getByTestId('position-row').getAttribute('data-disabled')).toBe('false');
   });

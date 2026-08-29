@@ -11,7 +11,7 @@ import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
-import { useDebateClaims } from '~/core/debates/hooks';
+import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/core/debates/transcript-claims';
@@ -63,7 +63,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
   // Without this a factual claim fell back to Agree/Disagree and published a *stance* response,
   // which is the "count one vote kind while publishing another" failure the claim page's own note
   // describes. One batch for the panel rather than a lookup per row.
-  const { entities: claimEntities, isLoading: areEntitiesLoading } = useQueryEntities({
+  const { entities: claimEntities } = useQueryEntities({
     where: { id: { in: claimIds } },
     first: claimIds.length || 1,
     enabled: claimIds.length > 0,
@@ -74,12 +74,30 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
     return map;
   }, [claimEntities]);
 
-  const rowsQuery = useDebateClaims(claimsSpaceId, claimIds, claimIds.length > 0);
+  // Grouped by each claim's own space rather than sent to one.
+  //
+  // `claimsSpaceId` is the first non-null space in the transcript, which is fine for the ranking it
+  // was written for but wrong here: `TranscriptClaim.spaceId` is allowed to differ per claim, and a
+  // debate that quotes an external claim has at least two. Asking one space about all of them means
+  // every row outside it comes back empty — losing its vocabulary and its available participants,
+  // silently, on the rows most likely to be interesting.
+  const rowGroups = React.useMemo(() => {
+    const bySpace = new Map<string, string[]>();
+    for (const claim of claims.all) {
+      const spaceId = claim.spaceId ?? claimsSpaceId;
+      const ids = bySpace.get(spaceId);
+      if (ids) ids.push(claim.id);
+      else bySpace.set(spaceId, [claim.id]);
+    }
+    return [...bySpace].map(([spaceId, ids]) => ({ spaceId, claimIds: ids }));
+  }, [claims.all, claimsSpaceId]);
+
+  const rowsQuery = useDebateClaimsBySpaces(rowGroups);
   const rowsByClaimId = React.useMemo(() => {
     const map = new Map<string, DebateClaim>();
-    for (const row of rowsQuery.data?.claims ?? []) map.set(row.claim_entity_id, row);
+    for (const row of rowsQuery.claims) map.set(row.claim_entity_id, row);
     return map;
-  }, [rowsQuery.data]);
+  }, [rowsQuery.claims]);
 
   // Held back the way the debate feed holds its rows back while the same ranking loads: painting
   // transcript order first and reordering a moment later moves claims under someone already
@@ -146,7 +164,6 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               }
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
-              areEntitiesLoading={areEntitiesLoading}
               isLoading={isOrdering}
               error={error}
             />
@@ -163,7 +180,6 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               claims={orphaned}
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
-              areEntitiesLoading={areEntitiesLoading}
               isLoading={false}
               error={null}
             />
@@ -178,14 +194,12 @@ function ClaimList({
   claims,
   rowsByClaimId,
   entitiesByClaimId,
-  areEntitiesLoading,
   isLoading,
   error,
 }: {
   claims: TranscriptClaim[];
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
-  areEntitiesLoading: boolean;
   isLoading: boolean;
   error: Error | null;
 }) {
@@ -219,7 +233,6 @@ function ClaimList({
               claim={claim}
               row={rowsByClaimId.get(claim.id) ?? null}
               entity={entitiesByClaimId.get(claim.id) ?? null}
-              areEntitiesLoading={areEntitiesLoading}
             />
           </li>
         ))}
@@ -251,17 +264,7 @@ function ClaimList({
  * controls are space-scoped, so there is nothing correct to point either one at — better a dead row
  * than one that navigates somewhere wrong or publishes a response into the wrong space.
  */
-function ClaimRow({
-  claim,
-  row,
-  entity,
-  areEntitiesLoading,
-}: {
-  claim: TranscriptClaim;
-  row: DebateClaim | null;
-  entity: Entity | null;
-  areEntitiesLoading: boolean;
-}) {
+function ClaimRow({ claim, row, entity }: { claim: TranscriptClaim; row: DebateClaim | null; entity: Entity | null }) {
   if (claim.spaceId === null) {
     return (
       <Text as="p" variant="metadata" color="text">
@@ -277,13 +280,7 @@ function ClaimRow({
           {claim.text}
         </Text>
       </Link>
-      <PanelClaimControls
-        claimId={claim.id}
-        spaceId={claim.spaceId}
-        row={row}
-        entity={entity}
-        areEntitiesLoading={areEntitiesLoading}
-      />
+      <PanelClaimControls claimId={claim.id} spaceId={claim.spaceId} row={row} entity={entity} />
     </>
   );
 }
@@ -305,23 +302,24 @@ function PanelClaimControls({
   spaceId,
   row,
   entity,
-  areEntitiesLoading,
 }: {
   claimId: string;
   spaceId: string;
   row: DebateClaim | null;
   entity: Entity | null;
-  areEntitiesLoading: boolean;
 }) {
   // geo-chat's copy wins where it has a row; the graph answers for the spaces it does not index.
   // The same order every other claim surface resolves this in — and it has to be, because this kind
   // selects the vote kind on both the count query and the write.
   const responseKind = row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance');
 
-  // The batch is asynchronous, so `stance` is a guess until it lands — and a guess the reader can
-  // act on is a stance response published against a factual claim. Held until something
-  // authoritative answers.
-  const isResponseKindResolved = row !== null || !areEntitiesLoading;
+  // Answered, not merely settled.
+  //
+  // Gating on the batch no longer loading was wrong in the case that matters: a graph timeout also
+  // stops it loading, and treating that as "no factual flag" enables Agree/Disagree on a claim that
+  // wants Verify/Dispute. Either geo-chat's row or an actual entity has to have said so — anything
+  // else leaves the pills alone, which is the safe direction to be wrong in.
+  const isResponseKindResolved = row !== null || entity !== null;
   const summary = useClaimResponseSummary(claimId, spaceId, responseKind);
 
   const claim = React.useMemo(

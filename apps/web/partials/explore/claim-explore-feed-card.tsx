@@ -79,7 +79,7 @@ export function ClaimExploreFeedCard({
     return () => observer.disconnect();
   }, [container, nearViewport]);
 
-  const { entity, isLoading: isEntityLoading } = useQueryEntity({ id: item.entityId, spaceId: item.spaceId });
+  const { entity } = useQueryEntity({ id: item.entityId, spaceId: item.spaceId });
 
   const rowQuery = useDebateClaims(item.spaceId, [item.entityId], nearViewport);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === item.entityId) ?? null;
@@ -91,11 +91,14 @@ export function ClaimExploreFeedCard({
 
   // Whether that kind is an answer or a placeholder.
   //
-  // `stance` is the fallback, and until one of the two lookups lands it is a guess — so a factual
+  // `stance` is the fallback, and until one of the two lookups answers it is a guess — so a factual
   // claim would show Agree/Disagree for the width of the entity query, and a click inside that
-  // window would publish a *stance* response against a claim that wants Verify/Dispute. The pills
-  // stay disabled until something authoritative has said which vocabulary this claim uses.
-  const isResponseKindResolved = row !== null || !isEntityLoading;
+  // window would publish a *stance* response against a claim that wants Verify/Dispute.
+  //
+  // Answered, not merely settled: a failed graph read also stops loading, and reading that as "no
+  // factual flag" is the same bug with a longer fuse. The feed item came from the graph, so the
+  // entity does arrive; if it does not, disabled pills are the safe direction to be wrong in.
+  const isResponseKindResolved = row !== null || Boolean(entity);
 
   const summary = useClaimResponseSummary(item.entityId, item.spaceId, responseKind, nearViewport);
 
