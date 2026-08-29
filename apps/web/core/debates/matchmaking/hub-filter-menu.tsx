@@ -138,6 +138,14 @@ type MultiProps<T extends string> = {
 };
 
 /**
+ * How long the counts may be pending before they turn into skeletons. GEO-2721 made the facets
+ * query fast — a materialized set rather than a subquery re-run per candidate row, 65ms rather
+ * than 17s — so an answer now normally arrives inside this window and the numbers just change.
+ * The skeleton stays for the slow answer it was written for, instead of flashing on every tick.
+ */
+const COUNT_SKELETON_DELAY_MS = 250;
+
+/**
  * The multi-select twin of {@link HubFilterMenu}: checkboxes, and the menu stays open so several
  * can be picked in one visit.
  *
@@ -147,14 +155,6 @@ type MultiProps<T extends string> = {
  * count answers "how many of the claims I'm already looking at also carry this", and ticking one
  * does narrow the rest of its menu to what co-occurs with it (GEO-2696).
  */
-/**
- * How long the counts may be pending before they turn into skeletons. GEO-2721 made the facets
- * query fast — a materialized set rather than a subquery re-run per candidate row, 65ms rather
- * than 17s — so an answer now normally arrives inside this window and the numbers just change.
- * The skeleton stays for the slow answer it was written for, instead of flashing on every tick.
- */
-const COUNT_SKELETON_DELAY_MS = 250;
-
 export function HubMultiFilterMenu<T extends string>({
   label,
   options,

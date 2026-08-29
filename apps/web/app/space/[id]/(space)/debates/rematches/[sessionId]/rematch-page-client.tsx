@@ -57,6 +57,7 @@ import {
   orderFacetOptions,
   toggleId,
 } from '~/core/debates/matchmaking/topic-facets';
+import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
 import { useScopedMatchmakingClaims } from '~/core/debates/matchmaking/use-scoped-claims';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
@@ -300,13 +301,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // drops the rest anyway, but the facets riding with them would still name their topics and count
   // their claims. The full selection stays in `spaceIds` for the pinned rows, which come from the
   // graph and are not narrowed by the allowlist.
+  //
+  // Debounced, like the hub's: the menu stays open across ticks, so picking three spaces in a row
+  // would otherwise fire three requests and throw two away. Only the request waits — every
+  // client-side filter below reads the live `spaceIds`, so the rows the page holds itself still
+  // react on the same frame as the tick.
+  const { value: debouncedSpaceIds, pending: spacesSettling } = useDebouncedSelection(spaceIds);
   const browsableSpaceIds = React.useMemo(
-    () => spaceIds.filter(id => isClaimSpaceAllowed(id, spaceAllowlist)),
-    [spaceAllowlist, spaceIds]
+    () => debouncedSpaceIds.filter(id => isClaimSpaceAllowed(id, spaceAllowlist)),
+    [debouncedSpaceIds, spaceAllowlist]
   );
 
   // Nothing left to ask about once every pick is one geo-chat cannot answer for.
-  const selectedSpaceShowsNothing = spaceIds.length > 0 && browsableSpaceIds.length === 0;
+  const selectedSpaceShowsNothing = debouncedSpaceIds.length > 0 && browsableSpaceIds.length === 0;
 
   // Every lookup the scope is built from. Until they have all landed the scope is `null`, which
   // geo-chat reads as "no filter" — so asking now buys an answer about the whole corpus, whose
@@ -377,21 +384,27 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // graph query.
   const browsesPages = tab === 'claims' && source === 'all';
 
+  const { value: debouncedTopicIds, pending: topicsSettling } = useDebouncedSelection(topicIds);
+
   const matchmakingQuery = React.useMemo<Omit<MatchmakingClaimsQuery, 'spaceIds' | 'spaceId'>>(
-    // `topicId` is sent whichever tab is showing. It only filters *these* rows, which back the
-    // All tab, and the server's topic facet is narrowed by spaces rather than by topics — so a
-    // topic selection can never collapse the menu it came from. The other two tabs are built
-    // from graph entities geo-chat has never seen, so their topic filter stays client-side.
+    // `topicIds` is sent whichever tab is showing. It only filters *these* rows, which back the
+    // All tab; the other two are built from graph entities geo-chat has never seen, so their
+    // topic filter stays client-side.
+    //
+    // Topics intersect now, and the server's topic facet is co-occurrence with them (GEO-2696) —
+    // so unlike before, a topic selection *does* narrow the menu it came from. What keeps that
+    // from being a trap is that the selected topics come back counted at the current result size,
+    // so they can always be un-picked, and every remaining option came off a surviving claim.
     () => ({
       search: debouncedSearch || null,
-      topicIds,
+      topicIds: debouncedTopicIds,
       // What `excludedClaimIds` removes below, removed by the endpoint instead — so the facets
       // describe the same corpus the rows do. Without it a topic whose every claim in the space
       // was one this session had dropped stayed on the menu over an empty list.
       rematchSessionId: sessionId,
       filter: 'all',
     }),
-    [debouncedSearch, sessionId, topicIds]
+    [debouncedSearch, debouncedTopicIds, sessionId]
   );
   // Every way the pages can outlive the scope that fetched them is handled in there, once, for
   // both pickers — see `useScopedMatchmakingClaims`.
@@ -1253,6 +1266,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               onTopicsClear={() => setTopicIds([])}
               facetSpaces={facetSpaces}
               facetTopics={facetTopics}
+              // Only the browsed source waits on geo-chat. The other two build their facets from
+              // entities already in hand, so their counts are never behind the selection and a
+              // skeleton there would be describing a wait that isn't happening.
+              countsPending={browsesPages && (browsedClaimsQuery.countsPending || topicsSettling || spacesSettling)}
               topicAtEnd
               // Only on Claims: the opponent's tab is one fixed source — their own responses — and
               // a menu offering three others there would read as filtering a list it can't reach.

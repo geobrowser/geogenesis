@@ -6,7 +6,6 @@ import cx from 'classnames';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
-import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -48,16 +47,11 @@ import {
   orderFacetOptions,
   toggleId,
 } from './topic-facets';
+import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useStableListOrder } from './use-stable-list-order';
 
 const SEARCH_DEBOUNCE_MS = 250;
-/**
- * Just long enough to coalesce a run of ticks into one request. It was 350ms while the backend
- * took seconds and each discarded request was expensive; now that GEO-2721 has landed the request
- * is the cheap part, and the wait is the only thing left that anyone can feel.
- */
-const SELECTION_DEBOUNCE_MS = 120;
 
 /**
  * GEO-2683. `featured` is the tab's own, not one of geo-chat's: the index has no notion of the tag,
@@ -188,8 +182,8 @@ export function ClaimsTab() {
   // Debounced like the search box, and for the same reason: the menu stays open across ticks, so
   // picking three topics in a row fires three requests and throws two away. The menu still
   // reflects each tick instantly; only the request waits.
-  const debouncedTopicIds = useDebouncedValue(topicIds, SELECTION_DEBOUNCE_MS);
-  const debouncedSpaceIds = useDebouncedValue(spaceIds, SELECTION_DEBOUNCE_MS);
+  const { value: debouncedTopicIds, pending: topicsSettling } = useDebouncedSelection(topicIds);
+  const { value: debouncedSpaceIds, pending: spacesSettling } = useDebouncedSelection(spaceIds);
 
   const query = React.useMemo<Omit<MatchmakingClaimsQuery, 'spaceIds' | 'spaceId'>>(
     () => ({ search: debouncedSearch || null, topicIds: debouncedTopicIds, filter: featured ? 'all' : filter }),
@@ -207,6 +201,12 @@ export function ClaimsTab() {
   // it also keeps the paging sentinel off a list that has no next page.
   const claimsQuery = useScopedMatchmakingClaims(query, scope, debouncedSpaceIds, featured);
   const { pages, facets } = claimsQuery;
+
+  // The debounce is part of the staleness, not separate from it. For those milliseconds no request
+  // has been made yet, so React Query is idle and `countsPending` is false on its own — while the
+  // menu already shows the new selection against the previous selection's counts. That is the
+  // state the flag exists to cover, so the settling window has to be folded in.
+  const countsPending = claimsQuery.countsPending || topicsSettling || spacesSettling;
 
   const serverClaims = React.useMemo(
     () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
@@ -479,7 +479,7 @@ export function ClaimsTab() {
           onTopicsClear={() => setTopicIds([])}
           facetSpaces={facetSpaces}
           facetTopics={facetTopics}
-          countsPending={claimsQuery.countsPending}
+          countsPending={countsPending}
           leading={
             <HubFilterMenu
               label={filterOptions.find(option => option.value === filter)?.label ?? 'All claims'}
