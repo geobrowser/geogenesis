@@ -294,8 +294,7 @@ function ClaimRow({ claim, row, entity }: { claim: TranscriptClaim; row: DebateC
  * argued in, and offering to request another one is the wrong invitation at the wrong moment.
  *
  * What remains is the vocabulary, which is the part that has to match: the same pills, publishing
- * through the same path, and the same evidence-scaled summary as the hub, the topic page and the
- * feed.
+ * through the same path, and the same shared summary as the hub, the topic page and the feed.
  */
 function PanelClaimControls({
   claimId,

@@ -79,7 +79,14 @@ export function ClaimExploreFeedCard({
     return () => observer.disconnect();
   }, [container, nearViewport]);
 
-  const { entity } = useQueryEntity({ id: item.entityId, spaceId: item.spaceId });
+  // Behind the same gate as the other two reads. The feed pre-mounts cards thousands of pixels
+  // below the fold, so an ungated hydration here is a graph read per claim on mount — exactly the
+  // cost the observer was added to avoid, and the one read that was still escaping it.
+  //
+  // Off-screen this answers `null`, which leaves the pills disabled. That is the correct answer:
+  // nothing has said which vocabulary the claim uses yet, and nobody can press a card they have
+  // not scrolled to.
+  const { entity } = useQueryEntity({ id: item.entityId, spaceId: item.spaceId, enabled: nearViewport });
 
   const rowQuery = useDebateClaims(item.spaceId, [item.entityId], nearViewport);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === item.entityId) ?? null;

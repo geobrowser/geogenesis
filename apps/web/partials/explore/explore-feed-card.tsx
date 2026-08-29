@@ -152,8 +152,8 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
     );
   }
 
-  // Claims get the card built for them — labelled position pills, an evidence-scaled verdict, and
-  // no thumbnail well they have no image to fill. Narrowly gated on purpose: every other type keeps
+  // Claims get the card built for them — labelled position pills, the shared verdict, and no
+  // thumbnail well they have no image to fill. Narrowly gated on purpose: every other type keeps
   // the generic card exactly as it was, so this changes what a Claim looks like and nothing else.
   const isClaim = props.item.types.some(type => normalizeId(type.id) === CLAIM_TYPE);
   if (isClaim) {

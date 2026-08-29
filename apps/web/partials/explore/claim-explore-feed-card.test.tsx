@@ -14,7 +14,8 @@ import { ClaimExploreFeedCard } from './claim-explore-feed-card';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Entity | null,
-  entityLoading: false,
+  /** Every `enabled` the entity hydration was called with, in render order. */
+  entityEnabledCalls: [] as boolean[],
   /** Every `enabled` the geo-chat row lookup was called with, in render order. */
   rowEnabledCalls: [] as boolean[],
   row: null as DebateClaim | null,
@@ -25,7 +26,12 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntity: () => ({ entity: mocks.entity, isLoading: mocks.entityLoading }),
+  // Answers null while disabled, as the real hook does — so a test that never scrolls the card
+  // into range cannot accidentally be handed an entity the card never asked for.
+  useQueryEntity: ({ enabled = true }: { enabled?: boolean }) => {
+    mocks.entityEnabledCalls.push(enabled);
+    return { entity: enabled ? mocks.entity : null, isLoading: false };
+  },
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -127,7 +133,7 @@ function factualClaim(): Entity {
 beforeEach(() => {
   observers = [];
   mocks.entity = null;
-  mocks.entityLoading = false;
+  mocks.entityEnabledCalls = [];
   mocks.rowEnabledCalls = [];
   mocks.row = null;
   mocks.summaryEnabledCalls = [];
@@ -191,16 +197,19 @@ describe('ClaimExploreFeedCard', () => {
   });
 
   it('asks for nothing about a claim the reader has not scrolled near', () => {
-    // The feed mounts cards thousands of pixels below the fold. Both the geo-chat row and the two
-    // response reads wait; without that a page of twenty-two issues them all on mount.
+    // The feed mounts cards thousands of pixels below the fold. Every read waits — the entity
+    // hydration, the geo-chat row and the two response reads; without that a page of twenty-two
+    // issues them all on mount.
     render(<ClaimExploreFeedCard item={item} />);
 
+    expect(mocks.entityEnabledCalls.every(enabled => enabled === false)).toBe(true);
     expect(mocks.rowEnabledCalls.every(enabled => enabled === false)).toBe(true);
     expect(mocks.summaryEnabledCalls.every(enabled => enabled === false)).toBe(true);
     expect(screen.getByTestId('end-slot').getAttribute('data-enabled')).toBe('false');
 
     scrollIntoRange();
 
+    expect(mocks.entityEnabledCalls.at(-1)).toBe(true);
     expect(mocks.rowEnabledCalls.at(-1)).toBe(true);
     expect(mocks.summaryEnabledCalls.at(-1)).toBe(true);
     expect(screen.getByTestId('end-slot').getAttribute('data-enabled')).toBe('true');
@@ -209,13 +218,13 @@ describe('ClaimExploreFeedCard', () => {
   it('will not let anyone answer before the claim’s vocabulary is known', () => {
     // `stance` is the fallback while the lookups are out, and the kind selects `voteKind` on the
     // write — so a click inside that window publishes the wrong vote on a factual claim.
-    mocks.entityLoading = true;
-    const { rerender } = render(<ClaimExploreFeedCard item={item} />);
+    mocks.entity = factualClaim();
+    render(<ClaimExploreFeedCard item={item} />);
+    // Off-screen nothing has been asked, so nothing has answered — including on a claim whose
+    // entity is sitting right there in the fixture.
     expect(screen.getByTestId('pills').getAttribute('data-disabled')).toBe('true');
 
-    mocks.entityLoading = false;
-    mocks.entity = factualClaim();
-    rerender(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
 
     const pills = screen.getByTestId('pills');
     expect(pills.getAttribute('data-disabled')).toBe('false');

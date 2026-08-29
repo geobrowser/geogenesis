@@ -28,7 +28,7 @@ import { CLAIM_RESPONSE_OBJECT_TYPE, type ClaimResponseSummary, claimSummaryTier
 import { ClaimSideResponders } from './claim-side-responders';
 
 /**
- * Where opinion sits on a claim, scaled to the evidence behind it.
+ * Where opinion sits on a claim, and how many people put it there.
  *
  * The one place any card-sized surface reports a claim's responses, so the hub, the topic page, the
  * related-claims gallery and the explore feed cannot drift apart — and cannot disagree with the

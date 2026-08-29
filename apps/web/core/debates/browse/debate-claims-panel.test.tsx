@@ -55,7 +55,7 @@ vi.mock('~/core/debates/claims-best-order', async () => {
   };
 });
 
-// The rows carry the shared claim controls now — labelled pills and the evidence-scaled summary —
+// The rows carry the shared claim controls now — labelled pills and the shared summary —
 // rather than the data block's chevrons. Mocked at the summary, which is the one part that receives
 // the claim and its space, so these assertions still test what they always tested: which claim each row
 // is for, and which space it is scoped to.

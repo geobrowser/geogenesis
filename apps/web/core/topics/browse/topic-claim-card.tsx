@@ -19,8 +19,12 @@ import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
  *
  * The split used to be passed down as a `footer` from here. It isn't any more: the card reports its
  * own responses through `ClaimSummary`, so the topic page, the hub and the explore feed cannot show
- * the same claim two different ways — and the summary scales itself to the evidence rather than
- * printing a percentage off two votes.
+ * the same claim two different ways.
+ *
+ * `ClaimSummary` draws the share and its bar from the first response onward, two votes included —
+ * an earlier revision of this comment claimed it withheld the percentage on a small sample, which
+ * was true of a design that got reversed. What the response floor still governs is the
+ * **Controversial** band, which is the one reading that genuinely needs a population behind it.
  *
  * Space-scoped to the claim's own space rather than the route's. A topic aggregates across spaces,
  * so the space in the URL is often not one this claim lives in — reading its responses against that
