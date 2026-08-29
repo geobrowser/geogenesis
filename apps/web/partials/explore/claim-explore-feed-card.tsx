@@ -264,7 +264,15 @@ export function ClaimExploreFeedCard({
           </h2>
         </Link>
 
-        <div className="col-start-1 row-start-3 mt-4 max-w-[360px] md:row-start-4 md:mt-0">
+        <div
+          className={cx(
+            'col-start-1 row-start-3 mt-4 max-w-[360px] md:mt-0',
+            // Row 4 only when the verdict is in row 3. Without it the pills would sit a row below an
+            // empty one, and an implicit row of zero height still costs the `gap-y-4` on either side
+            // of it — so the space between the claim and the pills would silently double.
+            hasVerdict && 'md:row-start-4'
+          )}
+        >
           <PositionRow
             positions={control.optimisticPositions}
             responseKind={responseKind}

@@ -1,0 +1,270 @@
+import '@testing-library/jest-dom/vitest';
+import { act, cleanup, render, screen } from '@testing-library/react';
+
+import type React from 'react';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { CLAIM_IS_FACTUAL_PROPERTY_ID } from '~/core/claims/ontology';
+import type { DebateClaim } from '~/core/debates/api';
+import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import type { Entity } from '~/core/types';
+
+import { ClaimExploreFeedCard } from './claim-explore-feed-card';
+
+const mocks = vi.hoisted(() => ({
+  entity: null as Entity | null,
+  entityLoading: false,
+  /** Every `enabled` the geo-chat row lookup was called with, in render order. */
+  rowEnabledCalls: [] as boolean[],
+  row: null as DebateClaim | null,
+  /** Every `enabled` the response summary was asked for. */
+  summaryEnabledCalls: [] as boolean[],
+  positive: 0,
+  negative: 0,
+}));
+
+vi.mock('~/core/sync/use-store', () => ({
+  useQueryEntity: () => ({ entity: mocks.entity, isLoading: mocks.entityLoading }),
+}));
+
+vi.mock('~/core/debates/hooks', () => ({
+  useDebateClaims: (_spaceId: string, _ids: string[], enabled: boolean) => {
+    mocks.rowEnabledCalls.push(enabled);
+    return { data: mocks.row ? { claims: [mocks.row] } : { claims: [] }, isLoading: false, error: null };
+  },
+}));
+
+vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>();
+  return {
+    ...actual,
+    useClaimResponseSummary: (_entityId: string, _spaceId: string, _kind: string, enabled = true) => {
+      mocks.summaryEnabledCalls.push(enabled);
+      return {
+        ...actual.summarizeClaimResponses(mocks.positive, mocks.negative),
+        isLoading: false,
+        viewerDirection: null,
+        viewerSpaceId: null,
+      };
+    },
+  };
+});
+
+// The pills publish through the entity-response stack; this suite is about the card around them.
+// `disabled` is surfaced because the card is what decides it.
+vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
+  PositionRow: ({ disabled, responseKind }: { disabled?: boolean; responseKind: string }) => (
+    <div data-testid="pills" data-disabled={String(Boolean(disabled))} data-response-kind={responseKind} />
+  ),
+  useClaimPositionControl: () => ({
+    viewerPosition: null,
+    optimisticPositions: [],
+    respond: vi.fn(),
+    actionTitle: () => '',
+    responseError: null,
+    canRespond: true,
+  }),
+}));
+
+vi.mock('~/core/claims/browse/claim-end-slot', () => ({
+  ClaimEndSlot: ({ enabled }: { enabled?: boolean }) => (
+    <div data-testid="end-slot" data-enabled={String(enabled !== false)} />
+  ),
+}));
+
+vi.mock('~/core/claims/browse/claim-summary', () => ({
+  ClaimSideSummary: ({ label, count }: { label: string; count: number }) => (
+    <div data-testid="side-summary">{`${count} ${label}`}</div>
+  ),
+  ControversialTag: () => <span data-testid="controversial">Controversial</span>,
+}));
+
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
+
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+}));
+
+vi.mock('~/design-system/fallback-image', () => ({ FallbackImage: () => <div data-testid="image" /> }));
+
+vi.mock('./explore-join-space-button', () => ({ ExploreJoinSpaceButton: () => <button type="button">Join</button> }));
+
+type ObserverRecord = {
+  callback: IntersectionObserverCallback;
+  elements: Set<Element>;
+  instance: IntersectionObserver;
+};
+let observers: ObserverRecord[] = [];
+
+const CLAIM_ID = '96f859efa1ca4b229372c86ad58b694b';
+
+const item: ExploreFeedItem = {
+  entityId: CLAIM_ID,
+  spaceId: 'space-1',
+  spaceName: 'Global Politics',
+  spaceImage: null,
+  types: [{ id: '96f859ef-a1ca-4b22-9372-c86ad58b694b', name: 'Claim' }],
+  createdAtSec: 0,
+  title: 'Ukrainian drones struck a St. Petersburg oil terminal.',
+  description: null,
+  imageUrl: null,
+  commentCount: 0,
+  recordingUrls: [],
+  debateVideoUrls: [],
+  isMemberOrEditor: true,
+  hasPendingMembershipRequest: false,
+};
+
+function factualClaim(): Entity {
+  return {
+    id: CLAIM_ID,
+    values: [{ spaceId: 'space-1', property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID }, value: '1' }],
+    relations: [],
+  } as unknown as Entity;
+}
+
+beforeEach(() => {
+  observers = [];
+  mocks.entity = null;
+  mocks.entityLoading = false;
+  mocks.rowEnabledCalls = [];
+  mocks.row = null;
+  mocks.summaryEnabledCalls = [];
+  mocks.positive = 0;
+  mocks.negative = 0;
+
+  class MockIntersectionObserver implements IntersectionObserver {
+    readonly root = null;
+    readonly rootMargin = '0px';
+    readonly scrollMargin = '0px';
+    readonly thresholds = [0];
+    private readonly record: ObserverRecord;
+
+    constructor(callback: IntersectionObserverCallback) {
+      this.record = { callback, elements: new Set(), instance: this };
+      observers.push(this.record);
+    }
+    observe(element: Element) {
+      this.record.elements.add(element);
+    }
+    unobserve(element: Element) {
+      this.record.elements.delete(element);
+    }
+    disconnect() {
+      this.record.elements.clear();
+    }
+    takeRecords(): IntersectionObserverEntry[] {
+      return [];
+    }
+  }
+
+  vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+function scrollIntoRange() {
+  act(() => {
+    for (const record of observers) {
+      for (const element of record.elements) {
+        record.callback(
+          [{ target: element, isIntersecting: true, intersectionRatio: 1 } as IntersectionObserverEntry],
+          record.instance
+        );
+      }
+    }
+  });
+}
+
+describe('ClaimExploreFeedCard', () => {
+  it('shows the claim and links it to its entity page', () => {
+    render(<ClaimExploreFeedCard item={item} />);
+
+    const title = screen.getByRole('link', { name: item.title });
+    expect(title.getAttribute('href')).toContain(CLAIM_ID);
+    // No thumbnail well: a claim has no image, so the sentence takes the column.
+    expect(screen.queryByTestId('image')).toBeNull();
+  });
+
+  it('asks for nothing about a claim the reader has not scrolled near', () => {
+    // The feed mounts cards thousands of pixels below the fold. Both the geo-chat row and the two
+    // response reads wait; without that a page of twenty-two issues them all on mount.
+    render(<ClaimExploreFeedCard item={item} />);
+
+    expect(mocks.rowEnabledCalls.every(enabled => enabled === false)).toBe(true);
+    expect(mocks.summaryEnabledCalls.every(enabled => enabled === false)).toBe(true);
+    expect(screen.getByTestId('end-slot').getAttribute('data-enabled')).toBe('false');
+
+    scrollIntoRange();
+
+    expect(mocks.rowEnabledCalls.at(-1)).toBe(true);
+    expect(mocks.summaryEnabledCalls.at(-1)).toBe(true);
+    expect(screen.getByTestId('end-slot').getAttribute('data-enabled')).toBe('true');
+  });
+
+  it('will not let anyone answer before the claim’s vocabulary is known', () => {
+    // `stance` is the fallback while the lookups are out, and the kind selects `voteKind` on the
+    // write — so a click inside that window publishes the wrong vote on a factual claim.
+    mocks.entityLoading = true;
+    const { rerender } = render(<ClaimExploreFeedCard item={item} />);
+    expect(screen.getByTestId('pills').getAttribute('data-disabled')).toBe('true');
+
+    mocks.entityLoading = false;
+    mocks.entity = factualClaim();
+    rerender(<ClaimExploreFeedCard item={item} />);
+
+    const pills = screen.getByTestId('pills');
+    expect(pills.getAttribute('data-disabled')).toBe('false');
+    expect(pills.getAttribute('data-response-kind')).toBe('veracity');
+  });
+
+  it('draws no verdict, and no rule, on a claim nobody has answered', () => {
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    expect(screen.queryByTestId('side-summary')).toBeNull();
+    // An empty 220px cell behind a vertical rule reads as something failing to load.
+    expect(document.querySelector('.border-l')).toBeNull();
+  });
+
+  it('places the pills a row up when there is no verdict above them', () => {
+    // An implicit row of zero height still costs the `gap-y-4` either side of it, so leaving the
+    // pills in row 4 would silently double the space under the claim.
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+    expect(screen.getByTestId('pills').parentElement).not.toHaveClass('md:row-start-4');
+
+    cleanup();
+    mocks.positive = 9;
+    mocks.negative = 3;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+    expect(screen.getByTestId('pills').parentElement).toHaveClass('md:row-start-4');
+  });
+
+  it('reports the split and both sides once anyone has answered', () => {
+    mocks.positive = 9;
+    mocks.negative = 3;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    expect(screen.getByText('75%')).toBeInTheDocument();
+    expect(screen.getByText('9 Agree')).toBeInTheDocument();
+    expect(screen.getByText('3 Disagree')).toBeInTheDocument();
+  });
+
+  it('flags a contested claim beside the space rather than in the verdict', () => {
+    mocks.positive = 6;
+    mocks.negative = 6;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    const tag = screen.getByTestId('controversial');
+    // Beside the space chip, which is what the meta row is for — not a second voice in the split.
+    expect(tag.closest('div')?.textContent).toContain('Global Politics');
+  });
+});

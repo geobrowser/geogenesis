@@ -31,10 +31,15 @@ export function useClaimMatchup({
   const { data: activity } = useDebateActivity(enabled);
   const createRequest = useCreateDebateRequest();
 
-  const match =
-    (matchesQuery.data?.matches ?? []).find(
-      candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
-    ) ?? null;
+  // `enabled: false` only stops this query from *fetching*. React Query still hands back whatever
+  // another mounted caller has already put in the cache — and on the hub the Matches tab is one, so
+  // a claim disabled precisely because the graph cannot resolve it would find a cached match and
+  // offer a debate it cannot honour. Disabled has to mean no answer, not a stale one.
+  const match = !enabled
+    ? null
+    : ((matchesQuery.data?.matches ?? []).find(
+        candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
+      ) ?? null);
 
   const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
   // Only when the server actually says so — a missing field must not block requesting.
