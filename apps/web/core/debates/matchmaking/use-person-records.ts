@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
-import { useWinnerShares } from '~/core/claims/browse/claim-debates';
+import { type WinnerShare, useWinnerSharesWithStatus } from '~/core/claims/browse/claim-debates';
 import { graphql } from '~/core/io/graphql-client';
 
 import { type PersonRecord, derivePersonRecord } from './person-record';
@@ -17,6 +17,8 @@ import {
   isPersonId,
   personAlias,
 } from './person-records-document';
+
+const EMPTY_SHARES = new Map<string, WinnerShare>();
 
 /** Raw per-person counts, before the winner grouping and the omit rules are applied. */
 type RawRecord = { positions: number; debateIds: string[]; truncated: boolean; createdAt: string | null };
@@ -82,17 +84,42 @@ export function usePersonRecords(personIds: string[]): Map<string, PersonRecord>
     return [...new Set([...raw.values()].filter(record => !record.truncated).flatMap(record => record.debateIds))];
   }, [raw]);
 
-  const winnerByDebateId = useWinnerShares(debateIds);
+  // Retained across the key change so a rate does not blink out every time someone comes online.
+  // `isStale` is the guard that makes retaining safe: see below.
+  const { shares: winnerByDebateId, isStale: sharesAreStale } = useWinnerSharesWithStatus(debateIds, {
+    keepPreviousWhileLoading: true,
+  });
+
+  // Records already derived from a settled share set, so a rate can be carried across the window
+  // where the shares belong to the previous set of debates.
+  const settledRecords = React.useRef<Map<string, PersonRecord>>(new Map());
 
   return React.useMemo(() => {
     const records = new Map<string, PersonRecord>();
     if (!raw) return records;
 
     for (const [personId, record] of raw) {
-      records.set(personId, derivePersonRecord({ personId, winnerByDebateId, ...record }));
+      // While the shares describe the previous set of debates, they cover some of this person's
+      // debates and not others. Deriving a rate from that overlap produces a real number computed
+      // from part of the evidence — someone's first debate rendering as 0% because the one debate
+      // the stale set happened to cover was not theirs. So the rate is not derived at all here; a
+      // rate already derived from a settled set is carried over instead, and a person who has none
+      // yet simply waits for one. The counts and join date stay current either way.
+      const fresh = derivePersonRecord({
+        personId,
+        ...record,
+        winnerByDebateId: sharesAreStale ? EMPTY_SHARES : winnerByDebateId,
+      });
+
+      records.set(
+        personId,
+        sharesAreStale ? { ...fresh, winRate: settledRecords.current.get(personId)?.winRate ?? null } : fresh
+      );
     }
+
+    if (!sharesAreStale) settledRecords.current = records;
     return records;
-  }, [raw, winnerByDebateId]);
+  }, [raw, winnerByDebateId, sharesAreStale]);
 }
 
 /** Pulls the aliased response back apart by position, which is how the aliases were assigned. */

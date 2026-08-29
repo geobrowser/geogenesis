@@ -84,8 +84,26 @@ describe('buildPersonRecordsDocument', () => {
     expect(ids).toEqual([A, B]);
   });
 
-  it('still parses with nobody listed', () => {
-    expect(() => buildPersonRecordsDocument([])).not.toThrow();
+  // Parsing is not enough: a query that declares a variable it never uses is rejected by
+  // `NoUnusedVariables` before it runs, so the empty document must declare none.
+  it('is executable with nobody listed, not merely parseable', () => {
+    const { document, variables, ids } = buildPersonRecordsDocument([]);
+    const operation = document.definitions.find(d => d.kind === 'OperationDefinition');
+
+    expect(ids).toEqual([]);
+    expect(variables).toEqual({});
+    expect(operation && 'variableDefinitions' in operation ? operation.variableDefinitions : []).toHaveLength(0);
+    expect(print(document)).not.toContain('$');
+  });
+
+  it('declares every variable it uses, and no others', () => {
+    const source = printed([A, B]);
+    const declared = [...source.matchAll(/\$(\w+):/g)].map(m => m[1]);
+
+    for (const name of declared) {
+      // One occurrence is the declaration; a used variable appears at least twice.
+      expect(source.match(new RegExp(`\\$${name}\\b`, 'g'))!.length).toBeGreaterThan(1);
+    }
   });
 });
 

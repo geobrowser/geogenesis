@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   gate: null as null | (() => void),
   responses: [] as Array<Record<string, unknown>>,
   calls: 0,
+  shares: new Map<string, unknown>(),
+  sharesAreStale: false,
 }));
 
 vi.mock('~/core/io/graphql-client', () => ({
@@ -25,7 +27,9 @@ vi.mock('~/core/io/graphql-client', () => ({
     }),
 }));
 
-vi.mock('~/core/claims/browse/claim-debates', () => ({ useWinnerShares: () => new Map() }));
+vi.mock('~/core/claims/browse/claim-debates', () => ({
+  useWinnerSharesWithStatus: () => ({ shares: mocks.shares, isStale: mocks.sharesAreStale }),
+}));
 
 const { usePersonRecords } = await import('./use-person-records');
 
@@ -36,6 +40,18 @@ function record(positions: number) {
     opposed: { totalCount: 0, nodes: [] },
     joined: { createdAt: '1769726933' },
   };
+}
+
+/** A response where each person supports the debates given for them. */
+function debated(...people: string[][]) {
+  const out: Record<string, unknown> = {};
+  people.forEach((debateIds, index) => {
+    out[`p${index}_positions`] = { totalCount: 1 };
+    out[`p${index}_supported`] = { totalCount: debateIds.length, nodes: debateIds.map(id => ({ fromEntityId: id })) };
+    out[`p${index}_opposed`] = { totalCount: 0, nodes: [] };
+    out[`p${index}_joined`] = { createdAt: '1769726933' };
+  });
+  return out;
 }
 
 /** The aliased response shape, for however many people are listed. */
@@ -60,6 +76,8 @@ beforeEach(() => {
   mocks.gate = null;
   mocks.calls = 0;
   mocks.responses = [];
+  mocks.shares = new Map();
+  mocks.sharesAreStale = false;
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -89,6 +107,34 @@ describe('usePersonRecords', () => {
     mocks.gate?.();
     await waitFor(() => expect(result.current.get(B)?.positions).toBe(8));
     expect(result.current.get(A)?.positions).toBe(16);
+  });
+
+  // The shares are retained across a key change so a rate does not blink out, which means that in
+  // the window after a new person's record arrives they describe the *previous* set of debates.
+  // Deriving a rate from that overlap would show a real number computed from part of the evidence.
+  it('does not derive a rate from shares that describe the previous set of debates', async () => {
+    // B debated A (d1) and somebody else (d2). The retained shares cover only d1 — the debate B
+    // lost — so a rate derived now would read 0% while d2, which B may well have won, is unjudged.
+    mocks.responses = [debated(['d1']), debated(['d1'], ['d1', 'd2'])];
+    mocks.shares = new Map([['d1', { spaceId: A, percent: 100, totalVotes: 2, tied: false }]]);
+
+    const { result, rerender } = renderHook(({ ids }: { ids: string[] }) => usePersonRecords(ids), {
+      wrapper,
+      initialProps: { ids: [A] },
+    });
+
+    await waitFor(() => expect(result.current.get(A)?.winRate).toEqual({ percent: 100, wins: 1, of: 1 }));
+
+    // B arrives; the shares still cover only d1, so B's d2 is unjudged as far as they know.
+    mocks.sharesAreStale = true;
+    rerender({ ids: [A, B] });
+    await waitFor(() => expect(result.current.get(B)).toBeDefined());
+
+    // B gets counts but no rate, rather than a rate computed off A's debate.
+    expect(result.current.get(B)?.debatesArgued).toBe(2);
+    expect(result.current.get(B)?.winRate).toBeNull();
+    // And A keeps the rate already derived from a settled set, so nothing blinks.
+    expect(result.current.get(A)?.winRate).toEqual({ percent: 100, wins: 1, of: 1 });
   });
 
   it('asks for nobody when the list is empty', () => {

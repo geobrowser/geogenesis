@@ -62,6 +62,21 @@ export function buildPersonRecordsDocument(personIds: string[]): {
 } {
   const ids = personIds.filter(isPersonId);
 
+  // With nobody to ask about there is nothing for the shared variables to filter, and a query that
+  // declares a variable it never uses is rejected outright by `NoUnusedVariables` — so the empty
+  // document declares none. The hook keeps this query disabled when there is nobody queryable;
+  // this keeps the builder from being what breaks if it is ever called anyway.
+  if (ids.length === 0) {
+    return {
+      document: parse('query PersonRecords { __typename }') as TypedDocumentNode<
+        PersonRecordsQuery,
+        PersonRecordsVariables
+      >,
+      variables: {},
+      ids,
+    };
+  }
+
   const declarations = [
     '$supportedBy: UUID!',
     '$opposedBy: UUID!',
@@ -89,10 +104,7 @@ export function buildPersonRecordsDocument(personIds: string[]): {
     })
     .join('\n');
 
-  // An empty selection set is a syntax error, so an empty list still has to produce a valid
-  // document. The hook keeps this query disabled with nobody listed; this keeps the builder from
-  // being the thing that throws if it is ever called anyway.
-  const source = `query PersonRecords(${declarations}) {${selections || '\n    __typename'}\n  }`;
+  const source = `query PersonRecords(${declarations}) {${selections}\n  }`;
 
   const variables: PersonRecordsVariables = {
     supportedBy: DEBATE_SUPPORTED_BY_PROPERTY_ID,

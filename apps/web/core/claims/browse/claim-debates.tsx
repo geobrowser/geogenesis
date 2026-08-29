@@ -188,7 +188,22 @@ export type WinnerShare = {
  * `voteSharePercentages` then rounds by largest remainder so the shares add to 100.
  */
 export function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
-  const { entities: votes } = useQueryEntities({
+  return useWinnerSharesWithStatus(debateIds).shares;
+}
+
+/**
+ * As `useWinnerShares`, but says whether the shares still describe the debates that were asked for.
+ *
+ * Retention is opt-in because it is only safe for a caller that reads one share per debate. A
+ * caller deriving an aggregate across a *set* of debates — a person's win rate — would otherwise
+ * compute it from whatever overlap the previous set happened to contain and show a number that is
+ * simply wrong, which is worse than showing none. `isStale` is how such a caller knows to wait.
+ */
+export function useWinnerSharesWithStatus(
+  debateIds: string[],
+  { keepPreviousWhileLoading = false }: { keepPreviousWhileLoading?: boolean } = {}
+): { shares: Map<string, WinnerShare>; isStale: boolean } {
+  const { entities: votes, isPlaceholderData } = useQueryEntities({
     where: {
       types: [{ id: { equals: VOTE_TYPE_ID } }],
       relations: [{ typeOf: { id: { equals: VOTE_DEBATES_PROPERTY_ID } }, toEntity: { id: { in: debateIds } } }],
@@ -198,12 +213,10 @@ export function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
     // The debate set is part of the key, so it changes whenever the caller's list does — paging a
     // browse page, or someone coming online on the People tab. Holding the previous answer keeps
     // shares on screen for debates that are still there instead of blanking every one of them.
-    // Shares are read per debate id, so a debate not in the previous answer is simply absent, which
-    // is what it was anyway while loading.
-    placeholderData: keepPreviousData,
+    placeholderData: keepPreviousWhileLoading ? keepPreviousData : undefined,
   });
 
-  return React.useMemo(() => {
+  const shares = React.useMemo(() => {
     // A truncated page is an arbitrary subset of the votes across every debate on screen, so any
     // share computed from it could name the wrong winner and would state a total that is simply
     // untrue. No share at all is the honest answer; a confidently wrong percentage is not.
@@ -261,6 +274,8 @@ export function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
     }
     return shares;
   }, [votes]);
+
+  return { shares, isStale: isPlaceholderData };
 }
 
 export function DebateRow({
