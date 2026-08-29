@@ -75,16 +75,8 @@ const PostAuthRedirect = dynamic(
   { ssr: false }
 );
 
-const SignInDeepLinkHandler = dynamic(
-  () => import('~/partials/auth/sign-in-deep-link-handler').then(m => ({ default: m.SignInDeepLinkHandler })),
-  { ssr: false }
-);
-
-const DebatesPanelDeepLinkHandler = dynamic(
-  () =>
-    import('~/partials/debates/debates-panel-deep-link-handler').then(m => ({
-      default: m.DebatesPanelDeepLinkHandler,
-    })),
+const DeepLinkHandler = dynamic(
+  () => import('~/partials/deep-links/deep-link-handler').then(m => ({ default: m.DeepLinkHandler })),
   { ssr: false }
 );
 
@@ -157,10 +149,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <SignInPrompt />
           <PostAuthRedirect />
           <React.Suspense fallback={null}>
-            <SignInDeepLinkHandler />
-          </React.Suspense>
-          <React.Suspense fallback={null}>
-            <DebatesPanelDeepLinkHandler />
+            <DeepLinkHandler />
           </React.Suspense>
           <Toast />
           <GovernanceReopenEditLoadingBar />

@@ -1,39 +1,58 @@
 /**
  * The scheme behind every link that opens something on arrival.
  *
- *     /explore?modal=signin&source=marketing          GEO-2727
- *     /explore?modal=debates&modalTab=people          GEO-2746
+ *     /explore?modal=signin&via=marketing              GEO-2727
+ *     /explore?modal=debates&modalTarget=people        GEO-2746
  *
- * GEO-2727 shipped this as a sign-in-only module. GEO-2746 needed the same three things — a
- * trigger param, a clearing rule, attribution — so the scheme lives here and each link keeps only
- * what is specific to it. A second trigger param would have made the third link a coin toss.
+ * The rule the repo already follows, written down: **a fragment addresses a position in the
+ * document, a query param triggers an action.** `buildBlockLink` puts a block id in the fragment
+ * and `comments-section` scrolls to `#entity-comments`; both are positions. Opening a panel is not,
+ * so it lives in the query string — and the clearing below preserves fragments rather than eating
+ * them.
  *
- * On the shape:
+ * On each param:
  *
- * - `modal` names *what* to open rather than a boolean per feature, so a new link is a new value
- *   rather than a new param, and there is no meaningless `signin=false` state. "Modal" is loose —
- *   the debates hub is a companion panel on desktop — but it is the shipped key and a URL contract,
- *   so it stays. Read it as "the thing to open".
- * - `modalTab` carries a sub-target. Deliberately not `tab`, which the ranking compose screen
- *   already reads (`use-ranking-block-state`), and deliberately not a fragment: fragments here
- *   address a position in the document — `block-reorder` resolves a linked block out of
- *   `location.hash` — and a panel tab is not one. Fragments are preserved by the clearing below
- *   rather than consumed by it.
- * - `source` is attribution, free-form, optional, and never required for the trigger to fire.
+ * - `modal` names *what* to open, so a new link is a new value rather than a new param, and there
+ *   is no meaningless `signin=false` state. Every value is in `DEEP_LINK_MODALS` below, which is
+ *   the list to read before adding one. "Modal" is loose — the debates hub is a companion panel on
+ *   desktop — but it is the shipped key in a URL that gets hardcoded off-repo, and renaming it
+ *   would break that for a cosmetic gain. Read it as "the thing to open".
+ * - `modalTarget` is a sub-target whose meaning belongs to the `modal` value: a tab for the debates
+ *   hub, an id for whatever comes next. Deliberately generic — a `modalTab` would have needed a
+ *   `modalEntity` beside it the first time a link pointed at something that wasn't a tab. And
+ *   deliberately not `tab`, which the ranking compose screen already reads.
+ * - `via` is attribution: free-form, optional, never required for the trigger to fire.
  *
- * The trigger params are cleared once acted on, so a refresh, a back button, or a URL copied out
- * of the address bar does not reopen something for someone who never asked.
+ *   Attribution is *not* `source`. `source` is already a trigger elsewhere — `block-reorder` does
+ *   nothing unless it reads `copy_link` — and one key cannot be both "who sent you" and "what to
+ *   do". While it was, a URL carrying `modal` and `source=copy_link` had its block reveal silently
+ *   stripped by the clearing below. `via` leaves `source` to the block link untouched.
  *
- * Note this is the *one-shot* half of a split the repo already contains. `buildBlockLink`
+ * Trigger params are cleared once acted on, so a refresh, a back button, or a URL copied out of
+ * the address bar does not reopen something for someone who never asked.
+ *
+ * Note this is the *one-shot* half of a split the repo contains on purpose. `buildBlockLink`
  * (GEO-2681) writes `?source=copy_link#blockId` and never clears it, because that link is a
  * permalink — a recipient refreshing it should land on the block again. Links here address an
- * action rather than a location, so they clear. Both are right; the difference is what the URL
- * is for, not an inconsistency to be resolved.
+ * action rather than a location, so they clear. The difference is what the URL is for, not an
+ * inconsistency to be resolved.
  */
 
+/**
+ * Every deep link in the app. Values are lowercase and stable — they appear in URLs written down
+ * outside this repo — and live here rather than in each feature so that two features cannot pick
+ * the same one without the conflict being visible.
+ */
+export const DEEP_LINK_MODALS = {
+  signIn: 'signin',
+  debates: 'debates',
+} as const;
+
+export type ModalDeepLink = (typeof DEEP_LINK_MODALS)[keyof typeof DEEP_LINK_MODALS];
+
 export const MODAL_PARAM = 'modal';
-export const MODAL_TAB_PARAM = 'modalTab';
-export const SOURCE_PARAM = 'source';
+export const MODAL_TARGET_PARAM = 'modalTarget';
+export const VIA_PARAM = 'via';
 
 /**
  * Structural rather than `URLSearchParams` itself: what `useSearchParams` hands back is a
@@ -42,27 +61,24 @@ export const SOURCE_PARAM = 'source';
 export type ReadableParams = Pick<URLSearchParams, 'get' | 'toString'> | null | undefined;
 
 /** True when the URL is asking for this particular overlay. */
-export function requestsModal(params: ReadableParams, modal: string): boolean {
+export function requestsModal(params: ReadableParams, modal: ModalDeepLink): boolean {
   return params?.get(MODAL_PARAM) === modal;
 }
 
-/** The sub-target, if the link named one. Validating it belongs to whoever owns the modal. */
-export function modalTab(params: ReadableParams): string | null {
-  return params?.get(MODAL_TAB_PARAM) || null;
+/** The sub-target, if the link named one. Interpreting it belongs to whoever owns the modal. */
+export function modalTarget(params: ReadableParams): string | null {
+  return params?.get(MODAL_TARGET_PARAM) || null;
 }
 
-/**
- * The attribution carried alongside the trigger. Free-form on purpose: the marketing site, an
- * email, or a partner page can each name itself without a deploy here.
- */
-export function modalSource(params: ReadableParams): string | null {
-  return params?.get(SOURCE_PARAM) || null;
+/** The attribution carried alongside the trigger, if any. */
+export function modalVia(params: ReadableParams): string | null {
+  return params?.get(VIA_PARAM) || null;
 }
 
 /**
  * The same URL with the trigger removed, keeping every other param — the viewer may have arrived
  * on a route that carries its own state, and dropping it would be a worse bug than the one this
- * clearing exists to prevent.
+ * clearing exists to prevent. `source` in particular is left alone: it belongs to the block link.
  *
  * The fragment has to be passed in: `usePathname` and `useSearchParams` both omit it, and
  * `replaceState` rewrites the whole URL, so a fragment left out here is a fragment thrown away.
@@ -70,8 +86,8 @@ export function modalSource(params: ReadableParams): string | null {
 export function urlWithoutModal(pathname: string, params: ReadableParams, hash = ''): string {
   const next = new URLSearchParams(params?.toString() ?? '');
   next.delete(MODAL_PARAM);
-  next.delete(MODAL_TAB_PARAM);
-  next.delete(SOURCE_PARAM);
+  next.delete(MODAL_TARGET_PARAM);
+  next.delete(VIA_PARAM);
   const search = next.toString();
   // Accepts `location.hash` as-is, which already carries the `#`, and tolerates a bare id.
   const fragment = !hash || hash === '#' ? '' : hash.startsWith('#') ? hash : `#${hash}`;
@@ -79,10 +95,10 @@ export function urlWithoutModal(pathname: string, params: ReadableParams, hash =
 }
 
 /** Builds a link. Each feature wraps this with its own modal value and default pathname. */
-export function toModal(options: { modal: string; pathname: string; tab?: string; source?: string }): string {
+export function toModal(options: { modal: ModalDeepLink; pathname: string; target?: string; via?: string }): string {
   const params = new URLSearchParams();
   params.set(MODAL_PARAM, options.modal);
-  if (options.tab) params.set(MODAL_TAB_PARAM, options.tab);
-  if (options.source) params.set(SOURCE_PARAM, options.source);
+  if (options.target) params.set(MODAL_TARGET_PARAM, options.target);
+  if (options.via) params.set(VIA_PARAM, options.via);
   return `${options.pathname}?${params.toString()}`;
 }
