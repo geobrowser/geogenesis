@@ -24,6 +24,13 @@ const mocks = vi.hoisted(() => ({
   featuredLoading: false,
   debateClaimGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
   claimEntityLookups: [] as string[][],
+  tailClaims: [] as MatchmakingClaim[],
+  tailTopics: [] as Array<{ claimEntityId: string; topics: Array<{ id: string; name: string | null }> }>,
+  tailLoading: false,
+  tailHasNextPage: false,
+  tailFetchNextPage: vi.fn(),
+  tailEnabledWith: [] as boolean[],
+  tailQueries: [] as unknown[],
   claimEntities: [] as Array<{
     id: string;
     name: string | null;
@@ -203,6 +210,24 @@ vi.mock('../featured-claims', async importOriginal => ({
 }));
 
 // Featured reads topics and the "Is factual" value through the picker's narrow projection.
+// GEO-2704. The graph tail that continues geo-chat's list once it runs out. Records what it was
+// enabled with and asked for, so the suites can pin when it fires and under which filters.
+vi.mock('../use-graph-claim-tail', () => ({
+  useGraphClaimTail: ({ query, search, enabled }: { query: unknown; search?: string | null; enabled: boolean }) => {
+    mocks.tailEnabledWith.push(enabled);
+    if (enabled) mocks.tailQueries.push({ ...(query as object), search: search ?? null });
+    return {
+      claims: enabled ? mocks.tailClaims : [],
+      topicsByClaimId: new Map(enabled ? mocks.tailTopics.map(entry => [entry.claimEntityId, entry.topics]) : []),
+      isLoading: enabled && mocks.tailLoading,
+      isFetchingNextPage: false,
+      hasNextPage: enabled && mocks.tailHasNextPage,
+      fetchNextPage: mocks.tailFetchNextPage,
+      error: null,
+    };
+  },
+}));
+
 vi.mock('../claim-picker-page', () => ({
   useClaimEntitiesByIds: (ids: string[]) => {
     mocks.claimEntityLookups.push(ids);
@@ -323,6 +348,13 @@ beforeEach(() => {
   mocks.featuredLoading = false;
   mocks.debateClaimGroups = [];
   mocks.claimEntityLookups = [];
+  mocks.tailClaims = [];
+  mocks.tailTopics = [];
+  mocks.tailLoading = false;
+  mocks.tailHasNextPage = false;
+  mocks.tailFetchNextPage.mockReset();
+  mocks.tailEnabledWith = [];
+  mocks.tailQueries = [];
   mocks.claimEntities = [];
   mocks.pageSize = null;
   mocks.lastEnabledData = undefined;
@@ -1299,5 +1331,124 @@ describe('ClaimsTab -- Featured', () => {
     await screen.findByText('Nuclear power is the cheapest clean energy');
 
     expect(mocks.debateClaimGroups.at(-1)).not.toEqual([]);
+  });
+});
+
+// GEO-2704. geo-chat can only list a claim it has a row for, and it has rows for far fewer claims
+// than exist — so the index running out of pages is not the corpus running out of claims. The graph
+// continues the list from there.
+describe('ClaimsTab -- the graph tail', () => {
+  const TAILED = '019fedb9-7db8-7fa5-8b88-9de4cf60bb75';
+
+  function tailClaim(entityId = TAILED, name = 'A claim geo-chat never indexed', spaceId = SPACE_ID) {
+    return {
+      claim: { id: entityId, space_id: spaceId, claim_entity_id: entityId, claim: name, description: null },
+      topics: [],
+      response_kind: 'stance' as const,
+      viewer_response: null,
+      viewer_position: null,
+      viewer_debate_ready: false,
+      readiness_disabled_reason: null,
+      positions: [],
+      score: 0,
+      active_debate: false,
+    };
+  }
+
+  it('appends the tail after geo-chat’s rows rather than merging into them', async () => {
+    mocks.tailClaims = [tailClaim()];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    const tailed = screen.getByText('A claim geo-chat never indexed');
+    // geo-chat's ordering is untouched: its rows keep their places and the tail follows.
+    const indexed = screen.getByText('Chips are better than fries');
+    expect(indexed.compareDocumentPosition(tailed) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // The whole point of the ordering: while geo-chat still has pages, its list is the list.
+  it('waits for geo-chat to run out before asking the graph', async () => {
+    mocks.hasNextPage = true;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(mocks.tailEnabledWith.at(-1)).toBe(false);
+  });
+
+  // `mine` and `debate_now` are questions about the viewer's own state, which the graph can't answer.
+  it('stays off the viewer-state filters', async () => {
+    render(<ClaimsTab />);
+    await showAllClaims();
+    expect(mocks.tailEnabledWith.at(-1)).toBe(true);
+
+    chooseFilter('All claims', 'My positions');
+
+    expect(mocks.tailEnabledWith.at(-1)).toBe(false);
+  });
+
+  // A search is answered too, but not by the ranking walk — a substring filter over that measured
+  // at ten seconds. The hook takes the term and picks the indexed endpoint instead.
+  it('hands a search term to the tail rather than switching it off', async () => {
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'chips' } });
+
+    await waitFor(() => expect((mocks.tailQueries.at(-1) as { search: string | null }).search).toBe('chips'));
+    expect(mocks.tailEnabledWith.at(-1)).toBe(true);
+  });
+
+  // The same narrowing the index query gets, so the two halves answer the same question — and the
+  // rows already on screen are excluded, or the tail would repeat them.
+  it('asks under the same filters, excluding what is already shown', async () => {
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    const asked = mocks.tailQueries.at(-1) as { excludeIds: string[]; topicIds: string[] };
+    expect(asked.excludeIds).toContain(MINE);
+    expect(asked.excludeIds).toContain(THEIRS);
+    expect(asked.topicIds).toEqual([]);
+  });
+
+  // The reported bug. geo-chat's facet describes the claims it has rows for, so a topic carried only
+  // by claims it never indexed was missing from the menu — and unreachable, since you cannot filter
+  // to an option that isn't there.
+  it('offers a topic carried only by a tailed claim', async () => {
+    mocks.tailClaims = [tailClaim()];
+    mocks.tailTopics = [{ claimEntityId: TAILED, topics: [{ id: 'topic-morning', name: 'Morning routine' }] }];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: /Morning routine/ })).toBeInTheDocument();
+  });
+
+  // Both halves count towards one option rather than the tail's shadowing the server's.
+  it('adds the tail’s count to the server facet for a shared topic', async () => {
+    // One indexed claim carries the topic, so geo-chat's facet counts it once.
+    mocks.claims = [
+      claim(MINE, 'Chips are better than fries', true, false, SPACE_ID, [{ id: 'topic-shared', name: 'Sleep' }]),
+    ];
+    mocks.tailClaims = [tailClaim()];
+    mocks.tailTopics = [{ claimEntityId: TAILED, topics: [{ id: 'topic-shared', name: 'Sleep' }] }];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: /Sleep\s*2/ })).toBeInTheDocument();
+  });
+
+  // One sentinel, two sources, in order: geo-chat's pages first, then the tail's.
+  it('pages the tail once geo-chat has no pages left', async () => {
+    mocks.tailHasNextPage = true;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    act(() => mocks.trigger?.());
+
+    expect(mocks.fetchNextPage).not.toHaveBeenCalled();
+    expect(mocks.tailFetchNextPage).toHaveBeenCalled();
   });
 });

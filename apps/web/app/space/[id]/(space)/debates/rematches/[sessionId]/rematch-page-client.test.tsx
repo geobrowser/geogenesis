@@ -76,6 +76,18 @@ const mocks = vi.hoisted(() => ({
   featuredCatalogError: null as Error | null,
   featuredEnabledWith: [] as boolean[],
   entityQueryHasNextPage: false,
+  tailSources: [] as Array<{
+    claimEntityId: string;
+    spaceId: string;
+    name: string;
+    description: string | null;
+    entity: Record<string, unknown>;
+  }>,
+  tailTopics: [] as Array<{ claimEntityId: string; topics: Array<{ id: string; name: string | null }> }>,
+  tailHasNextPage: false,
+  tailFetchNextPage: vi.fn(),
+  tailEnabledWith: [] as boolean[],
+  tailQueries: [] as unknown[],
   /** The hub's claims query (the All tab) is still in flight. */
   entityQueryLoading: false,
   /** The by-id hydration of the opponent's claims is still in flight. */
@@ -243,6 +255,31 @@ vi.mock('~/core/debates/debate-entry-intent', () => ({
 
 // GEO-2683. Featured stands in for Recommended when no curator page exists, which is what most of
 // these suites run under — so without this every case here would reach the graph for the tag.
+// GEO-2704. The graph tail that continues All claims once geo-chat runs out of pages.
+vi.mock('~/core/debates/use-graph-claim-tail', () => ({
+  useGraphClaimTailSources: ({
+    query,
+    search,
+    enabled,
+  }: {
+    query: unknown;
+    search?: string | null;
+    enabled: boolean;
+  }) => {
+    mocks.tailEnabledWith.push(enabled);
+    if (enabled) mocks.tailQueries.push({ ...(query as object), search: search ?? null });
+    return {
+      sources: enabled ? mocks.tailSources : [],
+      topicsByClaimId: new Map(enabled ? mocks.tailTopics.map(entry => [entry.claimEntityId, entry.topics]) : []),
+      isLoading: false,
+      isFetchingNextPage: false,
+      hasNextPage: enabled && mocks.tailHasNextPage,
+      fetchNextPage: mocks.tailFetchNextPage,
+      error: null,
+    };
+  },
+}));
+
 vi.mock('~/core/debates/featured-claims', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/debates/featured-claims')>()),
   useFeaturedClaims: (enabled: boolean) => {
@@ -478,6 +515,12 @@ beforeEach(() => {
   mocks.featuredCatalogError = null;
   mocks.featuredEnabledWith = [];
   mocks.entityQueryHasNextPage = false;
+  mocks.tailSources = [];
+  mocks.tailTopics = [];
+  mocks.tailHasNextPage = false;
+  mocks.tailFetchNextPage.mockReset();
+  mocks.tailEnabledWith = [];
+  mocks.tailQueries = [];
   mocks.lastEnabledData = undefined;
   mocks.spacesHeldOver = false;
   mocks.scopeHeldOver = false;
@@ -2782,3 +2825,94 @@ function publishedEntity(id = CLAIM_MORE, name = 'A newly published claim') {
 function claimSummary(id: string, claim: string) {
   return { id, space_id: SPACE_1, claim_entity_id: id, claim, description: null };
 }
+
+// GEO-2704. geo-chat can only list a claim it has a row for, and it has rows for far fewer claims
+// than exist — so its index running out of pages is not the corpus running out of claims.
+describe('DebateRematchPageClient — the graph tail', () => {
+  const TAILED = '019fedba-8ec9-7ab6-9c99-aef5d071cc86';
+
+  function tailSource(id = TAILED, name = 'A claim geo-chat never indexed') {
+    return {
+      claimEntityId: id,
+      spaceId: SPACE_2,
+      name,
+      description: null,
+      entity: { ...publishedEntity(id, name), spaces: [SPACE_2] },
+    };
+  }
+
+  it('appends the tail after geo-chat’s rows on All claims', async () => {
+    mocks.tailSources = [tailSource()];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(screen.getByText('A claim geo-chat never indexed')).toBeInTheDocument();
+    expect(appearsBefore('A newly published claim', 'A claim geo-chat never indexed')).toBe(true);
+  });
+
+  // While geo-chat still has pages, its list is the list.
+  it('waits for geo-chat to run out before asking the graph', async () => {
+    mocks.entityQueryHasNextPage = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(mocks.tailEnabledWith.at(-1)).toBe(false);
+  });
+
+  // A search is answered too, through the indexed endpoint rather than the ranking walk — a
+  // substring filter over that measured at ten seconds.
+  it('hands a search term to the tail rather than switching it off', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'newly' } });
+
+    await waitFor(() => expect((mocks.tailQueries.at(-1) as { search: string | null }).search).toBe('newly'));
+    expect(mocks.tailEnabledWith.at(-1)).toBe(true);
+  });
+
+  // The other two sources are already graph-backed or a fixed curated set.
+  it('stays off under Recommended and Featured', async () => {
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] }];
+    mocks.recommendedEntities = [sharedEntity()];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.tailEnabledWith.at(-1)).toBe(false);
+
+    await chooseSource('Featured');
+
+    expect(mocks.tailEnabledWith.at(-1)).toBe(false);
+  });
+
+  it('excludes what is already on screen', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const asked = mocks.tailQueries.at(-1) as { excludeIds: string[] };
+    expect(asked.excludeIds).toContain(CLAIM_MORE);
+  });
+
+  // The reported bug: a topic carried only by claims geo-chat never indexed was missing from the
+  // menu, and unreachable, since you cannot filter to an option that isn't there.
+  it('offers a topic carried only by a tailed claim', async () => {
+    mocks.tailSources = [tailSource()];
+    mocks.tailTopics = [{ claimEntityId: TAILED, topics: [{ id: 'topic-morning', name: 'Morning routine' }] }];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(screen.getByRole('button', { name: /Morning routine/ })).toBeInTheDocument();
+  });
+
+  // One sentinel, two sources, in order.
+  it('pages the tail once geo-chat has no pages left', async () => {
+    mocks.tailHasNextPage = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    act(() => mocks.scrollSentinelIntoView?.());
+
+    expect(mocks.tailFetchNextPage).toHaveBeenCalled();
+  });
+});

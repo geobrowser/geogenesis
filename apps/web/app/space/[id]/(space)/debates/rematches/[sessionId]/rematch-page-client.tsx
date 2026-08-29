@@ -1,7 +1,5 @@
 'use client';
 
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -20,6 +18,7 @@ import {
   type MatchmakingReadiness,
   type MatchmakingTopic,
 } from '~/core/debates/api';
+import { claimCandidateSpaceIds, claimHomeSpaceId } from '~/core/debates/claim-home-space';
 import { type ClaimPickerEntity, useClaimEntitiesByIds } from '~/core/debates/claim-picker-page';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '~/core/debates/claim-space-allowlist';
 import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
@@ -62,20 +61,20 @@ import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
+import { useGraphClaimTailSources } from '~/core/debates/use-graph-claim-tail';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
-
-import { RematchVoicePill } from './rematch-voice';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
-import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
+
+import { RematchVoicePill } from './rematch-voice';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -404,6 +403,29 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
   const { pages: browsedPages, facets: browsedFacets } = browsedClaimsQuery;
 
+  /**
+   * GEO-2704. What geo-chat doesn't know about, continuing All claims once it runs out.
+   *
+   * geo-chat can only list a claim it has a row for, and it has rows for far fewer claims than
+   * exist — so the index running out of pages is not the corpus running out of claims. Off while it
+   * still has pages, and off on the other two sources, which are already graph-backed or a fixed
+   * curated set.
+   *
+   * A search is answered through the indexed endpoint rather than the ranking walk — see
+   * `useGraphClaimTailSources`, which picks the source.
+   */
+  const tailEnabled =
+    browsesPages &&
+    !allowlistPending &&
+    !browsedClaimsQuery.unusable &&
+    !browsedClaimsQuery.isLoading &&
+    !browsedClaimsQuery.hasNextPage;
+
+  const tailSpaceIds = React.useMemo(
+    () => (spaceIds.length > 0 ? spaceIds : eligibleSpaceIds),
+    [eligibleSpaceIds, spaceIds]
+  );
+
   // What geo-chat knows about this session's claims — readiness, the shared-preference and
   // rejection flags, and which ids the session excludes. One batch for the opponent's claims, one
   // for the curated ones; the session's own id-less list covers anything both have answered.
@@ -571,6 +593,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         }
       }
     }
+    return map;
     return map;
   }, [browsedPages, featuredEntitiesQuery.entities, opponentEntitiesQuery.entities, recommendedEntities]);
 
@@ -753,10 +776,95 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     sidesOf,
     spaceAllowlist,
   ]);
+  // Everything already on screen, so the tail never repeats a row. The session's own exclusions ride
+  // along for the same reason they go out as `rematch_session_id`: a claim this session has dealt
+  // with should not come back through another door.
+  const tailQuery = React.useMemo(
+    () => ({
+      spaceIds: tailSpaceIds,
+      topicIds,
+      excludeIds: [...new Set([...browsedRows.map(row => row.claim.claim_entity_id), ...excludedClaimIds])],
+    }),
+    [browsedRows, excludedClaimIds, tailSpaceIds, topicIds]
+  );
+
+  // Both gates, on the space the row will actually carry: the home space decides where the debate
+  // is published, so a claim whose home falls outside them is dropped rather than offered against a
+  // space this picker would not have listed.
+  const tailHomeSpaceOf = React.useCallback(
+    (entity: ClaimPickerEntity) => {
+      const homeSpaceId = claimHomeSpaceId(entity, canPublishDebateIn);
+      if (!homeSpaceId || !canPublishDebateIn(homeSpaceId)) return null;
+      return isClaimSpaceAllowed(homeSpaceId, spaceAllowlist) ? homeSpaceId : null;
+    },
+    [canPublishDebateIn, spaceAllowlist]
+  );
+
+  const tail = useGraphClaimTailSources({
+    query: tailQuery,
+    search: debouncedSearch || null,
+    enabled: tailEnabled,
+    homeSpaceOf: tailHomeSpaceOf,
+  });
+
+  const tailClaimIds = React.useMemo(() => tail.sources.map(source => source.claimEntityId), [tail.sources]);
+  // The session's view of these claims — readiness and its flags — through the same lookup the other
+  // sources use, rather than the per-space one: these rows are the picker's shape, not the hub's.
+  const tailClaimsQuery = useDebateRematchClaimsForIds(sessionId, tailClaimIds);
+
+  // The tail's claims are ones geo-chat never indexed, so its facet says nothing about their topics
+  // — which is how a topic came to be offered under Featured and missing under All claims for the
+  // same space. Folded in here, the menu's existing merge of server facet and row topics picks them
+  // up without further change.
+  const topicsWithTail = React.useMemo(() => {
+    if (tail.topicsByClaimId.size === 0) return topicsByClaimId;
+    const map = new Map(topicsByClaimId);
+    for (const [claimId, topics] of tail.topicsByClaimId) if (!map.has(claimId)) map.set(claimId, topics);
+    return map;
+  }, [tail.topicsByClaimId, topicsByClaimId]);
+
+  /**
+   * Appended, not merged. geo-chat orders by presence and readiness, the tail by ranking score.
+   *
+   * The session's answer about these claims is layered here rather than folded into
+   * `sessionRowsByClaimId` and `excludedClaimIds` above. Those are built before the tail exists and
+   * the tail's own query is built from them, so feeding its response back into them is a cycle —
+   * the exclusions would depend on the lookup that depends on the exclusions.
+   */
+  const browsedWithTail = React.useMemo(() => {
+    if (tail.sources.length === 0) return browsedRows;
+
+    const sessionRows = new Map((tailClaimsQuery.data?.claims ?? []).map(row => [row.claim.claim_entity_id, row]));
+    const sessionExcluded = new Set(tailClaimsQuery.data?.excluded_claim_ids ?? []);
+    const shown = new Set(browsedRows.map(row => row.claim.claim_entity_id));
+
+    const rows = tail.sources.flatMap(source => {
+      const claimId = source.claimEntityId;
+      if (shown.has(claimId) || excludedClaimIds.has(claimId) || sessionExcluded.has(claimId)) return [];
+      const row = source.entity ? rowFromEntity(source.entity, source.spaceId) : null;
+      if (!row) return [];
+
+      const sessionRow = sessionRows.get(claimId);
+      if (!sessionRow) return [row];
+      return [
+        {
+          ...row,
+          shared_preference: sessionRow.shared_preference,
+          recently_rejected: sessionRow.recently_rejected,
+          previously_debated: sessionRow.previously_debated,
+          viewer_debate_ready: sessionRow.viewer_debate_ready,
+          readiness_disabled_reason: sessionRow.readiness_disabled_reason,
+        },
+      ];
+    });
+
+    return rows.length > 0 ? [...browsedRows, ...rows] : browsedRows;
+  }, [browsedRows, excludedClaimIds, rowFromEntity, tail.sources, tailClaimsQuery.data]);
+
   // The server re-sorts on every readiness change, so hold the order the viewer is looking at
   // until they ask for a different list.
   const browsedClaims = useStableListOrder(
-    browsedRows,
+    browsedWithTail,
     row => `${row.claim.space_id}:${row.claim.claim_entity_id}`,
     // Topic belongs in the key for the same reason space does: it goes out as `topic_id`, so the
     // server ranks a different list under it, and holding the previous order would arrange the
@@ -916,7 +1024,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           if (!offered.has(claim.claim.space_id)) return false;
           if (
             topicIds.length > 0 &&
-            !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(topic => topicIds.includes(topic.id))
+            !(topicsWithTail.get(claim.claim.claim_entity_id) ?? []).some(topic => topicIds.includes(topic.id))
           )
             return false;
           if (
@@ -935,7 +1043,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // empty list. An absent *selection* comes back at zero, or its checkbox disappears while the
     // trigger goes on counting it, and it can't be unticked without clearing every space.
     return orderFacetOptions(keepSelectedVisible(merged, spaceIds), spaceIds);
-  }, [browsedFacets?.space_facets, claims, debouncedSearch, facetSpaceIds, spaceIds, tab, topicIds, topicsByClaimId]);
+  }, [browsedFacets?.space_facets, claims, debouncedSearch, facetSpaceIds, spaceIds, tab, topicIds, topicsWithTail]);
 
   // A space picked while the gates were still passing everything has to be let go once they
   // reject it, or it keeps going out as `space_id` on every request while its rows are dropped.
@@ -982,10 +1090,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () =>
       countBy(
         topicFacetClaims.flatMap(claim =>
-          (topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).map(topic => ({ id: topic.id, name: topic.name }))
+          (topicsWithTail.get(claim.claim.claim_entity_id) ?? []).map(topic => ({ id: topic.id, name: topic.name }))
         )
       ),
-    [topicFacetClaims, topicsByClaimId]
+    [topicFacetClaims, topicsWithTail]
   );
 
   const facetTopics = React.useMemo(() => {
@@ -1014,7 +1122,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         // match. A no-op for the rows the server did filter, which match by construction.
         if (
           topicIds.length > 0 &&
-          !(topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).some(t => topicIds.includes(t.id))
+          !(topicsWithTail.get(claim.claim.claim_entity_id) ?? []).some(t => topicIds.includes(t.id))
         )
           return false;
         if (
@@ -1025,21 +1133,26 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           return false;
         return true;
       }),
-    [browsesPages, claims, debouncedSearch, spaceIds, topicIds, topicsByClaimId]
+    [browsesPages, claims, debouncedSearch, spaceIds, topicIds, topicsWithTail]
   );
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
   // Only All claims pages, so the sentinel exists only under it.
-  const hasNextPage = browsesPages && browsedClaimsQuery.hasNextPage;
+  // geo-chat's pages first, then the tail's — one sentinel, two sources, in that order.
+  const hasNextPage = browsesPages && (browsedClaimsQuery.hasNextPage || tail.hasNextPage);
+  const fetchNextPage = React.useCallback(() => {
+    if (browsedClaimsQuery.hasNextPage) browsedClaimsQuery.fetchNextPage();
+    else tail.fetchNextPage();
+  }, [browsedClaimsQuery, tail]);
 
   const sentinelRef = useInfiniteScrollSentinel({
     // Masked for the same reason the pages are: the retained `hasNextPage` outlives the scope it
     // described, and `fetchNextPage` is a manual call that ignores `enabled` — so a sentinel left
     // in view would page the unscoped corpus the moment it was scrolled to.
     hasNextPage,
-    isFetchingNextPage: browsedClaimsQuery.isFetchingNextPage,
-    fetchNextPage: browsedClaimsQuery.fetchNextPage,
+    isFetchingNextPage: browsedClaimsQuery.isFetchingNextPage || tail.isFetchingNextPage,
+    fetchNextPage,
   });
 
   // Each tab draws from a different set of queries, so each waits on its own. The allowlist narrows
@@ -1653,79 +1766,6 @@ function rematchPositionSummaries(
       participants,
     };
   });
-}
-
-/**
- * The space a claim actually lives in.
- *
- * Everything the picker does with a claim is scoped to one space — the response is published
- * against it, geo-chat keys its claim row and readiness on it, and the "Is factual" value that
- * decides the response kind is read from it. Getting it wrong means responding in one space and
- * asking to debate in another, which the server answers with "respond to this claim in this space
- * before enabling debate readiness".
- *
- * `entity.spaces` can't answer it: it is ordered by a fixed space ranking and counts every space
- * holding *any* value or even an inbound relation, so `spaces[0]` is a space that merely mentions
- * the claim whenever that space outranks the claim's own — a Podcasts claim cited from Root or
- * Crypto resolves to those. Prefer the spaces where the claim is actually named, which is how the
- * entity side panel scopes the same entity.
- *
- * `canPublishIn`, where given, is consulted before the ranking. A claim named in both a personal
- * space and a public one is a real case — a debater publishes into their own space and a curator
- * later adds the claim to a shared one — and the space ranking has no opinion on which to pick:
- * neither is in its table, so the tie falls to array order. Picking the personal space there loses a
- * claim that is perfectly debatable in the public one, since the home space is exactly what decides
- * where the debate is published. So: rank among the spaces that could receive it, and fall back to
- * the plain ranking when none can, which leaves the claim to be filtered out on its merits rather
- * than resolving to no space at all.
- */
-function claimHomeSpaceId(
-  entity: {
-    spaces: string[];
-    values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
-  },
-  canPublishIn?: (spaceId: string) => boolean
-): string | null {
-  const named = [...claimNamedSpaceIds(entity)];
-  const publishable = canPublishIn ? (ids: string[]) => ids.filter(canPublishIn) : (ids: string[]) => ids;
-
-  return (
-    getTopRankedSpaceId(publishable(named)) ??
-    getTopRankedSpaceId(named) ??
-    getTopRankedSpaceId(publishable(entity.spaces)) ??
-    getTopRankedSpaceId(entity.spaces) ??
-    null
-  );
-}
-
-/** The spaces a claim is actually named in — where it lives, as opposed to where it is mentioned. */
-function claimNamedSpaceIds(entity: {
-  values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
-}): Set<string> {
-  const namedSpaceIds = new Set<string>();
-  for (const value of entity.values ?? []) {
-    if (
-      value.isDeleted !== true &&
-      uuidToHex(value.property.id) === uuidToHex(SystemIds.NAME_PROPERTY) &&
-      typeof value.value === 'string' &&
-      value.value.trim().length > 0
-    ) {
-      namedSpaceIds.add(value.spaceId);
-    }
-  }
-  return namedSpaceIds;
-}
-
-/**
- * Every space a claim could resolve its home to. The publishability lookup covers all of them, so
- * {@link claimHomeSpaceId} has the types it needs to choose between them rather than choosing first
- * and discovering afterwards that the space it picked can never receive the debate.
- */
-function claimCandidateSpaceIds(entity: {
-  spaces: string[];
-  values?: Array<{ isDeleted?: boolean; property: { id: string }; spaceId: string; value: string }>;
-}): string[] {
-  return [...new Set([...claimNamedSpaceIds(entity), ...entity.spaces])];
 }
 
 function rematchCancellationMessage(reason: string) {
