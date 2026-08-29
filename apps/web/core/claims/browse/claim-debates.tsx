@@ -203,7 +203,12 @@ export function useWinnerSharesWithStatus(
   debateIds: string[],
   { keepPreviousWhileLoading = false }: { keepPreviousWhileLoading?: boolean } = {}
 ): { shares: Map<string, WinnerShare>; isStale: boolean } {
-  const { entities: votes, isPlaceholderData } = useQueryEntities({
+  const {
+    entities: votes,
+    isPlaceholderData,
+    isFetched,
+    error,
+  } = useQueryEntities({
     where: {
       types: [{ id: { equals: VOTE_TYPE_ID } }],
       relations: [{ typeOf: { id: { equals: VOTE_DEBATES_PROPERTY_ID } }, toEntity: { id: { in: debateIds } } }],
@@ -275,7 +280,12 @@ export function useWinnerSharesWithStatus(
     return shares;
   }, [votes]);
 
-  return { shares, isStale: isPlaceholderData };
+  // Not just "is this the previous page's answer". Before the first remote fetch this query answers
+  // from whatever matching votes happen to be in the local store, which is an arbitrary subset and
+  // is not flagged as placeholder data; a failed fetch reads the same way. Any of the three means
+  // the shares do not describe the debates that were asked for, which is the only question an
+  // aggregate caller needs answered.
+  return { shares, isStale: isPlaceholderData || !isFetched || Boolean(error) };
 }
 
 export function DebateRow({

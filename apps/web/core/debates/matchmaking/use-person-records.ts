@@ -111,10 +111,11 @@ export function usePersonRecords(personIds: string[]): Map<string, PersonRecord>
         winnerByDebateId: sharesAreStale ? EMPTY_SHARES : winnerByDebateId,
       });
 
-      records.set(
-        personId,
-        sharesAreStale ? { ...fresh, winRate: settledRecords.current.get(personId)?.winRate ?? null } : fresh
-      );
+      // A rate is only carried across if this person's own record is still whole. Once their
+      // relations come back truncated the debate count is withheld, and a rate is a statement about
+      // that count — showing one over a total the row will not print says more than is known.
+      const carried = record.truncated ? null : (settledRecords.current.get(personId)?.winRate ?? null);
+      records.set(personId, sharesAreStale ? { ...fresh, winRate: carried } : fresh);
     }
 
     if (!sharesAreStale) settledRecords.current = records;
