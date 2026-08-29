@@ -174,7 +174,18 @@ describe('join date', () => {
 
   it('has no date rather than a wrong one', () => {
     expect(record({ createdAt: null }).joinedAt).toBeNull();
+    expect(record({ createdAt: '' }).joinedAt).toBeNull();
     expect(record({ createdAt: 'not-a-timestamp' }).joinedAt).toBeNull();
+    // `Date.parse` reads "0" as the year 2000; an empty timestamp must not become a join date.
     expect(record({ createdAt: '0' }).joinedAt).toBeNull();
+    expect(record({ createdAt: '-1' }).joinedAt).toBeNull();
+  });
+
+  // `createdAt` is documented as unix seconds, stringified or numeric, or ISO 8601 — "varies by
+  // backend". Assuming the one form it happened to return when measured would drop the date from
+  // every row on an ISO value, and read a millisecond value as the sixty-seventh millennium.
+  it('reads the other shapes the backend may send', () => {
+    expect(formatJoinedAt(record({ createdAt: '2026-01-29T00:00:00.000Z' }).joinedAt!)).toBe('Jan 2026');
+    expect(formatJoinedAt(record({ createdAt: '1769726933000' }).joinedAt!)).toBe('Jan 2026');
   });
 });

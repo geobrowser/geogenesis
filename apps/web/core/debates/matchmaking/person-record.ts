@@ -1,4 +1,5 @@
 import type { WinnerShare } from '~/core/claims/browse/claim-debates';
+import { parseEntityUpdatedAtToUnixSec } from '~/core/explore/explore-relative-time';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 
 /**
@@ -50,7 +51,7 @@ export function derivePersonRecord({
   createdAt,
   winnerByDebateId,
 }: PersonRecordInput): PersonRecord {
-  const joinedAt = parseUnixSeconds(createdAt);
+  const joinedAt = parseCreatedAt(createdAt);
 
   // A truncated page is an arbitrary subset of someone's debates, so both the count and any rate
   // derived from it would be quietly low. No number is the honest answer; a wrong one is not.
@@ -88,13 +89,22 @@ export function derivePersonRecord({
   };
 }
 
-/** `entity.createdAt` comes back as Unix seconds in a string, not an ISO timestamp. */
-function parseUnixSeconds(value: string | null): Date | null {
+/**
+ * `createdAt` is typed as unix seconds — stringified or numeric — or an ISO 8601 string, "varies by
+ * backend". Parsed through the helper that already handles all three rather than assuming the one
+ * form this happened to return when it was measured: seconds would read an ISO value as no date at
+ * all, and a millisecond value as a year in the sixty-seventh millennium.
+ */
+function parseCreatedAt(value: string | null): Date | null {
   if (!value) return null;
-  const seconds = Number(value);
-  if (!Number.isFinite(seconds) || seconds <= 0) return null;
-  const date = new Date(seconds * 1000);
-  return Number.isNaN(date.getTime()) ? null : date;
+  // The helper falls back to `Date.parse`, which is lenient enough to read "0" as the year 2000.
+  // A row is better with no join date than with a wrong one, so a non-positive number is rejected
+  // before it can be read as a date at all.
+  const asNumber = Number(value.trim());
+  if (Number.isFinite(asNumber) && asNumber <= 0) return null;
+
+  const seconds = parseEntityUpdatedAtToUnixSec(value);
+  return seconds > 0 ? new Date(seconds * 1000) : null;
 }
 
 /**

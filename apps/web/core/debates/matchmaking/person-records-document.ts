@@ -2,22 +2,21 @@ import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 
 import { parse } from 'graphql';
 
-import { responseKindToVoteKind } from '~/core/responses/entity-response';
+import { uuidToHex } from '~/core/id/normalize';
 
 import { DEBATE_OPPOSED_BY_PROPERTY_ID, DEBATE_SUPPORTED_BY_PROPERTY_ID } from '../ontology';
+import { POSITION_VOTE_FILTER } from '../participant-positions';
 
 /**
- * The vote kinds that count as a position someone has taken.
- *
- * Kind 0 is curation — an upvote or downvote on someone else's entity — and the votes table is
- * mostly that: 4,218 curation votes against 812 positions when this was measured. Counting the
- * table unfiltered would label a curation total "positions" and be wrong at any volume, so the
- * kinds are named through the same map the response surfaces use rather than written as 1 and 2.
+ * Ids reach this from the presence feed, which is not the service that writes them dashed, so both
+ * forms are accepted and normalised on the way into the query.
  */
-export const POSITION_VOTE_KINDS = [responseKindToVoteKind('stance'), responseKindToVoteKind('veracity')];
+const ID_PATTERN = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 
-/** Guards the alias builder against ids that would produce invalid GraphQL. */
-const ID_PATTERN = /^[0-9a-f]{32}$/i;
+/** Whether an id can be asked about at all. Shared with the hook so both agree on what is queryable. */
+export function isPersonId(id: string): boolean {
+  return ID_PATTERN.test(id);
+}
 
 /**
  * How many debate relations are read per person per side. A person's whole record is the point, so
@@ -34,7 +33,7 @@ export type PersonRecordsQuery = Record<
   | undefined
 >;
 
-export type PersonRecordsVariables = Record<string, string | number[] | number>;
+export type PersonRecordsVariables = Record<string, unknown>;
 
 /** Aliases are positional because a hex id is not a valid GraphQL name — `0f…` cannot start one. */
 export function personAlias(index: number, field: 'positions' | 'supported' | 'opposed' | 'joined') {
@@ -61,12 +60,12 @@ export function buildPersonRecordsDocument(personIds: string[]): {
    */
   ids: string[];
 } {
-  const ids = personIds.filter(id => ID_PATTERN.test(id));
+  const ids = personIds.filter(isPersonId);
 
   const declarations = [
     '$supportedBy: UUID!',
     '$opposedBy: UUID!',
-    '$positionKinds: [Int!]',
+    '$positionFilter: UserVoteFilter!',
     '$first: Int!',
     ...ids.map((_, index) => `$p${index}: UUID!`),
   ].join(', ');
@@ -76,7 +75,7 @@ export function buildPersonRecordsDocument(personIds: string[]): {
       const person = `$p${index}`;
       return `
     ${personAlias(index, 'positions')}: userVotesConnection(
-      filter: { userId: { is: ${person} }, voteKind: { in: $positionKinds } }
+      filter: { and: [$positionFilter, { userId: { is: ${person} } }] }
     ) { totalCount }
     ${personAlias(index, 'supported')}: relationsConnection(
       first: $first
@@ -98,11 +97,15 @@ export function buildPersonRecordsDocument(personIds: string[]): {
   const variables: PersonRecordsVariables = {
     supportedBy: DEBATE_SUPPORTED_BY_PROPERTY_ID,
     opposedBy: DEBATE_OPPOSED_BY_PROPERTY_ID,
-    positionKinds: POSITION_VOTE_KINDS,
+    // The same rows `fetchParticipantPositions` reads, so the count on a row and the positions
+    // listed anywhere else cannot mean different things.
+    positionFilter: POSITION_VOTE_FILTER,
     first: DEBATE_RELATIONS_PER_SIDE,
   };
+  // Normalised for the query, but `ids` keeps the caller's spelling so records can be looked up
+  // with the id that was handed in.
   ids.forEach((id, index) => {
-    variables[`p${index}`] = id;
+    variables[`p${index}`] = uuidToHex(id);
   });
 
   return {

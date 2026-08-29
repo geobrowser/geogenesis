@@ -14,6 +14,7 @@ import {
   DEBATE_RELATIONS_PER_SIDE,
   type PersonRecordsQuery,
   buildPersonRecordsDocument,
+  isPersonId,
   personAlias,
 } from './person-records-document';
 
@@ -33,9 +34,12 @@ type RawRecord = { positions: number; debateIds: string[]; truncated: boolean; c
  * person argued are not known until the batch returns.
  */
 export function usePersonRecords(personIds: string[]): Map<string, PersonRecord> {
-  // Sorted so a re-ordered list — the presence feed re-sorts as people come and go — reuses the
-  // cached batch instead of refetching an identical set under a different key.
-  const key = React.useMemo(() => [...personIds].sort(), [personIds]);
+  // Deduplicated and sorted so a re-ordered or repeated list — the presence feed re-sorts as people
+  // come and go — reuses the cached batch instead of refetching an identical set under a different
+  // key. Unqueryable ids are dropped here rather than inside the builder, so `enabled` below counts
+  // what will actually be asked for: a list of nothing but bad ids would otherwise send a query
+  // declaring variables it never uses, which the server rejects outright.
+  const key = React.useMemo(() => [...new Set(personIds.filter(isPersonId))].sort(), [personIds]);
 
   const { data: raw } = useQuery({
     queryKey: ['debates', 'person-records', key],
@@ -44,6 +48,10 @@ export function usePersonRecords(personIds: string[]): Map<string, PersonRecord>
     // this the answer is undefined until the new batch lands and every row's stats blank out and
     // return — for people whose records were already in hand and had not changed.
     placeholderData: keepPreviousData,
+    // Presence flaps, and every flap is a new key. Without this a list settling after a few people
+    // arrive at once re-runs a request carrying four aliased connections per person, for records
+    // that barely move — someone's lifetime positions and join date do not change second to second.
+    staleTime: 5 * 60_000,
     queryFn: ({ signal }) => {
       const { document, variables, ids } = buildPersonRecordsDocument(key);
       return Effect.runPromise(
@@ -109,9 +117,12 @@ export function readPersonRecords(response: PersonRecordsQuery, personIds: strin
     // truncated would permanently withhold the record of anyone sitting on exactly the page size.
     // `totalCount` is the authority; the cap is the fallback for when it is missing.
     const truncated = [supported, opposed].some(side => {
-      const loaded = side?.nodes?.length ?? 0;
-      const total = side?.totalCount;
-      return typeof total === 'number' ? loaded < total : loaded >= DEBATE_RELATIONS_PER_SIDE;
+      // A side that did not come back at all is not an empty side. Reading it as complete would
+      // count the debates from whichever side did arrive and call that someone's whole record —
+      // the under-report this flag exists to prevent.
+      if (!side || !side.nodes) return true;
+      const loaded = side.nodes.length;
+      return typeof side.totalCount === 'number' ? loaded < side.totalCount : loaded >= DEBATE_RELATIONS_PER_SIDE;
     });
 
     records.set(personId, {

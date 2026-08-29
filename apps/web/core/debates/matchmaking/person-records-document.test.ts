@@ -1,7 +1,8 @@
 import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
-import { POSITION_VOTE_KINDS, buildPersonRecordsDocument, personAlias } from './person-records-document';
+import { POSITION_VOTE_FILTER } from '../participant-positions';
+import { buildPersonRecordsDocument, isPersonId, personAlias } from './person-records-document';
 import { readPersonRecords } from './use-person-records';
 
 const A = '07842862d2c3654c0324a07bc7cce1a4';
@@ -39,12 +40,32 @@ describe('buildPersonRecordsDocument', () => {
     expect(printed([A, B])).toContain('$p0: UUID!');
   });
 
-  // The votes table is mostly curation — 4,218 curation votes against 812 positions when measured.
-  // Unfiltered, this field would be labelled "positions" and show something else entirely.
-  it('scopes positions to stance and veracity, never curation', () => {
-    expect(POSITION_VOTE_KINDS).toEqual([1, 2]);
-    expect(POSITION_VOTE_KINDS).not.toContain(0);
-    expect(buildPersonRecordsDocument([A]).variables.positionKinds).toEqual([1, 2]);
+  // Counted through the same filter `fetchParticipantPositions` reads, so a count on a row and the
+  // positions listed anywhere else cannot come to mean different things. Curation (kind 0) is out,
+  // and so are withdrawn responses, which are a vote *type* and mean "no side".
+  it('counts positions through the shared filter', () => {
+    expect(buildPersonRecordsDocument([A]).variables.positionFilter).toBe(POSITION_VOTE_FILTER);
+    expect(POSITION_VOTE_FILTER.voteKind.in).toEqual([1, 2]);
+    expect(POSITION_VOTE_FILTER.voteKind.in).not.toContain(0);
+    expect(POSITION_VOTE_FILTER.voteType.in).toEqual([0, 1]);
+    expect(POSITION_VOTE_FILTER.objectType.is).toBe(0);
+  });
+
+  // Both spellings reach this from the presence feed; rejecting the dashed one would drop that
+  // person's record silently, and rejecting every id would send a query the server refuses.
+  it('accepts a person id in either spelling', () => {
+    expect(isPersonId(A)).toBe(true);
+    expect(isPersonId('07842862-d2c3-654c-0324-a07bc7cce1a4')).toBe(true);
+    expect(isPersonId('not-a-hex-id')).toBe(false);
+    expect(isPersonId('')).toBe(false);
+  });
+
+  it('normalises the ids it sends while keeping the callers spelling', () => {
+    const dashed = '07842862-d2c3-654c-0324-a07bc7cce1a4';
+    const { variables, ids } = buildPersonRecordsDocument([dashed]);
+
+    expect(variables.p0).toBe(A);
+    expect(ids).toEqual([dashed]);
   });
 
   it('drops ids that would not make a valid query', () => {
@@ -125,12 +146,13 @@ describe('readPersonRecords', () => {
   // exactly the page size would otherwise have their record withheld forever.
   it('does not call a complete page truncated', () => {
     const nodes = Array.from({ length: 100 }, (_, i) => ({ fromEntityId: `d${i}` }));
+    const empty = { totalCount: 0, nodes: [] };
     const full = readPersonRecords(
-      { p0_positions: { totalCount: 0 }, p0_supported: { totalCount: 100, nodes }, p0_joined: {} },
+      { p0_positions: { totalCount: 0 }, p0_supported: { totalCount: 100, nodes }, p0_opposed: empty, p0_joined: {} },
       [A]
     );
     const short = readPersonRecords(
-      { p0_positions: { totalCount: 0 }, p0_supported: { totalCount: 137, nodes }, p0_joined: {} },
+      { p0_positions: { totalCount: 0 }, p0_supported: { totalCount: 137, nodes }, p0_opposed: empty, p0_joined: {} },
       [A]
     );
 
@@ -138,9 +160,24 @@ describe('readPersonRecords', () => {
     expect(short.get(A)?.truncated).toBe(true);
   });
 
-  it('reads a missing person as an empty record rather than dropping the row', () => {
+  // A side that never arrived is not an empty side: counting only the side that did would report
+  // part of someone's record as all of it, so the row withholds instead.
+  it('treats a person missing from the response as unknown, not as having no record', () => {
     const records = readPersonRecords({}, [A]);
 
-    expect(records.get(A)).toEqual({ positions: 0, debateIds: [], truncated: false, createdAt: null });
+    expect(records.get(A)).toEqual({ positions: 0, debateIds: [], truncated: true, createdAt: null });
+  });
+
+  it('treats one missing side as truncated even when the other came back', () => {
+    const records = readPersonRecords(
+      {
+        p0_positions: { totalCount: 4 },
+        p0_supported: { totalCount: 1, nodes: [{ fromEntityId: 'd1' }] },
+        p0_joined: {},
+      },
+      [A]
+    );
+
+    expect(records.get(A)?.truncated).toBe(true);
   });
 });
