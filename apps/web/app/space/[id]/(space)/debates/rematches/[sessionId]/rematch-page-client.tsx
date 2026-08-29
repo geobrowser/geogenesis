@@ -1541,22 +1541,16 @@ function RematchClaimCard({
     readiness_disabled_reason: claimReadiness?.readiness_disabled_reason ?? null,
   };
 
-  // The picker has no active-debate signal of its own, so this is the one place both readiness
-  // paths read it from — the switch and the opt-in below must gate on the same thing, or the
-  // opt-in could stand the viewer up on a claim the switch is refusing.
-  const activeDebate = false;
-
   return (
     <MatchmakingClaimCard
       claim={claim.claim}
       positions={positions}
       readiness={readiness}
-      // The picker has no active-debate signal of its own, and it is mid-session anyway: there is
-      // nothing to watch that isn't the session the viewer is already in. The end slot is off
-      // entirely here — a rematch request is its own mutation with its own gating, and the footer
+      // No end slot. A rematch request is its own mutation with its own gating, and the footer
       // below is the control that sends it, so a second "Request debate" in the header would be a
-      // different button wearing the same words.
-      activeDebate={null}
+      // different button wearing the same words. Nothing to watch either: the picker has no
+      // active-debate signal, and it is mid-session anyway — the only debate to watch is the one
+      // the viewer is already in. With the slot off, `activeDebate` has no reader.
       hideEndSlot
       // `positions` locates the viewer by geo-chat user id, which is null until the token exchange
       // lands. Until then `serverLocalPosition` reads as "no position" for someone the summaries

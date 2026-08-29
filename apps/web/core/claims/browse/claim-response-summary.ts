@@ -192,13 +192,36 @@ export function useClaimResponseSummary(
   const positive = Math.max(0, (data?.positive ?? 0) + activePositive - indexedPositive);
   const negative = Math.max(0, (data?.negative ?? 0) + activeNegative - indexedNegative);
 
+  // Disabled means no answer, not a stale one.
+  //
+  // `enabled: false` stops the two queries from *fetching*; it does not stop them handing back
+  // whatever is already cached under their key — and the key includes `responseKind`. A caller that
+  // disabled this hook precisely because the kind is still the `stance` fallback would otherwise
+  // read a stance split that some other surface primed, which is the exact number it was trying not
+  // to show. The indexing snapshot is not a query at all and answers regardless, so the viewer's
+  // own side needs masking too.
+  //
+  // The batch is the opposite case and must not be masked: there `enabled` is true, the queries are
+  // held for a different reason, and the cache *is* the intended source because
+  // `ClaimResponseBatchBoundary` primes exactly these two keys.
+  if (!enabled) {
+    return {
+      ...summarizeClaimResponses(0, 0),
+      // Held back is not the same as loading: a caller that has not asked yet has nothing to wait
+      // for, and reporting otherwise would leave a skeleton on a card that never asks.
+      isLoading: false,
+      viewerDirection: null,
+      // Who the viewer is, not what they answered — safe to report, and the avatars need it to
+      // place the viewer once there is something to place.
+      viewerSpaceId: personalSpaceId ?? null,
+    };
+  }
+
   return {
     ...summarizeClaimResponses(positive, negative),
     // Under a batch the individual query never runs, so its `isLoading` is false from the start —
     // the batch's own readiness is what says whether there is anything to draw yet.
-    // Held back is not the same as loading: a caller that has not asked yet has nothing to wait
-    // for, and reporting otherwise would leave a skeleton on screen for a card that never asks.
-    isLoading: responseBatch.managed ? !responseBatch.ready : enabled && isLoading,
+    isLoading: responseBatch.managed ? !responseBatch.ready : isLoading,
     viewerDirection: activeDirection ?? null,
     viewerSpaceId: personalSpaceId ?? null,
   };
