@@ -3,68 +3,41 @@
  *
  *     /explore?modal=signin&source=marketing
  *
- * Once that site ships the URL is hardcoded off-repo, so the shape below is a contract rather
- * than an internal detail — hence one module owning the param names, the reader, and the builder,
- * so a change here is a change everywhere.
- *
- * On the shape:
- *
- * - `modal=signin`, not `signin=true`. A named value takes the next deep link (a different modal,
- *   an entity action) without a new param each time, and has no meaningless `signin=false` state.
- * - `source` already exists in the repo — `buildBlockLink` writes `?source=copy_link` and
- *   `block-reorder` reads it — so attribution reuses that key rather than inventing a parallel one.
- *   Values are lowercase, `snake_case` when they need more than a word, matching `copy_link`.
- *
- * Both params are stripped once the trigger has been acted on, so a refresh, a back button, or a
- * URL copied out of the address bar doesn't reopen the modal for someone who never asked.
+ * That URL is hardcoded off-repo, so it is a contract rather than an internal detail. The param
+ * scheme it established now lives in `core/deep-links/modal-deep-link`, shared with the debates
+ * panel link (GEO-2746); what stays here is what is specific to signing in — the `modal` value and
+ * where the marketing button lands. The URL itself is unchanged.
  */
+import {
+  MODAL_PARAM,
+  type ReadableParams,
+  SOURCE_PARAM,
+  modalSource,
+  requestsModal,
+  toModal,
+  urlWithoutModal,
+} from '~/core/deep-links/modal-deep-link';
 
-export const MODAL_PARAM = 'modal';
-export const SOURCE_PARAM = 'source';
+export { MODAL_PARAM, SOURCE_PARAM };
 
-/** The one `modal` value in use today. Others join it here as deep links are added. */
 export const SIGN_IN_MODAL = 'signin';
 
 /** Where the marketing button lands. Its own page owns nothing about this — the handler is global. */
 const SIGN_IN_PATHNAME = '/explore';
 
-/**
- * Structural rather than `URLSearchParams` itself: what `useSearchParams` hands back is a
- * `ReadonlyURLSearchParams`, and narrowing to the concrete class would make every caller cast.
- */
-type ReadableParams = Pick<URLSearchParams, 'get' | 'toString'> | null | undefined;
-
 /** True when the URL is asking for the sign-in modal. */
 export function requestsSignInModal(params: ReadableParams): boolean {
-  return params?.get(MODAL_PARAM) === SIGN_IN_MODAL;
+  return requestsModal(params, SIGN_IN_MODAL);
 }
 
-/**
- * The attribution value carried alongside the trigger, if any. Free-form on purpose: the marketing
- * site, an email, or a partner page can each name itself without a deploy here.
- */
+/** The attribution value carried alongside the trigger, if any. */
 export function signInModalSource(params: ReadableParams): string | null {
-  return params?.get(SOURCE_PARAM) || null;
+  return modalSource(params);
 }
 
-/**
- * The same URL with the trigger removed, preserving every other param — the viewer may have
- * arrived on a route that carries its own state, and dropping it would be a worse bug than the
- * one this clearing exists to prevent.
- *
- * The fragment has to be passed in: `usePathname` and `useSearchParams` both omit it, and a
- * fragment is route state here rather than decoration — `block-reorder` resolves a linked block
- * out of `window.location.hash`. Rebuilding a URL without it would silently drop the anchor a
- * viewer followed.
- */
+/** The same URL with the trigger removed, preserving every other param and the fragment. */
 export function urlWithoutSignInModal(pathname: string, params: ReadableParams, hash = ''): string {
-  const next = new URLSearchParams(params?.toString() ?? '');
-  next.delete(MODAL_PARAM);
-  next.delete(SOURCE_PARAM);
-  const search = next.toString();
-  // Accepts `location.hash` as-is, which already carries the `#`, and tolerates a bare id.
-  const fragment = !hash || hash === '#' ? '' : hash.startsWith('#') ? hash : `#${hash}`;
-  return `${pathname}${search ? `?${search}` : ''}${fragment}`;
+  return urlWithoutModal(pathname, params, hash);
 }
 
 /**
@@ -72,8 +45,9 @@ export function urlWithoutSignInModal(pathname: string, params: ReadableParams, 
  * a route in this codebase looks first.
  */
 export function toSignIn(options?: { source?: string; pathname?: string }): string {
-  const params = new URLSearchParams();
-  params.set(MODAL_PARAM, SIGN_IN_MODAL);
-  if (options?.source) params.set(SOURCE_PARAM, options.source);
-  return `${options?.pathname ?? SIGN_IN_PATHNAME}?${params.toString()}`;
+  return toModal({
+    modal: SIGN_IN_MODAL,
+    pathname: options?.pathname ?? SIGN_IN_PATHNAME,
+    source: options?.source,
+  });
 }

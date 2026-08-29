@@ -80,6 +80,14 @@ const SignInDeepLinkHandler = dynamic(
   { ssr: false }
 );
 
+const DebatesPanelDeepLinkHandler = dynamic(
+  () =>
+    import('~/partials/debates/debates-panel-deep-link-handler').then(m => ({
+      default: m.DebatesPanelDeepLinkHandler,
+    })),
+  { ssr: false }
+);
+
 const ReviewChanges = dynamic(
   () => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })),
   { ssr: false }
@@ -150,6 +158,9 @@ export function App({ children }: { children: React.ReactNode }) {
           <PostAuthRedirect />
           <React.Suspense fallback={null}>
             <SignInDeepLinkHandler />
+          </React.Suspense>
+          <React.Suspense fallback={null}>
+            <DebatesPanelDeepLinkHandler />
           </React.Suspense>
           <Toast />
           <GovernanceReopenEditLoadingBar />
