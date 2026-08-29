@@ -115,7 +115,15 @@ export function useScopedMatchmakingClaims(
   // Placeholder data is the previous key's answer, and since GEO-2696 a topic facet is narrowed by
   // the topic selection — so on a filter change the held counts don't merely lag, they describe a
   // question the viewer is no longer asking.
-  const countsPending = claimsQuery.isPlaceholderData || claimsQuery.isLoading;
+  //
+  // Not while unusable, for the same reason `facetsSettled` treats it as an answer: the query is
+  // deliberately never made, so nothing is on its way. React Query still hands back the previous
+  // key's rows through `placeholderData` when the key moves under a disabled query, and no request
+  // will ever replace them — so reading that as "pending" would leave the counts waiting forever
+  // on a request that was never going to happen. The callers in that state have client-derived
+  // counts that are already current: the hub's Featured source, and a rematch selection with no
+  // browsable space.
+  const countsPending = !unusable && (claimsQuery.isPlaceholderData || claimsQuery.isLoading);
 
   return {
     pages,

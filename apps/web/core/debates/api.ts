@@ -477,8 +477,14 @@ export type MatchmakingClaimsQuery = {
   spaceIds?: string[] | null;
   topicId?: string | null;
   /**
-   * Topics to narrow by, OR-ed together. Merged with `topicId` the same way `spaceIds` is with
-   * `spaceId`, so send one or the other rather than both.
+   * Topics to narrow by, AND-ed together: a row has to carry *every* one of them (GEO-2696).
+   * The opposite of `spaceIds`, and deliberately — a second space widens the list, a second topic
+   * drills into it.
+   *
+   * Merged with `topicId` structurally the same way `spaceIds` is with `spaceId` — the two are
+   * unioned into one set rather than one overriding the other — so send one or the other rather
+   * than both. Note what that union means here: every topic in the combined set is required, so
+   * sending both narrows further instead of widening.
    */
   topicIds?: string[] | null;
   /**

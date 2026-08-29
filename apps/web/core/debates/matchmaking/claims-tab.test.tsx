@@ -129,14 +129,19 @@ vi.mock('./hooks', () => ({
     // every selected topic, so what it offers is what appears *alongside* the selection, and the
     // selected topics come back with the current result count. Computed over the whole filtered
     // set rather than the returned page, which is the point of a server-side facet.
-    const topicFacets = [
-      ...new Map(
-        inSpace
-          .filter(entry => inTopicFilter(entry.topics))
-          .flatMap(entry => entry.topics)
-          .map(topic => [topic.id, topic])
-      ).values(),
-    ];
+    // Counted, not just listed: a facet count is how many of the surviving claims carry the topic,
+    // so a selected one comes back at the current result size. Collapsing every option to 1 would
+    // let a count-display or count-ordering regression pass against a response the server cannot
+    // produce.
+    const topicCounts = new Map<string, { id: string; name: string | null; count: number }>();
+    for (const entry of claims) {
+      for (const topic of entry.topics) {
+        const seen = topicCounts.get(topic.id);
+        if (seen) seen.count += 1;
+        else topicCounts.set(topic.id, { id: topic.id, name: topic.name, count: 1 });
+      }
+    }
+    const topicFacets = [...topicCounts.values()];
     const spacesCarryingTopic = new Set(
       mocks.claims.filter(entry => inTopicFilter(entry.topics)).map(entry => norm(entry.claim.space_id))
     );
@@ -153,9 +158,17 @@ vi.mock('./hooks', () => ({
           next_cursor: null,
           facets: {
             space_ids: spaceFacetIds,
-            topics: topicFacets,
-            space_facets: spaceFacetIds.map(id => ({ id, name: null, count: 1 })),
-            topic_facets: topicFacets.map(topic => ({ ...topic, count: 1 })),
+            topics: topicFacets.map(topic => ({ id: topic.id, name: topic.name })),
+            // A space's count is its claims that survive the topic filter — never its own, since
+            // spaces are OR and picking one must not collapse the menu it came from.
+            space_facets: spaceFacetIds.map(id => ({
+              id,
+              name: null,
+              count: mocks.claims.filter(
+                entry => norm(entry.claim.space_id) === norm(id) && inTopicFilter(entry.topics)
+              ).length,
+            })),
+            topic_facets: topicFacets,
           },
         },
       ],

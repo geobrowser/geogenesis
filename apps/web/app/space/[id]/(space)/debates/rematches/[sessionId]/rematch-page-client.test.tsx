@@ -360,14 +360,18 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
     const inSpace = corpus.flat().filter(entry => inSpaceFilter(entry.claim.space_id));
     // Co-occurrence: over the claims already carrying every selected topic, so the menu offers
     // what appears alongside the selection and the selection itself.
-    const topicFacets = [
-      ...new Map(
-        inSpace
-          .filter(entry => inTopicFilter(entry.topics))
-          .flatMap(entry => entry.topics)
-          .map(topic => [topic.id, topic])
-      ).values(),
-    ];
+    // Counted, not just listed: a facet count is how many surviving claims carry the topic, so a
+    // selected one comes back at the current result size. Collapsing them all to 1 would let a
+    // count-display or count-ordering regression pass against an impossible response.
+    const topicCounts = new Map<string, { id: string; name: string | null; count: number }>();
+    for (const entry of inSpace.filter(entry => inTopicFilter(entry.topics))) {
+      for (const topic of entry.topics) {
+        const seen = topicCounts.get(topic.id);
+        if (seen) seen.count += 1;
+        else topicCounts.set(topic.id, { id: topic.id, name: topic.name, count: 1 });
+      }
+    }
+    const topicFacets = [...topicCounts.values()];
     // Narrowed by the topic filter and never by its own dimension — picking a space must not
     // collapse the menu it came from, while picking a topic must narrow it. Built from the whole
     // corpus, this returned a response the server can't produce, so a multi-topic test would have
@@ -384,9 +388,13 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
     // collapse the menu it came from. Topics are co-occurrence, built above.
     const facets = {
       space_ids: spaceIds,
-      topics: topicFacets,
-      space_facets: spaceIds.map(id => ({ id, name: null, count: 1 })),
-      topic_facets: topicFacets.map(topic => ({ ...topic, count: 1 })),
+      topics: topicFacets.map(topic => ({ id: topic.id, name: topic.name })),
+      space_facets: spaceIds.map(id => ({
+        id,
+        name: null,
+        count: corpus.flat().filter(entry => entry.claim.space_id === id && inTopicFilter(entry.topics)).length,
+      })),
+      topic_facets: topicFacets,
     };
     const data = {
       pages: corpus.map(page => ({
