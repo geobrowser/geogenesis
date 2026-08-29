@@ -795,6 +795,23 @@ describe('topic menu', () => {
     expect(screen.getByRole('button', { name: /^Health/ })).toBeInTheDocument();
   });
 
+  // Both picks land before the first one's answer does, so the menu still offers a topic that
+  // doesn't co-occur with it. Only the pick that didn't fit is given back — and only one of them,
+  // which is the part a unit test on the helper cannot see: `facetTopics` is rebuilt from
+  // `topicIds`, so an ungated effect reconciles against its own output and takes both.
+  it('gives back only the newest topic when two picked in a row cannot co-occur', async () => {
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^AI/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Health/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'AI' })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+  });
+
   it('drops the topics that have no claims in the picked space', async () => {
     render(<ClaimsTab />);
     await showAllClaims();
@@ -968,8 +985,10 @@ describe('topic menu', () => {
     mocks.claims = [claim('claim-health', 'Sleep is underrated', false, false, OTHER_SPACE_ID, [HEALTH])];
     view.rerender(<ClaimsTab />);
 
-    // Left held, it would filter the list from a chip no longer in the menu to unpick.
-    expect(screen.getByRole('button', { name: /Any topic/ })).toBeInTheDocument();
+    // Left held, it would filter the list from a chip no longer in the menu to unpick. Awaited
+    // rather than immediate: reconciliation waits for a facet that answers the selection in hand,
+    // so it happens once the pick has settled rather than in the same tick as the corpus change.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any topic/ })).toBeInTheDocument());
   });
 
   // The other dimension, which must behave differently. `space_facets` is narrowed by the topic

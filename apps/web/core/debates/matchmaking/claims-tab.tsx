@@ -444,9 +444,15 @@ export function ClaimsTab() {
 
   // Changing space with a topic held would otherwise leave the viewer filtered by a chip that is
   // no longer in the menu to unpick.
+  //
+  // Only against a facet that answers the selection in hand, which `topicsSettling` is the missing
+  // half of. `facetTopics` is rebuilt whenever `topicIds` changes, so without this the effect
+  // re-runs on its own output while the query is still debounced on the previous selection and
+  // `facetsSettled` is still true from it — reconciling repeatedly against one stale answer and
+  // draining the whole selection in a single tick, rather than one pick per server response.
   React.useEffect(() => {
-    setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsSettled));
-  }, [facetTopics, facetsSettled]);
+    setTopicIds(current => keepSelectableTopics(current, facetTopics, facetsSettled && !topicsSettling));
+  }, [facetTopics, facetsSettled, topicsSettling]);
 
   // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
   // empty Featured tab should say nothing is featured — not that filters are hiding things — and

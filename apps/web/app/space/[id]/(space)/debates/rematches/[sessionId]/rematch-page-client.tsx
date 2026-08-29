@@ -1079,9 +1079,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   React.useEffect(() => {
     // The All tab's menu is only as settled as the facets behind it; the other two have no facet
     // to wait on, so their own loading state is the whole answer.
-    const resolved = browsesPages ? browsedClaimsQuery.facetsSettled && !tabIsLoading : !tabIsLoading;
+    // `topicsSettling` for the same reason as on the hub: `facetTopics` is rebuilt from
+    // `topicIds`, so reconciling while the query is still debounced on the previous selection
+    // would re-run the effect on its own output against one unchanged answer, and take the whole
+    // selection instead of the single pick that didn't fit.
+    const resolved =
+      !topicsSettling && (browsesPages ? browsedClaimsQuery.facetsSettled && !tabIsLoading : !tabIsLoading);
     setTopicIds(current => keepSelectableTopics(current, facetTopics, resolved));
-  }, [browsedClaimsQuery.facetsSettled, browsesPages, facetTopics, tabIsLoading]);
+  }, [browsedClaimsQuery.facetsSettled, browsesPages, facetTopics, tabIsLoading, topicsSettling]);
 
   const tabError =
     sessionQuery.error ??
