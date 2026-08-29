@@ -24,12 +24,12 @@ import { CommentSection } from '~/partials/comments/comments-section';
 
 import { ClaimDebates } from './claim-debates';
 import { ClaimEndSlot } from './claim-end-slot';
-import { positionSummariesFromCounts, viewerResponseFromDirection } from './claim-position-summaries';
 import { ClaimProvenance } from './claim-provenance';
 import { ClaimRelatedClaims } from './claim-related-claims';
-import { type ClaimResponseSummary, useClaimResponseSummary } from './claim-response-summary';
+import type { ClaimResponseSummary } from './claim-response-summary';
 import { ControversialTag } from './claim-summary';
 import { ClaimVerdict } from './claim-verdict';
+import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
 
 /** Topic chips shown inline before the rest collapse into a count. */
 const TOPIC_CHIP_CAP = 3;
@@ -63,11 +63,8 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
   // spaces geo-chat does not index, which have no row at all.
   const rowQuery = useDebateClaims(spaceId, [entityId], true);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
-  const responseKind = React.useMemo(
-    () => row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance'),
-    [entity, row?.response_kind, spaceId]
-  );
-  const summary = useClaimResponseSummary(entityId, spaceId, responseKind);
+  const state = useClaimResponseState({ claimId: entityId, spaceId, row, entity: entity ?? null });
+  const { responseKind, summary } = state;
 
   const topics = React.useMemo(() => relationsOfType(entity?.relations, TOPICS_PROPERTY_ID), [entity?.relations]);
   const tags = React.useMemo(() => relationsOfType(entity?.relations, TAG_PROPERTY_ID), [entity?.relations]);
@@ -144,13 +141,7 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 
         <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
 
-        <ClaimPositionSection
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          summary={summary}
-          row={row}
-        />
+        <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
 
         <ClaimDebates claimId={entityId} spaceId={spaceId} responseKind={responseKind} />
 
@@ -183,45 +174,22 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 function ClaimPositionSection({
   entityId,
   spaceId,
-  responseKind,
-  summary,
+  state,
   row,
 }: {
   entityId: string;
   spaceId: string;
-  /** The page's one effective kind. Deriving a second one here is what let the two diverge. */
-  responseKind: 'stance' | 'veracity';
-  summary: ClaimResponseSummary;
+  /**
+   * The page's one derivation, passed down rather than repeated.
+   *
+   * Deriving a second kind here is what let the page count one vote kind while publishing another,
+   * and the same block written per surface is what made each of that family of bugs a separate fix.
+   */
+  state: ClaimResponseState;
   /** geo-chat's row, or null — which for a claim nobody has answered is a settled answer. */
   row: DebateClaim | null;
 }) {
-  const claim = React.useMemo(
-    () => ({
-      id: row?.id ?? entityId,
-      space_id: spaceId,
-      claim_entity_id: entityId,
-      claim: '',
-      description: null,
-    }),
-    [entityId, row?.id, spaceId]
-  );
-
-  const positions = React.useMemo(
-    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, row),
-    [responseKind, row, summary.negative, summary.positive]
-  );
-
-  const readiness = React.useMemo(
-    () => ({
-      response_kind: responseKind,
-      // Falls back to the on-chain summary. Without it a viewer's own side reads as unselected for
-      // as long as geo-chat's row is out — and in a space geo-chat does not index, permanently.
-      viewer_response: row?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
-      viewer_debate_ready: row?.viewer_debate_ready ?? false,
-      readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-    }),
-    [responseKind, row, summary.viewerDirection]
-  );
+  const { responseKind, claim, positions, readiness } = state;
 
   // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the vote
   // arrows on an entity page do — and through the same hook, which also keeps Privy's session

@@ -2,12 +2,7 @@
 
 import * as React from 'react';
 
-import {
-  positionSummariesFromCounts,
-  viewerResponseFromDirection,
-} from '~/core/claims/browse/claim-position-summaries';
-import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { claimResponseKind } from '~/core/claims/response-kind';
+import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
@@ -45,35 +40,20 @@ export function TopicClaimCard({ claim, fallbackSpaceId }: { claim: Entity; fall
   const rowQuery = useDebateClaims(spaceId, [claim.id], true);
   const row: DebateClaim | null = rowQuery.data?.claims.find(entry => entry.claim_entity_id === claim.id) ?? null;
 
-  // One effective kind for the card, geo-chat's where it has a row. Deriving it twice is what let
-  // the claim page count one vote kind while publishing another.
-  const responseKind = row?.response_kind ?? claimResponseKind(claim, spaceId);
-  const summary = useClaimResponseSummary(claim.id, spaceId, responseKind);
-
-  const positions = React.useMemo(
-    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, row),
-    [responseKind, row, summary.negative, summary.positive]
-  );
+  const state = useClaimResponseState({
+    claimId: claim.id,
+    spaceId,
+    row,
+    entity: claim,
+    title: claim.name ?? claim.id,
+    description: claim.description,
+  });
 
   return (
     <MatchmakingClaimCard
-      claim={{
-        id: row?.id ?? claim.id,
-        space_id: spaceId,
-        claim_entity_id: claim.id,
-        claim: claim.name ?? claim.id,
-        description: claim.description,
-      }}
-      positions={positions}
-      readiness={{
-        response_kind: responseKind,
-        // The on-chain summary resolves independently of geo-chat, so an unarrived row is not read
-        // as "no response" — which would draw the viewer's own side unselected and turn a click on
-        // it into a republish rather than a clear.
-        viewer_response: row?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
-        viewer_debate_ready: row?.viewer_debate_ready ?? false,
-        readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-      }}
+      claim={state.claim}
+      positions={state.positions}
+      readiness={state.readiness}
       activeDebate={row?.active_debate ?? null}
     />
   );

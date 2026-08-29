@@ -2,13 +2,8 @@
 
 import * as React from 'react';
 
-import {
-  positionSummariesFromCounts,
-  viewerResponseFromDirection,
-} from '~/core/claims/browse/claim-position-summaries';
-import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
-import { claimResponseKind } from '~/core/claims/response-kind';
+import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
@@ -307,45 +302,13 @@ function PanelClaimControls({
   row: DebateClaim | null;
   entity: Entity | null;
 }) {
-  // geo-chat's copy wins where it has a row; the graph answers for the spaces it does not index.
-  // The same order every other claim surface resolves this in — and it has to be, because this kind
-  // selects the vote kind on both the count query and the write.
-  const responseKind = row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance');
-
-  // Answered, not merely settled.
-  //
-  // Gating on the batch no longer loading was wrong in the case that matters: a graph timeout also
-  // stops it loading, and treating that as "no factual flag" enables Agree/Disagree on a claim that
-  // wants Verify/Dispute. Either geo-chat's row or an actual entity has to have said so — anything
-  // else leaves the pills alone, which is the safe direction to be wrong in.
-  const isResponseKindResolved = row !== null || entity !== null;
-  const summary = useClaimResponseSummary(claimId, spaceId, responseKind);
-
-  const claim = React.useMemo(
-    () => ({
-      id: row?.id ?? claimId,
-      space_id: spaceId,
-      claim_entity_id: claimId,
-      claim: '',
-      description: null,
-    }),
-    [claimId, row?.id, spaceId]
-  );
-
-  const positions = React.useMemo(
-    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, row),
-    [responseKind, row, summary.negative, summary.positive]
-  );
-
-  const readiness = React.useMemo(
-    () => ({
-      response_kind: responseKind,
-      viewer_response: row?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
-      viewer_debate_ready: row?.viewer_debate_ready ?? false,
-      readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-    }),
-    [responseKind, row, summary.viewerDirection]
-  );
+  // The claim's row title is drawn by `ClaimRow` above, so nothing is passed for it here.
+  const { responseKind, isResponseKindResolved, summary, claim, positions, readiness } = useClaimResponseState({
+    claimId,
+    spaceId,
+    row,
+    entity,
+  });
 
   const promptSignIn = usePrivySignIn();
   const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });

@@ -5,17 +5,12 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
-import {
-  positionSummariesFromCounts,
-  viewerResponseFromDirection,
-} from '~/core/claims/browse/claim-position-summaries';
-import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSideSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
-import { claimResponseKind } from '~/core/claims/response-kind';
+import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
-import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
@@ -25,9 +20,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
-import { ExploreJoinSpaceButton } from './explore-join-space-button';
-import { MetaDot } from './meta-dot';
-import { SpaceThumb } from './space-thumb';
+import { ExploreMetaRow } from './explore-meta-row';
 
 /**
  * A Claim in the explore feed.
@@ -93,52 +86,15 @@ export function ClaimExploreFeedCard({
   const rowQuery = useDebateClaims(item.spaceId, [item.entityId], nearViewport);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === item.entityId) ?? null;
 
-  // One effective kind for the card. geo-chat's copy wins where it has a row; the graph answers for
-  // spaces geo-chat does not index. Deriving it twice is what let a claim count one vote kind while
-  // publishing another.
-  const responseKind = row?.response_kind ?? (entity ? claimResponseKind(entity, item.spaceId) : 'stance');
-
-  // Whether that kind is an answer or a placeholder.
-  //
-  // `stance` is the fallback, and until one of the two lookups answers it is a guess — so a factual
-  // claim would show Agree/Disagree for the width of the entity query, and a click inside that
-  // window would publish a *stance* response against a claim that wants Verify/Dispute.
-  //
-  // Answered, not merely settled: a failed graph read also stops loading, and reading that as "no
-  // factual flag" is the same bug with a longer fuse. The feed item came from the graph, so the
-  // entity does arrive; if it does not, disabled pills are the safe direction to be wrong in.
-  const isResponseKindResolved = row !== null || Boolean(entity);
-
-  const summary = useClaimResponseSummary(item.entityId, item.spaceId, responseKind, nearViewport);
-
-  const positions = React.useMemo(
-    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, row),
-    [responseKind, row, summary.negative, summary.positive]
-  );
-
-  const claim = React.useMemo(
-    () => ({
-      id: row?.id ?? item.entityId,
-      space_id: item.spaceId,
-      claim_entity_id: item.entityId,
-      claim: item.title,
-      description: null,
-    }),
-    [item.entityId, item.spaceId, item.title, row?.id]
-  );
-
-  const readiness = React.useMemo(
-    () => ({
-      response_kind: responseKind,
-      // The on-chain summary resolves independently of geo-chat, so an unarrived row is not read as
-      // "no response" — which would draw the viewer's own side unselected and turn a click on it
-      // into a republish rather than a clear.
-      viewer_response: row?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
-      viewer_debate_ready: row?.viewer_debate_ready ?? false,
-      readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-    }),
-    [responseKind, row, summary.viewerDirection]
-  );
+  const { responseKind, isResponseKindResolved, summary, claim, positions, readiness } = useClaimResponseState({
+    claimId: item.entityId,
+    spaceId: item.spaceId,
+    row,
+    entity,
+    title: item.title,
+    // Held with the other two reads until the card is near the viewport.
+    enabled: nearViewport,
+  });
 
   // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the claim
   // page does — and through the same hook, which also keeps Privy's session restoration from being
@@ -148,61 +104,6 @@ export function ClaimExploreFeedCard({
 
   // Withheld while the counts are still out, so the column does not appear a beat after the card.
   const hasVerdict = !summary.isLoading && summary.total > 0;
-  const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-
-  // Deduped by normalized id and named only where the type has a name — an unnamed one would render
-  // as a raw id, which says less than nothing. Mirrors what `BaseExploreFeedCard` does, so a claim
-  // and its neighbours in the feed label themselves the same way.
-  const typeNames = React.useMemo(() => {
-    const seen = new Set<string>();
-    const names: string[] = [];
-    for (const type of item.types) {
-      if (!type.name) continue;
-      const key = type.id.replace(/-/g, '').toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      names.push(type.name);
-    }
-    return names;
-  }, [item.types]);
-
-  // Assembled rather than laid out inline, because the dots only fall between segments that are
-  // actually there — a claim with no timestamp must not leave a trailing separator.
-  const metaSegments: React.ReactNode[] = [];
-  if (!hideJoinButton && !item.isMemberOrEditor) {
-    metaSegments.push(
-      <ExploreJoinSpaceButton
-        key="join"
-        spaceId={item.spaceId}
-        hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-        variant="compact"
-        label="Join"
-      />
-    );
-  }
-  if (typeNames.length > 0) {
-    metaSegments.push(
-      <span
-        key="types"
-        className="inline-flex min-w-0 flex-wrap items-center text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04"
-      >
-        {typeNames.map((name, index) => (
-          <React.Fragment key={name}>
-            {index > 0 ? <MetaDot /> : null}
-            <span className="truncate">{name}</span>
-          </React.Fragment>
-        ))}
-      </span>
-    );
-  }
-  if (summary.isControversial) metaSegments.push(<ControversialTag key="controversial" />);
-  if (timeAgo) {
-    metaSegments.push(
-      <span key="time" className="shrink-0 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-        {timeAgo}
-      </span>
-    );
-  }
 
   return (
     <article ref={setContainer} className="flex flex-col gap-4 border-b border-divider py-4 last:border-b-0">
@@ -232,37 +133,26 @@ export function ClaimExploreFeedCard({
           hasVerdict ? 'grid-cols-[minmax(0,1fr)_220px] gap-x-6' : 'grid-cols-1'
         )}
       >
-        {/* The generic card's meta row, class for class: the space, a 6px spacer, then segments
-            joined by `MetaDot`, whose own margins carry the spacing. Every difference from it turned
-            out to be a difference the eye could see — a flex `gap` instead of those margins, a
-            missing `font-normal`, a `min-h` reserving the end slot's height that also held the row
-            8px taller than the same row on every neighbouring card. The only thing added is the
-            slot at the end. */}
-        <div className="col-start-1 row-start-1 mb-3 flex min-w-0 flex-wrap items-center gap-y-2 md:mb-0">
-          {!hideSpaceLink ? (
-            <Link
-              href={NavUtils.toSpace(item.spaceId)}
-              className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
-            >
-              <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-              <span className="min-w-0 truncate">{item.spaceName}</span>
-            </Link>
-          ) : null}
-          {!hideSpaceLink && metaSegments.length > 0 ? <span className="w-1.5 shrink-0" /> : null}
-          {metaSegments.map((segment, index) => (
-            <React.Fragment key={index}>
-              {index > 0 ? <MetaDot /> : null}
-              {segment}
-            </React.Fragment>
-          ))}
-          <ClaimEndSlot
-            claimId={item.entityId}
-            spaceId={item.spaceId}
-            activeDebate={row?.active_debate}
-            enabled={nearViewport}
-            className="ml-auto"
-          />
-        </div>
+        {/* The same row every other explore card draws, through the same component. It was a copy
+            once, and the copy drifted in four ways the eye could see before anyone found them in a
+            diff — see the note on `ExploreMetaRow`. What a claim adds is Controversial beside its
+            type, and the offer pinned to the end. */}
+        <ExploreMetaRow
+          item={item}
+          hideSpaceLink={hideSpaceLink}
+          hideJoinButton={hideJoinButton}
+          extraSegments={summary.isControversial ? [<ControversialTag key="controversial" />] : undefined}
+          endSlot={
+            <ClaimEndSlot
+              claimId={item.entityId}
+              spaceId={item.spaceId}
+              activeDebate={row?.active_debate}
+              enabled={nearViewport}
+              className="ml-auto"
+            />
+          }
+          className="col-start-1 row-start-1 mb-3 md:mb-0"
+        />
 
         {/* No thumbnail: claims carry no image, so the generic card's 60px well is either an empty
             gutter or a placeholder that says nothing. The sentence gets the column instead — it
@@ -336,7 +226,7 @@ function ClaimVerdictColumn({
   entityId: string;
   spaceId: string;
   responseKind: 'stance' | 'veracity';
-  summary: ReturnType<typeof useClaimResponseSummary>;
+  summary: ClaimResponseSummary;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
 
