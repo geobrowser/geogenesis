@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   resetIndexing: vi.fn(),
   isConnected: true,
   availableToDebate: true,
+  /** What the shared summary reports for every claim in the fixture. */
+  responseCounts: { positive: 0, negative: 0 },
 }));
 
 vi.mock('../hooks', () => ({
@@ -63,6 +65,25 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
   useResetEntityResponseIndexingSnapshot: () => mocks.resetIndexing,
 }));
+
+// The shared claim summary reads the viewer's personal space, which reaches wagmi through
+// `useSmartAccount` — and these suites render without a `WagmiProvider` on purpose, stubbing the
+// wallet-dependent seams instead (the `use-entity-vote` mock above supplies the same personal
+// space to the publish path). The real arithmetic is kept, so `isControversial` and the response
+// floor still come from the shared rule rather than a hand-written literal; only the two network
+// reads and the wallet lookup are replaced.
+vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>();
+  return {
+    ...actual,
+    useClaimResponseSummary: () => ({
+      ...actual.summarizeClaimResponses(mocks.responseCounts.positive, mocks.responseCounts.negative),
+      isLoading: false,
+      viewerDirection: null,
+      viewerSpaceId: null,
+    }),
+  };
+});
 
 // useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
 // suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
