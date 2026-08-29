@@ -31,6 +31,7 @@ export const NavUtils = {
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),
   toCommunity: (spaceId: string) => `${NavUtils.toSpace(spaceId)}/community`,
+  toCommunityAccretion: (spaceId: string) => `${NavUtils.toCommunity(spaceId)}/accretion`,
   toCommunityBounties: (spaceId: string, status: 'completed' | 'in-progress' | 'available') =>
     `${NavUtils.toSpace(spaceId)}/community/bounties/${status}`,
   toProposal: (spaceId: string, proposalId: string, from?: string, governanceHomeReturnSearch?: string) => {
