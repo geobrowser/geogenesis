@@ -136,7 +136,15 @@ function sideWeights(direction: ActiveResponseDirection | null | undefined): [po
 export function useClaimResponseSummary(
   entityId: string,
   spaceId: string,
-  responseKind: ResponseKind
+  responseKind: ResponseKind,
+  /**
+   * False to hold both reads back.
+   *
+   * For a feed, which mounts cards thousands of pixels below the fold: two queries apiece across a
+   * page of twenty-two is forty-four requests for claims nobody is looking at. Callers that are
+   * always on screen leave this alone.
+   */
+  enabled = true
 ): ClaimResponseSummary {
   const { personalSpaceId } = usePersonalSpaceId();
 
@@ -152,7 +160,7 @@ export function useClaimResponseSummary(
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
     queryFn: () =>
       Effect.runPromise(getEntityResponseCounts(entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)),
-    enabled: !responseBatch.managed,
+    enabled: enabled && !responseBatch.managed,
     staleTime: 30_000,
   });
 
@@ -165,7 +173,7 @@ export function useClaimResponseSummary(
         getUserEntityResponse(personalSpaceId, entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)
       );
     },
-    enabled: Boolean(personalSpaceId) && !responseBatch.managed,
+    enabled: enabled && Boolean(personalSpaceId) && !responseBatch.managed,
     staleTime: 30_000,
   });
 
@@ -188,7 +196,9 @@ export function useClaimResponseSummary(
     ...summarizeClaimResponses(positive, negative),
     // Under a batch the individual query never runs, so its `isLoading` is false from the start —
     // the batch's own readiness is what says whether there is anything to draw yet.
-    isLoading: responseBatch.managed ? !responseBatch.ready : isLoading,
+    // Held back is not the same as loading: a caller that has not asked yet has nothing to wait
+    // for, and reporting otherwise would leave a skeleton on screen for a card that never asks.
+    isLoading: responseBatch.managed ? !responseBatch.ready : enabled && isLoading,
     viewerDirection: activeDirection ?? null,
     viewerSpaceId: personalSpaceId ?? null,
   };

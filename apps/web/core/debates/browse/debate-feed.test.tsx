@@ -668,9 +668,7 @@ describe('DebatesBrowseFeed comments', () => {
   it('marks the button as a hub opener so the panel does not dismiss on pointerdown', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
-    expect(screen.getAllByRole('button', { name: 'Join a debate' })[0]).toHaveAttribute(
-      'data-debates-hub-opener'
-    );
+    expect(screen.getAllByRole('button', { name: 'Join a debate' })[0]).toHaveAttribute('data-debates-hub-opener');
   });
 
   // `useSmartAccount` reads null while the account restores and after an init failure as well as

@@ -79,7 +79,7 @@ export function ClaimExploreFeedCard({
     return () => observer.disconnect();
   }, [container, nearViewport]);
 
-  const { entity } = useQueryEntity({ id: item.entityId, spaceId: item.spaceId });
+  const { entity, isLoading: isEntityLoading } = useQueryEntity({ id: item.entityId, spaceId: item.spaceId });
 
   const rowQuery = useDebateClaims(item.spaceId, [item.entityId], nearViewport);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === item.entityId) ?? null;
@@ -88,7 +88,16 @@ export function ClaimExploreFeedCard({
   // spaces geo-chat does not index. Deriving it twice is what let a claim count one vote kind while
   // publishing another.
   const responseKind = row?.response_kind ?? (entity ? claimResponseKind(entity, item.spaceId) : 'stance');
-  const summary = useClaimResponseSummary(item.entityId, item.spaceId, responseKind);
+
+  // Whether that kind is an answer or a placeholder.
+  //
+  // `stance` is the fallback, and until one of the two lookups lands it is a guess — so a factual
+  // claim would show Agree/Disagree for the width of the entity query, and a click inside that
+  // window would publish a *stance* response against a claim that wants Verify/Dispute. The pills
+  // stay disabled until something authoritative has said which vocabulary this claim uses.
+  const isResponseKindResolved = row !== null || !isEntityLoading;
+
+  const summary = useClaimResponseSummary(item.entityId, item.spaceId, responseKind, nearViewport);
 
   const positions = React.useMemo(
     () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, row),
@@ -261,7 +270,7 @@ export function ClaimExploreFeedCard({
             responseKind={responseKind}
             viewerPosition={control.viewerPosition}
             onRespond={control.respond}
-            disabled={!control.canRespond}
+            disabled={!control.canRespond || !isResponseKindResolved}
             titleFor={control.actionTitle}
           />
           {control.responseError ? (

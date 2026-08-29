@@ -63,7 +63,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
   // Without this a factual claim fell back to Agree/Disagree and published a *stance* response,
   // which is the "count one vote kind while publishing another" failure the claim page's own note
   // describes. One batch for the panel rather than a lookup per row.
-  const { entities: claimEntities } = useQueryEntities({
+  const { entities: claimEntities, isLoading: areEntitiesLoading } = useQueryEntities({
     where: { id: { in: claimIds } },
     first: claimIds.length || 1,
     enabled: claimIds.length > 0,
@@ -146,6 +146,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               }
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
+              areEntitiesLoading={areEntitiesLoading}
               isLoading={isOrdering}
               error={error}
             />
@@ -162,6 +163,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               claims={orphaned}
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
+              areEntitiesLoading={areEntitiesLoading}
               isLoading={false}
               error={null}
             />
@@ -176,12 +178,14 @@ function ClaimList({
   claims,
   rowsByClaimId,
   entitiesByClaimId,
+  areEntitiesLoading,
   isLoading,
   error,
 }: {
   claims: TranscriptClaim[];
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
+  areEntitiesLoading: boolean;
   isLoading: boolean;
   error: Error | null;
 }) {
@@ -215,6 +219,7 @@ function ClaimList({
               claim={claim}
               row={rowsByClaimId.get(claim.id) ?? null}
               entity={entitiesByClaimId.get(claim.id) ?? null}
+              areEntitiesLoading={areEntitiesLoading}
             />
           </li>
         ))}
@@ -246,7 +251,17 @@ function ClaimList({
  * controls are space-scoped, so there is nothing correct to point either one at — better a dead row
  * than one that navigates somewhere wrong or publishes a response into the wrong space.
  */
-function ClaimRow({ claim, row, entity }: { claim: TranscriptClaim; row: DebateClaim | null; entity: Entity | null }) {
+function ClaimRow({
+  claim,
+  row,
+  entity,
+  areEntitiesLoading,
+}: {
+  claim: TranscriptClaim;
+  row: DebateClaim | null;
+  entity: Entity | null;
+  areEntitiesLoading: boolean;
+}) {
   if (claim.spaceId === null) {
     return (
       <Text as="p" variant="metadata" color="text">
@@ -262,7 +277,13 @@ function ClaimRow({ claim, row, entity }: { claim: TranscriptClaim; row: DebateC
           {claim.text}
         </Text>
       </Link>
-      <PanelClaimControls claimId={claim.id} spaceId={claim.spaceId} row={row} entity={entity} />
+      <PanelClaimControls
+        claimId={claim.id}
+        spaceId={claim.spaceId}
+        row={row}
+        entity={entity}
+        areEntitiesLoading={areEntitiesLoading}
+      />
     </>
   );
 }
@@ -284,16 +305,23 @@ function PanelClaimControls({
   spaceId,
   row,
   entity,
+  areEntitiesLoading,
 }: {
   claimId: string;
   spaceId: string;
   row: DebateClaim | null;
   entity: Entity | null;
+  areEntitiesLoading: boolean;
 }) {
   // geo-chat's copy wins where it has a row; the graph answers for the spaces it does not index.
   // The same order every other claim surface resolves this in — and it has to be, because this kind
   // selects the vote kind on both the count query and the write.
   const responseKind = row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance');
+
+  // The batch is asynchronous, so `stance` is a guess until it lands — and a guess the reader can
+  // act on is a stance response published against a factual claim. Held until something
+  // authoritative answers.
+  const isResponseKindResolved = row !== null || !areEntitiesLoading;
   const summary = useClaimResponseSummary(claimId, spaceId, responseKind);
 
   const claim = React.useMemo(
@@ -332,7 +360,7 @@ function PanelClaimControls({
         responseKind={responseKind}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
-        disabled={!control.canRespond}
+        disabled={!control.canRespond || !isResponseKindResolved}
         titleFor={control.actionTitle}
       />
       {control.responseError ? (

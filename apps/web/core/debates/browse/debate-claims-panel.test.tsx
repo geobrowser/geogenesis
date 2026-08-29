@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   /** Props every rendered response control received, in render order. */
   responseControlProps: [] as Array<Record<string, unknown>>,
   rankByClaimId: new Map<string, number>(),
+  entitiesLoading: false,
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -64,7 +65,9 @@ vi.mock('~/core/claims/browse/claim-summary', () => ({
 
 // The pills publish through the entity-response stack, which is not what this panel is about.
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
-  PositionRow: () => <div data-testid="position-row" />,
+  PositionRow: ({ disabled }: { disabled?: boolean }) => (
+    <div data-testid="position-row" data-disabled={String(Boolean(disabled))} />
+  ),
   useClaimPositionControl: () => ({
     viewerPosition: null,
     optimisticPositions: [],
@@ -94,7 +97,7 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn()
 // The panel resolves the claim entities to answer the response vocabulary where geo-chat has no
 // row. That is a graph read, and these suites are about grouping and ordering.
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntities: () => ({ entities: [], isLoading: false }),
+  useQueryEntities: () => ({ entities: [], isLoading: mocks.entitiesLoading }),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -159,6 +162,7 @@ beforeEach(() => {
   mocks.error = null;
   mocks.responseControlProps.length = 0;
   mocks.rankByClaimId = new Map();
+  mocks.entitiesLoading = false;
   mocks.rankingReady = true;
 });
 
@@ -217,6 +221,25 @@ describe('DebateClaimsPanel', () => {
 
   // Both the link and the response target are space-scoped, so a claim with no space has nothing
   // correct to point at. Showing the text without controls beats guessing a space.
+  it('will not let anyone answer before the claim\u2019s vocabulary is known', () => {
+    // `stance` is the fallback while the entity batch is in flight, so the pills would say Agree and
+    // Disagree on a claim that wants Verify and Dispute — and a click inside that window publishes a
+    // stance response against a factual claim. The kind selects `voteKind` on the write, so this is
+    // not a labelling problem; it is the wrong vote.
+    mocks.entitiesLoading = true;
+    mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'One.')] });
+
+    const { unmount } = render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+    expect(screen.getByTestId('position-row').getAttribute('data-disabled')).toBe('true');
+    unmount();
+
+    // Settled, whether or not the batch found anything: a lookup that comes back empty has still
+    // answered, and geo-chat's row would have answered sooner.
+    mocks.entitiesLoading = false;
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+    expect(screen.getByTestId('position-row').getAttribute('data-disabled')).toBe('false');
+  });
+
   it('renders a claim with no space as plain text, with no link and no controls', () => {
     mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'Homeless claim.', { spaceId: null })] });
 
