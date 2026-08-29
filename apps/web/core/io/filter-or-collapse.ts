@@ -1,8 +1,15 @@
 import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
 
 /**
- * Collapse `or: [ { relations: { some: X, typeId: A } }, { relations: { some: X, typeId: B } } ]`
- * into a single `relations: { some: { ...X, typeId: { in: [A, B] } } }`.
+ * Collapse an `or` whose branches differ only by which single value they match into one
+ * multi-valued clause. Two shapes, both seen in production, both from filters authored in the
+ * graph rather than written here:
+ *
+ *   or: [ { relations: { some: X, typeId: A } }, { relations: { some: X, typeId: B } } ]
+ *     -> relations: { some: { ...X, typeId: { in: [A, B] } } }
+ *
+ *   or: [ { typeIds: { anyEqualTo: A } }, { typeIds: { anyEqualTo: B } } ]
+ *     -> typeIds: { overlaps: [A, B] }
  *
  * Why this exists: PostGraphile's connection-filter compiles every `relations.some`
  * into its own EXISTS subquery. OR-ing two of them leaves the planner unable to use
@@ -78,7 +85,7 @@ function shapeWithoutTypeId(relation: RelationFilter): string {
  * Requires at least two branches, every branch a bare `relations.some` carrying a
  * single `typeId: { is }`, and all branches identical once typeId is set aside.
  */
-function collapseOrBranches(branches: readonly EntityFilter[]): EntityFilter | undefined {
+function collapseRelationsSomeBranches(branches: readonly EntityFilter[]): EntityFilter | undefined {
   if (branches.length < 2) return undefined;
 
   const relations: RelationFilter[] = [];
@@ -114,11 +121,45 @@ function collapseOrBranches(branches: readonly EntityFilter[]): EntityFilter | u
 }
 
 /**
+ * Rewrite an `or` whose every branch is a bare `typeIds: { anyEqualTo }`, or undefined when it is
+ * not that shape.
+ *
+ * The result uses `overlaps`, not `in`. On a list column `in` compares the *whole array* against
+ * each candidate rather than testing membership, so the `in` form returns nothing — measured at
+ * 28,810 ms and 0 rows against production, versus 6,521 ms and 9 rows for the OR it would have
+ * replaced. `overlaps` is the membership operator and returns the same 9 rows in 2,151 ms, and
+ * `extractTypeIdsFromFilter` then promotes it to the indexed top-level argument at 750 ms.
+ *
+ * `anyEqualTo` is already membership ("any array item equals this"), so the rewrite is a
+ * straight OR-to-set: `any = A ∨ any = B` is `overlaps [A, B]`.
+ */
+function collapseTypeIdsBranches(branches: readonly EntityFilter[]): EntityFilter | undefined {
+  if (branches.length < 2) return undefined;
+
+  const ids: string[] = [];
+  for (const branch of branches) {
+    if (!branch) return undefined;
+    const keys = Object.keys(branch).filter(k => (branch as Record<string, unknown>)[k] != null);
+    if (keys.length !== 1 || keys[0] !== 'typeIds') return undefined;
+
+    const typeIds = branch.typeIds;
+    if (!typeIds) return undefined;
+    const typeIdKeys = Object.keys(typeIds).filter(k => (typeIds as Record<string, unknown>)[k] != null);
+    if (typeIdKeys.length !== 1 || typeIdKeys[0] !== 'anyEqualTo') return undefined;
+    if (typeof typeIds.anyEqualTo !== 'string') return undefined;
+    ids.push(typeIds.anyEqualTo);
+  }
+
+  const unique = [...new Set(ids)];
+  return { typeIds: unique.length === 1 ? { anyEqualTo: unique[0] } : { overlaps: unique } };
+}
+
+/**
  * Walk the filter and collapse every OR-of-`relations.some` it contains, at any
  * depth. Returns the input unchanged (by reference) when there is nothing to do,
  * so callers can keep using it as an effect dependency.
  */
-export function collapseRelationOrFilter(filter?: EntityFilter): EntityFilter | undefined {
+export function collapseOrFilter(filter?: EntityFilter): EntityFilter | undefined {
   if (!filter) return filter;
 
   let changed = false;
@@ -127,7 +168,7 @@ export function collapseRelationOrFilter(filter?: EntityFilter): EntityFilter | 
   // Children first, so an `or` collapsed below appends to an already-walked `and`
   // rather than re-appending the original children alongside it.
   if (filter.and) {
-    const walked = filter.and.map(child => collapseRelationOrFilter(child) ?? child);
+    const walked = filter.and.map(child => collapseOrFilter(child) ?? child);
     if (walked.some((child, i) => child !== filter.and![i])) {
       next.and = walked;
       changed = true;
@@ -135,7 +176,7 @@ export function collapseRelationOrFilter(filter?: EntityFilter): EntityFilter | 
   }
 
   if (filter.not) {
-    const walked = collapseRelationOrFilter(filter.not);
+    const walked = collapseOrFilter(filter.not);
     if (walked !== filter.not) {
       next.not = walked;
       changed = true;
@@ -143,19 +184,20 @@ export function collapseRelationOrFilter(filter?: EntityFilter): EntityFilter | 
   }
 
   if (filter.or) {
-    const collapsed = collapseOrBranches(filter.or);
+    const collapsed = collapseRelationsSomeBranches(filter.or) ?? collapseTypeIdsBranches(filter.or);
     if (collapsed) {
       delete next.or;
-      // A collapsed `or` becomes a `relations` clause. If the filter already carries
-      // one, AND them together rather than silently dropping either.
-      if (next.relations) {
+      // The collapsed branch becomes a `relations` or `typeIds` clause. If the filter already
+      // carries that same key, AND them together rather than silently dropping either.
+      const key = collapsed.relations ? 'relations' : 'typeIds';
+      if (next[key]) {
         next.and = [...(next.and ?? []), collapsed];
       } else {
-        next.relations = collapsed.relations;
+        Object.assign(next, collapsed);
       }
       changed = true;
     } else {
-      const walked = filter.or.map(child => collapseRelationOrFilter(child) ?? child);
+      const walked = filter.or.map(child => collapseOrFilter(child) ?? child);
       if (walked.some((child, i) => child !== filter.or![i])) {
         next.or = walked;
         changed = true;

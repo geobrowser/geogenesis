@@ -6,7 +6,9 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateClaim } from '~/core/debates/api';
+import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
+import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
@@ -226,12 +228,15 @@ function ClaimPositionSection({
   // restoration from being mistaken for a login somebody asked for.
   const promptSignIn = usePrivySignIn();
   const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
+  // See claims-page-client: retiring the optimistic snapshot outlived the toggle that used to own
+  // it, because `claim-response-summary` on this page reads that snapshot for display.
+  useRetireConfirmedResponseIndexing({ debateClaim: row, entityId, spaceId });
+  useBackfillReadinessForHeldPosition({ debateClaim: row, entityId, spaceId });
 
   return (
     <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
-      {/* No readiness switch. The Debate toggle is being retired, so nothing here interacts with
-          it — and the corner the card gave it is now the end slot, which always offers something
-          the reader can act on. */}
+      {/* No readiness switch — the Debate toggle is gone from the product. Master left the header
+          row that used to hold it; with nothing on its right there is no row, just a label. */}
       <Text as="div" variant="metadataMedium" color="grey-04" className="mb-2.5 block">
         Your position
       </Text>

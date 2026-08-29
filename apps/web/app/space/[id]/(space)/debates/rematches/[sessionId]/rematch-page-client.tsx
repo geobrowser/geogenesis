@@ -11,7 +11,6 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import {
   type DebateClaimPositionSummary,
-  type DebateClaimSummary,
   type DebateRematchClaim,
   type DebateRematchClaimPosition,
   type DebateRematchParticipant,
@@ -1113,10 +1112,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }, [browsedClaims, curatedClaims, featuredClaims, opponentClaims, participants]);
   useDebateGatewaySpaceScopes(scopedSpaceIds, geoChatAuthenticated && scopedSpaceIds.length > 0);
 
-  // Readiness drives the card's Debate toggle. geo-chat now carries it on the rematch claims
+  // Readiness is reported by the card. geo-chat now carries it on the rematch claims
   // response itself; the per-space debate-claims endpoint is the fallback for a backend that
   // predates that, and it costs one query per space on screen.
-  const { byClaimId: readinessByClaimId, unresolved: readinessUnresolved } = useClaimReadinessByClaimId({
+  const { byClaimId: readinessByClaimId } = useClaimReadinessByClaimId({
     claims,
     unresolved:
       tab === 'opponent'
@@ -1153,7 +1152,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       session={session}
       currentUserId={currentUserId}
       readiness={readinessByClaimId.get(claim.claim.claim_entity_id) ?? null}
-      readinessUnresolved={readinessUnresolved}
       onRequest={() =>
         createRequest.mutate({
           source_space_id: claim.claim.space_id,
@@ -1378,8 +1376,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 type ClaimReadinessState = { viewer_debate_ready: boolean; readiness_disabled_reason: string | null };
 
 /**
- * Readiness for every claim on screen, keyed by claim entity id, so the shared card can render its
- * Debate toggle against real state.
+ * Readiness for every claim on screen, keyed by claim entity id, so the shared card reads real
+ * state. The Debate toggle it used to drive is gone (GEO-2740) — readiness now follows from
+ * holding a position — but the card still reports readiness, so this stays.
  *
  * Read off the rows themselves when they carry it — geo-chat's matchmaking and rematch responses
  * both do, so nothing extra goes over the wire. A row with the field absent comes from a backend
@@ -1446,7 +1445,6 @@ function RematchClaimCard({
   session,
   currentUserId,
   readiness: claimReadiness,
-  readinessUnresolved,
   onRequest,
   busy,
 }: {
@@ -1455,7 +1453,6 @@ function RematchClaimCard({
   currentUserId: string | null;
   readiness: ClaimReadinessState | null;
   /** True while any readiness lookup is still running or has failed. */
-  readinessUnresolved: boolean;
   onRequest: () => void;
   busy: boolean;
 }) {

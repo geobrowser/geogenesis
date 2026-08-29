@@ -76,8 +76,9 @@ export function EntityVoteButtons({
   // but derives `types` from all of them, so a claim collected into another space — a data block
   // row, a ranking entry — has its Types relation only in the space it was published to. Asking
   // for that other space returned an entity with no Types relation at all, so this read it as a
-  // plain entity and drew curation arrows, while `ClaimDebateButton` reads `types` and drew the
-  // Debate toggle beside it. One claim, two controls disagreeing about what it was.
+  // plain entity and drew curation arrows, while the Debate control beside it read `types` and
+  // disagreed about what the same claim was. That control is gone (GEO-2740); the unscoped read
+  // stays, because the disagreement it fixed was about this component's own arrows.
   //
   // Space still decides the *kind* of response, just not whether there is one: the checks below
   // and `hasUnpublishedClaimResponseKindEdit` each re-filter to `spaceId` themselves, so widening
