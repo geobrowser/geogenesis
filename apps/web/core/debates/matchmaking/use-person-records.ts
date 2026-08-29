@@ -7,6 +7,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { type WinnerShare, useWinnerSharesWithStatus } from '~/core/claims/browse/claim-debates';
+import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
 import { type PersonRecord, derivePersonRecord } from './person-record';
@@ -20,8 +21,18 @@ import {
 
 const EMPTY_SHARES = new Map<string, WinnerShare>();
 
+/** Canonical identity of the debates a rate was computed over, order- and spelling-independent. */
+function debateSetKey(debateIds: string[]): string {
+  return debateIds.map(uuidToHex).sort().join(',');
+}
+
 /** Raw per-person counts, before the winner grouping and the omit rules are applied. */
-type RawRecord = { positions: number; debateIds: string[]; truncated: boolean; createdAt: string | null };
+type RawRecord = {
+  positions: number;
+  debateIds: string[];
+  truncated: boolean;
+  createdAt: string | number | null;
+};
 
 /**
  * The record behind every row of the People tab.
@@ -90,12 +101,14 @@ export function usePersonRecords(personIds: string[]): Map<string, PersonRecord>
     keepPreviousWhileLoading: true,
   });
 
-  // Records already derived from a settled share set, so a rate can be carried across the window
-  // where the shares belong to the previous set of debates.
-  const settledRecords = React.useRef<Map<string, PersonRecord>>(new Map());
+  // Rates already derived from a settled share set, each remembered against the exact debates it
+  // was computed over, so one can be carried across the window where the shares belong to the
+  // previous set — and only while it still describes what the row is counting.
+  const settledRates = React.useRef<Map<string, { winRate: PersonRecord['winRate']; debateKey: string }>>(new Map());
 
   return React.useMemo(() => {
     const records = new Map<string, PersonRecord>();
+    const settling = new Map<string, { winRate: PersonRecord['winRate']; debateKey: string }>();
     if (!raw) return records;
 
     for (const [personId, record] of raw) {
@@ -114,11 +127,18 @@ export function usePersonRecords(personIds: string[]): Map<string, PersonRecord>
       // A rate is only carried across if this person's own record is still whole. Once their
       // relations come back truncated the debate count is withheld, and a rate is a statement about
       // that count — showing one over a total the row will not print says more than is known.
-      const carried = record.truncated ? null : (settledRecords.current.get(personId)?.winRate ?? null);
+      // Carried only while it still describes the debates the row is now counting. A refetch that
+      // turns up a debate the settled rate never saw would otherwise pair "2 debates" with "won 1
+      // of 1" — a row disagreeing with itself.
+      const debateKey = debateSetKey(record.debateIds);
+      const previous = settledRates.current.get(personId);
+      const carried = record.truncated || !previous || previous.debateKey !== debateKey ? null : previous.winRate;
+
       records.set(personId, sharesAreStale ? { ...fresh, winRate: carried } : fresh);
+      settling.set(personId, { winRate: fresh.winRate, debateKey });
     }
 
-    if (!sharesAreStale) settledRecords.current = records;
+    if (!sharesAreStale) settledRates.current = settling;
     return records;
   }, [raw, winnerByDebateId, sharesAreStale]);
 }

@@ -25,8 +25,8 @@ export type PersonRecordInput = {
   debateIds: string[];
   /** A relation page came back full, so `debateIds` is a subset and any count from it under-reports. */
   truncated: boolean;
-  /** Unix seconds, as `entity.createdAt` returns it. */
-  createdAt: string | null;
+  /** Unix seconds — stringified or numeric — or ISO 8601, as `entity.createdAt` may return it. */
+  createdAt: string | number | null;
   winnerByDebateId: Map<string, WinnerShare>;
 };
 
@@ -95,15 +95,20 @@ export function derivePersonRecord({
  * form this happened to return when it was measured: seconds would read an ISO value as no date at
  * all, and a millisecond value as a year in the sixty-seventh millennium.
  */
-function parseCreatedAt(value: string | null): Date | null {
-  if (!value) return null;
+function parseCreatedAt(value: string | number | null): Date | null {
+  if (value === null || value === undefined || value === '') return null;
+  // Stringified before anything reads it: the scalar is documented as numeric *or* string, and a
+  // number arriving at a string method takes the whole tab down mid-render.
+  const raw = String(value).trim();
+  if (raw === '') return null;
+
   // The helper falls back to `Date.parse`, which is lenient enough to read "0" as the year 2000.
   // A row is better with no join date than with a wrong one, so a non-positive number is rejected
   // before it can be read as a date at all.
-  const asNumber = Number(value.trim());
+  const asNumber = Number(raw);
   if (Number.isFinite(asNumber) && asNumber <= 0) return null;
 
-  const seconds = parseEntityUpdatedAtToUnixSec(value);
+  const seconds = parseEntityUpdatedAtToUnixSec(raw);
   return seconds > 0 ? new Date(seconds * 1000) : null;
 }
 

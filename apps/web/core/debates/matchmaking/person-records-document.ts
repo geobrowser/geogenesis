@@ -28,7 +28,7 @@ export const DEBATE_RELATIONS_PER_SIDE = 100;
 export type PersonRecordsQuery = Record<
   string,
   | { totalCount?: number | null; nodes?: Array<{ fromEntityId?: string | null } | null> | null }
-  | { createdAt?: string | null }
+  | { createdAt?: string | number | null }
   | null
   | undefined
 >;

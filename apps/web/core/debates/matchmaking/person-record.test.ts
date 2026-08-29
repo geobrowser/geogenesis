@@ -181,6 +181,14 @@ describe('join date', () => {
     expect(record({ createdAt: '-1' }).joinedAt).toBeNull();
   });
 
+  // The scalar is documented as numeric *or* string. A number reaching a string method would take
+  // the whole tab down mid-render, so it is stringified before anything reads it.
+  it('accepts a numeric timestamp without throwing', () => {
+    expect(() => record({ createdAt: 1769726933 as unknown as string })).not.toThrow();
+    expect(formatJoinedAt(record({ createdAt: 1769726933 as unknown as string }).joinedAt!)).toBe('Jan 2026');
+    expect(record({ createdAt: 0 as unknown as string }).joinedAt).toBeNull();
+  });
+
   // `createdAt` is documented as unix seconds, stringified or numeric, or ISO 8601 — "varies by
   // backend". Assuming the one form it happened to return when measured would drop the date from
   // every row on an ISO value, and read a millisecond value as the sixty-seventh millennium.

@@ -137,6 +137,28 @@ describe('usePersonRecords', () => {
     expect(result.current.get(A)?.winRate).toEqual({ percent: 100, wins: 1, of: 1 });
   });
 
+  // A carried rate describes the debates it was computed over. If a refetch turns up a debate that
+  // rate never saw, carrying it pairs "2 debates" with "won 1 of 1" — a row disagreeing with itself.
+  it('drops a carried rate once the debates it was computed over have changed', async () => {
+    mocks.responses = [debated(['d1']), debated(['d1', 'd2'], ['d3'])];
+    mocks.shares = new Map([['d1', { spaceId: A, percent: 100, totalVotes: 2, tied: false }]]);
+
+    const { result, rerender } = renderHook(({ ids }: { ids: string[] }) => usePersonRecords(ids), {
+      wrapper,
+      initialProps: { ids: [A] },
+    });
+
+    await waitFor(() => expect(result.current.get(A)?.winRate).toEqual({ percent: 100, wins: 1, of: 1 }));
+
+    mocks.sharesAreStale = true;
+    rerender({ ids: [A, B] });
+    await waitFor(() => expect(result.current.get(A)?.debatesArgued).toBe(2));
+
+    // The count moved on, so the rate that described one debate is withheld rather than shown
+    // beside a total it does not match.
+    expect(result.current.get(A)?.winRate).toBeNull();
+  });
+
   it('asks for nobody when the list is empty', () => {
     const { result } = renderHook(() => usePersonRecords([]), { wrapper });
 
