@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { toSignIn } from '~/core/auth/sign-in-deep-link';
+import { SIGN_IN_MODAL, toSignIn } from '~/core/auth/sign-in-deep-link';
 import { modalTarget, requestsModal } from '~/core/deep-links/modal-deep-link';
 
-import { debatesPanelTab, requestsDebatesPanel, toDebatesPanel } from './debates-panel-deep-link';
+import { DEBATES_MODAL, debatesPanelTab, toDebatesPanel } from './debates-panel-deep-link';
 
-const params = (search: string) => new URLSearchParams(search);
-
+/**
+ * Only what is specific to this link. Reading a trigger, clearing one, and the param names are the
+ * scheme's, and are covered once in `core/deep-links/modal-deep-link.test.ts` rather than again per
+ * feature.
+ */
 describe('toDebatesPanel', () => {
   it('builds the link', () => {
     expect(toDebatesPanel()).toBe('/explore?modal=debates');
@@ -23,28 +26,20 @@ describe('toDebatesPanel', () => {
     );
   });
 
-  it('round-trips through the readers', () => {
+  it('round-trips through the scheme’s readers', () => {
     const built = new URL(toDebatesPanel({ tab: 'matches' }), 'https://geobrowser.io');
 
-    expect(requestsDebatesPanel(built.searchParams)).toBe(true);
+    expect(requestsModal(built.searchParams, DEBATES_MODAL)).toBe(true);
     expect(debatesPanelTab(modalTarget(built.searchParams))).toBe('matches');
   });
 
-  // Both links share the trigger param, so each has to ignore the other's value rather than
-  // treating any `modal` at all as its own.
+  // Both links share the trigger param, so the value has to be the thing that tells them apart —
+  // in both directions, since either handler acting on the other's link would clear it.
   it('is distinguishable from the sign-in link', () => {
     const signIn = new URL(toSignIn({ via: 'marketing' }), 'https://geobrowser.io');
 
-    expect(requestsDebatesPanel(signIn.searchParams)).toBe(false);
-    expect(requestsModal(signIn.searchParams, 'signin')).toBe(true);
-  });
-});
-
-describe('requestsDebatesPanel', () => {
-  it('recognises the trigger and ignores another modal', () => {
-    expect(requestsDebatesPanel(params('modal=debates'))).toBe(true);
-    expect(requestsDebatesPanel(params('modal=signin'))).toBe(false);
-    expect(requestsDebatesPanel(null)).toBe(false);
+    expect(requestsModal(signIn.searchParams, DEBATES_MODAL)).toBe(false);
+    expect(requestsModal(signIn.searchParams, SIGN_IN_MODAL)).toBe(true);
   });
 });
 

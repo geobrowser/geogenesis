@@ -11,7 +11,7 @@
  * Any page: the hub is mounted app-wide in `app/entry.tsx`, so it has no host route to be
  * contextual to. `/explore` is only the default this builder fills in.
  */
-import { DEEP_LINK_MODALS, type ReadableParams, requestsModal, toModal } from '~/core/deep-links/modal-deep-link';
+import { DEEP_LINK_MODALS, toModal } from '~/core/deep-links/modal-deep-link';
 
 import type { DebatesHubTab } from '~/atoms';
 
@@ -21,10 +21,6 @@ export const DEBATES_MODAL = DEEP_LINK_MODALS.debates;
 const DEBATES_PATHNAME = '/explore';
 
 const TABS: readonly DebatesHubTab[] = ['claims', 'people', 'matches', 'requests'];
-
-export function requestsDebatesPanel(params: ReadableParams): boolean {
-  return requestsModal(params, DEBATES_MODAL);
-}
 
 /**
  * The hub's reading of `modalTarget`: a tab name, or null to let the hub pick its own landing tab.
@@ -43,6 +39,9 @@ export function debatesPanelTab(target: string | null): DebatesHubTab | null {
 /**
  * Builds the link. Exposed through `NavUtils.toDebatesPanel` as well, which is where anyone
  * looking for a route in this codebase looks first.
+ *
+ * Reading the link back is `useDeepLinkParams(DEBATES_MODAL)` rather than a `requestsDebatesPanel`
+ * here — a per-feature wrapper over `requestsModal` had no callers once the protocol was shared.
  */
 export function toDebatesPanel(options?: { tab?: DebatesHubTab; via?: string; pathname?: string }): string {
   return toModal({

@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { modalVia, requestsModal } from '~/core/deep-links/modal-deep-link';
 
-import { requestsSignInModal, toSignIn } from './sign-in-deep-link';
+import { SIGN_IN_MODAL, toSignIn } from './sign-in-deep-link';
 
-const params = (search: string) => new URLSearchParams(search);
-
+/**
+ * Only what is specific to this link. Reading a trigger, clearing one, and the param names are the
+ * scheme's, and are covered once in `core/deep-links/modal-deep-link.test.ts` rather than again per
+ * feature.
+ */
 describe('toSignIn', () => {
   // The marketing site hardcodes whatever this returns, so the shape is the deliverable.
   it('builds the link the marketing site hardcodes', () => {
@@ -22,27 +25,15 @@ describe('toSignIn', () => {
     expect(toSignIn({ pathname: '/root', via: 'email' })).toBe('/root?modal=signin&via=email');
   });
 
-  it('round-trips through the readers', () => {
+  it('round-trips through the scheme’s readers', () => {
     const built = new URL(toSignIn({ via: 'marketing' }), 'https://geobrowser.io');
 
-    expect(requestsSignInModal(built.searchParams)).toBe(true);
+    expect(requestsModal(built.searchParams, SIGN_IN_MODAL)).toBe(true);
     expect(modalVia(built.searchParams)).toBe('marketing');
   });
 
+  // Both links share the trigger param, so the value has to be the thing that tells them apart.
   it('is distinguishable from the debates link', () => {
-    expect(requestsSignInModal(params('modal=debates'))).toBe(false);
-    expect(requestsModal(params('modal=debates'), 'debates')).toBe(true);
-  });
-});
-
-describe('requestsSignInModal', () => {
-  it('recognises the trigger', () => {
-    expect(requestsSignInModal(params('modal=signin'))).toBe(true);
-  });
-
-  it('ignores a different modal, so an unrelated deep link never opens the login', () => {
-    expect(requestsSignInModal(params('modal=something-else'))).toBe(false);
-    expect(requestsSignInModal(params(''))).toBe(false);
-    expect(requestsSignInModal(null)).toBe(false);
+    expect(requestsModal(new URLSearchParams('modal=debates'), SIGN_IN_MODAL)).toBe(false);
   });
 });

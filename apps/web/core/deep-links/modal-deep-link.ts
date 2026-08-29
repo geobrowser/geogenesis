@@ -50,9 +50,11 @@ export const DEEP_LINK_MODALS = {
 
 export type ModalDeepLink = (typeof DEEP_LINK_MODALS)[keyof typeof DEEP_LINK_MODALS];
 
-export const MODAL_PARAM = 'modal';
-export const MODAL_TARGET_PARAM = 'modalTarget';
-export const VIA_PARAM = 'via';
+// Module-private: every read and write of these goes through the helpers below, so nothing
+// outside needs the raw names.
+const MODAL_PARAM = 'modal';
+const MODAL_TARGET_PARAM = 'modalTarget';
+const VIA_PARAM = 'via';
 
 /**
  * Structural rather than `URLSearchParams` itself: what `useSearchParams` hands back is a
