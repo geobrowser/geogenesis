@@ -35,9 +35,16 @@ export type ScopedClaims = {
    * The facets in hand answer a filter the viewer has since moved on from.
    *
    * They keep being rendered — blanking the menu under the cursor is worse than a beat of staleness
-   * — but their *counts* must not be, because a count is the one part that is provably wrong: a
-   * topic facet is co-occurrence, so a stale one can show an option counted above the selection
-   * itself, which is impossible for a real answer. Callers hide the numbers while this is true.
+   * — but their *counts* are the part that is provably wrong: a topic facet is co-occurrence, so a
+   * stale one can show an option counted above the selection itself, which is impossible for a
+   * real answer.
+   *
+   * Callers cover the numbers while this is true, though deliberately not the instant it goes
+   * true. `HubMultiFilterMenu` waits out a grace period first, which means a short pending spell
+   * shows the previous counts rather than a placeholder. That is the trade, and it is the right
+   * way round: a wrong number needs to be read to mislead, and nobody reads one inside a couple of
+   * hundred milliseconds, whereas a placeholder flashing in and out is noticed every single time
+   * and was the complaint that led here. The skeleton is for a wait long enough to be seen.
    */
   countsPending: boolean;
   /** Already masked: a sentinel rendered on this can't page a corpus the caller can't show. */

@@ -98,6 +98,27 @@ describe('keepSelectableTopics', () => {
     const selected = ['ai', 'health'];
     expect(keepSelectableTopics(selected, [AI, HEALTH], true)).toBe(selected);
   });
+
+  // The race the co-occurrence menu opens: the second pick lands against the first one's facet,
+  // before the answer narrowing that facet has arrived. Giving back only the pick that didn't fit
+  // beats discarding the one the viewer chose deliberately alongside it.
+  it('gives back only the newest pick when the combination matches nothing', () => {
+    expect(keepSelectableTopics(['ai', 'health'], [], true)).toEqual(['ai']);
+  });
+
+  // A single held topic has no earlier pick to fall back to, so an empty menu still clears it —
+  // the space changing under a held topic, which is what this rule was written for.
+  it('still clears a lone topic the menu no longer offers', () => {
+    expect(keepSelectableTopics(['ai'], [], true)).toEqual([]);
+  });
+
+  // Each round asks about the shortened selection, so a genuinely expired one drains rather than
+  // sticking at one topic forever.
+  it('drains a stale selection one pick at a time', () => {
+    expect(keepSelectableTopics(['ai', 'health', 'crypto'], [], true)).toEqual(['ai', 'health']);
+    expect(keepSelectableTopics(['ai', 'health'], [], true)).toEqual(['ai']);
+    expect(keepSelectableTopics(['ai'], [], true)).toEqual([]);
+  });
 });
 
 describe('orderFacetOptions', () => {

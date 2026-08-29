@@ -63,12 +63,23 @@ export function keepSelectableTopic(
  * longer offers is a chip the viewer cannot unpick from the menu it came from. Returns the input
  * unchanged while unresolved, and the same array when nothing is dropped, so it is safe to feed
  * straight back into state without looping.
+ *
+ * With more than one topic held, an empty menu is read as the newest pick not fitting rather than
+ * as the whole selection expiring, and only that pick is given back. Since GEO-2696 the facet is
+ * co-occurrence, so an empty one means "this combination matches nothing" — and the reachable way
+ * to land there is picking a second topic before the first one's answer arrives, while the menu
+ * still offers topics that don't co-occur with it. Dropping everything would discard a pick the
+ * viewer had made deliberately along with the one that didn't fit. A selection that has genuinely
+ * expired — the space changed under it, say — still clears: the shortened selection is asked
+ * about in turn, and each round drops one until nothing is left.
  */
 export function keepSelectableTopics(topicIds: string[], available: MatchmakingTopic[], isResolved: boolean): string[] {
   if (topicIds.length === 0 || !isResolved) return topicIds;
   const offered = new Set(available.map(topic => topic.id));
   const kept = topicIds.filter(id => offered.has(id));
-  return kept.length === topicIds.length ? topicIds : kept;
+  if (kept.length === topicIds.length) return topicIds;
+  // `toggleId` appends, so the last id is the most recent pick.
+  return kept.length === 0 && topicIds.length > 1 ? topicIds.slice(0, -1) : kept;
 }
 
 /**
