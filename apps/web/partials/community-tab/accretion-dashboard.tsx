@@ -8,9 +8,11 @@ import cx from 'classnames';
 
 import {
   ACCRETION_PERIOD_OPTIONS,
+  ACCRETION_SCOPE_OPTIONS,
   type AccretionCoverage,
   type AccretionDashboardResult,
   type AccretionPeriod,
+  type AccretionScope,
 } from '~/core/community/accretion-types';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -64,10 +66,7 @@ function EmptyMetric({ children }: { children: React.ReactNode }) {
 function UnitCostDeck({ data }: { data: AccretionDashboardResult }) {
   return (
     <section className={PANEL_CLASS}>
-      <PanelHeader
-        title="Unit cost deck"
-        description="Median nominal payout allocated to each accepted artifact type."
-      />
+      <PanelHeader title="Unit cost deck" description="Median points allocated to each accepted artifact type." />
       {data.unitCosts.length === 0 ? (
         <EmptyMetric>No fully linked payout and proposal-diff samples are available for this period.</EmptyMetric>
       ) : (
@@ -78,7 +77,7 @@ function UnitCostDeck({ data }: { data: AccretionDashboardResult }) {
                 <th className="pb-3 font-normal">Artifact type</th>
                 <th className="pb-3 text-right font-normal">Artifacts</th>
                 <th className="pb-3 text-right font-normal">Proposals</th>
-                <th className="pb-3 text-right font-normal">Median unit cost</th>
+                <th className="pb-3 text-right font-normal">Median unit cost (points)</th>
               </tr>
             </thead>
             <tbody>
@@ -111,7 +110,7 @@ function RetroactiveRoi({ data }: { data: AccretionDashboardResult }) {
     <section className={PANEL_CLASS}>
       <PanelHeader
         title="Retroactive ROI"
-        description="Modeled replacement-cost value divided by observed payout volume."
+        description="Modeled replacement-cost points divided by observed payout points."
       />
       {roi === null ? (
         <EmptyMetric>ROI appears when payout-linked proposal outputs can be classified.</EmptyMetric>
@@ -122,9 +121,9 @@ function RetroactiveRoi({ data }: { data: AccretionDashboardResult }) {
               {formatDecimal(roi)}×
             </p>
             <p className="pb-1 text-right text-[13px] leading-[18px] text-grey-04">
-              {formatCompact(data.summary.replacementValue)} modeled value
+              {formatCompact(data.summary.replacementValue)} modeled points
               <br />
-              {formatCompact(data.summary.modeledPayoutAmount)} classified payout volume
+              {formatCompact(data.summary.modeledPayoutAmount)} classified payout points
             </p>
           </div>
           <div className="relative mt-6 h-2 overflow-hidden rounded-full bg-grey-02">
@@ -171,7 +170,7 @@ function AbsorptionCurve({ data }: { data: AccretionDashboardResult }) {
                 </div>
                 <p className="mt-2 truncate text-[12px] leading-[16px] text-grey-04">{point.label}</p>
                 <p className="mt-0.5 truncate text-[11px] leading-[14px] text-grey-04">
-                  {point.payoutAmount > 0 ? `${formatCompact(point.payoutAmount)} paid` : '—'}
+                  {point.payoutAmount > 0 ? `${formatCompact(point.payoutAmount)} points` : '—'}
                 </p>
               </div>
             ))}
@@ -209,7 +208,7 @@ function CuratorCohorts({ data }: { data: AccretionDashboardResult }) {
               <div className="min-w-0">
                 <p className={cx('truncate text-[15px] leading-[20px] font-medium', INK)}>{row.name}</p>
                 <p className="text-[12px] leading-[16px] text-grey-04">
-                  {formatCompact(row.payoutAmount)} paid · {formatCompact(row.outputUnits)} output units
+                  {formatCompact(row.payoutAmount)} points · {formatCompact(row.outputUnits)} output units
                 </p>
               </div>
               <div className="shrink-0 text-right">
@@ -366,21 +365,24 @@ function DashboardSkeleton() {
 
 export function AccretionDashboard({
   spaceId,
+  initialScope = 'space',
   initialData,
 }: {
   spaceId: string;
+  initialScope?: AccretionScope;
   initialData?: AccretionDashboardResult;
 }) {
   const [period, setPeriod] = React.useState<AccretionPeriod>('year');
+  const [scope, setScope] = React.useState<AccretionScope>(initialScope);
   const { data, isPending, isError, refetch } = useQuery({
-    queryKey: ['accretion-dashboard', spaceId, period],
+    queryKey: ['accretion-dashboard', spaceId, scope, period],
     queryFn: async () => {
-      const params = new URLSearchParams({ period });
+      const params = new URLSearchParams({ period, scope });
       const response = await fetch(`/api/space/${spaceId}/accretion?${params.toString()}`);
       if (!response.ok) throw new Error('Failed to load accretion dashboard');
       return (await response.json()) as AccretionDashboardResult;
     },
-    initialData,
+    initialData: scope === initialScope && period === 'year' ? initialData : undefined,
     staleTime: 5 * 60_000,
     retry: 1,
   });
@@ -399,10 +401,15 @@ export function AccretionDashboard({
             Accretion dashboard
           </h1>
           <p className="mt-2 max-w-2xl text-[16px] leading-[23px] text-grey-04">
-            Is this space allocating bounty spending into accepted, additive graph output?
+            {scope === 'protocol'
+              ? 'Is the protocol allocating bounty spending into accepted, additive graph output?'
+              : 'Is this space allocating bounty spending into accepted, additive graph output?'}
           </p>
         </div>
-        <SingleSelectPill value={period} options={ACCRETION_PERIOD_OPTIONS} onChange={setPeriod} />
+        <div className="flex flex-wrap items-center gap-2">
+          <SingleSelectPill value={scope} options={ACCRETION_SCOPE_OPTIONS} onChange={setScope} />
+          <SingleSelectPill value={period} options={ACCRETION_PERIOD_OPTIONS} onChange={setPeriod} />
+        </div>
       </div>
 
       <div className="mb-6 flex items-start gap-3 rounded-xl border border-purple/20 bg-purple/5 p-4">
@@ -432,9 +439,9 @@ export function AccretionDashboard({
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
-              label="Payout volume"
+              label="Payout volume (points)"
               value={formatCompact(data.summary.payoutAmount)}
-              detail="Nominal amount; currency normalization pending"
+              detail={scope === 'protocol' ? 'Paid across protocol spaces' : 'Paid in this space'}
             />
             <MetricCard
               label="Accepted proposals"

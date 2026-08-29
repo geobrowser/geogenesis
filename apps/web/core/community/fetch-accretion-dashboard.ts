@@ -30,6 +30,7 @@ import type {
   AccretionPeriod,
   AccretionProposalInput,
   AccretionProposalOutputInput,
+  AccretionScope,
 } from './accretion-types';
 import { ID_CHUNK_SIZE, afterArg, chunk, collectConnection, gqlId, gqlIdList, runQuery } from './community-graphql';
 import { toUnixSeconds } from './curator-leaderboard-period';
@@ -110,13 +111,13 @@ function targetsFor(node: { relationsList: GraphRelation[] }, propertyId: string
     .map(relation => relation.toEntity);
 }
 
-async function fetchBounties(spaceHex: string) {
+async function fetchBounties(spaceHex: string | null) {
   return collectConnection<BountyNode>(
     'accretion bounties',
     after => `query {
       entitiesConnection(
         first: ${ENTITY_PAGE_SIZE}${afterArg(after)}
-        spaceId: "${spaceHex}"
+        ${spaceHex ? `spaceId: "${spaceHex}"` : ''}
         typeId: "${gqlId(BOUNTY_TYPE_ID)}"
       ) {
         totalCount
@@ -134,13 +135,13 @@ async function fetchBounties(spaceHex: string) {
   );
 }
 
-async function fetchPayouts(spaceHex: string) {
+async function fetchPayouts(spaceHex: string | null) {
   return collectConnection<PayoutNode>(
     'accretion payouts',
     after => `query {
       entitiesConnection(
         first: ${ENTITY_PAGE_SIZE}${afterArg(after)}
-        spaceId: "${spaceHex}"
+        ${spaceHex ? `spaceId: "${spaceHex}"` : ''}
         typeId: "${gqlId(PAYOUT_TYPE_ID)}"
       ) {
         totalCount
@@ -157,7 +158,7 @@ async function fetchPayouts(spaceHex: string) {
   );
 }
 
-async function fetchProposalLinks(spaceHex: string) {
+async function fetchProposalLinks(spaceHex: string | null) {
   return collectConnection<ProposalLink>(
     'accretion bounty proposal links',
     after => `query {
@@ -165,7 +166,7 @@ async function fetchProposalLinks(spaceHex: string) {
         first: ${RELATION_PAGE_SIZE}${afterArg(after)}
         filter: {
           typeId: { is: "${gqlId(BOUNTIES_RELATION_TYPE)}" }
-          toSpaceId: { is: "${spaceHex}" }
+          ${spaceHex ? `toSpaceId: { is: "${spaceHex}" }` : ''}
         }
       ) {
         totalCount
@@ -319,15 +320,18 @@ function buildProposalOutputs(
 
 export async function fetchAccretionDashboard({
   spaceId,
+  scope = 'space',
   period,
   now = Date.now(),
 }: {
   spaceId: string;
+  scope?: AccretionScope;
   period: AccretionPeriod;
   now?: number;
 }): Promise<AccretionDashboardResult> {
-  const spaceHex = gqlId(spaceId);
-  if (!spaceHex) throw new Error('Invalid space id');
+  const validatedSpaceHex = gqlId(spaceId);
+  if (!validatedSpaceHex) throw new Error('Invalid space id');
+  const spaceHex = scope === 'protocol' ? null : validatedSpaceHex;
 
   const [bountyResult, payoutResult, proposalLinkResult] = await Promise.all([
     fetchBounties(spaceHex),
@@ -337,8 +341,10 @@ export async function fetchAccretionDashboard({
 
   const bounties = bountyResult.nodes.map(mapBounty);
   const payouts = payoutResult.nodes.map(mapPayout);
+  const bountyIds = new Set(bounties.map(bounty => bounty.id));
   const bountyIdsByProposalId = new Map<string, string[]>();
   for (const link of proposalLinkResult.nodes) {
+    if (!bountyIds.has(link.toEntityId)) continue;
     const ids = bountyIdsByProposalId.get(link.fromEntityId) ?? [];
     if (!ids.includes(link.toEntityId)) ids.push(link.toEntityId);
     bountyIdsByProposalId.set(link.fromEntityId, ids);

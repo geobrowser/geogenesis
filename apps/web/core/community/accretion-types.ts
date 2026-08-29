@@ -1,5 +1,12 @@
 export type AccretionPeriod = 'week' | 'month' | 'year' | 'all';
 
+export type AccretionScope = 'space' | 'protocol';
+
+export const ACCRETION_SCOPE_OPTIONS: { value: AccretionScope; label: string }[] = [
+  { value: 'space', label: 'This space' },
+  { value: 'protocol', label: 'Protocol' },
+];
+
 export const ACCRETION_PERIOD_OPTIONS: { value: AccretionPeriod; label: string }[] = [
   { value: 'week', label: 'Last week' },
   { value: 'month', label: 'Last month' },

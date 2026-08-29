@@ -21,7 +21,7 @@ The Geo graph already contains a strong curator-program spine:
 - Governance proposal authorship, submission time, and execution time.
 - Proposal diffs capable of describing the entities, claims, relations, and structure produced by accepted work.
 
-The graph does **not** yet provide a reliable direct payout recipient, adjudication state history, rejection/rework events, token/currency metadata, funding balances, issuance, stake positions, commissions, appeals, affiliate relationships, or lifecycle declarations. Those gaps block the complete network, space, and staker dashboards, but they do not block a useful pre-launch curator-program dashboard.
+The graph does **not** yet provide a reliable direct payout recipient, adjudication state history, rejection/rework events, funding balances, issuance, stake positions, commissions, appeals, affiliate relationships, or lifecycle declarations. Payout values are currently denominated in protocol points, although that unit is not encoded alongside every historical amount. Those gaps block the complete network, space, and staker dashboards, but they do not block a useful curator-program dashboard at either protocol or individual-space scope.
 
 The recommended first implementation is a read-only analytics surface with six panels:
 
@@ -74,7 +74,7 @@ The public GraphQL endpoint provides the curator-program domain objects and thei
 | Payout to proposal       | Relation                        | `8128964c1ec54829beb380a21ab64c51` | 2,651 links                                          |
 | Payout recipient         | Declared relation property      | `151b0bd3440d435ab093ed5fab73db6c` | 0 links; schema exists but is unused                 |
 
-The payout amount sum in the snapshot is 587,575 across 770 populated records. This is a data-integrity observation only: the graph does not consistently identify currency, token, USD conversion, or whether historical testnet records represent real settlement.
+The payout amount sum in the snapshot is 587,575 points across 770 populated records. This is a data-integrity observation only: the graph does not encode fiat conversion or whether every historical testnet record represents real settlement.
 
 The allocation relation currently provides the best graph-native view of curator participation: 475 allocation links cover 135 unique target identities, 131 bounties, and 32 spaces. Most targets are both Person and Space entities because personal spaces carry both types. A separate type named `Curator` exists, but its description is specific to a Paris content domain and it is not the curator-program identity model. Do not filter program participants by that type.
 
@@ -166,7 +166,7 @@ Space
 4. A proposal is **accepted** for pre-launch analytics when the governance indexer has a non-null `executedAt`. Do not infer acceptance from the bounty's current `Done` status.
 5. A payout may link to multiple proposals. Do not double-count the full payout amount once per proposal.
 6. A bounty may have multiple allocated curators. Until `Payout recipient` is populated, recipient-level and cohort metrics are ambiguous and must be labeled provisional or omitted.
-7. Treat payout amount as nominal until currency/token and USD-normalization fields exist.
+7. Treat payout amounts as protocol points. Do not imply a fiat value unless an explicit settlement-time conversion source is added.
 8. Use proposal diffs to determine output; never use proposal title keywords as the production count.
 
 ## Artifact classification
@@ -230,7 +230,7 @@ clearing_unit_cost(type, trailing_window)
 - Never count the bounty budget as the clearing price when a payout amount exists.
 - Keep records with missing amounts or output classification out of the median and disclose the excluded count.
 
-**MVP status:** Buildable after the output transformer is implemented. Currency normalization remains a limitation.
+**MVP status:** Buildable after the output transformer is implemented. Display all costs explicitly in protocol points.
 
 #### 2. Retroactive ROI
 
@@ -328,19 +328,19 @@ Report `new`, `reused`, `suspected duplicate`, and `unknown` separately. Do not 
 
 ### Space dashboard
 
-| Metric                              | Required source                                    | Current status                                   |
-| ----------------------------------- | -------------------------------------------------- | ------------------------------------------------ |
-| Spend-to-output                     | Payouts + accepted proposal diffs + unit-cost deck | Buildable after output transformer               |
-| Commission per unit stake           | Commission ledger + stake snapshots                | Not available in inspected graph                 |
-| Cleared payout volume by cycle/type | Payout amount, kind, currency, state, cycle        | Amount exists; kind/currency/state/cycle missing |
-| Promised vs available funds         | Obligations + space balance/funding windows        | Not available                                    |
-| Declared vs delivered               | Bounties + proposals + payouts + deadlines         | Partially buildable                              |
-| Editor self-payment ratio           | Recipient + editor/affiliate snapshot              | Recipient unused; affiliate data missing         |
-| Payout concentration                | Explicit recipient + normalized amount             | Blocked by recipient and currency gaps           |
-| Curator churn                       | Explicit recipient + payout timestamp              | Blocked by recipient gap                         |
-| Stop/appeal record                  | Adjudication event ledger                          | Not available                                    |
-| Lifecycle and seasonality           | Space declaration + observed spend                 | Declaration model missing; spend derivable       |
-| Aggregator management fee           | Fee declaration + settlement ledger                | Not available                                    |
+| Metric                              | Required source                                    | Current status                                |
+| ----------------------------------- | -------------------------------------------------- | --------------------------------------------- |
+| Spend-to-output                     | Payouts + accepted proposal diffs + unit-cost deck | Buildable after output transformer            |
+| Commission per unit stake           | Commission ledger + stake snapshots                | Not available in inspected graph              |
+| Cleared payout volume by cycle/type | Payout amount, kind, unit, state, cycle            | Point amount exists; kind/state/cycle missing |
+| Promised vs available funds         | Obligations + space balance/funding windows        | Not available                                 |
+| Declared vs delivered               | Bounties + proposals + payouts + deadlines         | Partially buildable                           |
+| Editor self-payment ratio           | Recipient + editor/affiliate snapshot              | Recipient unused; affiliate data missing      |
+| Payout concentration                | Explicit recipient + point amount                  | Blocked by recipient gap                      |
+| Curator churn                       | Explicit recipient + payout timestamp              | Blocked by recipient gap                      |
+| Stop/appeal record                  | Adjudication event ledger                          | Not available                                 |
+| Lifecycle and seasonality           | Space declaration + observed spend                 | Declaration model missing; spend derivable    |
+| Aggregator management fee           | Fee declaration + settlement ledger                | Not available                                 |
 
 ### Staker dashboard
 
@@ -357,7 +357,7 @@ Report `new`, `reused`, `suspected duplicate`, and `unknown` separately. Do not 
 ### Priority 0: needed for a credible pre-launch release
 
 1. Populate `Payout recipient` on every new payout and backfill historical payouts.
-2. Add `currency_or_token`, raw amount, decimals, and settlement-time USD value.
+2. Encode `unit = points` alongside payout amounts; add a separate settlement-time fiat value only if governance needs one.
 3. Define whether payout entity creation means human-cleared settlement; if not, add an explicit state.
 4. Provide a stable proposal-diff analytics endpoint or batch export. The current per-proposal REST endpoint is suitable for UI review but expensive for a full historical dashboard.
 5. Define artifact types and methodology-versioned output weights.
@@ -438,7 +438,7 @@ Every response should include:
 - `methodology_version`
 - source-row counts
 - missing/unclassified counts
-- currency coverage
+- point-unit coverage
 - whether the result is observed, derived, or modeled
 
 ## Suggested first Linear ticket
@@ -478,7 +478,7 @@ Build a read-only curator-program dashboard using bounty, payout, governance pro
 ## Implementation work breakdown
 
 1. **Data contract and backfill**
-   - Populate payout recipient and currency metadata.
+   - Populate payout recipient and encode the points unit explicitly.
    - Confirm lifecycle semantics and create fixture coverage.
 2. **Historical extractor**
    - Fetch bounty/payout/proposal joins.
@@ -500,7 +500,7 @@ Build a read-only curator-program dashboard using bounty, payout, governance pro
 
 These decisions should be resolved before implementation estimates are final:
 
-1. What currency/token does each historical payout amount represent, and what is the USD conversion policy?
+1. Should protocol points ever receive a displayed fiat conversion, and if so, what timestamp and price source governs it?
 2. Does creating a payout entity guarantee that payment cleared, or is it merely a payout request?
 3. Which event is authoritative for delivery: accepted proposal execution, bounty status `Done`, payout creation, or a new adjudication event?
 4. How should one payout be allocated across multiple proposals and artifact types?
@@ -513,7 +513,7 @@ These decisions should be resolved before implementation estimates are final:
 
 ## Risks
 
-- **Currency ambiguity:** Summing nominal payout amounts can produce a convincing but invalid financial chart.
+- **Unit ambiguity in historical data:** The current mechanism uses points, but old records do not encode that unit directly.
 - **Attribution ambiguity:** Bounty allocations are many-to-many and cannot safely substitute for a payout recipient.
 - **Survivorship bias:** Proposal diffs emphasize accepted work; rejected and rework attempts need explicit events.
 - **Circular valuation:** Deriving replacement value from the same payouts used as cost can mechanically pull ROI toward 1.
@@ -607,6 +607,6 @@ query AcceptedBountySubmissions($spaceId: UUID!, $proposalIds: [UUID!]) {
 
 ## Final recommendation
 
-Proceed with the pre-launch dashboard as an analytics and instrumentation project. The data is already rich enough to validate the core accretion thesis, especially unit cost, accepted output, absorption, delivery, and exact reuse. Start by fixing recipient/currency/lifecycle data and by materializing proposal diffs. Defer protocol-level issuance, commission, and staker panels until their accounting event sources exist.
+Proceed with the dashboard as an analytics and instrumentation project, with a selector between a protocol-wide curator-program rollup and the current space. The data is already rich enough to validate the core accretion thesis, especially point-denominated unit cost, accepted output, absorption, delivery, and exact reuse. Start by fixing recipient/unit/lifecycle data and by materializing proposal diffs. Defer protocol-level issuance, commission, and staker panels until their accounting event sources exist.
 
 Above all, retain the boundary that makes the framework robust: measurement may inform governance and choice, while payment remains a separate human-adjudicated clearing decision.

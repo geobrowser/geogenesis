@@ -1,17 +1,26 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AccretionDashboardResult } from '~/core/community/accretion-types';
+import type { AccretionDashboardResult, AccretionScope } from '~/core/community/accretion-types';
 
 import { AccretionDashboard } from './accretion-dashboard';
 
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
+
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
 
 const result: AccretionDashboardResult = {
   period: 'year',
@@ -73,14 +82,14 @@ const result: AccretionDashboardResult = {
     diffLimitReached: false,
     sourceTruncated: false,
   },
-  warnings: ['Payout amounts are nominal.'],
+  warnings: ['Payout amounts and unit costs are shown in protocol points; no fiat conversion is applied.'],
 };
 
-function renderDashboard() {
+function renderDashboard(initialScope: AccretionScope = 'space') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <AccretionDashboard spaceId="space-1" initialData={result} />
+      <AccretionDashboard spaceId="space-1" initialScope={initialScope} initialData={result} />
     </QueryClientProvider>
   );
 }
@@ -104,6 +113,28 @@ describe('AccretionDashboard', () => {
     expect(screen.getAllByText(/curator-program-v1/).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Direct recipients').length).toBeGreaterThan(0);
     expect(screen.getAllByText('inferred').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Payout amounts are nominal.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/shown in protocol points/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Median unit cost (points)').length).toBeGreaterThan(0);
+  });
+
+  it('loads the protocol rollup when the scope changes', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => result });
+    vi.stubGlobal('fetch', fetchMock);
+    renderDashboard();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /This space/i }).at(-1)!);
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Protocol' }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith('/api/space/space-1/accretion?period=year&scope=protocol')
+    );
+    expect(screen.getByText(/Is the protocol allocating bounty spending/)).toBeTruthy();
+  });
+
+  it('can open directly in protocol scope', () => {
+    renderDashboard('protocol');
+
+    expect(screen.getAllByRole('button', { name: /Protocol/i }).at(-1)).toBeTruthy();
+    expect(screen.getAllByText(/Is the protocol allocating bounty spending/).at(-1)).toBeTruthy();
   });
 });

@@ -31,7 +31,7 @@ export default async function AccretionDashboardPage({ params }: Props) {
 
   return (
     <EntityPageSidebarLayout sidebar={sidebar}>
-      <AccretionDashboard spaceId={spaceId} />
+      <AccretionDashboard spaceId={spaceId} initialScope={spaceId === ROOT_SPACE ? 'protocol' : 'space'} />
     </EntityPageSidebarLayout>
   );
 }

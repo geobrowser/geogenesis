@@ -364,7 +364,7 @@ export function buildAccretionDashboard(inputs: AccretionMetricInputs): Accretio
   const reused = periodArtifacts.filter(artifact => artifact.operation === 'reused').length;
   const unknown = periodArtifacts.filter(artifact => artifact.operation === 'unknown').length;
 
-  const warnings = ['Payout amounts are nominal because historical currency and USD conversion are not modeled.'];
+  const warnings = ['Payout amounts and unit costs are shown in protocol points; no fiat conversion is applied.'];
   if (inputs.payouts.some(payout => payout.recipientId === null)) {
     warnings.push('Curator cohorts are provisional because direct payout recipients are not populated consistently.');
   }
