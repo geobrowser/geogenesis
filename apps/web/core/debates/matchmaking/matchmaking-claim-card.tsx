@@ -48,6 +48,18 @@ type Props = {
    * debate, the paged index carries only a flag. The end slot surfaces it as "Watch live".
    */
   activeDebate?: Debate | boolean | null;
+  /**
+   * False while the claim's own state is still arriving, which holds the pills.
+   *
+   * Two things have to have landed before a press means what it looks like it means: the vocabulary,
+   * or the pills publish a stance response against a claim that wants Verify/Dispute; and the
+   * viewer's own side, or the side they already hold is drawn unselected and pressing it republishes
+   * instead of clearing.
+   *
+   * Defaults to true for hosts that have already resolved both — the hub's own tabs, whose rows come
+   * from geo-chat carrying both.
+   */
+  answersReady?: boolean;
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
   /**
@@ -107,6 +119,7 @@ export function MatchmakingClaimCard({
   positions,
   readiness,
   activeDebate,
+  answersReady,
   footer,
   onOpenClaim,
   viewerIdentityPending,
@@ -128,6 +141,7 @@ export function MatchmakingClaimCard({
           positions={positions}
           readiness={readiness}
           activeDebate={activeDebate}
+          answersReady={answersReady}
           onOpenClaim={onOpenClaim}
           viewerIdentityPending={viewerIdentityPending}
           onRequireSignIn={onRequireSignIn}
@@ -361,6 +375,7 @@ function RespondableControls({
   positions,
   readiness,
   activeDebate,
+  answersReady = true,
   onOpenClaim,
   viewerIdentityPending,
   onRequireSignIn,
@@ -370,6 +385,7 @@ function RespondableControls({
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
+  answersReady?: boolean;
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   onRequireSignIn?: () => void;
@@ -402,7 +418,7 @@ function RespondableControls({
         // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
         // overlapping submissions, so there is nothing to protect against — and dimming the pills
         // for the length of an indexing round trip read as the response not having landed.
-        disabled={!canRespond}
+        disabled={!canRespond || !answersReady}
         titleFor={actionTitle}
       />
       {responseError ? (

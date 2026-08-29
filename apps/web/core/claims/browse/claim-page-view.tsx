@@ -187,7 +187,7 @@ function ClaimPositionSection({
   /** geo-chat's row, or null — which for a claim nobody has answered is a settled answer. */
   row: DebateClaim | null;
 }) {
-  const { claim, positions, readiness } = state;
+  const { claim, positions, readiness, isResponseKindResolved, isViewerResponseResolved } = state;
 
   // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the vote
   // arrows on an entity page do — and through the same hook, which also keeps Privy's session
@@ -211,7 +211,10 @@ function ClaimPositionSection({
         responseKind={readiness.response_kind}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
-        disabled={!control.canRespond}
+        // The page had neither gate. It reaches the same two lookups as every card, so a fast press
+        // on a factual claim could publish a stance response, and a press on a side the viewer
+        // already held could republish it rather than clear it.
+        disabled={!control.canRespond || !isResponseKindResolved || !isViewerResponseResolved}
         titleFor={control.actionTitle}
       />
       {control.responseError ? (

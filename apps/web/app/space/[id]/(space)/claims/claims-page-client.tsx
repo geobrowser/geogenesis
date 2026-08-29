@@ -358,6 +358,7 @@ function ClaimListItem({
       claim={state.claim}
       positions={state.positions}
       readiness={state.readiness}
+      answersReady={state.isResponseKindResolved && state.isViewerResponseResolved}
       activeDebate={activeDebate}
     />
   );

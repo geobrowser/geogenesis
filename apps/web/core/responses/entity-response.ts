@@ -49,6 +49,14 @@ export type EntityResponseCopy = {
   negativeAction: string;
   removePositive: string;
   removeNegative: string;
+  /**
+   * The whole invitation, not a verb to interpolate.
+   *
+   * "Be the first to {positiveAction}" reads correctly for `verify` and `upvote` and not for
+   * `agree`, which takes an object through "with". A per-kind sentence costs one line each and
+   * cannot be assembled wrongly.
+   */
+  firstResponsePrompt: string;
   empty: string;
   loading: string;
   viewResponders: string;
@@ -62,6 +70,7 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     negativeAction: 'Downvote',
     removePositive: 'Remove upvote',
     removeNegative: 'Remove downvote',
+    firstResponsePrompt: 'Be the first to upvote this claim.',
     empty: 'No votes yet',
     loading: 'Loading voters…',
     viewResponders: 'View voters',
@@ -73,6 +82,7 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     negativeAction: 'Disagree',
     removePositive: 'Remove agreement',
     removeNegative: 'Remove disagreement',
+    firstResponsePrompt: 'Be the first to agree with this claim.',
     empty: 'No stances yet',
     loading: 'Loading responders…',
     viewResponders: 'View stances',
@@ -84,6 +94,7 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     negativeAction: 'Dispute',
     removePositive: 'Remove verification',
     removeNegative: 'Remove dispute',
+    firstResponsePrompt: 'Be the first to verify this claim.',
     empty: 'No veracity responses yet',
     loading: 'Loading responders…',
     viewResponders: 'View veracity responses',

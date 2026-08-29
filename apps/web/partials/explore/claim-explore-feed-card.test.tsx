@@ -21,6 +21,8 @@ const mocks = vi.hoisted(() => ({
   row: null as DebateClaim | null,
   /** Every `enabled` the response summary was asked for. */
   summaryEnabledCalls: [] as boolean[],
+  /** Every response kind it was asked under, so a fallback read cannot pass unnoticed. */
+  summaryKindCalls: [] as string[],
   positive: 0,
   negative: 0,
 }));
@@ -47,6 +49,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
     ...actual,
     useClaimResponseSummary: (_entityId: string, _spaceId: string, _kind: string, enabled = true) => {
       mocks.summaryEnabledCalls.push(enabled);
+      mocks.summaryKindCalls.push(_kind);
       return {
         ...actual.summarizeClaimResponses(mocks.positive, mocks.negative),
         isLoading: false,
@@ -138,6 +141,7 @@ beforeEach(() => {
   mocks.rowEnabledCalls = [];
   mocks.row = null;
   mocks.summaryEnabledCalls = [];
+  mocks.summaryKindCalls = [];
   mocks.positive = 0;
   mocks.negative = 0;
 
@@ -212,8 +216,23 @@ describe('ClaimExploreFeedCard', () => {
 
     expect(mocks.entityEnabledCalls.at(-1)).toBe(true);
     expect(mocks.rowEnabledCalls.at(-1)).toBe(true);
-    expect(mocks.summaryEnabledCalls.at(-1)).toBe(true);
     expect(screen.getByTestId('end-slot').getAttribute('data-enabled')).toBe('true');
+
+    // The response reads wait for one thing more. The kind is part of both of their query keys, so
+    // asking under the `stance` fallback fetches a factual claim's *stance* counts and can draw
+    // that split until the entity lands.
+    expect(mocks.summaryEnabledCalls.at(-1)).toBe(false);
+  });
+
+  it('waits for the vocabulary before reading the split, not just for the viewport', () => {
+    mocks.entity = factualClaim();
+    const { rerender } = render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+    rerender(<ClaimExploreFeedCard item={item} />);
+
+    expect(mocks.summaryEnabledCalls.at(-1)).toBe(true);
+    // And under the kind the entity supplied, never the fallback it would have used a beat earlier.
+    expect(mocks.summaryKindCalls.at(-1)).toBe('veracity');
   });
 
   it('will not let anyone answer before the claim’s vocabulary is known', () => {

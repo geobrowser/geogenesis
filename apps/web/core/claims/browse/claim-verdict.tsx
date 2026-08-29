@@ -49,7 +49,7 @@ export function ClaimVerdict({
           No responses yet
         </Text>
         <Text as="p" variant="metadata" color="grey-04" className="mt-1">
-          Be the first to {copy.positiveAction.toLowerCase()} this claim.
+          {copy.firstResponsePrompt}
         </Text>
       </section>
     );

@@ -91,7 +91,14 @@ export function withMatchParticipants(
     return {
       ...side,
       participants: fromMatch.participants,
-      present_count: fromMatch.present_count ?? fromMatch.participants.length,
+      // The larger of the two, not the match's.
+      //
+      // Today `positionSummariesFromCounts` derives `present_count` from the same participant list,
+      // so a side with no faces reports zero and this cannot lose anything. That is a property of
+      // one caller, not of the helper — the server's own `match.positions` carry a count that is
+      // independent of their capped preview, and taking the match's number there would drop the
+      // pill's `+N` overflow and underreport who is available.
+      present_count: Math.max(side.present_count ?? 0, fromMatch.present_count ?? fromMatch.participants.length),
     };
   });
 }

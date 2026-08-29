@@ -303,12 +303,13 @@ function PanelClaimControls({
   entity: Entity | null;
 }) {
   // The claim's row title is drawn by `ClaimRow` above, so nothing is passed for it here.
-  const { responseKind, isResponseKindResolved, summary, claim, positions, readiness } = useClaimResponseState({
-    claimId,
-    spaceId,
-    row,
-    entity,
-  });
+  const { responseKind, isResponseKindResolved, isViewerResponseResolved, summary, claim, positions, readiness } =
+    useClaimResponseState({
+      claimId,
+      spaceId,
+      row,
+      entity,
+    });
 
   const promptSignIn = usePrivySignIn();
   const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
@@ -320,7 +321,7 @@ function PanelClaimControls({
         responseKind={responseKind}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
-        disabled={!control.canRespond || !isResponseKindResolved}
+        disabled={!control.canRespond || !isResponseKindResolved || !isViewerResponseResolved}
         titleFor={control.actionTitle}
       />
       {control.responseError ? (

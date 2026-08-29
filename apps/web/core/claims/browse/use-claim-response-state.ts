@@ -29,6 +29,19 @@ export type ClaimResponseState = {
    * factual flag" is the same bug with a longer fuse. Something has to have said so.
    */
   isResponseKindResolved: boolean;
+  /**
+   * Whether the viewer's own side is known yet.
+   *
+   * Separate from the vocabulary, and it fails in a different way. The counts and the viewer's
+   * indexed response arrive together; until they do, a viewer who already answered is drawn holding
+   * neither side — and pressing the side they already hold *republishes* it rather than clearing
+   * it, because the control reads the same state the display does.
+   *
+   * geo-chat's row carries `viewer_response` directly, so a row is an answer on its own. Otherwise
+   * it takes the on-chain read landing — including under a batch, where "landing" means the batch's
+   * own readiness and a failed batch never resolves.
+   */
+  isViewerResponseResolved: boolean;
   summary: ClaimResponseSummary;
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -94,7 +107,13 @@ export function useClaimResponseState({
   const responseKind = resolveClaimResponseKind(row, entity, spaceId);
   const isResponseKindResolved = row !== null || entity !== null;
 
-  const summary = useClaimResponseSummary(claimId, spaceId, responseKind, enabled);
+  // Withheld until the vocabulary is an answer rather than the `stance` fallback.
+  //
+  // The kind is part of both query keys, so asking early does not just waste a pair of requests on
+  // a factual claim — it populates the summary from the *stance* counts, and a card can draw that
+  // split for as long as the entity takes to arrive, then swap it for the veracity one. The pills
+  // being disabled stops the wrong write; it does not stop the wrong number.
+  const summary = useClaimResponseSummary(claimId, spaceId, responseKind, enabled && isResponseKindResolved);
 
   const claim = React.useMemo(
     () => ({
@@ -126,5 +145,13 @@ export function useClaimResponseState({
     [responseKind, row, summary.viewerDirection]
   );
 
-  return { responseKind, isResponseKindResolved, summary, claim, positions, readiness };
+  return {
+    responseKind,
+    isResponseKindResolved,
+    isViewerResponseResolved: row !== null || !summary.isLoading,
+    summary,
+    claim,
+    positions,
+    readiness,
+  };
 }

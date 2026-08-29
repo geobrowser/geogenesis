@@ -86,15 +86,16 @@ export function ClaimExploreFeedCard({
   const rowQuery = useDebateClaims(item.spaceId, [item.entityId], nearViewport);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === item.entityId) ?? null;
 
-  const { responseKind, isResponseKindResolved, summary, claim, positions, readiness } = useClaimResponseState({
-    claimId: item.entityId,
-    spaceId: item.spaceId,
-    row,
-    entity,
-    title: item.title,
-    // Held with the other two reads until the card is near the viewport.
-    enabled: nearViewport,
-  });
+  const { responseKind, isResponseKindResolved, isViewerResponseResolved, summary, claim, positions, readiness } =
+    useClaimResponseState({
+      claimId: item.entityId,
+      spaceId: item.spaceId,
+      row,
+      entity,
+      title: item.title,
+      // Held with the other two reads until the card is near the viewport.
+      enabled: nearViewport,
+    });
 
   // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the claim
   // page does — and through the same hook, which also keeps Privy's session restoration from being
@@ -180,7 +181,7 @@ export function ClaimExploreFeedCard({
             responseKind={responseKind}
             viewerPosition={control.viewerPosition}
             onRespond={control.respond}
-            disabled={!control.canRespond || !isResponseKindResolved}
+            disabled={!control.canRespond || !isResponseKindResolved || !isViewerResponseResolved}
             titleFor={control.actionTitle}
           />
           {control.responseError ? (
