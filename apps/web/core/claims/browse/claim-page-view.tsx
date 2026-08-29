@@ -193,7 +193,13 @@ function ClaimPositionSection({
   // arrows on an entity page do — and through the same hook, which also keeps Privy's session
   // restoration from being mistaken for a login somebody asked for.
   const promptSignIn = usePrivySignIn();
-  const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
+  const control = useClaimPositionControl({
+    claim,
+    positions,
+    readiness,
+    answersReady: isResponseKindResolved && isViewerResponseResolved,
+    onRequireSignIn: promptSignIn,
+  });
   // See claims-page-client: retiring the optimistic snapshot outlived the toggle that used to own
   // it, because `claim-response-summary` on this page reads that snapshot for display.
   useRetireConfirmedResponseIndexing({ debateClaim: row, entityId, spaceId });
@@ -211,10 +217,7 @@ function ClaimPositionSection({
         responseKind={readiness.response_kind}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
-        // The page had neither gate. It reaches the same two lookups as every card, so a fast press
-        // on a factual claim could publish a stance response, and a press on a side the viewer
-        // already held could republish it rather than clear it.
-        disabled={!control.canRespond || !isResponseKindResolved || !isViewerResponseResolved}
+        disabled={!control.canRespond}
         titleFor={control.actionTitle}
       />
       {control.responseError ? (

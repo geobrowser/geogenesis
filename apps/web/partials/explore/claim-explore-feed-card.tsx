@@ -101,7 +101,13 @@ export function ClaimExploreFeedCard({
   // page does — and through the same hook, which also keeps Privy's session restoration from being
   // mistaken for a login somebody asked for.
   const promptSignIn = usePrivySignIn();
-  const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
+  const control = useClaimPositionControl({
+    claim,
+    positions,
+    readiness,
+    answersReady: isResponseKindResolved && isViewerResponseResolved,
+    onRequireSignIn: promptSignIn,
+  });
 
   // Withheld while the counts are still out, so the column does not appear a beat after the card.
   const hasVerdict = !summary.isLoading && summary.total > 0;
@@ -181,7 +187,7 @@ export function ClaimExploreFeedCard({
             responseKind={responseKind}
             viewerPosition={control.viewerPosition}
             onRespond={control.respond}
-            disabled={!control.canRespond || !isResponseKindResolved || !isViewerResponseResolved}
+            disabled={!control.canRespond}
             titleFor={control.actionTitle}
           />
           {control.responseError ? (

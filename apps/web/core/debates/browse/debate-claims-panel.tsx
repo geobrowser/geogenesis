@@ -312,7 +312,13 @@ function PanelClaimControls({
     });
 
   const promptSignIn = usePrivySignIn();
-  const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
+  const control = useClaimPositionControl({
+    claim,
+    positions,
+    readiness,
+    answersReady: isResponseKindResolved && isViewerResponseResolved,
+    onRequireSignIn: promptSignIn,
+  });
 
   return (
     <div className="mt-2">
@@ -321,7 +327,7 @@ function PanelClaimControls({
         responseKind={responseKind}
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
-        disabled={!control.canRespond || !isResponseKindResolved || !isViewerResponseResolved}
+        disabled={!control.canRespond}
         titleFor={control.actionTitle}
       />
       {control.responseError ? (

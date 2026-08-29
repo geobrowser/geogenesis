@@ -71,13 +71,18 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   PositionRow: ({ disabled }: { disabled?: boolean }) => (
     <div data-testid="position-row" data-disabled={String(Boolean(disabled))} />
   ),
-  useClaimPositionControl: () => ({
+  // Honours `answersReady`, because the real hook does. The gate used to live in each caller's
+  // `disabled`, so a mock that hardcoded `canRespond: true` could still be caught by these
+  // assertions; now that it lives in the hook, a hardcoded mock would report every claim as
+  // answerable no matter what the lookups say — and these suites would go quiet on the bug they
+  // exist to catch.
+  useClaimPositionControl: ({ answersReady = true }: { answersReady?: boolean }) => ({
     viewerPosition: null,
     optimisticPositions: [],
     respond: vi.fn(),
-    actionTitle: () => '',
+    actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
     responseError: null,
-    canRespond: true,
+    canRespond: answersReady,
   }),
 }));
 

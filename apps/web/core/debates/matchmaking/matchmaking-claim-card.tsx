@@ -237,12 +237,26 @@ export function useClaimPositionControl({
   claim,
   positions,
   readiness,
+  answersReady = true,
   viewerIdentityPending,
   onRequireSignIn,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
+  /**
+   * False while the claim's own state is still arriving.
+   *
+   * Two things have to have landed before a press means what it looks like it means: the vocabulary,
+   * or a press publishes a stance response against a claim that wants Verify/Dispute; and the
+   * viewer's own side, or the side they already hold is drawn unselected and pressing it republishes
+   * instead of clearing.
+   *
+   * Held here rather than at each caller's `disabled`, because a pill that is unpressable while its
+   * tooltip still says "Agree" is worse than one that says why. Three surfaces were adding this to
+   * their own disabled condition and none of them could reach the title.
+   */
+  answersReady?: boolean;
   viewerIdentityPending?: boolean;
   /**
    * What to do when a signed-out visitor presses a side. Given one, the pills stay live while
@@ -347,6 +361,9 @@ export function useClaimPositionControl({
   };
 
   const actionTitle = (position: boolean) => {
+    // Ahead of the others: it is the only one of these the reader can do nothing about, and naming
+    // the side they cannot take yet is the least useful thing to say about a dead control.
+    if (!answersReady) return 'Loading this claim’s responses…';
     if (!isConnected) return copy.connect;
     if (isAccountSetupPending) return 'Finishing account setup…';
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
@@ -365,7 +382,7 @@ export function useClaimPositionControl({
      * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
      * control gives a visitor nothing to press and no way to learn what to do about it.
      */
-    canRespond: (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending,
+    canRespond: (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending && answersReady,
   };
 }
 
@@ -392,7 +409,7 @@ function RespondableControls({
   hideEndSlot?: boolean;
 }) {
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
-    useClaimPositionControl({ claim, positions, readiness, viewerIdentityPending, onRequireSignIn });
+    useClaimPositionControl({ claim, positions, readiness, answersReady, viewerIdentityPending, onRequireSignIn });
   // One read for the card. The header flags a contested claim and the footer reports the split, and
   // deciding that twice is how the two would eventually disagree.
   const summary = useClaimResponseSummary(claim.claim_entity_id, claim.space_id, readiness.response_kind);
@@ -418,7 +435,7 @@ function RespondableControls({
         // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
         // overlapping submissions, so there is nothing to protect against — and dimming the pills
         // for the length of an indexing round trip read as the response not having landed.
-        disabled={!canRespond || !answersReady}
+        disabled={!canRespond}
         titleFor={actionTitle}
       />
       {responseError ? (

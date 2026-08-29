@@ -63,16 +63,34 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
 // The pills publish through the entity-response stack; this suite is about the card around them.
 // `disabled` is surfaced because the card is what decides it.
 vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
-  PositionRow: ({ disabled, responseKind }: { disabled?: boolean; responseKind: string }) => (
-    <div data-testid="pills" data-disabled={String(Boolean(disabled))} data-response-kind={responseKind} />
+  PositionRow: ({
+    disabled,
+    responseKind,
+    titleFor,
+  }: {
+    disabled?: boolean;
+    responseKind: string;
+    titleFor?: (position: boolean) => string;
+  }) => (
+    <div
+      data-testid="pills"
+      data-disabled={String(Boolean(disabled))}
+      data-response-kind={responseKind}
+      data-title={titleFor?.(true)}
+    />
   ),
-  useClaimPositionControl: () => ({
+  // Honours `answersReady`, because the real hook does. The gate used to live in each caller's
+  // `disabled`, so a mock that hardcoded `canRespond: true` could still be caught by these
+  // assertions; now that it lives in the hook, a hardcoded mock would report every claim as
+  // answerable no matter what the lookups say — and these suites would go quiet on the bug they
+  // exist to catch.
+  useClaimPositionControl: ({ answersReady = true }: { answersReady?: boolean }) => ({
     viewerPosition: null,
     optimisticPositions: [],
     respond: vi.fn(),
-    actionTitle: () => '',
+    actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
     responseError: null,
-    canRespond: true,
+    canRespond: answersReady,
   }),
 }));
 
@@ -243,6 +261,10 @@ describe('ClaimExploreFeedCard', () => {
     // Off-screen nothing has been asked, so nothing has answered — including on a claim whose
     // entity is sitting right there in the fixture.
     expect(screen.getByTestId('pills').getAttribute('data-disabled')).toBe('true');
+
+    // And it says so, rather than naming a side it will not take. A pill that is unpressable while
+    // its tooltip reads "Agree" is the misleading state; the disabling on its own is not.
+    expect(screen.getByTestId('pills').getAttribute('data-title')).toBe('Loading this claim’s responses…');
 
     scrollIntoRange();
 

@@ -355,6 +355,30 @@ describe('position avatar stack', () => {
 });
 
 describe('MatchmakingClaimCard', () => {
+  it('says why a held pill cannot be pressed, rather than naming the side', () => {
+    // `answersReady` false means one of the claim's two lookups has not answered — its vocabulary,
+    // or the viewer's own side. Disabling alone is not enough: a pill that will not respond while
+    // its tooltip still reads "Agree" is the misleading state, and on a failed lookup that state is
+    // permanent rather than a loading beat.
+    renderCard(
+      <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} answersReady={false} />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree).toBeDisabled();
+    expect(agree.getAttribute('title')).toBe('Loading this claim’s responses…');
+  });
+
+  it('names the side once both lookups have answered', () => {
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree).not.toBeDisabled();
+    // This fixture has the viewer already on the positive side, so the honest title is the one that
+    // says what pressing does now — which is the point: the title tracks the viewer's actual state.
+    expect(agree.getAttribute('title')).toBe('Remove agreement');
+  });
+
   it('carries no readiness switch', () => {
     // It moved off the card entirely. Asserted rather than left implicit because the corner it
     // vacated is now the end slot, and a switch reappearing there would quietly take the space the
