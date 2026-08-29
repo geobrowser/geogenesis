@@ -40,8 +40,10 @@ import { SpaceThumb } from './space-thumb';
  * Two zones, divided. Everything you can *do* to the claim sits on the left — the claim, the pills,
  * the offer that ends the meta row. Everything describing its *state* sits on the right, behind a
  * rule that runs the full height so the meta row is inside the split rather than spanning above it.
- * At phone width the rule turns horizontal and the verdict moves above the pills: same two zones,
- * same order, rotated.
+ * At phone width the verdict moves above the pills and the rule goes away entirely rather than
+ * turning horizontal. Deliberate, and matching the claim page's own phone layout: stacked, the two
+ * zones are already separated by the stack, and a full-bleed rule across a narrow card reads as the
+ * end of the card rather than as a divider inside it.
  *
  * No actions row. It briefly carried debate and related-claim counts, which the coverage numbers
  * did not support — 33 debates against 311,047 claims — and then comments and Share, which is what
@@ -300,7 +302,8 @@ export function ClaimExploreFeedCard({
           ) : null}
         </div>
 
-        {/* Spans all three rows at desktop width, which is what makes the rule full-height. */}
+        {/* Spans all three rows at desktop width, which is what makes the rule full-height. The
+            `md` variant drops the rule rather than rotating it — see the note on the component. */}
         {hasVerdict ? (
           <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 md:col-start-1 md:row-span-1 md:row-start-3 md:border-l-0 md:pl-0">
             <ClaimVerdictColumn

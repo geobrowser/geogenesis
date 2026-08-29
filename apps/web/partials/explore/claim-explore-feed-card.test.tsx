@@ -255,6 +255,21 @@ describe('ClaimExploreFeedCard', () => {
     expect(screen.getByTestId('pills').parentElement).toHaveClass('md:row-start-4');
   });
 
+  it('separates the two zones with a rule at desktop width and with the stack on a phone', () => {
+    // Not an omission. The rule is full-height beside the claim, and on a phone the verdict sits
+    // above the pills with nothing drawn between them — a full-bleed rule across a narrow card
+    // reads as the card ending rather than as a divider inside it.
+    mocks.positive = 9;
+    mocks.negative = 3;
+    render(<ClaimExploreFeedCard item={item} />);
+    scrollIntoRange();
+
+    const verdict = screen.getAllByTestId('side-summary')[0].closest('div.border-l') as HTMLElement;
+    expect(verdict).not.toBeNull();
+    expect(verdict).toHaveClass('md:border-l-0');
+    expect(verdict.className).not.toContain('md:border-t');
+  });
+
   it('reports the split and both sides once anyone has answered', () => {
     mocks.positive = 9;
     mocks.negative = 3;
