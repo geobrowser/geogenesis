@@ -39,6 +39,10 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   /** False while Privy is still restoring the session. */
   authReady: true,
+  /** The anchor fetched by id when it is not in the space listing (GEO-2764). */
+  anchorDebate: null as ReturnType<typeof completedDebate> | null,
+  anchorLoading: false,
+  anchorError: null as Error | null,
 }));
 
 type ObserverRecord = {
@@ -58,6 +62,7 @@ vi.mock('~/core/debates/hooks', () => ({
     hasError: mocks.mediaError,
   }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate }),
+  useDebate: () => ({ data: mocks.anchorDebate, isLoading: mocks.anchorLoading, error: mocks.anchorError }),
 }));
 
 vi.mock('./use-debates-best-order', async () => {
@@ -169,6 +174,9 @@ beforeEach(() => {
   mocks.entityVoteProps.length = 0;
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
   mocks.processedIds = null;
+  mocks.anchorDebate = null;
+  mocks.anchorLoading = false;
+  mocks.anchorError = null;
   mocks.bestOrderIds = [];
   mocks.bestOrderLoading = false;
   mocks.claimsCount = 0;
@@ -415,6 +423,61 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(screen.getByText('Entity page')).toBeInTheDocument();
     // An ordinary entity page renders here and does want the chrome.
     expect(store.get(debateFullscreenActiveAtom)).toBe(false);
+  });
+
+  // GEO-2764. `list_space_debates` is `LIMIT 50` with no pagination, so a watchable debate can be
+  // past the window and simply absent from the listing. Resolving the anchor from that listing
+  // silently rendered the ordinary entity page instead of the feed.
+  it('plays an anchor that is past the space listing window', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = completedDebate('debate-99', 'Past the window', '2026-07-01T00:00:00.000Z');
+    mocks.processedIds = ['debate-1', 'debate-99'];
+
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />
+      </Provider>
+    );
+
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+    expect(screen.getByTestId('player-debate-99')).toBeInTheDocument();
+    // And it takes over the chrome, which the fallback path deliberately does not.
+    expect(store.get(debateFullscreenActiveAtom)).toBe(true);
+  });
+
+  // Being navigated to is not a reason to play a debate with no video: the directly-fetched anchor
+  // goes through the same media gate as everything in the listing.
+  it('still falls back when the fetched anchor has no processed video', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = completedDebate('debate-99', 'Past the window', '2026-07-01T00:00:00.000Z');
+    mocks.processedIds = ['debate-1'];
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+  });
+
+  // Falling back while the direct fetch is still in flight is the bug itself, one race later.
+  it('waits for the anchor fetch rather than falling back mid-flight', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = null;
+    mocks.anchorLoading = true;
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
+
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading debates…')).toBeInTheDocument();
+  });
+
+  // A debate that genuinely is not watchable anywhere still reaches the entity page.
+  it('falls back when the anchor cannot be resolved at all', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = null;
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
   });
 
   it('nudges only when there is something below to scroll to', () => {

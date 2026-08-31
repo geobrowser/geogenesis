@@ -59,6 +59,9 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  // The feed resolves an anchor by id when the space listing does not contain it (GEO-2764).
+  // These tests never anchor, so it stays idle.
+  useDebate: () => ({ data: null, isLoading: false, error: null }),
 }));
 
 // The feed orders itself by the explore "Best" ranking. These tests are about readiness and
