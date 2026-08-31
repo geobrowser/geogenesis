@@ -47,6 +47,16 @@ describe('mergeFilterDisplayNames', () => {
     expect(merged[0].valueName).toBeNull();
   });
 
+  // The sync parse provisionally types everything RELATION; the merge adopts the type the
+  // resolve already learned so text chips render as text straight away.
+  it('carries the resolved value type onto a provisionally-typed filter', () => {
+    const resolved = [filter({ value: 'bitcoin', valueType: 'TEXT' as Filter['valueType'], valueName: null })];
+
+    const merged = mergeFilterDisplayNames([filter({ value: 'bitcoin' })], resolved);
+
+    expect(merged[0].valueType).toBe('TEXT');
+  });
+
   it('leaves a name the caller already supplied alone', () => {
     const resolved = [filter({ valueName: 'Stale' })];
 

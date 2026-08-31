@@ -75,7 +75,7 @@ function FilterChipShell({
   disabled,
   removable,
 }: {
-  displayLabel: string;
+  displayLabel: React.ReactNode;
   removeLabel: string;
   tone: 'white' | 'grey';
   onRemove: () => void;
@@ -130,25 +130,25 @@ function FilterRelationChip({
   const hydratedName = useName(valueId);
   const name = hydratedName ?? valueName;
 
-  if (name === null && isResolvingNames) {
-    return <FilterChipSkeleton tone={rest.tone} />;
+  // `parseFiltersSync` provisionally types every persisted filter as RELATION until the
+  // property's data type resolves, so a text filter can land here on first load. Its value is
+  // literal text the reader typed — show it; only an id-shaped value is a lookup in progress.
+  const looksLikeEntityId = /^[0-9a-f]{32}$/i.test(valueId);
+
+  if (name === null && isResolvingNames && looksLikeEntityId) {
+    // The shell (and its per-value Remove button) stays mounted; only the label is a skeleton.
+    return <FilterChipShell {...rest} displayLabel={<ResolvingValueLabel />} removeLabel="unresolved value" />;
   }
 
-  const displayLabel = name ?? valueId.slice(0, 8);
+  const displayLabel = name ?? (looksLikeEntityId ? valueId.slice(0, 8) : valueId);
   return <FilterChipShell {...rest} displayLabel={displayLabel} removeLabel={displayLabel} />;
 }
 
-/** Sized to sit on the chip's baseline so the pill doesn't resize when the name lands. */
-function FilterChipSkeleton({ tone }: { tone: 'white' | 'grey' }) {
+/** Announced to assistive tech as a status; visually the same small shimmer, sized to the chip. */
+function ResolvingValueLabel() {
   return (
-    <span
-      aria-hidden
-      className={cx(
-        'inline-flex h-6 items-center rounded-[4px] border border-grey-02 px-1.5',
-        tone === 'white' ? 'bg-white' : 'bg-grey-01'
-      )}
-    >
-      <Skeleton className="h-3 w-16 rounded-[2px]" />
+    <span role="status" aria-label="Resolving filter value" className="inline-flex items-center">
+      <Skeleton aria-hidden className="h-3 w-16 rounded-[2px]" />
     </span>
   );
 }

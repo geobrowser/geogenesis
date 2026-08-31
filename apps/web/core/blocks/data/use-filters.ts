@@ -207,8 +207,15 @@ export function useFilters(canEdit?: boolean) {
   };
 }
 
+/**
+ * What makes a filter "the same filter" across parses: column + value + direction. The value
+ * type is deliberately NOT part of the identity — it is derived from the property, and
+ * `parseFiltersSync` provisionally types every persisted filter as RELATION until the async
+ * resolve learns the real data type. Including it made the parsed and resolved lists of a mixed
+ * TEXT + RELATION filter set look like different sets, which discarded the carried names.
+ */
 function filterIdentity(f: Filter): string {
-  return `${f.columnId}\0${f.valueType}\0${f.value}\0${f.isBacklink === true ? '1' : '0'}`;
+  return `${f.columnId}\0${f.value}\0${f.isBacklink === true ? '1' : '0'}`;
 }
 
 function areSameFilterSet(a: Filter[], b: Filter[]): boolean {
@@ -232,6 +239,10 @@ export function mergeFilterDisplayNames(filters: Filter[], displayNameSource: Fi
       columnName: filter.columnName ?? source.columnName,
       valueName: filter.valueName ?? source.valueName,
       relationValueTypes: filter.relationValueTypes ?? source.relationValueTypes,
+      // A provisional RELATION (the sync parse's placeholder) adopts the type the resolve
+      // already learned, so text chips render as text straight away.
+      valueType:
+        filter.valueType === 'RELATION' && source.valueType !== 'RELATION' ? source.valueType : filter.valueType,
     };
   });
 }

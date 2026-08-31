@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   /** The persisted filter string, which `storage.values.set` rewrites the way the real store does. */
   filterValue: '',
   namesById: new Map<string, string>(),
+  /** Data types the "server" knows — the real resolve assigns property dataType (TEXT filters). */
+  typesById: new Map<string, string>(),
   resolveCalls: 0,
 }));
 
@@ -71,6 +73,7 @@ vi.mock('./filters', async importOriginal => {
         ...f,
         columnName: f.columnName ?? 'Topics',
         valueName: f.valueName ?? mocks.namesById.get(f.value) ?? null,
+        valueType: (mocks.typesById.get(f.value) ?? f.valueType) as Filter['valueType'],
       }));
     },
   };
@@ -94,6 +97,7 @@ beforeEach(() => {
     [CRYPTO, 'Crypto'],
     [PODCASTS, 'Podcasts'],
   ]);
+  mocks.typesById = new Map();
   mocks.resolveCalls = 0;
 });
 
@@ -118,6 +122,39 @@ describe('useFilters', () => {
 
     await waitFor(() =>
       expect(result.current.resolvedFilterState.map(f => f.valueName)).toEqual(['Crypto', 'Podcasts'])
+    );
+  });
+
+  // parseFiltersSync provisionally types every persisted filter as RELATION; the resolved list
+  // carries the real types. With a TEXT filter in the set, the two lists must still count as the
+  // same filter set, or the carried names are discarded and the chips blank out again.
+  it('keeps names when the set mixes TEXT and RELATION filters', async () => {
+    const textFilter = {
+      columnId: TOPICS_PROPERTY,
+      columnName: null,
+      valueType: 'TEXT',
+      value: 'bitcoin',
+      valueName: null,
+    } as Filter;
+    mocks.filterValue = toGeoFilterState([relationFilter(CRYPTO), textFilter], 'AND');
+    mocks.typesById = new Map([['bitcoin', 'TEXT']]);
+
+    const { result } = renderHook(() => useFilters(true), { wrapper });
+
+    await waitFor(() => expect(result.current.resolvedFilterState[0]?.valueName).toBe('Crypto'));
+    expect(result.current.resolvedFilterState.map(f => f.valueType)).toEqual(['RELATION', 'TEXT']);
+
+    // Rebuild from the resolved list the way the picker does, adding a filter.
+    act(() => {
+      result.current.setFilterState([...result.current.resolvedFilterState, relationFilter(PODCASTS)]);
+    });
+
+    // The relation filter must keep its name (and the text filter its type) before the re-resolve.
+    expect(result.current.resolvedFilterState.map(f => f.valueName)).toEqual(['Crypto', null, null]);
+    expect(result.current.resolvedFilterState.map(f => f.valueType)).toEqual(['RELATION', 'TEXT', 'RELATION']);
+
+    await waitFor(() =>
+      expect(result.current.resolvedFilterState.map(f => f.valueName)).toEqual(['Crypto', null, 'Podcasts'])
     );
   });
 

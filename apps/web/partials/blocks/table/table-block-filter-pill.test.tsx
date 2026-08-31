@@ -56,6 +56,27 @@ describe('TableBlockFilterGroupPill', () => {
     expect(screen.queryByText(VALUE_ID)).not.toBeInTheDocument();
   });
 
+  // parseFiltersSync provisionally types text filters as RELATION until the property's data
+  // type resolves — their literal value must show immediately, never a skeleton.
+  it('shows a provisionally-typed text value while resolving instead of a skeleton', () => {
+    renderPill([relationFilter({ value: 'bitcoin' })], true);
+
+    expect(screen.getByText('bitcoin')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('keeps the per-value Remove button mounted while resolving', () => {
+    renderPill([relationFilter(), relationFilter({ value: 'a2c7c4ef4e2146a8a3924fe867fd41d7' })], true);
+
+    expect(screen.getAllByRole('button', { name: 'Remove unresolved value' })).toHaveLength(2);
+  });
+
+  it('announces the resolving state to assistive tech', () => {
+    renderPill([relationFilter()], true);
+
+    expect(screen.getByRole('status')).toHaveAccessibleName('Resolving filter value');
+  });
+
   it('shows the name once it resolves', () => {
     renderPill([relationFilter({ valueName: 'Crypto' })], false);
 
