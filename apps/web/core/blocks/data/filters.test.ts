@@ -190,7 +190,10 @@ describe('filters', () => {
       'custom-prop-id': 'AND',
     });
     const parsedFilter = JSON.parse(stringFilter);
-    expect(parsedFilter.mode).toBeUndefined();
+    // Rollout compatibility: the legacy global mode is dual-written whenever
+    // any column is OR, so readers still on the old schema don't decode the
+    // block as AND. New readers ignore it when `modes` is present.
+    expect(parsedFilter.mode).toBe('OR');
     expect(parsedFilter.modes).toEqual({ [SystemIds.TYPES_PROPERTY]: 'OR' });
 
     const { modesByColumn } = await fromGeoFilterString(stringFilter);
