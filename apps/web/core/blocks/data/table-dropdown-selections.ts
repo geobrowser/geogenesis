@@ -44,9 +44,11 @@ export function filterDefaultsForColumn(filterState: Filter[], columnId: string)
 }
 
 function sameIdSet(a: string[], b: string[]): boolean {
+  // Ids arrive in dashed and dashless forms from different sources (GraphQL
+  // vs normalized writes); compare like ID.equals does everywhere else, or a
+  // re-checked default would register as a phantom override.
   if (a.length !== b.length) return false;
-  const bSet = new Set(b);
-  return a.every(id => bSet.has(id));
+  return a.every(id => b.some(other => ID.equals(id, other)));
 }
 
 /**
@@ -122,9 +124,13 @@ export function applyDropdownSelectionsToFilters(
         relationValueTypes: template?.relationValueTypes,
       });
     }
+    const keepsBacklinkOnColumn = filterState.some(f => ID.equals(f.columnId, columnId) && f.isBacklink);
     if (selections[columnId].length > 1) {
       nextModes[columnId] = 'OR';
-    } else {
+    } else if (!keepsBacklinkOnColumn) {
+      // With a single selection the mode is irrelevant — unless a backlink
+      // filter shares the column: deleting the mode would silently flip a
+      // persisted OR group to AND against the surviving backlink.
       delete nextModes[columnId];
     }
   }

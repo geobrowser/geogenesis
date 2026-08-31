@@ -51,7 +51,10 @@ export function useDropdownOptions({
     queryFn: ({ pageParam, signal }) =>
       fetchDropdownOptionsPage({ propertyId: columnId, where, after: pageParam, signal }),
     getNextPageParam: lastPage => (lastPage.hasNextPage ? lastPage.endCursor : undefined),
-    staleTime: 60_000,
+    // The scope for a fixed where does not change mid-session, and a focus
+    // refetch would replay every accumulated page of the walk serially.
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
   });
 
   // The walk advances on its own while enabled. An error stops it — without

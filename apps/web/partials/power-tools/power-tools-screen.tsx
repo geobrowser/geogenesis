@@ -10,8 +10,8 @@ import { createPortal } from 'react-dom';
 
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { FilterMode } from '~/core/blocks/data/filters';
-import { applyDropdownSelectionsToFilters } from '~/core/blocks/data/table-dropdown-selections';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useDropdownQueryOverlay } from '~/core/blocks/data/use-dropdown-query-overlay';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { columnPropertyIdFromRelation, useView } from '~/core/blocks/data/use-view';
@@ -194,7 +194,7 @@ export function PowerToolsScreen() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { spaceId, name: blockName, browseDropdowns } = useDataBlock();
+  const { spaceId, name: blockName } = useDataBlock();
   const isEditing = useUserIsEditing(spaceId);
   const canEdit = useCanUserEdit(spaceId);
   const { storage } = useMutate();
@@ -236,34 +236,28 @@ export function PowerToolsScreen() {
   }, [sortState]);
 
   // Browse-mode personal dropdowns overlay the query (never the persisted
-  // filters), the same way TableBlock applies them inside useDataBlock. Power
-  // Tools runs its own filter state, so the overlay is applied here.
-  // Match useDataBlock: only overlay properties that resolve as relation
-  // properties, so a stored selection never filters with no visible pill.
-  const dropdownColumnIds = React.useMemo(
-    () =>
-      browseDropdowns.configs
-        .map(d => d.propertyId)
-        .filter(id => filterableProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION')),
-    [browseDropdowns.configs, filterableProperties]
-  );
-  const applyDropdownOverlay = !isEditing && browseDropdowns.hydrated && dropdownColumnIds.length > 0;
-  const dropdownQueryState = React.useMemo(
-    () =>
-      applyDropdownOverlay
-        ? applyDropdownSelectionsToFilters(
-            effectiveFilterState,
-            activeModesByColumn,
-            browseDropdowns.selections,
-            dropdownColumnIds
-          )
-        : null,
-    [applyDropdownOverlay, effectiveFilterState, activeModesByColumn, browseDropdowns.selections, dropdownColumnIds]
-  );
+  // filters). Power Tools runs its own filter state, so it applies the
+  // shared overlay hook to that state rather than reusing useDataBlock's.
+  const {
+    queryFilterState: overlaidFilterState,
+    queryModesByColumn: overlaidModesByColumn,
+    isActive: isDropdownOverlayActive,
+    browseDropdowns,
+  } = useDropdownQueryOverlay({
+    source,
+    isEditing,
+    baseFilterState: effectiveFilterState,
+    baseModesByColumn: activeModesByColumn,
+    filterableProperties,
+  });
 
   const data = usePowerToolsData({
-    filterStateOverride: dropdownQueryState?.filterState ?? (canEdit ? undefined : temporaryFilters),
-    modesByColumnOverride: dropdownQueryState?.modesByColumn ?? (canEdit ? undefined : temporaryModesByColumn),
+    filterStateOverride: isDropdownOverlayActive ? overlaidFilterState : canEdit ? undefined : temporaryFilters,
+    modesByColumnOverride: isDropdownOverlayActive
+      ? overlaidModesByColumn
+      : canEdit
+        ? undefined
+        : temporaryModesByColumn,
     extraColumnIds,
     excludedColumnIds,
     sort: serverSort,
@@ -941,8 +935,7 @@ export function PowerToolsScreen() {
 
   const hasActiveFilters = effectiveFilterState.length > 0;
 
-  /** Dropdowns act on the block's query; Collection and Relations blocks have none. */
-  const isQuerySource = source.type === 'SPACES' || source.type === 'GEO';
+  const isQuerySource = browseDropdowns.isQuerySource;
   const showBrowseDropdownsRow = !isEditing && isQuerySource && browseDropdowns.configs.length > 0;
   const showPillsRow = hasActiveFilters || (isEditing && isQuerySource && browseDropdowns.configs.length > 0);
 
@@ -1088,6 +1081,7 @@ export function PowerToolsScreen() {
         <div className="flex flex-wrap items-center gap-2 border-b border-grey-02 px-4 py-2">
           <TableBlockDropdowns
             configs={browseDropdowns.configs}
+            appliedColumnIds={browseDropdowns.appliedColumnIds}
             properties={data.properties}
             spaceId={spaceId}
             baseFilterState={effectiveFilterState}

@@ -763,7 +763,7 @@ const ConfiguredTableBlock = ({
         dropdownSelections: Object.entries(browseDropdowns.selections).sort(([a], [b]) => a.localeCompare(b)),
         sort: sortState ?? null,
       }),
-    [isInfiniteExplore, pageSize, source, activeFilters, activeModesByColumn, sortState]
+    [isInfiniteExplore, pageSize, source, activeFilters, activeModesByColumn, sortState, browseDropdowns.selections]
   );
 
   React.useEffect(() => {
@@ -1076,6 +1076,7 @@ const ConfiguredTableBlock = ({
           <div className="flex flex-wrap items-center gap-2 py-2" onMouseDown={e => e.stopPropagation()}>
             <TableBlockDropdowns
               configs={browseDropdowns.configs}
+              appliedColumnIds={browseDropdowns.appliedColumnIds}
               properties={mergedBlockProperties}
               spaceId={spaceId}
               baseFilterState={browseDropdowns.baseFilterState}

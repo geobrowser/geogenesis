@@ -33,6 +33,8 @@ const REVEAL_STEP = 25;
 
 type TableBlockDropdownsProps = {
   configs: BlockDropdownConfig[];
+  /** The overlay's applied set — pills render exactly these columns, nothing else. */
+  appliedColumnIds: string[];
   properties: Property[];
   spaceId: string;
   /** The filter state the dropdowns default against (the block's, plus any temporary filters). */
@@ -53,6 +55,7 @@ type TableBlockDropdownsProps = {
  */
 export function TableBlockDropdowns({
   configs,
+  appliedColumnIds,
   properties,
   baseFilterState,
   baseModesByColumn,
@@ -62,12 +65,14 @@ export function TableBlockDropdowns({
 }: TableBlockDropdownsProps) {
   const [openColumnId, setOpenColumnId] = React.useState<string | null>(null);
 
+  // Render exactly what the overlay applies (computed in
+  // useDropdownQueryOverlay) — never a divergent local property check.
   const relationDropdowns = configs
+    .filter(config => appliedColumnIds.some(id => ID.equals(id, config.propertyId)))
     .map(config => ({
       config,
       property: properties.find(p => ID.equals(p.id, config.propertyId)),
-    }))
-    .filter(({ property }) => property?.dataType === 'RELATION');
+    }));
 
   if (relationDropdowns.length === 0) return null;
 
@@ -77,7 +82,7 @@ export function TableBlockDropdowns({
         <TableBlockDropdown
           key={config.propertyId}
           config={config}
-          property={property!}
+          property={property}
           baseFilterState={baseFilterState}
           baseModesByColumn={baseModesByColumn}
           selections={selections}
@@ -103,14 +108,14 @@ function TableBlockDropdown({
   hydrated,
   open,
   onOpenChange,
-}: Omit<TableBlockDropdownsProps, 'configs' | 'properties' | 'spaceId'> & {
+}: Omit<TableBlockDropdownsProps, 'configs' | 'appliedColumnIds' | 'properties' | 'spaceId'> & {
   config: BlockDropdownConfig;
-  property: Property;
+  property: Property | undefined;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const columnId = config.propertyId;
-  const label = config.propertyName ?? property.name ?? 'Property';
+  const label = config.propertyName ?? property?.name ?? 'Property';
 
   const defaultFilters = React.useMemo(
     () => baseFilterState.filter(f => ID.equals(f.columnId, columnId) && !f.isBacklink),
@@ -284,7 +289,13 @@ function TableBlockDropdown({
           )}
           {visibleOptions.length === 0 && (
             <p className="px-2 py-2 text-sm text-grey-04">
-              {isWalking ? 'Loading…' : query ? 'No matches' : 'No values in this table'}
+              {isError
+                ? "Couldn't load values"
+                : isWalking
+                  ? 'Loading…'
+                  : query
+                    ? 'No matches'
+                    : 'No values in this table'}
             </p>
           )}
           {renderedOptions.map(option => {
@@ -303,8 +314,21 @@ function TableBlockDropdown({
               </button>
             );
           })}
+          {isError && (
+            <button
+              type="button"
+              onClick={() => retry()}
+              className="flex items-center rounded px-2 py-2 text-left text-sm text-grey-04 underline hover:bg-grey-01 hover:text-text"
+            >
+              Retry loading values
+            </button>
+          )}
           {hasMoreToReveal && <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />}
-          {isWalking && renderedOptions.length > 0 && <p className="px-2 pt-1 text-footnote text-grey-04">Loading…</p>}
+          {isWalking && renderedOptions.length > 0 && (
+            <p className="px-2 pt-1 text-footnote text-grey-04">
+              {scannedCount >= 2000 ? `Loading… (${scannedCount.toLocaleString()} rows scanned)` : 'Loading…'}
+            </p>
+          )}
         </div>
       </div>
     </Menu>

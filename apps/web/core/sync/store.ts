@@ -4,7 +4,7 @@ import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
-import { DATA_BLOCK_DROPDOWNS_PROPERTY_ID } from '~/core/blocks/data/block-ontology-ids';
+import { BLOCK_CONFIG_RELATION_TYPE_IDS } from '~/core/blocks/data/shown-column-relations';
 
 import { columnPropertyIdFromRelation } from '../blocks/data/shown-column-relations';
 import {
@@ -65,13 +65,6 @@ function preferRelation(
   // (and its relation entity) across syncs, orphaning data hung off of it.
   return candidate.id < existing.id ? candidate : existing;
 }
-
-const BLOCK_CONFIG_RELATION_TYPE_IDS: readonly string[] = [
-  SystemIds.VIEW_PROPERTY,
-  SystemIds.PROPERTIES,
-  SystemIds.SHOWN_COLUMNS,
-  DATA_BLOCK_DROPDOWNS_PROPERTY_ID,
-];
 
 export function dedupeRelationsByKey(relations: Relation[]): Relation[] {
   const byKey = new Map<string, Relation>();

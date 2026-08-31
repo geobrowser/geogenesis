@@ -130,6 +130,25 @@ describe('applyDropdownSelectionsToFilters', () => {
   });
 });
 
+describe('id-form and backlink edge cases', () => {
+  it('drops the override when a re-checked default differs only in id form', () => {
+    const dashless = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1';
+    const dashed = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1';
+    // Uncheck the (dashless) default, then re-check it via a (dashed) option.
+    const cleared = toggleDropdownSelection({}, TOPICS, dashless, [dashless]);
+    const restored = toggleDropdownSelection(cleared, TOPICS, dashed, [dashless]);
+    expect(restored).toEqual({});
+  });
+
+  it('keeps the column mode when a backlink filter shares the overridden column', () => {
+    const filters = [relationFilter(TOPICS, 't1'), relationFilter(TOPICS, 'b1', { isBacklink: true })];
+    const result = applyDropdownSelectionsToFilters(filters, { [TOPICS]: 'OR' }, { [TOPICS]: ['t2'] }, [TOPICS]);
+    // One selection, but the surviving backlink still needs the OR group.
+    expect(result.modesByColumn[TOPICS]).toBe('OR');
+    expect(result.filterState.some(f => f.isBacklink)).toBe(true);
+  });
+});
+
 describe('dropdownSelectionsStorageKey', () => {
   it('scopes storage to the block relation entity', () => {
     expect(dropdownSelectionsStorageKey('rel-1')).toBe('tableDropdownSelections:rel-1');
