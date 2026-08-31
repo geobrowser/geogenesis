@@ -1079,6 +1079,51 @@ describe('ClaimsTab -- Featured', () => {
     await waitFor(() => expect(screen.getAllByRole('button', { name: /Space/ })).toHaveLength(1));
   });
 
+  // Featured builds both menus from the live selections over a list it already holds, so its
+  // counts are right on the same render as the tick. The debounce still runs there — it feeds a
+  // query Featured deliberately never makes — and an ungated pending flag would therefore drop
+  // skeletons over numbers that were already correct, once a run of clicks kept the selection
+  // settling for longer than the menu's grace period.
+  it('never covers its counts with skeletons, having nothing to wait for', async () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy', SPACE_ID)];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } },
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-grid', name: 'Grid' } },
+        ],
+      },
+    ];
+    vi.useFakeTimers();
+    try {
+      render(<ClaimsTab />);
+      fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+      // Each tick restarts the debounce, so the selection never settles across the run — the only
+      // way to stay pending for longer than the grace period. Ordered so the row being clicked is
+      // never the one the trigger is currently named after, which would make the two ambiguous.
+      fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+      act(() => void vi.advanceTimersByTime(100));
+      fireEvent.click(screen.getByRole('button', { name: /^Grid/ }));
+      act(() => void vi.advanceTimersByTime(100));
+      fireEvent.click(screen.getByRole('button', { name: /^Grid/ }));
+      act(() => void vi.advanceTimersByTime(100));
+
+      expect(screen.queryAllByLabelText('Loading count')).toHaveLength(0);
+
+      // And still none once everything has settled, so this isn't passing on a race.
+      act(() => void vi.advanceTimersByTime(500));
+      expect(screen.queryAllByLabelText('Loading count')).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // GEO-2696 made topics intersect rather than union, server-side. Featured is the one source
   // geo-chat has no facet for, so the same rule has to be applied here — two halves of one menu
   // disagreeing about what a second topic does would be worse than either answer on its own.
