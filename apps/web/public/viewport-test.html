@@ -1,0 +1,222 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GEO-2762 viewport test</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        background: #fff;
+      }
+
+      /* MODE "inner": what the debate feed does today. The document is pinned to exactly the
+     viewport and never scrolls; a fixed, full-viewport overlay holds a nested scroller. */
+      .shell {
+        display: flex;
+        min-height: 100dvh;
+        align-items: stretch;
+      }
+      .overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 70;
+        height: 100dvh;
+        background: #fff;
+        display: flex;
+      }
+      .inner-scroller {
+        height: 100dvh;
+        overflow-y: auto;
+        scroll-snap-type: y mandatory;
+        overscroll-behavior: contain;
+        flex: 1;
+      }
+
+      /* MODE "document": the ordinary arrangement every other site uses — the document scrolls. */
+      .doc-scroller {
+      }
+
+      .item {
+        scroll-snap-align: start;
+        min-height: 100dvh;
+        padding: 12px 8px;
+      }
+      .top-marker {
+        background: #e11;
+        color: #fff;
+        font-weight: 700;
+        font-size: 15px;
+        padding: 8px;
+        text-align: center;
+        letter-spacing: 0.5px;
+      }
+      .meta {
+        font-size: 13px;
+        color: #666;
+        padding: 6px 2px;
+      }
+      .title {
+        font-size: 24px;
+        line-height: 24px;
+        font-weight: 500;
+        padding: 2px;
+      }
+      .media {
+        background: #ddd;
+        border-radius: 12px;
+        height: 300px;
+        margin-top: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #555;
+      }
+      .ruler {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 46px;
+        pointer-events: none;
+        z-index: 60;
+      }
+      .ruler div {
+        height: 20px;
+        font-size: 9px;
+        color: #c00;
+        border-top: 1px solid rgba(204, 0, 0, 0.5);
+        padding-left: 2px;
+        font-family: monospace;
+      }
+      .readout {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.9);
+        color: #fff;
+        font-family: monospace;
+        font-size: 10px;
+        line-height: 12px;
+        padding: 3px;
+      }
+      .mode {
+        color: #0ff;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div class="readout" id="readout"></div>
+    <script>
+      (function () {
+        var params = new URLSearchParams(location.search);
+        var mode = params.get('mode') || 'inner';
+        var delay = parseInt(params.get('delay') || '1500', 10);
+
+        function content(n) {
+          var html = '';
+          for (var i = 0; i < n; i++) {
+            html +=
+              '<section class="item">' +
+              (i === 0
+                ? '<div class="top-marker">TOP OF CONTENT &mdash; IF YOU CAN READ THIS, IT IS CORRECT</div>'
+                : '') +
+              '<div class="meta">World affairs &middot; debate ' +
+              (i + 1) +
+              '</div>' +
+              '<div class="title">Keeping the Strait of Hormuz open justifies continued US military action</div>' +
+              '<div class="media">video ' +
+              (i + 1) +
+              'a</div>' +
+              '<div class="media">video ' +
+              (i + 1) +
+              'b</div>' +
+              '</section>';
+          }
+          return html;
+        }
+
+        function ruler() {
+          var html = '<div class="ruler">';
+          for (var y = 0; y < 900; y += 20) html += '<div>' + y + '</div>';
+          return html + '</div>';
+        }
+
+        // Rendered late on purpose: the real feed is entirely client-rendered and only appears well
+        // after first paint, and the fault only shows on a cold load.
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          if (mode === 'document') {
+            root.innerHTML = ruler() + '<div class="doc-scroller">' + content(3) + '</div>';
+          } else if (mode === 'plain') {
+            root.innerHTML = ruler() + content(3);
+          } else {
+            root.innerHTML =
+              ruler() +
+              '<div class="shell"><div class="overlay"><div class="inner-scroller">' +
+              content(3) +
+              '</div></div></div>';
+          }
+        }, delay);
+
+        var units = document.createElement('div');
+        units.style.cssText = 'position:absolute;top:0;left:-9999px;width:1px';
+        units.innerHTML =
+          '<i style="display:block;height:100svh"></i><i style="display:block;height:100dvh"></i><i style="display:block;height:100lvh"></i>';
+        document.body.appendChild(units);
+
+        var lines = [];
+        function read() {
+          var u = units.children,
+            vv = window.visualViewport,
+            doc = document.scrollingElement;
+          var marker = document.querySelector('.top-marker');
+          return (
+            'in' +
+            window.innerHeight +
+            ' vv' +
+            (vv ? Math.round(vv.height) + '/' + Math.round(vv.offsetTop) : '?') +
+            ' s' +
+            u[0].offsetHeight +
+            ' d' +
+            u[1].offsetHeight +
+            ' l' +
+            u[2].offsetHeight +
+            ' doc' +
+            Math.round(doc.scrollTop) +
+            '/' +
+            Math.round(doc.scrollHeight) +
+            ' mk' +
+            (marker ? Math.round(marker.getBoundingClientRect().top) : -1)
+          );
+        }
+        [0, 400, 1200, 2500, 5000].forEach(function (ms) {
+          setTimeout(function () {
+            lines.push('t' + ms + ' ' + read());
+            render();
+          }, ms);
+        });
+        function render() {
+          document.getElementById('readout').innerHTML =
+            '<div class="mode">MODE=' +
+            mode +
+            '</div>' +
+            lines.join('<br>') +
+            '<br><span style="color:#fd0">now ' +
+            read() +
+            '</span>';
+        }
+        setInterval(render, 500);
+        render();
+      })();
+    </script>
+  </body>
+</html>
