@@ -108,19 +108,26 @@ function defaultFetchPage(filter: ParticipantPositionsFilter, first: number, off
   );
 }
 
+/**
+ * The `userVotes` rows that count as a position someone currently holds.
+ *
+ * Exported because the People tab counts the same rows and must not drift from what this reads:
+ * kind 0 is curation rather than a position, a withdrawn response is a different *vote type* and
+ * means "no side", and `objectType` 0 keeps this to responses on claims.
+ */
+export const POSITION_VOTE_FILTER = {
+  objectType: { is: 0 },
+  voteType: { in: [0, 1] },
+  voteKind: { in: [...VOTE_KIND_TO_RESPONSE_KIND.keys()] },
+};
+
 export async function fetchParticipantPositions(
   profileSpaceIds: string[],
   signal?: AbortSignal,
   fetchPage: FetchPage = defaultFetchPage
 ): Promise<ParticipantPosition[]> {
   if (profileSpaceIds.length === 0) return [];
-  const filter = {
-    userId: { in: profileSpaceIds },
-    objectType: { is: 0 },
-    // Active responses only: a withdrawn one is a different vote type and means "no side".
-    voteType: { in: [0, 1] },
-    voteKind: { in: [...VOTE_KIND_TO_RESPONSE_KIND.keys()] },
-  };
+  const filter = { userId: { in: profileSpaceIds }, ...POSITION_VOTE_FILTER };
 
   const rows: ParticipantPositionRow[] = [];
   let offset = 0;

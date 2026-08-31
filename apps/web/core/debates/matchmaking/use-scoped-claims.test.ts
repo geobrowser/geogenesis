@@ -125,6 +125,24 @@ describe('useScopedMatchmakingClaims', () => {
     expect(scoped({ spaceIds: ['space-1'], pending: false }, true).result.current.facetsSettled).toBe(true);
   });
 
+  // The mirror of the rule above, and the same reason. A disabled query is never refetched, but
+  // React Query still hands back the previous key's rows as placeholder data when the key moves
+  // under it — so read as pending, the counts would wait forever on a request nobody is making,
+  // and the menu would sit on skeletons over client-derived counts that are already right.
+  it('reports no pending counts for a query it never makes', () => {
+    mocks.isPlaceholderData = true;
+
+    expect(scoped({ spaceIds: [], pending: false }).result.current.countsPending).toBe(false);
+    expect(scoped({ spaceIds: ['space-1'], pending: false }, true).result.current.countsPending).toBe(false);
+  });
+
+  // A query that *is* made still reports honestly, or the flag would mean nothing.
+  it('reports pending counts while a usable query is answering', () => {
+    mocks.isPlaceholderData = true;
+
+    expect(scoped({ spaceIds: ['space-1'], pending: false }).result.current.countsPending).toBe(true);
+  });
+
   // But only once it is known to be unusable — a scope still resolving says nothing either way.
   it('calls nothing settled while the scope is still resolving', () => {
     expect(scoped({ spaceIds: [], pending: true }).result.current.facetsSettled).toBe(false);

@@ -2,10 +2,10 @@
 
 import * as React from 'react';
 
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
-import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { NavUtils } from '~/core/utils/utils';
@@ -16,9 +16,11 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { PublishedRecordingPlayer } from '~/partials/community-calls/published-recording-player';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
+import { ClaimExploreFeedCard } from './claim-explore-feed-card';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
+import { ExploreCardEntityLink } from './explore-card-entity-link';
 import { ExploreCommentsIcon } from './explore-comments-icon';
-import { ExploreJoinSpaceButton } from './explore-join-space-button';
+import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
 
 type ExploreFeedCardProps = {
@@ -27,27 +29,12 @@ type ExploreFeedCardProps = {
   hideSpaceLink?: boolean;
   /** Hide the Join button next to the space name. */
   hideJoinButton?: boolean;
+  /**
+   * Whether clicking the entity name opens it in the side panel rather than navigating (GEO-2757).
+   * Explore turns this on; the other surfaces this card serves keep navigating.
+   */
+  titleOpensSidePanel?: boolean;
 };
-
-function SpaceThumb({ image, name }: { image: string | null; name: string }) {
-  if (!image) {
-    const initial = name.trim().slice(0, 1).toUpperCase() || '?';
-    return (
-      <span className="flex h-3 w-3 shrink-0 items-center justify-center rounded-[4px] bg-grey-01 text-[8px] font-medium text-grey-04">
-        {initial}
-      </span>
-    );
-  }
-  return (
-    <span className="relative h-3 w-3 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
-      <FallbackImage value={image} sizes="24px" className="object-cover" />
-    </span>
-  );
-}
-
-function MetaDot() {
-  return <span className="mx-[6px] shrink-0 text-[14px] leading-none text-[#2A2B2E]">·</span>;
-}
 
 function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
   return (
@@ -61,15 +48,16 @@ function ExploreFeedCommentLink({ href, count }: { href: string; count: number }
 const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
 const COMMUNITY_CALL_EVENT_TYPE = normalizeId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
 const DEBATE_TYPE = normalizeId(DEBATE_TYPE_ID);
+const CLAIM_TYPE = normalizeId(CLAIM_TYPE_ID);
 const RANKING_BLOCK_TYPE = normalizeId(RANKING_BLOCK_TYPE_ID);
 
-function CardTitle({ item }: { item: ExploreFeedItem }) {
+function CardTitle({ item, opensSidePanel }: { item: ExploreFeedItem; opensSidePanel: boolean }) {
   return (
-    <Link href={NavUtils.toEntity(item.spaceId, item.entityId)}>
+    <ExploreCardEntityLink item={item} opensSidePanel={opensSidePanel}>
       <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
         {item.title}
       </h2>
-    </Link>
+    </ExploreCardEntityLink>
   );
 }
 
@@ -77,10 +65,12 @@ type CardBodyProps = {
   item: ExploreFeedItem;
   /** The vote / comment row, owned by the shell so bodies render it identically. Not every body takes it. */
   actions: React.ReactNode;
+  /** Threaded to the title only. The thumbnail beside it still navigates — see `BaseExploreFeedCard`. */
+  titleOpensSidePanel: boolean;
 };
 
 /** The default body: thumbnail on the left, title and description beside it. */
-function DefaultCardBody({ item, actions }: CardBodyProps) {
+function DefaultCardBody({ item, actions, titleOpensSidePanel }: CardBodyProps) {
   return (
     <div className="flex items-start gap-4">
       {item.imageUrl ? (
@@ -93,7 +83,7 @@ function DefaultCardBody({ item, actions }: CardBodyProps) {
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="min-w-0">
-          <CardTitle item={item} />
+          <CardTitle item={item} opensSidePanel={titleOpensSidePanel} />
           {item.description ? (
             <p className="mt-1 line-clamp-2 text-[16px]! leading-[20px]! font-normal! tracking-[-0.03em] text-grey-04">
               {item.description}
@@ -108,7 +98,7 @@ function DefaultCardBody({ item, actions }: CardBodyProps) {
 }
 
 /** A Community call event's body */
-function CommunityCallCardBody({ item, actions }: CardBodyProps) {
+function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyProps) {
   const sources = useRecordingSources({
     entityId: item.entityId,
     spaceId: item.spaceId,
@@ -117,7 +107,7 @@ function CommunityCallCardBody({ item, actions }: CardBodyProps) {
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <CardTitle item={item} />
+      <CardTitle item={item} opensSidePanel={titleOpensSidePanel} />
       {sources.length > 0 ? (
         <div className="w-full max-w-[773px]">
           <PublishedRecordingPlayer
@@ -147,73 +137,38 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         item={props.item}
         hideSpaceLink={props.hideSpaceLink}
         hideJoinButton={props.hideJoinButton}
+        titleOpensSidePanel={props.titleOpensSidePanel}
         fallback={<BaseExploreFeedCard {...props} />}
       />
     );
   }
-  return <BaseExploreFeedCard {...props} />;
-}
 
-function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = false }: ExploreFeedCardProps) {
-  const isCommunityCall = item.types.some(type => normalizeId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
-  const isRanking = item.types.some(type => normalizeId(type.id) === RANKING_BLOCK_TYPE);
-  const uniqueTypes = React.useMemo(() => {
-    const seen = new Set<string>();
-    const out: { id: string; name: string }[] = [];
-    for (const t of item.types) {
-      if (!t.name) continue;
-      const key = t.id.replace(/-/g, '').toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const name = key === RANKING_BLOCK_TYPE ? 'Ranking' : t.name;
-      out.push({ id: t.id, name });
-    }
-    return out;
-  }, [item.types]);
-  const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-
-  const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
-  const showJoin = !hideJoinButton && !item.isMemberOrEditor;
-  const showSpace = !hideSpaceLink;
-
-  const dottedSegments: React.ReactNode[] = [];
-
-  if (showJoin) {
-    dottedSegments.push(
-      <ExploreJoinSpaceButton
-        key="join"
-        spaceId={item.spaceId}
-        hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-        variant="compact"
-        label="Join"
+  // Claims get the card built for them — labelled position pills, the shared verdict, and no
+  // thumbnail well they have no image to fill. Narrowly gated on purpose: every other type keeps
+  // the generic card exactly as it was, so this changes what a Claim looks like and nothing else.
+  const isClaim = props.item.types.some(type => normalizeId(type.id) === CLAIM_TYPE);
+  if (isClaim) {
+    return (
+      <ClaimExploreFeedCard
+        item={props.item}
+        hideSpaceLink={props.hideSpaceLink}
+        hideJoinButton={props.hideJoinButton}
       />
     );
   }
 
-  if (uniqueTypes.length > 0) {
-    dottedSegments.push(
-      <span
-        key="types"
-        className="inline-flex min-w-0 flex-wrap items-center text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04"
-      >
-        {uniqueTypes.map((t, index) => (
-          <React.Fragment key={t.id}>
-            {index > 0 ? <MetaDot /> : null}
-            <span className="truncate">{t.name}</span>
-          </React.Fragment>
-        ))}
-      </span>
-    );
-  }
+  return <BaseExploreFeedCard {...props} />;
+}
 
-  if (timeAgo) {
-    dottedSegments.push(
-      <span key="time" className="shrink-0 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04">
-        {timeAgo}
-      </span>
-    );
-  }
-
+function BaseExploreFeedCard({
+  item,
+  hideSpaceLink = false,
+  hideJoinButton = false,
+  titleOpensSidePanel = false,
+}: ExploreFeedCardProps) {
+  const isCommunityCall = item.types.some(type => normalizeId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
+  const isRanking = item.types.some(type => normalizeId(type.id) === RANKING_BLOCK_TYPE);
+  const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
   const cardActions = (
     <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
       <ExploreFeedCommentLink href={entityHref} count={item.commentCount} />
@@ -222,33 +177,14 @@ function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = fal
 
   return (
     <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
-      {showSpace || dottedSegments.length > 0 ? (
-        <div className="flex min-w-0 flex-wrap items-center gap-y-2">
-          {showSpace ? (
-            <Link
-              href={NavUtils.toSpace(item.spaceId)}
-              className="flex min-w-0 items-center gap-1.5 text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-text hover:underline"
-            >
-              <SpaceThumb image={item.spaceImage} name={item.spaceName} />
-              <span className="min-w-0 truncate">{item.spaceName}</span>
-            </Link>
-          ) : null}
-          {showSpace && dottedSegments.length > 0 ? <span className="w-1.5 shrink-0" /> : null}
-          {dottedSegments.map((segment, index) => (
-            <React.Fragment key={index}>
-              {index > 0 ? <MetaDot /> : null}
-              {segment}
-            </React.Fragment>
-          ))}
-        </div>
-      ) : null}
+      <ExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} />
 
       {isCommunityCall ? (
-        <CommunityCallCardBody item={item} actions={cardActions} />
+        <CommunityCallCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
       ) : isRanking ? (
-        <RankingCardBody item={item} actions={cardActions} />
+        <RankingCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
       ) : (
-        <DefaultCardBody item={item} actions={cardActions} />
+        <DefaultCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
       )}
     </article>
   );

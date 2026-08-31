@@ -108,7 +108,9 @@ const mocks = vi.hoisted(() => ({
   allowlistLoading: false,
   spaceTypes: {} as Record<string, 'DAO' | 'PERSONAL'>,
   publishableSpaceIds: null as Set<string> | null,
-  scrollSentinelIntoView: null as null | (() => void),
+  observerTriggers: [] as (() => void)[],
+  /** Scrolls everything observed into view — the sentinel among it. */
+  scrollSentinelIntoView: () => mocks.observerTriggers.forEach(fire => fire()),
   claimReadinessLoading: false,
   claimReadinessError: false,
   /** Every group list the per-space readiness lookup was asked for, in render order. */
@@ -155,8 +157,29 @@ vi.mock('~/core/debates/api', async importOriginal => {
   };
 });
 
+// The card reports its own responses, which reaches the personal-space lookup and through it
+// Wagmi. This suite is about the picker's claim list and its request flow.
+vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>()),
+  useClaimResponseSummary: () => ({
+    positive: 0,
+    negative: 0,
+    total: 0,
+    percent: null,
+    meetsFloor: false,
+    isControversial: false,
+    isLoading: false,
+    isViewerResponseLoading: false,
+    hasCounts: true,
+    viewerDirection: null,
+    viewerSpaceId: null,
+  }),
+}));
+
 vi.mock('~/core/debates/hooks', () => ({
   useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
+  // Read by the match lookup above; the picker never shows an offer, so this only answers "no".
+  useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
   // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
   // arrive through the id lookup.
   useDebateRematchClaims: () => ({
@@ -313,6 +336,12 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 // The card's Debate toggle publishes readiness through this.
 vi.mock('~/core/debates/matchmaking/hooks', () => ({
   useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
+  // The shared position control asks whether this claim has a match, to put the opponent's face on
+  // the opposing side. The picker hides its own end slot — a rematch request is a different
+  // mutation — so there is never an offer here, and these only have to answer "no".
+  useMatchmakingMatches: () => ({ data: { matches: [] }, isLoading: false, error: null }),
+  useDebateRequests: () => ({ data: { inbound: [], outbound: null }, isLoading: false, error: null }),
+  useCreateDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   // The All tab is the hub's Claims query. Its arguments are what the tests below inspect.
   useMatchmakingClaims: (
     query: { search: string | null; spaceIds?: string[] | null; topicIds?: string[] | null },
@@ -354,21 +383,59 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
     const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
     const inSpaceFilter = (spaceId: string) =>
       !query.spaceIds?.length || query.spaceIds.some(id => norm(id) === norm(spaceId));
+    // AND since GEO-2696: every selected topic has to be on the claim, not just one of them.
     const inTopicFilter = (topics: { id: string }[]) =>
-      !query.topicIds?.length || topics.some(topic => (query.topicIds ?? []).includes(topic.id));
+      !query.topicIds?.length || query.topicIds.every(id => topics.some(topic => topic.id === id));
     const inSpace = corpus.flat().filter(entry => inSpaceFilter(entry.claim.space_id));
-    const topicFacets = [...new Map(inSpace.flatMap(entry => entry.topics).map(topic => [topic.id, topic])).values()];
-    const spaceIds = [...new Set(corpus.flat().map(entry => entry.claim.space_id))];
-    // Narrowed by space, never by topic: picking a topic must not collapse its own menu.
+    // Co-occurrence: over the claims already carrying every selected topic, so the menu offers
+    // what appears alongside the selection and the selection itself.
+    // Counted, not just listed: a facet count is how many surviving claims carry the topic, so a
+    // selected one comes back at the current result size. Collapsing them all to 1 would let a
+    // count-display or count-ordering regression pass against an impossible response.
+    const topicCounts = new Map<string, { id: string; name: string | null; count: number }>();
+    for (const entry of inSpace.filter(entry => inTopicFilter(entry.topics))) {
+      for (const topic of entry.topics) {
+        const seen = topicCounts.get(topic.id);
+        if (seen) seen.count += 1;
+        else topicCounts.set(topic.id, { id: topic.id, name: topic.name, count: 1 });
+      }
+    }
+    const topicFacets = [...topicCounts.values()];
+    // Narrowed by the topic filter and never by its own dimension — picking a space must not
+    // collapse the menu it came from, while picking a topic must narrow it. Built from the whole
+    // corpus, this returned a response the server can't produce, so a multi-topic test would have
+    // been checking the space menu against an impossible facet.
+    const spaceIds = [
+      ...new Set(
+        corpus
+          .flat()
+          .filter(entry => inTopicFilter(entry.topics))
+          .map(entry => entry.claim.space_id)
+      ),
+    ];
+    // Spaces narrowed by the topic selection and never by their own — picking a space must not
+    // collapse the menu it came from. Topics are co-occurrence, built above.
     const facets = {
       space_ids: spaceIds,
-      topics: topicFacets,
-      space_facets: spaceIds.map(id => ({ id, name: null, count: 1 })),
-      topic_facets: topicFacets.map(topic => ({ ...topic, count: 1 })),
+      topics: topicFacets.map(topic => ({ id: topic.id, name: topic.name })),
+      space_facets: spaceIds.map(id => ({
+        id,
+        name: null,
+        count: corpus.flat().filter(entry => entry.claim.space_id === id && inTopicFilter(entry.topics)).length,
+      })),
+      topic_facets: topicFacets,
     };
     const data = {
       pages: corpus.map(page => ({
-        claims: page.filter(entry => inSpaceFilter(entry.claim.space_id)).filter(entry => inTopicFilter(entry.topics)),
+        // Rows come back with `topics: []`, which is what the real endpoint sends:
+        // `matchmaking_claims_for_user` leaves the field empty and answers about topics in the
+        // facet instead. The fixture used to hand its own topics back on every row, which is more
+        // than geo-chat gives — and that generosity is why nothing caught GEO-2714, where the
+        // client re-tested server rows against topics it could not possibly know.
+        claims: page
+          .filter(entry => inSpaceFilter(entry.claim.space_id))
+          .filter(entry => inTopicFilter(entry.topics))
+          .map(entry => ({ ...entry, topics: [] })),
         next_cursor: null,
         facets,
       })),
@@ -507,15 +574,20 @@ beforeEach(() => {
   mocks.spaceTypes = {};
   mocks.publishableSpaceIds = null;
   // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
-  // the callback so a test can say the sentinel scrolled into view.
-  mocks.scrollSentinelIntoView = null;
+  // every callback so a test can say the sentinel scrolled into view.
+  //
+  // Every one of them, not just the last: each claim card now observes itself too, to hold its
+  // response reads until it is near the viewport. Keeping a single callback would hand back the
+  // last card's, and the sentinel — the only thing these tests scroll — would never fire.
+  mocks.observerTriggers = [];
   vi.stubGlobal(
     'IntersectionObserver',
     class {
       constructor(private readonly callback: IntersectionObserverCallback) {}
       observe(element: Element) {
-        mocks.scrollSentinelIntoView = () =>
-          this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never);
+        mocks.observerTriggers.push(() =>
+          this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never)
+        );
       }
       unobserve() {}
       disconnect() {}
@@ -1158,7 +1230,7 @@ describe('DebateRematchPageClient', () => {
 
     expect(mocks.fetchNextPage).not.toHaveBeenCalled();
 
-    act(() => mocks.scrollSentinelIntoView?.());
+    act(() => mocks.scrollSentinelIntoView());
 
     expect(mocks.fetchNextPage).toHaveBeenCalledOnce();
   });
@@ -1715,6 +1787,30 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: /Later/ })).toBeNull());
   });
 
+  // The browsed query runs on every tab, so its answer must not vouch for rows another tab drew
+  // from the graph — least of all under the previous topic selection. Here the opponent's claim
+  // carries no topics and has to go the moment one is picked; it is also in the browsed pages,
+  // which are held on the selection before this one.
+  it('filters the opponent tab on its own topics, not a held browsed answer', async () => {
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+      position('profile-remote', CLAIM_MORE, SPACE_2, false),
+    ];
+    mocks.matchmakingClaims = [matchmakingClaim(), matchmakingClaim(CLAIM_SHARED, 'A claim both participants chose')];
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+    await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
+
+    mocks.scopeHeldOver = true;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    selectFilter('Any topic', 'Governance');
+
+    // The shared claim carries no topics at all, so nothing about it survives the filter.
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+  });
+
   it('asks the server to do the topic filtering on the All tab', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
@@ -1901,6 +1997,37 @@ describe('DebateRematchPageClient', () => {
     selectFilter('Governance space', 'Crypto');
 
     await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ spaceIds: [SPACE_2] }));
+  });
+
+  // GEO-2696: topics intersect now, and the menu answers "what appears alongside what I picked".
+  // The pinned rows are the half geo-chat has no facet for, so the rule is applied here — the two
+  // halves of one menu must not disagree about what a second topic does.
+  //
+  // Built so the old union rule and the new one differ: `Pinned only` shares no claim with Ethics,
+  // so under union it stayed on offer and led to an empty list.
+  it('offers only the topics that co-occur with the picked one', async () => {
+    // The default browsed claim carries Governance and Ethics; this adds a pinned row carrying a
+    // topic that appears on nothing else.
+    mocks.entities = [
+      {
+        ...sharedEntity(),
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-pinned', name: 'Pinned only' }, isDeleted: false },
+        ],
+      },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    expect(screen.getByRole('button', { name: /Pinned only/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Ethics/ }));
+
+    // No claim carries both, so adding it could only ever empty the list.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Pinned only/ })).toBeNull());
+    // Governance does co-occur with Ethics on the published claim, so it stays addable.
+    expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument();
   });
 
   // Not reachable by picking a topic and then a space it has nothing in: each menu is narrowed by
@@ -2243,7 +2370,6 @@ describe('DebateRematchPageClient', () => {
       await showAllClaims();
       expect(scoped()).toEqual([SPACE_1, SPACE_2, 'profile-local', 'profile-remote']);
     });
-
   });
 
   // geo-chat answers the browsed lookup in id-sorted batches, so a list laid out in response order
@@ -2609,7 +2735,6 @@ describe('DebateRematchPageClient', () => {
     expect(button).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
   });
-
 });
 
 /** The latest arguments the picker handed its browsed-claims page query. */

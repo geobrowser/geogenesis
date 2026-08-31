@@ -76,6 +76,12 @@ vi.mock('./claims-tab', async () => {
 
 // `usePrivySignIn` reaches for Privy's context, which these suites do not stand up. The signed-out
 // paths assert that it is *called*, so the stub is shared through `mocks.promptSignIn`.
+// PeopleTab fetches every listed person's record through react-query; this panel test renders
+// without a client and is about tab switching, not the rows.
+vi.mock('./use-person-records', () => ({
+  usePersonRecords: () => new Map(),
+}));
+
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => mocks.promptSignIn,
 }));
