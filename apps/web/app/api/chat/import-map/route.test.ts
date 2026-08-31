@@ -14,13 +14,12 @@ vi.mock('~/core/environment/environment', () => ({
   getConfig: () => ({ chainId: '1', rpc: 'https://rpc.example', api: 'https://api.example/graphql' }),
 }));
 
-const { buildMapping, dedupeById, lookupTypes, rankBySpace, renderColumns, typeSourceSpaces, validateInput } =
+const { buildMapping, dedupeById, lookupTypes, renderColumns, typeSourceSpaces, validateInput } =
   await import('./route');
 
 const ROOT_SPACE_ID = 'a19c345ab9866679b001d7d2138d88a1';
 const CRYPTO_SPACE = 'c9f267dcb0d270718c2a3c45a64afd32';
 const AI_SPACE = '41e851610e13a19441c4d980f2f2ce6b';
-const UNRANKED_SPACE = '9'.repeat(32);
 const TECHNOLOGY_SPACE = '870e3b3068661e6280fad2ab456829bc';
 const MEMBER_SPACE = '7'.repeat(32);
 
@@ -74,56 +73,6 @@ function mapping(sub: SubmitMappingInput, inp = input()) {
   if ('error' in result) throw new Error(`expected a mapping, got ${result.error}`);
   return result;
 }
-
-describe('rankBySpace', () => {
-  const match = (id: string, ...spaceIds: string[]) => ({ id, spaces: spaceIds.map(spaceId => ({ spaceId })) });
-
-  it('puts the current space first, ahead of Root', () => {
-    // A property this space defines for itself beats the canonical one: the
-    // import is landing here, so this space's own vocabulary wins.
-    const ranked = rankBySpace([match('root', ROOT_SPACE_ID), match('mine', AI_SPACE)], AI_SPACE);
-    expect(ranked.map(m => m.id)).toEqual(['mine', 'root']);
-  });
-
-  it('falls back to Root over any other ranked space', () => {
-    const ranked = rankBySpace([match('crypto', CRYPTO_SPACE), match('root', ROOT_SPACE_ID)], AI_SPACE);
-    expect(ranked.map(m => m.id)).toEqual(['root', 'crypto']);
-  });
-
-  it('ranks known spaces ahead of unknown ones', () => {
-    const ranked = rankBySpace([match('nowhere', UNRANKED_SPACE), match('crypto', CRYPTO_SPACE)], AI_SPACE);
-    expect(ranked.map(m => m.id)).toEqual(['crypto', 'nowhere']);
-  });
-
-  it('scores a multi-space property by its best space', () => {
-    const ranked = rankBySpace([match('a', UNRANKED_SPACE), match('b', UNRANKED_SPACE, ROOT_SPACE_ID)], AI_SPACE);
-    expect(ranked.map(m => m.id)).toEqual(['b', 'a']);
-  });
-
-  it('is stable — equal ranks keep the API relevance order', () => {
-    const ranked = rankBySpace(
-      [match('first', ROOT_SPACE_ID), match('second', ROOT_SPACE_ID), match('third', ROOT_SPACE_ID)],
-      AI_SPACE
-    );
-    expect(ranked.map(m => m.id)).toEqual(['first', 'second', 'third']);
-  });
-
-  it('keeps every match — this orders, it does not filter', () => {
-    // The slice that follows is what drops candidates. Ranking exists so that
-    // slice keeps the best six rather than an arbitrary six.
-    const input = [match('a', UNRANKED_SPACE), match('b', ROOT_SPACE_ID), match('c')];
-    expect(rankBySpace(input, AI_SPACE)).toHaveLength(3);
-  });
-
-  it('survives a property with no spaces, sorting it last', () => {
-    const ranked = rankBySpace([match('homeless'), match('root', ROOT_SPACE_ID)], AI_SPACE);
-    expect(ranked.map(m => m.id)).toEqual(['root', 'homeless']);
-  });
-
-  it('handles an empty list', () => {
-    expect(rankBySpace([], AI_SPACE)).toEqual([]);
-  });
-});
 
 describe('renderColumns with pre-fetched candidates', () => {
   const candidates = new Map([

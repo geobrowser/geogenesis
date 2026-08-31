@@ -19,7 +19,8 @@ import { ROOT_SPACE } from '~/core/constants';
 import { WALLET_ADDRESS } from '~/core/cookie';
 import { getAllEntities, getProperties, getResults } from '~/core/io/queries';
 import type { Property } from '~/core/types';
-import { RANKED_SPACE_IDS, getSpaceRank } from '~/core/utils/space/space-ranking';
+import { isTrustedSpace, rankBySpace, trustedSpaceSet } from '~/core/utils/space/search-trust';
+import { RANKED_SPACE_IDS } from '~/core/utils/space/space-ranking';
 
 import { hydrateRelationValueTypes } from '~/partials/import/import-generation';
 
@@ -252,27 +253,9 @@ async function hydrateIfRelation(property: Property): Promise<Property> {
  * `getProperties` returns `relationValueTypes: []` for every property — the gap
  * that makes the resolver's type filter a no-op downstream.
  */
-/**
- * Spaces a candidate property may come from.
- *
- * The search reaches the whole canonical graph, and "canonical" is not the same
- * as "curated ontology" — a scraped content space with 21,000 Articles and News
- * stories is canonical too, and its incidental `Role` text field competes with
- * the real one on equal footing. Restricting to spaces someone has vouched for
- * — the ranked list, the space being imported into, and the user's own — is
- * what keeps a dataset's private vocabulary out of a curator's mapping.
- */
-function isTrustedSpace(spaceId: string, allowed: ReadonlySet<string>): boolean {
-  const normalized = normalizeId(spaceId);
-  if (!normalized) return false;
-  return allowed.has(normalized) || getSpaceRank(normalized) !== UNRANKED_SPACE;
-}
-
-const UNRANKED_SPACE = Number.MAX_SAFE_INTEGER;
-
 async function searchProperties(queries: string[], spaceId: string, searchSpaces: string[]) {
   const unique = [...new Set(queries.map(q => q.trim()).filter(Boolean))];
-  const allowed = new Set(searchSpaces.map(id => normalizeId(id)).filter((id): id is string => id !== null));
+  const allowed = trustedSpaceSet(searchSpaces);
 
   const perQuery = await Promise.all(
     unique.map(async query => {
@@ -280,6 +263,12 @@ async function searchProperties(queries: string[], spaceId: string, searchSpaces
         const results = await Effect.runPromise(
           getResults({ query, typeIds: [SystemIds.PROPERTY], additionalSpaceIds: searchSpaces })
         );
+        // The search reaches the whole canonical graph, and "canonical" is not
+        // the same as "curated ontology" — a scraped content space with 21,000
+        // Articles is canonical too, and its incidental `Role` text field
+        // competes with the real one on equal footing. Restricting to spaces
+        // someone has vouched for keeps a dataset's private vocabulary out of a
+        // curator's mapping.
         const trusted = results.filter(r => r.spaces.some(s => isTrustedSpace(s.spaceId, allowed)));
         // Ranked *before* the slice, not after. A common header like "Website"
         // matches the same property name across many spaces; taking the API's
@@ -373,36 +362,6 @@ function dedupe(ids: string[]): string[] {
     out.push(normalized);
   }
   return out;
-}
-
-/**
- * Order property matches so the best candidate is first.
- *
- * Restores what `use-auto-map-columns.ts` already did and this route lost when
- * it replaced that matcher: rank each match by the best-ranked space it lives
- * in, using the app's existing `getSpaceRank` (Root 0, Education 1, Crypto 2,
- * AI 3, …, everything else last). The current space is treated as rank -1 —
- * ahead of Root — because a property this space defines for itself is the one
- * an import into this space should use.
- *
- * Ordering only. Nothing is dropped that would otherwise have survived; a
- * lower-ranked match still reaches the model if it is inside the cap.
- */
-export function rankBySpace<T extends { spaces: Array<{ spaceId: string }> }>(
-  matches: T[],
-  currentSpaceId: string
-): T[] {
-  const rankOf = (match: T): number => {
-    if (match.spaces.length === 0) return Number.MAX_SAFE_INTEGER;
-    return Math.min(...match.spaces.map(s => (s.spaceId === currentSpaceId ? -1 : getSpaceRank(s.spaceId))));
-  };
-
-  // Decorated sort: `Array.prototype.sort` is stable, so equal ranks keep the
-  // API's own relevance order rather than being reshuffled.
-  return matches
-    .map((match, index) => ({ match, index, rank: rankOf(match) }))
-    .sort((a, b) => a.rank - b.rank || a.index - b.index)
-    .map(entry => entry.match);
 }
 
 /** First occurrence wins, so caller order decides precedence. */
@@ -712,7 +671,7 @@ export async function POST(req: Request) {
   // covering all of them, so it can be wide.
   const browseSpaces = dedupe([input.spaceId, ROOT_SPACE]);
   const searchSpaces = typeSourceSpaces(input.spaceId, input.searchSpaceIds);
-  const allowedSpaces = new Set(searchSpaces);
+  const allowedSpaces = trustedSpaceSet(searchSpaces);
   let spaceTypes: Array<{ id: string; name: string | null }> = [];
   let moreTypesExist = false;
   try {

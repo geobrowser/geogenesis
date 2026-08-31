@@ -67,6 +67,18 @@ describe('rankBySpace', () => {
     expect(ranked.map(m => m.id)).toEqual(['first', 'second', 'third']);
   });
 
+  it('ranks a known space ahead of an unknown one', () => {
+    const ranked = rankBySpace([match('nowhere', AI_MUSIC), match('crypto', CRYPTO)]);
+    expect(ranked.map(m => m.id)).toEqual(['crypto', 'nowhere']);
+  });
+
+  it('keeps every match — this orders, it does not filter', () => {
+    // The caller's slice is what drops candidates. Ranking exists so that slice
+    // keeps the best of them rather than an arbitrary few.
+    const matches = [match('a', AI_MUSIC), match('b', ROOT), match('c')];
+    expect(rankBySpace(matches, CRYPTO)).toHaveLength(3);
+  });
+
   it('does not mutate the input', () => {
     const matches = [match('wa', WORLD_AFFAIRS), match('root', ROOT)];
     rankBySpace(matches);
