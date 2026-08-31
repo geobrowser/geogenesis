@@ -10,10 +10,13 @@ import { useSetAtom } from 'jotai';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { useGeoChatAuth } from '~/core/debates/hooks';
+import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useComments } from '~/core/hooks/use-comments';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -26,14 +29,11 @@ import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 
-import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
-import { useGeoChatAuth } from '~/core/debates/hooks';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
+import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -340,7 +340,7 @@ function DebateFeedItem({
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const winnerVotes = useDebateVotes(debate);
-  const shareAction = useDebateShareAction(debate, active);
+  const share = useDebateShareAction();
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
   // Same arguments as the Comments panel's own useComments, so the two share a
@@ -372,7 +372,7 @@ function DebateFeedItem({
     claimsCount: claims.totalCount,
     onComment: onOpenComments,
     onClaims: onOpenClaims,
-    shareAction,
+    onShare: share.onOpen,
   };
 
   return (
@@ -425,6 +425,7 @@ function DebateFeedItem({
           <DebateInteractionBar orientation="vertical" {...interactionProps} />
         </div>
       </div>
+      <DebateShareDialog open={share.open} onOpenChange={share.onOpenChange} debate={debate} spaceId={spaceId} />
     </section>
   );
 }
