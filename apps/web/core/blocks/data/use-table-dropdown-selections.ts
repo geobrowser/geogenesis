@@ -9,42 +9,100 @@ import {
 } from './table-dropdown-selections';
 
 /**
- * Personal dropdown selections for one data block, persisted in localStorage
- * (the Explore type-filter pattern). Selections are a per-user view: they
- * never touch the block's stored filters and never affect other users.
+ * Personal dropdown selections, shared across every hook instance for the
+ * same block: `useDataBlock` runs once per consumer (table, block title,
+ * view menu, row actions), and per-instance state would leave siblings
+ * querying with a stale overlay and fighting over pagination anchors. One
+ * external store per storage key keeps every instance on the same view.
  *
- * `hydrated` stays false until storage has been read so callers can keep
- * querying with the block's own filters instead of briefly querying with
- * missing overrides. Writes only happen after a real user change — a
- * hydration read never clobbers storage.
+ * Persisted in localStorage (the Explore type-filter pattern): hydrated once
+ * per key, written only after a real user change — never on hydration.
  */
-export function useTableDropdownSelections(blocksRelationEntityId: string) {
-  const [selections, setSelections] = React.useState<DropdownSelections>({});
-  const [hydrated, setHydrated] = React.useState(false);
-  const userChangedRef = React.useRef(false);
+type SelectionsEntry = {
+  selections: DropdownSelections;
+  hydrated: boolean;
+  listeners: Set<() => void>;
+};
 
-  const storageKey = blocksRelationEntityId ? dropdownSelectionsStorageKey(blocksRelationEntityId) : null;
+const entries = new Map<string, SelectionsEntry>();
 
-  React.useEffect(() => {
-    if (!storageKey) return;
-    userChangedRef.current = false;
-    setSelections(parseStoredDropdownSelections(window.localStorage.getItem(storageKey)));
-    setHydrated(true);
-  }, [storageKey]);
+function getEntry(storageKey: string): SelectionsEntry {
+  let entry = entries.get(storageKey);
+  if (!entry) {
+    entry = { selections: {}, hydrated: false, listeners: new Set() };
+    entries.set(storageKey, entry);
+  }
+  return entry;
+}
 
-  React.useEffect(() => {
-    if (!storageKey || !userChangedRef.current) return;
-    if (Object.keys(selections).length === 0) {
+function hydrate(storageKey: string) {
+  const entry = getEntry(storageKey);
+  if (entry.hydrated) return;
+  try {
+    entry.selections = parseStoredDropdownSelections(window.localStorage.getItem(storageKey));
+  } catch {
+    entry.selections = {};
+  }
+  entry.hydrated = true;
+  entry.listeners.forEach(listener => listener());
+}
+
+function update(storageKey: string, updater: (current: DropdownSelections) => DropdownSelections) {
+  const entry = getEntry(storageKey);
+  entry.selections = updater(entry.selections);
+  try {
+    if (Object.keys(entry.selections).length === 0) {
       window.localStorage.removeItem(storageKey);
     } else {
-      window.localStorage.setItem(storageKey, JSON.stringify(selections));
+      window.localStorage.setItem(storageKey, JSON.stringify(entry.selections));
     }
-  }, [selections, storageKey]);
+  } catch {
+    // Storage can be unavailable (private windows); the in-memory view still works.
+  }
+  entry.listeners.forEach(listener => listener());
+}
 
-  const updateSelections = React.useCallback((updater: (current: DropdownSelections) => DropdownSelections) => {
-    userChangedRef.current = true;
-    setSelections(updater);
-  }, []);
+/** Test-only: drop all shared state so specs are isolated. */
+export function __resetDropdownSelectionsStoreForTests() {
+  entries.clear();
+}
+
+export function useTableDropdownSelections(blocksRelationEntityId: string) {
+  const storageKey = blocksRelationEntityId ? dropdownSelectionsStorageKey(blocksRelationEntityId) : null;
+
+  const subscribe = React.useCallback(
+    (listener: () => void) => {
+      if (!storageKey) return () => {};
+      const entry = getEntry(storageKey);
+      entry.listeners.add(listener);
+      return () => entry.listeners.delete(listener);
+    },
+    [storageKey]
+  );
+
+  const selections = React.useSyncExternalStore(
+    subscribe,
+    () => (storageKey ? getEntry(storageKey).selections : EMPTY_SELECTIONS),
+    () => EMPTY_SELECTIONS
+  );
+  const hydrated = React.useSyncExternalStore(
+    subscribe,
+    () => (storageKey ? getEntry(storageKey).hydrated : false),
+    () => false
+  );
+
+  React.useEffect(() => {
+    if (storageKey) hydrate(storageKey);
+  }, [storageKey]);
+
+  const updateSelections = React.useCallback(
+    (updater: (current: DropdownSelections) => DropdownSelections) => {
+      if (storageKey) update(storageKey, updater);
+    },
+    [storageKey]
+  );
 
   return { selections, updateSelections, hydrated };
 }
+
+const EMPTY_SELECTIONS: DropdownSelections = {};

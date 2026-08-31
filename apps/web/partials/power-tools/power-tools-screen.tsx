@@ -209,6 +209,7 @@ export function PowerToolsScreen() {
     setGroupMode,
     temporaryModesByColumn,
     setTemporaryGroupMode,
+    filterableProperties,
   } = useFilters(canEdit);
   const { source } = useSource({ filterState, setFilterState });
 
@@ -237,10 +238,19 @@ export function PowerToolsScreen() {
   // Browse-mode personal dropdowns overlay the query (never the persisted
   // filters), the same way TableBlock applies them inside useDataBlock. Power
   // Tools runs its own filter state, so the overlay is applied here.
+  // Match useDataBlock: only overlay properties that resolve as relation
+  // properties, so a stored selection never filters with no visible pill.
   const dropdownColumnIds = React.useMemo(
-    () => browseDropdowns.configs.map(d => d.propertyId),
-    [browseDropdowns.configs]
+    () =>
+      browseDropdowns.configs
+        .map(d => d.propertyId)
+        .filter(id => filterableProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION')),
+    [browseDropdowns.configs, filterableProperties]
   );
+  /** Dropdowns act on the block's query; Collection and Relations blocks have none. */
+  const isQuerySource = source.type === 'SPACES' || source.type === 'GEO';
+  const showBrowseDropdownsRow = !isEditing && isQuerySource && browseDropdowns.configs.length > 0;
+  const showPillsRow = hasActiveFilters || (isEditing && isQuerySource && browseDropdowns.configs.length > 0);
   const applyDropdownOverlay = !isEditing && browseDropdowns.hydrated && dropdownColumnIds.length > 0;
   const dropdownQueryState = React.useMemo(
     () =>
@@ -943,7 +953,13 @@ export function PowerToolsScreen() {
       style={{
         top: '44px',
         display: 'grid',
-        gridTemplateRows: ['auto', !isEditing ? 'auto' : null, hasActiveFilters ? 'auto' : null, '1fr']
+        gridTemplateRows: [
+          'auto',
+          !isEditing ? 'auto' : null,
+          showBrowseDropdownsRow ? 'auto' : null,
+          showPillsRow ? 'auto' : null,
+          '1fr',
+        ]
           .filter(Boolean)
           .join(' '),
       }}
@@ -1004,7 +1020,7 @@ export function PowerToolsScreen() {
             filterState={effectiveFilterState}
             setFilterState={effectiveSetFilterState}
             afterFilterTrigger={
-              isEditing ? (
+              isEditing && isQuerySource ? (
                 <TableBlockDropdownsConfigTrigger
                   configs={browseDropdowns.configs}
                   properties={data.properties}
@@ -1067,7 +1083,7 @@ export function PowerToolsScreen() {
         </div>
       )}
 
-      {!isEditing && browseDropdowns.configs.length > 0 && (
+      {showBrowseDropdownsRow && (
         <div className="flex flex-wrap items-center gap-2 border-b border-grey-02 px-4 py-2">
           <TableBlockDropdowns
             configs={browseDropdowns.configs}
@@ -1082,10 +1098,10 @@ export function PowerToolsScreen() {
         </div>
       )}
 
-      {(hasActiveFilters || (isEditing && browseDropdowns.configs.length > 0)) && (
+      {showPillsRow && (
         <div className="flex items-center gap-2 border-b border-grey-02 px-4 py-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            {isEditing && (
+            {isEditing && isQuerySource && (
               <TableBlockDropdownsConfigChips
                 configs={browseDropdowns.configs}
                 properties={data.properties}

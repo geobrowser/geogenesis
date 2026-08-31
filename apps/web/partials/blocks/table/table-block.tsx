@@ -739,6 +739,9 @@ const ConfiguredTableBlock = ({
     return out;
   }, [filterableProperties, properties]);
 
+  /** Dropdowns act on the block's query; Collection and Relations blocks have none. */
+  const isQuerySource = source.type === 'SPACES' || source.type === 'GEO';
+
   const isExploreView = view === 'EXPLORE';
   const isInfiniteExplore = isExploreView && !isEditing;
 
@@ -752,6 +755,9 @@ const ConfiguredTableBlock = ({
         sourceKey: source.type === 'SPACES' ? source.value.slice().sort() : 'value' in source ? source.value : 'GEO',
         filters: activeFilters.map(f => ({ c: f.columnId, v: f.value })),
         filterModes: Object.entries(activeModesByColumn).sort(([a], [b]) => a.localeCompare(b)),
+        // Personal dropdown selections overlay the query, so they must reset
+        // accumulated Explore pages exactly like a filter change.
+        dropdownSelections: Object.entries(browseDropdowns.selections).sort(([a], [b]) => a.localeCompare(b)),
         sort: sortState ?? null,
       }),
     [isInfiniteExplore, pageSize, source, activeFilters, activeModesByColumn, sortState]
@@ -1063,7 +1069,7 @@ const ConfiguredTableBlock = ({
 
         <BlockLinkIngestionPanel />
 
-        {!isEditing && browseDropdowns.configs.length > 0 && (
+        {!isEditing && isQuerySource && browseDropdowns.configs.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 py-2" onMouseDown={e => e.stopPropagation()}>
             <TableBlockDropdowns
               configs={browseDropdowns.configs}
@@ -1124,11 +1130,13 @@ const ConfiguredTableBlock = ({
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}
                         afterFilterTrigger={
-                          <TableBlockDropdownsConfigTrigger
-                            configs={browseDropdowns.configs}
-                            properties={mergedBlockProperties}
-                            toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
-                          />
+                          isQuerySource ? (
+                            <TableBlockDropdownsConfigTrigger
+                              configs={browseDropdowns.configs}
+                              properties={mergedBlockProperties}
+                              toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+                            />
+                          ) : null
                         }
                       />
                     </>
@@ -1156,41 +1164,44 @@ const ConfiguredTableBlock = ({
                     ))}
                 </div>
 
-                {isEditing && (filterGroupsForToolbarPills.length > 0 || browseDropdowns.configs.length > 0) && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <TableBlockDropdownsConfigChips
-                      configs={browseDropdowns.configs}
-                      properties={mergedBlockProperties}
-                      toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
-                    />
-                    {filterGroupsForToolbarPills.map(group => (
-                      <React.Fragment key={group.columnId}>
-                        <TableBlockFilterGroupPill
-                          group={group}
-                          mode={activeModesByColumn[group.columnId] ?? 'AND'}
-                          onToggleMode={() => toggleActiveGroupMode(group.columnId)}
-                          onDeleteValue={originalIndex => {
-                            const newFilterState = produce(activeFilters, draft => {
-                              draft.splice(originalIndex, 1);
-                            });
-                            setActiveFilters(newFilterState);
-                          }}
-                          onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
-                          }}
-                          onAddSimilar={anchorEl => {
-                            requestAnimationFrame(() => {
-                              requestAnimationFrame(() => {
-                                filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
-                              });
-                            });
-                          }}
-                          isEditing={isEditing}
+                {isEditing &&
+                  (filterGroupsForToolbarPills.length > 0 || (isQuerySource && browseDropdowns.configs.length > 0)) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isQuerySource && (
+                        <TableBlockDropdownsConfigChips
+                          configs={browseDropdowns.configs}
+                          properties={mergedBlockProperties}
+                          toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                         />
-                      </React.Fragment>
-                    ))}
-                  </div>
-                )}
+                      )}
+                      {filterGroupsForToolbarPills.map(group => (
+                        <React.Fragment key={group.columnId}>
+                          <TableBlockFilterGroupPill
+                            group={group}
+                            mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                            onToggleMode={() => toggleActiveGroupMode(group.columnId)}
+                            onDeleteValue={originalIndex => {
+                              const newFilterState = produce(activeFilters, draft => {
+                                draft.splice(originalIndex, 1);
+                              });
+                              setActiveFilters(newFilterState);
+                            }}
+                            onClearGroup={() => {
+                              setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                            }}
+                            onAddSimilar={anchorEl => {
+                              requestAnimationFrame(() => {
+                                requestAnimationFrame(() => {
+                                  filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
+                                });
+                              });
+                            }}
+                            isEditing={isEditing}
+                          />
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  )}
               </motion.div>
             </motion.div>
           </AnimatePresence>

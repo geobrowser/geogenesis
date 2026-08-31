@@ -5,6 +5,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
@@ -134,7 +135,16 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     updateSelections: updateDropdownSelections,
     hydrated: dropdownSelectionsHydrated,
   } = useTableDropdownSelections(blocksRelationEntityId);
-  const dropdownColumnIds = React.useMemo(() => dropdownConfigs.map(d => d.propertyId), [dropdownConfigs]);
+  // Only overlay properties that currently resolve as relation properties:
+  // the pill (and its reset) renders under the same condition, so a stored
+  // selection can never filter the table with no visible control.
+  const dropdownColumnIds = React.useMemo(
+    () =>
+      dropdownConfigs
+        .map(d => d.propertyId)
+        .filter(id => filterableProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION')),
+    [dropdownConfigs, filterableProperties]
+  );
   const applyDropdownOverlay = !isEditing && dropdownSelectionsHydrated && dropdownColumnIds.length > 0;
   const { filterState: queryFilterState, modesByColumn: queryModesByColumn } = React.useMemo(
     () =>
