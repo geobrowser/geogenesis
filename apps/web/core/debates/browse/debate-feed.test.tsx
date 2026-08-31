@@ -290,17 +290,84 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(() => render(<DebatesBrowseFeed spaceId="space-1" />)).not.toThrow();
   });
 
-  it('clamps long claims and lets mobile users expand them', () => {
+  /**
+   * jsdom has no layout, so the heading's measurements are supplied. The numbers are the ones
+   * Chromium reports for the real type scale at 390px: a 24px face on 24px leading, where one
+   * rendered line of glyphs is 26px of content inside a 24px box.
+   */
+  function stubHeadingMetrics({ contentHeight, clampedHeight }: { contentHeight: number; clampedHeight: number }) {
+    const isHeading = (el: HTMLElement) => el.tagName === 'H2';
     const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (
       this: HTMLElement
     ) {
-      return this.tagName === 'H2' ? 72 : 0;
+      return isHeading(this) ? contentHeight : 0;
     });
     const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (
       this: HTMLElement
     ) {
-      return this.tagName === 'H2' ? 48 : 0;
+      return isHeading(this) ? clampedHeight : 0;
     });
+    const original = window.getComputedStyle.bind(window);
+    // Proxied rather than spread: a spread `CSSStyleDeclaration` is a plain object, and Testing
+    // Library's accessible-name computation calls `getPropertyValue` on whatever this returns.
+    const computed = vi.spyOn(window, 'getComputedStyle').mockImplementation((el: Element, pseudo?: string | null) => {
+      const style = original(el, pseudo);
+      if (!(el instanceof HTMLElement) || !isHeading(el)) return style;
+      return new Proxy(style, {
+        get(target, property) {
+          if (property === 'lineHeight') return '24px';
+          const value = Reflect.get(target, property, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
+    });
+    return () => {
+      scrollHeight.mockRestore();
+      clientHeight.mockRestore();
+      computed.mockRestore();
+    };
+  }
+
+  /**
+   * GEO-2756. The old check was `scrollHeight > clientHeight`, and the claim title's leading is
+   * tighter than its glyphs — so every title measured two pixels over its own box and the control
+   * was offered permanently. It only ever showed on mobile, which is where it was reported, because
+   * the button is `hidden md:inline-flex` and `md` here is `max-width: 767px`.
+   */
+  it('offers no expand control for a claim that fits', () => {
+    const restore = stubHeadingMetrics({ contentHeight: 26, clampedHeight: 24 });
+
+    try {
+      const claim = 'Bitcoin is money';
+      mocks.debates = [completedDebate('debate-1', claim, '2026-07-02T00:01:10.000Z')];
+      render(<DebatesBrowseFeed spaceId="space-1" />);
+
+      const heading = screen.getByRole('heading', { name: claim });
+      expect(heading).toHaveClass('line-clamp-2');
+      // No tooltip either: it repeated a title the reader can already see in full.
+      expect(heading).not.toHaveAttribute('title');
+      expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  });
+
+  it('offers no expand control for a claim that exactly fills the clamp', () => {
+    const restore = stubHeadingMetrics({ contentHeight: 50, clampedHeight: 48 });
+
+    try {
+      const claim = 'A claim that wraps onto a second line and stops there';
+      mocks.debates = [completedDebate('debate-1', claim, '2026-07-02T00:01:10.000Z')];
+      render(<DebatesBrowseFeed spaceId="space-1" />);
+
+      expect(screen.queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  });
+
+  it('clamps long claims and lets mobile users expand them', () => {
+    const restore = stubHeadingMetrics({ contentHeight: 74, clampedHeight: 48 });
 
     try {
       const claim = 'A claim long enough to wrap beyond the two lines reserved by the debate header';
@@ -319,8 +386,7 @@ describe('DebatesBrowseFeed video sharing', () => {
       expect(heading).toHaveClass('md:line-clamp-none');
       expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
     } finally {
-      scrollHeight.mockRestore();
-      clientHeight.mockRestore();
+      restore();
     }
   });
 

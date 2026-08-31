@@ -82,6 +82,12 @@ type EntityFeedProps = {
   feedTopSpacingClassName?: string;
   /** When true, renders a divider line between the filter row and the first feed card. */
   dividerBeforeFeed?: boolean;
+  /**
+   * Whether a card's entity name opens the side panel instead of navigating (GEO-2757). Explore
+   * turns this on. Off for the space activity tab, which is a feed inside a space rather than the
+   * cross-space browsing surface the panel was asked for.
+   */
+  titleOpensSidePanel?: boolean;
 };
 
 async function fetchFeedPage(
@@ -125,6 +131,7 @@ export function EntityFeed({
   showTypeFilter = false,
   feedTopSpacingClassName,
   dividerBeforeFeed = false,
+  titleOpensSidePanel = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExploreSort>(initialSort);
@@ -379,6 +386,7 @@ export function EntityFeed({
               item={item}
               hideSpaceLink={lockedSpaceId != null}
               hideJoinButton={lockedSpaceId != null}
+              titleOpensSidePanel={titleOpensSidePanel}
             />
           ))
         )}

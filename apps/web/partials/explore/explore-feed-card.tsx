@@ -18,6 +18,7 @@ import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { ClaimExploreFeedCard } from './claim-explore-feed-card';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
+import { ExploreCardEntityLink } from './explore-card-entity-link';
 import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
@@ -28,6 +29,11 @@ type ExploreFeedCardProps = {
   hideSpaceLink?: boolean;
   /** Hide the Join button next to the space name. */
   hideJoinButton?: boolean;
+  /**
+   * Whether clicking the entity name opens it in the side panel rather than navigating (GEO-2757).
+   * Explore turns this on; the other surfaces this card serves keep navigating.
+   */
+  titleOpensSidePanel?: boolean;
 };
 
 function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
@@ -45,13 +51,13 @@ const DEBATE_TYPE = normalizeId(DEBATE_TYPE_ID);
 const CLAIM_TYPE = normalizeId(CLAIM_TYPE_ID);
 const RANKING_BLOCK_TYPE = normalizeId(RANKING_BLOCK_TYPE_ID);
 
-function CardTitle({ item }: { item: ExploreFeedItem }) {
+function CardTitle({ item, opensSidePanel }: { item: ExploreFeedItem; opensSidePanel: boolean }) {
   return (
-    <Link href={NavUtils.toEntity(item.spaceId, item.entityId)}>
+    <ExploreCardEntityLink item={item} opensSidePanel={opensSidePanel}>
       <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
         {item.title}
       </h2>
-    </Link>
+    </ExploreCardEntityLink>
   );
 }
 
@@ -59,10 +65,12 @@ type CardBodyProps = {
   item: ExploreFeedItem;
   /** The vote / comment row, owned by the shell so bodies render it identically. Not every body takes it. */
   actions: React.ReactNode;
+  /** Threaded to the title only. The thumbnail beside it still navigates — see `BaseExploreFeedCard`. */
+  titleOpensSidePanel: boolean;
 };
 
 /** The default body: thumbnail on the left, title and description beside it. */
-function DefaultCardBody({ item, actions }: CardBodyProps) {
+function DefaultCardBody({ item, actions, titleOpensSidePanel }: CardBodyProps) {
   return (
     <div className="flex items-start gap-4">
       {item.imageUrl ? (
@@ -75,7 +83,7 @@ function DefaultCardBody({ item, actions }: CardBodyProps) {
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="min-w-0">
-          <CardTitle item={item} />
+          <CardTitle item={item} opensSidePanel={titleOpensSidePanel} />
           {item.description ? (
             <p className="mt-1 line-clamp-2 text-[16px]! leading-[20px]! font-normal! tracking-[-0.03em] text-grey-04">
               {item.description}
@@ -90,7 +98,7 @@ function DefaultCardBody({ item, actions }: CardBodyProps) {
 }
 
 /** A Community call event's body */
-function CommunityCallCardBody({ item, actions }: CardBodyProps) {
+function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyProps) {
   const sources = useRecordingSources({
     entityId: item.entityId,
     spaceId: item.spaceId,
@@ -99,7 +107,7 @@ function CommunityCallCardBody({ item, actions }: CardBodyProps) {
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
-      <CardTitle item={item} />
+      <CardTitle item={item} opensSidePanel={titleOpensSidePanel} />
       {sources.length > 0 ? (
         <div className="w-full max-w-[773px]">
           <PublishedRecordingPlayer
@@ -129,6 +137,7 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         item={props.item}
         hideSpaceLink={props.hideSpaceLink}
         hideJoinButton={props.hideJoinButton}
+        titleOpensSidePanel={props.titleOpensSidePanel}
         fallback={<BaseExploreFeedCard {...props} />}
       />
     );
@@ -151,7 +160,12 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
   return <BaseExploreFeedCard {...props} />;
 }
 
-function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = false }: ExploreFeedCardProps) {
+function BaseExploreFeedCard({
+  item,
+  hideSpaceLink = false,
+  hideJoinButton = false,
+  titleOpensSidePanel = false,
+}: ExploreFeedCardProps) {
   const isCommunityCall = item.types.some(type => normalizeId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
   const isRanking = item.types.some(type => normalizeId(type.id) === RANKING_BLOCK_TYPE);
   const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
@@ -166,11 +180,11 @@ function BaseExploreFeedCard({ item, hideSpaceLink = false, hideJoinButton = fal
       <ExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} />
 
       {isCommunityCall ? (
-        <CommunityCallCardBody item={item} actions={cardActions} />
+        <CommunityCallCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
       ) : isRanking ? (
-        <RankingCardBody item={item} actions={cardActions} />
+        <RankingCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
       ) : (
-        <DefaultCardBody item={item} actions={cardActions} />
+        <DefaultCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
       )}
     </article>
   );
