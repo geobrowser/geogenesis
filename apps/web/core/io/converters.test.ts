@@ -91,7 +91,7 @@ describe('convertWhereConditionToEntityFilter empty-name exclusion', () => {
 
     expect(result).toEqual({
       and: [
-        { spaceIds: { in: ['space-1'] } },
+        { spaceIds: { overlaps: ['space-1'] } },
         { or: [{ typeIds: { anyEqualTo: 'type-a' } }, { typeIds: { anyEqualTo: 'type-b' } }] },
         { name: { isNull: false, isNot: '' } },
       ],
