@@ -128,9 +128,15 @@ export function useFilters(canEdit?: boolean) {
   const temporaryFilters = temporaryFilterOverride ?? effectiveResolvedState;
   const temporaryModesByColumn = temporaryModesOverride ?? effectiveModesByColumn;
 
-  const setTemporaryFilters = React.useCallback((filters: Filter[]) => {
-    setTemporaryFilterOverride(filters);
-  }, []);
+  const setTemporaryFilters = React.useCallback(
+    (filters: Filter[], modeOverrides?: ModesByColumn) => {
+      setTemporaryFilterOverride(filters);
+      if (modeOverrides && Object.keys(modeOverrides).length > 0) {
+        setTemporaryModesOverride(previous => ({ ...(previous ?? effectiveModesByColumn), ...modeOverrides }));
+      }
+    },
+    [effectiveModesByColumn]
+  );
 
   const setTemporaryGroupMode = React.useCallback(
     (columnId: string, mode: FilterMode) => {
@@ -184,12 +190,21 @@ export function useFilters(canEdit?: boolean) {
   );
 
   const setFilterState = React.useCallback(
-    (filters: Filter[]) => {
+    /**
+     * `modeOverrides` lets a caller commit filters and their modes in one
+     * write — the filter prompt chooses a mode for chips that do not exist
+     * yet, so writing the mode through a separate setGroupMode call (on a
+     * different hook instance, against a filter list without those chips)
+     * silently dropped it.
+     */
+    (filters: Filter[], modeOverrides?: ModesByColumn) => {
       setOptimisticFilterState(filters);
       filterStateRef.current = filters;
       const presentColumnIds = new Set(filters.map(filter => filter.columnId));
       const nextModes: ModesByColumn = Object.fromEntries(
-        Object.entries(modesByColumnRef.current).filter(([columnId]) => presentColumnIds.has(columnId))
+        Object.entries({ ...modesByColumnRef.current, ...modeOverrides }).filter(([columnId]) =>
+          presentColumnIds.has(columnId)
+        )
       );
       setOptimisticModesByColumn(nextModes);
       writeFilterTriple(filters, nextModes);
@@ -202,8 +217,16 @@ export function useFilters(canEdit?: boolean) {
       const nextModes = { ...modesByColumnRef.current };
       if (mode === 'AND') delete nextModes[columnId];
       else nextModes[columnId] = mode;
-      setOptimisticModesByColumn(nextModes);
-      writeFilterTriple(filterStateRef.current, nextModes);
+      // Prune to committed columns: the serializer drops modes for columns
+      // without filters, so an unprunable entry would never match persisted
+      // state and the optimistic override would be stuck forever, masking
+      // (and later overwriting) modes set through other instances.
+      const presentColumnIds = new Set(filterStateRef.current.map(filter => filter.columnId));
+      const prunedModes: ModesByColumn = Object.fromEntries(
+        Object.entries(nextModes).filter(([id]) => presentColumnIds.has(id))
+      );
+      setOptimisticModesByColumn(prunedModes);
+      writeFilterTriple(filterStateRef.current, prunedModes);
     },
     [modesByColumnRef, setOptimisticModesByColumn, writeFilterTriple]
   );

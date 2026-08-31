@@ -11,7 +11,7 @@ import { Duration, Effect } from 'effect';
 import equal from 'fast-deep-equal';
 import { AnimatePresence, motion } from 'framer-motion';
 
-import { Filter, type FilterMode } from '~/core/blocks/data/filters';
+import { Filter, type FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
 import { Source, sourceStableKey } from '~/core/blocks/data/source';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
@@ -67,7 +67,8 @@ interface TableBlockFilterPromptProps {
   filterSuggestionSpaceId?: string;
   /** When set, `openWithColumn` seeds from this list (e.g. table active filters); defaults to `useFilters().filterState`. */
   filterStateForSeed?: Filter[];
-  onCreate: (filters: TableBlockNewFilterRow[], touchedColumnIds: string[]) => void;
+  /** `modeOverrides` carries AND/OR choices made for chips in this commit; applied atomically with the filters. */
+  onCreate: (filters: TableBlockNewFilterRow[], touchedColumnIds: string[], modeOverrides?: ModesByColumn) => void;
   /** When false, pending filter chips and value inputs use read-only (grey, no remove) styling. */
   isEditing?: boolean;
 }
@@ -1038,7 +1039,13 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     const { id: fromId, spaceId } = useEntityStoreInstance();
     const fromName = useName(fromId, spaceId);
 
-    const { filterState, setFilterState, modesByColumn, setGroupMode } = useFilters();
+    const { filterState, setFilterState, modesByColumn } = useFilters();
+    // Modes chosen for not-yet-committed chips. They must not go through
+    // setGroupMode: this hook instance's filter list does not contain the
+    // pending chips, so the serializer would prune the mode and the write
+    // would land as AND while the control shows OR. They commit with the
+    // chips through onCreate instead.
+    const [pendingModes, setPendingModes] = React.useState<ModesByColumn>({});
     const { source } = useSource({ filterState, setFilterState });
     const [state, dispatch] = React.useReducer(reducer, getInitialState(source));
     const isRelationsMode = source.type === 'RELATIONS';
@@ -1188,8 +1195,9 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
     const onEntitiesDone = () => {
       const { filters, touchedColumnIds } = collectFiltersToApply(state, options);
       if (touchedColumnIds.length > 0) {
-        onCreate(filters, touchedColumnIds);
+        onCreate(filters, touchedColumnIds, pendingModes);
       }
+      setPendingModes({});
       dispatch({ type: 'done' });
     };
 
@@ -1199,6 +1207,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       // Opened from a filter chip "+" — clear only this column's values, not every filter.
       if (externalAnchorElRef.current) {
         dispatch({ type: 'clearCurrentColumnSelections' });
+        setPendingModes({});
         onCreate([], [columnId]);
         dispatch({ type: 'done' });
         return;
@@ -1216,6 +1225,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       const touchedColumnIds = [...touched];
       if (touchedColumnIds.length === 0) return;
       dispatch({ type: 'clearAllColumnDrafts' });
+      setPendingModes({});
       onCreate([], touchedColumnIds);
       dispatch({ type: 'done' });
     };
@@ -1247,8 +1257,8 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
         state={state}
         dispatch={dispatch}
         filterSuggestionSpaceId={filterSuggestionSpaceId}
-        filterMode={modesByColumn[state.selectedColumn] ?? 'AND'}
-        onFilterModeChange={mode => setGroupMode(state.selectedColumn, mode)}
+        filterMode={pendingModes[state.selectedColumn] ?? modesByColumn[state.selectedColumn] ?? 'AND'}
+        onFilterModeChange={mode => setPendingModes(previous => ({ ...previous, [state.selectedColumn]: mode }))}
         onSelectColumnToFilter={onSelectColumnToFilter}
         isEditing={isEditing}
         onValueDropdownOpenChange={setValueDropdownOpen}
@@ -1279,6 +1289,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       const fs = seedFilterStateRef.current;
       const seedDraft = seedColumnDraftFromCommittedFilters(initialColumn, fs, opts);
       const sessionBaseline = buildSessionBaselineFromCommittedFilters(opts, fs);
+      setPendingModes({});
       dispatch({ type: 'reset', payload: { source, open: true, seedDraft, sessionBaseline } });
     };
 
