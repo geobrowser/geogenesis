@@ -245,15 +245,7 @@ function GovernanceFilterMenu({
         'min-h-0 w-full min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]',
         maxHeightClass ?? 'max-h-[200px]'
       )}
-      trigger={
-        <SmallButton
-          icon={<ChevronDownSmall />}
-          aria-disabled={disabled || undefined}
-          className={cx(pendingLabel && 'opacity-70', disabled && 'cursor-default')}
-        >
-          {displayLabel}
-        </SmallButton>
-      }
+      trigger={<SmallButton icon={<ChevronDownSmall />}>{displayLabel}</SmallButton>}
     >
       <>
         {items.map(item => (
