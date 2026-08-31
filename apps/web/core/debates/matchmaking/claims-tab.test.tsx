@@ -186,6 +186,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
     isControversial: false,
     isLoading: true,
     isViewerResponseLoading: true,
+    hasCounts: false,
     viewerDirection: null,
     viewerSpaceId: null,
   }),

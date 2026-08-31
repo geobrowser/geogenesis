@@ -17,7 +17,9 @@ import { ClaimSides, ClaimSplitBar } from './claim-summary';
  * claim cannot say different things about it.
  *
  * At zero it invites a first response rather than rendering nothing at all, which is what it used
- * to do on the state most claims are in. From the first response the share is shown, however small
+ * to do on the state most claims are in — but only at a zero the server actually reported. A zero
+ * standing in for a failed or unasked question renders nothing, because the invitation is an
+ * assertion about the claim and those two are not. From the first response the share is shown, however small
  * the sample: 93% of answered claims are unanimous and the median has two responses, so a "100%"
  * here is usually standing on very little — and what keeps that honest is the responder counts
  * directly beneath it, not withholding the number.
@@ -36,6 +38,19 @@ export function ClaimVerdict({
   if (summary.isLoading) {
     return <Skeleton className="h-[132px] w-full rounded-lg" />;
   }
+
+  // Nothing, where the counts never answered.
+  //
+  // `total: 0` is also what a failed count query and a held-back hook produce, and this module is
+  // the one place that turns a zero into a *claim about the world* — "No responses yet", followed
+  // by an invitation to be the first. Said over a claim with two hundred responses that is not a
+  // missing verdict but a wrong one, and the reader has no way to tell. On the claim page the
+  // held-back case is reached on every load: the summary waits for the vocabulary, so until the
+  // entity lands there is a window where nothing is loading and nothing has been asked.
+  //
+  // Rendering nothing is what this did before it learned to invite, and it is the honest answer to
+  // a question that was never put.
+  if (!summary.hasCounts) return null;
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const tier = claimSummaryTier(summary.total);

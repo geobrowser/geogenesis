@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   batch: { managed: false, ready: true },
   /** Whether the viewer's own indexed-response read fails rather than answering. */
   viewerResponseFails: false,
+  /** Whether the response-counts read fails rather than answering. */
+  countsFail: false,
   /** The viewer's personal space, which the indexed-response query is gated on. */
   personalSpace: { personalSpaceId: 'space-viewer' as string | null, isLoading: false },
   /** What the indexing snapshot reports — not a query, so `enabled` never reaches it. */
@@ -34,7 +36,10 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 vi.mock('~/core/io/queries', async () => {
   const { Effect } = await import('effect');
   return {
-    getEntityResponseCounts: () => Effect.succeed({ positive: 0, negative: 0 }),
+    getEntityResponseCounts: () =>
+      mocks.countsFail
+        ? Effect.fail(new Error('the graph is unreachable'))
+        : Effect.succeed({ positive: 0, negative: 0 }),
     getUserEntityResponse: () =>
       mocks.viewerResponseFails ? Effect.fail(new Error('the graph is unreachable')) : Effect.succeed(null),
   };
@@ -70,6 +75,7 @@ beforeEach(() => {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   mocks.batch = { managed: false, ready: true };
   mocks.viewerResponseFails = false;
+  mocks.countsFail = false;
   mocks.personalSpace = { personalSpaceId: VIEWER_SPACE, isLoading: false };
   mocks.indexing = { status: 'idle', pending: null, runId: null };
 });
@@ -236,6 +242,48 @@ describe('useClaimResponseSummary and the viewer’s own side', () => {
     const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
 
     await waitFor(() => expect(result.current.isViewerResponseLoading).toBe(false));
+  });
+
+  it('does not call a failed counts read an answer of zero', async () => {
+    // The same distinction one layer over: a counts query that exhausts its retries leaves `data`
+    // undefined, so `total` falls to zero while nothing is loading any more — the exact shape of a
+    // claim nobody has answered. `ClaimVerdict` turns that shape into "No responses yet", so
+    // without this the reader is told a claim with two hundred responses has none.
+    mocks.countsFail = true;
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryState(entityResponseCountsQueryKey(CLAIM, SPACE, CLAIM_RESPONSE_OBJECT_TYPE, 'stance'))
+          ?.status
+      ).toBe('error')
+    );
+
+    expect(result.current.total).toBe(0);
+    expect(result.current.hasCounts).toBe(false);
+  });
+
+  it('calls the counts an answer once they arrive, so only the failure is withheld', async () => {
+    // The guard for the test above.
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    await waitFor(() => expect(result.current.hasCounts).toBe(true));
+  });
+
+  it('reports no counts while held back, since nothing was asked', () => {
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', false), { wrapper });
+
+    expect(result.current.total).toBe(0);
+    expect(result.current.hasCounts).toBe(false);
+  });
+
+  it('takes the batch’s readiness as the counts’ answer under a boundary', () => {
+    mocks.batch = { managed: true, ready: false };
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(result.current.hasCounts).toBe(false);
   });
 
   it('is settled while held back, which is not the same as waiting', () => {

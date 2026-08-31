@@ -46,6 +46,16 @@ export type ClaimResponseSummary = {
   isControversial: boolean;
   isLoading: boolean;
   /**
+   * Whether the counts are an answer, as opposed to the zero that stands in for one.
+   *
+   * `total: 0` has three causes and only one of them is "nobody has responded": the counts query
+   * can fail, and a held-back hook reports zero without asking anything. Neither is a population,
+   * and a reader told "No responses yet" about a claim with two hundred of them has been given a
+   * fact rather than a gap. Anything that would *assert* emptiness has to check this first;
+   * anything that merely needs a number can keep reading `total`, which is zero either way.
+   */
+  hasCounts: boolean;
+  /**
    * Whether {@link viewerDirection} is still on its way, as opposed to being a settled "no side".
    *
    * Separate from `isLoading`, which reports the counts. The two settle independently and the
@@ -108,7 +118,10 @@ export function claimSummaryTier(total: number): ClaimSummaryTier {
 export function summarizeClaimResponses(
   positive: number,
   negative: number
-): Omit<ClaimResponseSummary, 'isLoading' | 'isViewerResponseLoading' | 'viewerDirection' | 'viewerSpaceId'> {
+): Omit<
+  ClaimResponseSummary,
+  'isLoading' | 'isViewerResponseLoading' | 'hasCounts' | 'viewerDirection' | 'viewerSpaceId'
+> {
   const total = positive + negative;
   const percent = total > 0 ? Math.round((100 * positive) / total) : null;
   const meetsFloor = total >= CLAIM_RESPONSE_FLOOR;
@@ -170,7 +183,11 @@ export function useClaimResponseSummary(
   // deferral was lost when the claim card replaced it on that page.
   const responseBatch = useClaimResponseBatchState();
 
-  const { data, isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    isSuccess: haveCountsAnswered,
+  } = useQuery({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
     queryFn: () =>
       Effect.runPromise(getEntityResponseCounts(entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)),
@@ -225,6 +242,10 @@ export function useClaimResponseSummary(
       // for, and reporting otherwise would leave a skeleton on a card that never asks.
       isLoading: false,
       isViewerResponseLoading: false,
+      // Nothing was asked, so the zero above stands for nothing. A caller that draws "no responses
+      // yet" off a hook it deliberately held back would be asserting the one thing it took care
+      // not to find out.
+      hasCounts: false,
       viewerDirection: null,
       // Who the viewer is, not what they answered — safe to report, and the avatars need it to
       // place the viewer once there is something to place.
@@ -237,6 +258,11 @@ export function useClaimResponseSummary(
     // Under a batch the individual query never runs, so its `isLoading` is false from the start —
     // the batch's own readiness is what says whether there is anything to draw yet.
     isLoading: responseBatch.managed ? !responseBatch.ready : isLoading,
+    // Answered, not merely finished — the same distinction `isViewerResponseLoading` draws below,
+    // and for the same reason. A counts query that exhausts its retries leaves `data` undefined, so
+    // `total` falls to zero while nothing is loading any more: the shape of an unanswered claim,
+    // which is exactly what it is not.
+    hasCounts: responseBatch.managed ? responseBatch.ready : haveCountsAnswered,
     // The viewer's own side, which the counts do not wait for.
     //
     // Two things have to settle before `viewerDirection` means "no side" rather than "not yet": the

@@ -77,6 +77,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
       ...actual.summarizeClaimResponses(mocks.summaryPositive, mocks.summaryNegative),
       isLoading: false,
       isViewerResponseLoading: false,
+      hasCounts: true,
       viewerDirection: null,
       viewerSpaceId: null,
     }),

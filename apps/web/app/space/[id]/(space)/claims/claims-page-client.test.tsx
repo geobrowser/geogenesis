@@ -106,6 +106,8 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
     // Same swap the real hook makes under a batch: the viewer's own side is primed by the batch
     // too, so the batch's readiness is the only thing either flag waits on.
     isViewerResponseLoading: !responseBatchReady,
+    // The batch is what answers under a boundary, so it is what makes the counts an answer.
+    hasCounts: responseBatchReady,
     viewerDirection: null,
     viewerSpaceId: null,
   }),

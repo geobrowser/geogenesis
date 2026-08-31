@@ -170,6 +170,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
     isControversial: false,
     isLoading: false,
     isViewerResponseLoading: false,
+    hasCounts: true,
     viewerDirection: null,
     viewerSpaceId: null,
   }),
