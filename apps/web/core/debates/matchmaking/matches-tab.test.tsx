@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   resetIndexing: vi.fn(),
   isConnected: true,
   availableToDebate: true,
+  /** What the shared summary reports for every claim in the fixture. */
+  responseCounts: { positive: 0, negative: 0 },
 }));
 
 vi.mock('../hooks', () => ({
@@ -63,6 +65,26 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
   useResetEntityResponseIndexingSnapshot: () => mocks.resetIndexing,
 }));
+
+// The shared claim summary reads the viewer's personal space, which reaches wagmi through
+// `useSmartAccount` — and these suites render without a `WagmiProvider` on purpose, stubbing the
+// wallet-dependent seams instead (the `use-entity-vote` mock above supplies the same personal
+// space to the publish path). The real arithmetic is kept, so `isControversial` and the response
+// floor still come from the shared rule rather than a hand-written literal; only the two network
+// reads and the wallet lookup are replaced.
+vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>();
+  return {
+    ...actual,
+    useClaimResponseSummary: () => ({
+      ...actual.summarizeClaimResponses(mocks.responseCounts.positive, mocks.responseCounts.negative),
+      isLoading: false,
+      hasCounts: true,
+      viewerDirection: null,
+      viewerSpaceId: null,
+    }),
+  };
+});
 
 // useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
 // suites render without a QueryClientProvider, so the read is stubbed as "nothing cached yet".
@@ -216,7 +238,6 @@ describe('MatchesTab', () => {
 
     expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText('Respond to this claim to debate it.')).not.toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeEnabled();
     expect(mocks.resetIndexing).not.toHaveBeenCalled();
   });
 
@@ -254,17 +275,6 @@ describe('MatchesTab', () => {
     expect(screen.queryByRole('button', { name: /^Agree/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Leftover fixture claim' })).not.toBeInTheDocument();
     expect(screen.getByText('Claim unavailable')).toBeInTheDocument();
-    // Readiness is geo-chat state, so it still works for a claim the graph can't resolve.
-    expect(screen.getByRole('switch', { name: 'Ready to debate this claim' })).toBeInTheDocument();
-  });
-
-  it('stands down from a claim by turning readiness off, never by clearing a response', async () => {
-    render(<MatchesTab onTabChange={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Ready to debate this claim' }));
-
-    await waitFor(() => expect(mocks.leaveMutateAsync).toHaveBeenCalledWith({ claimId: CLAIM_ENTITY_ID }));
-    expect(mocks.submitResponse).not.toHaveBeenCalled();
   });
 
   // A request you send while marked unavailable could not be answered, so the design drops the

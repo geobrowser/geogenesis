@@ -2,13 +2,15 @@
 
 import * as React from 'react';
 
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+
 import { Avatar } from '~/design-system/avatar';
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
 
 import { activeDebate } from '../activity-state';
 import type { DebatePerson } from '../api';
-import { useCreateDebateChallenge, useDebateActivity } from '../hooks';
+import { useCreateDebateChallenge, useDebateActivity, useGeoChatAuth } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
@@ -16,6 +18,9 @@ import { HubStickyControls } from './claims-tab';
 import { useDebatePeople, useDebateRequests } from './hooks';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
+import type { PersonRecord } from './person-record';
+import { PersonRecordLine } from './person-record-line';
+import { usePersonRecords } from './use-person-records';
 import { useUnexpiredRequests } from './use-request-countdown';
 
 /**
@@ -23,9 +28,16 @@ import { useUnexpiredRequests } from './use-request-countdown';
  * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
  */
 export function PeopleTab() {
+  const { authenticated } = useGeoChatAuth();
+  const promptSignIn = usePrivySignIn();
+  // Undefined when signed in, so every path below keeps behaving exactly as it did.
+  const onRequireSignIn = authenticated ? undefined : promptSignIn;
+
   const peopleQuery = useDebatePeople(true);
-  const { data: activity } = useDebateActivity(true);
-  const { data: requests } = useDebateRequests(true);
+  // Both describe the viewer's own state, so signed out there is nothing to ask for. Passing
+  // `authenticated` rather than `true` keeps them from firing a request that can only 401.
+  const { data: activity } = useDebateActivity(authenticated);
+  const { data: requests } = useDebateRequests(authenticated);
   const currentUserId = useCurrentGeoChatUserId();
   const allPeople = React.useMemo(() => peopleQuery.data?.people ?? [], [peopleQuery.data]);
 
@@ -38,6 +50,10 @@ export function PeopleTab() {
     if (!term) return allPeople;
     return allPeople.filter(person => speakerLabel(person).toLowerCase().includes(term));
   }, [allPeople, search]);
+
+  // Keyed on everyone available rather than on the filtered list, so typing in the search box
+  // re-slices a batch that is already cached instead of firing a request per keystroke.
+  const records = usePersonRecords(React.useMemo(() => allPeople.map(person => person.profile_space_id), [allPeople]));
 
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
   // A challenge stays `pending` in the activity payload until the server says otherwise, so its own
@@ -99,6 +115,11 @@ export function PeopleTab() {
             search.trim() ? 'Nobody available matches that search.' : 'Nobody is available to debate right now.'
           }
           emptyAction={search.trim() ? { label: 'Clear search', onClick: () => setSearch('') } : undefined}
+          signInAction={
+            onRequireSignIn
+              ? { label: 'Sign in', message: 'Sign in to see who is available to debate.', onClick: onRequireSignIn }
+              : undefined
+          }
         >
           <>
             {blockedReason ? (
@@ -111,8 +132,10 @@ export function PeopleTab() {
                 <PersonRow
                   key={person.user_id}
                   person={person}
+                  record={records.get(person.profile_space_id) ?? null}
                   disabled={buttonsDisabled}
                   disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
+                  onRequireSignIn={onRequireSignIn}
                 />
               ))}
             </ul>
@@ -125,34 +148,56 @@ export function PeopleTab() {
 
 function PersonRow({
   person,
+  record,
   disabled,
   disabledReason,
+  onRequireSignIn,
 }: {
   person: DebatePerson;
+  /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
+  record: PersonRecord | null;
   disabled: boolean;
   /** Only surfaced on hover, so it explains the greyed-out button without repeating the card. */
   disabledReason: string;
+  /**
+   * Set only when signed out. Pressing Debate then opens Privy instead of sending a request, which
+   * would fail at the token exchange with an error the viewer can do nothing about.
+   */
+  onRequireSignIn?: () => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
 
   return (
-    <li className="flex items-center justify-between gap-3 border-b border-grey-02 py-2.5 last:border-b-0">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
-          <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
-        </div>
+    // Three columns rather than a flex run, so the button sits in its own track instead of sharing a
+    // row box with the name — where it was the tallest thing and set the name's line height. All
+    // three tracks centre on the row: hanging them from the top clustered everything up there and
+    // left the join date trailing under an empty right-hand side.
+    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
+      <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
+        <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
+      </div>
+      <div className="flex min-w-0 flex-col gap-0.5">
         <Text as="p" variant="metadataMedium" className="truncate">
           {speakerLabel(person)}
         </Text>
+        {record && <PersonRecordLine record={record} />}
       </div>
       <HubPillButton
-        onClick={() => createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })}
-        disabled={!person.can_challenge || person.in_debate || disabled}
+        onClick={() =>
+          onRequireSignIn
+            ? onRequireSignIn()
+            : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
+        }
+        // `in_debate` holds signed out too: it means this person is in an active debate right now,
+        // which is true of them rather than of any viewer, so signing in would not make them
+        // available. `can_challenge` and the viewer's own pending request are the viewer-relative
+        // ones, and those are what the press bypasses on its way to the sign-in.
+        disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
         pending={createChallenge.isPending}
         pendingLabel="Requesting…"
         title={disabled ? disabledReason : undefined}
       >
-        {person.in_debate ? 'In a debate' : 'Debate'}
+        {person.in_debate ? 'In a debate' : 'Request debate'}
       </HubPillButton>
     </li>
   );

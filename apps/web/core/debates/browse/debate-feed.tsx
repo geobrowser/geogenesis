@@ -10,10 +10,13 @@ import { useSetAtom } from 'jotai';
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { useGeoChatAuth } from '~/core/debates/hooks';
+import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useComments } from '~/core/hooks/use-comments';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -26,14 +29,11 @@ import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 
-import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
-import { useGeoChatAuth } from '~/core/debates/hooks';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
+import { exceedsLineClamp } from './line-clamp-overflow';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -429,6 +429,15 @@ function DebateFeedItem({
   );
 }
 
+/**
+ * Lines the claim title shows before it offers to expand.
+ *
+ * Must agree with the `line-clamp-2` literal on the heading below — Tailwind only emits classes it
+ * can read as literals, so the class cannot be built from this and the two are kept together
+ * instead. If one changes, change both.
+ */
+const CLAIM_CLAMP_LINES = 2;
+
 function DebateTitleHeader({
   claim,
   claimEntityId,
@@ -456,7 +465,17 @@ function DebateTitleHeader({
     const element = claimRef.current;
     if (!element || isClaimExpanded) return;
 
-    const measureOverflow = () => setIsClaimOverflowing(element.scrollHeight > element.clientHeight + 1);
+    const measureOverflow = () =>
+      setIsClaimOverflowing(
+        exceedsLineClamp({
+          contentHeight: element.scrollHeight,
+          clampedHeight: element.clientHeight,
+          // Read on every measure rather than once: the breakpoint swaps the whole type scale, so a
+          // rotation or a resize past 767px changes the line height this is counting in.
+          lineHeight: parseFloat(getComputedStyle(element).lineHeight),
+          maxLines: CLAIM_CLAMP_LINES,
+        })
+      );
     measureOverflow();
 
     if (typeof ResizeObserver === 'undefined') return;

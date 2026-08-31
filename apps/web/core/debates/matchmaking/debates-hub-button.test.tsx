@@ -44,21 +44,35 @@ describe('DebatesHubButton', () => {
     expect(screen.getByRole('button', { name: 'Debate' })).toBeInTheDocument();
   });
 
-  it('stays hidden for a signed-out visitor', () => {
+  // GEO-2725. It used to be hidden signed out, because every tab behind it needed an identity.
+  // Claims and People are readable anonymously now, and this is the only opener for them — hiding
+  // it left them unreachable.
+  it('shows for a signed-out visitor', () => {
     mocks.authenticated = false;
     renderButton();
-    // The hub is the only opener for the panel, and every tab behind it needs an identity.
-    expect(screen.queryByRole('button', { name: /Debate/ })).not.toBeInTheDocument();
+
+    expect(screen.getByRole('button', { name: 'Debate' })).toBeInTheDocument();
   });
 
-  it('stays hidden until Privy has restored the session', () => {
-    // `authenticated` is false while Privy is still resolving, so a returning user sees the button
-    // appear late rather than watching it flash in and out.
+  it('shows while Privy is still restoring the session', () => {
     mocks.ready = false;
     mocks.authenticated = false;
     renderButton();
 
-    expect(screen.queryByRole('button', { name: /Debate/ })).not.toBeInTheDocument();
+    // No longer anything to wait for: the button is the same for both answers, so there is no
+    // flash of it appearing or disappearing once Privy resolves.
+    expect(screen.getByRole('button', { name: 'Debate' })).toBeInTheDocument();
+  });
+
+  // The badge counts requests addressed to somebody, so signed out there is nobody to badge it
+  // for — and a cache left over from a session that has since signed out must not leak into it.
+  it('never badges a signed-out visitor, even with a stale count cached', () => {
+    mocks.authenticated = false;
+    mocks.incomingRequestCount = 3;
+    renderButton();
+
+    expect(screen.getByRole('button', { name: 'Debate' })).toBeInTheDocument();
+    expect(screen.queryByText('3')).not.toBeInTheDocument();
   });
 
   it('keeps announcing the pending request count while signed in', () => {

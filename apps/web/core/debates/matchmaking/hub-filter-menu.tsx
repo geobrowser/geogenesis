@@ -12,6 +12,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { formatFacetCount } from './topic-facets';
+import { useDelayedFlag } from './use-delayed-flag';
 
 export type HubFilterOption<T extends string> = {
   value: T;
@@ -132,16 +133,33 @@ type MultiProps<T extends string> = {
   clearLabel: string;
   showImages?: boolean;
   labelPending?: boolean;
+  /**
+   * The counts in hand answer a filter the viewer has already moved on from.
+   *
+   * Not a request to hide them on this render: the menu waits out {@link COUNT_SKELETON_DELAY_MS}
+   * first, so a spell shorter than that shows the previous numbers rather than a placeholder that
+   * would only flash. Callers should read this as "these are stale", not "these are hidden".
+   */
+  countsPending?: boolean;
 };
+
+/**
+ * How long the counts may be pending before they turn into skeletons. GEO-2721 made the facets
+ * query fast — a materialized set rather than a subquery re-run per candidate row, 65ms rather
+ * than 17s — so an answer now normally arrives inside this window and the numbers just change.
+ * The skeleton stays for the slow answer it was written for, instead of flashing on every tick.
+ */
+const COUNT_SKELETON_DELAY_MS = 250;
 
 /**
  * The multi-select twin of {@link HubFilterMenu}: checkboxes, and the menu stays open so several
  * can be picked in one visit.
  *
- * Counts sit at the end of each row and describe what that option would leave given every *other*
- * filter — geo-chat counts each dimension without narrowing itself, so a topic's count answers
- * "how many of the claims I'm already looking at carry this", and ticking one never changes the
- * numbers in its own menu.
+ * Counts describe what that option would leave, given the rest of the filter. The two dimensions
+ * differ, because the filters do: spaces are OR, so the space menu is narrowed by the topics and
+ * never by itself, and ticking a space leaves its own numbers alone. Topics are AND, so a topic's
+ * count answers "how many of the claims I'm already looking at also carry this", and ticking one
+ * does narrow the rest of its menu to what co-occurs with it (GEO-2696).
  */
 export function HubMultiFilterMenu<T extends string>({
   label,
@@ -152,8 +170,10 @@ export function HubMultiFilterMenu<T extends string>({
   clearLabel,
   showImages,
   labelPending,
+  countsPending,
 }: MultiProps<T>) {
   const [open, setOpen] = React.useState(false);
+  const showCountSkeletons = useDelayedFlag(countsPending ?? false, COUNT_SKELETON_DELAY_MS);
   const selected = new Set<string>(values);
 
   return (
@@ -230,7 +250,13 @@ export function HubMultiFilterMenu<T extends string>({
                 {option.label}
               </Text>
             )}
-            {option.count === undefined ? null : (
+            {option.count === undefined ? null : showCountSkeletons ? (
+              // Held as a skeleton rather than removed: the number is coming back, and taking the
+              // column away and putting it back makes every row twitch on each tick.
+              <span className="ml-auto shrink-0">
+                <Skeleton className="h-[1em] w-5" aria-label="Loading count" />
+              </span>
+            ) : (
               <Text variant="footnote" className="ml-auto shrink-0 text-grey-04!">
                 {formatFacetCount(option.count)}
               </Text>

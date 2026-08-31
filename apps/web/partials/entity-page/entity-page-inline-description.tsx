@@ -14,12 +14,10 @@ const MAX_LINES = 3;
 export function EntityPageInlineDescription({
   entityId,
   spaceId,
-  truncate = true,
   fallbackDescription,
 }: {
   entityId: string;
   spaceId: string;
-  truncate?: boolean;
   fallbackDescription?: string | null;
 }) {
   const isEditing = useUserIsEditing(spaceId);
@@ -75,14 +73,6 @@ export function EntityPageInlineDescription({
 
   if (!description) {
     return null;
-  }
-
-  if (!truncate) {
-    return (
-      <div className="-mt-3 mb-5">
-        <p className="text-body wrap-break-word text-text">{description}</p>
-      </div>
-    );
   }
 
   return (

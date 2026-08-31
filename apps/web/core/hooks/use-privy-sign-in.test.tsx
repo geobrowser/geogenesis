@@ -81,6 +81,59 @@ describe('usePrivySignIn', () => {
     expect(onComplete).toHaveBeenCalledOnce();
   });
 
+  // `AnalyticsUserIdentifier` already reports restores, as restores. Recording one here as a
+  // manual login double-counted it and mislabelled it — and since this hook is now mounted
+  // app-wide for the sign-in deep link, that would have been every page load with a live session.
+  it('records a login only for a sign-in it started', () => {
+    const { result } = renderHook(() => usePrivySignIn());
+
+    act(() => mocks.privyOnComplete?.({}));
+    expect(mocks.trackPrivyAuth).not.toHaveBeenCalled();
+
+    act(() => result.current());
+    act(() => mocks.privyOnComplete?.({}));
+    expect(mocks.trackPrivyAuth).toHaveBeenCalledOnce();
+    expect(mocks.trackPrivyAuth.mock.calls[0]?.[1]).toMatchObject({ auth_flow: 'manual_login' });
+  });
+
+  // The deep link strips its own params as it opens the dialog, so the render that sees the
+  // completion no longer knows where the viewer came from. Reading the attribution then would
+  // lose it in exactly the case it exists for.
+  it('keeps the attribution from the press, not from whatever the page says later', () => {
+    const { result, rerender } = renderHook(
+      (props: { analytics?: Record<string, unknown> }) => usePrivySignIn(undefined, props),
+      { initialProps: { analytics: { link_source: 'marketing' } } }
+    );
+
+    act(() => result.current());
+
+    // The URL is cleaned, the handler rerenders, the source is gone.
+    rerender({ analytics: { link_source: undefined } });
+
+    act(() => mocks.privyOnComplete?.({}));
+
+    expect(mocks.trackPrivyAuth.mock.calls[0]?.[1]).toMatchObject({
+      auth_flow: 'manual_login',
+      link_source: 'marketing',
+    });
+  });
+
+  it('does not carry attribution from one attempt into the next', () => {
+    const { result, rerender } = renderHook(
+      (props: { analytics?: Record<string, unknown> }) => usePrivySignIn(undefined, props),
+      { initialProps: { analytics: { link_source: 'marketing' } as Record<string, unknown> | undefined } }
+    );
+
+    act(() => result.current());
+    act(() => mocks.privyOnError?.('exited_auth_flow'));
+
+    rerender({ analytics: undefined });
+    act(() => result.current());
+    act(() => mocks.privyOnComplete?.({}));
+
+    expect(mocks.trackPrivyAuth.mock.calls[0]?.[1]).not.toHaveProperty('link_source');
+  });
+
   // Dismissing the modal abandons the press. Staying armed would hand it to whatever completion
   // came next — a restore, or a login started elsewhere on the page.
   it('forgets an abandoned sign-in rather than replaying it later', () => {

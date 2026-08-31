@@ -1,30 +1,19 @@
 'use client';
 
 import { isRevertedUserOperationError } from '@geogenesis/auth/account';
-import { IdUtils, Position } from '@geoprotocol/geo-sdk/lite';
+import { IdUtils, Ops } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import { Duration, Effect, Either, Schedule } from 'effect';
 
-import {
-  COMMENT_MARKDOWN_CONTENT_ID,
-  COMMENT_NAME_PROPERTY_ID,
-  COMMENT_REPLY_TO_ID,
-  COMMENT_RESOLVED_ID,
-  COMMENT_TYPES_PROPERTY_ID,
-  COMMENT_TYPE_ID,
-} from '~/core/comment-ids';
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { TransactionWriteFailedError } from '~/core/errors';
-import { createValueId } from '~/core/id/create-id';
 import { checkEntityExists } from '~/core/io/queries';
 import { geo } from '~/core/sdk/geo-client';
 import { useReportError } from '~/core/state/status-bar-store';
-import type { Relation, Value } from '~/core/types';
 import { toUserFacingError } from '~/core/utils/error-diagnostics';
-import { Publish } from '~/core/utils/publish';
 
 import type { CommentEntity, CreateCommentParams } from '~/partials/comments/types';
 
@@ -229,112 +218,29 @@ export function useCreateComment(targetEntityId: string) {
       setError(null);
 
       try {
-        const values: Value[] = [];
-        const relations: Relation[] = [];
+        // `ancestorComments` is ordered [immediate parent, ..., root comment] and contains only
+        // comments — never the entity being commented on. Index 0 is the direct reply target;
+        // for a top-level comment there is no parent, so we reply straight to the target entity.
+        const immediateParent = ancestorComments?.[0];
+        const replyToTarget = immediateParent
+          ? { entityId: immediateParent.id, spaceId: immediateParent.spaceId }
+          : { entityId: targetEntityId, spaceId: targetSpaceId };
+        const replyToRelations = immediateParent
+          ? [
+              ...ancestorComments!.slice(1).map(c => ({ entityId: c.id, spaceId: c.spaceId, position: null })),
+              { entityId: targetEntityId, spaceId: targetSpaceId, position: null },
+            ]
+          : [];
 
-        // 1. Name value
-        values.push({
-          id: createValueId({
-            entityId: commentEntityId,
-            propertyId: COMMENT_NAME_PROPERTY_ID,
-            spaceId: personalSpaceId,
-          }),
-          entity: { id: commentEntityId, name: commentName },
-          property: { id: COMMENT_NAME_PROPERTY_ID, name: 'Name', dataType: 'TEXT' },
-          spaceId: personalSpaceId,
-          value: commentName,
-          isLocal: true,
-          hasBeenPublished: false,
+        const { ops } = Ops.comments.create({
+          id: commentEntityId,
+          content: text,
+          replyTo: replyToTarget,
+          resolved: false,
+          replyToRelations,
         });
-
-        // 2. Markdown Content value
-        values.push({
-          id: createValueId({
-            entityId: commentEntityId,
-            propertyId: COMMENT_MARKDOWN_CONTENT_ID,
-            spaceId: personalSpaceId,
-          }),
-          entity: { id: commentEntityId, name: commentName },
-          property: { id: COMMENT_MARKDOWN_CONTENT_ID, name: 'Markdown content', dataType: 'TEXT' },
-          spaceId: personalSpaceId,
-          value: text,
-          isLocal: true,
-          hasBeenPublished: false,
-        });
-
-        // 3. Resolved value (default false)
-        values.push({
-          id: createValueId({ entityId: commentEntityId, propertyId: COMMENT_RESOLVED_ID, spaceId: personalSpaceId }),
-          entity: { id: commentEntityId, name: commentName },
-          property: { id: COMMENT_RESOLVED_ID, name: 'Resolved', dataType: 'BOOLEAN' },
-          spaceId: personalSpaceId,
-          value: '0',
-          isLocal: true,
-          hasBeenPublished: false,
-        });
-
-        // 4. Types relation → Comment type
-        relations.push({
-          id: IdUtils.generate(),
-          entityId: IdUtils.generate(),
-          spaceId: personalSpaceId,
-          renderableType: 'RELATION',
-          position: Position.generate(),
-          type: { id: COMMENT_TYPES_PROPERTY_ID, name: 'Types' },
-          fromEntity: { id: commentEntityId, name: commentName },
-          toEntity: { id: COMMENT_TYPE_ID, name: 'Comment', value: COMMENT_TYPE_ID },
-          isLocal: true,
-          hasBeenPublished: false,
-        });
-
-        // 5. Reply To relation → target entity (the entity being commented on)
-        // Positions are ordered: target entity (lowest) → root ancestor → ... → immediate parent (highest)
-        let lastReplyToPos: string | null = null;
-
-        const targetEntityPosition = Position.generateBetween(lastReplyToPos, null);
-        lastReplyToPos = targetEntityPosition;
-
-        relations.push({
-          id: IdUtils.generate(),
-          entityId: IdUtils.generate(),
-          spaceId: personalSpaceId,
-          renderableType: 'RELATION',
-          position: targetEntityPosition,
-          type: { id: COMMENT_REPLY_TO_ID, name: 'Reply to' },
-          fromEntity: { id: commentEntityId, name: commentName },
-          toEntity: { id: targetEntityId, name: null, value: targetEntityId },
-          toSpaceId: targetSpaceId,
-          isLocal: true,
-          hasBeenPublished: false,
-        });
-
-        // 6. Reply To relations for each ancestor comment in the thread
-        // ancestorComments is [immediate parent, ..., root] — reverse so positions ascend from root to immediate parent
-        if (ancestorComments) {
-          const rootToLeaf = [...ancestorComments].reverse();
-          for (const ancestor of rootToLeaf) {
-            const pos = Position.generateBetween(lastReplyToPos, null);
-            lastReplyToPos = pos;
-
-            relations.push({
-              id: IdUtils.generate(),
-              entityId: IdUtils.generate(),
-              spaceId: personalSpaceId,
-              renderableType: 'RELATION',
-              position: pos,
-              type: { id: COMMENT_REPLY_TO_ID, name: 'Reply to' },
-              fromEntity: { id: commentEntityId, name: commentName },
-              toEntity: { id: ancestor.id, name: null, value: ancestor.id },
-              toSpaceId: ancestor.spaceId,
-              isLocal: true,
-              hasBeenPublished: false,
-            });
-          }
-        }
 
         const publish = Effect.gen(function* () {
-          const ops = yield* Publish.prepareLocalDataForPublishing(values, relations, personalSpaceId);
-
           if (ops.length === 0) {
             throw new Error('No operations to publish');
           }
@@ -486,6 +392,9 @@ export function useCreateComment(targetEntityId: string) {
         return { id: commentEntityId, published: true };
       } catch (err) {
         console.error('[useCreateComment] Error creating comment:', err);
+        queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
+          old.filter(c => c.id !== commentEntityId)
+        );
         const { message, retry } = toUserFacingError(err, 'Failed to create comment: ');
         reportError(message, retry);
         setError(err as Error);
@@ -531,32 +440,8 @@ export function useCreateComment(targetEntityId: string) {
 
       try {
         const newName = getCommentName(newText);
-
-        // Build updated values for the existing comment entity
-        const values: Value[] = [
-          {
-            id: createValueId({ entityId: commentId, propertyId: COMMENT_NAME_PROPERTY_ID, spaceId: personalSpaceId }),
-            entity: { id: commentId, name: newName },
-            property: { id: COMMENT_NAME_PROPERTY_ID, name: 'Name', dataType: 'TEXT' },
-            spaceId: personalSpaceId,
-            value: newName,
-            isLocal: true,
-            hasBeenPublished: false,
-          },
-          {
-            id: createValueId({
-              entityId: commentId,
-              propertyId: COMMENT_MARKDOWN_CONTENT_ID,
-              spaceId: personalSpaceId,
-            }),
-            entity: { id: commentId, name: newName },
-            property: { id: COMMENT_MARKDOWN_CONTENT_ID, name: 'Markdown content', dataType: 'TEXT' },
-            spaceId: personalSpaceId,
-            value: newText,
-            isLocal: true,
-            hasBeenPublished: false,
-          },
-        ];
+        // Generate the update ops through the SDK instead of hand-building values.
+        const { ops } = Ops.comments.update({ id: commentId, content: newText });
 
         // Optimistically update the comment in the query cache
         queryClient.setQueryData<CommentEntity[]>(['comments', targetEntityId], (old = []) =>
@@ -564,8 +449,6 @@ export function useCreateComment(targetEntityId: string) {
         );
 
         const publish = Effect.gen(function* () {
-          const ops = yield* Publish.prepareLocalDataForPublishing(values, [], personalSpaceId);
-
           if (ops.length === 0) {
             throw new Error('No operations to publish');
           }

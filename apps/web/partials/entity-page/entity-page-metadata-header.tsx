@@ -16,7 +16,6 @@ import {
   FORMAT_PROPERTY,
   RENDERABLE_TYPE_PROPERTY,
 } from '~/core/constants';
-import { ClaimDebateButton } from '~/core/debates/claim-debate-button';
 import { useCreateProperty } from '~/core/hooks/use-create-property';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
@@ -39,7 +38,6 @@ import { HistoryEmpty } from '../history/history-empty';
 import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
-
 import { DataTypePill } from './data-type-pill';
 import { RelationsGroup as EditableRelationsGroup } from './editable-entity-page';
 import { EntityPageContextMenu } from './entity-page-context-menu';
@@ -355,7 +353,6 @@ export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: En
               <Create />
             </Link>
           )}
-          <ClaimDebateButton entityId={id} spaceId={spaceId} />
           {isVoteable && <EntityVoteButtons entityId={id} spaceId={spaceId} />}
         </div>
       </div>

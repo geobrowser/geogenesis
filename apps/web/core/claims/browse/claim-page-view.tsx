@@ -3,14 +3,12 @@
 import * as React from 'react';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { claimResponseKind } from '~/core/claims/response-kind';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateClaim } from '~/core/debates/api';
-import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
-import { useDebateActivity, useDebateClaims } from '~/core/debates/hooks';
-import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
-import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
+import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
+import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -24,11 +22,12 @@ import { Text } from '~/design-system/text';
 import { CommentSection } from '~/partials/comments/comments-section';
 
 import { ClaimDebates } from './claim-debates';
-import { positionSummariesFromCounts, viewerResponseFromDirection } from './claim-position-summaries';
+import { ClaimEndSlot } from './claim-end-slot';
 import { ClaimProvenance } from './claim-provenance';
 import { ClaimRelatedClaims } from './claim-related-claims';
-import { type ClaimResponseSummary, useClaimResponseSummary } from './claim-response-summary';
+import { ControversialTag } from './claim-summary';
 import { ClaimVerdict } from './claim-verdict';
+import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
 
 /** Topic chips shown inline before the rest collapse into a count. */
 const TOPIC_CHIP_CAP = 3;
@@ -62,11 +61,8 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
   // spaces geo-chat does not index, which have no row at all.
   const rowQuery = useDebateClaims(spaceId, [entityId], true);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === entityId) ?? null;
-  const responseKind = React.useMemo(
-    () => row?.response_kind ?? (entity ? claimResponseKind(entity, spaceId) : 'stance'),
-    [entity, row?.response_kind, spaceId]
-  );
-  const summary = useClaimResponseSummary(entityId, spaceId, responseKind);
+  const state = useClaimResponseState({ claimId: entityId, spaceId, row, entity: entity ?? null });
+  const { responseKind, summary } = state;
 
   const topics = React.useMemo(() => relationsOfType(entity?.relations, TOPICS_PROPERTY_ID), [entity?.relations]);
   const tags = React.useMemo(() => relationsOfType(entity?.relations, TAG_PROPERTY_ID), [entity?.relations]);
@@ -115,6 +111,9 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
               {tags.map(tag => (
                 <MetaChip key={tag.id}>{tag.toEntity.name ?? tag.toEntity.id}</MetaChip>
               ))}
+              {/* Among the chips that say what this is, which is what "contested" is — and the same
+                  component the cards use, rather than a second span at a size the scale lacks. */}
+              {summary.isControversial ? <ControversialTag /> : null}
             </div>
 
             {topics.length > 0 && (
@@ -140,14 +139,7 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 
         <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
 
-        <ClaimPositionSection
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          summary={summary}
-          row={row}
-          isRowLoading={rowQuery.isLoading}
-        />
+        <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
 
         <ClaimDebates claimId={entityId} spaceId={spaceId} responseKind={responseKind} />
 
@@ -180,72 +172,48 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 function ClaimPositionSection({
   entityId,
   spaceId,
-  responseKind,
-  summary,
+  state,
   row,
-  isRowLoading,
 }: {
   entityId: string;
   spaceId: string;
-  /** The page's one effective kind. Deriving a second one here is what let the two diverge. */
-  responseKind: 'stance' | 'veracity';
-  summary: ClaimResponseSummary;
+  /**
+   * The page's one derivation, passed down rather than repeated.
+   *
+   * Deriving a second kind here is what let the page count one vote kind while publishing another,
+   * and the same block written per surface is what made each of that family of bugs a separate fix.
+   */
+  state: ClaimResponseState;
   /** geo-chat's row, or null — which for a claim nobody has answered is a settled answer. */
   row: DebateClaim | null;
-  isRowLoading: boolean;
 }) {
-  const claim = React.useMemo(
-    () => ({
-      id: row?.id ?? entityId,
-      space_id: spaceId,
-      claim_entity_id: entityId,
-      claim: '',
-      description: null,
-    }),
-    [entityId, row?.id, spaceId]
-  );
-
-  const positions = React.useMemo(
-    () => positionSummariesFromCounts(summary.positive, summary.negative, responseKind, row),
-    [responseKind, row, summary.negative, summary.positive]
-  );
-
-  const readiness = React.useMemo(
-    () => ({
-      response_kind: responseKind,
-      // Falls back to the on-chain summary. Without it a viewer's own side reads as unselected for
-      // as long as geo-chat's row is out — and in a space geo-chat does not index, permanently.
-      viewer_response: row?.viewer_response ?? viewerResponseFromDirection(summary.viewerDirection, responseKind),
-      viewer_debate_ready: row?.viewer_debate_ready ?? false,
-      readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-    }),
-    [responseKind, row, summary.viewerDirection]
-  );
+  const { claim, positions, readiness, isResponseKindResolved, isViewerResponseResolved, responseBlockedReason } =
+    state;
 
   // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the vote
   // arrows on an entity page do — and through the same hook, which also keeps Privy's session
   // restoration from being mistaken for a login somebody asked for.
   const promptSignIn = usePrivySignIn();
-  const control = useClaimPositionControl({ claim, positions, readiness, onRequireSignIn: promptSignIn });
+  const control = useClaimPositionControl({
+    claim,
+    positions,
+    readiness,
+    answersReady: isResponseKindResolved && isViewerResponseResolved,
+    responseBlockedReason,
+    onRequireSignIn: promptSignIn,
+  });
+  // See claims-page-client: retiring the optimistic snapshot outlived the toggle that used to own
+  // it, because `claim-response-summary` on this page reads that snapshot for display.
+  useRetireConfirmedResponseIndexing({ debateClaim: row, entityId, spaceId });
+  useBackfillReadinessForHeldPosition({ debateClaim: row, entityId, spaceId });
 
   return (
     <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
-      {/* Label left, readiness switch right — the same header shape the hub's claim card uses, so
-          the control sits where someone who has used the panel already expects it. `items-start`
-          so the label stays put when the switch stacks an explanation beneath it. */}
-      <div className="mb-2.5 flex items-start justify-between gap-3">
-        <Text as="div" variant="metadataMedium" color="grey-04">
-          Your position
-        </Text>
-        <ClaimDebateReadiness
-          debateClaim={row}
-          entityId={entityId}
-          spaceId={spaceId}
-          canEnable={!row?.active_debate}
-          isLoading={isRowLoading}
-          compact
-        />
-      </div>
+      {/* No readiness switch — the Debate toggle is gone from the product. Master left the header
+          row that used to hold it; with nothing on its right there is no row, just a label. */}
+      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-2.5 block">
+        Your position
+      </Text>
       <PositionRow
         positions={control.optimisticPositions}
         responseKind={readiness.response_kind}
@@ -261,68 +229,20 @@ function ClaimPositionSection({
           </Text>
         </div>
       ) : null}
-
-      <ClaimMatchup claimId={entityId} spaceId={spaceId} />
+      {/* Under the pills rather than up in the hero.
+       *
+       * On a card the offer ends the meta row because the card has no better place for it. A page
+       * does: taking a side and being offered a debate on it are one sequence, and the offer only
+       * exists because of the side directly above it. Reading it beside the title asked the reader
+       * to connect two things a screen apart. */}
+      <ClaimEndSlot
+        claimId={entityId}
+        spaceId={spaceId}
+        activeDebate={row?.active_debate}
+        variant="block"
+        className="mt-2"
+      />
     </section>
-  );
-}
-
-/**
- * The live half of the position card: someone holding the opposite side is online and ready, so
- * there is a debate to be had right now.
- *
- * Reads the same matches the hub's Matches tab does, narrowed to this claim. A match needs three
- * things at once — you standing ready, them standing ready, and opposite responses — so this is
- * absent far more often than it is present, and it stays absent rather than explaining itself.
- * The readiness switch above is where someone goes to become matchable; repeating that here would
- * put a second explanation on a card that already carries the control.
- */
-function ClaimMatchup({ claimId, spaceId }: { claimId: string; spaceId: string }) {
-  const matchesQuery = useMatchmakingMatches(true);
-  const requestsQuery = useDebateRequests(true);
-  const { data: activity } = useDebateActivity(true);
-  const createRequest = useCreateDebateRequest();
-
-  const match = (matchesQuery.data?.matches ?? []).find(
-    candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
-  );
-
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
-  // Only when the server actually says so — a missing field must not block requesting.
-  const unavailable = activity?.available_to_debate === false;
-  const blockedReason = unavailable
-    ? 'Switch yourself to available to send a request.'
-    : outbound
-      ? 'Withdraw your open request to send another.'
-      : undefined;
-  const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
-
-  if (!match) return null;
-
-  return (
-    <div className="mt-3 flex flex-col gap-1 border-t border-divider pt-3">
-      <HubPillButton
-        onClick={() => createRequest.mutate({ space_id: spaceId, claim_entity_id: claimId })}
-        disabled={Boolean(blockedReason)}
-        pending={createRequest.isPending}
-        pendingLabel="Requesting…"
-        className="w-full"
-      >
-        Request debate
-      </HubPillButton>
-      {/* Shown rather than left to a `title`: native tooltips never appear on touch and are
-          unreliable on a disabled button, which is exactly when the explanation matters. */}
-      {blockedReason ? (
-        <Text as="p" variant="footnote" color="grey-04">
-          {blockedReason}
-        </Text>
-      ) : null}
-      {requestError ? (
-        <Text as="p" variant="footnote" color="red-01">
-          {requestError}
-        </Text>
-      ) : null}
-    </div>
   );
 }
 
