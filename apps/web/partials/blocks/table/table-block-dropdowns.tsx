@@ -137,25 +137,32 @@ function TableBlockDropdown({
     return [...byId.values()];
   }, [defaultFilters, selected]);
 
-  // The dropdown's one scope: this property's values across the table's
-  // population, paged in as the user scrolls or searches.
-  const { options, nameOf, isWalking, isError, retry, scannedCount } = useDropdownOptions({
-    columnId,
-    baseFilterState,
-    baseModesByColumn,
-    pinned,
-    enabled: open,
-  });
-
   // The option list is its own scroll area (below a fixed search bar), so the
   // sentinel observes intersection with it rather than with the viewport.
   const [listEl, setListEl] = React.useState<HTMLDivElement | null>(null);
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery, 200).trim();
+  // Reading past the auto-walk window requires intent: the user scrolled to
+  // the end of the loaded list, or is searching.
+  const [scrolledToEnd, setScrolledToEnd] = React.useState(false);
 
   React.useEffect(() => {
-    if (!open) setRawQuery('');
+    if (!open) {
+      setRawQuery('');
+      setScrolledToEnd(false);
+    }
   }, [open]);
+
+  // The dropdown's one scope: this property's values across the table's
+  // population; the first pages load on their own, the rest on demand.
+  const { options, nameOf, isWalking, hasMoreInScope, isError, retry, scannedCount } = useDropdownOptions({
+    columnId,
+    baseFilterState,
+    baseModesByColumn,
+    pinned,
+    enabled: open,
+    demand: query.length > 0 || scrolledToEnd,
+  });
 
   const visibleOptions = React.useMemo(() => {
     if (!query) return options;
@@ -181,9 +188,9 @@ function TableBlockDropdown({
   });
 
   // The search bar appears once more than SEARCH_BAR_THRESHOLD values have
-  // loaded (values only accumulate while open, so it never disappears again)
-  // and stays for as long as a query is typed.
-  const showSearch = query.length > 0 || options.length > SEARCH_BAR_THRESHOLD;
+  // loaded, or whenever more of the scope remains unread — searching is the
+  // way to reach it — and stays for as long as a query is typed.
+  const showSearch = query.length > 0 || options.length > SEARCH_BAR_THRESHOLD || hasMoreInScope;
 
   // A stored override survives reloads as bare ids; resolve their names even
   // while the menu is closed so the pill never reads "…" over a filtered table.
@@ -263,6 +270,10 @@ function TableBlockDropdown({
         )}
         <div
           ref={setListEl}
+          onScroll={e => {
+            const el = e.currentTarget;
+            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) setScrolledToEnd(true);
+          }}
           onWheel={e => {
             // The Menu's own wheel trap would cancel scrolling here because
             // its viewport no longer scrolls; trap against this list instead
@@ -293,9 +304,11 @@ function TableBlockDropdown({
                 ? "Couldn't load values"
                 : isWalking
                   ? 'Loading…'
-                  : query
-                    ? 'No matches'
-                    : 'No values in this table'}
+                  : hasMoreInScope
+                    ? `No values in the first ${scannedCount.toLocaleString()} rows — scroll or search to check the rest`
+                    : query
+                      ? 'No matches'
+                      : 'No values in this table'}
             </p>
           )}
           {renderedOptions.map(option => {
@@ -327,6 +340,11 @@ function TableBlockDropdown({
           {isWalking && renderedOptions.length > 0 && (
             <p className="px-2 pt-1 text-footnote text-grey-04">
               {scannedCount >= 2000 ? `Loading… (${scannedCount.toLocaleString()} rows scanned)` : 'Loading…'}
+            </p>
+          )}
+          {!isWalking && !isError && hasMoreInScope && renderedOptions.length > 0 && (
+            <p className="px-2 pt-1 text-footnote text-grey-04">
+              {`Scroll or search to load more (${scannedCount.toLocaleString()} rows scanned)`}
             </p>
           )}
         </div>
