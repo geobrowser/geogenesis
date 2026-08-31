@@ -127,6 +127,29 @@ type FilterMap = Schema.Schema.Type<typeof FilterMap>;
 
 export type ModesByColumn = Record<string, FilterMode>;
 
+/**
+ * Applies mode overrides onto a current mode map and prunes the result to the
+ * columns present in the accompanying filter list. Shared by the persisted and
+ * temporary filter paths in `useFilters` so their semantics cannot drift:
+ *  - an OR override sets the column's entry;
+ *  - any other override (i.e. AND) deletes it — the serializer only persists
+ *    OR, so a stored 'AND' could never deep-equal persisted state;
+ *  - entries for columns with no remaining filter are dropped, so a removed
+ *    group cannot resurrect its old mode when re-added.
+ */
+export function mergeModeOverrides(
+  current: ModesByColumn,
+  overrides: ModesByColumn | undefined,
+  presentColumnIds: ReadonlySet<string>
+): ModesByColumn {
+  const merged = { ...current };
+  for (const [columnId, mode] of Object.entries(overrides ?? {})) {
+    if (mode === 'OR') merged[columnId] = mode;
+    else delete merged[columnId];
+  }
+  return Object.fromEntries(Object.entries(merged).filter(([columnId]) => presentColumnIds.has(columnId)));
+}
+
 export function toGeoFilterState(
   filters: OmitStrict<Filter, 'valueName'>[],
   modesByColumn: ModesByColumn = {}

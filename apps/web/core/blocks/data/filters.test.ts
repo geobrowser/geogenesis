@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   FilterString,
   fromGeoFilterString,
+  mergeModeOverrides,
   parseFiltersSync,
   resolveFilterDisplayNames,
   toGeoFilterState,
@@ -488,5 +489,21 @@ describe('resolveFilterDisplayNames', () => {
     const result = await resolveFilterDisplayNames(filters);
     expect(result[0].columnName).toBe('Custom Prop');
     expect(result[0].valueName).toBe('Relation Value');
+  });
+});
+
+describe('mergeModeOverrides', () => {
+  const present = (...ids: string[]) => new Set(ids);
+
+  it('sets OR overrides and drops AND overrides instead of storing them', () => {
+    expect(mergeModeOverrides({ a: 'OR' }, { a: 'AND', b: 'OR' }, present('a', 'b'))).toEqual({ b: 'OR' });
+  });
+
+  it('prunes modes whose column no longer has a filter', () => {
+    expect(mergeModeOverrides({ a: 'OR', b: 'OR' }, undefined, present('b'))).toEqual({ b: 'OR' });
+  });
+
+  it('keeps existing modes for present columns when there are no overrides', () => {
+    expect(mergeModeOverrides({ a: 'OR' }, {}, present('a'))).toEqual({ a: 'OR' });
   });
 });

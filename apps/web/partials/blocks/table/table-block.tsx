@@ -1105,6 +1105,7 @@ const ConfiguredTableBlock = ({
                         ref={filterPromptRef}
                         filterState={activeFilters}
                         setFilterState={setActiveFilters}
+                        modesByColumn={activeModesByColumn}
                         filterSuggestionSpaceId={spaceId}
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}

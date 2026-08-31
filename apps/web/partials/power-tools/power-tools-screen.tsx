@@ -973,7 +973,11 @@ export function PowerToolsScreen() {
               />
             </>
           )}
-          <TableBlockEditableFilters filterState={effectiveFilterState} setFilterState={effectiveSetFilterState} />
+          <TableBlockEditableFilters
+            filterState={effectiveFilterState}
+            setFilterState={effectiveSetFilterState}
+            modesByColumn={activeModesByColumn}
+          />
           <Menu
             open={isColumnMenuOpen}
             onOpenChange={setIsColumnMenuOpen}
