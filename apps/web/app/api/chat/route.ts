@@ -307,13 +307,17 @@ const CLIENT_READ_TOOL_NAMES = new Set<string>([
   'geoQuery',
 ]);
 
-// The closer's reply budget. 400 covers the 1-3 sentences / 3-5 bullets its
-// prompt asks for, and the 5-item list cap exists because a `geo://` pill costs
-// roughly TOKENS_PER_LISTED_ITEM — two 32-char hex ids tokenize badly — so a
-// longer list would be truncated mid-citation and render as broken markdown.
-// Room for a longer list is bought per-turn against a count the user actually
-// named, rather than by raising the ceiling on every ordinary turn.
-const CLOSER_BASE_OUTPUT_TOKENS = 400;
+// The closer's reply budget. A backstop, not a length control: the model is
+// never shown this number, so it cannot shorten to fit — at 400 a multi-part
+// question ("assess this space's quality, relevance, timeliness…") was cut
+// mid-word, often mid-`geo://` citation, which renders as broken markdown.
+// Concision is the prompt's job; this only decides where a runaway stops.
+// Raising it costs nothing on ordinary turns — they generate what the prompt
+// asks for regardless — and only spends tokens where a reply was being
+// truncated. The 5-item list cap still applies: a pill costs roughly
+// TOKENS_PER_LISTED_ITEM, two 32-char hex ids tokenizing badly, and room for a
+// longer list is still bought per-turn against a count the user actually named.
+const CLOSER_BASE_OUTPUT_TOKENS = 1_200;
 const TOKENS_PER_LISTED_ITEM = 50;
 // Ceiling on a named count, whatever was asked for. Beyond this the reply stops
 // being a list and becomes a data dump: 25 items is already ~1,650 tokens and
@@ -832,6 +836,10 @@ export async function POST(req: Request) {
 
       const closerMessages = (await closerResult.response).messages;
       await recordCost('closer', CLOSER_MODEL, closerResult);
+
+      if (debug && (await closerResult.finishReason) === 'length') {
+        console.warn(`[chat:srv] closer hit its ${closerMaxOutputTokens(listedCount)}-token cap — reply was truncated`);
+      }
 
       // Stage D: follow-ups (Haiku, forced tool).
       const followUpInstruction = [
