@@ -2,6 +2,8 @@
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import * as React from 'react';
+
 import cx from 'classnames';
 
 import { getRowDescription, getRowDisplayName } from '~/core/blocks/ranking/ranking-rankable-list';
@@ -54,6 +56,7 @@ export function RankingComposeMyRanking({
   pendingEntityIds,
 }: Props) {
   const isDesktop = !isMobile;
+  const [isReordering, setIsReordering] = React.useState(false);
 
   return (
     <div className={cx('flex flex-col', isDesktop && 'min-h-0 flex-1', isMobile && 'border-t border-grey-02 pt-8')}>
@@ -89,7 +92,11 @@ export function RankingComposeMyRanking({
           <RankingMyRankingDndList
             entityIds={displayEntityIds}
             onReorder={onReorder}
-            onDragStart={() => onActiveSwipeRowKeyChange(null)}
+            onDragStart={() => {
+              onActiveSwipeRowKeyChange(null);
+              setIsReordering(true);
+            }}
+            onDragEnd={() => setIsReordering(false)}
             className="flex flex-col"
             renderItem={(entityId, index, isDragActive, overlayImageUrl) => {
               const entry = entriesById.get(entityId);
@@ -129,6 +136,7 @@ export function RankingComposeMyRanking({
                   activeRowKey={activeSwipeRowKey}
                   onActiveRowKeyChange={onActiveSwipeRowKeyChange}
                   showRemove
+                  swipeEnabled={!isReordering}
                   onView={() => onView(entityId)}
                   onRemove={() => onRemove(entityId)}
                   primaryDisabled={isDragActive}
