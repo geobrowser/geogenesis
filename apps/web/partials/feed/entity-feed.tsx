@@ -14,6 +14,14 @@ import {
 } from '~/core/explore/explore-type-filter';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreSort, ExploreTime } from '~/core/explore/fetch-explore-feed';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { resolveEntityResponseKind } from '~/core/responses/entity-response';
+import {
+  ClaimResponseBatchBoundary,
+  type CrossSpaceClaimResponseTarget,
+  useClaimResponseSummaryBatchAcrossSpaces,
+} from '~/core/responses/use-claim-response-summaries';
+import { useQueryEntities } from '~/core/sync/use-store';
+import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Menu, MenuItem } from '~/design-system/menu';
@@ -223,6 +231,67 @@ export function EntityFeed({
     return flat;
   }, [data?.pages]);
 
+  /**
+   * One batched response lookup for the whole feed, instead of two queries per row.
+   *
+   * `EntityVoteButtons` and `ClaimVoterAvatars` each fetch their own counts and responders, so a
+   * page of 66 rows cost 125 requests and kept the network busy long after first paint. They
+   * already stand down when a `ClaimResponseBatchBoundary` says the data is managed — the Claims
+   * tab has done this since GEO-2599 — but nothing set that up for a feed.
+   *
+   * `responseKind` is read from the same store entity the buttons read it from, so the keys the
+   * batch writes are the keys they look for. Before an entity hydrates it resolves to the default,
+   * the row falls back to its own fetch as it does today, and the target list changes once the
+   * store fills — `keepPreviousData` in the hook keeps the visible positions through that.
+   */
+  const feedEntityIds = React.useMemo(() => [...new Set(items.map(item => item.entityId))], [items]);
+  const { entities: feedEntities } = useQueryEntities({
+    where: { id: { in: feedEntityIds } },
+    first: feedEntityIds.length,
+    enabled: feedEntityIds.length > 0,
+  });
+  const feedEntitiesById = React.useMemo(
+    () => new Map((feedEntities ?? []).map(entity => [entity.id, entity])),
+    [feedEntities]
+  );
+  const responseTargets = React.useMemo<CrossSpaceClaimResponseTarget[]>(
+    () =>
+      items.flatMap(item => {
+        const entity = feedEntitiesById.get(item.entityId);
+        // Nothing is known about this row yet, so anything derived here would be a guess. Emitting
+        // no target leaves the row to its own fetch rather than writing a key it will not read.
+        if (!entity) return [];
+
+        /**
+         * Derived with the same two functions the button uses, not an approximation of them.
+         *
+         * `EntityVoteButtons` resolves its space with `resolveEntitySpaceId` — a row listing an
+         * entity that lives elsewhere reads that space's votes (GEO-2660) — and its kind with
+         * `resolveEntityResponseKind`, which returns `curation` for everything that is not a claim.
+         * Computing either differently writes cache keys the button never looks at, and because the
+         * boundary disables its own query, the row would render zero votes instead of falling back.
+         */
+        const spaceId = resolveEntitySpaceId(entity, item.spaceId);
+        return [{ entityId: item.entityId, spaceId, responseKind: resolveEntityResponseKind(entity, spaceId) }];
+      }),
+    [items, feedEntitiesById]
+  );
+  const responseBatch = useClaimResponseSummaryBatchAcrossSpaces({
+    targets: responseTargets,
+    enabled: responseTargets.length > 0,
+  });
+  const responseBatchReady = responseTargets.length === 0 || responseBatch.isSuccess;
+  /**
+   * A failed batch hands the rows back rather than holding them.
+   *
+   * `EntityVoteButtons` renders a skeleton while `managed && !ready`, and disables its own query
+   * whenever `managed` — so leaving the boundary up after the retries are exhausted would leave
+   * every control in the feed a skeleton indefinitely, with no error surfaced and nothing to retry.
+   * Dropping the boundary puts each row back on the query it would have run anyway: more requests,
+   * but the counts appear.
+   */
+  const responseBatchFailed = responseBatch.isError;
+
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
   const spaceLabel =
@@ -373,14 +442,22 @@ export function EntityFeed({
         ) : items.length === 0 ? (
           <p className="text-browseMenu text-grey-04">No entities match these filters yet.</p>
         ) : (
-          items.map(item => (
-            <ExploreFeedCard
-              key={`${item.entityId}-${item.spaceId}`}
-              item={item}
-              hideSpaceLink={lockedSpaceId != null}
-              hideJoinButton={lockedSpaceId != null}
-            />
-          ))
+          (() => {
+            const cards = items.map(item => (
+              <ExploreFeedCard
+                key={`${item.entityId}-${item.spaceId}`}
+                item={item}
+                hideSpaceLink={lockedSpaceId != null}
+                hideJoinButton={lockedSpaceId != null}
+              />
+            ));
+
+            return responseBatchFailed ? (
+              cards
+            ) : (
+              <ClaimResponseBatchBoundary ready={responseBatchReady}>{cards}</ClaimResponseBatchBoundary>
+            );
+          })()
         )}
         <div ref={sentinelRef} className="h-4 w-full" aria-hidden />
         {isFetchingNextPage ? (
