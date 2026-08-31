@@ -63,12 +63,23 @@ export function keepSelectableTopic(
  * longer offers is a chip the viewer cannot unpick from the menu it came from. Returns the input
  * unchanged while unresolved, and the same array when nothing is dropped, so it is safe to feed
  * straight back into state without looping.
+ *
+ * With more than one topic held, an empty menu is read as the newest pick not fitting rather than
+ * as the whole selection expiring, and only that pick is given back. Since GEO-2696 the facet is
+ * co-occurrence, so an empty one means "this combination matches nothing" — and the reachable way
+ * to land there is picking a second topic before the first one's answer arrives, while the menu
+ * still offers topics that don't co-occur with it. Dropping everything would discard a pick the
+ * viewer had made deliberately along with the one that didn't fit. A selection that has genuinely
+ * expired — the space changed under it, say — still clears: the shortened selection is asked
+ * about in turn, and each round drops one until nothing is left.
  */
 export function keepSelectableTopics(topicIds: string[], available: MatchmakingTopic[], isResolved: boolean): string[] {
   if (topicIds.length === 0 || !isResolved) return topicIds;
   const offered = new Set(available.map(topic => topic.id));
   const kept = topicIds.filter(id => offered.has(id));
-  return kept.length === topicIds.length ? topicIds : kept;
+  if (kept.length === topicIds.length) return topicIds;
+  // `toggleId` appends, so the last id is the most recent pick.
+  return kept.length === 0 && topicIds.length > 1 ? topicIds.slice(0, -1) : kept;
 }
 
 /**
@@ -90,11 +101,17 @@ export function formatFacetCount(count: number): string {
  * with stay put and the ordering applies to what's left.
  */
 export function orderFacetOptions<T extends { id: string; count: number }>(options: T[], selected: string[]): T[] {
-  const picked = new Set(selected);
+  // Selected options hold the order they were picked in, not their count order. Pinning them to the
+  // top isn't enough on its own: their counts change with every tick, so ordering them by count
+  // reshuffled the ones already chosen each time another was added — the rows least expected to
+  // move, since they're the ones being worked with.
+  const pickedAt = new Map(selected.map((id, index) => [id, index]));
   return [...options].sort((a, b) => {
-    const aPicked = picked.has(a.id);
-    const bPicked = picked.has(b.id);
-    if (aPicked !== bPicked) return aPicked ? -1 : 1;
+    const aPicked = pickedAt.get(a.id);
+    const bPicked = pickedAt.get(b.id);
+    if (aPicked !== undefined && bPicked !== undefined) return aPicked - bPicked;
+    if (aPicked !== undefined) return -1;
+    if (bPicked !== undefined) return 1;
     if (a.count !== b.count) return b.count - a.count;
     return a.id.localeCompare(b.id);
   });
@@ -174,4 +191,20 @@ export function keepSelectedVisible<T extends { id: string; name: string | null;
   const present = new Set(options.map(option => option.id));
   const missing = selected.filter(id => !present.has(id)).map(id => ({ id, name: null, count: 0 }));
   return missing.length === 0 ? options : [...options, ...missing];
+}
+
+/**
+ * Whether a claim survives the topic filter.
+ *
+ * Intersection, not union: two topics narrow the list rather than widening it, because drilling
+ * into a subject is what the filter is for, and the union of two topics is a bigger pile than
+ * either alone. geo-chat's `topic_ids` means the same thing (GEO-2696), and this is how claims it
+ * has never seen — the picker's pinned rows, and the hub's featured list — are held to the same
+ * rule. Two halves of one menu disagreeing about what a second topic does would be worse than
+ * either answer.
+ */
+export function carriesEveryTopic(topics: { id: string }[] | undefined, selected: string[]): boolean {
+  if (selected.length === 0) return true;
+  const carried = new Set((topics ?? []).map(topic => topic.id));
+  return selected.every(id => carried.has(id));
 }
