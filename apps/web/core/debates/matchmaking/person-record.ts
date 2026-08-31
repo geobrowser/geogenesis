@@ -27,11 +27,11 @@ export type PersonRecordInput = {
   personId: string;
   /** Distinct claims they hold a position on, not `userVotes` rows — see `readPersonRecords`. */
   positions: number;
-  /** A page of their position rows came back full, so the distinct-claim count under-reports. */
+  /** Their position rows came back short of what the server holds, so the distinct count is low. */
   positionsTruncated: boolean;
   /** Every debate they argued, either side, already de-duplicated. */
   debateIds: string[];
-  /** A relation page came back full, so `debateIds` is a subset and any count from it under-reports. */
+  /** A side's relations came back short, so `debateIds` is a subset and any count from it is low. */
   truncated: boolean;
   /** Unix seconds — stringified or numeric — or ISO 8601, as `entity.createdAt` may return it. */
   createdAt: string | number | null;

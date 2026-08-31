@@ -20,8 +20,9 @@ export function isPersonId(id: string): boolean {
 
 /**
  * How many debate relations are read per person per side. A person's whole record is the point, so
- * a truncated page is reported rather than silently counted — see `PersonRecordRow.truncated`.
- * The graph holds 71 `Supported by` relations in total, so this is slack rather than a limit.
+ * a page that came back short of what the server holds is reported rather than silently counted —
+ * see `RawRecord.truncated`. The graph holds 71 `Supported by` relations in total, so this is slack
+ * rather than a limit.
  */
 export const DEBATE_RELATIONS_PER_SIDE = 100;
 
@@ -35,7 +36,9 @@ export const DEBATE_RELATIONS_PER_SIDE = 100;
  * what "positions held" means, and distinct claims needs the ids.
  *
  * The whole table holds 830 position rows and the busiest person 122, so this is slack rather than
- * a limit; a page that does come back full is reported and the count withheld, as with debates.
+ * a limit; a page short of what the server holds is reported and the count withheld, as with
+ * debates. Short is not the same as full: an exactly-250-of-250 page is everything they have, and
+ * `totalCount` is what settles it.
  */
 export const POSITIONS_PER_PERSON = 250;
 

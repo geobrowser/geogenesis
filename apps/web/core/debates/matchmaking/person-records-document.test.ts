@@ -2,7 +2,7 @@ import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
 import { POSITION_VOTE_FILTER } from '../participant-positions';
-import { buildPersonRecordsDocument, isPersonId, personAlias } from './person-records-document';
+import { POSITIONS_PER_PERSON, buildPersonRecordsDocument, isPersonId, personAlias } from './person-records-document';
 import { readPersonRecords } from './use-person-records';
 
 const A = '07842862d2c3654c0324a07bc7cce1a4';
@@ -162,6 +162,24 @@ describe('readPersonRecords', () => {
     );
 
     expect(records.get(A)?.positions).toBe(1);
+  });
+
+  // Short is not the same as full. Someone holding exactly the page size has come back whole, and
+  // withholding their count would be the boundary bug the relation cap already had once.
+  it('does not call an exactly full page of positions short', () => {
+    const claims = Array.from({ length: POSITIONS_PER_PERSON }, (_, i) => `c${i}`);
+    const records = readPersonRecords(
+      {
+        p0_positions: positions(claims),
+        p0_supported: { totalCount: 0, nodes: [] },
+        p0_opposed: { totalCount: 0, nodes: [] },
+        p0_joined: {},
+      },
+      [A]
+    );
+
+    expect(records.get(A)?.positionsTruncated).toBe(false);
+    expect(records.get(A)?.positions).toBe(POSITIONS_PER_PERSON);
   });
 
   it('reports a short page of positions rather than a low count', () => {
