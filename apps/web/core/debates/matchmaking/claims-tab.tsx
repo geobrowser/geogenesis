@@ -31,14 +31,15 @@ import {
   featuredClaimIdsBySpace,
   useFeaturedClaims,
 } from '../featured-claims';
-import { useGeoChatAuth } from '../hooks';
-import { useDebateClaimsBySpaces } from '../hooks';
+import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
+import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
+import { OutboundRequestCard } from './outbound-request-card';
 import {
   carriesEveryTopic,
   countBy,
@@ -107,6 +108,13 @@ export function ClaimsTab() {
   // card keeps publishing directly.
   const promptSignIn = usePrivySignIn();
   const onRequireSignIn = authenticated ? undefined : promptSignIn;
+
+  // The account's open request, from the same two sources the Matches tab reads it from — the
+  // requests lookup, or the activity payload where that has not landed. Gated on being signed in:
+  // a signed-out visitor has no request to have sent.
+  const requestsQuery = useDebateRequests(authenticated);
+  const { data: activity } = useDebateActivity(authenticated);
+  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
   const filterOptions = React.useMemo(() => filterOptionsFor(authenticated), [authenticated]);
 
   const [search, setSearch] = React.useState('');
@@ -283,7 +291,6 @@ export function ClaimsTab() {
     [authenticated, featuredAllowed]
   );
   const featuredRows = useDebateClaimsBySpaces(featuredGroups);
-  const featuredReadinessUnresolved = featured && (featuredRows.isLoading || featuredRows.isError);
 
   // Only real entity ids can be looked up in the KG; the graph 400s the whole batch on a single
   // malformed id, so drop any that aren't valid.
@@ -332,6 +339,24 @@ export function ClaimsTab() {
       };
     });
   }, [featured, featuredEntities, featuredMatching, featuredRows.claims]);
+
+  // Which featured claims have a vocabulary rather than the `stance` fallback.
+  //
+  // The featured list comes from the search index, which arrives before either source of the kind
+  // does — geo-chat's row, or the entity's own "Is factual" value — and `featuredEntitiesLoading`
+  // is deliberately not part of the list's own loading state, because the claims are listable
+  // without it. So the cards render first, and this is the view the hub opens on.
+  //
+  // The kind selects `voteKind` on the write, so a press in that window does not just label a
+  // factual claim Agree/Disagree: it publishes a stance response against it. Held until one of the
+  // two sources has actually answered — not merely stopped loading, since a failed lookup also
+  // stops loading and would fall through to the same fallback.
+  const featuredKindResolved = React.useMemo(() => {
+    if (!featured) return new Set<string>();
+    const resolved = new Set(featuredRows.claims.map(row => row.claim_entity_id));
+    for (const entity of featuredEntities) resolved.add(entity.id);
+    return resolved;
+  }, [featured, featuredEntities, featuredRows.claims]);
 
   // Featured claims are not in geo-chat's index, so the server's topic facet says nothing about
   // them and its `topic_id` can't narrow them. Their topics come off the entities already fetched
@@ -475,6 +500,13 @@ export function ClaimsTab() {
   return (
     <div className="flex flex-col">
       <HubStickyControls>
+        {/* Pinned above the filters, the way the Matches tab pins it. A request sent from here used
+            to vanish the moment it was sent — the card that sent it looks exactly as it did before,
+            and the only evidence was on another tab. It rides inside the sticky block rather than
+            above it because two stickies would both claim `top-0` and overlap, and this one is
+            conditional so the filters could not be offset by a known height. */}
+        {outbound ? <OutboundRequestCard request={outbound} /> : null}
+
         <Input
           withSearchIcon
           value={search}
@@ -548,10 +580,10 @@ export function ClaimsTab() {
                 claim={entry.claim}
                 positions={entry.positions}
                 readiness={entry}
-                // Featured rows carry `viewer_debate_ready: false` until geo-chat's per-space lookup
-                // lands, and a switch drawn from that would report "not ready" on a claim the viewer
-                // is in fact standing ready on. The paged rows come with readiness on them, so this
-                // only ever applies to Featured.
+                activeDebate={entry.active_debate}
+                // The paged list is geo-chat's own, so every row carries its kind already; only the
+                // featured list has to wait for one.
+                answersReady={!featured || featuredKindResolved.has(entry.claim.claim_entity_id)}
                 onRequireSignIn={onRequireSignIn}
               />
             ))}

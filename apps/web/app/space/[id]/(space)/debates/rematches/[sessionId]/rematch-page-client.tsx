@@ -1619,16 +1619,17 @@ function RematchClaimCard({
     readiness_disabled_reason: claimReadiness?.readiness_disabled_reason ?? null,
   };
 
-  // The picker has no active-debate signal of its own, so this is the one place both readiness
-  // paths read it from — the switch and the opt-in below must gate on the same thing, or the
-  // opt-in could stand the viewer up on a claim the switch is refusing.
-  const activeDebate = false;
-
   return (
     <MatchmakingClaimCard
       claim={claim.claim}
       positions={positions}
       readiness={readiness}
+      // No end slot. A rematch request is its own mutation with its own gating, and the footer
+      // below is the control that sends it, so a second "Request debate" in the header would be a
+      // different button wearing the same words. Nothing to watch either: the picker has no
+      // active-debate signal, and it is mid-session anyway — the only debate to watch is the one
+      // the viewer is already in. With the slot off, `activeDebate` has no reader.
+      hideEndSlot
       // `positions` locates the viewer by geo-chat user id, which is null until the token exchange
       // lands. Until then `serverLocalPosition` reads as "no position" for someone the summaries
       // may already count, and the card would draw them onto a second side.
@@ -1636,8 +1637,6 @@ function RematchClaimCard({
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
-      // Rather than draw the switch off on a guess. Only while this claim's readiness is genuinely
-      // unknown — a settled lookup that simply has no row for it really does mean "not ready".
       footer={
         awaitingResponse || canRequest || requesting ? (
           <div className="mt-3">
@@ -1674,7 +1673,6 @@ function RematchClaimCard({
     />
   );
 }
-
 
 /** One curated block, collapsible so a long page of recommendations stays scannable. */
 function RecommendedSection({ name, count, children }: { name: string; count: number; children: React.ReactNode }) {

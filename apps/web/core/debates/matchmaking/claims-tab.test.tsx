@@ -48,7 +48,9 @@ const mocks = vi.hoisted(() => ({
   hasNextPage: false,
   fetchNextPage: vi.fn(),
   observed: [] as Element[],
-  trigger: null as null | (() => void),
+  triggers: [] as (() => void)[],
+  /** Scrolls everything observed into view. Null-safe so a test with nothing observed still reads. */
+  trigger: () => mocks.triggers.forEach(fire => fire()),
 }));
 
 // `pending-personal-space` reads localStorage at module scope (`atomWithStorage` with
@@ -185,6 +187,30 @@ vi.mock('./hooks', () => ({
       refetch: vi.fn(),
     };
   },
+  // Each card's end slot asks whether there is a debate to be had on its claim. One shared query at
+  // runtime; here it only has to answer "no", so the slot stays empty and the tab's own assertions
+  // are about the tab.
+  useMatchmakingMatches: () => ({ data: { matches: [] }, isLoading: false, error: null }),
+  useDebateRequests: () => ({ data: { inbound: [], outbound: null }, isLoading: false, error: null }),
+  useCreateDebateRequest: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+}));
+
+// The cards report their own responses now, which is a graph read per card and not what this tab's
+// tests are about.
+vi.mock('~/core/claims/browse/claim-response-summary', () => ({
+  useClaimResponseSummary: () => ({
+    positive: 0,
+    negative: 0,
+    total: 0,
+    percent: null,
+    meetsFloor: false,
+    isControversial: false,
+    isLoading: true,
+    isViewerResponseLoading: true,
+    hasCounts: false,
+    viewerDirection: null,
+    viewerSpaceId: null,
+  }),
 }));
 
 // The readiness switch rides the shared queue-backed machine, which reaches for geo-chat auth and
@@ -199,6 +225,8 @@ vi.mock('../hooks', () => ({
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: 'account-1' }),
+  // Read by the end slot's match lookup; the tab's tests do not exercise availability.
+  useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
   useLeaveDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
   // Featured rows are hydrated by the per-space debate-claims lookup. Records what it was asked
@@ -361,18 +389,24 @@ beforeEach(() => {
   mocks.spacesLoading = false;
   mocks.fetchNextPage.mockReset();
   mocks.observed = [];
-  // Cleared with it: a trigger left over from the previous test still closes over that test's
+  // Cleared with them: a trigger left over from the previous test still closes over that test's
   // observer, so a case where nothing is observed could "scroll" a sentinel that isn't there.
-  mocks.trigger = null;
-  // Records the sentinel and hands back a way to say it scrolled into view.
+  mocks.triggers = [];
+  // Records everything observed and hands back a way to say it all scrolled into view.
+  //
+  // Every observer, not just the last one to be built. The sentinel is no longer the only thing
+  // watching: each claim card now observes itself, to hold its response reads until it is near the
+  // viewport. A stub that kept one trigger would hand back the last card's, and the sentinel — the
+  // one thing these tests scroll — would never fire.
   vi.stubGlobal(
     'IntersectionObserver',
     class {
       constructor(private readonly callback: IntersectionObserverCallback) {}
       observe(element: Element) {
         mocks.observed.push(element);
-        mocks.trigger = () =>
-          this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never);
+        mocks.triggers.push(() =>
+          this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never)
+        );
       }
       unobserve() {}
       disconnect() {}
@@ -428,7 +462,7 @@ describe('ClaimsTab', () => {
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
     expect(mocks.fetchNextPage).not.toHaveBeenCalled();
 
-    act(() => mocks.trigger?.());
+    act(() => mocks.trigger());
 
     expect(mocks.fetchNextPage).toHaveBeenCalled();
   });
@@ -610,7 +644,7 @@ describe('ClaimsTab', () => {
 
     expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
 
-    act(() => mocks.trigger?.());
+    act(() => mocks.trigger());
 
     expect(mocks.fetchNextPage).not.toHaveBeenCalled();
   });
@@ -653,7 +687,7 @@ describe('ClaimsTab', () => {
     expect(screen.getByText('No debatable claims yet.')).toBeInTheDocument();
     expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
 
-    act(() => mocks.trigger?.());
+    act(() => mocks.trigger());
 
     expect(mocks.fetchNextPage).toHaveBeenCalled();
   });
@@ -1412,6 +1446,45 @@ describe('ClaimsTab -- Featured', () => {
 
     expect(mocks.claimEntityLookups.at(-1)).toHaveLength(12);
     expect(screen.getByRole('button', { name: /Verify/ })).toBeInTheDocument();
+  });
+
+  // The featured list comes from the search index, which answers before either source of a claim's
+  // vocabulary does — geo-chat's row, or the entity's own "Is factual" value. Its entity lookup is
+  // deliberately not part of the list's loading state, because the claims are listable without it,
+  // so the cards render first. And this is the view the tab opens on.
+  //
+  // The kind selects `voteKind` on the write, so a press in that window does not merely mislabel a
+  // factual claim: it publishes a stance response against it.
+  it('will not let anyone answer a featured claim before its vocabulary arrives', () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    // Neither source has answered: no geo-chat row, and no entity.
+    mocks.claimEntities = [];
+
+    render(<ClaimsTab />);
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree).toBeDisabled();
+    // And it says why, rather than naming a side it will not take.
+    expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+  });
+
+  it('lets them answer once the entity has said which vocabulary the claim uses', () => {
+    // The guard for the test above: without it, a permanently dead pill would pass just as well.
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [{ property: { id: CLAIM_IS_FACTUAL_PROPERTY_ID }, spaceId: SPACE_ID, value: '1' }],
+        relations: [],
+      },
+    ];
+
+    render(<ClaimsTab />);
+
+    expect(screen.getByRole('button', { name: /^Verify/ })).toBeEnabled();
   });
 
   // Search runs over the loaded list here -- there is no server query for it to go into -- and the
