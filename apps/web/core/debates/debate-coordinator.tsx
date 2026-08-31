@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
+import { useFeatureFlag } from '~/core/state/feature-flags';
+
 import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
@@ -70,9 +72,27 @@ function pausedBannerText(reason: DebateGatewayPauseReason | null | undefined) {
   }
 }
 
+/**
+ * Console fallback for the banner, now that only `debateDebugging` sees it. Hiding it must not cost
+ * the diagnosis GEO-2670 put into it, so every viewer still gets the reason — once per transition,
+ * and a recovery is only remembered, not announced.
+ */
+function useDebateGatewayPauseLog(paused: boolean, reason: DebateGatewayPauseReason | null | undefined) {
+  // 'resumed', not null: a mount that was never paused has nothing to report.
+  const lastLoggedRef = React.useRef<string>('resumed');
+
+  React.useEffect(() => {
+    const state = paused ? (reason ?? 'unknown') : 'resumed';
+    if (lastLoggedRef.current === state) return;
+    lastLoggedRef.current = state;
+    if (paused) console.warn(`[debates] live updates paused (${state}): ${pausedBannerText(reason)}`);
+  }, [paused, reason]);
+}
+
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
+  const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
   const geoChatAuth = useGeoChatAuth();
   // Presence, not attention: being available to debate has to survive looking at another window.
   const debatePresence = useDebatePresence();
@@ -84,6 +104,7 @@ export function DebateCoordinator() {
     geoChatAuth.accountKey,
     debatePresence
   );
+  useDebateGatewayPauseLog(gateway.paused, gateway.pauseReason);
   useClaimResponseIndexedNotifier(
     geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
@@ -262,7 +283,7 @@ export function DebateCoordinator() {
 
   return (
     <>
-      {gateway.paused && (
+      {gateway.paused && debateDebuggingEnabled && (
         <div
           role="status"
           aria-live="polite"
