@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import equal from 'fast-deep-equal';
 
-import { Filter } from '~/core/blocks/data/filters';
+import { Filter, ModesByColumn } from '~/core/blocks/data/filters';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 
@@ -25,7 +25,7 @@ type RenderableFilter = Filter & { columnName: string };
 
 interface TableBlockEditableFiltersProps {
   filterState?: Filter[];
-  setFilterState?: (filters: Filter[]) => void;
+  setFilterState?: (filters: Filter[], modeOverrides?: ModesByColumn) => void;
   filterSuggestionSpaceId?: string;
   orderedColumnIds?: string[];
   isEditing?: boolean;
@@ -100,7 +100,11 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
 
     const sortedFilters = orderFiltersForPicker(filterableColumns, orderedColumnIds);
 
-    const onCreateFilter = (filters: TableBlockNewFilterRow[], touchedColumnIds: string[]) => {
+    const onCreateFilter = (
+      filters: TableBlockNewFilterRow[],
+      touchedColumnIds: string[],
+      modeOverrides?: ModesByColumn
+    ) => {
       if (touchedColumnIds.length === 0) return;
       const touched = new Set(touchedColumnIds);
       const base = effectiveFilterState.filter(f => !touched.has(f.columnId));
@@ -117,7 +121,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
       if (equal(comparableFilterList(next), comparableFilterList(effectiveFilterState))) {
         return;
       }
-      effectiveSetFilterState(next);
+      effectiveSetFilterState(next, modeOverrides);
     };
 
     if (!isEditing) {

@@ -1085,7 +1085,12 @@ async function planSetDataBlockFilters(input: SetDataBlockFiltersInput, ctx: Wri
   }
 
   const modesByColumn: ModesByColumn = {};
-  if (input.modesByColumn !== undefined) {
+  if (input.modesByColumn !== undefined && input.modesByColumn !== null) {
+    // Models routinely send null for optional object fields; treat it as
+    // absent rather than throwing in Object.entries, and reject non-objects.
+    if (typeof input.modesByColumn !== 'object' || Array.isArray(input.modesByColumn)) {
+      return invalid('modesByColumn must be an object mapping column ids to AND or OR');
+    }
     for (const [columnId, mode] of Object.entries(input.modesByColumn)) {
       if (!isEntityId(columnId)) return invalid(`modesByColumn key ${columnId} is not a valid id`);
       if (mode !== 'AND' && mode !== 'OR') return invalid(`modesByColumn value ${mode} is not valid`);

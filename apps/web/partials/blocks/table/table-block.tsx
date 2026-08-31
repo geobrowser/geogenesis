@@ -11,7 +11,7 @@ import { produce } from 'immer';
 
 import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
-import { Filter, FilterMode } from '~/core/blocks/data/filters';
+import { Filter, FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
 import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-relations';
 import { Source } from '~/core/blocks/data/source';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
@@ -644,14 +644,17 @@ const ConfiguredTableBlock = ({
   // Setter that handles both editors and non-editors correctly
   // Also resets to page 1 when filters change
   const setActiveFilters = React.useCallback(
-    (filters: Filter[]) => {
-      if (equal(comparableFilterList(filters), comparableFilterList(activeFilters))) {
+    (filters: Filter[], modeOverrides?: ModesByColumn) => {
+      if (
+        equal(comparableFilterList(filters), comparableFilterList(activeFilters)) &&
+        (!modeOverrides || Object.keys(modeOverrides).length === 0)
+      ) {
         return;
       }
       if (canEdit) {
-        setFilterState(filters);
+        setFilterState(filters, modeOverrides);
       } else {
-        setTemporaryFilters(filters);
+        setTemporaryFilters(filters, modeOverrides);
       }
       // Reset to first page when filters change
       setPage(0);

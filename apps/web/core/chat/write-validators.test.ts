@@ -795,6 +795,41 @@ describe('planWriteTool: setDataBlockView / setDataBlockFilters', () => {
 
     expect(out.intent.modesByColumn).toEqual({ [SystemIds.TYPES_PROPERTY]: 'OR' });
   });
+
+  it('setDataBlockFilters treats modesByColumn: null as absent instead of throwing', async () => {
+    findOne.mockResolvedValue(null);
+    const out = (await planWriteTool(
+      'setDataBlockFilters',
+      {
+        blockId: BLOCK,
+        parentEntityId: PARENT,
+        spaceId: SPACE,
+        filters: [{ columnId: SystemIds.TYPES_PROPERTY, valueType: 'RELATION', value: TARGET }],
+        modesByColumn: null,
+      },
+      ctx
+    )) as { ok: true; intent: { modesByColumn: Record<string, string> } };
+
+    expect(out.ok).toBe(true);
+    expect(out.intent.modesByColumn).toEqual({});
+  });
+
+  it('setDataBlockFilters rejects a non-object modesByColumn', async () => {
+    findOne.mockResolvedValue(null);
+    const out = await planWriteTool(
+      'setDataBlockFilters',
+      {
+        blockId: BLOCK,
+        parentEntityId: PARENT,
+        spaceId: SPACE,
+        filters: [{ columnId: SystemIds.TYPES_PROPERTY, valueType: 'RELATION', value: TARGET }],
+        modesByColumn: ['OR'],
+      },
+      ctx
+    );
+
+    expect(out).toMatchObject({ ok: false });
+  });
 });
 
 describe('planWriteTool: changePropertyDataType', () => {
