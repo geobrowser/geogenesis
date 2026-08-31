@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   cancelChallenge: vi.fn(),
   cancelPending: false,
   cancelError: null as Error | null,
+  records: new Map<string, unknown>(),
 }));
 
 vi.mock('../hooks', () => ({
@@ -37,6 +38,12 @@ vi.mock('../hooks', () => ({
 vi.mock('./hooks', () => ({
   useDebatePeople: () => ({ data: { people: mocks.people }, isLoading: false, error: null }),
   useDebateRequests: () => ({ data: { incoming: [], outbound: null }, isLoading: false, error: null }),
+}));
+
+// The record is fetched once for the whole list through react-query; these tests render the tab
+// without a client, and the row's own behaviour is what they are about.
+vi.mock('./use-person-records', () => ({
+  usePersonRecords: () => mocks.records,
 }));
 
 vi.mock('../use-current-geo-chat-user-id', () => ({
@@ -96,6 +103,7 @@ beforeEach(() => {
   mocks.cancelChallenge.mockReset();
   mocks.cancelPending = false;
   mocks.cancelError = null;
+  mocks.records = new Map();
 });
 
 afterEach(cleanup);
@@ -287,6 +295,30 @@ describe('PeopleTab', () => {
 
     expect(mocks.promptSignIn).toHaveBeenCalled();
     expect(mocks.createChallenge).not.toHaveBeenCalled();
+  });
+
+  // Every field in the record is public graph data — positions, debates, wins and join date need no
+  // viewer identity — so a signed-out visitor gets the full context before being asked to sign in.
+  // Only the button is gated.
+  it('shows the record signed out, gating only the button', () => {
+    mocks.authenticated = false;
+    mocks.records = new Map([
+      [
+        'profile-user-them',
+        {
+          positions: 119,
+          debatesArgued: 11,
+          winRate: { percent: 73, wins: 8, of: 11, judged: 11 },
+          joinedAt: new Date(Date.UTC(2026, 0, 29)),
+        },
+      ],
+    ]);
+    render(<PeopleTab />);
+
+    expect(screen.getByText('119 positions')).toBeInTheDocument();
+    expect(screen.getByText('Won 8 of 11 debates')).toBeInTheDocument();
+    expect(screen.getByText('On Geo since Jan 2026')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
   });
 
   // The row's availability flags describe a pairing with somebody, and signed out there is nobody
