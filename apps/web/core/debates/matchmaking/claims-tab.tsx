@@ -47,11 +47,10 @@ import {
   orderFacetOptions,
   toggleId,
 } from './topic-facets';
+import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useStableListOrder } from './use-stable-list-order';
-
-const SEARCH_DEBOUNCE_MS = 250;
 
 /**
  * GEO-2683. `featured` is the tab's own, not one of geo-chat's: the index has no notion of the tag,
@@ -111,7 +110,7 @@ export function ClaimsTab() {
   const filterOptions = React.useMemo(() => filterOptionsFor(authenticated), [authenticated]);
 
   const [search, setSearch] = React.useState('');
-  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+  const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
   // Featured is where the tab opens. The whole corpus is the wider net but the shallower one — a
   // curator's pick is a better first thing to put in front of someone than whatever the index
   // ranked highest, and All claims is one option below.
@@ -123,11 +122,6 @@ export function ClaimsTab() {
   const filter = !authenticated && SIGNED_OUT_HIDDEN_FILTERS.includes(selectedFilter) ? 'featured' : selectedFilter;
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
-
-  React.useEffect(() => {
-    const timeout = setTimeout(() => setDebouncedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timeout);
-  }, [search]);
 
   const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
 
@@ -213,7 +207,7 @@ export function ClaimsTab() {
   // same render as the tick and there is nothing to wait for. The debounce still runs there —
   // it feeds a query Featured deliberately never makes — so without this gate a run of clicks
   // lasting past the grace period would drop skeletons over numbers that were already correct.
-  const countsPending = !featured && (claimsQuery.countsPending || topicsSettling || spacesSettling);
+  const countsPending = !featured && (claimsQuery.countsPending || topicsSettling || spacesSettling || searchSettling);
 
   const serverClaims = React.useMemo(
     () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),

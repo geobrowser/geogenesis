@@ -57,6 +57,7 @@ import {
   orderFacetOptions,
   toggleId,
 } from '~/core/debates/matchmaking/topic-facets';
+import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
 import { useScopedMatchmakingClaims } from '~/core/debates/matchmaking/use-scoped-claims';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
@@ -80,8 +81,6 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { RematchVoicePill } from './rematch-voice';
-
-const SEARCH_DEBOUNCE_MS = 250;
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
 
@@ -144,12 +143,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const exitStartedRef = React.useRef(false);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
-  const [debouncedSearch, setDebouncedSearch] = React.useState('');
-
-  React.useEffect(() => {
-    const timeout = setTimeout(() => setDebouncedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timeout);
-  }, [search]);
+  const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
 
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
@@ -1327,7 +1321,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               // Only the browsed source waits on geo-chat. The other two build their facets from
               // entities already in hand, so their counts are never behind the selection and a
               // skeleton there would be describing a wait that isn't happening.
-              countsPending={browsesPages && (browsedClaimsQuery.countsPending || topicsSettling || spacesSettling)}
+              countsPending={
+                browsesPages && (browsedClaimsQuery.countsPending || topicsSettling || spacesSettling || searchSettling)
+              }
               topicAtEnd
               // Only on Claims: the opponent's tab is one fixed source — their own responses — and
               // a menu offering three others there would read as filtering a list it can't reach.

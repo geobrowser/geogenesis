@@ -812,6 +812,30 @@ describe('topic menu', () => {
     expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
   });
 
+  // Search narrows the facets exactly as the space and topic filters do, so the window where the
+  // box says one thing and the counts answer another is the same window — and has to start on the
+  // keystroke. Left out, the grace period didn't begin until the search debounce had already run,
+  // so the stale numbers stood for both delays back to back instead of one.
+  it('covers the counts while the typed query is still settling', async () => {
+    render(<ClaimsTab />);
+    await showAllClaims();
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    vi.useFakeTimers();
+    try {
+      // Two keystrokes far enough apart to restart the debounce, so the query stays unsettled for
+      // longer than the menu's grace period without ever being sent.
+      fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'mod' } });
+      act(() => void vi.advanceTimersByTime(200));
+      fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'model' } });
+      act(() => void vi.advanceTimersByTime(100));
+
+      expect(screen.getAllByLabelText('Loading count').length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('drops the topics that have no claims in the picked space', async () => {
     render(<ClaimsTab />);
     await showAllClaims();
