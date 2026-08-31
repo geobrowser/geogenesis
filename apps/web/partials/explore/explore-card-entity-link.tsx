@@ -60,6 +60,16 @@ export function ExploreCardEntityLink({ item, opensSidePanel = false, className,
       spaceId={item.spaceId}
       className={className}
       onClick={onClick}
+      // Exempts this link from the panel's capture-phase outside-pointerdown close
+      // (`entity-side-panel.tsx`). Without it, clicking a second card while the panel is open
+      // tears the panel down on `pointerdown` and the `onClick` below builds it again — a
+      // close/reopen where the viewer asked to switch targets, running close cleanup in between.
+      //
+      // Conditional, and on the opt-in rather than on whether a panel happens to be open: the data
+      // block explore view renders this same card *inside the editor*, which reads the attribute
+      // too (`editor.tsx`) — and there the name navigates, so it is not an opener and must not
+      // claim to be one.
+      {...(opensSidePanel ? { 'data-entity-side-panel-opener': '' } : {})}
     >
       {children}
     </Link>
