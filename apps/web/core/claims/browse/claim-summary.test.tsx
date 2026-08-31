@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,9 +8,14 @@ import type { ClaimResponseSummary } from './claim-response-summary';
 import { summarizeClaimResponses } from './claim-response-summary';
 import { ClaimSummary } from './claim-summary';
 
-// The faces and their popovers each run their own responder query, which is not what this is about.
-vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({ ClaimResponderAvatars: () => null }));
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({ RespondersPopoverContent: () => null }));
+// The faces and the list each run their own responder query, which is not what this is about. The
+// avatars still render something pressable, because where the popover lands is.
+vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
+  ClaimResponderAvatars: () => <span data-testid="responder-avatars" />,
+}));
+vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
+  RespondersPopoverContent: () => <div data-testid="responders-list" />,
+}));
 vi.mock('./claim-side-responders', () => ({ ClaimSideResponders: () => null }));
 
 const ENTITY = 'claim-1';
@@ -68,5 +73,38 @@ describe('ClaimSummary', () => {
     const { container } = renderSummary(summary());
 
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+/**
+ * Where the responder list lands, which is the difference between it opening and appearing not to.
+ *
+ * Radix's default portal puts the popper on `document.body` with no z-index of its own, leaving the
+ * list at the content's `z-100` in the root stacking context. That clears an ordinary page and
+ * loses to every panel this card is drawn inside — the debates hub is `z-[200]`, so the list opened
+ * *behind* it and pressing the faces looked like it did nothing at all.
+ *
+ * jsdom computes no stacking, so the assertion is the portal container rather than what is on top:
+ * `.elevated-popover` is what the stylesheet lifts above those panels, and it is the same check the
+ * debate room's audio settings make.
+ */
+describe('the responder list’s portal', () => {
+  it('opens into the elevated portal, above whatever panel the card sits in', async () => {
+    renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
+
+    fireEvent.click(screen.getByTestId('responder-avatars').closest('button') as HTMLElement);
+
+    const list = await screen.findByTestId('responders-list');
+    expect(list.closest('[data-radix-popper-content-wrapper]')?.parentElement).toHaveClass('elevated-popover');
+  });
+
+  it('leaves the faces pressable at all', async () => {
+    // The guard: the assertion above passes vacuously if nothing ever opens.
+    renderSummary(summary({ ...summarizeClaimResponses(17, 3) }));
+
+    expect(screen.queryByTestId('responders-list')).toBeNull();
+    fireEvent.click(screen.getByTestId('responder-avatars').closest('button') as HTMLElement);
+
+    await waitFor(() => expect(screen.getByTestId('responders-list')).toBeInTheDocument());
   });
 });

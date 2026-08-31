@@ -20,6 +20,7 @@ import {
 
 import { Tag } from '~/design-system/tag';
 import { Text } from '~/design-system/text';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
 import { RespondersPopoverContent } from '~/partials/entity-page/entity-vote-buttons';
@@ -292,6 +293,19 @@ function ClaimResponders({
   const [open, setOpen] = React.useState(false);
   const warm = useWarmResponders(entityId, spaceId, responseKind);
 
+  // Portalled above the container, not just above the page.
+  //
+  // Radix's own portal lands the popper on `document.body` with no z-index of its own, so this list
+  // sits at the content's `z-100` in the root stacking context. That clears an ordinary page and
+  // loses to every panel the card is drawn inside: the debates hub is `z-[200]`, so pressing the
+  // faces there opened the list *behind* the panel — nothing appeared to happen, on the one surface
+  // whose whole purpose is browsing claims. The entity side panel is higher still.
+  //
+  // `useElevatedPopoverPortal` is the existing answer to exactly this, and it handles both: inside
+  // the side panel it returns that panel's own portal, and otherwise a body-level `.elevated-popover`
+  // container whose popper wrapper is lifted above any of them.
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
+
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
@@ -319,21 +333,23 @@ function ClaimResponders({
           />
         </button>
       </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content
-          align="end"
-          side="bottom"
-          sideOffset={8}
-          className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
-        >
-          <RespondersPopoverContent
-            entityId={entityId}
-            spaceId={spaceId}
-            objectType={CLAIM_RESPONSE_OBJECT_TYPE}
-            responseKind={responseKind}
-          />
-        </Popover.Content>
-      </Popover.Portal>
+      {elevatedPopoverPortal && (
+        <Popover.Portal container={elevatedPopoverPortal}>
+          <Popover.Content
+            align="end"
+            side="bottom"
+            sideOffset={8}
+            className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          >
+            <RespondersPopoverContent
+              entityId={entityId}
+              spaceId={spaceId}
+              objectType={CLAIM_RESPONSE_OBJECT_TYPE}
+              responseKind={responseKind}
+            />
+          </Popover.Content>
+        </Popover.Portal>
+      )}
     </Popover.Root>
   );
 }

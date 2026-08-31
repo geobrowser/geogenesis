@@ -19,6 +19,7 @@ import {
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 
 import { Skeleton } from '~/design-system/skeleton';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 import { MemberRow } from '~/partials/space-page/space-member-row';
@@ -60,6 +61,12 @@ export function ClaimSideResponders({
   // Held rather than left to Radix so the profile lookup below is deferred until the list is
   // actually opened — a page of claim cards would otherwise fetch every side's profiles up front.
   const [open, setOpen] = React.useState(false);
+
+  // Above whatever the sides are drawn inside, not merely above the page. Radix's default portal
+  // leaves this at the content's own `z-100` on `document.body`, which loses to the entity side
+  // panel and to the debates hub — see the same note on `ClaimResponders`, where the faces stopped
+  // opening anything at all.
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
 
   // Stands down under a batch, the same as the other two callers of this key.
   //
@@ -109,11 +116,13 @@ export function ClaimSideResponders({
           size={12}
         />
       </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Content side="bottom" align="start" sideOffset={8} avoidCollisions className="z-100 origin-top-left">
-          {open ? <ResponderList spaceIds={sideSpaceIds} label={label} totalCount={totalResponders} /> : null}
-        </Popover.Content>
-      </Popover.Portal>
+      {elevatedPopoverPortal && (
+        <Popover.Portal container={elevatedPopoverPortal}>
+          <Popover.Content side="bottom" align="start" sideOffset={8} avoidCollisions className="z-100 origin-top-left">
+            {open ? <ResponderList spaceIds={sideSpaceIds} label={label} totalCount={totalResponders} /> : null}
+          </Popover.Content>
+        </Popover.Portal>
+      )}
     </Popover.Root>
   );
 }
