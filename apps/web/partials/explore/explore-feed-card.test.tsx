@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
 import type React from 'react';
@@ -34,12 +35,33 @@ vi.mock('./explore-join-space-button', () => ({
 // The ranking body pulls the sync store; stub it and surface whatever `actions` it is handed so we
 // can assert the card still threads a comment link into rankings.
 vi.mock('./explore-ranking-card-body', () => ({
-  RankingCardBody: ({ actions }: { actions?: React.ReactNode }) => <div data-testid="ranking-body">{actions}</div>,
+  RankingCardBody: ({ actions, titleOpensSidePanel }: { actions?: React.ReactNode; titleOpensSidePanel?: boolean }) => (
+    <div data-testid="ranking-body" data-opens-side-panel={String(titleOpensSidePanel)}>
+      {actions}
+    </div>
+  ),
 }));
 
 vi.mock('./debate-explore-feed-card', () => ({
-  DebateExploreFeedCard: ({ fallback }: { fallback: React.ReactNode }) => (
-    <div data-testid="debate-card">{fallback}</div>
+  DebateExploreFeedCard: ({
+    fallback,
+    titleOpensSidePanel,
+  }: {
+    fallback: React.ReactNode;
+    titleOpensSidePanel?: boolean;
+  }) => (
+    <div data-testid="debate-card" data-opens-side-panel={String(titleOpensSidePanel)}>
+      {fallback}
+    </div>
+  ),
+}));
+
+// The link's own behaviour has its own suite; here we only need to see which flag it was handed.
+vi.mock('./explore-card-entity-link', () => ({
+  ExploreCardEntityLink: ({ children, opensSidePanel }: { children: React.ReactNode; opensSidePanel?: boolean }) => (
+    <a href="#" data-testid="card-title-link" data-opens-side-panel={String(opensSidePanel)}>
+      {children}
+    </a>
   ),
 }));
 
@@ -113,5 +135,41 @@ describe('ExploreFeedCard', () => {
     expect(commentLink?.getAttribute('href')).toContain('#entity-comments');
     expect(rowActions.contains(commentLink)).toBe(true);
     expect(screen.getByTestId('ranking-body').contains(rowActions)).toBe(true);
+  });
+  // GEO-2757. The flag travels page -> EntityFeed -> ExploreFeedCard -> body -> title, and every
+  // rendition draws its own title, so a card type added later is exactly what goes quietly
+  // unwired. One case per rendition, and one for the default (off) that keeps the card's other
+  // homes navigating.
+  describe('titleOpensSidePanel', () => {
+    const COMMUNITY_CALL_TYPE_ID = '0419ca20118b4cdb84dfdb9ed73b50c2';
+    const DEBATE_TYPE_ID = 'fd51f935-2063-4617-be39-7b672b23364c';
+
+    it('reaches the default card title', () => {
+      render(<ExploreFeedCard item={item} titleOpensSidePanel />);
+      expect(screen.getByTestId('card-title-link')).toHaveAttribute('data-opens-side-panel', 'true');
+    });
+
+    it('reaches the community call card title', () => {
+      const call = { ...item, types: [{ id: COMMUNITY_CALL_TYPE_ID, name: 'Community call' }] };
+      render(<ExploreFeedCard item={call} titleOpensSidePanel />);
+      expect(screen.getByTestId('card-title-link')).toHaveAttribute('data-opens-side-panel', 'true');
+    });
+
+    it('reaches the ranking card body', () => {
+      const ranking = { ...item, types: [{ id: RANKING_BLOCK_TYPE_ID, name: 'Ranking block' }] };
+      render(<ExploreFeedCard item={ranking} titleOpensSidePanel />);
+      expect(screen.getByTestId('ranking-body')).toHaveAttribute('data-opens-side-panel', 'true');
+    });
+
+    it('reaches the debate card', () => {
+      const debate = { ...item, types: [{ id: DEBATE_TYPE_ID, name: 'Debate' }] };
+      render(<ExploreFeedCard item={debate} titleOpensSidePanel />);
+      expect(screen.getByTestId('debate-card')).toHaveAttribute('data-opens-side-panel', 'true');
+    });
+
+    it('stays off by default, so the card keeps navigating everywhere else it is used', () => {
+      render(<ExploreFeedCard item={item} />);
+      expect(screen.getByTestId('card-title-link')).toHaveAttribute('data-opens-side-panel', 'false');
+    });
   });
 });
