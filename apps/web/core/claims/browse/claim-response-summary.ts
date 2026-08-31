@@ -232,6 +232,19 @@ export function useClaimResponseSummary(
   // it success even though the query itself never runs here.
   const haveCounts = responseBatch.managed ? responseBatch.ready && haveCountsAnswered : haveCountsAnswered;
 
+  // Whether the viewer's own side is still coming — one condition, because both branches below need
+  // it and they had drifted.
+  //
+  // There has to *be* a viewer for it to be coming. Signed out there is no personal space, so the
+  // key is never written by either path — the query is disabled without one, and the batch guards
+  // its own write with `if (personalSpaceId)`. Reading that absence as "still loading" is a wait
+  // that never ends: on the batched claims page it left every signed-out reader with dead pills and
+  // no split at all, because the card's summary read is gated on the same flag.
+  //
+  // Absence of a viewer is a settled "no side", exactly as it is for a signed-out reader anywhere
+  // else.
+  const awaitingViewerResponse = Boolean(personalSpaceId) && !hasViewerResponseAnswered;
+
   // A delta needs a baseline.
   //
   // The adjustment below is the viewer's own in-flight response applied *to a reported population*.
@@ -305,9 +318,12 @@ export function useClaimResponseSummary(
     // Under a batch the query never runs and the batch primes its key, so the batch's readiness is
     // what to wait on — plus this key actually having been primed, for the reason `haveCounts`
     // gives above: a batch can be ready against a response that predates this claim.
+    //
+    // `isPersonalSpaceLoading` is not repeated here because the batch already waits on it: it is
+    // part of that query's own `enabled`, so `ready` cannot be true while the space is resolving.
     isViewerResponseLoading: responseBatch.managed
-      ? !responseBatch.ready || !hasViewerResponseAnswered
-      : isPersonalSpaceLoading || (Boolean(personalSpaceId) && !hasViewerResponseAnswered),
+      ? !responseBatch.ready || awaitingViewerResponse
+      : isPersonalSpaceLoading || awaitingViewerResponse,
     viewerDirection: activeDirection ?? null,
     viewerSpaceId: personalSpaceId ?? null,
   };

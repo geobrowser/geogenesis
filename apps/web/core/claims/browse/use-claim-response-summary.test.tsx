@@ -334,6 +334,40 @@ describe('useClaimResponseSummary and the viewer’s own side', () => {
     expect(result.current.isViewerResponseLoading).toBe(true);
   });
 
+  it('does not wait forever for a viewer who does not exist, under a batch', () => {
+    // The batch guards its own viewer-response write with `if (personalSpaceId)`, and the query is
+    // disabled without one, so signed out that key is never written by either path. Reading its
+    // absence as "still loading" is a wait with nothing to end it — and because the card's summary
+    // read is gated on the same flag, the public claims page would render dead pills and no split
+    // at all rather than merely a stale one.
+    mocks.batch = { managed: true, ready: true };
+    mocks.personalSpace = { personalSpaceId: null, isLoading: false };
+    queryClient.setQueryData(entityResponseCountsQueryKey(CLAIM, SPACE, CLAIM_RESPONSE_OBJECT_TYPE, 'stance'), {
+      positive: 9,
+      negative: 3,
+    });
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(result.current.isViewerResponseLoading).toBe(false);
+    expect(result.current.hasCounts).toBe(true);
+    expect(result.current.total).toBe(12);
+  });
+
+  it('still waits for a signed-in viewer’s key under the same batch', () => {
+    // The guard: with a personal space the key is written, so its absence is genuinely a wait — the
+    // case the previous commit added and this must not undo.
+    mocks.batch = { managed: true, ready: true };
+    queryClient.setQueryData(entityResponseCountsQueryKey(CLAIM, SPACE, CLAIM_RESPONSE_OBJECT_TYPE, 'stance'), {
+      positive: 9,
+      negative: 3,
+    });
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(result.current.isViewerResponseLoading).toBe(true);
+  });
+
   it('answers once the batch has primed this claim’s keys', () => {
     // The guard: both flags must still settle in the ordinary batched case, or the test above passes
     // on a hook that never answers under a boundary at all.
