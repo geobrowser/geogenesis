@@ -294,7 +294,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingChunksRef = React.useRef<Blob[]>([]);
   const recordingStartedAtRef = React.useRef<number | null>(null);
   const recordingEndedAtRef = React.useRef<number | null>(null);
-  const recordingStartTimerRef = React.useRef<number | null>(null);
   const recordingStopTimerRef = React.useRef<number | null>(null);
   const autoConnectAttemptedRef = React.useRef<string | null>(null);
   const postJoinRecoveryAttemptsRef = React.useRef(0);
@@ -628,10 +627,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [currentUserId, debateId, reportConnectionConflict]);
 
   const clearRecordingTimers = React.useCallback(() => {
-    if (recordingStartTimerRef.current !== null) {
-      window.clearTimeout(recordingStartTimerRef.current);
-      recordingStartTimerRef.current = null;
-    }
     if (recordingStopTimerRef.current !== null) {
       window.clearTimeout(recordingStopTimerRef.current);
       recordingStopTimerRef.current = null;
@@ -1699,12 +1694,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
 
-    if (recordingStartedAtRef.current === null) {
-      recordingStartTimerRef.current = window.setTimeout(
-        () => startLocalRecorder(stream),
-        Math.max(0, recordingWindow.startAtMs - now)
-      );
-    }
+    // GEO-2644. Start capturing the moment the stream exists, rather than waiting for the window
+    // to open. Waiting meant the encoder's own warmup happened *at* t=0, so every recording began
+    // slightly after the window it is measured against and the head had to be padded with black.
+    //
+    // Starting early is free: `recording_trim_for_window` trims the pre-window head via
+    // `source_start_offset_ms` and pads zero, so nothing captured before the window is ever
+    // published. The status gate above already admits `preflight`; only this timer held it back.
+    //
+    // Note what this does not fix. A participant who reaches `connected` after the window has
+    // already opened was starting immediately regardless — `Math.max(0, negative)` is 0 — so the
+    // large misses on record are unaffected. Those need the clock to stop being armed by `/joined`,
+    // which is the rest of GEO-2644; this is the prerequisite that makes that possible without
+    // deadlocking capture against the clock it would then be waiting on.
+    startLocalRecorder(stream);
     recordingStopTimerRef.current = window.setTimeout(
       () => {
         persistRecordingAfterCapture();

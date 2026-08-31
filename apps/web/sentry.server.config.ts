@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/nextjs';
 
 import { isTelemetryEnabled, telemetryDsn } from '~/core/telemetry/config';
+import { isAbortedResponseStream } from '~/core/telemetry/noise';
 
 if (isTelemetryEnabled) {
   Sentry.init({
@@ -15,6 +16,10 @@ if (isTelemetryEnabled) {
     tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.2,
 
     beforeSend(event) {
+      // Dropped before anything else: this was the largest error group in production, with zero
+      // users impacted, and its volume is what makes real reports hard to find. See noise.ts.
+      if (isAbortedResponseStream(event)) return null;
+
       if (event.request?.headers) {
         delete event.request.headers.authorization;
         delete event.request.headers.Authorization;

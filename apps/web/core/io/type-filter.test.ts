@@ -194,3 +194,30 @@ describe('removeTypeIdsFromFilter', () => {
     });
   });
 });
+
+describe('overlaps promotion (GEO-2739)', () => {
+  const T1 = '5ef5a5860f274d8e8f6c59ae5b3e89e2';
+  const T2 = 'c7a4fc6d1afc53250a22d4209391dc79';
+
+  it('promotes overlaps to the indexed top-level argument as `in`', () => {
+    // `in` is correct *here* and wrong inside the filter: the top-level `typeIds` argument is a
+    // UuidFilter over the set, not a filter on the list column. That difference is the whole
+    // 2,151 ms -> 750 ms.
+    expect(extractTypeIdsFromFilter({ typeIds: { overlaps: [T1, T2] } })).toEqual({ in: [T1, T2] });
+  });
+
+  it('promotes a single-valued overlaps as `is`', () => {
+    expect(extractTypeIdsFromFilter({ typeIds: { overlaps: [T1] } })).toEqual({ is: T1 });
+    expect(extractSingleTypeIdFromFilter({ typeIds: { overlaps: [T1] } })).toEqual(T1);
+  });
+
+  it('finds an overlaps clause buried one level deep in `and`', () => {
+    const filter = { and: [{ typeIds: { overlaps: [T1, T2] } }, { name: { isNot: '' } }] };
+    expect(extractTypeIdsFromFilter(filter)).toEqual({ in: [T1, T2] });
+  });
+
+  it('strips the promoted clause so it is not also scanned as a predicate', () => {
+    const filter = { and: [{ typeIds: { overlaps: [T1, T2] } }, { name: { isNot: '' } }] };
+    expect(removeTypeIdsFromFilter(filter)).toEqual({ name: { isNot: '' } });
+  });
+});

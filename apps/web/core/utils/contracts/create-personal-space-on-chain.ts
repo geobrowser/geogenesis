@@ -119,6 +119,7 @@ type CreatePersonalSpaceOnChainParams = {
   spaceAvatarUri?: string | null;
   spaceCoverUri?: string | null;
   topicId?: string;
+  onRegistered?: (spaceId: string) => void;
 };
 
 export async function createPersonalSpaceOnChain({
@@ -129,6 +130,7 @@ export async function createPersonalSpaceOnChain({
   spaceAvatarUri,
   spaceCoverUri,
   topicId,
+  onRegistered,
 }: CreatePersonalSpaceOnChainParams): Promise<string> {
   // 1. Register the space id if the account doesn't already have one.
   let spaceId = await readRegisteredSpaceId(walletAddress);
@@ -207,6 +209,12 @@ export async function createPersonalSpaceOnChain({
   );
   if (submitResult._tag === 'Left') throw submitResult.left;
   devLog('[CREATE_SPACE] publish + topic userOp sent, waiting for index…');
+
+  try {
+    onRegistered?.(spaceId);
+  } catch (error) {
+    console.error('[CREATE_SPACE] onRegistered callback failed', error);
+  }
 
   // 4. Wait for both content and topic to index (one merged loop).
   //

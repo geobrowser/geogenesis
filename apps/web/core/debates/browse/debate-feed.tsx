@@ -11,24 +11,29 @@ import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
 import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
+import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useComments } from '~/core/hooks/use-comments';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
+import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Button } from '~/design-system/button';
-import { ArrowLeft } from '~/design-system/icons/arrow-left';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
+
+import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
+import { useGeoChatAuth } from '~/core/debates/hooks';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
-import { JoinDebatePanel } from './join-debate-panel';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -127,7 +132,20 @@ export function DebatesBrowseFeed({
   // Which panel is open, not which debate it was opened from: the claims and
   // comments panels describe the debate you're watching, so they follow the feed
   // as you scroll rather than staying pinned to the one whose button you pressed.
-  const [openPanel, setOpenPanel] = React.useState<'join' | 'claims' | 'comments' | null>(null);
+  const [openPanel, setOpenPanel] = React.useState<'claims' | 'comments' | null>(null);
+  // "Join a debate" opens the shared hub rather than a panel of this space's claims: the hub is
+  // cross-space and carries the search, filters, counts and ranking the feed's own panel never had.
+  const debatesHub = useDebatesHub();
+  // Carry the intent across the login: signing in is a detour the viewer did not ask for, so
+  // finish what they pressed rather than returning them to the feed to press it again.
+  const openPrivySignIn = usePrivySignIn(() => {
+    setOpenPanel(null);
+    debatesHub.open('claims');
+  });
+  // Privy, not the smart account: `useSmartAccount` reports null while the account is restoring
+  // and after an initialization failure as well as when nobody is signed in, and sending a
+  // signed-in viewer back through login would wipe their half-finished onboarding.
+  const { ready: authReady, authenticated } = useGeoChatAuth();
 
   // The media lookups gate rendering, so the feed is still loading until they settle — otherwise it
   // flashes "no debates" and strands a valid anchor.
@@ -234,7 +252,26 @@ export function DebatesBrowseFeed({
           // otherwise open on the debate being scrolled away from.
           onOpenJoin={() => {
             setActiveId(debate.id);
-            setOpenPanel('join');
+            // Decide nothing until Privy has restored the session: a press in that window is a
+            // no-op rather than a wrong answer in either direction.
+            if (!authReady) return;
+            // Everything the hub offers — taking a position, standing ready, requesting a debate —
+            // needs an account, so a signed-out viewer gets the same login voting gives them
+            // rather than a panel whose every control refuses them.
+            if (!authenticated) {
+              openPrivySignIn();
+              return;
+            }
+            // A second press closes it, the way the navbar's debate button behaves. Without this
+            // the button is a one-way door and the only way out is the panel's own close control.
+            if (debatesHub.isOpen) {
+              debatesHub.close();
+              return;
+            }
+            // The hub is its own portal, so the feed's panel state stays out of it. Closing the
+            // in-flow panel first keeps the two from stacking over the same feed.
+            setOpenPanel(null);
+            debatesHub.open('claims');
           }}
           onOpenClaims={() => {
             setActiveId(debate.id);
@@ -256,10 +293,8 @@ export function DebatesBrowseFeed({
   const closePanel = () => setOpenPanel(null);
 
   const sidePanel =
-    openPanel === 'join' ? (
-      <JoinDebatePanel spaceId={spaceId} onClose={closePanel} />
-    ) : openPanel === 'claims' && activeDebate ? (
-      <DebateClaimsPanel debate={activeDebate} count={0} onClose={closePanel} />
+    openPanel === 'claims' && activeDebate ? (
+      <DebateClaimsPanel debate={activeDebate} onClose={closePanel} />
     ) : openPanel === 'comments' && activeDebate ? (
       // Keyed so scrolling to the next debate resets the panel rather than
       // carrying a half-typed reply across to a different debate's thread.
@@ -311,6 +346,9 @@ function DebateFeedItem({
   // Same arguments as the Comments panel's own useComments, so the two share a
   // cache entry and posting there updates this count without a refetch.
   const { totalCount: commentCount } = useComments({ entityId: debate.id, spaceId });
+  // Same query key as the Claims panel's own hook, for the same reason as comments above: the
+  // badge and the panel share one cache entry, so opening the panel doesn't refetch.
+  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
 
   React.useEffect(() => {
     const element = itemRef.current;
@@ -331,7 +369,7 @@ function DebateFeedItem({
     entityId: debate.id,
     spaceId,
     commentCount,
-    claimsCount: 0,
+    claimsCount: claims.totalCount,
     onComment: onOpenComments,
     onClaims: onOpenClaims,
     shareAction,
@@ -356,20 +394,12 @@ function DebateFeedItem({
           className="relative flex w-[var(--debate-feed-column-width)] min-w-0 flex-col md:w-[calc(100vw-1rem)]"
           style={DEBATE_COLUMN_STYLE}
         >
-          {/* Mobile-only back arrow; desktop keeps the app nav. NB: breakpoints
-              here are desktop-first (md = max-width:767px), so md: targets mobile. */}
-          <button
-            type="button"
-            aria-label="Back"
-            onClick={() => window.history.back()}
-            className="-mb-3 hidden size-8 items-center justify-center text-text md:flex"
-          >
-            <ArrowLeft />
-          </button>
           <div className="md:mt-4">
             <DebateTitleHeader
               key={debate.claim.claim}
               claim={debate.claim.claim}
+              claimEntityId={debate.claim.claim_entity_id}
+              spaceId={spaceId}
               spaceName={spaceName}
               spaceImage={spaceImage}
               topics={topics}
@@ -401,12 +431,16 @@ function DebateFeedItem({
 
 function DebateTitleHeader({
   claim,
+  claimEntityId,
+  spaceId,
   spaceName,
   spaceImage,
   topics,
   onOpenJoin,
 }: {
   claim: string;
+  claimEntityId: string;
+  spaceId: string;
   spaceName: string;
   spaceImage?: string | null;
   topics: string[];
@@ -436,12 +470,17 @@ function DebateTitleHeader({
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
-            <Avatar avatarUrl={spaceImage} value={spaceName} size={16} />
-          </span>
-          <Text as="span" variant="metadata" color="text" className="truncate !leading-[13px] !tracking-[-0.35px]">
-            {spaceName}
-          </Text>
+          {/* `min-w-0` again on the anchor: the truncation chain runs parent → anchor → text, and
+              a link left at its default `min-width: auto` would refuse to shrink and push the
+              topics off the row instead of ellipsing the name. */}
+          <Link href={NavUtils.toSpace(spaceId)} className="flex min-w-0 items-center gap-1.5 hover:underline">
+            <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
+              <Avatar avatarUrl={spaceImage} value={spaceName} size={16} />
+            </span>
+            <Text as="span" variant="metadata" color="text" className="truncate !leading-[13px] !tracking-[-0.35px]">
+              {spaceName}
+            </Text>
+          </Link>
           {topics.map(topic => (
             <React.Fragment key={topic}>
               <Text as="span" variant="metadata" color="grey-04" className="!leading-[13px] !tracking-[-0.35px]">
@@ -460,6 +499,10 @@ function DebateTitleHeader({
         </div>
         <Button
           type="button"
+          // Exempts this button from the hub's outside-pointerdown dismissal, the same way the
+          // navbar's opener is exempt. Without it the pointerdown closed the hub and the click
+          // that followed reopened it, which read as a flicker.
+          data-debates-hub-opener
           variant="secondary"
           small
           onClick={onOpenJoin}
@@ -475,7 +518,14 @@ function DebateTitleHeader({
           isClaimExpanded ? 'line-clamp-2 md:line-clamp-none' : 'line-clamp-2'
         }`}
       >
-        {claim}
+        <Link
+          href={NavUtils.toEntity(spaceId, claimEntityId)}
+          entityId={claimEntityId}
+          spaceId={spaceId}
+          className="hover:underline"
+        >
+          {claim}
+        </Link>
       </h2>
       {isClaimOverflowing && (
         <button

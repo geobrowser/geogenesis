@@ -130,6 +130,11 @@ interface UpsertBlocksRelationsArgs {
   entityPageId: string;
 }
 
+export type UpsertEditorStateOptions = {
+  /** Blocks whose complete graph will be restored by a clone operation. */
+  skipDefaultInitializationForBlockIds?: ReadonlySet<string>;
+};
+
 // Helper function to create or update the block IDs on an entity
 // Since we don't currently support array value types, we store all ordered blocks as a single stringified array
 const makeBlocksRelations = ({
@@ -534,7 +539,7 @@ export function useEditorStore() {
   ]);
 
   const upsertEditorState = React.useCallback(
-    (json: JSONContent) => {
+    (json: JSONContent, options: UpsertEditorStateOptions = {}) => {
       const { content = [] } = json;
 
       const populatedContent = content.filter(node => {
@@ -597,6 +602,11 @@ export function useEditorStore() {
       // @TODO we can probably write all of these changes at once by aggregating the
       // "actions" then performing them. See our migrate module for this pattern.
       for (const node of addedBlocks) {
+        // A copied block restores the source graph immediately after this upsert.
+        // Initializing a fresh block here would mix default sources, filters, and
+        // shown columns into the cloned configuration.
+        if (options.skipDefaultInitializationForBlockIds?.has(node.id)) continue;
+
         const blockType = (() => {
           switch (node.type) {
             case 'rankingNode':
@@ -703,6 +713,7 @@ export function useEditorStore() {
 
       // New collection data blocks: persist Types + Description as shown columns (with Name)
       for (const node of addedBlocks) {
+        if (options.skipDefaultInitializationForBlockIds?.has(node.id)) continue;
         if (node.type !== 'tableNode') continue;
         if (node.attrs?.initialDataSource === 'QUERY') continue;
 
