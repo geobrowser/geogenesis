@@ -4,13 +4,14 @@ import { ColorName, colors } from '~/design-system/theme/colors';
 
 interface Props {
   color?: ColorName;
+  size?: number;
 }
 
-export function Megaphone({ color }: Props) {
+export function Megaphone({ color, size = 16 }: Props) {
   const themeColor = color ? colors.light[color] : 'currentColor';
 
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
         d="M14 2.5L5.5 6H2.5C1.94772 6 1.5 6.44772 1.5 7V9C1.5 9.55228 1.94772 10 2.5 10H5.5L14 13.5V2.5Z"
         stroke={themeColor}
