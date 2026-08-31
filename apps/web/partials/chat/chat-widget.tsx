@@ -25,6 +25,8 @@ import {
 import type { NavigateOutput, OpenReviewPanelOutput } from '~/core/chat/nav-types';
 import { type PreloadedEntity, usePreloadedEntity } from '~/core/chat/preload';
 import { useGeoQueryDispatcher } from '~/core/chat/geo-query-dispatcher';
+import { useImportDispatcher } from '~/core/chat/import-dispatcher';
+import { useFileAttachment } from '~/core/chat/import/use-file-attachment';
 import { useReadDispatcher } from '~/core/chat/read-dispatcher';
 import { useResearchDispatcher } from '~/core/chat/research-dispatcher';
 import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher';
@@ -535,6 +537,18 @@ export function ChatWidget() {
   useReadDispatcher(messages, addToolResultRef, globalSearchSpaceIds);
   useResearchDispatcher(messages, addToolResultRef);
   useGeoQueryDispatcher(messages, addToolResultRef);
+  // The space the user is in *now*. An import maps against it and stages into
+  // it, so it has to follow them rather than staying where the file was
+  // attached — see `fetchMapping` and `runApply`.
+  useImportDispatcher(messages, addToolResultRef, currentSpaceId);
+
+  const {
+    attachment,
+    attach: attachFile,
+    remove: removeAttachment,
+    dismiss: dismissAttachment,
+    metadata: attachmentMetadata,
+  } = useFileAttachment(currentSpaceId);
   useWebFetchDispatcher(messages, addToolResultRef);
   useSearchImagesDispatcher(messages, addToolResultRef);
 
@@ -1162,7 +1176,7 @@ export function ChatWidget() {
   // somewhere else after the user navigates. Metadata survives persistence and
   // is dropped by `convertToModelMessages`, so this never reaches the model
   // directly — the route reads it and writes the note itself.
-  const sentFrom = () => ({ spaceId: currentSpaceId });
+  const sentFrom = () => ({ spaceId: currentSpaceId, ...attachmentMetadata() });
 
   const handleSend = () => {
     const text = input.trim();
@@ -1171,6 +1185,10 @@ export function ChatWidget() {
     trackAssistantMessage(text, 'typed');
     sendMessage({ text, metadata: sentFrom() });
     setInput('');
+    // Announced once. The session stays in memory for applyImport to read back
+    // by id; only the chip goes, so the next message can't re-announce the same
+    // file and invite a second import of it.
+    dismissAttachment();
   };
 
   const handleSuggestion = (text: string, source: AssistantSuggestionSource) => {
@@ -1207,6 +1225,11 @@ export function ChatWidget() {
           history={history}
           onSwitchChat={handleSwitchChat}
           onClearHistory={handleClearHistory}
+          // Undefined outside a space: an import has to land somewhere, and an
+          // upload control that can only fail is worse than no control.
+          onAttachFile={currentSpaceId ? attachFile : undefined}
+          attachment={attachment}
+          onRemoveAttachment={removeAttachment}
         />
       ) : (
         <motion.button

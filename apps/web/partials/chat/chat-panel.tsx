@@ -21,6 +21,7 @@ import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { Context } from '~/design-system/icons/context';
 import { Menu, MenuItem } from '~/design-system/menu';
 
+import { type AttachmentState, ChatAttachment } from './chat-attachment';
 import { ChatInput } from './chat-input';
 import { ChatMessages } from './chat-messages';
 import { ChatWelcome } from './chat-welcome';
@@ -47,6 +48,10 @@ type Props = {
   history: PersistedChat[];
   onSwitchChat: (id: string) => void;
   onClearHistory: () => void;
+  /** Undefined outside a space — an import needs somewhere to land. */
+  onAttachFile?: (file: File) => void;
+  attachment?: AttachmentState | null;
+  onRemoveAttachment?: () => void;
 };
 
 type ResizeAxis = 'x' | 'y' | 'xy';
@@ -70,6 +75,9 @@ export function ChatPanel({
   history,
   onSwitchChat,
   onClearHistory,
+  onAttachFile,
+  attachment,
+  onRemoveAttachment,
 }: Props) {
   const [size, setSize] = useAtom(chatSizeAtom);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -266,6 +274,9 @@ export function ChatPanel({
         <ChatWelcome onSuggestion={text => onSuggestion(text, 'welcome')} disabled={isBusy || isCompacting} />
       )}
 
+      {attachment && onRemoveAttachment ? (
+        <ChatAttachment attachment={attachment} onRemove={onRemoveAttachment} />
+      ) : null}
       <ChatInput
         value={input}
         onChange={onInputChange}
@@ -275,6 +286,7 @@ export function ChatPanel({
         placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
         contextFraction={contextFraction}
         onCompact={onCompact}
+        onAttachFile={onAttachFile}
       />
     </motion.div>
   );

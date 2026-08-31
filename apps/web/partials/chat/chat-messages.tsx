@@ -175,6 +175,8 @@ const TOOL_LABELS: Record<string, string> = {
   'tool-research': 'Researching the web',
   'tool-webFetch': 'Reading a page',
   'tool-geoQuery': 'Querying the graph',
+  'tool-proposeImportMapping': 'Reading your file',
+  'tool-applyImport': 'Importing your file',
   'tool-navigate': 'Navigating',
   'tool-openReviewPanel': 'Opening the review panel',
   'tool-createEntity': 'Creating an entity',
