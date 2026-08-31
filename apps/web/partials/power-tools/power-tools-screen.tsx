@@ -247,10 +247,6 @@ export function PowerToolsScreen() {
         .filter(id => filterableProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION')),
     [browseDropdowns.configs, filterableProperties]
   );
-  /** Dropdowns act on the block's query; Collection and Relations blocks have none. */
-  const isQuerySource = source.type === 'SPACES' || source.type === 'GEO';
-  const showBrowseDropdownsRow = !isEditing && isQuerySource && browseDropdowns.configs.length > 0;
-  const showPillsRow = hasActiveFilters || (isEditing && isQuerySource && browseDropdowns.configs.length > 0);
   const applyDropdownOverlay = !isEditing && browseDropdowns.hydrated && dropdownColumnIds.length > 0;
   const dropdownQueryState = React.useMemo(
     () =>
@@ -944,6 +940,11 @@ export function PowerToolsScreen() {
   }
 
   const hasActiveFilters = effectiveFilterState.length > 0;
+
+  /** Dropdowns act on the block's query; Collection and Relations blocks have none. */
+  const isQuerySource = source.type === 'SPACES' || source.type === 'GEO';
+  const showBrowseDropdownsRow = !isEditing && isQuerySource && browseDropdowns.configs.length > 0;
+  const showPillsRow = hasActiveFilters || (isEditing && isQuerySource && browseDropdowns.configs.length > 0);
 
   const filterGroups = React.useMemo(() => groupFilters(effectiveFilterState), [effectiveFilterState]);
 
