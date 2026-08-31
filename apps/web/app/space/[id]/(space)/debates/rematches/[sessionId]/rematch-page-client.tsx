@@ -1319,10 +1319,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               facetSpaces={facetSpaces}
               facetTopics={facetTopics}
               // Only the browsed source waits on geo-chat. The other two build their facets from
-              // entities already in hand, so their counts are never behind the selection and a
+              // entities already in hand, so their counts are never behind the *selection*, and a
               // skeleton there would be describing a wait that isn't happening.
+              //
+              // Search is not like that: every source filters its rows by `debouncedSearch`, so
+              // while the box is unsettled the counts describe the pre-typing query wherever they
+              // came from. That window is ungated for the same reason the others are gated.
               countsPending={
-                browsesPages && (browsedClaimsQuery.countsPending || topicsSettling || spacesSettling || searchSettling)
+                searchSettling ||
+                (browsesPages && (browsedClaimsQuery.countsPending || topicsSettling || spacesSettling))
               }
               topicAtEnd
               // Only on Claims: the opponent's tab is one fixed source — their own responses — and

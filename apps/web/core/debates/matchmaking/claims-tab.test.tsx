@@ -1148,6 +1148,38 @@ describe('ClaimsTab -- Featured', () => {
     }
   });
 
+  // The other half of the rule above. Featured's space and topic menus follow the live selections,
+  // but its *search* is debounced like everything else — `featuredSearched` reads
+  // `debouncedSearch` — so while the box is unsettled its counts really do describe the query
+  // before the typing started, and have to be covered.
+  it('covers its counts while the typed query is settling, unlike the selections', async () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy', SPACE_ID)];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
+      },
+    ];
+    render(<ClaimsTab />);
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nuc' } });
+      act(() => void vi.advanceTimersByTime(200));
+      fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nucle' } });
+      act(() => void vi.advanceTimersByTime(100));
+
+      expect(screen.getAllByLabelText('Loading count').length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // GEO-2696 made topics intersect rather than union, server-side. Featured is the one source
   // geo-chat has no facet for, so the same rule has to be applied here — two halves of one menu
   // disagreeing about what a second topic does would be worse than either answer on its own.

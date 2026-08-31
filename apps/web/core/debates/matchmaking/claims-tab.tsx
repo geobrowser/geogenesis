@@ -202,12 +202,18 @@ export function ClaimsTab() {
   // menu already shows the new selection against the previous selection's counts. That is the
   // state the flag exists to cover, so the settling window has to be folded in.
   //
-  // Indexed sources only, the way the rematch picker gates on `browsesPages`. Featured builds both
-  // menus from the live selections over a list it already holds, so its counts are right on the
-  // same render as the tick and there is nothing to wait for. The debounce still runs there —
-  // it feeds a query Featured deliberately never makes — so without this gate a run of clicks
-  // lasting past the grace period would drop skeletons over numbers that were already correct.
-  const countsPending = !featured && (claimsQuery.countsPending || topicsSettling || spacesSettling || searchSettling);
+  // The source gate covers the selections and the query, and deliberately not the search.
+  //
+  // Featured builds both menus from the live space and topic selections over a list it already
+  // holds, so those are right on the same render as the tick and there is nothing to wait for. The
+  // debounce still runs there, feeding a query Featured never makes, so ungated it would drop
+  // skeletons over numbers that were already correct.
+  //
+  // Search is the exception, because Featured filters by `debouncedSearch` like every other source
+  // does — see `featuredSearched`. Its counts really do describe the pre-typing query for as long
+  // as the box is unsettled, so that window has to cover the counts wherever they came from.
+  const countsPending =
+    searchSettling || (!featured && (claimsQuery.countsPending || topicsSettling || spacesSettling));
 
   const serverClaims = React.useMemo(
     () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
