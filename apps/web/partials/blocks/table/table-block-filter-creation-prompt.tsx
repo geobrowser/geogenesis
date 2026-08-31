@@ -1194,7 +1194,9 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
 
     const onEntitiesDone = () => {
       const { filters, touchedColumnIds } = collectFiltersToApply(state, options);
-      if (touchedColumnIds.length > 0) {
+      // A mode flip with untouched chips is still a commit: without this,
+      // Done silently discards an AND/OR change made on existing chips.
+      if (touchedColumnIds.length > 0 || Object.keys(pendingModes).length > 0) {
         onCreate(filters, touchedColumnIds, pendingModes);
       }
       setPendingModes({});
@@ -1278,6 +1280,9 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
       if (open && !isEditing) return;
       if (!open) {
         clearExternalAnchor();
+        // An abandoned AND/OR toggle must not ride along with a later,
+        // unrelated commit.
+        setPendingModes({});
         dispatch({ type: 'onOpenChange', payload: { open } });
         return;
       }

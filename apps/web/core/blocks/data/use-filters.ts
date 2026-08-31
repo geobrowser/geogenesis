@@ -201,10 +201,17 @@ export function useFilters(canEdit?: boolean) {
       setOptimisticFilterState(filters);
       filterStateRef.current = filters;
       const presentColumnIds = new Set(filters.map(filter => filter.columnId));
+      // An AND override removes the column's entry rather than storing an
+      // explicit 'AND': the serializer only persists OR, so a stored 'AND'
+      // could never deep-equal persisted state and the optimistic override
+      // would be stuck forever.
+      const merged = { ...modesByColumnRef.current };
+      for (const [columnId, mode] of Object.entries(modeOverrides ?? {})) {
+        if (mode === 'OR') merged[columnId] = mode;
+        else delete merged[columnId];
+      }
       const nextModes: ModesByColumn = Object.fromEntries(
-        Object.entries({ ...modesByColumnRef.current, ...modeOverrides }).filter(([columnId]) =>
-          presentColumnIds.has(columnId)
-        )
+        Object.entries(merged).filter(([columnId]) => presentColumnIds.has(columnId))
       );
       setOptimisticModesByColumn(nextModes);
       writeFilterTriple(filters, nextModes);

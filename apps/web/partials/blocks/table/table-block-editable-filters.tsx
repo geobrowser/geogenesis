@@ -96,7 +96,8 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
       touchedColumnIds: string[],
       modeOverrides?: ModesByColumn
     ) => {
-      if (touchedColumnIds.length === 0) return;
+      const hasModeOverrides = modeOverrides !== undefined && Object.keys(modeOverrides).length > 0;
+      if (touchedColumnIds.length === 0 && !hasModeOverrides) return;
       const touched = new Set(touchedColumnIds);
       const base = effectiveFilterState.filter(f => !touched.has(f.columnId));
       const newFilters = filters.map(f => ({
@@ -109,7 +110,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
       const firstTouchedIndex = effectiveFilterState.findIndex(f => touched.has(f.columnId));
       const insertIndex = firstTouchedIndex === -1 ? base.length : firstTouchedIndex;
       const next = [...base.slice(0, insertIndex), ...newFilters, ...base.slice(insertIndex)];
-      if (equal(comparableFilterList(next), comparableFilterList(effectiveFilterState))) {
+      if (!hasModeOverrides && equal(comparableFilterList(next), comparableFilterList(effectiveFilterState))) {
         return;
       }
       effectiveSetFilterState(next, modeOverrides);

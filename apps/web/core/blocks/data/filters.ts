@@ -172,6 +172,11 @@ export function toGeoFilterState(
     // Always emit `modes`, including when empty. Its presence distinguishes the
     // per-property format from legacy payloads whose absent global mode meant AND.
     modes: persistedModes,
+    // Rollout compatibility: a reader still on the legacy schema ignores the
+    // unknown `modes` key and would decode an OR block as AND (zero rows for
+    // mutually-exclusive types). Dual-write the legacy global mode while old
+    // builds may still be reading; remove after the release settles.
+    ...(Object.values(persistedModes).includes('OR') && { mode: 'OR' as const }),
     ...(spaces.length > 0 && { spaceId: { in: spaces } }),
     ...(Object.keys(filterMap).length > 0 && { filter: filterMap }),
   };
