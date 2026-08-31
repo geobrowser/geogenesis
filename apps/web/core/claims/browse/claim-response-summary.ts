@@ -218,10 +218,26 @@ export function useClaimResponseSummary(
   const [activePositive, activeNegative] = sideWeights(activeDirection);
   const [indexedPositive, indexedNegative] = sideWeights(indexedDirection);
 
-  // Clamped: the counts and the viewer's indexed response are two queries that can settle out of
-  // step, and a negative side would render as a bar sliver pointing the wrong way.
-  const positive = Math.max(0, (data?.positive ?? 0) + activePositive - indexedPositive);
-  const negative = Math.max(0, (data?.negative ?? 0) + activeNegative - indexedNegative);
+  // Whether the counts are an answer. Decided once: it gates the arithmetic below and is what the
+  // hook reports.
+  const haveCounts = responseBatch.managed ? responseBatch.ready : haveCountsAnswered;
+
+  // A delta needs a baseline.
+  //
+  // The adjustment below is the viewer's own in-flight response applied *to a reported population*.
+  // Where the counts never answered there is no population to adjust, and applying it anyway leaves
+  // the viewer's single uncommitted response standing as the entire one — a claim with two hundred
+  // responses reporting "100% verify, 1 response" the moment its owner presses a pill behind a
+  // failed count query. Nobody has to have responded for the number to be wrong; it is wrong
+  // because it is arithmetic on a figure we do not have.
+  //
+  // Zero rather than a guess, so `total` means "the reported population" on every surface and
+  // `total > 0` can be trusted to imply there is something real behind it.
+  //
+  // Clamped as well: the counts and the viewer's indexed response are two queries that can settle
+  // out of step, and a negative side would render as a bar sliver pointing the wrong way.
+  const positive = haveCounts ? Math.max(0, (data?.positive ?? 0) + activePositive - indexedPositive) : 0;
+  const negative = haveCounts ? Math.max(0, (data?.negative ?? 0) + activeNegative - indexedNegative) : 0;
 
   // Disabled means no answer, not a stale one.
   //
@@ -262,7 +278,7 @@ export function useClaimResponseSummary(
     // and for the same reason. A counts query that exhausts its retries leaves `data` undefined, so
     // `total` falls to zero while nothing is loading any more: the shape of an unanswered claim,
     // which is exactly what it is not.
-    hasCounts: responseBatch.managed ? responseBatch.ready : haveCountsAnswered,
+    hasCounts: haveCounts,
     // The viewer's own side, which the counts do not wait for.
     //
     // Two things have to settle before `viewerDirection` means "no side" rather than "not yet": the

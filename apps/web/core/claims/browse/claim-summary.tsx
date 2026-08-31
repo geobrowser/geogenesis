@@ -55,6 +55,15 @@ export function ClaimSummary({
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const tier = claimSummaryTier(summary.total);
 
+  // Nothing where the counts never answered, before asking what the tier is.
+  //
+  // The hook zeroes its arithmetic without a baseline, so `total` already collapses to the invite
+  // tier here. Said again anyway, because this renderer takes its summary as a *prop*: six surfaces
+  // hand it one, and it cannot assume every one of them got it from the hook. A percentage is the
+  // most confident thing on the card, and it must never be the loudest statement about a population
+  // nobody reported.
+  if (!summary.hasCounts) return null;
+
   // Nothing at all where nobody has answered.
   //
   // This used to invite one — "Be the first to verify it" — which is a line telling the reader what

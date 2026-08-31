@@ -271,6 +271,41 @@ describe('useClaimResponseSummary and the viewer’s own side', () => {
     await waitFor(() => expect(result.current.hasCounts).toBe(true));
   });
 
+  it('does not let the viewer’s own in-flight response stand as the whole population', async () => {
+    // A delta needs a baseline. With the counts failed there is none, so applying the viewer's
+    // pending response anyway leaves it alone in the split — a claim with two hundred responses
+    // reporting "100%, 1 response" the moment its reader presses a pill. `total > 0` is what three
+    // surfaces read to decide they have a verdict worth drawing, so this is the number that has to
+    // stay honest rather than the flag.
+    mocks.countsFail = true;
+    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryState(entityResponseCountsQueryKey(CLAIM, SPACE, CLAIM_RESPONSE_OBJECT_TYPE, 'stance'))
+          ?.status
+      ).toBe('error')
+    );
+
+    expect(result.current.total).toBe(0);
+    expect(result.current.percent).toBeNull();
+    // The viewer's own side is still known — it is the population that is not.
+    expect(result.current.viewerDirection).toBe('positive');
+  });
+
+  it('does apply that response once there is a baseline to apply it to', async () => {
+    // The guard: the delta must still work in the ordinary case, or the test above passes on a hook
+    // that has simply stopped counting the viewer at all.
+    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    await waitFor(() => expect(result.current.total).toBe(1));
+    expect(result.current.percent).toBe(100);
+  });
+
   it('reports no counts while held back, since nothing was asked', () => {
     const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', false), { wrapper });
 

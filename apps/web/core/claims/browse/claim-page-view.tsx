@@ -187,7 +187,8 @@ function ClaimPositionSection({
   /** geo-chat's row, or null — which for a claim nobody has answered is a settled answer. */
   row: DebateClaim | null;
 }) {
-  const { claim, positions, readiness, isResponseKindResolved, isViewerResponseResolved } = state;
+  const { claim, positions, readiness, isResponseKindResolved, isViewerResponseResolved, responseBlockedReason } =
+    state;
 
   // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the vote
   // arrows on an entity page do — and through the same hook, which also keeps Privy's session
@@ -198,6 +199,7 @@ function ClaimPositionSection({
     positions,
     readiness,
     answersReady: isResponseKindResolved && isViewerResponseResolved,
+    responseBlockedReason,
     onRequireSignIn: promptSignIn,
   });
   // See claims-page-client: retiring the optimistic snapshot outlived the toggle that used to own

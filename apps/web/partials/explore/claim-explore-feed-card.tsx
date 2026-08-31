@@ -78,16 +78,24 @@ export function ClaimExploreFeedCard({
   const rowQuery = useDebateClaims(item.spaceId, [item.entityId], nearViewport);
   const row: DebateClaim | null = rowQuery.data?.claims.find(claim => claim.claim_entity_id === item.entityId) ?? null;
 
-  const { responseKind, isResponseKindResolved, isViewerResponseResolved, summary, claim, positions, readiness } =
-    useClaimResponseState({
-      claimId: item.entityId,
-      spaceId: item.spaceId,
-      row,
-      entity,
-      title: item.title,
-      // Held with the other two reads until the card is near the viewport.
-      enabled: nearViewport,
-    });
+  const {
+    responseKind,
+    isResponseKindResolved,
+    isViewerResponseResolved,
+    responseBlockedReason,
+    summary,
+    claim,
+    positions,
+    readiness,
+  } = useClaimResponseState({
+    claimId: item.entityId,
+    spaceId: item.spaceId,
+    row,
+    entity,
+    title: item.title,
+    // Held with the other two reads until the card is near the viewport.
+    enabled: nearViewport,
+  });
 
   // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the claim
   // page does — and through the same hook, which also keeps Privy's session restoration from being
@@ -98,11 +106,16 @@ export function ClaimExploreFeedCard({
     positions,
     readiness,
     answersReady: isResponseKindResolved && isViewerResponseResolved,
+    responseBlockedReason,
     onRequireSignIn: promptSignIn,
   });
 
   // Withheld while the counts are still out, so the column does not appear a beat after the card.
-  const hasVerdict = !summary.isLoading && summary.total > 0;
+  // `hasCounts` as well as a non-zero total. The two are equivalent as the hook computes them —
+  // without a baseline it reports no counts and zeroes the split — but this column states the rule
+  // it depends on rather than inheriting it, the same as the claim page's verdict and the shared
+  // summary. A verdict drawn from a failed read is the one thing all three must never draw.
+  const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
 
   return (
     <article ref={setContainer} className="flex flex-col gap-4 border-b border-divider py-4 last:border-b-0">

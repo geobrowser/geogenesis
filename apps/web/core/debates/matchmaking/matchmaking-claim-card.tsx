@@ -62,6 +62,8 @@ type Props = {
    * from geo-chat carrying both.
    */
   answersReady?: boolean;
+  /** Why responding is refused outright — an unpublished edit to the claim's own vocabulary. */
+  responseBlockedReason?: string | null;
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
   /**
@@ -122,6 +124,7 @@ export function MatchmakingClaimCard({
   readiness,
   activeDebate,
   answersReady,
+  responseBlockedReason,
   footer,
   onOpenClaim,
   viewerIdentityPending,
@@ -177,6 +180,7 @@ export function MatchmakingClaimCard({
           readiness={readiness}
           activeDebate={activeDebate}
           answersReady={answersReady}
+          responseBlockedReason={responseBlockedReason}
           readResponses={readResponses}
           onOpenClaim={onOpenClaim}
           viewerIdentityPending={viewerIdentityPending}
@@ -274,6 +278,7 @@ export function useClaimPositionControl({
   positions,
   readiness,
   answersReady = true,
+  responseBlockedReason = null,
   viewerIdentityPending,
   onRequireSignIn,
   offersDebate = true,
@@ -294,6 +299,14 @@ export function useClaimPositionControl({
    * their own disabled condition and none of them could reach the title.
    */
   answersReady?: boolean;
+  /**
+   * Why responding is refused outright, or null.
+   *
+   * Not the same shape as `answersReady`, which means "not yet" and clears itself — this is a
+   * standing condition with something the reader can do about it, so it is a sentence rather than a
+   * flag and it outranks every other reason the pills might be dead.
+   */
+  responseBlockedReason?: string | null;
   viewerIdentityPending?: boolean;
   /**
    * What to do when a signed-out visitor presses a side. Given one, the pills stay live while
@@ -415,7 +428,10 @@ export function useClaimPositionControl({
   };
 
   const actionTitle = (position: boolean) => {
-    // Ahead of the others: it is the only one of these the reader can do nothing about, and naming
+    // First of all, because it is the only one with an action in it. The others describe a state
+    // the reader waits out; this one names the thing they can go and do.
+    if (responseBlockedReason) return responseBlockedReason;
+    // Ahead of the rest: it is the only one of these the reader can do nothing about, and naming
     // the side they cannot take yet is the least useful thing to say about a dead control.
     if (!answersReady) return 'Loading this claim’s responses…';
     if (!isConnected) return copy.connect;
@@ -436,7 +452,8 @@ export function useClaimPositionControl({
      * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
      * control gives a visitor nothing to press and no way to learn what to do about it.
      */
-    canRespond: (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending && answersReady,
+    canRespond:
+      (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending && answersReady && !responseBlockedReason,
   };
 }
 
@@ -447,6 +464,7 @@ function RespondableControls({
   readiness,
   activeDebate,
   answersReady = true,
+  responseBlockedReason = null,
   readResponses = true,
   onOpenClaim,
   viewerIdentityPending,
@@ -458,6 +476,7 @@ function RespondableControls({
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
   answersReady?: boolean;
+  responseBlockedReason?: string | null;
   /** False while the card is still far enough below the fold that its reads are not worth making. */
   readResponses?: boolean;
   onOpenClaim?: () => void;
@@ -471,6 +490,7 @@ function RespondableControls({
       positions,
       readiness,
       answersReady,
+      responseBlockedReason,
       viewerIdentityPending,
       onRequireSignIn,
       // The faces the match implies belong with the offer the match makes. Where the slot is hidden

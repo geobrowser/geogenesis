@@ -359,6 +359,7 @@ function ClaimListItem({
       positions={state.positions}
       readiness={state.readiness}
       answersReady={state.isResponseKindResolved && state.isViewerResponseResolved}
+      responseBlockedReason={state.responseBlockedReason}
       activeDebate={activeDebate}
     />
   );

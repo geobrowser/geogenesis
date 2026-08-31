@@ -55,6 +55,7 @@ export function TopicClaimCard({ claim, fallbackSpaceId }: { claim: Entity; fall
       positions={state.positions}
       readiness={state.readiness}
       answersReady={state.isResponseKindResolved && state.isViewerResponseResolved}
+      responseBlockedReason={state.responseBlockedReason}
       activeDebate={row?.active_debate ?? null}
     />
   );

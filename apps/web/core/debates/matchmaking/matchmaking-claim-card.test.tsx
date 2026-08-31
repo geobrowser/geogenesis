@@ -544,6 +544,31 @@ describe('MatchmakingClaimCard', () => {
     );
   });
 
+  // `EntityVoteButtons` — the control every claim surface used to render — refused outright while
+  // the claim's "Is factual" value or its Claim type had an unpublished local edit, and said so.
+  // The shared card replaced it and dropped the guard. The kind selects `voteKind` on the write, so
+  // responding across that edit publishes a veracity response against a claim the graph still calls
+  // a stance one, or the reverse.
+  it('refuses to publish across an unpublished edit to the claim’s own vocabulary', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness()}
+        responseBlockedReason="Publish the claim type change before responding."
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree).toBeDisabled();
+    // And says what to do about it. This one outranks the other reasons a pill can be dead, because
+    // it is the only one with an action in it — the rest the reader simply waits out.
+    expect(agree).toHaveAttribute('title', 'Publish the claim type change before responding.');
+
+    fireEvent.click(agree);
+    expect(mocks.submitResponse).not.toHaveBeenCalled();
+  });
+
   it('still offers the debate on a claim the graph cannot resolve', () => {
     // Every card on the Matches tab is a match by definition, and its footer button is gone — the
     // end slot is the only request control left. Both the match and the request are geo-chat's,

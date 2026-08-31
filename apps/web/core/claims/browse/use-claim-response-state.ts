@@ -8,6 +8,7 @@ import type {
   DebateClaimSummary,
   MatchmakingReadiness,
 } from '~/core/debates/api';
+import { hasUnpublishedClaimResponseKindEdit } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
 import { claimResponseKind } from '../response-kind';
@@ -42,6 +43,14 @@ export type ClaimResponseState = {
    * own readiness and a failed batch never resolves.
    */
   isViewerResponseResolved: boolean;
+  /**
+   * Why this claim cannot be responded to at all, or null.
+   *
+   * Distinct from the two flags above, which mean "not yet" and clear themselves. This is a
+   * standing condition the reader has to do something about, so it carries its own sentence rather
+   * than borrowing their "still loading" one.
+   */
+  responseBlockedReason: string | null;
   summary: ClaimResponseSummary;
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -107,6 +116,23 @@ export function useClaimResponseState({
   const responseKind = resolveClaimResponseKind(row, entity, spaceId);
   const isResponseKindResolved = row !== null || entity !== null;
 
+  // An unpublished edit to the claim's own vocabulary blocks responding, as it did before.
+  //
+  // `EntityVoteButtons` — the control every one of these surfaces used to render — refused outright
+  // while the "Is factual" value or the Claim type had a local edit that had not been published,
+  // and said so. Replacing it with the shared card dropped that, and the failure it prevents is the
+  // one this file exists to stop: the kind selects `voteKind` on the write, so a draft flag would
+  // publish a veracity response against a claim the graph still calls a stance one, or the reverse.
+  //
+  // A row does not settle it either. geo-chat indexes the *published* graph, so its kind is the
+  // stale half of exactly the disagreement the edit creates.
+  //
+  // Only ever true where the entity carries local edits at all: the surfaces that read it through a
+  // narrow projection have no `isLocal` to find, and this is false for them.
+  const responseBlockedReason = hasUnpublishedClaimResponseKindEdit(entity, spaceId)
+    ? 'Publish the claim type change before responding.'
+    : null;
+
   // Withheld until the vocabulary is an answer rather than the `stance` fallback.
   //
   // The kind is part of both query keys, so asking early does not just waste a pair of requests on
@@ -148,6 +174,7 @@ export function useClaimResponseState({
   return {
     responseKind,
     isResponseKindResolved,
+    responseBlockedReason,
     // Both halves of the fallback below, not just the counts.
     //
     // `viewer_response` falls back to `summary.viewerDirection`, which rides a *second* query —

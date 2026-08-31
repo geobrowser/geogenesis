@@ -303,13 +303,21 @@ function PanelClaimControls({
   entity: Entity | null;
 }) {
   // The claim's row title is drawn by `ClaimRow` above, so nothing is passed for it here.
-  const { responseKind, isResponseKindResolved, isViewerResponseResolved, summary, claim, positions, readiness } =
-    useClaimResponseState({
-      claimId,
-      spaceId,
-      row,
-      entity,
-    });
+  const {
+    responseKind,
+    isResponseKindResolved,
+    isViewerResponseResolved,
+    responseBlockedReason,
+    summary,
+    claim,
+    positions,
+    readiness,
+  } = useClaimResponseState({
+    claimId,
+    spaceId,
+    row,
+    entity,
+  });
 
   const promptSignIn = usePrivySignIn();
   const control = useClaimPositionControl({
@@ -317,6 +325,7 @@ function PanelClaimControls({
     positions,
     readiness,
     answersReady: isResponseKindResolved && isViewerResponseResolved,
+    responseBlockedReason,
     onRequireSignIn: promptSignIn,
     // No offer here, so no faces borrowed from one. The panel deliberately has no end slot — the
     // reader is already watching the debate this claim is being argued in — and the merge exists to
