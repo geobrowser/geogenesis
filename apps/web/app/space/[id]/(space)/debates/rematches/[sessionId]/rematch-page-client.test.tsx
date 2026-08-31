@@ -1754,6 +1754,30 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: /Later/ })).toBeNull());
   });
 
+  // The browsed query runs on every tab, so its answer must not vouch for rows another tab drew
+  // from the graph — least of all under the previous topic selection. Here the opponent's claim
+  // carries no topics and has to go the moment one is picked; it is also in the browsed pages,
+  // which are held on the selection before this one.
+  it('filters the opponent tab on its own topics, not a held browsed answer', async () => {
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+      position('profile-remote', CLAIM_MORE, SPACE_2, false),
+    ];
+    mocks.matchmakingClaims = [matchmakingClaim(), matchmakingClaim(CLAIM_SHARED, 'A claim both participants chose')];
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+    await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
+
+    mocks.scopeHeldOver = true;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    selectFilter('Any topic', 'Governance');
+
+    // The shared claim carries no topics at all, so nothing about it survives the filter.
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+  });
+
   it('asks the server to do the topic filtering on the All tab', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();

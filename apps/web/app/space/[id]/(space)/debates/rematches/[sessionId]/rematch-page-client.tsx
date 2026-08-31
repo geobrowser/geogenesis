@@ -580,15 +580,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
       if (topics.length > 0) map.set(entity.id, topics);
     }
-    for (const page of browsedPages) {
-      for (const entry of page.claims) {
-        if (entry.topics.length > 0 && !map.has(entry.claim.claim_entity_id)) {
-          map.set(entry.claim.claim_entity_id, entry.topics);
-        }
-      }
-    }
     return map;
-  }, [browsedPages, featuredEntitiesQuery.entities, opponentEntitiesQuery.entities, recommendedEntities]);
+    // Graph entities only. The browsed rows used to be folded in here too, which never added
+    // anything: geo-chat sends them back with `topics: []`. Reading as though it did was worse
+    // than useless, since the whole point below is that a browsed row's topics are unknowable.
+  }, [featuredEntitiesQuery.entities, opponentEntitiesQuery.entities, recommendedEntities]);
 
   // Which claims the server has already held to the topic filter.
   //
@@ -612,11 +608,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * The pinned rows are Knowledge Graph entities geo-chat has never seen, so the client is the
    * only thing that can filter them. The browsed rows have already been filtered by the query
    * that returned them, and are taken at their word.
+   *
+   * Only while the browsed list is the one on screen, though. That query runs on every tab and
+   * source by design (see the note beside it), so without `browsesPages` its answer would vouch
+   * for rows the other tabs draw from the graph — and vouch for them under the *previous* topic
+   * selection, for the debounce plus a round trip. An opponent claim the viewer had just filtered
+   * away would stay up, its topics still feeding the menu, until a background request nothing on
+   * screen depends on came back. Here the local answer is the whole answer, and it is already
+   * right.
    */
   const carriesPickedTopics = React.useCallback(
     (claimEntityId: string) =>
-      serverFilteredClaimIds.has(claimEntityId) || carriesEveryTopic(topicsByClaimId.get(claimEntityId), topicIds),
-    [serverFilteredClaimIds, topicIds, topicsByClaimId]
+      (browsesPages && serverFilteredClaimIds.has(claimEntityId)) ||
+      carriesEveryTopic(topicsByClaimId.get(claimEntityId), topicIds),
+    [browsesPages, serverFilteredClaimIds, topicIds, topicsByClaimId]
   );
 
   // The opponent's tab: every claim they hold a side on, newest first. Held until the session's
@@ -976,7 +981,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // empty list. An absent *selection* comes back at zero, or its checkbox disappears while the
     // trigger goes on counting it, and it can't be unticked without clearing every space.
     return orderFacetOptions(keepSelectedVisible(merged, spaceIds), spaceIds);
-  }, [browsedFacets?.space_facets, carriesPickedTopics, claims, debouncedSearch, facetSpaceIds, spaceIds, tab]);
+  }, [
+    browsedFacets?.space_facets,
+    browsesPages,
+    carriesPickedTopics,
+    claims,
+    debouncedSearch,
+    facetSpaceIds,
+    spaceIds,
+  ]);
 
   // A space picked while the gates were still passing everything has to be let go once they
   // reject it, or it keeps going out as `space_id` on every request while its rows are dropped.
@@ -1071,7 +1084,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           return false;
         return true;
       }),
-    [browsesPages, claims, debouncedSearch, spaceIds, topicIds, topicsByClaimId]
+    [browsesPages, carriesPickedTopics, claims, debouncedSearch, spaceIds]
   );
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
