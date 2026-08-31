@@ -460,19 +460,27 @@ export type MatchmakingClaim = MatchmakingReadiness & {
 
 export type MatchmakingClaimsFilter = 'all' | 'mine' | 'debate_now';
 
-/** Topics are Knowledge Graph data, which geo-chat replicates as of GEO-2659 — so `topicId`
- * filters server-side and the response carries a topic facet. Before that the server returned
- * `topics: []` and ignored the parameter, and both pickers resolved and filtered topics
- * themselves over whatever pages they had loaded. */
+/**
+ * Topics are Knowledge Graph data, which geo-chat replicates as of GEO-2659 — so `topicId` filters
+ * server-side and the response carries a topic facet. Before that the parameter was ignored, and
+ * both pickers resolved and filtered topics themselves over whatever pages they had loaded.
+ *
+ * What did *not* change is `MatchmakingClaim.topics`, which `/matchmaking/claims` still returns
+ * empty on every row: the rows are filtered, and the answer about which topics are involved is the
+ * facet beside them, not a field on each one. Reading a filtered row as though it carried its own
+ * topics — and re-testing it against them — is how a filter with claims behind it rendered an
+ * empty list (GEO-2714).
+ */
 export type MatchmakingClaimsQuery = {
   search?: string | null;
   spaceId?: string | null;
   /**
    * The spaces this viewer may see claims from at all, sent when they haven't picked one.
    *
-   * Both this and `spaceId` are OR-ed together server-side rather than one overriding the other,
-   * so only ever send one of them: sending both would widen the query back out to every space in
-   * either list.
+   * Send this or `spaceId`, never both: the serializer takes `spaceId` first and drops this list
+   * entirely when it is set, so a caller passing both silently loses every space here. geo-chat
+   * would union the two if it ever received them, which is the other reason not to — the union of
+   * a scope and a pick is wider than the pick.
    */
   spaceIds?: string[] | null;
   topicId?: string | null;
@@ -481,10 +489,9 @@ export type MatchmakingClaimsQuery = {
    * The opposite of `spaceIds`, and deliberately — a second space widens the list, a second topic
    * drills into it.
    *
-   * Merged with `topicId` structurally the same way `spaceIds` is with `spaceId` — the two are
-   * unioned into one set rather than one overriding the other — so send one or the other rather
-   * than both. Note what that union means here: every topic in the combined set is required, so
-   * sending both narrows further instead of widening.
+   * Send this or `topicId`, never both, and for a sharper reason than the spaces above: the
+   * serializer takes `topicId` first and drops this list, so a caller passing both doesn't get a
+   * wider answer, it gets a narrower filter than it asked for silently replaced by a broader one.
    */
   topicIds?: string[] | null;
   /**

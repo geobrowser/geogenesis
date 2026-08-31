@@ -567,7 +567,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 
   // Topics live on the KG claim entity, so resolve them here to label each card and drive the
-  // "Any topic" filter. A claim can carry several topics. The browsed rows bring their own.
+  // "Any topic" filter. A claim can carry several topics.
+  //
+  // Graph-backed claims only. The browsed rows do *not* bring their own, whatever their type says:
+  // geo-chat fills `topics: []` on every row and answers about topics in the facet beside them.
+  // Reading that the other way round is what emptied the list in GEO-2714, so nothing here should
+  // suggest this map can speak for a browsed row — `carriesPickedTopics` below is where they are
+  // accounted for.
   const topicsByClaimId = React.useMemo(() => {
     const map = new Map<string, MatchmakingTopic[]>();
     for (const entity of [
@@ -1065,8 +1071,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return orderFacetOptions(mergeFacetCounts(browsedFacets?.topic_facets ?? [], rowCounts), topicIds);
   }, [browsedFacets?.topic_facets, browsesPages, rowTopicCounts, topicIds]);
 
-  // Search and space reach the browsed query; on the other tabs, and for the topic everywhere
-  // (geo-chat doesn't model topics), they are applied here.
+  // Search and space reach the browsed query; on the other tabs they are applied here.
+  //
+  // The topic is split rather than applied everywhere. geo-chat does model topics as of GEO-2659,
+  // so the browsed rows arrive already filtered and are taken at their word; the pinned rows are
+  // graph entities it has never seen, and this is the only place they can be filtered at all. See
+  // `carriesPickedTopics` for which is which, and why the split is only trusted while the browsed
+  // list is the one on screen.
   const visibleClaims = React.useMemo(
     () =>
       claims.filter(claim => {
@@ -1074,7 +1085,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         // Kept even on the All tab, where the query has already applied it. That tab is the
         // browsed rows *plus* this session's claims pinned in front of them, and the pinned ones
         // never went through the query — without this they survive a topic filter they don't
-        // match. A no-op for the rows the server did filter, which match by construction.
+        // match.
         if (!carriesPickedTopics(claim.claim.claim_entity_id)) return false;
         if (
           !browsesPages &&

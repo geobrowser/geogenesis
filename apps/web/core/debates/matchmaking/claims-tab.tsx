@@ -90,15 +90,16 @@ function filterOptionsFor(authenticated: boolean) {
 const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
 
 /**
- * Cross-space claim discovery. Search, the space and position filters, and the sort (people
- * available now → total positions → recency) run server-side. Topics are a Knowledge Graph
- * notion geo-chat doesn't model — the server returns `topics: []` and ignores `topic_id` — so
- * topic labels, the topic facet, and topic filtering are resolved here over the loaded pages.
+ * Cross-space claim discovery. Search, the space, topic and position filters, and the sort (people
+ * available now → total positions → recency) all run server-side, and the response carries a facet
+ * for each filter dimension describing the whole filtered corpus rather than the pages walked so
+ * far (GEO-2659). The viewer's eligible spaces go out as `space_ids` and the picked topics as
+ * `topic_ids`, so neither is a page-local filter any more and the list is whatever the index says.
  *
- * The set of spaces a viewer may see claims from is resolved here too, for the same reason:
- * `/matchmaking/claims` takes a single `space_id`, so a viewer-specific list of spaces has no
- * query to go into. That makes it a page-local filter — a page can come back mostly or entirely
- * disallowed — so the sentinel that asks for the next page sits outside the empty state below.
+ * The server still returns `topics: []` on every row, which is not the contradiction it looks
+ * like: the rows are filtered, and the topic answer rides in the facet beside them. Only Featured
+ * resolves topics itself, because its list comes from the knowledge graph and the index has never
+ * seen it.
  */
 export function ClaimsTab() {
   const { authenticated } = useGeoChatAuth();
@@ -627,7 +628,11 @@ type SpaceTopicFiltersProps = {
   /** Ordered as they should be shown, and carrying the counts the rows display. */
   facetSpaces: { id: string; count: number }[];
   facetTopics?: { id: string; name: string | null; count: number }[];
-  /** Hide both menus' counts: the ones in hand describe a filter the viewer has moved on from. */
+  /**
+   * Both menus' counts describe a filter the viewer has moved on from. Passed straight through to
+   * {@link HubMultiFilterMenu}, which holds the old numbers for a grace period before replacing
+   * them with skeletons rather than blanking them on the spot — see the prop there.
+   */
   countsPending?: boolean;
   /** Rendered before the space filter — the Claims tab puts its position filter here. */
   leading?: React.ReactNode;

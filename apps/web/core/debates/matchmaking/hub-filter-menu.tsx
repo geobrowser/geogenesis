@@ -133,7 +133,13 @@ type MultiProps<T extends string> = {
   clearLabel: string;
   showImages?: boolean;
   labelPending?: boolean;
-  /** Hide the counts: the ones in hand answer a filter the viewer has already moved on from. */
+  /**
+   * The counts in hand answer a filter the viewer has already moved on from.
+   *
+   * Not a request to hide them on this render: the menu waits out {@link COUNT_SKELETON_DELAY_MS}
+   * first, so a spell shorter than that shows the previous numbers rather than a placeholder that
+   * would only flash. Callers should read this as "these are stale", not "these are hidden".
+   */
   countsPending?: boolean;
 };
 
