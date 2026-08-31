@@ -5,7 +5,7 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  MouseSensor,
+  PointerSensor,
   TouchSensor,
   closestCenter,
   useSensor,
@@ -18,11 +18,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-const MOUSE_ACTIVATION = { distance: 10 };
-// `tolerance` is the cancel radius under a delay constraint, not a grace allowance: dnd-kit
-// measures each move against the initial touch point and cancels the moment it is exceeded, for
-// the whole delay. So a longer hold with a wider radius is not more forgiving — it just gives the
-// finger more time to drift past the threshold that kills the gesture.
+const POINTER_ACTIVATION = { distance: 8 };
 const TOUCH_ACTIVATION = { delay: 250, tolerance: 6 };
 
 type DragOverlaySnapshot = {
@@ -134,7 +130,7 @@ export function RankingMyRankingDndList({
   itemsRef.current = items;
 
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: MOUSE_ACTIVATION }),
+    useSensor(PointerSensor, { activationConstraint: POINTER_ACTIVATION }),
     useSensor(TouchSensor, { activationConstraint: TOUCH_ACTIVATION })
   );
 

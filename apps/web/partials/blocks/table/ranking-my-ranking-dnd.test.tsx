@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   DragOverlay: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  MouseSensor: class MouseSensor {},
+  PointerSensor: class PointerSensor {},
   TouchSensor: class TouchSensor {},
   closestCenter: vi.fn(),
   useSensor: vi.fn(),
