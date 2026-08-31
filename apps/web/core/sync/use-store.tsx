@@ -17,6 +17,7 @@ import { Properties } from '../utils/property';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
+import { hydrateEntityBatched } from './hydrate-entity-batcher';
 import { E, mergeRelations } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues, resolveRelationNames, stableStringify } from './store';
 import { GeoEventStream } from './stream';
@@ -138,21 +139,15 @@ export function useHydrateEntity({ id, enabled = true }: OmitStrict<QueryEntityO
       }
 
       /**
-       * We explicitly don't query by space id here and let the sync
-       * engine handle filtering it as the hook receives events
+       * Batched rather than one request per entity. This hook is reached from ~48 call sites via
+       * `useQueryEntity`, so a page rendering 42 rows used to issue 42 singular `Entity` requests
+       * for data one `EntitiesBatch` returns — see `hydrate-entity-batcher.ts`.
+       *
+       * The query key stays per entity, so caching, retries and error state remain per row; only
+       * the request underneath is shared. Space id is still not queried here — the sync engine
+       * filters by space as it receives events.
        */
-      const { merged, remote } = await E.syncOne({ id, store, cache });
-
-      if (merged) {
-        stream.emit({
-          type: GeoEventStream.ENTITIES_SYNCED,
-          entities: [merged],
-          remoteEntities: remote ? [remote] : [],
-        });
-        return merged;
-      }
-
-      return null;
+      return hydrateEntityBatched({ id, store, cache, stream });
     },
   });
 

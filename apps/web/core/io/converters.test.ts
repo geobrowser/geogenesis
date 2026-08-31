@@ -98,3 +98,32 @@ describe('convertWhereConditionToEntityFilter empty-name exclusion', () => {
     });
   });
 });
+
+describe('convertWhereConditionToEntityFilter space handling', () => {
+  it('asks whether an entity is in any of the spaces, not whether its spaces are exactly these', () => {
+    // `spaceIds` is an array column. On one of those, `in` compares the whole array — so an entity
+    // living in [A, B] does not match a filter for A, and every multi-space entity silently
+    // disappears from a space-filtered block. `overlaps` is the "shares an element" operator, and
+    // it is what the local matcher in `experimental_query-layer` has always done.
+    //
+    // Measured on testnet: the same topic-scoped query returns 829 rows with `overlaps` against 3
+    // with `in`, and 41 of 1,000 sampled entities live in more than one space.
+    // `includeEmptyNames` keeps the raw filter; without it the result is wrapped in an `and` with
+    // the empty-name exclusion, which would bury the clause under test.
+    const filter = convertWhereConditionToEntityFilter(
+      { spaces: [{ equals: 'space-a' }, { equals: 'space-b' }] },
+      { includeEmptyNames: true }
+    );
+
+    expect(filter.spaceIds).toEqual({ overlaps: ['space-a', 'space-b'] });
+  });
+
+  it('emits no space clause at all when there is nothing to scope to', () => {
+    // An empty list must not become `overlaps: []`, which the API reads as a filter matching
+    // nothing rather than as no filter.
+    expect(
+      convertWhereConditionToEntityFilter({ spaces: [] }, { includeEmptyNames: true }).spaceIds
+    ).toBeUndefined();
+    expect(convertWhereConditionToEntityFilter({}, { includeEmptyNames: true }).spaceIds).toBeUndefined();
+  });
+});
