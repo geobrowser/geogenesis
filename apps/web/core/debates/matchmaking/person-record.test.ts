@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { WinnerShare } from '~/core/claims/browse/claim-debates';
 
-import { derivePersonRecord, formatJoinedAt } from './person-record';
+import { type PersonRecordInput, canonicalizeWinnerShares, derivePersonRecord, formatJoinedAt } from './person-record';
 
 const ME = 'me';
 const THEM = 'them';
@@ -12,15 +12,23 @@ function share(spaceId: string, over: Partial<WinnerShare> = {}): WinnerShare {
   return { spaceId, percent: 100, totalVotes: 2, tied: false, ...over };
 }
 
-function record(over: Partial<Parameters<typeof derivePersonRecord>[0]> = {}) {
+/** Takes the winner map the way the services write it, so the tests exercise the canonicalisation. */
+type RecordOver = Partial<Omit<PersonRecordInput, 'sharesByDebateId'>> & {
+  winnerByDebateId?: Map<string, WinnerShare>;
+};
+
+function record(over: RecordOver = {}) {
+  const { winnerByDebateId, ...rest } = over;
   return derivePersonRecord({
     personId: ME,
     positions: 0,
+    positionsTruncated: false,
     debateIds: [],
     truncated: false,
     createdAt: JAN_2026,
-    winnerByDebateId: new Map(),
-    ...over,
+    // Callers write the map the way the services do; the hook canonicalises it once for the tab.
+    sharesByDebateId: canonicalizeWinnerShares(winnerByDebateId ?? new Map()),
+    ...rest,
   });
 }
 
@@ -39,7 +47,7 @@ describe('derivePersonRecord', () => {
 
     expect(result.positions).toBe(119);
     expect(result.debatesArgued).toBe(4);
-    expect(result.winRate).toEqual({ percent: 50, wins: 2, of: 4 });
+    expect(result.winRate).toEqual({ percent: 50, wins: 2, of: 4, judged: 4 });
   });
 
   // Rule: debates *argued* is the denominator, not debates anyone voted on. The two diverge the
@@ -50,7 +58,7 @@ describe('derivePersonRecord', () => {
       winnerByDebateId: new Map([['judged', share(ME)]]),
     });
 
-    expect(result.winRate).toEqual({ percent: 50, wins: 1, of: 2 });
+    expect(result.winRate).toEqual({ percent: 50, wins: 1, of: 2, judged: 1 });
   });
 
   // Rule: a tie is neither won nor lost. `useWinnerShares` picks its leader with a strict `>`, so
@@ -64,7 +72,7 @@ describe('derivePersonRecord', () => {
       ]),
     });
 
-    expect(result.winRate).toEqual({ percent: 50, wins: 1, of: 2 });
+    expect(result.winRate).toEqual({ percent: 50, wins: 1, of: 2, judged: 2 });
   });
 
   it('ignores a debate whose votes are all gone', () => {
@@ -89,42 +97,33 @@ describe('id formats across services', () => {
   const HEX_DEBATE = '22222222222222222222222222222222';
 
   it('finds the debate when the winner map is keyed dashed', () => {
-    const result = derivePersonRecord({
+    const result = record({
       personId: HEX_PERSON,
-      positions: 0,
       debateIds: [HEX_DEBATE],
-      truncated: false,
-      createdAt: JAN_2026,
       winnerByDebateId: new Map([[DASHED_DEBATE, share(HEX_PERSON)]]),
     });
 
-    expect(result.winRate).toEqual({ percent: 100, wins: 1, of: 1 });
+    expect(result.winRate).toEqual({ percent: 100, wins: 1, of: 1, judged: 1 });
   });
 
   it('credits the win when the winner id is dashed and the person id is not', () => {
-    const result = derivePersonRecord({
+    const result = record({
       personId: HEX_PERSON,
-      positions: 0,
       debateIds: [HEX_DEBATE],
-      truncated: false,
-      createdAt: JAN_2026,
       winnerByDebateId: new Map([[HEX_DEBATE, share(DASHED_PERSON)]]),
     });
 
-    expect(result.winRate).toEqual({ percent: 100, wins: 1, of: 1 });
+    expect(result.winRate).toEqual({ percent: 100, wins: 1, of: 1, judged: 1 });
   });
 
   it('still does not credit a different person written dashed', () => {
-    const result = derivePersonRecord({
+    const result = record({
       personId: HEX_PERSON,
-      positions: 0,
       debateIds: [HEX_DEBATE],
-      truncated: false,
-      createdAt: JAN_2026,
       winnerByDebateId: new Map([[HEX_DEBATE, share('33333333-3333-3333-3333-333333333333')]]),
     });
 
-    expect(result.winRate).toEqual({ percent: 0, wins: 0, of: 1 });
+    expect(result.winRate).toEqual({ percent: 0, wins: 0, of: 1, judged: 1 });
   });
 });
 
@@ -145,6 +144,43 @@ describe('omit, never zero', () => {
     expect(result.winRate).toBeNull();
   });
 
+  // The same rule one step in. With debates *argued* as the denominator every rate is a lower
+  // bound, which is fine at 18% and not at 0%: someone who argued three debates, one of which was
+  // judged and lost, is not a person who has lost three. On the live graph only 14 of 55 debates
+  // are judged, so this is the ordinary case.
+  it('leaves out a 0% built from a partly judged record', () => {
+    const result = record({
+      debateIds: ['judged', 'unwatched', 'also-unwatched'],
+      winnerByDebateId: new Map([['judged', share(THEM)]]),
+    });
+
+    expect(result.debatesArgued).toBe(3);
+    expect(result.winRate).toBeNull();
+  });
+
+  // Nothing is unknown here, so 0% is a measurement rather than an absence and is shown.
+  it('shows 0% once every debate argued has been judged', () => {
+    const result = record({
+      debateIds: ['d1', 'd2'],
+      winnerByDebateId: new Map([
+        ['d1', share(THEM)],
+        ['d2', share(THEM)],
+      ]),
+    });
+
+    expect(result.winRate).toEqual({ percent: 0, wins: 0, of: 2, judged: 2 });
+  });
+
+  // A win is evidence the record is real, so a partly judged rate above zero still stands.
+  it('keeps a partly judged rate that is not zero', () => {
+    const result = record({
+      debateIds: ['won', 'unwatched', 'also-unwatched'],
+      winnerByDebateId: new Map([['won', share(ME)]]),
+    });
+
+    expect(result.winRate).toEqual({ percent: 33, wins: 1, of: 3, judged: 1 });
+  });
+
   it('still gives a newcomer the join date the row is floored on', () => {
     expect(record().joinedAt).toBeInstanceOf(Date);
   });
@@ -162,8 +198,17 @@ describe('truncation', () => {
 
     expect(result.debatesArgued).toBeNull();
     expect(result.winRate).toBeNull();
-    // Positions come from a totalCount, so the relation cap says nothing about them.
+    // Positions are paged separately, so the relation cap says nothing about them.
     expect(result.positions).toBe(5);
+  });
+
+  // Positions are a distinct-claim count off a page of rows now, so that page can be short too —
+  // and a short one under-reports exactly the way a short relation page does.
+  it('withholds the positions count when their own page came back short', () => {
+    const result = record({ positions: 250, positionsTruncated: true, debateIds: ['d1'] });
+
+    expect(result.positions).toBeNull();
+    expect(result.debatesArgued).toBe(1);
   });
 });
 

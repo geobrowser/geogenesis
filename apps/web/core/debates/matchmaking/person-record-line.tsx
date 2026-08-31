@@ -18,19 +18,38 @@ const ICON_SIZE = 13;
  * wraps *between* stats rather than through the middle of one. An icon beside a bare number is only
  * legible to someone who already knows the icon, so every stat carries real label text — `title`
  * alone would leave the row as two unexplained numbers to a screen reader.
+ *
+ * The same text also rides on the hidden half as a `title`, so a pointer can reach what a screen
+ * reader is already told. It sits on the `aria-hidden` spans rather than the item, where assistive
+ * technology would read it a second time alongside the label.
  */
 function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
     <li className="inline-flex items-center gap-1.5 text-browseSection whitespace-nowrap text-grey-04">
-      <span className="shrink-0 text-grey-04" aria-hidden>
+      <span className="shrink-0 text-grey-04" title={label} aria-hidden>
         {icon}
       </span>
-      <span className="text-text tabular-nums" aria-hidden>
+      <span className="text-text tabular-nums" title={label} aria-hidden>
         {value}
       </span>
       <span className="sr-only">{label}</span>
     </li>
   );
+}
+
+/**
+ * What the percentage is derived from, said rather than implied.
+ *
+ * The denominator is debates *argued*, so until every one of them has been judged the figure is a
+ * lower bound — "won 2 of 11" is true, but 4 of those 11 are unjudged rather than lost, and the
+ * bare sentence reads as though they were. Naming the judged count is what keeps the label from
+ * asserting an outcome nobody has voted on.
+ */
+export function winRateLabel(winRate: NonNullable<PersonRecord['winRate']>): string {
+  const debates = winRate.of === 1 ? 'debate' : 'debates';
+  return winRate.judged >= winRate.of
+    ? `Won ${winRate.wins} of ${winRate.of} ${debates}`
+    : `Won ${winRate.wins} of ${winRate.of} ${debates} argued, ${winRate.judged} judged so far`;
 }
 
 /**
@@ -68,7 +87,7 @@ export function PersonRecordLine({ record }: { record: PersonRecord }) {
             <Stat
               icon={<Crown size={ICON_SIZE} variant="outline" />}
               value={`${winRate.percent}%`}
-              label={`Won ${winRate.wins} of ${winRate.of} ${winRate.of === 1 ? 'debate' : 'debates'}`}
+              label={winRateLabel(winRate)}
             />
           )}
         </ul>

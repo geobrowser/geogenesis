@@ -108,14 +108,20 @@ describe('buildPersonRecordsDocument', () => {
 });
 
 describe('readPersonRecords', () => {
+  /** A page of position rows, one per id given — repeat an id to model the same claim answered twice. */
+  const positions = (claimIds: string[], totalCount = claimIds.length) => ({
+    totalCount,
+    nodes: claimIds.map(objectId => ({ objectId })),
+  });
+
   it('puts each aliased answer back against the right person', () => {
     const records = readPersonRecords(
       {
-        p0_positions: { totalCount: 16 },
+        p0_positions: positions(['c1', 'c2']),
         p0_supported: { totalCount: 2, nodes: [{ fromEntityId: 'd1' }, { fromEntityId: 'd2' }] },
         p0_opposed: { totalCount: 0, nodes: [] },
         p0_joined: { createdAt: '1769726933' },
-        p1_positions: { totalCount: 8 },
+        p1_positions: positions(['c3']),
         p1_supported: { totalCount: 0, nodes: [] },
         p1_opposed: { totalCount: 1, nodes: [{ fromEntityId: 'd3' }] },
         p1_joined: { createdAt: '1785353035' },
@@ -123,15 +129,60 @@ describe('readPersonRecords', () => {
       [A, B]
     );
 
-    expect(records.get(A)).toMatchObject({ positions: 16, debateIds: ['d1', 'd2'], truncated: false });
-    expect(records.get(B)).toMatchObject({ positions: 8, debateIds: ['d3'] });
+    expect(records.get(A)).toMatchObject({ positions: 2, debateIds: ['d1', 'd2'], truncated: false });
+    expect(records.get(B)).toMatchObject({ positions: 1, debateIds: ['d3'] });
+  });
+
+  // A `userVotes` row is not a position. The same claim answered on both the stance and the veracity
+  // axis is two rows, and one answered in two spaces is two more — both happen on the live graph, and
+  // a row count would say a bigger number than the positions the rest of the app lists for them.
+  it('counts a claim answered twice as one position', () => {
+    const records = readPersonRecords(
+      {
+        p0_positions: positions(['c1', 'c1', 'c2']),
+        p0_supported: { totalCount: 0, nodes: [] },
+        p0_opposed: { totalCount: 0, nodes: [] },
+        p0_joined: {},
+      },
+      [A]
+    );
+
+    expect(records.get(A)?.positions).toBe(2);
+  });
+
+  it('counts the same claim written in either spelling once', () => {
+    const records = readPersonRecords(
+      {
+        p0_positions: positions(['3bf9b841187f8c71b74f892ba4e83b75', '3bf9b841-187f-8c71-b74f-892ba4e83b75']),
+        p0_supported: { totalCount: 0, nodes: [] },
+        p0_opposed: { totalCount: 0, nodes: [] },
+        p0_joined: {},
+      },
+      [A]
+    );
+
+    expect(records.get(A)?.positions).toBe(1);
+  });
+
+  it('reports a short page of positions rather than a low count', () => {
+    const records = readPersonRecords(
+      {
+        p0_positions: positions(['c1', 'c2'], 137),
+        p0_supported: { totalCount: 0, nodes: [] },
+        p0_opposed: { totalCount: 0, nodes: [] },
+        p0_joined: {},
+      },
+      [A]
+    );
+
+    expect(records.get(A)?.positionsTruncated).toBe(true);
   });
 
   // Someone can be recorded on both sides of the same debate; it is still one debate argued.
   it('counts a debate once across both sides', () => {
     const records = readPersonRecords(
       {
-        p0_positions: { totalCount: 0 },
+        p0_positions: positions([]),
         p0_supported: { nodes: [{ fromEntityId: 'd1' }] },
         p0_opposed: { nodes: [{ fromEntityId: 'd1' }] },
         p0_joined: { createdAt: null },
@@ -148,7 +199,7 @@ describe('readPersonRecords', () => {
     const { ids } = buildPersonRecordsDocument(['not-a-hex-id', A]);
     const records = readPersonRecords(
       {
-        p0_positions: { totalCount: 16 },
+        p0_positions: positions(['c1']),
         p0_supported: { totalCount: 1, nodes: [{ fromEntityId: 'd1' }] },
         p0_opposed: { totalCount: 0, nodes: [] },
         p0_joined: { createdAt: '1769726933' },
@@ -156,7 +207,7 @@ describe('readPersonRecords', () => {
       ids
     );
 
-    expect(records.get(A)?.positions).toBe(16);
+    expect(records.get(A)?.positions).toBe(1);
     expect(records.has('not-a-hex-id')).toBe(false);
   });
 
@@ -166,11 +217,11 @@ describe('readPersonRecords', () => {
     const nodes = Array.from({ length: 100 }, (_, i) => ({ fromEntityId: `d${i}` }));
     const empty = { totalCount: 0, nodes: [] };
     const full = readPersonRecords(
-      { p0_positions: { totalCount: 0 }, p0_supported: { totalCount: 100, nodes }, p0_opposed: empty, p0_joined: {} },
+      { p0_positions: positions([]), p0_supported: { totalCount: 100, nodes }, p0_opposed: empty, p0_joined: {} },
       [A]
     );
     const short = readPersonRecords(
-      { p0_positions: { totalCount: 0 }, p0_supported: { totalCount: 137, nodes }, p0_opposed: empty, p0_joined: {} },
+      { p0_positions: positions([]), p0_supported: { totalCount: 137, nodes }, p0_opposed: empty, p0_joined: {} },
       [A]
     );
 
@@ -178,18 +229,58 @@ describe('readPersonRecords', () => {
     expect(short.get(A)?.truncated).toBe(true);
   });
 
+  // Truncation is measured against the ids actually collected, not the page length. A node the
+  // collection loop skips — a null, or a `fromEntityId` elided by a partial GraphQL error — leaves
+  // the page as long as `totalCount` while the record is a debate short, which is the silent
+  // under-report the flag exists to prevent.
+  it('is short when a node came back without an id', () => {
+    const records = readPersonRecords(
+      {
+        p0_positions: positions([]),
+        p0_supported: { totalCount: 2, nodes: [{ fromEntityId: 'd1' }, { fromEntityId: null }] },
+        p0_opposed: { totalCount: 0, nodes: [] },
+        p0_joined: {},
+      },
+      [A]
+    );
+
+    expect(records.get(A)?.debateIds).toEqual(['d1']);
+    expect(records.get(A)?.truncated).toBe(true);
+  });
+
+  it('is short when a node came back null', () => {
+    const records = readPersonRecords(
+      {
+        p0_positions: { totalCount: 2, nodes: [{ objectId: 'c1' }, null] },
+        p0_supported: { totalCount: 1, nodes: [null] },
+        p0_opposed: { totalCount: 0, nodes: [] },
+        p0_joined: {},
+      },
+      [A]
+    );
+
+    expect(records.get(A)?.truncated).toBe(true);
+    expect(records.get(A)?.positionsTruncated).toBe(true);
+  });
+
   // A side that never arrived is not an empty side: counting only the side that did would report
   // part of someone's record as all of it, so the row withholds instead.
   it('treats a person missing from the response as unknown, not as having no record', () => {
     const records = readPersonRecords({}, [A]);
 
-    expect(records.get(A)).toEqual({ positions: 0, debateIds: [], truncated: true, createdAt: null });
+    expect(records.get(A)).toEqual({
+      positions: 0,
+      positionsTruncated: true,
+      debateIds: [],
+      truncated: true,
+      createdAt: null,
+    });
   });
 
   it('treats one missing side as truncated even when the other came back', () => {
     const records = readPersonRecords(
       {
-        p0_positions: { totalCount: 4 },
+        p0_positions: positions(['c1']),
         p0_supported: { totalCount: 1, nodes: [{ fromEntityId: 'd1' }] },
         p0_joined: {},
       },

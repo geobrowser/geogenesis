@@ -9,7 +9,7 @@ import { PersonRecordLine } from './person-record-line';
 const FULL: PersonRecord = {
   positions: 119,
   debatesArgued: 11,
-  winRate: { percent: 73, wins: 8, of: 11 },
+  winRate: { percent: 73, wins: 8, of: 11, judged: 11 },
   joinedAt: new Date(Date.UTC(2026, 0, 29)),
 };
 
@@ -40,7 +40,7 @@ describe('PersonRecordLine', () => {
   });
 
   it('says "1 position" rather than "1 positions"', () => {
-    line({ positions: 1, debatesArgued: 1, winRate: { percent: 100, wins: 1, of: 1 } });
+    line({ positions: 1, debatesArgued: 1, winRate: { percent: 100, wins: 1, of: 1, judged: 1 } });
 
     expect(screen.getByText('1 position')).toBeInTheDocument();
     expect(screen.getByText('1 debate')).toBeInTheDocument();
@@ -56,6 +56,15 @@ describe('PersonRecordLine', () => {
     expect(screen.queryByText(/positions?$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/debates?$/)).not.toBeInTheDocument();
     expect(screen.getByText('On Geo since Jan 2026')).toBeInTheDocument();
+  });
+
+  // With debates *argued* as the denominator a rate is a lower bound until every one of them has
+  // been judged, so the label says what it was actually derived from rather than reading as though
+  // the unjudged ones were losses.
+  it('names how many of the debates have been judged when some have not', () => {
+    line({ winRate: { percent: 33, wins: 1, of: 3, judged: 1 } });
+
+    expect(screen.getByText('Won 1 of 3 debates argued, 1 judged so far')).toBeInTheDocument();
   });
 
   it('drops just the win rate when only that is missing', () => {

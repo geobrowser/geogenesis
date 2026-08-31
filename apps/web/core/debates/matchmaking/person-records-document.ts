@@ -25,9 +25,24 @@ export function isPersonId(id: string): boolean {
  */
 export const DEBATE_RELATIONS_PER_SIDE = 100;
 
+/**
+ * How many position rows are read per person.
+ *
+ * Rows rather than a `totalCount`, because a row is not a position: the same claim answered on both
+ * the stance and the veracity axis is two rows, and a claim answered in two spaces is two more. Both
+ * happen on the live graph today, so a count of rows says a number the positions listed anywhere
+ * else in the app disagree with — the drift the shared filter exists to prevent. Distinct claims is
+ * what "positions held" means, and distinct claims needs the ids.
+ *
+ * The whole table holds 830 position rows and the busiest person 122, so this is slack rather than
+ * a limit; a page that does come back full is reported and the count withheld, as with debates.
+ */
+export const POSITIONS_PER_PERSON = 250;
+
 export type PersonRecordsQuery = Record<
   string,
   | { totalCount?: number | null; nodes?: Array<{ fromEntityId?: string | null } | null> | null }
+  | { totalCount?: number | null; nodes?: Array<{ objectId?: string | null } | null> | null }
   | { createdAt?: string | number | null }
   | null
   | undefined
@@ -82,6 +97,7 @@ export function buildPersonRecordsDocument(personIds: string[]): {
     '$opposedBy: UUID!',
     '$positionFilter: UserVoteFilter!',
     '$first: Int!',
+    '$positionsFirst: Int!',
     ...ids.map((_, index) => `$p${index}: UUID!`),
   ].join(', ');
 
@@ -90,8 +106,9 @@ export function buildPersonRecordsDocument(personIds: string[]): {
       const person = `$p${index}`;
       return `
     ${personAlias(index, 'positions')}: userVotesConnection(
+      first: $positionsFirst
       filter: { and: [$positionFilter, { userId: { is: ${person} } }] }
-    ) { totalCount }
+    ) { totalCount nodes { objectId } }
     ${personAlias(index, 'supported')}: relationsConnection(
       first: $first
       filter: { typeId: { is: $supportedBy }, toEntityId: { is: ${person} } }
@@ -109,10 +126,11 @@ export function buildPersonRecordsDocument(personIds: string[]): {
   const variables: PersonRecordsVariables = {
     supportedBy: DEBATE_SUPPORTED_BY_PROPERTY_ID,
     opposedBy: DEBATE_OPPOSED_BY_PROPERTY_ID,
-    // The same rows `fetchParticipantPositions` reads, so the count on a row and the positions
-    // listed anywhere else cannot mean different things.
+    // The same rows `fetchParticipantPositions` reads, so a position counted on a row and a
+    // position listed anywhere else cannot mean different things.
     positionFilter: POSITION_VOTE_FILTER,
     first: DEBATE_RELATIONS_PER_SIDE,
+    positionsFirst: POSITIONS_PER_PERSON,
   };
   // Normalised for the query, but `ids` keeps the caller's spelling so records can be looked up
   // with the id that was handed in.

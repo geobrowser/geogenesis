@@ -33,9 +33,14 @@ vi.mock('~/core/claims/browse/claim-debates', () => ({
 
 const { usePersonRecords } = await import('./use-person-records');
 
+/** Position rows, one per distinct claim — the count is a distinct-claim count, not a row count. */
+function positionPage(count: number) {
+  return { totalCount: count, nodes: Array.from({ length: count }, (_, i) => ({ objectId: `c${i}` })) };
+}
+
 function record(positions: number) {
   return {
-    positions: { totalCount: positions },
+    positions: positionPage(positions),
     supported: { totalCount: 0, nodes: [] },
     opposed: { totalCount: 0, nodes: [] },
     joined: { createdAt: '1769726933' },
@@ -46,7 +51,7 @@ function record(positions: number) {
 function debated(...people: string[][]) {
   const out: Record<string, unknown> = {};
   people.forEach((debateIds, index) => {
-    out[`p${index}_positions`] = { totalCount: 1 };
+    out[`p${index}_positions`] = positionPage(1);
     out[`p${index}_supported`] = { totalCount: debateIds.length, nodes: debateIds.map(id => ({ fromEntityId: id })) };
     out[`p${index}_opposed`] = { totalCount: 0, nodes: [] };
     out[`p${index}_joined`] = { createdAt: '1769726933' };
@@ -123,7 +128,7 @@ describe('usePersonRecords', () => {
       initialProps: { ids: [A] },
     });
 
-    await waitFor(() => expect(result.current.get(A)?.winRate).toEqual({ percent: 100, wins: 1, of: 1 }));
+    await waitFor(() => expect(result.current.get(A)?.winRate).toEqual({ percent: 100, wins: 1, of: 1, judged: 1 }));
 
     // B arrives; the shares still cover only d1, so B's d2 is unjudged as far as they know.
     mocks.sharesAreStale = true;
@@ -134,7 +139,7 @@ describe('usePersonRecords', () => {
     expect(result.current.get(B)?.debatesArgued).toBe(2);
     expect(result.current.get(B)?.winRate).toBeNull();
     // And A keeps the rate already derived from a settled set, so nothing blinks.
-    expect(result.current.get(A)?.winRate).toEqual({ percent: 100, wins: 1, of: 1 });
+    expect(result.current.get(A)?.winRate).toEqual({ percent: 100, wins: 1, of: 1, judged: 1 });
   });
 
   // A carried rate describes the debates it was computed over. If a refetch turns up a debate that
@@ -148,7 +153,7 @@ describe('usePersonRecords', () => {
       initialProps: { ids: [A] },
     });
 
-    await waitFor(() => expect(result.current.get(A)?.winRate).toEqual({ percent: 100, wins: 1, of: 1 }));
+    await waitFor(() => expect(result.current.get(A)?.winRate).toEqual({ percent: 100, wins: 1, of: 1, judged: 1 }));
 
     mocks.sharesAreStale = true;
     rerender({ ids: [A, B] });

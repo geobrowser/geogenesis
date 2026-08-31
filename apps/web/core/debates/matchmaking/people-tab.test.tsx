@@ -308,7 +308,7 @@ describe('PeopleTab', () => {
         {
           positions: 119,
           debatesArgued: 11,
-          winRate: { percent: 73, wins: 8, of: 11 },
+          winRate: { percent: 73, wins: 8, of: 11, judged: 11 },
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
         },
       ],
