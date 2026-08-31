@@ -30,9 +30,9 @@ const MOUSE_ACTIVATION = { distance: 10 };
  * what made rows grab during a scroll gesture.
  *
  * `tolerance` reads backwards. Under a delay constraint it is a *cancel* radius — moving more than
- * this before the timer fires aborts the pending drag (`@dnd-kit/core` `core.cjs.development.js`,
- * the `hasExceededDistance` checks around :1546). So a *lower* tolerance makes scrolling win more
- * often, and raising it would make accidental drags more likely, not less. Keep this small.
+ * this before the timer fires aborts the pending drag (`@dnd-kit/core` gates it through
+ * `hasExceededDistance`). So a *lower* tolerance makes scrolling win more often, and raising it
+ * would make accidental drags more likely, not less. Keep this small.
  */
 const TOUCH_ACTIVATION = { delay: 250, tolerance: 6 };
 
