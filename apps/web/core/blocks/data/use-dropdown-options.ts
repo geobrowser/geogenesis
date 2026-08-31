@@ -12,17 +12,16 @@ import type { Filter, ModesByColumn } from './filters';
 
 export type { DropdownOption } from './fetch-dropdown-options';
 
-/** Upper bound on population pages walked for one dropdown (× 1000 entities). */
-const MAX_POPULATION_PAGES = 5;
-
 /**
  * The values of one property across the table's population — the block's
  * filter with this property's own constraint removed, so the list is not
- * narrowed by what is currently selected. While enabled, the population is
- * walked page by page until the scope is exhausted, so the list is complete
- * and "no values" is only ever reported after the whole scope was checked.
- * Selected and filter-default entities are always present so a preset never
- * goes missing.
+ * narrowed by what is currently selected. While the dropdown is open the
+ * population is walked page by page until the scope is exhausted; closing
+ * the menu stops the walk and reopening resumes from the cursor. There is
+ * deliberately no page cap: cost is bounded by how long a person holds the
+ * menu open, and "no values"/"no matches" are only ever reported after the
+ * whole scope was checked. Selected and filter-default entities are always
+ * present so a preset never goes missing.
  */
 export function useDropdownOptions({
   columnId,
@@ -45,26 +44,31 @@ export function useDropdownOptions({
 
   const whereKey = React.useMemo(() => JSON.stringify(where), [where]);
 
-  const { data, isFetching, fetchNextPage, hasNextPage } = useInfiniteQuery({
+  const { data, isFetching, isError, fetchNextPage, hasNextPage, refetch } = useInfiniteQuery({
     queryKey: ['data-block', 'dropdown-options', columnId, whereKey],
     enabled,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
       fetchDropdownOptionsPage({ propertyId: columnId, where, after: pageParam, signal }),
-    getNextPageParam: (lastPage, pages) =>
-      lastPage.hasNextPage && pages.length < MAX_POPULATION_PAGES ? lastPage.endCursor : undefined,
+    getNextPageParam: lastPage => (lastPage.hasNextPage ? lastPage.endCursor : undefined),
     staleTime: 60_000,
   });
 
-  // The walk runs to completion on its own while enabled — it is the only
-  // way to know the scope is exhausted — bounded by MAX_POPULATION_PAGES.
+  // The walk advances on its own while enabled. An error stops it — without
+  // the guard a failing page refires forever — and `retry` resumes it.
   React.useEffect(() => {
-    if (!enabled || !hasNextPage || isFetching) return;
+    if (!enabled || !hasNextPage || isFetching || isError) return;
     void fetchNextPage();
-  }, [enabled, hasNextPage, isFetching, fetchNextPage]);
+  }, [enabled, hasNextPage, isFetching, isError, fetchNextPage]);
 
-  /** True from the moment a walk is requested until the scope is exhausted (or capped). */
-  const isWalking = enabled && (data === undefined || isFetching || Boolean(hasNextPage));
+  /** True from the moment a walk is requested until the scope is exhausted. */
+  const isWalking = enabled && !isError && (data === undefined || isFetching || Boolean(hasNextPage));
+
+  /** How many population rows the walk has checked so far. */
+  const scannedCount = React.useMemo(
+    () => (data?.pages ?? []).reduce((sum, page) => sum + page.populationCount, 0),
+    [data]
+  );
 
   // Pinned first, then values in arrival order (each page name-sorted) so
   // the list never reshuffles under the cursor as pages arrive.
@@ -85,5 +89,5 @@ export function useDropdownOptions({
     [options]
   );
 
-  return { options, nameOf, isWalking };
+  return { options, nameOf, isWalking, isError, retry: refetch, scannedCount };
 }

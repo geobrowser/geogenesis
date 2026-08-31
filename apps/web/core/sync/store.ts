@@ -4,6 +4,8 @@ import { createAtom } from '@xstate/store';
 import { Array as A } from 'effect';
 import { produce } from 'immer';
 
+import { DATA_BLOCK_DROPDOWNS_PROPERTY_ID } from '~/core/blocks/data/block-ontology-ids';
+
 import { columnPropertyIdFromRelation } from '../blocks/data/shown-column-relations';
 import {
   FORMAT_PROPERTY,
@@ -68,6 +70,7 @@ const BLOCK_CONFIG_RELATION_TYPE_IDS: readonly string[] = [
   SystemIds.VIEW_PROPERTY,
   SystemIds.PROPERTIES,
   SystemIds.SHOWN_COLUMNS,
+  DATA_BLOCK_DROPDOWNS_PROPERTY_ID,
 ];
 
 export function dedupeRelationsByKey(relations: Relation[]): Relation[] {

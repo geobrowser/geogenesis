@@ -40,7 +40,7 @@ export const DROPDOWN_POPULATION_PAGE_SIZE = 1000;
  * property (Types) has more relations than entities, so each chunk keeps
  * its own window instead of one capped query for the whole page.
  */
-export const DROPDOWN_RELATION_CHUNK = 250;
+export const DROPDOWN_RELATION_CHUNK = 100;
 export const DROPDOWN_RELATION_WINDOW = 1000;
 const RELATION_CHUNK_CONCURRENCY = 4;
 
@@ -90,6 +90,7 @@ const POPULATION_PAGE_DOCUMENT = parse(/* GraphQL */ `
 type RelationsResult = {
   relations: { toEntity: { id: string; name: string | null } | null }[] | null;
 };
+type RelationsChunk = { options: DropdownOption[]; windowHit: boolean };
 type RelationsVariables = { propertyId: string; fromEntityIds: string[]; first: number };
 
 const RELATIONS_DOCUMENT = parse(/* GraphQL */ `
@@ -155,7 +156,52 @@ export type DropdownOptionsPage = {
   options: DropdownOption[];
   endCursor: string | null;
   hasNextPage: boolean;
+  /** Entities checked by this page — the walk's progress unit. */
+  populationCount: number;
 };
+
+/**
+ * Relations for one id-chunk. A chunk that fills the server's window would
+ * silently truncate (a dense property can carry more relations than the
+ * window per chunk), so a full window splits the chunk and recurses; a
+ * single id that still fills the window has >1000 distinct-ish relations
+ * and keeps the first window's worth.
+ */
+function fetchRelationsForChunk({
+  propertyId,
+  fromEntityIds,
+  signal,
+}: {
+  propertyId: string;
+  fromEntityIds: string[];
+  signal?: AbortSignal;
+}): Effect.Effect<DropdownOption[], unknown> {
+  return Effect.gen(function* () {
+    const chunk: RelationsChunk = yield* graphql({
+      query: RELATIONS_DOCUMENT,
+      decoder: (result: RelationsResult) => ({
+        options: toDropdownOptions(result),
+        windowHit: (result.relations ?? []).length >= DROPDOWN_RELATION_WINDOW,
+      }),
+      variables: { propertyId, fromEntityIds, first: DROPDOWN_RELATION_WINDOW },
+      signal,
+    });
+
+    if (!chunk.windowHit || fromEntityIds.length <= 1) {
+      return chunk.options;
+    }
+
+    const middle = Math.ceil(fromEntityIds.length / 2);
+    const halves = yield* Effect.all(
+      [
+        fetchRelationsForChunk({ propertyId, fromEntityIds: fromEntityIds.slice(0, middle), signal }),
+        fetchRelationsForChunk({ propertyId, fromEntityIds: fromEntityIds.slice(middle), signal }),
+      ],
+      { concurrency: 2 }
+    );
+    return halves.flat();
+  });
+}
 
 /** One page of the scope: the property's values across the next slice of the table's population. */
 export function fetchDropdownOptionsPage({
@@ -183,7 +229,7 @@ export function fetchDropdownOptionsPage({
       });
 
       if (population.ids.length === 0) {
-        return { options: [], endCursor: population.endCursor, hasNextPage: false };
+        return { options: [], endCursor: population.endCursor, hasNextPage: false, populationCount: 0 };
       }
 
       const chunks: string[][] = [];
@@ -192,14 +238,7 @@ export function fetchDropdownOptionsPage({
       }
 
       const perChunk = yield* Effect.all(
-        chunks.map(fromEntityIds =>
-          graphql({
-            query: RELATIONS_DOCUMENT,
-            decoder: toDropdownOptions,
-            variables: { propertyId, fromEntityIds, first: DROPDOWN_RELATION_WINDOW },
-            signal,
-          })
-        ),
+        chunks.map(fromEntityIds => fetchRelationsForChunk({ propertyId, fromEntityIds, signal })),
         { concurrency: RELATION_CHUNK_CONCURRENCY }
       );
 
@@ -209,6 +248,7 @@ export function fetchDropdownOptionsPage({
         }),
         endCursor: population.endCursor,
         hasNextPage: population.hasNextPage,
+        populationCount: population.ids.length,
       };
     })
   );

@@ -17,6 +17,7 @@ import { useDropdownOptions } from '~/core/blocks/data/use-dropdown-options';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { ID } from '~/core/id';
+import { useQueryEntities } from '~/core/sync/use-store';
 import type { Property } from '~/core/types';
 
 import { CheckboxVisual } from '~/design-system/checkbox';
@@ -133,7 +134,7 @@ function TableBlockDropdown({
 
   // The dropdown's one scope: this property's values across the table's
   // population, paged in as the user scrolls or searches.
-  const { options, nameOf, isWalking } = useDropdownOptions({
+  const { options, nameOf, isWalking, isError, retry, scannedCount } = useDropdownOptions({
     columnId,
     baseFilterState,
     baseModesByColumn,
@@ -179,7 +180,23 @@ function TableBlockDropdown({
   // and stays for as long as a query is typed.
   const showSearch = query.length > 0 || options.length > SEARCH_BAR_THRESHOLD;
 
-  const selectedNames = selected.map(id => nameOf(id) ?? '…');
+  // A stored override survives reloads as bare ids; resolve their names even
+  // while the menu is closed so the pill never reads "…" over a filtered table.
+  const unresolvedSelectedIds = React.useMemo(
+    () => selected.filter(id => !nameOf(id) && !pinned.some(pin => ID.equals(pin.id, id) && pin.name)),
+    [selected, nameOf, pinned]
+  );
+  const { entities: resolvedEntities } = useQueryEntities({
+    where: { id: { in: unresolvedSelectedIds } },
+    first: Math.max(unresolvedSelectedIds.length, 1),
+    enabled: unresolvedSelectedIds.length > 0,
+  });
+  const nameFor = React.useCallback(
+    (id: string) => nameOf(id) ?? resolvedEntities?.find(entity => ID.equals(entity.id, id))?.name ?? null,
+    [nameOf, resolvedEntities]
+  );
+
+  const selectedNames = selected.map(id => nameFor(id) ?? '…');
   const pillLabel =
     selected.length === 0
       ? label
