@@ -31,7 +31,6 @@ import type {
   DebateParticipantSummary,
   MatchmakingReadiness,
 } from '../api';
-import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { hubCardMotion } from './hub-motion';
 
 type Props = {
@@ -39,7 +38,6 @@ type Props = {
   positions: DebateClaimPositionSummary[];
   /** Drives the response buttons and the readiness toggle. */
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
   /** Rendered under the controls — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
   /**
@@ -52,7 +50,6 @@ type Props = {
    * ready — the switch reads `viewer_debate_ready`, so drawing it from an unresolved lookup would
    * report "not ready" on a claim they are in fact ready on.
    */
-  hideReadinessToggle?: boolean;
   /**
    * Set when `positions` cannot be trusted to say which side the viewer is on — the rematch picker
    * identifies the viewer inside the summaries by geo-chat user id, which is null until its token
@@ -89,10 +86,8 @@ export function MatchmakingClaimCard({
   claim,
   positions,
   readiness,
-  activeDebate,
   footer,
   onOpenClaim,
-  hideReadinessToggle,
   viewerIdentityPending,
   onRequireSignIn,
   ref,
@@ -110,9 +105,7 @@ export function MatchmakingClaimCard({
           claim={claim}
           positions={positions}
           readiness={readiness}
-          activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
-          hideReadinessToggle={hideReadinessToggle}
           viewerIdentityPending={viewerIdentityPending}
           onRequireSignIn={onRequireSignIn}
         />
@@ -121,9 +114,7 @@ export function MatchmakingClaimCard({
           positions={positions}
           readiness={readiness}
           claim={claim}
-          activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
-          hideReadinessToggle={hideReadinessToggle}
         />
       )}
 
@@ -316,18 +307,14 @@ function RespondableControls({
   claim,
   positions,
   readiness,
-  activeDebate,
   onOpenClaim,
-  hideReadinessToggle,
   viewerIdentityPending,
   onRequireSignIn,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
   onOpenClaim?: () => void;
-  hideReadinessToggle?: boolean;
   viewerIdentityPending?: boolean;
   onRequireSignIn?: () => void;
 }) {
@@ -339,11 +326,7 @@ function RespondableControls({
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
-        toggle={
-          hideReadinessToggle ? null : (
-            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
-          )
-        }
+        toggle={null}
       />
       <PositionRow
         positions={optimisticPositions}
@@ -461,16 +444,12 @@ function UnresolvableControls({
   claim,
   positions,
   readiness,
-  activeDebate,
   onOpenClaim,
-  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
   onOpenClaim?: () => void;
-  hideReadinessToggle?: boolean;
 }) {
   return (
     <>
@@ -478,12 +457,7 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
-        toggle={
-          /* Readiness is geo-chat state, so it still works without a graph id. */
-          hideReadinessToggle ? null : (
-            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
-          )
-        }
+        toggle={null}
       />
       <PositionRow
         positions={positions}

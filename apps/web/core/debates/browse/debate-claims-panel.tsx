@@ -184,7 +184,7 @@ function ClaimList({
  * One claim: its text linking to the claim entity, with the row's actions beneath it.
  *
  * `EntityRowActions` is what a data block's bulleted-list row renders, and it is the whole set —
- * the response control *and* the Debate toggle. Reaching past it for the response control alone
+ * the response control (and, before GEO-2740, the Debate toggle). Reaching past it for the response control alone
  * (which this did) is what left the toggle off these rows. It also resolves the response kind from
  * the entity itself, so a factual claim gets Verify/Dispute here the same way it does everywhere
  * else, including while a change to that flag is still an unpublished edit.
