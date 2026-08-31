@@ -24,7 +24,11 @@ describe('validateQuestion', () => {
   });
 
   it('rejects a question too long to be one', () => {
-    expect(validateQuestion('a'.repeat(501))).toBeNull();
+    expect(validateQuestion('a'.repeat(1_001))).toBeNull();
+  });
+
+  it('accepts a question long enough to carry several resolved ids', () => {
+    expect(validateQuestion('a'.repeat(900))).toHaveLength(900);
   });
 });
 

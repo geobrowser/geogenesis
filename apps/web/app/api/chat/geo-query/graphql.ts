@@ -27,9 +27,10 @@ export type GraphqlResult = { ok: true; data: unknown } | { ok: false; error: st
 export async function runGeoGraphql(
   query: string,
   variables: Record<string, unknown> | undefined,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  timeoutMs: number = SINGLE_QUERY_TIMEOUT_MS
 ): Promise<GraphqlResult> {
-  const timeout = AbortSignal.timeout(SINGLE_QUERY_TIMEOUT_MS);
+  const timeout = AbortSignal.timeout(timeoutMs);
   const composite = signal ? AbortSignal.any([signal, timeout]) : timeout;
 
   let res: Response;
@@ -42,7 +43,7 @@ export async function runGeoGraphql(
     });
   } catch (err) {
     if (timeout.aborted) {
-      return { ok: false, error: `Query timed out after ${SINGLE_QUERY_TIMEOUT_MS / 1000}s. Scope it harder.` };
+      return { ok: false, error: `Query timed out after ${Math.round(timeoutMs / 1000)}s. Scope it harder.` };
     }
     return { ok: false, error: `Network error: ${err instanceof Error ? err.message : 'unknown'}` };
   }

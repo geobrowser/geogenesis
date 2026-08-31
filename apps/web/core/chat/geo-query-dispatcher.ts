@@ -23,6 +23,7 @@ async function fetchGeoQuery(input: GeoQueryInput, signal: AbortSignal): Promise
     if (res.status === 401) return { error: 'not_signed_in' };
     if (res.status === 429) return { error: 'rate_limited' };
     if (res.status === 504) return { error: 'timed_out' };
+    if (res.status === 400) return { error: 'question_rejected' };
     if (!res.ok) {
       console.error('[chat/geo-query-dispatcher] non-ok', res.status);
       return { error: 'lookup_failed' };

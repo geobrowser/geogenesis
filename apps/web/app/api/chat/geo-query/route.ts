@@ -17,14 +17,14 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 import { logCallCost } from '../cost';
 import { RESEARCH_MODEL } from '../models';
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
-import { runGeoGraphql } from './graphql';
+import { SINGLE_QUERY_TIMEOUT_MS, runGeoGraphql } from './graphql';
 import { GEO_QUERY_SYSTEM_PROMPT } from './system-prompt';
 
 const anthropic = createAnthropic({
   apiKey: process.env.CLAUDE_API_KEY,
 });
 
-const MAX_QUESTION_CHARS = 500;
+const MAX_QUESTION_CHARS = 1_000;
 const MAX_ANSWER_CHARS = 4_000;
 // Rows are a courtesy, not the payload. The answer carries the finding; these
 // let the UI render pills. A block can hold 1,000 entities and none of them
@@ -41,12 +41,37 @@ const MAX_ROWS = 50;
  */
 const MAX_REPORTED_QUERIES = 3;
 const MAX_QUERY_CHARS = 400;
+/**
+ * How much of one query's response the sub-agent is allowed to read back.
+ *
+ * A nested selection over 50 rows measures at 56k characters — roughly 15k
+ * tokens, more than the system prompt — and it lands in the context of every
+ * step that follows, so one greedy query slows the whole remaining loop past
+ * its budget. Rejected rather than truncated on purpose: half a JSON document
+ * reads as a complete one, and a count taken from it would be wrong in exactly
+ * the confident way this sub-agent must never be.
+ */
+const MAX_RESULT_CHARS = 20_000;
 // Enough for discover → query → fix a mistake → confirm. Beyond this it is
 // flailing, and flailing slowly: the user is watching a spinner.
 const MAX_TOOL_STEPS = 8;
+// Per step, not per invocation — so this caps the size of one GraphQL document
+// as much as it caps the answer. A query that runs past it is delivered as a
+// tool call with an empty `query`, which is why `execute` explains that case.
 const MAX_OUTPUT_TOKENS = 2_000;
 // Whole-invocation budget, distinct from the per-query timeout in graphql.ts.
-const TOTAL_BUDGET_MS = 30_000;
+const TOTAL_BUDGET_MS = 45_000;
+// When to stop querying and start answering. Reaching TOTAL_BUDGET_MS mid-loop
+// aborts with nothing, discarding every query that did succeed; stopping here
+// leaves room for one final pass that answers from whatever was retrieved.
+// Only checked between steps, and a step is a generation plus a query, so the
+// gap to TOTAL_BUDGET_MS has to cover one whole step that started a moment too
+// early — not just the answer.
+const TOOL_LOOP_BUDGET_MS = 24_000;
+// Taking the tool away is not enough on its own: asked for prose with nothing
+// left to call, the model sometimes just stops. It has to be told to answer.
+const ANSWER_NOW =
+  'Your time for querying is up — this is your last turn. Answer the original question now, using the results you already have. Name plainly whichever part you could not retrieve; never fill it in with an estimate.';
 
 function isSameOrigin(req: Request): boolean {
   const origin = req.headers.get('origin');
@@ -221,6 +246,7 @@ export async function POST(req: Request) {
     return jsonError(400, 'Invalid request body');
   }
 
+  const startedAt = Date.now();
   const budget = AbortSignal.timeout(TOTAL_BUDGET_MS);
   const signal = req.signal ? AbortSignal.any([req.signal, budget]) : budget;
 
@@ -244,8 +270,28 @@ export async function POST(req: Request) {
       additionalProperties: false,
     }),
     execute: async ({ query, variables }: { query: string; variables?: Record<string, unknown> }) => {
-      const result = await runGeoGraphql(query, variables, signal);
+      if (query.trim().length === 0) {
+        return {
+          error:
+            'Your query arrived empty because the document you were writing ran past the output limit and was cut off mid-call. Send a shorter one — fewer aliases, fewer fields.',
+        };
+      }
+      // A query that outruns the loop budget takes the answer turn down with
+      // it, so it may only have whatever is left of that budget.
+      const remaining = TOOL_LOOP_BUDGET_MS - (Date.now() - startedAt);
+      const result = await runGeoGraphql(
+        query,
+        variables,
+        signal,
+        Math.min(SINGLE_QUERY_TIMEOUT_MS, Math.max(1_000, remaining))
+      );
       if (!result.ok) return { error: result.error };
+      const size = JSON.stringify(result.data).length;
+      if (size > MAX_RESULT_CHARS) {
+        return {
+          error: `That returned ${size} characters, over the ${MAX_RESULT_CHARS} limit, so it was discarded — a result this large would slow every step after it. Ask again for less: fewer rows via \`first:\`, fewer nested fields, or \`totalCount\` instead of the rows themselves.`,
+        };
+      }
       // Recorded only once it worked. Pushing before running put rejected and
       // timed-out attempts in the list looking exactly like the one that
       // produced the answer, which is the opposite of what a reader wants from
@@ -273,6 +319,10 @@ export async function POST(req: Request) {
       ],
       tools: { runQuery },
       toolChoice: 'auto',
+      prepareStep: ({ messages }) =>
+        Date.now() - startedAt > TOOL_LOOP_BUDGET_MS
+          ? { toolChoice: 'none', messages: [...messages, { role: 'user', content: ANSWER_NOW }] }
+          : {},
       stopWhen: stepCountIs(MAX_TOOL_STEPS),
       maxOutputTokens: MAX_OUTPUT_TOKENS,
       abortSignal: signal,

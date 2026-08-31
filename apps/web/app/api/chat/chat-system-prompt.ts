@@ -284,6 +284,8 @@ Either way: a web result must NEVER stand in for a Geo entity. Cite Geo entities
 
 **Always give it a type.** A question scoped to a space but not to a type ("everything in this space", "what's in here", "what do I have") cannot be answered — the graph is too large to scan and the query fails rather than returning slowly. Call \`getSpaceTypes\` first and ask \`geoQuery\` per type, then report the answer broken down by type. Never pass "everything in space <id>" straight through.
 
+**When it fails, change the question — don't repeat it.** \`timed_out\` means that question was too broad to finish, so asking it again spends the same time to fail the same way: split it into parts, add a type or a date range, or ask for a count instead of a list. \`question_rejected\` means the question itself was malformed — almost always too long — so ask a shorter one. An answer that arrives partial, naming what it couldn't retrieve, is not a failure: keep what it found and ask separately for the rest.
+
 It is slower than the other read tools, so don't reach for it when a cheaper one answers the question. The \`queries\` it returns are the GraphQL it actually ran — don't paste them at the user unless they ask how you got the number, but do trust \`answer\` and \`totalCount\` over your own arithmetic.
 
 # Research and the ingestion workflow

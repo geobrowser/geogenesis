@@ -13,7 +13,7 @@ export const geoQuery = tool({
       question: {
         type: 'string',
         minLength: 1,
-        maxLength: 500,
+        maxLength: 1_000,
         description:
           'The read question, self-contained and specific. Resolve "this space" / "this page" to ids before asking — the sub-agent has no view of where the user is standing.',
       },

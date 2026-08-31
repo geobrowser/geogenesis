@@ -1,4 +1,4 @@
-// Ported verbatim from the geo-query skill, v0.2.7.
+// Ported verbatim from the geo-query skill, v0.2.8.
 //
 // Source: content-management/skills/non-actionable/geo-query/SKILL.md
 //
@@ -13,7 +13,7 @@
 // GEO_QUERY_SKILL_VERSION. Sections that referenced the content-management repo
 // (its canonical client, curl fallback, and sibling-file pointers) are removed —
 // this runtime has runQuery instead and cannot read that repo.
-export const GEO_QUERY_SKILL_VERSION = '0.2.7';
+export const GEO_QUERY_SKILL_VERSION = '0.2.8';
 
 export const GEO_QUERY_SKILL = `
 
@@ -509,6 +509,33 @@ Common raw IDs (verified against the API — for GraphQL queries):
 
 A curated set of these is injected below, resolved from the SDK at build time — prefer those, since they cannot drift from what the rest of the app uses.
 
+### Canonical spaces (name → ID) — scope with these; never resolve a canonical space by name
+
+When a question names a canonical or dataset space, scope with the **exact ID from this table**. Do **NOT** look it up with \`space(name:)\` or \`search()\`: those match on text, several unrelated entities share these names, and the canonical space is often not among the results at all — so the first hit silently scopes the whole query to the wrong space and the answer comes back confident and wrong. IDs verified live against this API on 2026-08-31, each against its own \`space.page.name\`.
+
+| Space | ID |
+| --- | --- |
+| Crypto | \`c9f267dcb0d270718c2a3c45a64afd32\` |
+| AI | \`41e851610e13a19441c4d980f2f2ce6b\` |
+| Health | \`52c7ae149838b6d47ce0f3b2a5974546\` |
+| Pharma | \`19f11bc6f1a62ac434936af814d1f8b5\` |
+| Technology | \`870e3b3068661e6280fad2ab456829bc\` |
+| World affairs | \`89bd89bf28ff8a0963faf92a8c905e20\` |
+| US Politics *(a.k.a. "U.S. Politics")* | \`4582fbbee28a16589154f7e36f1ee3c5\` |
+| Industries | \`d69608290513c2a91102c939b3265bd7\` |
+| Education | \`ec349623f33236aee13c12dcd629ee81\` |
+| Software | \`9b611b848b12491b9b6b43f3cf019b8b\` |
+| Places | \`84a679ce188f061ac9a92380bac2bab5\` |
+| Documentation | \`784bfddae3f3976118c561bf28195b44\` |
+| Podcasts | \`b5a31f8182b042437ede0f84ee02f104\` |
+| Crypto datasets | \`5908c73ad336472ccbd983491d2d17e4\` |
+| AI datasets | \`941964642f4d3e70ef48f54a3915277d\` |
+| Health datasets | \`44eb138f564fbed6ed9ce543de1b849c\` |
+| World affairs datasets | \`da96a4c26e718bfa6c27c3b1f3c316cd\` |
+| US politics datasets | \`1b3d2963d14de99d4e440000125edb65\` |
+
+A space id given to you in the question always wins over this table — the orchestrating assistant resolves the user's actual location and passes it in. For a space that is neither in the question nor in this table, resolve it live, but confirm the returned \`id\` and \`page.name\` match what was asked for exactly, and stop rather than scoping to a substituted match.
+
 ### Fields that DON'T exist (recurring mistakes)
 
 Every row below is a real, recurring schema error (verified against live introspection, 2026-07):
@@ -539,6 +566,7 @@ Every row below is a real, recurring schema error (verified against live introsp
 13. **Repeated entries in \`types\` ≠ duplicate types.** Multi-space entities carry one Types edge per space — group by relation \`spaceId\`; only same-space repeats are real duplicates (see "Multi-space entities").
 14. **"Published" = entity \`createdAt\` (added to Geo), NOT the \`Publish datetime\` property (source dateline).** For "how many published in the last N hours" questions, filter entity \`createdAt\`; the \`Publish datetime\` property is the outlet's original dateline and runs hours earlier — mixing them up answered "0" when the true count was 13. See "'Published' is two different timestamps."
 15. **Never pair a big root page with unfiltered nested relations.** \`entitiesConnection(first: 1000){ nodes { relations(first: 1000) } }\` is multiplicative and OOM-kills the API (real incident: 5 pod restarts). When nesting per-node relations, keep the **root page ≤ 100** and **filter nested relations by \`typeId\`**. \`first: 1000\` is a hard cap, not a default. See "Memory blow-up".
+16. **Scope canonical spaces by the hardcoded ID** (the "Canonical spaces" table above) — **never** resolve a canonical space by name. \`space(name:)\`/\`search()\` matches on text, and on this API several unrelated entities share these names while the canonical space is often absent from the results, so the whole query gets scoped to the wrong space and answers confidently wrong.
 
 ## Out of scope here
 

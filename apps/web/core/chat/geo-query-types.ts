@@ -40,4 +40,4 @@ export type GeoQuerySuccess = {
 
 export type GeoQueryOutput =
   | GeoQuerySuccess
-  | { error: 'not_signed_in' | 'rate_limited' | 'timed_out' | 'lookup_failed' };
+  | { error: 'not_signed_in' | 'rate_limited' | 'timed_out' | 'question_rejected' | 'lookup_failed' };
