@@ -42,7 +42,12 @@ import { ExploreMetaRow } from './explore-meta-row';
  * did not support — 33 debates against 311,047 claims — and then comments and Share, which is what
  * the generic card has. Even that earned less than it cost here: a strip of small grey glyphs under
  * a card whose whole lower half is already the response controls and the verdict. The claim's title
- * links to its page, where the comments are.
+ * is the way through to all of it.
+ *
+ * Where that title goes is the host's call, through `titleOpensSidePanel`: the side panel on
+ * Explore, the entity page everywhere else this card is used. Either way it stays a real anchor
+ * with a real href — only unmodified left clicks are intercepted — so cmd-click, shift-click and
+ * middle click still open the page, and so does anyone reading the status bar before they click.
  *
  * Scoped to Claim entities by the caller. Every other type keeps the generic card untouched.
  */
