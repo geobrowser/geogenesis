@@ -321,6 +321,32 @@ describe('useClaimResponseSummary and the viewer’s own side', () => {
     expect(result.current.hasCounts).toBe(false);
   });
 
+  it('waits for its own key even once the batch reports ready', () => {
+    // `ready` says the batch answered; it does not say *this claim* is in the answer. The batch
+    // keys on the whole target list and serves the previous key's data through a change, so adding
+    // a claim leaves `ready` true against a response that predates it. Reading that as an answer
+    // reports an authoritative zero for a claim nothing has asked about yet.
+    mocks.batch = { managed: true, ready: true };
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(result.current.hasCounts).toBe(false);
+    expect(result.current.isViewerResponseLoading).toBe(true);
+  });
+
+  it('answers once the batch has primed this claim’s keys', () => {
+    // The guard: both flags must still settle in the ordinary batched case, or the test above passes
+    // on a hook that never answers under a boundary at all.
+    mocks.batch = { managed: true, ready: true };
+    primeStanceCache();
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(result.current.hasCounts).toBe(true);
+    expect(result.current.isViewerResponseLoading).toBe(false);
+    expect(result.current.total).toBe(12);
+  });
+
   it('is settled while held back, which is not the same as waiting', () => {
     mocks.personalSpace = { personalSpaceId: null, isLoading: true };
 

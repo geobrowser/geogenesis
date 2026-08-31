@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   summaryNegative: 0,
   spaceId: '019fedae-72b6-7ab2-927a-df044d57c566',
   viewerSpaceId: 'personal-space',
+  /** Whether each render of the card's summary read was enabled, in order. */
+  summaryEnabled: [] as boolean[],
 }));
 
 // The readiness switch shares the entity page's queue-backed machine, so it needs geo-chat auth
@@ -68,12 +70,18 @@ vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
 }));
 
 // The card reports its own responses now. The tier this returns is what decides whether the footer
-// shows a bar, a tally, or an invitation.
+// shows a bar, a tally, or an invitation. Records what it was asked for, because *whether* the card
+// asks is itself a correctness question: the response kind is part of the query key.
 vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
   const actual = await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>();
   return {
     ...actual,
-    useClaimResponseSummary: () => ({
+    useClaimResponseSummary: (
+      _entityId: string,
+      _spaceId: string,
+      _responseKind: string,
+      enabled = true
+    ) => (mocks.summaryEnabled.push(enabled), {
       ...actual.summarizeClaimResponses(mocks.summaryPositive, mocks.summaryNegative),
       isLoading: false,
       isViewerResponseLoading: false,
@@ -211,6 +219,7 @@ beforeEach(() => {
   mocks.summaryPositive = 0;
   mocks.summaryNegative = 0;
   mocks.viewerSpaceId = 'personal-space';
+  mocks.summaryEnabled = [];
 });
 
 afterEach(cleanup);
@@ -549,6 +558,25 @@ describe('MatchmakingClaimCard', () => {
   // The shared card replaced it and dropped the guard. The kind selects `voteKind` on the write, so
   // responding across that edit publishes a veracity response against a claim the graph still calls
   // a stance one, or the reverse.
+  // Disabling the pills stops the wrong write; it does not stop the wrong number, and the number is
+  // the part the reader believes. The response kind is in both query keys, so asking before the
+  // vocabulary lands fetches and draws the *stance* split for a factual claim, then swaps it.
+  it('does not read the split until the claim’s vocabulary has landed', () => {
+    renderCard(
+      <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} answersReady={false} />
+    );
+
+    expect(mocks.summaryEnabled).not.toHaveLength(0);
+    expect(mocks.summaryEnabled.every(enabled => enabled === false)).toBe(true);
+  });
+
+  it('reads it once the vocabulary is known', () => {
+    // The guard: the card must still ask in the ordinary case.
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+    expect(mocks.summaryEnabled.some(enabled => enabled === true)).toBe(true);
+  });
+
   it('refuses to publish across an unpublished edit to the claim’s own vocabulary', () => {
     renderCard(
       <MatchmakingClaimCard

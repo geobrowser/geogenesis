@@ -220,7 +220,17 @@ export function useClaimResponseSummary(
 
   // Whether the counts are an answer. Decided once: it gates the arithmetic below and is what the
   // hook reports.
-  const haveCounts = responseBatch.managed ? responseBatch.ready : haveCountsAnswered;
+  //
+  // Under a batch it takes both halves. `responseBatch.ready` says the batch answered; it does not
+  // say this claim is in the answer. The batch keys its query on the whole target list and serves
+  // the previous key's data through a change (`keepPreviousData`, for GEO-2599), so adding a claim
+  // — or any local edit while typing, on a page that includes unpublished rows — leaves `ready`
+  // true against a response that predates the new claim. Its own key is unprimed, and the row would
+  // report an authoritative zero rather than waiting.
+  //
+  // The query's own `isSuccess` is what says this key has data: `setQueryData` from the batch marks
+  // it success even though the query itself never runs here.
+  const haveCounts = responseBatch.managed ? responseBatch.ready && haveCountsAnswered : haveCountsAnswered;
 
   // A delta needs a baseline.
   //
@@ -293,9 +303,10 @@ export function useClaimResponseSummary(
     // Only a successful read is an answer.
     //
     // Under a batch the query never runs and the batch primes its key, so the batch's readiness is
-    // the only thing to wait on — the same swap `isLoading` makes above.
+    // what to wait on — plus this key actually having been primed, for the reason `haveCounts`
+    // gives above: a batch can be ready against a response that predates this claim.
     isViewerResponseLoading: responseBatch.managed
-      ? !responseBatch.ready
+      ? !responseBatch.ready || !hasViewerResponseAnswered
       : isPersonalSpaceLoading || (Boolean(personalSpaceId) && !hasViewerResponseAnswered),
     viewerDirection: activeDirection ?? null,
     viewerSpaceId: personalSpaceId ?? null,

@@ -499,11 +499,22 @@ function RespondableControls({
     });
   // One read for the card. The header flags a contested claim and the footer reports the split, and
   // deciding that twice is how the two would eventually disagree.
+  //
+  // Held on `answersReady` as well as proximity, because the response kind is part of both query
+  // keys. Asking under the `stance` fallback does not merely waste a pair of requests on a factual
+  // claim: it fetches and *draws* the stance split until the vocabulary lands, then swaps it for
+  // the veracity one. Disabling the pills stops the wrong write; it does not stop the wrong number,
+  // and the number is the part the reader believes.
+  //
+  // `answersReady` is a superset of what this strictly needs — it also waits on the viewer's own
+  // side, which the counts do not depend on. That costs nothing: hosts that resolve the kind
+  // through `useClaimResponseState` have already primed this exact key by then, so the extra beat
+  // is a cache read, and on the hub's own tabs the rows carry their kind and it is never false.
   const summary = useClaimResponseSummary(
     claim.claim_entity_id,
     claim.space_id,
     readiness.response_kind,
-    readResponses
+    readResponses && answersReady
   );
 
   return (

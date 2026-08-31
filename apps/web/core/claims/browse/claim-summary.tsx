@@ -339,6 +339,13 @@ function ClaimResponders({
             align="end"
             side="bottom"
             sideOffset={8}
+            // Kept clear of the fixed navbar, and gone once its trigger is. The card this hangs off
+            // rides in a scrolling panel, and the popover is portalled above everything so nothing
+            // clips it: scrolling the hub tracked the list up over the 44px header and left it
+            // sitting there. `collisionPadding.top` reserves that strip; `hideWhenDetached` retires
+            // the popover when its trigger scrolls out of the panel instead.
+            collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
+            hideWhenDetached
             className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           >
             <RespondersPopoverContent

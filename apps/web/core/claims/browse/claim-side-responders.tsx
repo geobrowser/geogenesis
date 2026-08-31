@@ -118,7 +118,17 @@ export function ClaimSideResponders({
       </Popover.Trigger>
       {elevatedPopoverPortal && (
         <Popover.Portal container={elevatedPopoverPortal}>
-          <Popover.Content side="bottom" align="start" sideOffset={8} avoidCollisions className="z-100 origin-top-left">
+          <Popover.Content
+            side="bottom"
+            align="start"
+            sideOffset={8}
+            avoidCollisions
+            // Same as the responder cluster's: clear of the fixed navbar, and retired when the
+            // trigger scrolls out of the panel it belongs to rather than floating over the header.
+            collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
+            hideWhenDetached
+            className="z-100 origin-top-left"
+          >
             {open ? <ResponderList spaceIds={sideSpaceIds} label={label} totalCount={totalResponders} /> : null}
           </Popover.Content>
         </Popover.Portal>
@@ -145,7 +155,8 @@ function ResponderList({ spaceIds, label, totalCount }: { spaceIds: string[]; la
 
   return (
     <div className="z-10 w-[248px] divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white shadow-lg">
-      <div className="max-h-[265px] overflow-hidden overflow-y-auto">
+      {/* Contained, so a wheel past the end of the list does not chain through to the page behind. */}
+      <div className="max-h-[265px] overflow-hidden overflow-y-auto overscroll-contain">
         {isLoading || !profiles ? (
           <ResponderRowSkeletons count={Math.min(spaceIds.length, 5)} />
         ) : (
