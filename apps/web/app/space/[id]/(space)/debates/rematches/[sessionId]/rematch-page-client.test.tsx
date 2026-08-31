@@ -398,7 +398,15 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
     };
     const data = {
       pages: corpus.map(page => ({
-        claims: page.filter(entry => inSpaceFilter(entry.claim.space_id)).filter(entry => inTopicFilter(entry.topics)),
+        // Rows come back with `topics: []`, which is what the real endpoint sends:
+        // `matchmaking_claims_for_user` leaves the field empty and answers about topics in the
+        // facet instead. The fixture used to hand its own topics back on every row, which is more
+        // than geo-chat gives — and that generosity is why nothing caught GEO-2714, where the
+        // client re-tested server rows against topics it could not possibly know.
+        claims: page
+          .filter(entry => inSpaceFilter(entry.claim.space_id))
+          .filter(entry => inTopicFilter(entry.topics))
+          .map(entry => ({ ...entry, topics: [] })),
         next_cursor: null,
         facets,
       })),

@@ -590,6 +590,35 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return map;
   }, [browsedPages, featuredEntitiesQuery.entities, opponentEntitiesQuery.entities, recommendedEntities]);
 
+  // Which claims the server has already held to the topic filter.
+  //
+  // geo-chat does not send per-row topics back: `matchmaking_claims_for_user` fills `topics: []`
+  // and puts the topic information in the facet beside the rows instead. So `topicsByClaimId`
+  // cannot know a browsed row's topics, and testing one against it fails every time — which is
+  // how a topic filter with 48 claims behind it rendered an empty list (GEO-2714). The rows were
+  // there and correct; the client threw them away for lacking a field the server never sends.
+  //
+  // Under the debounce these ids answer the previous topic selection for a moment, like the rows
+  // themselves do. That is the same beat of staleness `keepPreviousData` already shows, not a
+  // second one.
+  const serverFilteredClaimIds = React.useMemo(
+    () => new Set(browsedPages.flatMap(page => page.claims.map(entry => entry.claim.claim_entity_id))),
+    [browsedPages]
+  );
+
+  /**
+   * Whether a claim survives the topic filter, wherever it came from.
+   *
+   * The pinned rows are Knowledge Graph entities geo-chat has never seen, so the client is the
+   * only thing that can filter them. The browsed rows have already been filtered by the query
+   * that returned them, and are taken at their word.
+   */
+  const carriesPickedTopics = React.useCallback(
+    (claimEntityId: string) =>
+      serverFilteredClaimIds.has(claimEntityId) || carriesEveryTopic(topicsByClaimId.get(claimEntityId), topicIds),
+    [serverFilteredClaimIds, topicIds, topicsByClaimId]
+  );
+
   // The opponent's tab: every claim they hold a side on, newest first. Held until the session's
   // exclusions are in, so nothing lists and then vanishes. Not narrowed by the space allowlist —
   // see it above.
@@ -930,7 +959,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       claims
         .filter(claim => {
           if (!offered.has(claim.claim.space_id)) return false;
-          if (!carriesEveryTopic(topicsByClaimId.get(claim.claim.claim_entity_id), topicIds)) return false;
+          if (!carriesPickedTopics(claim.claim.claim_entity_id)) return false;
           if (
             !browsesPages &&
             debouncedSearch &&
@@ -947,7 +976,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // empty list. An absent *selection* comes back at zero, or its checkbox disappears while the
     // trigger goes on counting it, and it can't be unticked without clearing every space.
     return orderFacetOptions(keepSelectedVisible(merged, spaceIds), spaceIds);
-  }, [browsedFacets?.space_facets, claims, debouncedSearch, facetSpaceIds, spaceIds, tab, topicIds, topicsByClaimId]);
+  }, [browsedFacets?.space_facets, carriesPickedTopics, claims, debouncedSearch, facetSpaceIds, spaceIds, tab]);
 
   // A space picked while the gates were still passing everything has to be let go once they
   // reject it, or it keeps going out as `space_id` on every request while its rows are dropped.
@@ -998,7 +1027,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () =>
       countBy(
         topicFacetClaims
-          .filter(claim => carriesEveryTopic(topicsByClaimId.get(claim.claim.claim_entity_id), topicIds))
+          .filter(claim => carriesPickedTopics(claim.claim.claim_entity_id))
           .flatMap(claim =>
             (topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).map(topic => ({
               id: topic.id,
@@ -1006,7 +1035,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             }))
           )
       ),
-    [topicFacetClaims, topicIds, topicsByClaimId]
+    [carriesPickedTopics, topicFacetClaims, topicsByClaimId]
   );
 
   const facetTopics = React.useMemo(() => {
@@ -1033,7 +1062,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         // browsed rows *plus* this session's claims pinned in front of them, and the pinned ones
         // never went through the query — without this they survive a topic filter they don't
         // match. A no-op for the rows the server did filter, which match by construction.
-        if (!carriesEveryTopic(topicsByClaimId.get(claim.claim.claim_entity_id), topicIds)) return false;
+        if (!carriesPickedTopics(claim.claim.claim_entity_id)) return false;
         if (
           !browsesPages &&
           debouncedSearch &&
