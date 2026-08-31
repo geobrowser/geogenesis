@@ -14,6 +14,7 @@ import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useSpace } from '~/core/hooks/use-space';
 import { useVideoWithFallback } from '~/core/hooks/use-video-with-fallback';
 import { EntityId } from '~/core/io/substream-schema';
+import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Dots } from '~/design-system/dots';
@@ -241,9 +242,7 @@ export function LinkableRelationChip({
   const handleEntityLinkClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
       if (!isSidePanelOpen) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button === 1) {
-        return;
-      }
+      if (isModifiedClick(event)) return;
       event.preventDefault();
       event.stopPropagation();
       openInSidePanel(entityId, targetSpaceId);
@@ -254,9 +253,7 @@ export function LinkableRelationChip({
   const handleRelationEntityLinkClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
       if (!isSidePanelOpen || !relationEntityId) return;
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button === 1) {
-        return;
-      }
+      if (isModifiedClick(event)) return;
       event.preventDefault();
       event.stopPropagation();
       openInSidePanel(relationEntityId, currentSpaceId);

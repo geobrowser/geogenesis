@@ -69,3 +69,43 @@ export function isClaimSpaceAllowed(spaceId: string | null | undefined, allowlis
   if (!spaceId) return false;
   return allowlist.has(normId(spaceId));
 }
+
+/**
+ * The spaces a viewer may see claims from, as a list rather than a membership test.
+ *
+ * Sent to geo-chat so its rows *and* its facets are scoped to the same spaces the client would
+ * otherwise filter down to afterwards. Without it a topic living only in a space this viewer
+ * can't see is still offered, and picking it returns rows the client then removes — a menu
+ * option that can only ever produce an empty list (GEO-2653).
+ *
+ * `null` when the allowlist hasn't resolved: there is no list to send, and the gates deliberately
+ * pass everything until it does.
+ */
+export function eligibleClaimSpaceIds(
+  allowlist: Set<string> | null,
+  spaceShowsClaims: (spaceId: string) => boolean
+): string[] | null {
+  if (allowlist === null) return null;
+  return [...allowlist].filter(spaceShowsClaims);
+}
+
+/**
+ * The space that should stay selected once the menu has settled around it.
+ *
+ * Both eligibility gates pass everything while their lookups are unresolved, so a space can be
+ * picked out of the menu in that window and then rejected once the answers land. Left selected it
+ * keeps going out as `space_id` on every request — with its topic facet — while every row it
+ * returns is dropped again locally.
+ *
+ * `isResolved` is passed rather than inferred from an empty list, for the same reason
+ * `keepSelectableTopic` takes it: "the menu hasn't arrived" and "the menu excludes this" look
+ * identical from here, and clearing on the first would throw away a selection about to be valid.
+ */
+export function keepSelectableSpace(
+  spaceId: string | null,
+  availableSpaceIds: string[],
+  isResolved: boolean
+): string | null {
+  if (spaceId === null || !isResolved) return spaceId;
+  return availableSpaceIds.some(id => normId(id) === normId(spaceId)) ? spaceId : null;
+}

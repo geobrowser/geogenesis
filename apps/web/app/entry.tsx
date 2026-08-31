@@ -75,6 +75,11 @@ const PostAuthRedirect = dynamic(
   { ssr: false }
 );
 
+const SignInDeepLinkHandler = dynamic(
+  () => import('~/partials/auth/sign-in-deep-link-handler').then(m => ({ default: m.SignInDeepLinkHandler })),
+  { ssr: false }
+);
+
 const ReviewChanges = dynamic(
   () => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })),
   { ssr: false }
@@ -143,6 +148,9 @@ export function App({ children }: { children: React.ReactNode }) {
           <PendingCreatedSpaceStatus />
           <SignInPrompt />
           <PostAuthRedirect />
+          <React.Suspense fallback={null}>
+            <SignInDeepLinkHandler />
+          </React.Suspense>
           <Toast />
           <GovernanceReopenEditLoadingBar />
           <FlowBar />

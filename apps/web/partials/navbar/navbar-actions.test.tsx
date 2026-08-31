@@ -10,19 +10,6 @@ const address = '0x1234567890abcdef1234567890abcdef12345678';
 
 const mocks = vi.hoisted(() => ({
   logout: vi.fn(),
-  setToast: vi.fn(),
-  debateActivityHook: vi.fn(),
-  mutateAvailability: vi.fn(),
-  mutationPending: false,
-  activityPending: false,
-  activity: {
-    online: true,
-    available_to_debate: true,
-    cooldown_until: null,
-    match: null,
-    debate: null,
-    rematch: null,
-  },
   profile: {
     name: 'Max',
     avatarUrl: 'ipfs://avatar',
@@ -56,19 +43,6 @@ vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => mocks.pendingPersonalSpace,
 }));
 vi.mock('~/core/state/feature-flags', () => ({
-}));
-vi.mock('~/core/debates/hooks', () => ({
-  useDebateActivity: (enabled: boolean) => {
-    mocks.debateActivityHook(enabled);
-    return { data: mocks.activity, isPending: mocks.activityPending };
-  },
-  useUpdateDebateAvailability: () => ({
-    mutate: mocks.mutateAvailability,
-    isPending: mocks.mutationPending,
-  }),
-}));
-vi.mock('~/core/hooks/use-toast', () => ({
-  useToast: () => [null, mocks.setToast],
 }));
 vi.mock('~/core/hooks/use-space-id', () => ({ useSpaceId: () => null }));
 vi.mock('~/core/hooks/use-access-control', () => ({
@@ -124,24 +98,11 @@ vi.mock('~/design-system/menu', () => ({
   ),
 }));
 
-describe('NavbarActions debate availability menu', () => {
+describe('NavbarActions profile menu', () => {
   afterEach(cleanup);
 
   beforeEach(() => {
     mocks.logout.mockReset();
-    mocks.setToast.mockReset();
-    mocks.debateActivityHook.mockReset();
-    mocks.mutateAvailability.mockReset();
-    mocks.mutationPending = false;
-    mocks.activityPending = false;
-    mocks.activity = {
-      online: true,
-      available_to_debate: true,
-      cooldown_until: null,
-      match: null,
-      debate: null,
-      rematch: null,
-    };
     mocks.profile = { name: 'Max', avatarUrl: 'ipfs://avatar' };
     mocks.personalSpaceId = 'personal-space';
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
@@ -179,18 +140,6 @@ describe('NavbarActions debate availability menu', () => {
       'tracking-[-0.03125rem]',
       'not-italic'
     );
-    expect(screen.getByRole('switch', { name: 'Available to debate' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('switch', { name: 'Available to debate' })).toHaveClass(
-      'px-3',
-      'py-2.5',
-      'gap-1',
-      'font-[family-name:var(--font-calibre)]',
-      'text-[1rem]',
-      'leading-[0.9375rem]',
-      'font-medium',
-      'tracking-[-0.03125rem]',
-      'not-italic'
-    );
     expect(screen.getByRole('button', { name: 'Sign out' })).toHaveClass(
       'px-3',
       'py-2.5',
@@ -220,41 +169,14 @@ describe('NavbarActions debate availability menu', () => {
     expect(within(identityLink).getByText(address, { selector: 'p' })).toBeInTheDocument();
   });
 
-  it('toggles with the keyboard and disables the switch while pending', async () => {
-    const user = userEvent.setup();
-    const { rerender } = render(<NavbarActions />);
-    await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
-    const availabilitySwitch = screen.getByRole('switch', { name: 'Available to debate' });
-
-    availabilitySwitch.focus();
-    await user.keyboard('[Space]');
-    expect(mocks.mutateAvailability).toHaveBeenCalledWith(false, expect.any(Object));
-
-    mocks.activity.available_to_debate = false;
-    rerender(<NavbarActions />);
-    expect(screen.getByRole('switch', { name: 'Available to debate' })).toHaveAttribute('aria-checked', 'false');
-
-    mocks.mutationPending = true;
-    rerender(<NavbarActions />);
-    expect(screen.getByRole('switch', { name: 'Available to debate' })).toBeDisabled();
-
-    mocks.mutationPending = false;
-    mocks.activityPending = true;
-    rerender(<NavbarActions />);
-    expect(screen.getByRole('switch', { name: 'Available to debate' })).toBeDisabled();
-  });
-
-  it('keeps sign out usable on load failure and shows the existing toast treatment on mutation failure', async () => {
-    mocks.activity = undefined as never;
-    mocks.mutateAvailability.mockImplementation((_value, options) => options.onError());
+  it('leaves sign out working, and no longer offers a second availability switch', async () => {
+    // The toggle moved to the debates hub panel, which the navbar's own hub button opens
+    // from anywhere — a copy here was a second control for one setting.
     const user = userEvent.setup();
     render(<NavbarActions />);
     await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
 
-    await user.click(screen.getByRole('switch', { name: 'Available to debate' }));
-    expect(mocks.setToast).toHaveBeenCalledWith(
-      expect.objectContaining({ props: expect.objectContaining({ children: 'Couldn’t update debate availability.' }) })
-    );
+    expect(screen.queryByRole('switch', { name: 'Available to debate' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(mocks.logout).toHaveBeenCalledOnce();

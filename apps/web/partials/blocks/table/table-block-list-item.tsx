@@ -23,6 +23,7 @@ import { SelectEntity } from '~/design-system/select-entity';
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { CollectionMetadata } from '~/partials/blocks/table/collection-metadata';
 import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
+import { CopyEntityIdButton } from '~/partials/blocks/table/copy-entity-id-button';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EditModeNameField } from '~/partials/blocks/table/edit-mode-name-field';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
@@ -234,7 +235,7 @@ export function TableBlockListItem({
 
           {!isPlaceholder && (
             <div className="mt-2 flex items-center justify-end gap-2">
-              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 has-data-[state=open]:visible has-data-[state=open]:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
                 {source.type === 'COLLECTION' ? (
                   <CollectionRowActions
                     isEditing={true}
@@ -247,11 +248,16 @@ export function TableBlockListItem({
                     openedWithMainViewEditing={isEditing}
                   />
                 ) : (
-                  <DataBlockOpenSidePanelButton
-                    entityId={rowEntityId}
-                    entitySpaceId={nameCell?.space ?? currentSpaceId}
-                    openedWithMainViewEditing={isEditing}
-                  />
+                  <div className="flex items-center gap-0.5">
+                    {/* Query rows have no menu to put this behind, so it sits in the row itself,
+                        ahead of the side panel and drawn to match it (GEO-2679). */}
+                    <CopyEntityIdButton entityId={rowEntityId} variant="row" />
+                    <DataBlockOpenSidePanelButton
+                      entityId={rowEntityId}
+                      entitySpaceId={nameCell?.space ?? currentSpaceId}
+                      openedWithMainViewEditing={isEditing}
+                    />
+                  </div>
                 )}
               </div>
             </div>
@@ -343,14 +349,14 @@ export function TableBlockListItem({
               </div>
             );
           })}
-          <div className="mt-1 flex items-center justify-between gap-2">
+          <div className="mt-1 flex items-center gap-4">
             {/* The entity's own space, not the block's — a data block lists rows from many
                 spaces, and both the claim controls and the Debate button are scoped by it
                 (GEO-2581). Every other space-bearing prop in this file already resolves it the
                 same way. */}
             <EntityRowActions entityId={rowEntityId} spaceId={nameCell?.space ?? currentSpaceId} />
             {!isPlaceholder && (
-              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+              <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100 has-data-[state=open]:visible has-data-[state=open]:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
                 {source.type === 'COLLECTION' ? (
                   <CollectionRowActions
                     isEditing={false}
@@ -363,11 +369,16 @@ export function TableBlockListItem({
                     openedWithMainViewEditing={isEditing}
                   />
                 ) : (
-                  <DataBlockOpenSidePanelButton
-                    entityId={rowEntityId}
-                    entitySpaceId={nameCell?.space ?? currentSpaceId}
-                    openedWithMainViewEditing={isEditing}
-                  />
+                  <div className="flex items-center gap-0.5">
+                    {/* Query rows have no menu to put this behind, so it sits in the row itself,
+                        ahead of the side panel and drawn to match it (GEO-2679). */}
+                    <CopyEntityIdButton entityId={rowEntityId} variant="row" />
+                    <DataBlockOpenSidePanelButton
+                      entityId={rowEntityId}
+                      entitySpaceId={nameCell?.space ?? currentSpaceId}
+                      openedWithMainViewEditing={isEditing}
+                    />
+                  </div>
                 )}
               </div>
             )}

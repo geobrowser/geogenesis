@@ -1147,7 +1147,104 @@ describe('DebateGatewayClient', () => {
     expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
   });
 
-  it('pauses live updates when a subscription is rejected', async () => {
+  // GEO-2650. This used to park in degraded forever. Nothing in that branch closed the socket, so
+  // heartbeats kept being acked, the two-missed-ack path to `forceReconnect` was never reached, and
+  // there was no route back to `ready` for the rest of the session — one scope-level rejection took
+  // the account-level stream, and with it the incoming-request popup, down with it.
+  // GEO-2670. Every pause used to be the same `{ degraded, paused }`, so spending the command
+  // budget looked exactly like a dropped socket — and tracing it meant reading the subscription
+  // code rather than a log line. The reason is what makes a pause actionable.
+  it('says why live updates are paused', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    expect(client.getSnapshot()).toMatchObject({ paused: false, pauseReason: null });
+
+    // Our fault, not the network's: we sent more commands than the session allows.
+    sockets[0]!.receive('ERROR', { code: 'rate_limited', message: 'retry after 5 seconds' });
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'rate_limited' });
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    expect(client.getSnapshot()).toMatchObject({ paused: false, pauseReason: null });
+
+    // A ceiling we are sitting against, which a reconnect would hit again.
+    sockets[1]!.receive('ERROR', {
+      code: 'subscription_limit_reached',
+      message: 'too many subscriptions',
+    });
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'subscription_limit' });
+  });
+
+  // A dropped socket is ordinary transport trouble, and has to stay distinguishable from the two
+  // above — that distinction is the whole point.
+  it('reports a dropped socket as disconnected rather than as a client fault', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    sockets[0]!.serverClose();
+
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'disconnected' });
+  });
+
+  // A server that never advertises the debate capability is not going to start: nothing recovers
+  // this without a deploy, so it must not read as a transient pause.
+  it('reports a missing debate capability as unsupported', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', { capabilities: [], subscriptions: [] });
+
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'unsupported' });
+  });
+
+  // The trap in `setSnapshot`: it skips notifying when status and paused are unchanged. These two
+  // pauses are both `degraded/paused` with no ready in between, so the reason is the *only*
+  // difference — which is exactly the case that would be written and never delivered.
+  //
+  // An earlier version of this test put a reconnect between them. That reset `paused` to false, so
+  // the status comparison already differed and the guard was never exercised: the test passed with
+  // the guard deleted.
+  it('notifies listeners when only the pause reason changes', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    // Parks without reconnecting, so the socket stays open and `paused` stays true throughout.
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_limit_reached',
+      message: 'too many subscriptions',
+    });
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'subscription_limit' });
+
+    const seen: (string | null)[] = [];
+    const unsubscribe = client.subscribe(() => seen.push(client.getSnapshot().pauseReason));
+
+    // Same status, same `paused`, different reason.
+    sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', message: 'not authorized' });
+
+    unsubscribe();
+    expect(seen).toEqual(['disconnected']);
+  });
+
+  it('recycles the socket when a subscription is rejected, rather than parking on it', async () => {
     client.start(
       vi.fn(async () => 'privy-token'),
       'user-a'
@@ -1158,7 +1255,65 @@ describe('DebateGatewayClient', () => {
 
     sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', message: 'not authorized' });
 
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
     expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets).toHaveLength(2);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+  });
+
+  // The other half of that trade: `reconnectAttempt` resets on a successful invalidation flush, which
+  // a fresh connection performs before the error recurs, so the backoff never grows and a
+  // reproducing rejection would spin roughly once a second indefinitely.
+  it('stops recycling when the same rejection reproduces inside the cooldown', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', message: 'not authorized' });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    sockets[1]!.receive('ERROR', { code: 'subscription_forbidden', message: 'not authorized' });
+
+    expect(sockets[1]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sockets).toHaveLength(2);
+  });
+
+  // And once the socket has been healthy for the cooldown, a later rejection is a fresh incident
+  // rather than the same one reproducing, so it gets its own recovery attempt.
+  it('recycles again once the cooldown has passed', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', { code: 'subscription_forbidden', message: 'not authorized' });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    sockets[1]!.receive('ERROR', { code: 'subscription_forbidden', message: 'not authorized' });
+
+    expect(sockets[1]!.readyState).toBe(FakeWebSocket.CLOSED);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets).toHaveLength(3);
   });
 
   it('reconnects with a new session when the authenticated account changes', async () => {

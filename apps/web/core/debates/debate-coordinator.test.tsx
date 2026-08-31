@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt } from './api';
 import { DebateCoordinator } from './debate-coordinator';
-import { clearEnteringDebate, markEnteringDebate } from './debate-entry-intent';
+import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   dismissRequestMutate: vi.fn(),
   blockUserMutate: vi.fn(),
   pathname: '/space/space-1/debates',
+  // Whether this tab is the focused one. jsdom reports no focus, so the real store would make
+  // every routing case here look like a background tab.
+  hasAttention: true,
   prompts: [] as DebateSharePrompt[],
   promptsFetching: false,
   mediaMutate: vi.fn(),
@@ -30,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   capture: vi.fn(),
   authenticated: true,
   gatewayPaused: false,
+  gatewayPauseReason: null as string | null,
   currentUserId: 'user-for' as string | null,
   // What the token exchange answers with when the stored session hasn't been written yet.
   resolvedUserId: null as string | null,
@@ -67,10 +71,16 @@ vi.mock('./hooks', () => ({
   useClearDebateActivity: () => mocks.clearDebateActivity,
 }));
 
+vi.mock('./debate-attention', () => ({
+  useDebatePresence: () => true,
+  useDebateAttention: () => mocks.hasAttention,
+}));
+
 vi.mock('./debate-gateway', () => ({
   useDebateGateway: () => ({
     status: mocks.gatewayPaused ? 'degraded' : 'ready',
     paused: mocks.gatewayPaused,
+    pauseReason: mocks.gatewayPauseReason,
     capabilities: [],
   }),
   useDebateGatewayScope: () => undefined,
@@ -129,10 +139,12 @@ beforeEach(() => {
   mocks.dismissRequestMutate.mockReset();
   mocks.blockUserMutate.mockReset();
   mocks.pathname = '/space/space-1/debates';
+  mocks.hasAttention = true;
   mocks.prompts = [];
   mocks.promptsFetching = false;
   mocks.authenticated = true;
   mocks.gatewayPaused = false;
+  mocks.gatewayPauseReason = null;
   mocks.currentUserId = 'user-for';
   mocks.resolvedUserId = null;
   mocks.refetch.mockReset();
@@ -176,6 +188,37 @@ describe('DebateCoordinator', () => {
     mocks.gatewayPaused = false;
     rerender(<DebateCoordinator />);
     expect(screen.queryByText('Live debate updates are paused while reconnecting.')).not.toBeInTheDocument();
+  });
+
+  /**
+   * GEO-2670. The banner said "reconnecting" for all six pause reasons, two of which are not
+   * reconnecting and one of which never recovers — so a report of it carried no information and
+   * every occurrence had to be re-diagnosed from the subscription code. Each cause now says
+   * something a reader can act on, and the reason reaches the DOM for the ones that get screenshot.
+   */
+  it('says what kind of pause it is, rather than always claiming to reconnect', () => {
+    const expected: Array<[string | null, string]> = [
+      ['rate_limited', 'Live debate updates are catching up.'],
+      ['subscription_limit', 'Too many claims on this page to follow live. Some may be out of date.'],
+      ['unsupported', 'Live debate updates are unavailable.'],
+      ['error', 'Live debate updates are paused while retrying.'],
+      // Transport trouble is the one case where the original wording was honest.
+      ['disconnected', 'Live debate updates are paused while reconnecting.'],
+      ['session', 'Live debate updates are paused while reconnecting.'],
+      [null, 'Live debate updates are paused while reconnecting.'],
+    ];
+
+    for (const [reason, text] of expected) {
+      mocks.gatewayPaused = true;
+      mocks.gatewayPauseReason = reason;
+      const { unmount } = render(<DebateCoordinator />);
+
+      const banner = screen.getByRole('status');
+      expect(banner).toHaveTextContent(text);
+      expect(banner).toHaveAttribute('data-pause-reason', reason ?? 'unknown');
+
+      unmount();
+    }
   });
 
   it('does not route another tab into a shared debate-again browser', async () => {
@@ -404,6 +447,44 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(screen.queryByText('Debate request')).not.toBeInTheDocument());
   });
 
+  // GEO-2648. This coordinator runs in every open tab, and the source-debate guard only covers
+  // rematches that have one — a session with `source_debate_id: null` fell through and pushed
+  // *every* tab into the picker at once, which is what Dovile saw: all her tabs jumped to the
+  // claim being debated. The majority of sessions take this branch, so it fired routinely.
+  it('does not route a tab the viewer is not looking at', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.hasAttention = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    render(<DebateCoordinator />);
+
+    // Give the effect the same room to fire that the focused-tab case below needs.
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  // Focus is what decides, not presence: several windows can be visible at once, so an unfocused
+  // tab must stay put and the focused one must still route in.
+  it('routes the focused tab once it gains attention', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.hasAttention = false;
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+
+    const view = render(<DebateCoordinator />);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    // The viewer turns to this tab. Attention is a subscription, so the effect re-runs.
+    mocks.hasAttention = true;
+    view.rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+  });
+
   // The sender learns it was accepted the same way every other flow does: activity gains a rematch
   // and the routing effect walks them into the claim picker. No popup is involved either way.
   it('routes the sender into the claim picker once the challenge is accepted', async () => {
@@ -468,6 +549,71 @@ describe('DebateCoordinator', () => {
     expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
     // Nor the fallback bar: it would flash in exactly the same window.
     expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+  });
+
+  // GEO-2604, the other window: accepting is a round trip, the server creates the debate inside it
+  // and emits `debate.state_changed` to the accepting tab, so that tab's own socket event can hand
+  // the coordinator a `ready` debate on some other path while the response it is waiting on is still
+  // in flight. The id-keyed intent cannot help — there is no id until the response arrives.
+  it('does not prompt while this tab is waiting on an accept', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+    const release = markEnteringPendingDebate();
+
+    try {
+      render(<DebateCoordinator />);
+
+      await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
+      expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+      // Nor the rejoin bar, which would flash in the same window for the same reason.
+      expect(screen.queryByRole('button', { name: /Your debate is/ })).not.toBeInTheDocument();
+    } finally {
+      release();
+    }
+  });
+
+  // Released when the mutation settles, so a failed accept cannot leave the viewer with no way in.
+  it('prompts again once the accept has settled', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+    const release = markEnteringPendingDebate();
+    const { rerender } = render(<DebateCoordinator />);
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+
+    release();
+    rerender(<DebateCoordinator />);
+
+    await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
+  });
+
+  // Counted, not boolean: two accepts can overlap, and the first to settle must not drop the
+  // second's claim and let the prompt through underneath it.
+  it('keeps suppressing while a second overlapping accept is still in flight', async () => {
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+    const releaseFirst = markEnteringPendingDebate();
+    const releaseSecond = markEnteringPendingDebate();
+    const { rerender } = render(<DebateCoordinator />);
+
+    releaseFirst();
+    rerender(<DebateCoordinator />);
+    expect(screen.queryByText('Your debate is ready')).not.toBeInTheDocument();
+
+    releaseSecond();
+    rerender(<DebateCoordinator />);
+    await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
   });
 
   // Still prompted anywhere else, so suppressing it above cannot swallow a real one.

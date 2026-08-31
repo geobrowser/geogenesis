@@ -26,6 +26,8 @@ type RenderableFilter = Filter & { columnName: string };
 interface TableBlockEditableFiltersProps {
   filterState?: Filter[];
   setFilterState?: (filters: Filter[], modeOverrides?: ModesByColumn) => void;
+  /** Active mode map matching `filterState`; forwarded to the prompt for display. */
+  modesByColumn?: ModesByColumn;
   filterSuggestionSpaceId?: string;
   orderedColumnIds?: string[];
   isEditing?: boolean;
@@ -38,6 +40,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
     {
       filterState,
       setFilterState,
+      modesByColumn,
       filterSuggestionSpaceId,
       orderedColumnIds = [],
       isEditing = true,
@@ -143,6 +146,7 @@ export const TableBlockEditableFilters = React.forwardRef<TableBlockFilterPrompt
           options={sortedFilters}
           filterSuggestionSpaceId={filterSuggestionSpaceId}
           filterStateForSeed={effectiveFilterState}
+          modesByColumnForSeed={modesByColumn}
           onCreate={onCreateFilter}
           isEditing={isEditing}
           trigger={

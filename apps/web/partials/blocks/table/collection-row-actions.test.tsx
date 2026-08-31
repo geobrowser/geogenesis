@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -23,7 +23,15 @@ type FakeRelation = { id: string; entityId: string; toEntity: { id: string } };
 const mocks = vi.hoisted(() => ({
   relations: [] as FakeRelation[],
   deleteRelation: vi.fn(),
+  writeText: vi.fn(),
 }));
+
+// jsdom ships no clipboard, and the component treats a rejection as "say nothing happened", so the
+// stub has to be able to reject as well as resolve.
+Object.defineProperty(navigator, 'clipboard', {
+  configurable: true,
+  value: { writeText: mocks.writeText },
+});
 
 vi.mock('~/core/blocks/data/use-data-block', () => ({
   useDataBlock: () => ({ blockEntity: { relations: mocks.relations } }),
@@ -58,7 +66,7 @@ vi.mock('~/design-system/select-space-dialog', () => ({
   SelectSpaceAsPopover: ({ trigger }: { trigger: React.ReactNode }) => <>{trigger}</>,
 }));
 vi.mock('~/partials/blocks/table/data-block-open-side-panel-button', () => ({
-  DataBlockOpenSidePanelButton: () => null,
+  DataBlockOpenSidePanelButton: () => <button type="button" aria-label="Open entity in side panel" />,
 }));
 
 function renderActions(overrides: Partial<React.ComponentProps<typeof CollectionRowActions>> = {}) {
@@ -173,5 +181,178 @@ describe('CollectionRowActions remove', () => {
     renderActions({ relationId: undefined });
 
     expect(removeButton()).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GEO-2679. The id people actually want off a collection row is the entity the row's relation
+ * points at — the thing you paste into a query or a ticket. The relation's own id is the other one,
+ * and it stays where it was, one link away.
+ *
+ * Feedback matters more than usual here: a clipboard write is invisible, so without the tick there
+ * is no way to tell a copy from a misfire. Which also means the tick must not appear when the write
+ * fails, or it is worse than no feedback at all.
+ */
+/**
+ * The side panel is the control people reach for, so it holds a fixed position instead of sliding
+ * left and right depending on whether the row has a menu to show.
+ */
+describe('CollectionRowActions order', () => {
+  it('puts the side panel before the row menu', () => {
+    renderActions();
+
+    const controls = [...document.querySelectorAll('button[aria-label]')].map(el => el.getAttribute('aria-label'));
+
+    expect(controls.indexOf('Open entity in side panel')).toBeLessThan(controls.indexOf('Show row actions'));
+  });
+
+  // Still the only destructive action, and still furthest from the one opened by habit.
+  it('leaves remove at the end', () => {
+    renderActions();
+
+    const controls = [...document.querySelectorAll('button[aria-label]')].map(el => el.getAttribute('aria-label'));
+
+    expect(controls.indexOf('Remove from collection')).toBe(controls.length - 1);
+  });
+});
+
+describe('CollectionRowActions copy entity id', () => {
+  const copyButton = () => screen.queryByRole('button', { name: 'Copy entity ID' });
+  // Where the confirmation actually lives. Renaming the button instead would be announced
+  // inconsistently, and would leave the control describing an event rather than its own action.
+  const confirmation = () => screen.getByRole('status');
+
+  // The region is emptied first and filled on the next commit, so the announcement lands a tick
+  // after the click.
+  async function copyOnce() {
+    await act(async () => {
+      fireEvent.click(copyButton()!);
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+  }
+
+  beforeEach(() => {
+    // Deliberately not `shouldAdvanceTime`: the announcement is deferred by a 0ms timer, and
+    // auto-advancing would fire it inside the click and hide the empty render this relies on.
+    vi.useFakeTimers();
+    mocks.writeText.mockReset();
+    mocks.writeText.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('offers copy inside the row menu', () => {
+    renderActions();
+
+    expect(openRowMenu().getByRole('button', { name: 'Copy entity ID' })).toBeInTheDocument();
+  });
+
+  it('copies the entity the row points at, not the relation', async () => {
+    renderActions();
+    openRowMenu();
+
+    await copyOnce();
+
+    expect(mocks.writeText).toHaveBeenCalledWith(ENTITY);
+    expect(mocks.writeText).not.toHaveBeenCalledWith(RELATION);
+  });
+
+  it('confirms the copy somewhere a screen reader will read it', async () => {
+    renderActions();
+    openRowMenu();
+
+    await copyOnce();
+
+    expect(confirmation()).toHaveTextContent('Entity ID copied');
+  });
+
+  // The region has to be mounted and empty beforehand: a live region that appears already holding
+  // its message is not reliably announced.
+  it('has the status region in place before anything is copied', () => {
+    renderActions();
+    openRowMenu();
+
+    expect(confirmation()).toBeEmptyDOMElement();
+  });
+
+  // The control still does the same thing after doing it once, and should still say so.
+  it('keeps the button describing its action, not the outcome', async () => {
+    renderActions();
+    openRowMenu();
+
+    await copyOnce();
+
+    expect(copyButton()).toBeInTheDocument();
+  });
+
+  it('goes back to offering a copy afterwards', async () => {
+    renderActions();
+    openRowMenu();
+
+    await copyOnce();
+    await act(async () => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(confirmation()).toBeEmptyDOMElement();
+    expect(copyButton()).toBeInTheDocument();
+  });
+
+  // Insecure origins, denied permissions and an unfocused document all reject. Claiming a copy that
+  // did not happen is the one outcome worse than the button doing nothing visible.
+  it('does not claim success when the clipboard write fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.writeText.mockRejectedValue(new Error('denied'));
+
+    renderActions();
+    openRowMenu();
+
+    await copyOnce();
+
+    expect(confirmation()).toBeEmptyDOMElement();
+    expect(copyButton()).toBeInTheDocument();
+
+    consoleError.mockRestore();
+  });
+
+  /**
+   * A live region announces a change, and two copies in a row produce the same sentence. Without an
+   * empty render between them the text never changes, so the second copy happens in silence — the
+   * one case where the clipboard and the confirmation disagree.
+   */
+  it('announces a second copy made inside the confirmation window', async () => {
+    renderActions();
+    openRowMenu();
+
+    await copyOnce();
+    expect(confirmation()).toHaveTextContent('Entity ID copied');
+
+    // Well inside the 1.5s window, so the first confirmation is still on screen.
+    await act(async () => {
+      vi.advanceTimersByTime(200);
+    });
+    await act(async () => {
+      fireEvent.click(copyButton()!);
+    });
+
+    // Emptied, which is what makes the repeat count as a change worth announcing.
+    expect(confirmation()).toBeEmptyDOMElement();
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(confirmation()).toHaveTextContent('Entity ID copied');
+    expect(mocks.writeText).toHaveBeenCalledTimes(2);
+  });
+
+  // Copy is about the row's entity, which a row has whether or not it has a relation of its own.
+  it('offers copy on a row with no relation yet', () => {
+    renderActions({ relationId: undefined });
+
+    expect(openRowMenu().getByRole('button', { name: 'Copy entity ID' })).toBeInTheDocument();
   });
 });

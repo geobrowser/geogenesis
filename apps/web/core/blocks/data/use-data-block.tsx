@@ -156,6 +156,13 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     return filterStateToWhere(stableFilterState, stableModesByColumn);
   }, [filterStateKey, filterModesKey]);
 
+  /**
+   * The query's own identity. Deliberately derived from `where` rather than `filterStateKey`:
+   * `effectiveFilterState` also carries `columnName`/`valueName`, which `resolveFilterDisplayNames`
+   * fills in asynchronously and `filterStateToWhere` discards. Keying off the filter state would
+   * make a name resolving from `null` to a string look like a new query.
+   */
+  const whereKey = React.useMemo(() => stableStringify(where), [where]);
   // Map sortState to server-side sort params — used by all source types.
   // dataType is required by the backend's entitiesOrderedByProperty SQL function
   // to resolve which value column to sort on.
@@ -223,6 +230,8 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isPlaceholderData: isQueryEntitiesPlaceholder,
     endCursor: queriedEndCursor,
     hasNextPage: queriedHasNextPage,
+    error: queriedError,
+    refetch: refetchQueriedEntities,
   } = useQueryEntities({
     where: where,
     enabled: source.type === 'SPACES' || source.type === 'GEO',
@@ -483,6 +492,31 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     isLoading,
     isFetched,
     isPlaceholderData,
+
+    /**
+     * A failed remote fetch settles as `isFetched`, so callers rendering an empty state need this
+     * to tell "nothing matched" from "the query never came back".
+     *
+     * Source-scoped like `isFetched`/`hasNextPage` above, and for the same reason: the entities
+     * query is keyed purely on its content, so two blocks with identical `where`/page/sort share a
+     * cache entry. Without this scoping a COLLECTION or RELATIONS block would report the failure of
+     * an unrelated GEO block that happened to issue the same query.
+     *
+     * The corollary is that only GEO/SPACES blocks can report a failure at all. A COLLECTION block
+     * with infinite scroll on whose page fetch fails still stops silently — `useCollection` has no
+     * error surface to forward. Fixing that means giving it one.
+     */
+    error: source.type === 'GEO' || source.type === 'SPACES' ? queriedError : null,
+    /** Retry after `error` — without it a failed fetch reads as "fetched, zero results" forever. */
+    refetch: source.type === 'GEO' || source.type === 'SPACES' ? refetchQueriedEntities : undefined,
+
+    /**
+     * The serialized query identity. Exposed so callers caching derived per-query state can
+     * invalidate on exactly what the query keys on, rather than re-deriving a projection of the
+     * filter/sort state that can silently drift from it.
+     */
+    whereKey,
+    sortKey,
 
     name: entity?.name ?? null,
     setName,

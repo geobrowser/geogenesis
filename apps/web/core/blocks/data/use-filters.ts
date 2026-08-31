@@ -19,6 +19,7 @@ import {
   Filter,
   FilterMode,
   ModesByColumn,
+  mergeModeOverrides,
   parseFiltersSync,
   resolveFilterDisplayNames,
   toGeoFilterState,
@@ -131,9 +132,17 @@ export function useFilters(canEdit?: boolean) {
   const setTemporaryFilters = React.useCallback(
     (filters: Filter[], modeOverrides?: ModesByColumn) => {
       setTemporaryFilterOverride(filters);
-      if (modeOverrides && Object.keys(modeOverrides).length > 0) {
-        setTemporaryModesOverride(previous => ({ ...(previous ?? effectiveModesByColumn), ...modeOverrides }));
-      }
+      // Snapshot modes alongside the filters and prune to the columns still
+      // present, mirroring `setFilterState` — without the prune, a read-only
+      // user who sets OR, clears the group and re-adds it silently inherits
+      // the stale OR (see `mergeModeOverrides`).
+      setTemporaryModesOverride(previous =>
+        mergeModeOverrides(
+          previous ?? effectiveModesByColumn,
+          modeOverrides,
+          new Set(filters.map(filter => filter.columnId))
+        )
+      );
     },
     [effectiveModesByColumn]
   );
@@ -200,18 +209,13 @@ export function useFilters(canEdit?: boolean) {
     (filters: Filter[], modeOverrides?: ModesByColumn) => {
       setOptimisticFilterState(filters);
       filterStateRef.current = filters;
-      const presentColumnIds = new Set(filters.map(filter => filter.columnId));
       // An AND override removes the column's entry rather than storing an
-      // explicit 'AND': the serializer only persists OR, so a stored 'AND'
-      // could never deep-equal persisted state and the optimistic override
-      // would be stuck forever.
-      const merged = { ...modesByColumnRef.current };
-      for (const [columnId, mode] of Object.entries(modeOverrides ?? {})) {
-        if (mode === 'OR') merged[columnId] = mode;
-        else delete merged[columnId];
-      }
-      const nextModes: ModesByColumn = Object.fromEntries(
-        Object.entries(merged).filter(([columnId]) => presentColumnIds.has(columnId))
+      // explicit 'AND', and modes are pruned to the columns still present —
+      // see `mergeModeOverrides`.
+      const nextModes = mergeModeOverrides(
+        modesByColumnRef.current,
+        modeOverrides,
+        new Set(filters.map(filter => filter.columnId))
       );
       setOptimisticModesByColumn(nextModes);
       writeFilterTriple(filters, nextModes);

@@ -26,6 +26,19 @@ const mocks = vi.hoisted(() => ({
   /** Debate entity ids in "Best" order. Empty = the ranking covers nothing, so recency stands. */
   bestOrderIds: [] as string[],
   bestOrderLoading: false,
+  /** Claims extracted from the transcript, as the count badge sees them. */
+  claimsCount: 0,
+  hubOpen: vi.fn(),
+  hubClose: vi.fn(),
+  /** Whether the debates hub is already showing. */
+  hubIsOpen: false,
+  openPrivySignIn: vi.fn(),
+  /** What the feed asked to happen once Privy finishes. */
+  privyOnComplete: undefined as undefined | (() => void),
+  /** Privy's answer, which is the authority on whether anyone is signed in. */
+  authenticated: true,
+  /** False while Privy is still restoring the session. */
+  authReady: true,
 }));
 
 type ObserverRecord = {
@@ -37,6 +50,7 @@ type ObserverRecord = {
 let observers: ObserverRecord[] = [];
 
 vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: 'user-a' }),
   useSpaceDebates: () => ({ data: { debates: mocks.debates }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => ({
     processedIds: mocks.processedIds ?? mocks.debates.map(debate => debate.id),
@@ -72,6 +86,16 @@ vi.mock('~/core/hooks/use-space', () => ({
   useSpace: () => ({ space: { entity: { name: 'Fashion', image: null } }, isLoading: false }),
 }));
 
+// PrefetchLink hydrates the entity it points at on hover, so it reaches for the sync engine and
+// the router. Stubbing those keeps the real anchor — and therefore the real hrefs — under test.
+vi.mock('~/core/sync/use-sync-engine', () => ({
+  useSyncEngine: () => ({ hydrate: vi.fn() }),
+}));
+vi.mock('next/navigation', async () => {
+  const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
+  return { ...actual, useRouter: () => ({ prefetch: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }) };
+});
+
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntities: () => ({ entities: [], isLoading: false }),
 }));
@@ -100,7 +124,16 @@ vi.mock('./debate-scroll-hint', () => ({
 vi.mock('./debate-claims-panel', () => ({
   DebateClaimsPanel: ({ debate }: { debate: Debate }) => <div>Claims panel for {debate.id}</div>,
 }));
-vi.mock('./join-debate-panel', () => ({ JoinDebatePanel: () => <div>Join panel</div> }));
+vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
+  useDebatesHub: () => ({
+    isOpen: mocks.hubIsOpen,
+    activeTab: 'claims' as const,
+    open: mocks.hubOpen,
+    close: mocks.hubClose,
+    toggle: vi.fn(),
+    setTab: vi.fn(),
+  }),
+}));
 vi.mock('~/partials/comments/entity-comments-panel', () => ({
   EntityCommentsPanel: ({ entityId }: { entityId: string }) => <div>Comments panel for {entityId}</div>,
 }));
@@ -109,15 +142,36 @@ vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 7, isLoading: false, error: null, refetch: vi.fn() }),
 }));
 
+vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
+  useDebateTranscriptClaims: () => ({
+    claims: { all: [], byAuthorSpaceId: new Map(), unattributed: [], totalCount: mocks.claimsCount },
+    isLoading: false,
+    error: null,
+  }),
+}));
+
+// Reaches for next-navigation and Privy context the feed's tests do not stand up.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: (onComplete?: () => void) => {
+    mocks.privyOnComplete = onComplete;
+    return mocks.openPrivySignIn;
+  },
+}));
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.resetAllMocks();
+  // Not mock fns, so `resetAllMocks` does not restore them.
+  mocks.authenticated = true;
+  mocks.authReady = true;
+  mocks.hubIsOpen = false;
   observers = [];
   mocks.entityVoteProps.length = 0;
   mocks.debates = [completedDebate('debate-1', 'Debates are useful', '2026-07-02T00:01:10.000Z')];
   mocks.processedIds = null;
   mocks.bestOrderIds = [];
   mocks.bestOrderLoading = false;
+  mocks.claimsCount = 0;
   mocks.mediaLoading = false;
   mocks.mediaError = false;
   mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');
@@ -173,13 +227,40 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('DebatesBrowseFeed header links', () => {
+  // Both name something that has a page, and neither was reachable.
+  it('links the space chip to the space and the claim title to its entity', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const heading = screen.getByRole('heading', { name: 'Debates are useful' });
+    // Inside the h2, not instead of it: the ref, the line clamp and the overflow measurement all
+    // stay on the element they were written for.
+    expect(within(heading).getByRole('link', { name: 'Debates are useful' })).toHaveAttribute(
+      'href',
+      '/space/space-1/claim-entity-debate-1'
+    );
+
+    expect(screen.getAllByRole('link', { name: 'Fashion' })[0]).toHaveAttribute('href', '/space/space-1');
+  });
+
+  // Truncation runs parent -> anchor -> text, and an anchor at its default `min-width: auto` would
+  // refuse to shrink, pushing the topics off the row instead of ellipsing the name.
+  it('keeps the space link shrinkable so the name still truncates', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.getAllByRole('link', { name: 'Fashion' })[0]).toHaveClass('min-w-0');
+  });
+});
+
 describe('DebatesBrowseFeed video sharing', () => {
   it('uses the full-screen responsive layout and design copy', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
     const heading = screen.getByRole('heading', { name: 'Debates are useful' });
     expect(screen.getByRole('button', { name: 'Join a debate' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Back' })).toHaveClass('size-8', 'justify-center', '-mb-3');
+    // The feed carried its own back arrow on mobile because it covers the navbar there. The
+    // browser's own back is the way out now, so nothing in the feed should offer a second one.
+    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
     const feedItem = heading.closest('section');
     assert(feedItem, 'Expected the debate heading to be rendered inside a feed item');
     // `pt-5` is the design's 20px gap under the navbar; `md:py-3` overrides it on mobile.
@@ -554,6 +635,96 @@ describe('DebatesBrowseFeed comments', () => {
 
     fireEvent.click(commentButtons[0]);
     expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+  });
+
+  // "Join a debate" is no longer one of the feed's own panels: it opens the shared hub, which is
+  // cross-space and carries the filters, counts and ranking the feed's panel never had.
+  it('opens the debates hub on the claims tab instead of a feed panel', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+    // The hub is a portal of its own, so nothing lands in the feed's in-flow panel slot.
+    expect(screen.queryByText(/^Claims panel for/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Comments panel for/)).not.toBeInTheDocument();
+  });
+
+  // Every control in the hub needs an account, so a signed-out viewer goes straight to the login
+  // rather than a panel that refuses them at each step.
+  it('sends a signed-out viewer to sign in instead of opening the hub', () => {
+    mocks.authenticated = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
+  });
+
+  // The hub dismisses itself on outside pointerdown and exempts anything marked as an opener.
+  // Without the marker the pointerdown closed it and the click reopened it — a visible flicker,
+  // and a toggle that never appeared to work.
+  it('marks the button as a hub opener so the panel does not dismiss on pointerdown', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    expect(screen.getAllByRole('button', { name: 'Join a debate' })[0]).toHaveAttribute(
+      'data-debates-hub-opener'
+    );
+  });
+
+  // `useSmartAccount` reads null while the account restores and after an init failure as well as
+  // when signed out, so gating on it sent a signed-in viewer back through a login that clears
+  // their half-finished onboarding. Privy is asked instead, and it is not asked until it is ready.
+  // Signing in is a detour the viewer did not ask for, so the press survives it rather than
+  // returning them to the feed to press the same button again.
+  it('opens the hub once sign-in completes, without a second press', () => {
+    mocks.authenticated = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+    expect(mocks.openPrivySignIn).toHaveBeenCalledOnce();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
+
+    act(() => mocks.privyOnComplete?.());
+
+    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+  });
+
+  it('does nothing until Privy has restored the session', () => {
+    mocks.authReady = false;
+    mocks.authenticated = false;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.openPrivySignIn).not.toHaveBeenCalled();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
+  });
+
+  // Otherwise the button is a one-way door: pressing it again did nothing and the only way out was
+  // the panel's own close control.
+  it('closes the hub when the button is pressed a second time', () => {
+    mocks.hubIsOpen = true;
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.hubClose).toHaveBeenCalledOnce();
+    expect(mocks.hubOpen).not.toHaveBeenCalled();
+  });
+
+  // Both would otherwise stack over the same feed, the hub on top of a panel nobody can see past.
+  it('closes an open feed panel when the hub takes over', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Comments' })[0]);
+    expect(screen.getByText('Comments panel for debate-1')).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Join a debate' })[0]);
+
+    expect(mocks.hubOpen).toHaveBeenCalledWith('claims');
+    expect(screen.queryByText('Comments panel for debate-1')).not.toBeInTheDocument();
   });
 
   it('closes the claims panel when comments open, and vice versa', () => {

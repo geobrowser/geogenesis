@@ -257,6 +257,10 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                               id={`search-result-${i}`}
                               // The onClick behavior is handled by cmdk.
                               onClick={() => {}}
+                              // A real destination, so the row can be opened in a new tab, middle
+                              // clicked, or right clicked like any other link (GEO-2701). The same
+                              // one cmdk pushes on a plain click.
+                              href={NavUtils.toEntity(result.spaces[0].spaceId, result.id)}
                               result={result}
                               active={i === selectedIndex}
                               onChooseSpace={() => setOpenSpacesIndex(i)}
@@ -312,6 +316,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                             <SpaceContent
                               // The onClick behavior is handled by cmdk.
                               onClick={() => {}}
+                              href={NavUtils.toEntity(space.spaceId, selectedEntity.id)}
                               entityId={selectedEntity.id}
                               space={space}
                             />

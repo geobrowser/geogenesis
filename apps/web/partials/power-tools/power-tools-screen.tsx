@@ -1013,6 +1013,7 @@ export function PowerToolsScreen() {
           <TableBlockEditableFilters
             filterState={effectiveFilterState}
             setFilterState={effectiveSetFilterState}
+            modesByColumn={activeModesByColumn}
             afterFilterTrigger={
               isEditing && isQuerySource ? (
                 <TableBlockDropdownsConfigTrigger

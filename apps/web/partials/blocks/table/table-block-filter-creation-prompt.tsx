@@ -24,6 +24,7 @@ import { searchResultMatchesAllowedTypes } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
 import { ID } from '~/core/id';
 import { getSpacesWhereMember } from '~/core/io/queries';
+import { capSearchQuery } from '~/core/io/search-query';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useEntityStoreInstance } from '~/core/state/entity-page-store/entity-store-provider';
 import { E } from '~/core/sync/orm';
@@ -67,6 +68,8 @@ interface TableBlockFilterPromptProps {
   filterSuggestionSpaceId?: string;
   /** When set, `openWithColumn` seeds from this list (e.g. table active filters); defaults to `useFilters().filterState`. */
   filterStateForSeed?: Filter[];
+  /** Mode map matching `filterStateForSeed` (e.g. temporary modes in Power Tools); defaults to `useFilters().modesByColumn`. */
+  modesByColumnForSeed?: ModesByColumn;
   /** `modeOverrides` carries AND/OR choices made for chips in this commit; applied atomically with the filters. */
   onCreate: (filters: TableBlockNewFilterRow[], touchedColumnIds: string[], modeOverrides?: ModesByColumn) => void;
   /** When false, pending filter chips and value inputs use read-only (grey, no remove) styling. */
@@ -1033,13 +1036,16 @@ function pendingChipsNeedFilterMode(items: PendingFilterChipItem[]): boolean {
 
 export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHandle, TableBlockFilterPromptProps>(
   function TableBlockFilterPrompt(
-    { trigger, onCreate, options, filterSuggestionSpaceId, filterStateForSeed, isEditing = true },
+    { trigger, onCreate, options, filterSuggestionSpaceId, filterStateForSeed, modesByColumnForSeed, isEditing = true },
     ref
   ) {
     const { id: fromId, spaceId } = useEntityStoreInstance();
     const fromName = useName(fromId, spaceId);
 
     const { filterState, setFilterState, modesByColumn } = useFilters();
+    // Display modes must come from the caller's active map when it differs from
+    // the persisted one (Power Tools non-editors run on temporary modes).
+    const seedModesByColumn = modesByColumnForSeed ?? modesByColumn;
     // Modes chosen for not-yet-committed chips. They must not go through
     // setGroupMode: this hook instance's filter list does not contain the
     // pending chips, so the serializer would prune the mode and the write
@@ -1259,7 +1265,7 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
         state={state}
         dispatch={dispatch}
         filterSuggestionSpaceId={filterSuggestionSpaceId}
-        filterMode={pendingModes[state.selectedColumn] ?? modesByColumn[state.selectedColumn] ?? 'AND'}
+        filterMode={pendingModes[state.selectedColumn] ?? seedModesByColumn[state.selectedColumn] ?? 'AND'}
         onFilterModeChange={mode => setPendingModes(previous => ({ ...previous, [state.selectedColumn]: mode }))}
         onSelectColumnToFilter={onSelectColumnToFilter}
         isEditing={isEditing}
@@ -1701,6 +1707,7 @@ function TableBlockEntityFilterInput({
 
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery);
+  const cappedQuery = capSearchQuery(query);
   const additionalSpaceIds = useGlobalSearchSpaceIds();
 
   const searchBlocked = (waitForFilterTypes || restrictSearchToTypes) && !filterByTypes?.length;
@@ -1717,7 +1724,13 @@ function TableBlockEntityFilterInput({
     fetchNextPage: fetchNextSearchPage,
     hasNextPage: hasNextSearchPage,
   } = useInfiniteQuery({
-    queryKey: ['table-block-filter-search', query, filterByTypes?.slice().sort().join(',') ?? '', additionalSpaceIds],
+    // The capped query, so typing past the cap stops re-running a search that cannot change.
+    queryKey: [
+      'table-block-filter-search',
+      cappedQuery,
+      filterByTypes?.slice().sort().join(',') ?? '',
+      additionalSpaceIds,
+    ],
     enabled: focused && !searchBlocked,
     initialPageParam: 0,
     queryFn: async ({ pageParam, signal }) => {
@@ -1732,7 +1745,7 @@ function TableBlockEntityFilterInput({
         store,
         cache,
         where: {
-          name: { fuzzy: query },
+          name: { fuzzy: cappedQuery },
           ...(filterByTypes?.length ? { types: filterByTypes.map(id => ({ id: { equals: id } })) } : {}),
         },
         first: FILTER_DROPDOWN_PAGE_SIZE,

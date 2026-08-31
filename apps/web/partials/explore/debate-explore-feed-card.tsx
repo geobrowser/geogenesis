@@ -9,6 +9,7 @@ import { getShareAriaLabel } from '~/core/debates/browse/debate-interaction-bar'
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
+import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
@@ -174,6 +175,7 @@ export function DebateExploreFeedCard({
  */
 function DebateCardExtras({ debate, active }: { debate: Debate; active: boolean }) {
   const [claimsOpen, setClaimsOpen] = React.useState(false);
+  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
   const shareAction = useDebateShareAction(debate, active);
   const shareUnavailable = shareAction.state === 'preparing' || shareAction.state === 'sharing';
 
@@ -201,8 +203,7 @@ function DebateCardExtras({ debate, active }: { debate: Debate; active: boolean 
         className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
       >
         <ExploreClaimsIcon />
-        {/* Claims are still a placeholder upstream — the full-screen feed passes 0 too. */}
-        <span className="text-[14px] font-normal tabular-nums">0</span>
+        <span className="text-[14px] font-normal tabular-nums">{claims.totalCount}</span>
       </button>
       {shareAction.tooltipMessage ? (
         <Tooltip trigger={shareButton} label={shareAction.tooltipMessage} position="top" />
@@ -211,7 +212,7 @@ function DebateCardExtras({ debate, active }: { debate: Debate; active: boolean 
       )}
       {claimsOpen ? (
         <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
-          <DebateClaimsPanel debate={debate} count={0} onClose={() => setClaimsOpen(false)} />
+          <DebateClaimsPanel debate={debate} onClose={() => setClaimsOpen(false)} />
         </div>
       ) : null}
     </>

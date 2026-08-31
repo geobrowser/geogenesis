@@ -75,6 +75,9 @@
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;
 
+  /* Shared width for the overview side rails (Explore + space home) */
+  --width-side-rail: 360px;
+
   /* Animations */
   /* One bounce cycle of the debates feed scroll nudge. Its duration is mirrored by
      BOUNCE_DURATION_MS in apps/web/core/debates/browse/debate-scroll-hint.tsx, which
