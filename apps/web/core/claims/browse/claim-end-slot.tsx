@@ -56,7 +56,19 @@ export function ClaimEndSlot({
    * nothing about the most compelling state a claim has.
    */
   activeDebate?: Debate | boolean | null;
-  /** False where the host cannot resolve the claim on the graph, so there is nothing to request. */
+  /**
+   * False while the host is not ready to ask — a feed card still below the fold.
+   *
+   * Not "the graph cannot resolve this claim". That is what it used to mean, and it was wrong:
+   * nothing in this slot touches the graph. Both the match and the live debate are geo-chat's, and
+   * the request is a geo-chat mutation against the ids geo-chat handed us, so a match the server has
+   * already made is one it will honour whatever the graph makes of the id. `UnresolvableControls`
+   * leaves the slot on for exactly that reason — gating it there took the request control off every
+   * card on the Matches tab, which is a tab where every card is a match by definition.
+   *
+   * It is a real gate all the same: `useClaimMatchup` masks a disabled lookup to null rather than
+   * serving another host's cached match, so this must only ever mean "not yet", never "not allowed".
+   */
   enabled?: boolean;
   /**
    * How the slot sits in its host.

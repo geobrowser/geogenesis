@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   claimEntities: [] as Array<{ id: string }>,
   /** Every set of per-space groups the row lookup was asked for. */
   rowGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
+  /** Whether each rendered row's controls asked for the account-level match, in render order. */
+  positionControlOffersDebate: [] as boolean[],
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -76,14 +78,23 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
   // assertions; now that it lives in the hook, a hardcoded mock would report every claim as
   // answerable no matter what the lookups say — and these suites would go quiet on the bug they
   // exist to catch.
-  useClaimPositionControl: ({ answersReady = true }: { answersReady?: boolean }) => ({
-    viewerPosition: null,
-    optimisticPositions: [],
-    respond: vi.fn(),
-    actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
-    responseError: null,
-    canRespond: answersReady,
-  }),
+  useClaimPositionControl: ({
+    answersReady = true,
+    offersDebate = true,
+  }: {
+    answersReady?: boolean;
+    offersDebate?: boolean;
+  }) => {
+    mocks.positionControlOffersDebate.push(offersDebate);
+    return {
+      viewerPosition: null,
+      optimisticPositions: [],
+      respond: vi.fn(),
+      actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
+      responseError: null,
+      canRespond: answersReady,
+    };
+  },
 }));
 
 vi.mock('~/core/claims/browse/claim-response-summary', () => ({
@@ -178,6 +189,7 @@ beforeEach(() => {
   mocks.rankByClaimId = new Map();
   mocks.claimEntities = [];
   mocks.rowGroups = [];
+  mocks.positionControlOffersDebate = [];
   mocks.rankingReady = true;
 });
 
@@ -194,6 +206,20 @@ describe('DebateClaimsPanel', () => {
 
     expect(within(cardFor('Preston Mantel')).getByText('Waking up early provides more sunlight.')).toBeInTheDocument();
     expect(within(cardFor('Arturas Vil')).getByText('Sunlight exposure can cause skin cancer.')).toBeInTheDocument();
+  });
+
+  // The merge that fills an empty side with the people behind an account-level match belongs to the
+  // offer it explains — a card must not offer a debate on a side showing nobody to debate. This
+  // panel makes no offer: it has no end slot, because the reader is already watching the debate this
+  // claim is being argued in. Left on, the merge would drop an unrelated online stranger's face into
+  // a pill on a row about this debate's own participants.
+  it('does not borrow faces from an account-level match it never offers', () => {
+    mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'Sleep matters.')] });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(mocks.positionControlOffersDebate).not.toHaveLength(0);
+    expect(mocks.positionControlOffersDebate.every(offers => offers === false)).toBe(true);
   });
 
   it('links each claim to its entity in the space the claim lives in', () => {

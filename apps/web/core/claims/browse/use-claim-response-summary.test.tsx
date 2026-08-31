@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
@@ -14,6 +14,8 @@ const SPACE = 'space-1';
 
 const mocks = vi.hoisted(() => ({
   batch: { managed: false, ready: true },
+  /** Whether the viewer's own indexed-response read fails rather than answering. */
+  viewerResponseFails: false,
   /** The viewer's personal space, which the indexed-response query is gated on. */
   personalSpace: { personalSpaceId: 'space-viewer' as string | null, isLoading: false },
   /** What the indexing snapshot reports — not a query, so `enabled` never reaches it. */
@@ -27,6 +29,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => mocks.personalSpace,
 }));
+
+// The two reads behind the hook, so a test can make the viewer's own fail rather than answer.
+vi.mock('~/core/io/queries', async () => {
+  const { Effect } = await import('effect');
+  return {
+    getEntityResponseCounts: () => Effect.succeed({ positive: 0, negative: 0 }),
+    getUserEntityResponse: () =>
+      mocks.viewerResponseFails ? Effect.fail(new Error('the graph is unreachable')) : Effect.succeed(null),
+  };
+});
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: () => mocks.indexing,
@@ -57,6 +69,7 @@ function primeStanceCache() {
 beforeEach(() => {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   mocks.batch = { managed: false, ready: true };
+  mocks.viewerResponseFails = false;
   mocks.personalSpace = { personalSpaceId: VIEWER_SPACE, isLoading: false };
   mocks.indexing = { status: 'idle', pending: null, runId: null };
 });
@@ -193,6 +206,36 @@ describe('useClaimResponseSummary and the viewer’s own side', () => {
     const ready = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
 
     expect(ready.result.current.isViewerResponseLoading).toBe(false);
+  });
+
+  it('does not treat a failed read of the viewer’s side as an answer', async () => {
+    // A fetch that *finishes* is not a fetch that answered. Once the retries are exhausted the query
+    // has completed, so anything keyed off completion would take `viewerDirection: null` as
+    // authoritative, re-enable both pills, and turn a press on the side the viewer holds into a
+    // republish — this flag's own failure, reached the long way round.
+    primeCountsOnly();
+    mocks.viewerResponseFails = true;
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryState(
+          userEntityResponseQueryKey(VIEWER_SPACE, CLAIM, SPACE, CLAIM_RESPONSE_OBJECT_TYPE, 'stance')
+        )?.status
+      ).toBe('error')
+    );
+
+    expect(result.current.isViewerResponseLoading).toBe(true);
+  });
+
+  it('settles once that read comes back, so the failure case is the only thing held', async () => {
+    // The guard for the test above: without it, a flag that never settled at all would pass it.
+    primeCountsOnly();
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    await waitFor(() => expect(result.current.isViewerResponseLoading).toBe(false));
   });
 
   it('is settled while held back, which is not the same as waiting', () => {

@@ -318,6 +318,12 @@ function PanelClaimControls({
     readiness,
     answersReady: isResponseKindResolved && isViewerResponseResolved,
     onRequireSignIn: promptSignIn,
+    // No offer here, so no faces borrowed from one. The panel deliberately has no end slot — the
+    // reader is already watching the debate this claim is being argued in — and the merge exists to
+    // stop a card offering a debate on a side showing nobody to debate. With nothing offered, all it
+    // could do is put an unrelated stranger from an account-level match inside a pill on a row about
+    // this debate's own participants.
+    offersDebate: false,
   });
 
   return (

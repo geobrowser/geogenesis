@@ -12,6 +12,7 @@ import type { DebateClaim } from '~/core/debates/api';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -55,24 +56,15 @@ export function ClaimExploreFeedCard({
   hideSpaceLink?: boolean;
   hideJoinButton?: boolean;
 }) {
-  const [container, setContainer] = React.useState<HTMLElement | null>(null);
-
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
-  // fires its lookups at once. Sticky: once fetched, stay fetched. Same approach the debate card
-  // takes for its video.
-  const [nearViewport, setNearViewport] = React.useState(false);
-  React.useEffect(() => {
-    if (!container || nearViewport) return;
-    const observer = new IntersectionObserver(
-      entries => {
-        if (entries.some(entry => entry.isIntersecting)) setNearViewport(true);
-      },
-      { rootMargin: '800px' }
-    );
-    observer.observe(container);
-    return () => observer.disconnect();
-  }, [container, nearViewport]);
+  // fires its lookups at once. Sticky: once fetched, stay fetched.
+  //
+  // The shared hook rather than this card's own copy of it. The copy came first and the shared card
+  // needed the same gating, so the logic was lifted; leaving the original behind would have left two
+  // observers that are supposed to agree and no reason they would — and they had already diverged,
+  // since only the lifted one falls back to fetching eagerly where `IntersectionObserver` is absent.
+  const { ref: setContainer, nearViewport } = useNearViewport();
 
   // Behind the same gate as the other two reads. The feed pre-mounts cards thousands of pixels
   // below the fold, so an ungated hydration here is a graph read per claim on mount — exactly the

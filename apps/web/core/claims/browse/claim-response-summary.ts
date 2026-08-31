@@ -179,7 +179,7 @@ export function useClaimResponseSummary(
   });
 
   // What the counts above already include for this viewer — the baseline the delta subtracts.
-  const { data: indexedDirection, isFetched: isIndexedDirectionFetched } = useQuery({
+  const { data: indexedDirection, isSuccess: hasViewerResponseAnswered } = useQuery({
     queryKey: userEntityResponseQueryKey(personalSpaceId, entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
     queryFn: async () => {
       if (!personalSpaceId) return null;
@@ -239,17 +239,22 @@ export function useClaimResponseSummary(
     isLoading: responseBatch.managed ? !responseBatch.ready : isLoading,
     // The viewer's own side, which the counts do not wait for.
     //
-    // Two things have to settle before `viewerDirection` means "no side" rather than "not yet":
-    // the personal space, and then the query it gates. `isFetched` rather than the query's own
-    // `isLoading` for the same reason `usePersonalSpaceId` uses it — `isLoading` reads false for a
-    // tick after a query becomes enabled but before it dispatches, which is precisely the window
-    // this is meant to cover.
+    // Two things have to settle before `viewerDirection` means "no side" rather than "not yet": the
+    // personal space, and then the query it gates.
+    //
+    // `isSuccess`, not the query's own `isLoading` and not `isFetched`. `isLoading` reads false for
+    // a tick after a query becomes enabled and before it dispatches, which is the very window this
+    // covers. `isFetched` closes that but opens another: it is true once a fetch *finishes*, a
+    // failure included. So a viewer-response read that exhausts its retries would hand back `null`
+    // as though it were an answer, re-enable both pills, and turn a press on the side the viewer
+    // holds into a republish — the failure this flag exists to prevent, reached the long way round.
+    // Only a successful read is an answer.
     //
     // Under a batch the query never runs and the batch primes its key, so the batch's readiness is
     // the only thing to wait on — the same swap `isLoading` makes above.
     isViewerResponseLoading: responseBatch.managed
       ? !responseBatch.ready
-      : isPersonalSpaceLoading || (Boolean(personalSpaceId) && !isIndexedDirectionFetched),
+      : isPersonalSpaceLoading || (Boolean(personalSpaceId) && !hasViewerResponseAnswered),
     viewerDirection: activeDirection ?? null,
     viewerSpaceId: personalSpaceId ?? null,
   };
