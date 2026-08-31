@@ -25,9 +25,12 @@ export function ProfileDebateButton({ spaceId }: { spaceId: string }) {
         type="button"
         onClick={() => createChallenge.mutate({ recipient_profile_space_id: spaceId })}
         disabled={createChallenge.isPending}
-        className="inline-flex h-7 shrink-0 items-center rounded-full bg-text px-2.5 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50"
+        // nowrap for the same reason as HubPillButton: `h-7` is fixed, and this sits at the end of
+        // the profile name row, so a long name squeezes it until the label wraps out of the pill.
+        // `shrink-0` does not help here — the wrapper is `flex-col`, so it governs height, not width.
+        className="inline-flex h-7 shrink-0 items-center rounded-full bg-text px-2.5 text-metadata whitespace-nowrap text-white transition-colors hover:bg-text/90 disabled:opacity-50"
       >
-        {createChallenge.isPending ? 'Requesting...' : 'Debate'}
+        {createChallenge.isPending ? 'Requesting...' : 'Request debate'}
       </button>
       {error && (
         <Text as="p" variant="footnote" color="red-01">

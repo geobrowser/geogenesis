@@ -3,7 +3,16 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Effect from 'effect/Effect';
 
 import { COMMENT_REPLY_TO_ID, COMMENT_TYPE_ID } from '~/core/comment-ids';
-import { VOTE_DEBATES_PROPERTY_ID, VOTE_TYPE_ID } from '~/core/debates/ontology';
+import {
+  AUTHORS_PROPERTY_ID,
+  BLOCKS_PROPERTY_ID,
+  DEBATE_CLAIMS_PROPERTY_ID,
+  DEBATE_TRANSCRIPTS_PROPERTY_ID,
+  NAME_PROPERTY_ID,
+  VOTE_DEBATES_PROPERTY_ID,
+  VOTE_TYPE_ID,
+} from '~/core/debates/ontology';
+import { groupTranscriptClaims } from '~/core/debates/transcript-claims';
 import { getConfig } from '~/core/environment/environment';
 import {
   EntitiesBatchForCommentsDocument,
@@ -15,10 +24,12 @@ import {
   type EntityExistsQuery,
   type EntityFilter,
   type EntitySpacesBatchQuery,
+  UserEntityVotesByTypeDocument,
   UserHasEntityVoteDocument,
   type UserVoteFilter,
   type UuidFilter,
 } from '~/core/gql/graphql';
+import { uuidToHex } from '~/core/id/normalize';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import {
   type ActiveResponseDirection,
@@ -32,6 +43,7 @@ import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 import { allEntitiesConnectionDocument } from './all-entities-connection-document';
+import { debateTranscriptClaimsDocument } from './debate-transcript-claims-document';
 import { type DebateVoteBacklinksPageQuery, debateVoteBacklinksPageDocument } from './debate-vote-backlinks-document';
 import { EntityDecoder, EntityTypeDecoder } from './decoders/entity';
 import { PropertyDecoder } from './decoders/property';
@@ -73,7 +85,9 @@ import {
   userEntityResponseQuery,
 } from './query-fragments';
 import { restFetch } from './rest';
+import { capSearchQuery } from './search-query';
 import { type SortOrder } from './sort-order';
+import { collapseOrFilter } from './filter-or-collapse';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
@@ -227,7 +241,9 @@ export function getAllEntities(
     const topLevelTypeId = typeId ?? extractedTypeId;
     const topLevelTypeIds = topLevelTypeId ? undefined : (typeIds ?? extractedTypeIds);
 
-    let normalizedFilter = filter;
+    // Collapse OR-ed branches before anything else looks at the filter: the OR forms make
+    // Postgres scan, in one case until the 30s statement timeout. See filter-or-collapse.ts.
+    let normalizedFilter = collapseOrFilter(filter);
     if (topLevelSpaceId || topLevelSpaceIds) {
       normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
     }
@@ -357,7 +373,8 @@ export function getEntitiesOrderedByPropertyConnection(
   const topLevelTypeIds =
     nonEmptyIds(typeIds) ?? idsFromUuidFilter(extractedTypeIds) ?? (extractedTypeId ? [extractedTypeId] : undefined);
 
-  let normalizedFilter = filter;
+  // See filter-or-collapse.ts — the same shapes reach this path too.
+  let normalizedFilter = collapseOrFilter(filter);
   if (topLevelSpaceId || topLevelSpaceIds) {
     normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
   }
@@ -643,6 +660,30 @@ export function getDebateVoteEntities(debateEntityId: string, signal?: AbortCont
 
     if (ids.length === 0) return [] as Entity[];
     return yield* getBatchEntitiesForComments(ids, signal);
+  });
+}
+
+/**
+ * Every claim extracted from a debate's transcript, grouped by the speaker it's attributed to.
+ *
+ * Walks Debate → Transcripts → Blocks → (Authors, Claims) in one request, scoped to the debate's
+ * publication space. Attribution comes from the text block rather than the claim, and the scoping
+ * is what keeps a stranger's relation out of it; see `debate-transcript-claims-document.ts`.
+ */
+export function getDebateTranscriptClaims(debateEntityId: string, spaceId: string, signal?: AbortController['signal']) {
+  return graphql({
+    query: debateTranscriptClaimsDocument,
+    decoder: data => groupTranscriptClaims(data, spaceId),
+    variables: {
+      id: debateEntityId,
+      transcriptsPropertyId: DEBATE_TRANSCRIPTS_PROPERTY_ID,
+      blocksPropertyId: BLOCKS_PROPERTY_ID,
+      authorsPropertyId: AUTHORS_PROPERTY_ID,
+      claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
+      spaceId,
+      namePropertyId: NAME_PROPERTY_ID,
+    },
+    signal,
   });
 }
 
@@ -1039,7 +1080,12 @@ export type SearchResultsPage = {
 
 export function buildSearchPath(args: ResultsArgs): string {
   const params = new URLSearchParams();
-  params.set('query', args.query);
+  // Every REST search in the app arrives here — the ten-odd `useSearch` surfaces through
+  // `E.findFuzzyPage`, plus chat, community calls and import auto-mapping calling `getResults`
+  // directly — so this is the one place the endpoint's length limit has to be respected. Capping
+  // here rather than at each input also leaves the caller's own state holding what the searcher
+  // actually typed, which is what gets echoed back to them.
+  params.set('query', capSearchQuery(args.query));
   params.set('limit', String(args.limit ?? 10));
   params.set('offset', String(args.offset ?? 0));
 
@@ -1337,6 +1383,60 @@ export function getEntityResponders(
     signal,
   });
 }
+
+export const USER_ENTITY_VOTES_PAGE_SIZE = 50;
+
+type UserEntityVoteRow = { objectId: string; voteKind: number; votedAt: string };
+
+export type UserEntityVoteObjectIdsPage = {
+  objectIds: string[];
+  voteKindByObjectId: Record<string, number>;
+  votedAtByObjectId: Record<string, string>;
+  nextOffset: number;
+  hasNextPage: boolean;
+};
+
+export function getUserEntityVoteObjectIdsPage(
+  userId: string,
+  voteType: 0 | 1,
+  objectType: 0 | 1 = 0,
+  offset = 0,
+  signal?: AbortController['signal']
+) {
+  return Effect.gen(function* () {
+    const rows: UserEntityVoteRow[] = yield* graphql({
+      query: UserEntityVotesByTypeDocument,
+      decoder: (data): UserEntityVoteRow[] =>
+        (data.userVotes ?? []).filter((row): row is UserEntityVoteRow => row != null),
+      variables: {
+        userId,
+        voteType,
+        objectType,
+        first: USER_ENTITY_VOTES_PAGE_SIZE,
+        offset,
+      },
+      signal,
+    });
+
+    const nodes = rows.filter(node => Boolean(node.objectId));
+    const objectIds = nodes.map(node => node.objectId);
+    const voteKindByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.voteKind]));
+    const votedAtByObjectId = Object.fromEntries(nodes.map(node => [uuidToHex(node.objectId), node.votedAt]));
+
+    return {
+      objectIds,
+      voteKindByObjectId,
+      votedAtByObjectId,
+      // Advance by what the server returned, not by what survived filtering, so a
+      // dropped row can't shift the window and skip the vote that follows it.
+      nextOffset: offset + rows.length,
+      // A short page is the last one. A page that lands exactly on the boundary
+      // costs one extra empty fetch, which is cheaper than a count query.
+      hasNextPage: rows.length === USER_ENTITY_VOTES_PAGE_SIZE,
+    } satisfies UserEntityVoteObjectIdsPage;
+  });
+}
+
 const EXCLUDED_BLOCK_TYPES = [
   SystemIds.TEXT_BLOCK,
   SystemIds.IMAGE_BLOCK,

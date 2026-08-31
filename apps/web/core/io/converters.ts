@@ -298,7 +298,16 @@ function convertWhereConditionToEntityFilterInner(where: WhereCondition): Entity
       }
     });
     if (spaceIds.length > 0) {
-      filter.spaceIds = { in: spaceIds } as UuidListFilter;
+      // `overlaps`, not `in`. `spaceIds` is an array column, and on one of those `in` asks whether
+      // the *whole array* equals one of the given arrays — so an entity living in spaces [A, B]
+      // does not match a filter for A. `overlaps` asks whether the two share an element, which is
+      // what "this entity is in one of these spaces" means, and what the local matcher in
+      // `experimental_query-layer` has always done (`clause.some(...entity.spaces.includes)`).
+      //
+      // Measured against testnet: the same topic-scoped query returns 829 rows with `overlaps` and
+      // 3 with `in`, and 41 of 1,000 sampled entities live in more than one space — so this was
+      // silently hiding multi-space entities from every space-filtered data block.
+      filter.spaceIds = { overlaps: spaceIds } as UuidListFilter;
     }
   }
 

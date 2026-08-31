@@ -9,7 +9,25 @@ export type RetryCategory =
   | 'transport_dns'
   | 'transport_connection_reset'
   | 'transport_connection_refused'
-  | 'transport_unknown';
+  | 'transport_unknown'
+  // Only ever produced by the test-run network guard in `vitest.setup.ts`. Deliberately absent
+  // from `isRetryableCategory` — see `TEST_UNMOCKED_NETWORK_CODE` below.
+  | 'test_unmocked_network';
+
+/**
+ * Marker `code` set by the test-run network guard (`vitest.setup.ts`).
+ *
+ * GEO-2645 made that guard reject immediately so an unmocked call fails inside its own test's
+ * lifetime. That is necessary but not sufficient: an immediate rejection is still classified as a
+ * transport failure, and every transport category is retryable, so the client re-armed it on the
+ * exponential schedule and logged `Exhausted retries` roughly a second and a half later — after the
+ * test had finished. The pending console RPC then killed the whole run at worker teardown with
+ * `EnvironmentTeardownError`, every assertion passing, exit code 1.
+ *
+ * Classifying the guard's error as non-retryable closes that gap. The call still fails, and still
+ * fails loudly inside its own test — it just fails once.
+ */
+export const TEST_UNMOCKED_NETWORK_CODE = 'GEO_TEST_UNMOCKED_NETWORK';
 
 type ErrorRecord = Record<string, unknown>;
 
@@ -41,6 +59,22 @@ export function classifyTransportFailure(error: unknown): TransportFailure {
   const causeMessage = typeof cause?.message === 'string' ? cause.message : undefined;
   const causeCode = typeof cause?.code === 'string' ? cause.code : undefined;
   const haystack = `${message} ${code ?? ''} ${errno ?? ''} ${causeMessage ?? ''} ${causeCode ?? ''}`.toLowerCase();
+
+  // Checked first: the guard's message names a URL, which the heuristics below would happily read
+  // as a DNS failure and retry.
+  if (code === TEST_UNMOCKED_NETWORK_CODE) {
+    return {
+      category: 'test_unmocked_network',
+      name,
+      message,
+      code,
+      errno,
+      syscall,
+      causeName,
+      causeMessage,
+      causeCode,
+    };
+  }
 
   if (
     haystack.includes('timed out') ||

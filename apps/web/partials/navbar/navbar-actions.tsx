@@ -10,14 +10,12 @@ import { AnimatePresence, motion, useAnimation } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 
 import { browseModeToggled, editModeToggled } from '~/core/analytics';
-import { useDebateActivity, useUpdateDebateAvailability } from '~/core/debates/hooks';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
-import { useToast } from '~/core/hooks/use-toast';
 import { useEditable } from '~/core/state/editable-store';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
@@ -50,10 +48,7 @@ export function NavbarActions() {
   const { personalSpaceId } = usePersonalSpaceId();
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
-  const activityQuery = useDebateActivity();
-  const availabilityMutation = useUpdateDebateAvailability();
   const { user } = usePrivy();
-  const [, setToast] = useToast();
   // Cleanup is registered once at the app root (useGeoLogoutCleanup); here we
   // only trigger the logout.
   const { logout } = useLogout();
@@ -83,15 +78,6 @@ export function NavbarActions() {
   const displayName = profile?.name?.trim() || shortAddress(address);
   const email = userEmail(user);
   const identityDetail = email ?? address;
-  const availableToDebate = activityQuery.data?.available_to_debate ?? true;
-  const availabilityPending = activityQuery.isPending || availabilityMutation.isPending;
-
-  const toggleDebateAvailability = () => {
-    availabilityMutation.mutate(!availableToDebate, {
-      onError: () => setToast(<span>Couldn’t update debate availability.</span>),
-    });
-  };
-
   return (
     <div className="flex items-center gap-4">
       <ModeToggle />
@@ -120,30 +106,6 @@ export function NavbarActions() {
           onNavigate={() => onOpenChange(false)}
         />
         <div className="border-t border-grey-02">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={availableToDebate}
-            disabled={availabilityPending}
-            onClick={toggleDebateAvailability}
-            className="flex w-full items-center justify-between gap-1 px-3 py-2.5 text-left font-[family-name:var(--font-calibre)] text-[1rem] leading-[0.9375rem] font-medium tracking-[-0.03125rem] text-text not-italic transition-colors hover:bg-bg focus-visible:bg-bg focus-visible:outline-none disabled:cursor-wait disabled:text-grey-03"
-          >
-            <span className="min-w-0 truncate">Available to debate</span>
-            <span
-              aria-hidden="true"
-              className={cx(
-                'relative h-4 w-6 shrink-0 rounded-full transition-colors',
-                availableToDebate ? 'bg-text' : 'bg-grey-03'
-              )}
-            >
-              <span
-                className={cx(
-                  'absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform',
-                  availableToDebate && 'translate-x-2'
-                )}
-              />
-            </span>
-          </button>
           <button
             type="button"
             onClick={logout}

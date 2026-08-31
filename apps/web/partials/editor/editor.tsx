@@ -1,5 +1,6 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { EditorContent, JSONContent, Editor as TiptapEditor, useEditor } from '@tiptap/react';
 
 import * as React from 'react';
@@ -9,19 +10,33 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
+import { useToast } from '~/core/hooks/use-toast';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorStore } from '~/core/state/editor/use-editor';
 import { removeIdAttributes } from '~/core/state/editor/utils';
 import { EntitySidePanelEditContext } from '~/core/state/entity-side-panel-edit-context';
+import { storage } from '~/core/sync/use-mutate';
+import { getRelations, getValues } from '~/core/sync/use-store';
 import { resolveGraphLinkHref } from '~/core/utils/graph-link';
 
 import { Spacer } from '~/design-system/spacer';
 
+import type { BlockClipboardPayload } from './block-clipboard';
+import {
+  blockPlainText,
+  buildBlockLink,
+  cloneBlockEntityData,
+  collectBlockEntityData,
+  insertClonedBlock,
+  readBlockClipboard,
+  writeBlockClipboard,
+} from './block-clipboard';
+import { BlockReorder } from './block-reorder';
 import { createCommandExtension } from './command-extension';
 import { createEntityMentionExtension, entityMentionPluginKey } from './entity-mention-extension';
 import { tiptapExtensions } from './extensions';
 import { createGraphLinkHoverExtension } from './graph-link-hover-extension';
-import { createIdExtension } from './id-extension';
+import { createIdExtension, ensureUniqueNodeIds } from './id-extension';
 import { normalizeEditorContent } from './normalize-editor-content';
 import { ServerContent } from './server-content';
 import { editorContentVersionAtom, entitySidePanelPersistEditorAtom } from '~/atoms';
@@ -47,8 +62,18 @@ interface Props {
 export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: Props) {
   useSuppressFlushSyncWarning();
   const router = useRouter();
-  const { upsertEditorState, editorJson, serverBlocks, activeEntityId, blockIds, setHasContent } = useEditorStore();
+  const {
+    upsertEditorState,
+    editorJson,
+    serverBlocks,
+    activeEntityId,
+    blockIds,
+    blockRelations,
+    initialBlockEntities,
+    setHasContent,
+  } = useEditorStore();
   const editable = useUserIsEditing(spaceId);
+  const [, setToast] = useToast();
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
   const sidePanelCtx = React.useContext(EntitySidePanelEditContext);
   const setSidePanelPersist = useSetAtom(entitySidePanelPersistEditorAtom);
@@ -155,6 +180,7 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
 
   // Ref to hold the current editor instance for use in effects
   const editorRef = React.useRef<TiptapEditor | null>(null);
+  const pasteCopiedBlockRef = React.useRef<(payload: BlockClipboardPayload) => boolean>(() => false);
 
   // Track the previous editable state to detect transitions from edit → read mode
   const prevEditableRef = React.useRef(editable);
@@ -163,6 +189,15 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
     if (!editableRef.current || !editorRef.current) return;
     const isSuggestionActive = entityMentionPluginKey.getState(editorRef.current.state)?.active;
     if (isSuggestionActive) return;
+    const json = editorRef.current.getJSON();
+    trackEditorDocument(json);
+    upsertEditorStateRef.current(json);
+  }, [trackEditorDocument]);
+
+  // A deliberate drop is an explicit document change, so persist it immediately
+  // even if a suggestion popup happened to be active before the drag began.
+  const persistReorderedBlocks = React.useCallback(() => {
+    if (!editableRef.current || !editorRef.current) return;
     const json = editorRef.current.getJSON();
     trackEditorDocument(json);
     upsertEditorStateRef.current(json);
@@ -216,6 +251,12 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
             // Get pasted content
             const clipboardData = event.clipboardData;
             if (clipboardData) {
+              const copiedBlock = readBlockClipboard(clipboardData);
+              if (copiedBlock && pasteCopiedBlockRef.current(copiedBlock)) {
+                event.preventDefault();
+                return true;
+              }
+
               const textData = clipboardData.getData('text/plain');
 
               // Always prevent default and handle manually to avoid emoji conversion
@@ -310,6 +351,194 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
     editor.commands.setContent(editorJson);
   }, [editor, editorJson, editable]);
 
+  const makeBlockClipboardPayload = React.useCallback(
+    (childIndex: number): BlockClipboardPayload | null => {
+      const currentEditor = editorRef.current;
+      if (!currentEditor || currentEditor.isDestroyed) return null;
+      if (childIndex < 0 || childIndex >= currentEditor.state.doc.childCount) return null;
+
+      ensureUniqueNodeIds(currentEditor);
+      const node = currentEditor.state.doc.child(childIndex);
+      const sourceBlockId = typeof node.attrs.id === 'string' ? node.attrs.id : null;
+      if (!sourceBlockId) return null;
+
+      const blockRelation = blockRelations.find(relation => relation.block.id === sourceBlockId);
+      const sourceRelationEntityId = blockRelation?.entityId ?? null;
+      const initialValues = initialBlockEntities.flatMap(entity => entity.values);
+      const initialRelations = [...initialBlockEntities.flatMap(entity => entity.relations), ...blockRelations];
+      const copiedData = collectBlockEntityData({
+        rootEntityIds: [sourceBlockId, sourceRelationEntityId].filter((id): id is string => Boolean(id)),
+        values: getValues({ mergeWith: initialValues, selector: value => value.spaceId === spaceId }),
+        relations: getRelations({
+          mergeWith: initialRelations,
+          selector: relation => relation.spaceId === spaceId,
+        }),
+      });
+
+      return {
+        version: 1,
+        node: node.toJSON(),
+        plainText: blockPlainText(node),
+        sourceBlockId,
+        sourceRelationEntityId,
+        values: copiedData.values,
+        relations: copiedData.relations,
+      };
+    },
+    [blockRelations, initialBlockEntities, spaceId]
+  );
+
+  const persistCopiedBlock = React.useCallback(
+    (payload: BlockClipboardPayload, blockId: string) => {
+      const currentEditor = editorRef.current;
+      if (!currentEditor || currentEditor.isDestroyed) return false;
+
+      const json = currentEditor.getJSON();
+      trackEditorDocument(json);
+      upsertEditorStateRef.current(json, {
+        skipDefaultInitializationForBlockIds: new Set([blockId]),
+      });
+
+      const destinationBlockRelation = getRelations({
+        selector: relation =>
+          relation.fromEntity.id === activeEntityId &&
+          relation.toEntity.id === blockId &&
+          relation.type.id === SystemIds.BLOCKS &&
+          relation.spaceId === spaceId,
+      })[0];
+      if (!destinationBlockRelation) {
+        console.error('Unable to find the new Blocks relation while copying block:', blockId);
+        return false;
+      }
+
+      const copiedData = cloneBlockEntityData({
+        payload,
+        blockId,
+        relationEntityId: destinationBlockRelation.entityId,
+        spaceId,
+      });
+
+      for (const value of copiedData.values) {
+        storage.values.set(value);
+      }
+
+      for (const relation of copiedData.relations) {
+        const existingRelation = getRelations({
+          selector: candidate =>
+            candidate.fromEntity.id === relation.fromEntity.id &&
+            candidate.type.id === relation.type.id &&
+            candidate.toEntity.id === relation.toEntity.id &&
+            candidate.spaceId === spaceId,
+        })[0];
+
+        if (existingRelation) {
+          storage.relations.update(existingRelation, draft => {
+            // Dependent values and relations in the cloned payload already point
+            // at this cloned relation entity, so retain that identity on a collision.
+            draft.entityId = relation.entityId;
+            draft.position = relation.position;
+            draft.verified = relation.verified;
+            if (relation.toSpaceId === undefined) {
+              delete draft.toSpaceId;
+            } else {
+              draft.toSpaceId = relation.toSpaceId;
+            }
+          });
+        } else {
+          storage.relations.set(relation);
+        }
+      }
+
+      return true;
+    },
+    [activeEntityId, spaceId, trackEditorDocument]
+  );
+
+  const insertCopiedBlock = React.useCallback(
+    (payload: BlockClipboardPayload, insertPosition?: number) => {
+      const currentEditor = editorRef.current;
+      if (!currentEditor || currentEditor.isDestroyed) return { inserted: false, persisted: false };
+
+      const blockId = insertClonedBlock(currentEditor, payload, spaceId, { position: insertPosition });
+      if (blockId === null) return { inserted: false, persisted: false };
+
+      return { inserted: true, persisted: persistCopiedBlock(payload, blockId) };
+    },
+    [persistCopiedBlock, spaceId]
+  );
+
+  const copyLinkToBlock = React.useCallback(
+    async (childIndex: number) => {
+      const currentEditor = editorRef.current;
+      if (!currentEditor || currentEditor.isDestroyed || typeof window === 'undefined') return;
+
+      ensureUniqueNodeIds(currentEditor);
+      const blockId = currentEditor.state.doc.child(childIndex)?.attrs.id;
+      if (typeof blockId !== 'string') return;
+
+      // ID assignment is normally persisted on blur, but the editor may not have
+      // been focused before the handle was used. Persist before sharing the URL so
+      // another visitor can resolve the target immediately.
+      const json = currentEditor.getJSON();
+      trackEditorDocument(json);
+      upsertEditorStateRef.current(json);
+
+      try {
+        await navigator.clipboard.writeText(buildBlockLink(window.location.href, blockId));
+        setToast(<div className="text-button">Link copied</div>);
+      } catch {
+        setToast(<div className="text-button">Unable to copy link</div>);
+      }
+    },
+    [setToast, trackEditorDocument]
+  );
+
+  const copyBlock = React.useCallback(
+    async (childIndex: number) => {
+      const payload = makeBlockClipboardPayload(childIndex);
+      if (!payload) return;
+
+      try {
+        await writeBlockClipboard(payload);
+        setToast(<div className="text-button">Block copied</div>);
+      } catch {
+        setToast(<div className="text-button">Unable to copy block</div>);
+      }
+    },
+    [makeBlockClipboardPayload, setToast]
+  );
+
+  const duplicateBlock = React.useCallback(
+    (childIndex: number) => {
+      const currentEditor = editorRef.current;
+      const payload = makeBlockClipboardPayload(childIndex);
+      if (!currentEditor || currentEditor.isDestroyed || !payload) return;
+
+      const insertPosition = positionBeforeTopLevelChild(currentEditor, childIndex + 1);
+      const result = insertCopiedBlock(payload, insertPosition);
+      if (!result.persisted) {
+        setToast(<div className="text-button">Unable to save duplicated block</div>);
+      }
+    },
+    [insertCopiedBlock, makeBlockClipboardPayload, setToast]
+  );
+
+  const pasteCopiedBlock = React.useCallback(
+    (payload: BlockClipboardPayload) => {
+      const result = insertCopiedBlock(payload);
+      if (!result.persisted) {
+        setToast(<div className="text-button">Unable to save pasted block</div>);
+      }
+      // If insertion succeeded, the paste event is handled even when graph
+      // persistence reports a failure. Falling through would insert the plain
+      // text a second time after the document has already changed.
+      return result.inserted;
+    },
+    [insertCopiedBlock, setToast]
+  );
+
+  pasteCopiedBlockRef.current = pasteCopiedBlock;
+
   const handleGutterClick = React.useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       if (!editor || editor.isDestroyed || !editable) return;
@@ -331,16 +560,38 @@ export function Editor({ shouldHandleOwnSpacing, spaceId, placeholder = null }: 
     <LayoutGroup id="editor">
       <div
         ref={editorWrapperRef}
-        className={editable ? 'editable' : 'not-editable'}
+        className={editable ? 'editable relative' : 'not-editable'}
         onClick={handleGutterClick}
         style={editable ? { minHeight: '8rem' } : undefined}
       >
-        {editor ? <EditorContent editor={editor} /> : <ServerContent blocks={serverBlocks} />}
+        {editor ? (
+          <BlockReorder
+            editor={editor}
+            editorWrapperRef={editorWrapperRef}
+            enabled={editable}
+            onReorder={persistReorderedBlocks}
+            onCopyLink={copyLinkToBlock}
+            onCopyBlock={copyBlock}
+            onDuplicateBlock={duplicateBlock}
+          >
+            <EditorContent editor={editor} />
+          </BlockReorder>
+        ) : (
+          <ServerContent blocks={serverBlocks} />
+        )}
 
         {shouldHandleOwnSpacing && editable && <Spacer height={60} />}
       </div>
     </LayoutGroup>
   );
+}
+
+function positionBeforeTopLevelChild(editor: TiptapEditor, childIndex: number) {
+  let position = 0;
+  for (let index = 0; index < childIndex; index += 1) {
+    position += editor.state.doc.child(index).nodeSize;
+  }
+  return position;
 }
 
 /**

@@ -6,7 +6,13 @@ import { useAtom } from 'jotai';
 
 import { type DebatesHubTab, debatesHubAtom } from '~/atoms';
 
-const DEFAULT_TAB: DebatesHubTab = 'requests';
+/**
+ * Opening the panel lands on Claims — the list you can always act on, and the reason to open the
+ * hub when nothing is pending. Deliberately not the megaphone's badge target: a pending request
+ * still needs one click to Requests, which is the trade for not opening onto an empty list the
+ * rest of the time.
+ */
+const DEFAULT_TAB: DebatesHubTab = 'claims';
 
 export function useDebatesHub() {
   const [state, setState] = useAtom(debatesHubAtom);

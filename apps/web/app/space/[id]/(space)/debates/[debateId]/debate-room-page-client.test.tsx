@@ -13,6 +13,7 @@ import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-polic
 import { DebateRoomPageClient, isDebateInThankYouPeriod } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
+  prefetchAllowlist: vi.fn(),
   back: vi.fn(),
   push: vi.fn(),
   replace: vi.fn(),
@@ -251,7 +252,14 @@ class FakeBroadcastChannel {
   }
 }
 
+// The warm-up reaches for a QueryClient and this suite renders without a provider. Mocked to the
+// question the room is responsible for: does entering a debate ask for the allowlist to be warmed?
+vi.mock('~/core/debates/use-prefetch-claim-space-allowlist', () => ({
+  usePrefetchClaimSpaceAllowlist: (enabled: boolean) => mocks.prefetchAllowlist(enabled),
+}));
+
 beforeEach(() => {
+  mocks.prefetchAllowlist.mockReset();
   clearDebateReturnDestination();
   setHistoryLength(1);
   mocks.back.mockReset();
@@ -431,6 +439,16 @@ describe('isDebateInThankYouPeriod', () => {
 });
 
 describe('DebateRoomPageClient', () => {
+  // GEO-2599. The debate-again picker's All tab waits on the claim-space allowlist, which walks the
+  // Root space's topic tree — about thirteen sequential round trips cold, and the tab stays empty
+  // until it lands. Entering the room says the picker is minutes away, so the traversal is started
+  // against a viewer who is watching a debate rather than one waiting on a list.
+  it('warms the claim-space allowlist on entering a debate', () => {
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(mocks.prefetchAllowlist).toHaveBeenCalledWith(true);
+  });
+
   it('returns through browser history without rendering an already-completed room', async () => {
     setHistoryLength(2);
 
@@ -476,12 +494,11 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
   });
 
-  // The session is what keeps both sides "in a flow": it disables every Debate control and keeps
-  // DebateCoordinator routing back into the room the cancellation just emptied.
-  it('leaves the rematch the cancelled recording anchored', async () => {
+  // Declining to publish and wanting another debate are unrelated choices, so the session the
+  // debate anchored outlives the cancellation and the canceller stays where they can act on it.
+  it('keeps the rematch the cancelled recording anchored, and does not eject the canceller', async () => {
     setHistoryLength(2);
     mocks.rematch = rematchSession('deciding');
-    mocks.leaveRematchMutateAsync.mockResolvedValue(rematchSession('ended'));
     mocks.debate = {
       ...completedDebate(),
       rematch_session_id: 'rematch-1',
@@ -492,13 +509,17 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    await waitFor(() => expect(mocks.clearDebateActivity).not.toHaveBeenCalled());
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
   });
 
-  it('leaves the rematch on the opponent side too, and never blocks their exit on it', async () => {
+  // The opponent is told the recording is gone, then put back on the thank-you screen: the debate
+  // they already agreed to is still there to accept.
+  it('returns the opponent to the flow after they acknowledge the removal', async () => {
     setHistoryLength(2);
     mocks.rematch = rematchSession('deciding');
-    mocks.leaveRematchMutateAsync.mockRejectedValue(new Error('rematch already gone'));
     mocks.debate = {
       ...completedDebate(),
       rematch_session_id: 'rematch-1',
@@ -510,11 +531,84 @@ describe('DebateRoomPageClient', () => {
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Your debate was removed')).toBeInTheDocument();
-    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    // The notice is a dialog over the debate, not a replacement for it. Returning it early
+    // unmounted the screen behind it and left the backdrop showing the app shell.
+    expect(screen.getByText('Debate complete.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Okay' }));
 
-    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates');
+    await waitFor(() => expect(screen.queryByText('Your debate was removed')).not.toBeInTheDocument());
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
+  });
+
+  // A cold load has no rematch data yet, so the teardown waits for the answer instead of reading
+  // "not loaded" as "still live" — which would leave the canceller sitting on a dead screen.
+  it('tears the room down once an unloaded rematch resolves to expired', async () => {
+    setHistoryLength(2);
+    mocks.rematch = null;
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // Nothing is decided while the session is unknown.
+    await waitFor(() => expect(screen.queryByText('Loading debate...')).not.toBeInTheDocument());
+    expect(mocks.replace).not.toHaveBeenCalled();
+
+    mocks.rematch = rematchSession('expired');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+  });
+
+  // Cancelling and then deciding against the rematch is the one exit left, and it was gated on
+  // saving a recording that had just been discarded — so it failed every time.
+  it('lets a canceller leave the surviving rematch without persisting a discarded recording', async () => {
+    setHistoryLength(2);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+    mocks.rematch = rematchSession('deciding');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    expect(screen.queryByText('Could not save the local recording. Please try leaving again.')).not.toBeInTheDocument();
+  });
+
+  // The exception that keeps the old teardown honest: there is nothing left to return to, so
+  // cancelling still ends the room rather than stranding the canceller on a dead screen.
+  it('still ends the room when the rematch has already expired', async () => {
+    setHistoryLength(2);
+    mocks.rematch = rematchSession('expired');
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+      recording_cancelled_at: '2026-07-02T00:01:20.000Z',
+      recording_cancelled_by: 'user-a',
+      recordings: [],
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(mocks.leaveRematchMutateAsync).not.toHaveBeenCalled();
     expect(mocks.back).not.toHaveBeenCalled();
   });
 
@@ -2446,6 +2540,30 @@ describe('DebateRoomPageClient', () => {
 
     pendingClock.resolve({ server_time_ms: Date.parse('2026-07-02T00:00:20.000Z') });
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+  });
+
+  it('starts capturing during preflight rather than waiting for the recording window to open', async () => {
+    // GEO-2644. The recorder used to be scheduled for `startAtMs`, so the encoder's own warmup
+    // happened at t=0 and every recording began fractionally after the window it is measured
+    // against. Capture has to be running *before* the window opens; the server trims the
+    // pre-window head, so starting early costs nothing and padding the head is what it avoids.
+    installRecordingMocks();
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'preflight',
+      current_turn_index: 0,
+      current_speaker_slot: null,
+      started_at: null,
+      // Ten seconds after the synchronized clock, so the window is still firmly shut.
+      preflight_ends_at: '2026-07-02T00:00:30.000Z',
+      completed_at: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalledOnce());
+    // Recording, but the debate has not started — nothing is uploaded until the window closes.
     expect(mocks.enqueueRecording).not.toHaveBeenCalled();
   });
 
