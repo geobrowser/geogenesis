@@ -22,7 +22,17 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 }));
 
 vi.mock('./claim-explore-feed-card', () => ({
-  ClaimExploreFeedCard: ({ item }: { item: { title: string } }) => <div data-testid="claim-card">{item.title}</div>,
+  ClaimExploreFeedCard: ({
+    item,
+    titleOpensSidePanel,
+  }: {
+    item: { title: string };
+    titleOpensSidePanel?: boolean;
+  }) => (
+    <div data-testid="claim-card" data-opens-side-panel={String(titleOpensSidePanel)}>
+      {item.title}
+    </div>
+  ),
 }));
 
 vi.mock('~/design-system/fallback-image', () => ({
@@ -205,6 +215,15 @@ describe('ExploreFeedCard', () => {
       const debate = { ...item, types: [{ id: DEBATE_TYPE_ID, name: 'Debate' }] };
       render(<ExploreFeedCard item={debate} titleOpensSidePanel />);
       expect(screen.getByTestId('debate-card')).toHaveAttribute('data-opens-side-panel', 'true');
+    });
+
+    // The card type this PR added, and the one the note above predicted: on Explore it *replaces*
+    // the default rendition, so a claim that did not take this prop would be the only card on the
+    // page whose name still navigated away.
+    it('reaches the claim card', () => {
+      const claim = { ...item, types: [{ id: '96f859ef-a1ca-4b22-9372-c86ad58b694b', name: 'Claim' }] };
+      render(<ExploreFeedCard item={claim} titleOpensSidePanel />);
+      expect(screen.getByTestId('claim-card')).toHaveAttribute('data-opens-side-panel', 'true');
     });
 
     it('stays off by default, so the card keeps navigating everywhere else it is used', () => {
