@@ -25,7 +25,15 @@ import { PositionBox } from '~/design-system/position-box';
 import { onChangeEntryFn, onLinkEntryFn } from './change-entry';
 
 const MOUSE_ACTIVATION = { distance: 10 };
-/** Kept in step with `ranking-my-ranking-dnd`, where the reasoning for these numbers lives. */
+/**
+ * Touch needs a hold, not a move: a distance constraint can't tell a drag from a scroll, which is
+ * what made rows grab during a scroll gesture.
+ *
+ * `tolerance` reads backwards. Under a delay constraint it is a *cancel* radius — moving more than
+ * this before the timer fires aborts the pending drag (`@dnd-kit/core` `core.cjs.development.js`,
+ * the `hasExceededDistance` checks around :1546). So a *lower* tolerance makes scrolling win more
+ * often, and raising it would make accidental drags more likely, not less. Keep this small.
+ */
 const TOUCH_ACTIVATION = { delay: 250, tolerance: 6 };
 
 export type RenderItemProps = {
