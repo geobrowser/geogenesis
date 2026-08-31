@@ -16,11 +16,10 @@ import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { NavUtils } from '~/core/utils/utils';
 
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
+import { ExploreCardEntityLink } from './explore-card-entity-link';
 import { ExploreMetaRow } from './explore-meta-row';
 
 /**
@@ -51,10 +50,20 @@ export function ClaimExploreFeedCard({
   item,
   hideSpaceLink = false,
   hideJoinButton = false,
+  titleOpensSidePanel = false,
 }: {
   item: ExploreFeedItem;
   hideSpaceLink?: boolean;
   hideJoinButton?: boolean;
+  /**
+   * Whether the claim's name opens the entity side panel rather than navigating (GEO-2757).
+   *
+   * Threaded through for the same reason every other card body takes it: on Explore this card
+   * *replaces* the generic one, so a claim that did not accept it would be the single card type on
+   * that page whose name still navigated away — a difference nobody chose, introduced by this card
+   * existing.
+   */
+  titleOpensSidePanel?: boolean;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -169,14 +178,15 @@ export function ClaimExploreFeedCard({
         {/* No thumbnail: claims carry no image, so the generic card's 60px well is either an empty
             gutter or a placeholder that says nothing. The sentence gets the column instead — it
             runs to a median of 108 characters and needs it. */}
-        <Link
-          href={NavUtils.toEntity(item.spaceId, item.entityId)}
+        <ExploreCardEntityLink
+          item={item}
+          opensSidePanel={titleOpensSidePanel}
           className="group/title col-start-1 row-start-2 min-w-0"
         >
           <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-pretty text-text group-hover/title:underline">
             {item.title}
           </h2>
-        </Link>
+        </ExploreCardEntityLink>
 
         <div
           className={cx(

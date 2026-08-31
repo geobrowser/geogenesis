@@ -153,6 +153,7 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         item={props.item}
         hideSpaceLink={props.hideSpaceLink}
         hideJoinButton={props.hideJoinButton}
+        titleOpensSidePanel={props.titleOpensSidePanel}
       />
     );
   }
