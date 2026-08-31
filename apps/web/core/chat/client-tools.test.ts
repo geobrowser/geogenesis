@@ -66,6 +66,21 @@ describe('shouldResubmitAfterClientExecution', () => {
     expect(shouldResubmitAfterClientExecution({ messages: settled })).toBe(true);
   });
 
+  it('treats both import tools as client-executed', () => {
+    // Same failure mode that broke round 7: a client-dispatched tool missing
+    // from CLIENT_EXECUTED_TOOL_TYPES never resubmits, so the model never sees
+    // its result and the turn just stops — while `isBusy` reads false for the
+    // whole run, unlocking the composer mid-import.
+    for (const tool of ['tool-proposeImportMapping', 'tool-applyImport']) {
+      const running = [user, assistant([stepStart, toolPart('call_1', tool, 'input-available')])];
+      expect(hasPendingClientToolCall(running), tool).toBe(true);
+      expect(shouldResubmitAfterClientExecution({ messages: running }), tool).toBe(false);
+
+      const settled = [user, assistant([stepStart, toolPart('call_1', tool, 'output-available')])];
+      expect(shouldResubmitAfterClientExecution({ messages: settled }), tool).toBe(true);
+    }
+  });
+
   it('only considers the last step', () => {
     const messages = [
       user,

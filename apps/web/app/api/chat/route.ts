@@ -37,6 +37,7 @@ import { buildFollowUpCapabilityNote } from './follow-up-capabilities';
 import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
 import { requestedItemCount } from './requested-item-count';
+import { attachmentInLastUserMessage, renderAttachmentNote } from './attachment-note';
 import { appendNoteToLastUserMessage, previousSpaceInConversation, renderSpaceSwitchNote } from './space-switch-note';
 import { sanitizeModelMessages } from './sanitize-model-messages';
 import { scopeToolTrafficToCurrentTurn } from './scope-tool-traffic';
@@ -305,6 +306,13 @@ const CLIENT_READ_TOOL_NAMES = new Set<string>([
   'webFetch',
   'searchImages',
   'geoQuery',
+  // Both run in the browser: the parsed file lives in a module-scoped Map
+  // there and is never uploaded. applyImport is a write, but it is dispatched
+  // by import-dispatcher rather than edit-dispatcher, so it is listed here —
+  // this set is what makes the route wait for a client result instead of
+  // ending the turn with the call unanswered.
+  'proposeImportMapping',
+  'applyImport',
 ]);
 
 // The closer's reply budget. A backstop, not a length control: the model is
@@ -479,10 +487,18 @@ export async function POST(req: Request) {
   // traffic, and only when the conversation actually holds another space —
   // an unmoved conversation is byte-identical to before.
   const previousSpaceId = previousSpaceInConversation(uiMessages, clientContext?.currentSpaceId ?? null);
-  const converted =
+  const withSpaceNote =
     previousSpaceId && clientContext?.currentSpaceId
       ? appendNoteToLastUserMessage(sanitized, renderSpaceSwitchNote(clientContext.currentSpaceId, previousSpaceId))
       : sanitized;
+
+  // Same mechanism, same reason: metadata is dropped by
+  // `convertToModelMessages`, so a file the user attached is announced here.
+  // Latest user message only — an older attachment has already been handled.
+  const attachment = attachmentInLastUserMessage(uiMessages);
+  const converted = attachment
+    ? appendNoteToLastUserMessage(withSpaceNote, renderAttachmentNote(attachment))
+    : withSpaceNote;
 
   if (droppedToolCallIds.length > 0) {
     console.warn(
