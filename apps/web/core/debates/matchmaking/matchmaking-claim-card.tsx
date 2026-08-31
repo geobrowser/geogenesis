@@ -31,7 +31,6 @@ import type {
   DebateParticipantSummary,
   MatchmakingReadiness,
 } from '../api';
-import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { hubCardMotion } from './hub-motion';
 
 type Props = {
@@ -39,7 +38,6 @@ type Props = {
   positions: DebateClaimPositionSummary[];
   /** Drives the response buttons and the readiness toggle. */
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
   /** Rendered under the controls — e.g. the Matches tab's "Request debate" button. */
   footer?: React.ReactNode;
   /**
@@ -52,7 +50,6 @@ type Props = {
    * ready — the switch reads `viewer_debate_ready`, so drawing it from an unresolved lookup would
    * report "not ready" on a claim they are in fact ready on.
    */
-  hideReadinessToggle?: boolean;
   /**
    * Set when `positions` cannot be trusted to say which side the viewer is on — the rematch picker
    * identifies the viewer inside the summaries by geo-chat user id, which is null until its token
@@ -60,6 +57,12 @@ type Props = {
    * that only means "don't know yet", which would draw the viewer onto two sides at once.
    */
   viewerIdentityPending?: boolean;
+  /**
+   * Sends a signed-out viewer to Privy instead of publishing. Set by hosts that render to signed-out
+   * viewers — the hub's Claims tab and the claim page — and left unset when signing in is not a
+   * possibility the host has to handle, which keeps the response path unchanged for everyone else.
+   */
+  onRequireSignIn?: () => void;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -83,11 +86,10 @@ export function MatchmakingClaimCard({
   claim,
   positions,
   readiness,
-  activeDebate,
   footer,
   onOpenClaim,
-  hideReadinessToggle,
   viewerIdentityPending,
+  onRequireSignIn,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -103,19 +105,16 @@ export function MatchmakingClaimCard({
           claim={claim}
           positions={positions}
           readiness={readiness}
-          activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
-          hideReadinessToggle={hideReadinessToggle}
           viewerIdentityPending={viewerIdentityPending}
+          onRequireSignIn={onRequireSignIn}
         />
       ) : (
         <UnresolvableControls
           positions={positions}
           readiness={readiness}
           claim={claim}
-          activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
-          hideReadinessToggle={hideReadinessToggle}
         />
       )}
 
@@ -171,23 +170,31 @@ function ClaimHeader({
   );
 }
 
-/** The live case: the side buttons publish the viewer's on-chain response. */
-function RespondableControls({
+/**
+ * The viewer's side of a claim, and everything needed to change it.
+ *
+ * Extracted from the card so surfaces that draw their own layout around the same controls — the
+ * claim page's "Your position" block — publish responses through exactly this path rather than
+ * growing a second copy of the optimistic and indexing handling below, which exists to fix bugs
+ * that are not obvious from the outside.
+ */
+export function useClaimPositionControl({
   claim,
   positions,
   readiness,
-  activeDebate,
-  onOpenClaim,
-  hideReadinessToggle,
   viewerIdentityPending,
+  onRequireSignIn,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
-  onOpenClaim?: () => void;
-  hideReadinessToggle?: boolean;
   viewerIdentityPending?: boolean;
+  /**
+   * What to do when a signed-out visitor presses a side. Given one, the pills stay live while
+   * signed out and pressing prompts sign-in — matching the vote arrows on an entity page. Without
+   * one they stay disabled, which is what the hub's cards have always done.
+   */
+  onRequireSignIn?: () => void;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -258,7 +265,11 @@ function RespondableControls({
   }, [readiness.viewer_response, resetResponseIndexing, responseIndexing]);
 
   const respond = (position: boolean) => {
-    if (!isConnected || isAccountSetupPending) return;
+    if (!isConnected) {
+      onRequireSignIn?.();
+      return;
+    }
+    if (isAccountSetupPending) return;
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
@@ -275,17 +286,47 @@ function RespondableControls({
     return position ? copy.positiveAction : copy.negativeAction;
   };
 
+  return {
+    viewerPosition,
+    optimisticPositions,
+    respond,
+    actionTitle,
+    responseError,
+    /**
+     * False only while the account genuinely cannot publish, never while one is in flight.
+     *
+     * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
+     * control gives a visitor nothing to press and no way to learn what to do about it.
+     */
+    canRespond: (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending,
+  };
+}
+
+/** The live case: the side buttons publish the viewer's on-chain response. */
+function RespondableControls({
+  claim,
+  positions,
+  readiness,
+  onOpenClaim,
+  viewerIdentityPending,
+  onRequireSignIn,
+}: {
+  claim: DebateClaimSummary;
+  positions: DebateClaimPositionSummary[];
+  readiness: MatchmakingReadiness;
+  onOpenClaim?: () => void;
+  viewerIdentityPending?: boolean;
+  onRequireSignIn?: () => void;
+}) {
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
+    useClaimPositionControl({ claim, positions, readiness, viewerIdentityPending, onRequireSignIn });
   return (
     <>
       <ClaimHeader
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
-        toggle={
-          hideReadinessToggle ? null : (
-            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
-          )
-        }
+        toggle={null}
       />
       <PositionRow
         positions={optimisticPositions}
@@ -295,7 +336,7 @@ function RespondableControls({
         // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
         // overlapping submissions, so there is nothing to protect against — and dimming the pills
         // for the length of an indexing round trip read as the response not having landed.
-        disabled={!isConnected || isAccountSetupPending}
+        disabled={!canRespond}
         titleFor={actionTitle}
       />
       {responseError ? (
@@ -358,14 +399,25 @@ export function withViewerPosition({
   // Counts follow `serverPosition`, but the participant lists are rebuilt from scratch on every
   // side. Removing the viewer only from the side the server reports assumed those two agree about
   // who the viewer is; where they don't, the viewer ends up on two sides at once.
+  // `present_count` and `total_count` both already include the viewer once geo-chat reports their
+  // position, so both are adjusted only while it does not. `available_now_count` is never adjusted:
+  // it means "people this viewer could request", which the viewer is not and never becomes.
   const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
     ...side,
     total_count: side.total_count + (serverPosition === side.position ? 0 : 1),
+    // Left undefined when the server sent none, so `presentCount` keeps falling back to the
+    // face count — which the participant list below has already been adjusted for.
+    present_count:
+      side.present_count === undefined ? undefined : side.present_count + (serverPosition === side.position ? 0 : 1),
     participants: [viewer, ...side.participants.filter(participant => !heldByViewer(participant))],
   });
   const withoutViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
     ...side,
     total_count: Math.max(0, side.total_count - (serverPosition === side.position ? 1 : 0)),
+    present_count:
+      side.present_count === undefined
+        ? undefined
+        : Math.max(0, side.present_count - (serverPosition === side.position ? 1 : 0)),
     participants: side.participants.filter(participant => !heldByViewer(participant)),
   });
 
@@ -379,6 +431,7 @@ export function withViewerPosition({
       position_label: viewerPosition ? copy.positiveAction : copy.negativeAction,
       total_count: 1,
       available_now_count: 0,
+      present_count: 1,
       participants: [viewer],
     });
   }
@@ -391,16 +444,12 @@ function UnresolvableControls({
   claim,
   positions,
   readiness,
-  activeDebate,
   onOpenClaim,
-  hideReadinessToggle,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
   onOpenClaim?: () => void;
-  hideReadinessToggle?: boolean;
 }) {
   return (
     <>
@@ -408,12 +457,7 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
-        toggle={
-          /* Readiness is geo-chat state, so it still works without a graph id. */
-          hideReadinessToggle ? null : (
-            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
-          )
-        }
+        toggle={null}
       />
       <PositionRow
         positions={positions}
@@ -429,7 +473,7 @@ function UnresolvableControls({
   );
 }
 
-function PositionRow({
+export function PositionRow({
   positions,
   responseKind,
   viewerPosition,
@@ -537,7 +581,7 @@ function PositionButton({
           {selected ? <span className="sr-only"> — your response</span> : null}
         </span>
       </span>
-      {summary && summary.total_count > 0 ? <PositionAvatars summary={summary} /> : null}
+      {summary && presentCount(summary) > 0 ? <PositionAvatars summary={summary} /> : null}
     </>
   );
 
@@ -557,9 +601,35 @@ function PositionButton({
   );
 }
 
+/**
+ * The population the avatar stack is drawn from.
+ *
+ * `present_count` is optional only because geo-chat began sending it in geo-chat#74 and the two
+ * halves deploy independently. Falling back to the number of faces actually supplied is the safe
+ * reading in that window: it renders every face geo-chat sent and claims no hidden extras, whereas
+ * reading the field directly would gate the stack on `undefined > 0` and draw nothing — the bug
+ * this whole change exists to fix, reintroduced by a deploy ordering.
+ */
+export function presentCount(summary: Pick<DebateClaimPositionSummary, 'present_count' | 'participants'>): number {
+  return summary.present_count ?? summary.participants.length;
+}
+
+/**
+ * The stack answers one question: who is here on this position, available to debate, right now.
+ *
+ * GEO-2691, and the count is the half that kept going wrong. It was `total_count - shown`, which
+ * counted offline holders under a control whose whole meaning is availability — a side with nobody
+ * available rendered a bare "+2" and no avatars. Then it was `available_now_count - shown`, which
+ * is viewer-relative: it excludes the viewer and anyone they have already debated on this claim, so
+ * a claim you had actually argued showed you an empty stack.
+ *
+ * `present_count` is the population geo-chat draws `participants` from, so the faces and the count
+ * beside them describe the same people, and describe the same people for every viewer.
+ * `total_count` is left alone — it answers "who holds this position", which the card does not show.
+ */
 function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
   const participants = summary.participants.slice(0, 2);
-  const overflow = Math.max(0, summary.total_count - participants.length);
+  const overflow = Math.max(0, presentCount(summary) - participants.length);
 
   return (
     <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">

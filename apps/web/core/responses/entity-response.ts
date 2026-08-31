@@ -5,6 +5,8 @@ import { uuidToHex } from '~/core/id/normalize';
 import type { Entity } from '~/core/types';
 import { sleep } from '~/core/utils/utils';
 
+import { getChecked } from '~/design-system/checkbox';
+
 export type ResponseKind = 'curation' | 'stance' | 'veracity';
 export type ResponseDirection = 'positive' | 'negative' | 'clear';
 export type ActiveResponseDirection = Exclude<ResponseDirection, 'clear'>;
@@ -106,6 +108,28 @@ export function responsePositionLabel(responseKind: 'stance' | 'veracity' | null
 export function getEntityResponseKind({ isClaim, isFactual }: { isClaim: boolean; isFactual: boolean }): ResponseKind {
   if (!isClaim) return 'curation';
   return isFactual ? 'veracity' : 'stance';
+}
+
+export function resolveEntityResponseKind(
+  entity: Pick<Entity, 'relations' | 'values'> | null | undefined,
+  spaceId: string
+): ResponseKind {
+  const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
+  const activeValues = entity?.values.filter(value => !value.isDeleted) ?? [];
+
+  const isClaim = activeRelations.some(
+    relation => uuidToHex(relation.type.id) === TYPES_PROPERTY && uuidToHex(relation.toEntity.id) === CLAIM_TYPE
+  );
+
+  const isFactual =
+    isClaim &&
+    getChecked(
+      activeValues.find(
+        value => uuidToHex(value.spaceId) === uuidToHex(spaceId) && uuidToHex(value.property.id) === CLAIM_IS_FACTUAL
+      )?.value
+    ) === true;
+
+  return getEntityResponseKind({ isClaim, isFactual });
 }
 
 export function hasUnpublishedClaimResponseKindEdit(

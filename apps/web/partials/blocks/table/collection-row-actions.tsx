@@ -20,7 +20,9 @@ import { PrefetchLink } from '~/design-system/prefetch-link';
 import { SelectSpaceAsPopover } from '~/design-system/select-space-dialog';
 
 import type { onLinkEntryFn } from '~/partials/blocks/table/change-entry';
+import { CopyEntityIdButton } from '~/partials/blocks/table/copy-entity-id-button';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
+import { rowOpenerClassName } from '~/partials/blocks/table/row-control-styles';
 
 type CollectionRowActionsProps = {
   isEditing: boolean;
@@ -53,6 +55,12 @@ export function CollectionRowActions({
   // dismiss handlers while it's active.
   const [isSpacePopoverOpen, setIsSpacePopoverOpen] = useState(false);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether this popover opened because a cursor crossed the trigger, rather than because someone
+  // asked for it. On close Radix hands focus back to the trigger, which is right for a popover you
+  // opened on purpose and wrong for one that opened on the way past: focus lands on a button nobody
+  // focused, every view's `group-focus-within:visible` matches, and the row's controls stay up with
+  // the pointer long gone. Keyboard opens still get their focus back — see `onCloseAutoFocus`.
+  const openedByHoverRef = useRef(false);
   const { storage } = useMutate();
   const { blockEntity } = useDataBlock();
   const { space } = useSpace(spaceId ?? '');
@@ -95,8 +103,25 @@ export function CollectionRowActions({
 
   return (
     <div className="flex shrink-0 flex-nowrap items-center gap-0.5">
+      {/* Side panel first: it is the one people reach for, so it keeps a fixed position rather than
+          shifting left and right depending on whether the row has a menu to show. */}
+      {showSidePanel && (
+        <DataBlockOpenSidePanelButton
+          entityId={entityId}
+          entitySpaceId={spaceId ?? currentSpaceId}
+          openedWithMainViewEditing={openedWithMainViewEditing}
+        />
+      )}
       {(relationId || isEditing) && (
-        <Popover.Root open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
+        <Popover.Root
+          open={isPopoverOpen}
+          onOpenChange={next => {
+            // Radix routes click and keyboard opens through here; hover sets the state directly
+            // below, so anything arriving on this path was deliberate.
+            if (next) openedByHoverRef.current = false;
+            setIsPopoverOpen(next);
+          }}
+        >
           <Popover.Trigger asChild>
             <button
               type="button"
@@ -106,20 +131,26 @@ export function CollectionRowActions({
                   clearTimeout(closeTimeoutRef.current);
                   closeTimeoutRef.current = null;
                 }
+                // Only when this is the event that opens it. A pointer wandering over the trigger of
+                // a popover someone opened from the keyboard must not relabel it as a hover open, or
+                // the close would skip the focus restoration that open is owed.
+                if (!isPopoverOpen) openedByHoverRef.current = true;
                 setIsPopoverOpen(true);
               }}
               onMouseLeave={() => {
                 if (closeTimeoutRef.current) {
                   clearTimeout(closeTimeoutRef.current);
                 }
+                // Long enough to bridge the few pixels between the trigger and the menu, which
+                // overlap, and short enough not to feel like the menu is refusing to leave.
                 closeTimeoutRef.current = setTimeout(() => {
                   setIsPopoverOpen(false);
-                }, 300);
+                }, 120);
               }}
               onMouseDown={e => e.preventDefault()}
-              className="inline-flex shrink-0 items-center text-grey-03 transition duration-300 ease-in-out hover:text-text"
+              className={rowOpenerClassName}
             >
-              <Menu />
+              <Menu filled={false} size={19} />
             </button>
           </Popover.Trigger>
           <Popover.Portal>
@@ -130,6 +161,18 @@ export function CollectionRowActions({
               onOpenAutoFocus={event => {
                 event.preventDefault();
                 event.stopPropagation();
+              }}
+              // Focus never entered a hover-opened popover, so there is nothing to give back, and
+              // taking the default would strand it on the trigger and hold the row's controls open.
+              // A popover opened by click or keyboard still returns focus the way it should.
+              onCloseAutoFocus={event => {
+                if (openedByHoverRef.current) event.preventDefault();
+              }}
+              // Unless focus did end up in here after all — tabbed in, or moved by something we
+              // rendered. Whatever holds it is about to unmount, so from this point the close owes
+              // focus a home and Radix's restoration is the only one on offer.
+              onFocusCapture={() => {
+                openedByHoverRef.current = false;
               }}
               onFocusOutside={event => {
                 if (isSpacePopoverOpen) event.preventDefault();
@@ -184,6 +227,9 @@ export function CollectionRowActions({
                   <RelationSmall />
                 </PrefetchLink>
               )}
+              {/* The entity the row's relation points at, not the relation itself. The relation's
+                  own id is a click away through the link beside this one (GEO-2679). */}
+              <CopyEntityIdButton entityId={entityId} />
               {isEditing && (
                 <PrefetchLink
                   href={NavUtils.toEntity(spaceId ?? currentSpaceId, entityId, true)}
@@ -198,13 +244,6 @@ export function CollectionRowActions({
             </Popover.Content>
           </Popover.Portal>
         </Popover.Root>
-      )}
-      {showSidePanel && (
-        <DataBlockOpenSidePanelButton
-          entityId={entityId}
-          entitySpaceId={spaceId ?? currentSpaceId}
-          openedWithMainViewEditing={openedWithMainViewEditing}
-        />
       )}
       {/* Last in the row on purpose: the only destructive action here, kept furthest from the side
           panel people open by habit. Grey until hovered, then red — the row shouldn't shout at

@@ -31,12 +31,36 @@ import type { DebatesHubTab } from '~/atoms';
 const MOBILE_SHEET_TOP_OFFSET_PX = 120;
 const PANEL_SCROLL_SELECTOR = '[data-debates-hub-scroll]';
 
+// Reading order, widest to narrowest: everything you could debate, then who is around, then the
+// two lists that only exist once matchmaking has produced something. The landing tab is set
+// separately, by `DEFAULT_TAB` in use-debates-hub — it happens to agree with this order, but
+// reordering here does not move it.
 const TABS: { id: DebatesHubTab; label: string }[] = [
-  { id: 'requests', label: 'Requests' },
-  { id: 'matches', label: 'Matches' },
   { id: 'claims', label: 'Claims' },
   { id: 'people', label: 'People' },
+  { id: 'matches', label: 'Matches' },
+  { id: 'requests', label: 'Requests' },
 ];
+
+/**
+ * GEO-2725. Matches and Requests are a particular person's, so signed out they have no possible
+ * contents — not an empty list but a meaningless one. Claims and People describe the world rather
+ * than the viewer, so both read fine anonymously and are what the hub offers before sign-in.
+ */
+const SIGNED_OUT_TABS: DebatesHubTab[] = ['claims', 'people'];
+
+function tabsFor(authenticated: boolean) {
+  return authenticated ? TABS : TABS.filter(tab => SIGNED_OUT_TABS.includes(tab.id));
+}
+
+/**
+ * Signing out with Matches or Requests open would otherwise leave the panel on a tab that is no
+ * longer in the row, showing a tab body with no tab selected.
+ */
+function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHubTab {
+  if (authenticated || SIGNED_OUT_TABS.includes(activeTab)) return activeTab;
+  return 'claims';
+}
 
 function isInteractiveDragTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
@@ -194,8 +218,10 @@ type SurfaceProps = {
   onClose?: () => void;
 };
 
-function DebatesHubSurface({ activeTab, onTabChange, onClose }: SurfaceProps) {
+function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: SurfaceProps) {
   const { authenticated, ready } = useGeoChatAuth();
+  const tabs = tabsFor(authenticated);
+  const activeTab = visibleTab(requestedTab, authenticated);
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
 
@@ -234,36 +260,47 @@ function DebatesHubSurface({ activeTab, onTabChange, onClose }: SurfaceProps) {
         </div>
       </div>
 
-      <div className="shrink-0 px-4">
+      {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
+          restoration, so a row drawn before then is the signed-out one — a returning viewer would
+          watch Matches and Requests appear, and a selected tab of theirs jump to Claims. */}
+      <div className={cx('shrink-0 px-4', !ready && 'invisible')} aria-hidden={!ready}>
         <div className="relative">
-          <div className="relative flex w-max items-center gap-6 pb-2">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                aria-current={activeTab === tab.id ? 'true' : undefined}
-                onClick={() => changeTab(tab.id)}
-                className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
-              >
-                {tab.label}
-                {tab.id === 'requests' && requestCount > 0 ? (
-                  <Badge>
-                    {requestCount}
-                    <span className="sr-only"> pending requests</span>
-                  </Badge>
-                ) : null}
-                {activeTab === tab.id && (
-                  <motion.div
-                    layoutId="debates-hub-tab-active-border"
-                    layout
-                    initial={false}
-                    transition={{ duration: 0.2 }}
-                    className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-                  />
-                )}
-              </button>
-            ))}
+          {/* The row is `w-max` so the labels never compress, and both panel shells are
+              `overflow-hidden` — so on a narrow phone whichever tab sits last is simply cut off
+              with no way to reach it. Scrolling costs nothing at the widths where everything
+              already fits, and Requests carries the badge, so it is the worst one to lose. */}
+          <div className="no-scrollbar overflow-x-auto">
+            <div className="relative flex w-max items-center gap-6 pb-2">
+              {tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-current={activeTab === tab.id ? 'true' : undefined}
+                  onClick={() => changeTab(tab.id)}
+                  className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
+                >
+                  {tab.label}
+                  {tab.id === 'requests' && requestCount > 0 ? (
+                    <Badge>
+                      {requestCount}
+                      <span className="sr-only"> pending requests</span>
+                    </Badge>
+                  ) : null}
+                  {activeTab === tab.id && (
+                    <motion.div
+                      layoutId="debates-hub-tab-active-border"
+                      layout
+                      initial={false}
+                      transition={{ duration: 0.2 }}
+                      className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+                    />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
+          {/* Outside the scroll container so the rule spans the visible row rather than the
+              scrollable width. */}
           <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
         </div>
       </div>
@@ -276,9 +313,7 @@ function DebatesHubSurface({ activeTab, onTabChange, onClose }: SurfaceProps) {
         data-debates-hub-scroll
         className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6"
       >
-        {!ready ? null : !authenticated ? (
-          <HubMessage>Sign in to find people to debate.</HubMessage>
-        ) : (
+        {!ready ? null : (
           <HubSwap activeKey={activeTab}>
             {activeTab === 'requests' ? (
               <RequestsTab />

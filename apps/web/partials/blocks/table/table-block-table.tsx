@@ -26,6 +26,8 @@ import { EyeHide } from '~/design-system/icons/eye-hide';
 import { TableCell } from '~/design-system/table/cell';
 import { Text } from '~/design-system/text';
 
+import { CollectionRowActions } from '~/partials/blocks/table/collection-row-actions';
+import { CopyEntityIdButton } from '~/partials/blocks/table/copy-entity-id-button';
 import { DataBlockOpenSidePanelButton } from '~/partials/blocks/table/data-block-open-side-panel-button';
 import { EntityTableCell } from '~/partials/entities-page/entity-table-cell';
 import { EditableEntityTableCell } from '~/partials/entity-page/editable-entity-table-cell';
@@ -123,6 +125,14 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
 
     const isNameCell = propertyId === SystemIds.NAME_PROPERTY;
     const spaceId = isNameCell ? (row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space) : space;
+    // Which *column* this is, as against which property's data lands in it. A mapping can render
+    // one property's value in another's slot — the entity's name in the Roles slot, say
+    // (`mappingToCell`, use-mapping.ts:155) — so `isNameCell` above answers "is this name data",
+    // which is the right question for the space to read it in and the wrong one for where the row's
+    // controls belong. Anything positional has to go by the slot, and `EntityTableCell` already
+    // does: it takes `property` from `propertiesSchema[cellData.slotId]`, so the title decorations
+    // this pairs with are in the slot-named column whatever is rendered elsewhere.
+    const isNameSlot = cellData.slotId === SystemIds.NAME_PROPERTY;
 
     const entityId = row.original.entityId;
     const nameCell = row.original.columns[SystemIds.NAME_PROPERTY];
@@ -166,7 +176,7 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
       );
     }
 
-    return (
+    const cellContents = (
       <EntityTableCell
         key={entityId}
         entityId={entityId}
@@ -182,7 +192,53 @@ const defaultColumn: Partial<ColumnDef<Row>> = {
         onLinkEntry={onLinkEntry}
         source={source}
         openedWithMainViewEditing={openedWithMainViewEditing}
+        hideHoverActions={isNameSlot && !isEditable}
       />
+    );
+
+    // Browse mode puts the row's controls under the name rather than in a trailing column of
+    // their own, which is where list and bulleted-list views already put them (GEO-2672). The
+    // hover actions ride along so they stop overlaying the title and squeezing it — `EntityTableCell`
+    // is told to leave them out above.
+    if (!isNameSlot || isEditable) {
+      return cellContents;
+    }
+
+    return (
+      <div className="flex min-w-0 flex-col">
+        {cellContents}
+        <div className="mt-1 flex items-center gap-4">
+          {/* The entity's own space, not the block's — a data block lists rows from many spaces,
+              and the Debate button forwards this to geo-chat, which rejects the claim if it does
+              not belong to the space given (GEO-2581). */}
+          <EntityRowActions entityId={entityId} spaceId={nameCell?.space ?? space} />
+          <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 has-data-[state=open]:visible has-data-[state=open]:opacity-100 md:hidden [&_button]:h-5 [&_button]:w-5">
+            {source.type === 'COLLECTION' ? (
+              <CollectionRowActions
+                isEditing={false}
+                currentSpaceId={space}
+                entityId={entityId}
+                spaceId={nameCell?.space}
+                relationId={relationId}
+                verified={verified}
+                onLinkEntry={onLinkEntry}
+                openedWithMainViewEditing={openedWithMainViewEditing}
+              />
+            ) : (
+              <div className="flex items-center gap-0.5">
+                {/* Query rows have no menu to put this behind, so it sits in the row itself,
+                    ahead of the side panel and drawn to match it (GEO-2679). */}
+                <CopyEntityIdButton entityId={entityId} variant="row" />
+                <DataBlockOpenSidePanelButton
+                  entityId={entityId}
+                  entitySpaceId={nameCell?.space ?? space}
+                  openedWithMainViewEditing={openedWithMainViewEditing}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     );
   },
 };
@@ -232,14 +288,33 @@ export const TableBlockTable = ({
   const isEditingColumns = useAtomValue(editingPropertiesAtom);
   const [expandedCells] = useState<Record<string, boolean>>({});
 
+  // Rebuilt on every render before this, which is the other half of the same hazard: TanStack
+  // treats a new `columns` identity as a change and re-derives from it, so an unstable array feeds
+  // the very resets the pagination fix below is stopping.
+  const columns = React.useMemo(() => formatColumns(properties, space), [properties, space]);
+
   const table = useReactTable({
     data: rows,
-    columns: formatColumns(properties, space),
+    columns,
     defaultColumn,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    state: {
+    // GEOGENESIS-8B / A3: "Maximum update depth exceeded" on /space/:id.
+    //
+    // This was `state.pagination`, which declares pagination *controlled* — and it was a fresh
+    // object literal on every render with no `onPaginationChange` to receive updates. So the table
+    // could never settle: `autoResetPageIndex` fires whenever the data changes, calls
+    // `setPagination`, falls through to the internal `onStateChange`, re-renders, reads a brand new
+    // `{ pageIndex: 0 }` object, and resets again. React can't bail out of that the way it does for
+    // an unchanged primitive, because the object identity differs every time. The reported
+    // stacktrace is exactly that cycle: resetPageIndex → setPageIndex → setPagination →
+    // onPaginationChange → setState → onStateChange.
+    //
+    // Nothing in this component ever changes the page — there is no pagination UI, and `pageIndex`
+    // appeared only in that literal. "Start at page 0, nine rows" is `initialState`, which the
+    // table owns internally, so the reset writes 0 over 0 and stops.
+    initialState: {
       pagination: {
         pageIndex: 0,
         pageSize: 9,
@@ -325,7 +400,6 @@ export const TableBlockTable = ({
                   </th>
                 );
               })}
-              {!isEditing && <th className="w-px p-[10px]" />}
             </tr>
           </thead>
           <tbody>
@@ -344,30 +418,6 @@ export const TableBlockTable = ({
                       </TableCell>
                     );
                   })}
-                  {!isEditing && (
-                    <TableCell isShown={true} isEditMode={false}>
-                      <div className="flex items-center gap-1">
-                        {source.type !== 'COLLECTION' && (
-                          <div className="invisible flex items-center opacity-0 transition duration-200 group-focus-within/table-row:visible group-focus-within/table-row:opacity-100 group-hover/table-row:visible group-hover/table-row:opacity-100 md:hidden [&>button]:h-5 [&>button]:w-5">
-                            <DataBlockOpenSidePanelButton
-                              entityId={row.original.entityId}
-                              entitySpaceId={row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space}
-                              openedWithMainViewEditing={false}
-                            />
-                          </div>
-                        )}
-                        {/* The entity's own space, not the block's — a data block lists rows
-                            from many spaces, and the Debate button forwards this to geo-chat,
-                            which rejects the claim if it does not belong to the space given
-                            (GEO-2581). Same resolution the side-panel button above and the name
-                            cell already use. */}
-                        <EntityRowActions
-                          entityId={row.original.entityId}
-                          spaceId={row.original.columns[SystemIds.NAME_PROPERTY]?.space ?? space}
-                        />
-                      </div>
-                    </TableCell>
-                  )}
                 </tr>
               );
             })}

@@ -18,7 +18,16 @@ export type Profile = {
    * the fallback values (wallet addresses) are not valid entity IDs.
    */
   id: string;
-  /** The user's personal space ID (bytes16 hex without 0x prefix) */
+  /**
+   * The user's personal space ID (bytes16 hex without 0x prefix).
+   *
+   * Carries the same hazard as `id` above, and the warning was previously only on `id`:
+   * `fetchProfile` falls back to `defaultProfile(walletAddress, walletAddress)` on every failure
+   * path, so this is a `0x…` wallet address whenever the profile lookup failed. Check
+   * `IdUtils.isValid()` rather than truthiness before passing it anywhere typed as a space or
+   * entity id — a non-empty address passes a truthiness check and then fails at the API as
+   * `Invalid UUID`.
+   */
   spaceId: string;
   name: string | null;
   avatarUrl: string | null;
@@ -238,6 +247,10 @@ export type Value = LocalMetadata & {
 // ==============================================================================
 
 export type Relation = LocalMetadata & {
+  /** Publish this local change with the SDK's updateRelation operation. */
+  isRelationUpdate?: boolean;
+  /** Optional relation fields that the pending updateRelation operation clears. */
+  relationUpdateUnsetFields?: Array<'toSpace'>;
   id: string;
   entityId: string;
   type: {
@@ -277,6 +290,12 @@ export type Entity = {
   createdAt?: string | number;
   /** Unix seconds (stringified or numeric) or ISO 8601 string — varies by backend. */
   updatedAt?: string | number;
+  /**
+   * Total relations this entity has on the server, before any page cap and before dangling ones
+   * are dropped. Only set by queries that ask for it. `relations.length` cannot stand in: it is
+   * filtered, so a truncated page and a short one are indistinguishable from it alone.
+   */
+  relationsTotalCount?: number;
 };
 
 export type EntityWithSchema = Entity & { schema: Property[] };

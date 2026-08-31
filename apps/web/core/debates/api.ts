@@ -1,5 +1,7 @@
 'use client';
 
+import { capSearchQuery } from '~/core/io/search-query';
+
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
@@ -389,11 +391,35 @@ export type DebatePeopleResponse = {
 export type DebateClaimPositionSummary = {
   position: boolean;
   position_label: string;
-  /** Everyone who set this position, online or not. */
+  /**
+   * Everyone geo-chat counts as holding this position — which is narrower than it sounds: the
+   * query only counts rows surviving `readiness.is_ready`, so someone who took the position
+   * without standing ready to debate it is excluded. Not shown on the claim card.
+   */
   total_count: number;
-  /** Online, available, not in a debate, not blocked either way. */
+  /**
+   * Eligible for *this viewer* to send a request to right now: excludes the viewer themselves and
+   * anyone they are already pair-blocked with on this claim. Drives the "Debate now" filter.
+   *
+   * Viewer-relative, so it is the wrong basis for anything presented as a fact about the claim.
+   * Using it for the avatar stack made a claim you had already debated show you an empty stack,
+   * because debating someone pair-blocks that pair on that claim (GEO-2691).
+   */
   available_now_count: number;
-  /** Capped list used for avatar stacks. */
+  /**
+   * Available to debate right now as a property of the *person* — online, reachable, not busy,
+   * not paused — including the viewer and anyone they have already debated here.
+   *
+   * This is the population `participants` is drawn from, so a `+N` overflow beside those faces
+   * must be computed against this and not against `available_now_count`.
+   *
+   * Optional because geo-chat only started sending it in geo-chat#74, and the two deploy
+   * separately. Read it through {@link presentCount}, never directly: a client that ships first
+   * would otherwise gate every avatar stack on `undefined > 0` and render no faces at all, which
+   * is the exact bug this field exists to fix. The fallback also covers a geo-chat rollback.
+   */
+  present_count?: number;
+  /** Capped list for the avatar stack, drawn from `present_count`'s population (GEO-2691). */
   participants: DebateParticipantSummary[];
 };
 
@@ -434,19 +460,70 @@ export type MatchmakingClaim = MatchmakingReadiness & {
 
 export type MatchmakingClaimsFilter = 'all' | 'mine' | 'debate_now';
 
-/** No topic facet: topics are Knowledge Graph data geo-chat doesn't model, so the Claims tab
- * resolves and filters them itself over the loaded pages. */
+/** Topics are Knowledge Graph data, which geo-chat replicates as of GEO-2659 — so `topicId`
+ * filters server-side and the response carries a topic facet. Before that the server returned
+ * `topics: []` and ignored the parameter, and both pickers resolved and filtered topics
+ * themselves over whatever pages they had loaded. */
 export type MatchmakingClaimsQuery = {
   search?: string | null;
   spaceId?: string | null;
+  /**
+   * The spaces this viewer may see claims from at all, sent when they haven't picked one.
+   *
+   * Both this and `spaceId` are OR-ed together server-side rather than one overriding the other,
+   * so only ever send one of them: sending both would widen the query back out to every space in
+   * either list.
+   */
+  spaceIds?: string[] | null;
+  topicId?: string | null;
+  /**
+   * Topics to narrow by, OR-ed together. Merged with `topicId` the same way `spaceIds` is with
+   * `spaceId`, so send one or the other rather than both.
+   */
+  topicIds?: string[] | null;
+  /**
+   * Narrows rows *and* facets to what a debate-again session can still offer: geo-chat drops the
+   * claim the source debate was about, and any this pairing has blocked (GEO-2674).
+   *
+   * The session id rather than the ids themselves — that set is geo-chat's own, and the client
+   * would be handing back a value it isn't the authority on.
+   */
+  rematchSessionId?: string | null;
   filter?: MatchmakingClaimsFilter;
   cursor?: string | null;
   limit?: number;
 };
 
+/** One dropdown option and how many claims the current filters leave behind it. */
+export type MatchmakingFacetCount = {
+  id: string;
+  /** Topics carry a replicated name; spaces don't — the client resolves those from the sidebar. */
+  name: string | null;
+  count: number;
+};
+
+/**
+ * The two menus, counted over the whole candidate set rather than the page being returned.
+ *
+ * Each dimension is narrowed by *the other* and never by itself — standard faceted counting, and
+ * what makes a count answer "how many of the claims matching everything else I have chosen are in
+ * here". Picking a space therefore doesn't collapse the space menu, and picking a topic doesn't
+ * collapse the topic menu, but each does narrow its counterpart.
+ *
+ * The half that is easy to miss is that this cuts both ways: a space can disappear from
+ * `space_facets` because the selected *topic* has nothing in it. That is "this combination is
+ * empty", not "this space is no longer yours to pick", and the two must not be confused — see the
+ * space effect in `claims-tab.tsx`.
+ */
 export type MatchmakingFacets = {
+  /** Superseded by `space_facets`, and derived from it — so it inherits the topic narrowing too. */
   space_ids: string[];
+  /** Superseded by `topic_facets`. Empty on every response until GEO-2659 made it real. */
   topics: MatchmakingTopic[];
+  /** Count descending. Narrowed by the topic filter, not by the space filter. */
+  space_facets: MatchmakingFacetCount[];
+  /** Count descending. Narrowed by the space filter, not by the topic filter. */
+  topic_facets: MatchmakingFacetCount[];
 };
 
 export type MatchmakingClaimsResponse = {
@@ -544,6 +621,13 @@ export type LiveKitJoinResponse = {
   participant_slot: ParticipantSlot;
   position: boolean;
   position_label: string;
+};
+
+export type RematchLiveKitJoinResponse = {
+  token: string;
+  url: string;
+  room_name: string;
+  participant_slot: ParticipantSlot;
 };
 
 export type LocalRecordingUploadRequest = {
@@ -664,7 +748,7 @@ export async function listDebateSharePrompts(
   });
 }
 
-export async function listDebateClaims(
+async function fetchDebateClaims(
   spaceId: string,
   claimIds: string[],
   getPrivyIdentityToken?: GetPrivyIdentityToken,
@@ -678,6 +762,114 @@ export async function listDebateClaims(
     accountKey,
     signal,
   });
+}
+
+/**
+ * How long to hold an id before asking, so a render's worth of rows travels as one request.
+ *
+ * A task, not a microtask: rows fire their queries from effects that react-query schedules, and
+ * those do not reliably land in the same microtask. Ten milliseconds is under a frame, so nothing
+ * waits perceptibly longer, and it is wide enough to catch a table committing its rows.
+ */
+const CLAIM_BATCH_WINDOW_MS = 10;
+
+/** Caps the query string. Fifty ids is roughly 1.7KB of URL; this leaves generous headroom. */
+const CLAIM_BATCH_LIMIT = 100;
+
+type ClaimBatchCaller = {
+  claimIds: string[];
+  resolve: (value: DebateClaimsResponse) => void;
+  reject: (reason: unknown) => void;
+};
+
+type ClaimBatch = {
+  ids: Set<string>;
+  callers: ClaimBatchCaller[];
+  getPrivyIdentityToken?: GetPrivyIdentityToken;
+  accountKey?: string | null;
+};
+
+const pendingClaimBatches = new Map<string, ClaimBatch>();
+
+/**
+ * Concurrent claim reads for one space, collapsed into one request.
+ *
+ * `ClaimDebateButton` renders once per entity row and asks only for its own claim, so a table of
+ * fifty claim entities issued fifty requests to an endpoint that takes all fifty ids at once — and
+ * every one of them made geo-chat resolve claim responses against the Knowledge Graph, which is
+ * exactly the load that endpoint answers 503 to (GEO-2724).
+ *
+ * Coalescing here rather than in the hook is deliberate: every caller keeps its own react-query
+ * cache entry and its own key, so no component changes and no key churn. They only share the fetch.
+ *
+ * Each caller is resolved with the claims **it asked for**, not the union. A caller handed a
+ * superset would be a real behaviour change — `claims-page-client` derives its active debates from
+ * every row in the response, and would pick up rows belonging to a sibling.
+ */
+function batchDebateClaims(
+  spaceId: string,
+  claimIds: string[],
+  getPrivyIdentityToken?: GetPrivyIdentityToken,
+  accountKey?: string | null
+): Promise<DebateClaimsResponse> {
+  // Keyed by account as well as space: two identities must never read one response, and the
+  // endpoint answers differently for each (readiness is per viewer).
+  const key = `${spaceId}\u0000${accountKey ?? ''}`;
+  let batch = pendingClaimBatches.get(key);
+
+  if (!batch) {
+    batch = { ids: new Set(), callers: [], getPrivyIdentityToken, accountKey };
+    pendingClaimBatches.set(key, batch);
+    setTimeout(() => flushClaimBatch(key, spaceId), CLAIM_BATCH_WINDOW_MS);
+  }
+
+  for (const claimId of claimIds) batch.ids.add(claimId);
+
+  return new Promise<DebateClaimsResponse>((resolve, reject) => {
+    batch.callers.push({ claimIds, resolve, reject });
+  });
+}
+
+function flushClaimBatch(key: string, spaceId: string) {
+  const batch = pendingClaimBatches.get(key);
+  if (!batch) return;
+  pendingClaimBatches.delete(key);
+
+  const ids = [...batch.ids];
+  const chunks: string[][] = [];
+  for (let index = 0; index < ids.length; index += CLAIM_BATCH_LIMIT) {
+    chunks.push(ids.slice(index, index + CLAIM_BATCH_LIMIT));
+  }
+
+  // Deliberately unsignalled. One row unmounting must not abort the request its siblings are
+  // waiting on, and a caller that has gone away simply has its own promise settled into a cache
+  // entry nobody reads.
+  Promise.all(chunks.map(chunk => fetchDebateClaims(spaceId, chunk, batch.getPrivyIdentityToken, batch.accountKey)))
+    .then(responses => {
+      const claims = responses.flatMap(response => response.claims);
+      for (const caller of batch.callers) {
+        const wanted = new Set(caller.claimIds);
+        caller.resolve({ claims: claims.filter(claim => wanted.has(claim.claim_entity_id)) });
+      }
+    })
+    .catch(error => {
+      for (const caller of batch.callers) caller.reject(error);
+    });
+}
+
+export async function listDebateClaims(
+  spaceId: string,
+  claimIds: string[],
+  getPrivyIdentityToken?: GetPrivyIdentityToken,
+  accountKey?: string | null,
+  signal?: AbortSignal
+) {
+  // An empty list means "every claim in this space", which is a different question and must not be
+  // folded into a batch of ids — nor answered from one.
+  if (claimIds.length === 0) {
+    return fetchDebateClaims(spaceId, claimIds, getPrivyIdentityToken, accountKey, signal);
+  }
+  return batchDebateClaims(spaceId, claimIds, getPrivyIdentityToken, accountKey);
 }
 
 /**
@@ -777,6 +969,19 @@ export async function getLiveKitToken(
   accountKey: string | null
 ) {
   return geoChatRequest<LiveKitJoinResponse>(`/debates/${debateId}/livekit-token`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export async function getRematchLiveKitToken(
+  sessionId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<RematchLiveKitJoinResponse>(`/debate-rematches/${sessionId}/livekit-token`, {
     method: 'POST',
     auth: true,
     getPrivyIdentityToken,
@@ -1013,7 +1218,11 @@ export async function listDebatePeople(
   signal?: AbortSignal
 ) {
   return geoChatRequest<DebatePeopleResponse>('/matchmaking/people', {
-    auth: true,
+    // Anonymous only when there is genuinely nobody signed in, matching `listDebateClaims`. A flat
+    // 'optional' would also swallow a token-exchange failure for a signed-in viewer and send the
+    // request anonymously — and the anonymous answer would then be cached under their account key,
+    // leaving viewer-relative fields like `can_challenge` quietly wrong with nothing to retry.
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,
@@ -1027,15 +1236,31 @@ export async function listMatchmakingClaims(
   signal?: AbortSignal
 ) {
   const params = new URLSearchParams();
-  if (query.search) params.set('search', query.search);
+  // GEO-2658. Capped for consistency, not to stay inside a limit: `/matchmaking/claims` has no
+  // ceiling on `search` — it trims, escapes the LIKE wildcards and binds, so an over-long query is
+  // answered rather than rejected. This is the only search box in debates, and the same typed
+  // string shouldn't behave differently depending on which box it went into.
+  //
+  // `capSearchQuery` also does the work that matters more than the length: it slices by code point,
+  // so a cut never lands inside a surrogate pair and hands `URLSearchParams` a lone surrogate.
+  if (query.search) params.set('search', capSearchQuery(query.search));
   if (query.spaceId) params.set('space_id', query.spaceId);
+  // Only when no single space is picked — see the note on the type. An empty list is left off
+  // entirely: the server reads "no ids" as "no filter", which is the opposite of what an empty
+  // eligible set means.
+  else if (query.spaceIds?.length) params.set('space_ids', query.spaceIds.join(','));
+  if (query.topicId) params.set('topic_id', query.topicId);
+  else if (query.topicIds?.length) params.set('topic_ids', query.topicIds.join(','));
+  if (query.rematchSessionId) params.set('rematch_session_id', query.rematchSessionId);
   if (query.filter && query.filter !== 'all') params.set('filter', query.filter);
   if (query.cursor) params.set('cursor', query.cursor);
   if (query.limit) params.set('limit', String(query.limit));
 
   const search = params.toString();
   return geoChatRequest<MatchmakingClaimsResponse>(`/matchmaking/claims${search ? `?${search}` : ''}`, {
-    auth: true,
+    // Same as People above: anonymous only with nobody signed in, never as a fallback for a
+    // signed-in viewer whose token exchange failed.
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,

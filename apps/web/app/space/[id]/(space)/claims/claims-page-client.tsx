@@ -5,13 +5,14 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { buildClaimDraft } from '~/core/claims/claim-draft';
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
-import { isClaimPublished } from '~/core/claims/publish';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
+import { isClaimPublishedInSpace } from '~/core/claims/publish';
+import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
-import { ClaimDebateReadiness } from '~/core/debates/claim-debate-readiness';
 import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
+import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
+import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import { useDebateClaims } from '~/core/debates/hooks';
-import { uuidToHex } from '~/core/id/normalize';
 import {
   ClaimResponseBatchBoundary,
   useClaimResponseSummaryBatch,
@@ -22,7 +23,6 @@ import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
 
 import { Button } from '~/design-system/button';
-import { getChecked } from '~/design-system/checkbox';
 import { Plus } from '~/design-system/icons/plus';
 import { SelectEntityCompact, type SelectEntityCompactResult } from '~/design-system/select-entity-compact';
 import { Text } from '~/design-system/text';
@@ -60,7 +60,14 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
     deferUntilFetched: true,
     includeUnpublishedLocal: true,
   });
-  const publishedClaimIds = React.useMemo(() => claims.filter(isClaimPublished).map(claim => claim.id), [claims]);
+  // Scoped to this space. `useQueryEntities` filters *which* entities come back, not each one's
+  // relations — rows materialize through a bare `store.getEntity(id)` — so the unscoped predicate
+  // reads a draft edit sitting in any other space and reports the claim unpublished here.
+  const isPublishedHere = React.useCallback((claim: Entity) => isClaimPublishedInSpace(claim, spaceId), [spaceId]);
+  const publishedClaimIds = React.useMemo(
+    () => claims.filter(isPublishedHere).map(claim => claim.id),
+    [claims, isPublishedHere]
+  );
   const debateClaimsQuery = useDebateClaims(spaceId, publishedClaimIds, true);
   const debateClaimsByEntityId = React.useMemo(() => {
     const map = new Map<string, DebateClaim>();
@@ -69,21 +76,17 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
     }
     return map;
   }, [debateClaimsQuery.data?.claims]);
-  const activeDebates = React.useMemo(
-    () => (debateClaimsQuery.data?.claims ?? []).flatMap(claim => (claim.active_debate ? [claim.active_debate] : [])),
-    [debateClaimsQuery.data?.claims]
-  );
   const responseKindsByEntityId = React.useMemo(
     () =>
       new Map(
         claims
-          .filter(isClaimPublished)
+          .filter(isPublishedHere)
           .map(claim => [
             claim.id,
             debateClaimsByEntityId.get(claim.id)?.response_kind ?? claimResponseKind(claim, spaceId),
           ])
       ),
-    [claims, debateClaimsByEntityId, spaceId]
+    [claims, debateClaimsByEntityId, isPublishedHere, spaceId]
   );
   const responseTargets = React.useMemo(
     () => publishedClaimIds.map(entityId => ({ entityId, responseKind: responseKindsByEntityId.get(entityId)! })),
@@ -124,7 +127,6 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
             claims={claims}
             isLoading={isLoading}
             spaceId={spaceId}
-            debateJoinBlocked={activeDebates.length > 0}
             debateClaimsByEntityId={debateClaimsByEntityId}
             responseKindsByEntityId={responseKindsByEntityId}
             debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
@@ -244,7 +246,6 @@ function ClaimsList({
   claims,
   isLoading,
   spaceId,
-  debateJoinBlocked,
   debateClaimsByEntityId,
   responseKindsByEntityId,
   debateStatus,
@@ -252,7 +253,6 @@ function ClaimsList({
   claims: Entity[];
   isLoading: boolean;
   spaceId: string;
-  debateJoinBlocked: boolean;
   debateClaimsByEntityId: Map<string, DebateClaim>;
   responseKindsByEntityId: Map<string, 'stance' | 'veracity'>;
   debateStatus: string | null;
@@ -290,7 +290,6 @@ function ClaimsList({
           key={claim.id}
           claim={claim}
           spaceId={spaceId}
-          debateJoinBlocked={debateJoinBlocked}
           debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
           responseKind={responseKindsByEntityId.get(claim.id) ?? claimResponseKind(claim, spaceId)}
         />
@@ -302,19 +301,22 @@ function ClaimsList({
 function ClaimListItem({
   claim,
   spaceId,
-  debateJoinBlocked,
   debateClaim,
   responseKind,
 }: {
   claim: Entity;
   spaceId: string;
-  debateJoinBlocked: boolean;
   debateClaim: DebateClaim | null;
   responseKind: 'stance' | 'veracity';
 }) {
   const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
-  const published = isClaimPublished(claim);
-  const activeDebate = debateClaim?.active_debate ?? null;
+  const published = isClaimPublishedInSpace(claim, spaceId);
+  // Kept when the Debate toggle went (GEO-2740): the toggle drew this side effect, but the
+  // snapshot it retires is what drives the notification that now creates readiness server-side.
+  useRetireConfirmedResponseIndexing({ debateClaim, entityId: claim.id, spaceId });
+  // Catches up readiness for a position the viewer already held before GEO-2740. Temporary; see
+  // the hook.
+  useBackfillReadinessForHeldPosition({ debateClaim, entityId: claim.id, spaceId });
 
   return (
     <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
@@ -333,13 +335,6 @@ function ClaimListItem({
       {published && (
         <div className="mt-3 flex items-center gap-4">
           <DebateEntityResponseControls entityId={claim.id} spaceId={spaceId} responseKind={responseKind} />
-          <ClaimDebateReadiness
-            compact
-            debateClaim={debateClaim}
-            entityId={claim.id}
-            spaceId={spaceId}
-            canEnable={!activeDebate && !debateJoinBlocked}
-          />
         </div>
       )}
 
@@ -400,14 +395,4 @@ function RelationChipGroup({
 
 function relationsForProperty(relations: Relation[], propertyId: string): Relation[] {
   return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
-}
-
-function claimResponseKind(claim: Entity, spaceId: string): 'stance' | 'veracity' {
-  const isFactual = claim.values.find(
-    value =>
-      value.isDeleted !== true &&
-      uuidToHex(value.spaceId) === uuidToHex(spaceId) &&
-      uuidToHex(value.property.id) === uuidToHex(CLAIM_IS_FACTUAL_PROPERTY_ID)
-  )?.value;
-  return getChecked(isFactual) === true ? 'veracity' : 'stance';
 }

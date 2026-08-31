@@ -73,11 +73,14 @@ export function EditableSpaceHeading({
   spaceId,
   entityId,
   addSubspaceComponent,
+  nameAccessoryComponent,
   actionsComponent,
 }: {
   spaceId: string;
   entityId: string;
   addSubspaceComponent?: React.ReactElement<any>;
+  /** Rendered directly after the name in browse mode, e.g. the verification state. */
+  nameAccessoryComponent?: React.ReactNode;
   /** Rendered at the end of the name row, e.g. the profile "Debate" button. */
   actionsComponent?: React.ReactNode;
 }) {
@@ -147,13 +150,16 @@ export function EditableSpaceHeading({
             <Spacer height={3.5} />
           </div>
         ) : (
-          <div>
-            <div className="flex items-center justify-between">
-              <Truncate maxLines={3} shouldTruncate>
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <Truncate maxLines={3} shouldTruncate className="w-auto! min-w-0">
                 <Text as="h1" variant="mainPage">
                   {name ?? ZERO_WIDTH_SPACE}
                 </Text>
               </Truncate>
+              {nameAccessoryComponent ? (
+                <span className="mt-[9px] inline-flex shrink-0">{nameAccessoryComponent}</span>
+              ) : null}
             </div>
             <Spacer height={12} />
           </div>

@@ -2,7 +2,14 @@
 
 import * as React from 'react';
 
+import { ClaimPageView } from '~/core/claims/browse/claim-page-view';
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { TOPIC_TYPE_ID } from '~/core/constants';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
+import { ID } from '~/core/id';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
+import { TopicPageView } from '~/core/topics/browse/topic-page-view';
 import type { Relation, TabEntity } from '~/core/types';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
@@ -13,7 +20,6 @@ import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { BacklinksClientContainer } from '~/partials/entity-page/backlinks-client-container';
-import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
@@ -74,17 +80,20 @@ function EntityTabsSection({
   );
 }
 
-function RouteBacklinks({ entityId }: { entityId: string }) {
-  return (
-    <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-      <React.Suspense fallback={<div />}>
-        <BacklinksServerContainer entityId={entityId} />
-      </React.Suspense>
-    </TrackedErrorBoundary>
-  );
-}
-
-function SidePanelBacklinks({ entityId }: { entityId: string }) {
+/**
+ * Both variants fetch through `BacklinksClientContainer`, which is the only one of the two
+ * containers that can run here.
+ *
+ * `BacklinksServerContainer` is an async component. This file is a client component, so React
+ * doesn't treat it as a Server Component — it re-invokes the function on every render, which fires
+ * its two requests again, suspends, resolves, renders, and invokes it again. The `Suspense` that
+ * used to wrap it hid that entirely: the backlinks looked fine while a single entity page load sent
+ * `EntityBacklinksPage` 82 times and `Spaces` 64 times, with identical variables (GEO-2666).
+ *
+ * The server container is still right for the three routes that render it from an actual server
+ * component; it just can't be reached from here.
+ */
+function EntityBacklinks({ entityId }: { entityId: string }) {
   return (
     <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
       <BacklinksClientContainer entityId={entityId} />
@@ -114,14 +123,41 @@ function EditorFooter({
         <ToggleEntityPage id={entityId} spaceId={spaceId} />
       )}
       <Spacer height={40} />
-      {variant === 'route' ? <RouteBacklinks entityId={entityId} /> : <SidePanelBacklinks entityId={entityId} />}
+      <EntityBacklinks entityId={entityId} />
       <CommentSection entityId={entityId} spaceId={spaceId} />
     </>
   );
 }
 
+/**
+ * Which custom read view this entity gets, if any.
+ *
+ * Editing always falls through to the generic page: these are read surfaces with no property editor
+ * behind them, so an editor who lost the value sheet would have no way to change the entity.
+ *
+ * Unscoped, matching how `EntityVoteButtons` reads the same flag. `types` is
+ * derived across every space either way, so this is about consistency with the controls the pages
+ * render rather than about reaching a type a scoped read would miss.
+ */
+function useCustomBrowseView(entityId: string, spaceId: string): 'claim' | 'topic' | 'generic' | 'pending' {
+  const isEditing = useUserIsEditing(spaceId);
+  const { entity, isLoading } = useQueryEntity({ id: entityId });
+
+  if (isEditing) return 'generic';
+  // The types decide which page this is, so until they are known there is no page to draw. Falling
+  // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
+  // replaced it a moment later, which read as the page loading twice.
+  if (!entity) return isLoading ? 'pending' : 'generic';
+  if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
+  // After Claim, so an entity typed as both reads as the narrower of the two — a claim is a thing
+  // to take a side on, which is more specific than a subject heading.
+  if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
+  return 'generic';
+}
+
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
+  const customView = useCustomBrowseView(entityId, spaceId);
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
   const entityMediaUrl = useEntityMediaUrl(entityId, spaceId);
@@ -135,6 +171,23 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     previewImageUrl?.startsWith('ipfs://') || previewImageUrl?.startsWith('http')
       ? previewImageUrl
       : (previewImageResolvedUrl ?? previewImageUrl);
+
+  // After every hook above, so the branch can't change the hook order between renders — the flag
+  // flips when edit mode is toggled, which happens without remounting.
+  //
+  // Placed here rather than in the entity route's template strategy so the side panel is covered
+  // too: both surfaces render through this component, and the strategy only sees the route.
+  // Nothing rather than the wrong page. A blank moment is shorter and quieter than drawing the
+  // generic value sheet and swapping it out from under the reader.
+  if (customView === 'pending') return null;
+
+  if (customView === 'claim') {
+    return <ClaimPageView entityId={entityId} spaceId={spaceId} />;
+  }
+
+  if (customView === 'topic') {
+    return <TopicPageView entityId={entityId} spaceId={spaceId} />;
+  }
 
   const tabsSection = (
     <EntityTabsSection
@@ -162,7 +215,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                 <EntityPageInlineDescription
                   entityId={entityId}
                   spaceId={spaceId}
-                  truncate={false}
                   fallbackDescription={previewDescription}
                 />
               )}

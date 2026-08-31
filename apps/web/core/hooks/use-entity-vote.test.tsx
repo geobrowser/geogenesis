@@ -3,18 +3,35 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type MockInstance, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { userEntityVotesQueryKey, votedEntityIdsPendingQueryKey } from '~/core/hooks/use-user-voted-entity-ids';
 import { entityResponseIndexingQueryKey } from '~/core/responses/entity-response';
 
 import {
+  responseIndexingRetryDelayMs,
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
   useEntityResponseIndexingState,
 } from './use-entity-vote';
+import { personalSpaceIdQueryKey } from './use-personal-space-id';
 
 const PERSONAL_SPACE_ID = 'd4bee0928fb5405baba3b1513f085835';
 const TARGET_SPACE_ID = '1234567890abcdef1234567890abcdef';
+
+/**
+ * Refetching the voted lists before the indexer has the vote just reloads the
+ * state from before it, so nothing may invalidate them until reconciliation.
+ */
+function expectNoVotedListRefresh(invalidateQueries: MockInstance, personalSpaceId = PERSONAL_SPACE_ID) {
+  expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(personalSpaceId, 'up') });
+  expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(personalSpaceId, 'down') });
+}
+
+function expectVotedListsRefreshed(invalidateQueries: MockInstance, personalSpaceId = PERSONAL_SPACE_ID) {
+  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(personalSpaceId, 'up') });
+  expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: userEntityVotesQueryKey(personalSpaceId, 'down') });
+}
 
 const mocks = vi.hoisted(() => ({
   fetchResponse:
@@ -41,7 +58,8 @@ vi.mock('~/core/responses/entity-response', async importOriginal => {
   };
 });
 
-vi.mock('~/core/hooks/use-personal-space-id', () => ({
+vi.mock('~/core/hooks/use-personal-space-id', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/hooks/use-personal-space-id')>()),
   usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isRegistered: mocks.personalSpaceId !== null }),
 }));
 
@@ -160,7 +178,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(mocks.fetchResponse).toHaveBeenCalledTimes(30);
     expect(result.current.isProcessingResponse).toBe(true);
     expect(result.current.isResponseIndexingDelayed).toBe(true);
-    expect(invalidateQueries).not.toHaveBeenCalled();
+    expectNoVotedListRefresh(invalidateQueries);
     expect(
       queryClient.getQueryData<{ runId: string }>(
         entityResponseIndexingQueryKey(PERSONAL_SPACE_ID, 'claim-1', TARGET_SPACE_ID, 'stance')
@@ -184,7 +202,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(cancelQueries).toHaveBeenCalledWith({
       queryKey: ['claim-response-summaries', PERSONAL_SPACE_ID, TARGET_SPACE_ID],
     });
-    expect(invalidateQueries).not.toHaveBeenCalled();
+    expectVotedListsRefreshed(invalidateQueries);
   });
 
   it('isolates optimistic response state by personal space', async () => {
@@ -222,7 +240,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(mocks.fetchResponse).toHaveBeenCalledOnce();
     expect(result.current.isProcessingResponse).toBe(true);
     expect(result.current.isResponseIndexingDelayed).toBe(false);
-    expect(invalidateQueries).not.toHaveBeenCalled();
+    expectNoVotedListRefresh(invalidateQueries);
 
     await act(async () => vi.advanceTimersByTimeAsync(2_000));
 
@@ -231,7 +249,7 @@ describe('useEntityResponse indexing reconciliation', () => {
     expect(result.current.isResponseIndexingDelayed).toBe(false);
     expect(result.current.optimisticResponse).toBeUndefined();
     expect(mocks.loadResponseSummaryCaches).toHaveBeenCalledOnce();
-    expect(invalidateQueries).not.toHaveBeenCalled();
+    expectVotedListsRefreshed(invalidateQueries);
   });
 
   it('keeps reconciliation recoverable when the single-claim summary refresh fails', async () => {
@@ -276,7 +294,64 @@ describe('useEntityResponse indexing reconciliation', () => {
     });
 
     expect(mocks.loadResponseSummaryCaches).not.toHaveBeenCalled();
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    // The three reconcile invalidations, plus one per voted list once indexing confirmed.
+    expectVotedListsRefreshed(invalidateQueries);
+    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+  });
+
+  it('shows a claim response in its tab optimistically, before indexing confirms it', async () => {
+    mocks.fetchResponse.mockReturnValue(null);
+    const { queryClient, wrapper } = createHarness();
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    const setQueryData = vi.spyOn(queryClient, 'setQueryData');
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'claim-1', spaceId: TARGET_SPACE_ID, responseKind: 'veracity' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('negative'));
+    await act(async () => Promise.resolve());
+
+    // Added to Downvoted and dropped from Upvoted right away...
+    expect(setQueryData).toHaveBeenCalledWith(
+      votedEntityIdsPendingQueryKey(PERSONAL_SPACE_ID, 'down'),
+      expect.any(Function)
+    );
+    expect(setQueryData).toHaveBeenCalledWith(userEntityVotesQueryKey(PERSONAL_SPACE_ID, 'up'), expect.any(Function));
+    // ...but the server lists are left alone until the vote is actually indexed.
+    expectNoVotedListRefresh(invalidateQueries);
+
+    expect(queryClient.getQueryData(votedEntityIdsPendingQueryKey(PERSONAL_SPACE_ID, 'down'))).toEqual({
+      added: [expect.objectContaining({ entityId: 'claim-1', voteKind: 2 })],
+      removed: [],
+    });
+  });
+
+  // The reactive personal space id is null while a queued vote replays after a
+  // remount; keying the lists off it would write them where nothing reads.
+  it('keys the voted lists off the space the response actually used', async () => {
+    mocks.fetchResponse.mockReturnValue('positive');
+    const { queryClient, wrapper } = createHarness();
+    queryClient.setQueryData(['smart-account', 'test'], { account: { address: '0xwriter' } });
+    queryClient.setQueryData(personalSpaceIdQueryKey('0xwriter'), {
+      personalSpaceId: PERSONAL_SPACE_ID,
+      isRegistered: true,
+    });
+    mocks.personalSpaceId = null;
+    const setQueryData = vi.spyOn(queryClient, 'setQueryData');
+    const { result } = renderHook(
+      () => useEntityResponse({ entityId: 'entity-1', spaceId: TARGET_SPACE_ID, responseKind: 'curation' }),
+      { wrapper }
+    );
+
+    act(() => result.current.submitResponse('positive'));
+    await act(async () => Promise.resolve());
+
+    expect(setQueryData).toHaveBeenCalledWith(
+      votedEntityIdsPendingQueryKey(PERSONAL_SPACE_ID, 'up'),
+      expect.any(Function)
+    );
+    expect(setQueryData).not.toHaveBeenCalledWith(votedEntityIdsPendingQueryKey(null, 'up'), expect.any(Function));
   });
 
   it('does not let an older control supersede shared indexing state', async () => {
@@ -623,3 +698,42 @@ function createHarness() {
     ),
   };
 }
+
+/**
+ * GEO-2687. This re-check is on the critical path of a two-person interaction: in the rematch
+ * picker the opponent only learns about a position once this client notices it is indexed and
+ * tells geo-chat, which then emits `debate.claims_changed`. It used to be a flat 10s, which
+ * quantised the opponent's view to 10s steps on top of a write measuring p50 9.9s / p95 48.6s.
+ */
+describe('responseIndexingRetryDelayMs', () => {
+  it('starts fast, so indexing that lands a second later is not charged a full interval', () => {
+    expect(responseIndexingRetryDelayMs(0)).toBe(1_000);
+  });
+
+  it('backs off, so a genuinely slow index does not become a tight poll', () => {
+    expect(responseIndexingRetryDelayMs(1)).toBe(2_000);
+    expect(responseIndexingRetryDelayMs(2)).toBe(4_000);
+    expect(responseIndexingRetryDelayMs(3)).toBe(8_000);
+  });
+
+  it('caps at the old flat interval, so it is never slower than what it replaced', () => {
+    expect(responseIndexingRetryDelayMs(4)).toBe(10_000);
+    expect(responseIndexingRetryDelayMs(50)).toBe(10_000);
+    // 2 ** 50 * 1000 overflows into a number far above the cap; the clamp has to hold there too.
+    expect(Number.isFinite(responseIndexingRetryDelayMs(2000))).toBe(true);
+    expect(responseIndexingRetryDelayMs(2000)).toBe(10_000);
+  });
+
+  it('is monotonic and never below the base', () => {
+    let previous = 0;
+    for (let attempt = 0; attempt <= 12; attempt += 1) {
+      const delay = responseIndexingRetryDelayMs(attempt);
+      expect(delay).toBeGreaterThanOrEqual(Math.max(previous, 1_000));
+      previous = delay;
+    }
+  });
+
+  it('treats a negative attempt as the first one rather than returning a sub-base delay', () => {
+    expect(responseIndexingRetryDelayMs(-1)).toBe(1_000);
+  });
+});

@@ -1,30 +1,35 @@
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
-import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
-import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
-import { EntityDecoder } from '~/core/io/decoders/entity';
 import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
-import type { Entity } from '~/core/types';
-import { getRelationVideoUrls } from '~/core/utils/relation-video';
 
 import {
-  EXPLORE_AVATAR_PROPERTY_ID,
-  EXPLORE_COVER_PROPERTY_ID,
-  EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID,
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
   EXPLORE_PAGE_SIZE,
 } from './explore-constants';
 import { exploreBestConnectionDocument } from './explore-best-document';
+import {
+  type ExploreCardEntity,
+  type ExploreFeedItem,
+  type ExploreFeedRow,
+  buildExploreFeedRows,
+  decodeExploreCardEntity,
+} from './explore-card-item';
+import {
+  EXPLORE_DIVERSITY_WINDOW_SIZE,
+  applyDiversityCap,
+  exploreItemTypeKey,
+} from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
 
 /**
  * `best` is the Phase A ranked feed (quality + structure + recency, server-side).
@@ -33,22 +38,9 @@ import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
 export type ExploreSort = 'new' | 'top' | 'best';
 export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
 
-export type ExploreFeedItem = {
-  entityId: string;
-  spaceId: string;
-  spaceName: string;
-  spaceImage: string | null;
-  types: { id: string; name: string | null }[];
-  createdAtSec: number;
-  title: string;
-  description: string | null;
-  imageUrl: string | null;
-  recordingUrls: string[];
-  debateVideoUrls: string[];
-  commentCount: number;
-  isMemberOrEditor: boolean;
-  hasPendingMembershipRequest: boolean;
-};
+// Re-exported so the many components importing the card's item shape from here keep working; it is
+// defined alongside the card builder in `explore-card-item`, which the Coverage section also uses.
+export type { ExploreFeedItem };
 
 export type ExploreFeedResult = {
   items: ExploreFeedItem[];
@@ -99,56 +91,8 @@ function timeThresholdSec(filter: ExploreTime): number | null {
   }
 }
 
-function pickDisplaySpaceId(entity: Entity, allowed: Set<string>): string | null {
-  for (const sid of entity.spaces) {
-    if (allowed.has(normId(sid))) return sid;
-  }
-  return entity.spaces[0] ?? null;
-}
-
-function textValueForProperty(entity: Entity, propertyId: string, spaceId: string): string | null {
-  const pid = normId(propertyId);
-  const sid = normId(spaceId);
-  const row = entity.values.find(v => normId(v.property.id) === pid && normId(v.spaceId) === sid);
-  if (!row?.value) return null;
-  const t = row.value.trim();
-  return t.length ? t : null;
-}
-
-function imageFromRelationMedia(relations: Entity['relations'], spaceId: string): string | null {
-  if (!relations?.length) return null;
-  const sid = normId(spaceId);
-  const coverT = normId(SystemIds.COVER_PROPERTY);
-  const avatarT = normId(ContentIds.AVATAR_PROPERTY);
-  const pool = relations.filter(r => normId(r.spaceId) === sid);
-  const scan = pool.length ? pool : relations;
-  for (const r of scan) {
-    if (normId(r.type.id) === coverT && r.toEntity.value) {
-      const v = r.toEntity.value.trim();
-      if (v) return v;
-    }
-  }
-  for (const r of scan) {
-    if (normId(r.type.id) === avatarT && r.toEntity.value) {
-      const v = r.toEntity.value.trim();
-      if (v) return v;
-    }
-  }
-  return null;
-}
-
-function imageFromEntity(entity: Entity, spaceId: string): string | null {
-  const cover = textValueForProperty(entity, EXPLORE_COVER_PROPERTY_ID, spaceId);
-  if (cover) return cover;
-  const av = textValueForProperty(entity, EXPLORE_AVATAR_PROPERTY_ID, spaceId);
-  if (av) return av;
-  return imageFromRelationMedia(entity.relations, spaceId);
-}
-
-type ExploreEntity = Entity & { commentCount: number; createdAt?: string };
-
 type ExploreEntitiesPageResponse = {
-  entities: ExploreEntity[];
+  entities: ExploreCardEntity[];
   endCursor: string | null;
   hasNextPage: boolean;
 };
@@ -159,17 +103,10 @@ type EntitiesConnectionShape = {
 } | null;
 
 function decodeConnection(connection: EntitiesConnectionShape): ExploreEntitiesPageResponse {
-  const entities: ExploreEntity[] = [];
-  for (const n of (connection?.nodes ?? []) as Array<
-    Record<string, unknown> & { backlinks?: { totalCount?: number } | null; createdAt?: string }
-  >) {
-    const decoded = EntityDecoder.decode(n);
-    if (!decoded) continue;
-    entities.push({
-      ...decoded,
-      commentCount: n.backlinks?.totalCount ?? 0,
-      createdAt: n.createdAt,
-    });
+  const entities: ExploreCardEntity[] = [];
+  for (const node of connection?.nodes ?? []) {
+    const decoded = decodeExploreCardEntity(node);
+    if (decoded) entities.push(decoded);
   }
   return {
     entities,
@@ -319,51 +256,6 @@ async function fetchBestEntitiesPage(args: {
   );
 }
 
-function buildItems(
-  entities: ExploreEntity[],
-  allowedSpaceIds: Set<string>,
-  memberOrEditorSpaceIds: Set<string>
-): Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] {
-  const items: Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[] = [];
-
-  const typesRelationIdNorm = normId(SystemIds.TYPES_PROPERTY);
-
-  for (const e of entities) {
-    const spaceId = pickDisplaySpaceId(e, allowedSpaceIds);
-    if (!spaceId) continue;
-
-    // Prefer space-scoped values so a card rendered for space A doesn't leak values
-    // from space C. Fall back to the top-level aggregated name/description when the
-    // entity has no value in the display space — avoids "Untitled" cards purely
-    // because of the space boundary.
-    const title = textValueForProperty(e, EXPLORE_ENTITY_NAME_PROPERTY_ID, spaceId) ?? e.name?.trim() ?? 'Untitled';
-    const description =
-      textValueForProperty(e, EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID, spaceId) ?? e.description ?? null;
-
-    const displaySpaceIdNorm = normId(spaceId);
-    const relationsInDisplaySpace = e.relations.filter(r => normId(r.spaceId) === displaySpaceIdNorm);
-    const types = relationsInDisplaySpace
-      .filter(r => normId(r.type.id) === typesRelationIdNorm)
-      .map(r => ({ id: r.toEntity.id, name: r.toEntity.name }));
-
-    items.push({
-      entityId: e.id,
-      spaceId,
-      types,
-      createdAtSec: parseEntityUpdatedAtToUnixSec(e.createdAt),
-      title,
-      description,
-      imageUrl: imageFromEntity(e, spaceId),
-      recordingUrls: getRecordingUrls(relationsInDisplaySpace),
-      debateVideoUrls: getRelationVideoUrls(relationsInDisplaySpace, DEBATE_VIDEOS_PROPERTY_ID),
-      commentCount: e.commentCount,
-      isMemberOrEditor: memberOrEditorSpaceIds.has(normId(spaceId)),
-    });
-  }
-
-  return items;
-}
-
 function browseSpaceRowsToMap(data: BrowseSidebarData): Map<string, { name: string; image: string | null }> {
   const m = new Map<string, { name: string; image: string | null }>();
   const add = (row: { id: string; name: string; image: string | null }) => {
@@ -403,7 +295,7 @@ export async function fetchExploreFeed(args: {
   const scanChunk = 30;
 
   const attachMeta = async (
-    rows: Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>[]
+    rows: ExploreFeedRow[]
   ): Promise<ExploreFeedItem[]> => {
     const out: ExploreFeedItem[] = rows.map(r => ({
       ...r,
@@ -448,38 +340,63 @@ export async function fetchExploreFeed(args: {
     return out;
   };
 
+  const { after, offset } = decodeExploreWindowCursor(args.cursor);
+
+  // Every sort scans wider than it serves — the row builder drops entities with no
+  // displayable space, so over-scanning absorbs that. Best scans wider still, because a
+  // diversity cap cannot break up a page it cannot see past. A single type is the
+  // exception: there is nothing to diversify against, so it keeps the narrow scan.
+  const windowSize =
+    args.sort === 'best' && (args.typeIds?.length ?? 0) !== 1 ? EXPLORE_DIVERSITY_WINDOW_SIZE : scanChunk;
+
   const page =
     args.sort === 'best'
       ? await fetchBestEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
-          limit: scanChunk,
-          after: args.cursor,
+          limit: windowSize,
+          after,
           typeIds: args.typeIds,
         })
       : args.sort === 'top'
       ? await fetchTopEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
-          limit: scanChunk,
-          after: args.cursor,
+          limit: windowSize,
+          after,
           typeIds: args.typeIds,
           requireName: args.requireName,
         })
       : await fetchExploreEntitiesPage({
           spaceIds: baseIds,
           time: args.time,
-          limit: scanChunk,
-          after: args.cursor,
+          limit: windowSize,
+          after,
           orderBy: [EntitiesOrderBy.CreatedAtDesc],
           typeIds: args.typeIds,
           requireName: args.requireName,
         });
 
-  const enriched = buildItems(page.entities, allowed, memberOrEditorSet);
-  const items = await attachMeta(enriched.slice(0, pageSize));
+  const rows = buildExploreFeedRows(page.entities, allowed, memberOrEditorSet);
 
-  const nextCursor = page.hasNextPage ? page.endCursor : null;
+  // "Best" is the only sort that reorders (GEO-2690). "New" is reverse-chronological and
+  // an activity log that shuffles is simply wrong; "Top" is an explicit "rank by score"
+  // request, and the crowding-out was measured on Best, which is also the default tab.
+  const ordered = args.sort === 'best' ? applyDiversityCap(rows, exploreItemTypeKey) : rows;
 
-  return { items, nextCursor };
+  // Serving a prefix and advancing the cursor past the whole scan is what dropped ranks
+  // 23-30 of every page before (GEO-2695). The offset keeps the rest reachable.
+  const slice = ordered.slice(offset, offset + pageSize);
+
+  return {
+    items: await attachMeta(slice),
+    nextCursor: nextExploreWindowCursor({
+      after,
+      offset,
+      served: slice.length,
+      windowLength: ordered.length,
+      hasNextPage: page.hasNextPage,
+      endCursor: page.endCursor,
+    }),
+  };
 }
