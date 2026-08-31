@@ -548,12 +548,10 @@ export function ClaimsTab() {
                 claim={entry.claim}
                 positions={entry.positions}
                 readiness={entry}
-                activeDebate={entry.active_debate}
                 // Featured rows carry `viewer_debate_ready: false` until geo-chat's per-space lookup
                 // lands, and a switch drawn from that would report "not ready" on a claim the viewer
                 // is in fact standing ready on. The paged rows come with readiness on them, so this
                 // only ever applies to Featured.
-                hideReadinessToggle={featuredReadinessUnresolved}
                 onRequireSignIn={onRequireSignIn}
               />
             ))}

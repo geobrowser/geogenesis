@@ -11,7 +11,6 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import {
   type DebateClaimPositionSummary,
-  type DebateClaimSummary,
   type DebateRematchClaim,
   type DebateRematchClaimPosition,
   type DebateRematchParticipant,
@@ -63,7 +62,6 @@ import { useScopedMatchmakingClaims } from '~/core/debates/matchmaking/use-scope
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
-import { useClaimDebateReadiness } from '~/core/debates/use-claim-debate-readiness';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
@@ -1181,10 +1179,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }, [browsedClaims, curatedClaims, featuredClaims, opponentClaims, participants]);
   useDebateGatewaySpaceScopes(scopedSpaceIds, geoChatAuthenticated && scopedSpaceIds.length > 0);
 
-  // Readiness drives the card's Debate toggle. geo-chat now carries it on the rematch claims
+  // Readiness is reported by the card. geo-chat now carries it on the rematch claims
   // response itself; the per-space debate-claims endpoint is the fallback for a backend that
   // predates that, and it costs one query per space on screen.
-  const { byClaimId: readinessByClaimId, unresolved: readinessUnresolved } = useClaimReadinessByClaimId({
+  const { byClaimId: readinessByClaimId } = useClaimReadinessByClaimId({
     claims,
     unresolved:
       tab === 'opponent'
@@ -1221,7 +1219,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       session={session}
       currentUserId={currentUserId}
       readiness={readinessByClaimId.get(claim.claim.claim_entity_id) ?? null}
-      readinessUnresolved={readinessUnresolved}
       onRequest={() =>
         createRequest.mutate({
           source_space_id: claim.claim.space_id,
@@ -1457,8 +1454,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 type ClaimReadinessState = { viewer_debate_ready: boolean; readiness_disabled_reason: string | null };
 
 /**
- * Readiness for every claim on screen, keyed by claim entity id, so the shared card can render its
- * Debate toggle against real state.
+ * Readiness for every claim on screen, keyed by claim entity id, so the shared card reads real
+ * state. The Debate toggle it used to drive is gone (GEO-2740) — readiness now follows from
+ * holding a position — but the card still reports readiness, so this stays.
  *
  * Read off the rows themselves when they carry it — geo-chat's matchmaking and rematch responses
  * both do, so nothing extra goes over the wire. A row with the field absent comes from a backend
@@ -1525,7 +1523,6 @@ function RematchClaimCard({
   session,
   currentUserId,
   readiness: claimReadiness,
-  readinessUnresolved,
   onRequest,
   busy,
 }: {
@@ -1534,7 +1531,6 @@ function RematchClaimCard({
   currentUserId: string | null;
   readiness: ClaimReadinessState | null;
   /** True while any readiness lookup is still running or has failed. */
-  readinessUnresolved: boolean;
   onRequest: () => void;
   busy: boolean;
 }) {
@@ -1628,24 +1624,11 @@ function RematchClaimCard({
   // opt-in could stand the viewer up on a claim the switch is refusing.
   const activeDebate = false;
 
-  useReadinessOnFirstPosition({
-    claim: claim.claim,
-    readiness,
-    canEnable: !activeDebate,
-    localPosition,
-    // The optimistic copy exists only while this client's own submission is in flight, so it is
-    // what separates "the viewer just picked this side" from "we just learned the side they already
-    // held" — which is what a position looks like when their identity or geo-chat's copy lands late.
-    pickedHere: optimisticResponse !== undefined,
-    alreadyReady: claimReadiness?.viewer_debate_ready ?? false,
-  });
-
   return (
     <MatchmakingClaimCard
       claim={claim.claim}
       positions={positions}
       readiness={readiness}
-      activeDebate={activeDebate}
       // `positions` locates the viewer by geo-chat user id, which is null until the token exchange
       // lands. Until then `serverLocalPosition` reads as "no position" for someone the summaries
       // may already count, and the card would draw them onto a second side.
@@ -1655,7 +1638,6 @@ function RematchClaimCard({
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
       // Rather than draw the switch off on a guess. Only while this claim's readiness is genuinely
       // unknown — a settled lookup that simply has no row for it really does mean "not ready".
-      hideReadinessToggle={claimReadiness === null && readinessUnresolved}
       footer={
         awaitingResponse || canRequest || requesting ? (
           <div className="mt-3">
@@ -1693,62 +1675,6 @@ function RematchClaimCard({
   );
 }
 
-/**
- * Taking a side here means you want to debate this claim, so readiness follows rather than being a
- * second step the viewer has to find. Deliberately local to the picker: the hub's Claims tab keeps
- * the two separate, where browsing and standing ready really are different intents.
- *
- * Only a side picked while the picker is open counts. Opting in for positions already held on
- * arrival would fire a write per claim on load, and would silently undo a stand-down the viewer
- * made somewhere else. Switching sides doesn't re-fire either, for the same reason.
- *
- * Recorded through the card's own readiness intent rather than sent from here. The two would
- * otherwise both stand the viewer up on the same claim — the switch holds an intent through
- * publishing now, so a viewer who took a side and pressed it would have queued twice — and the
- * intent already owns the wait for geo-chat to catch up, which this used to duplicate.
- */
-function useReadinessOnFirstPosition({
-  claim,
-  readiness,
-  canEnable,
-  localPosition,
-  pickedHere,
-  alreadyReady,
-}: {
-  claim: DebateClaimSummary;
-  readiness: MatchmakingReadiness;
-  /** Must match what the card's switch gates on, so the two can't disagree about the same claim. */
-  canEnable: boolean;
-  localPosition: boolean | null;
-  /** Whether {@link localPosition} is this client's own in-flight submission. */
-  pickedHere: boolean;
-  alreadyReady: boolean;
-}) {
-  const { setReady } = useClaimDebateReadiness({
-    readiness,
-    entityId: claim.claim_entity_id,
-    spaceId: claim.space_id,
-    canEnable,
-  });
-  // Seeded with the position held on mount, so arriving with one is not a transition.
-  const previousPosition = React.useRef(localPosition);
-  const optedIn = React.useRef(false);
-
-  React.useEffect(() => {
-    const previous = previousPosition.current;
-    previousPosition.current = localPosition;
-
-    const justEstablished = previous === null && localPosition !== null;
-    // A position can appear without anyone picking anything: the viewer's id resolves a beat after
-    // mount, or geo-chat's copy of a claim they had already answered lands late. Both look exactly
-    // like a fresh pick from here, and standing them ready for either silently undoes a stand-down
-    // they made elsewhere — the thing this hook is careful not to do.
-    if (!justEstablished || !pickedHere || alreadyReady || optedIn.current) return;
-
-    optedIn.current = true;
-    setReady(true);
-  }, [alreadyReady, localPosition, pickedHere, setReady]);
-}
 
 /** One curated block, collapsible so a long page of recommendations stays scannable. */
 function RecommendedSection({ name, count, children }: { name: string; count: number; children: React.ReactNode }) {

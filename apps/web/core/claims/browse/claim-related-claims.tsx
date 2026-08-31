@@ -237,10 +237,8 @@ function RelatedClaimCard({
         viewer_debate_ready: row?.viewer_debate_ready ?? false,
         readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
       }}
-      activeDebate={Boolean(row?.active_debate)}
       // The readiness switch reads `viewer_debate_ready`, which is false until geo-chat's lookup
       // lands — drawing it before then would report "not ready" on a claim the viewer is ready on.
-      hideReadinessToggle={row === null && rowsPending}
       footer={<AgreePercent summary={summary} responseKind={responseKind} />}
     />
   );
