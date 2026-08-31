@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => ({
     runId: string | null;
   },
   spaceName: 'Crypto',
-  match: null as { id: string } | null,
+  match: null as { id: string; positions?: DebateClaimPositionSummary[] } | null,
   blockedReason: undefined as string | undefined,
   request: vi.fn(),
   summaryPositive: 0,
@@ -55,8 +55,11 @@ vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
   // match's participants into the pills runs here rather than being mocked away — and a whole-module
   // mock would have left it undefined, which is how this broke.
   ...(await importOriginal<typeof import('~/core/claims/browse/use-claim-matchup')>()),
-  useClaimMatchup: () => ({
-    match: mocks.match,
+  // Honours `enabled`, because the real hook does: disabled means no answer, not a stale one, so it
+  // masks the match rather than just holding the fetch. A stub that ignored it would report every
+  // host as offering a debate no matter what the host asked for.
+  useClaimMatchup: ({ enabled = true }: { enabled?: boolean }) => ({
+    match: enabled ? mocks.match : null,
     blockedReason: mocks.blockedReason,
     isRequesting: false,
     requestError: null,
@@ -73,6 +76,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
     useClaimResponseSummary: () => ({
       ...actual.summarizeClaimResponses(mocks.summaryPositive, mocks.summaryNegative),
       isLoading: false,
+      isViewerResponseLoading: false,
       viewerDirection: null,
       viewerSpaceId: null,
     }),
@@ -354,6 +358,63 @@ describe('position avatar stack', () => {
   });
 });
 
+/**
+ * The merge that fills an empty side with the people the server based its offer on, so the card
+ * cannot offer a debate on a side showing nobody to debate.
+ *
+ * It belongs to the offer, which means it belongs only to hosts that make one.
+ */
+describe('faces borrowed from the match', () => {
+  const matchWithOpponent: DebateClaimPositionSummary[] = [
+    { ...positions[0], participants: [] },
+    { ...positions[1], present_count: 1, participants: [participant('opponent')] },
+  ];
+
+  it('fills a side that has no faces of its own from the match', () => {
+    // The guard for the test below: without this, hiding the merge would be indistinguishable from
+    // the merge never having worked.
+    mocks.match = { id: 'match-1', positions: matchWithOpponent };
+
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={[
+          { ...positions[0], present_count: 0, participants: [] },
+          { ...positions[1], present_count: 0, participants: [] },
+        ]}
+        readiness={readiness()}
+      />
+    );
+
+    expect(within(screen.getByRole('button', { name: /^Disagree/ })).getAllByTestId('avatar')).toHaveLength(1);
+  });
+
+  it('borrows nobody where the host makes no offer', () => {
+    // The rematch picker's shape. Its `positions` come from a fixed pair and it empties the unheld
+    // side deliberately — a rematch has nobody to send a request to — so filling that side from an
+    // account-level match puts an unrelated online stranger inside a pill that means "your opponent
+    // holds this side". `hideEndSlot` is the host saying it makes no offer at all.
+    mocks.match = { id: 'match-1', positions: matchWithOpponent };
+
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={[
+          { ...positions[0], present_count: 0, participants: [] },
+          { ...positions[1], present_count: 0, participants: [] },
+        ]}
+        readiness={readiness()}
+        hideEndSlot
+      />
+    );
+
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+    expect(within(disagree).queryAllByTestId('avatar')).toHaveLength(0);
+    // And no overflow either, which is the other half of what the merge would have added.
+    expect(within(disagree).queryByText(/^\+/)).toBeNull();
+  });
+});
+
 describe('MatchmakingClaimCard', () => {
   it('says why a held pill cannot be pressed, rather than naming the side', () => {
     // `answersReady` false means one of the claim's two lookups has not answered — its vocabulary,
@@ -448,7 +509,7 @@ describe('MatchmakingClaimCard', () => {
         claim={claim}
         positions={positions}
         readiness={readiness()}
-        activeDebate={{ id: 'debate-7' } as never}
+        activeDebate={{ id: 'debate-7', claim: { ...claim, space_id: mocks.spaceId } } as never}
       />
     );
 
@@ -458,6 +519,44 @@ describe('MatchmakingClaimCard', () => {
       'href',
       `/space/${mocks.spaceId}/debates/debate-7`
     );
+  });
+
+  // A debate room lives under the space its *claim* came from, which is not always the space the
+  // surface rendering the row is scoped to — the debate claims panel already fetches its rows per
+  // claim space, so a debate quoting a claim from elsewhere lands here with the two disagreeing.
+  // Building the href from the host's `spaceId` sent the reader to a room under the wrong space.
+  it('opens the room under the debate claim’s own space, not the host surface’s', () => {
+    const OTHER_SPACE = 'e7d6d84d3a3d4b0e9f9d6d0f6f5e4c3b';
+
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness()}
+        activeDebate={{ id: 'debate-7', claim: { ...claim, space_id: OTHER_SPACE } } as never}
+      />
+    );
+
+    expect(screen.getByRole('link', { name: /Watch live/ })).toHaveAttribute(
+      'href',
+      `/space/${OTHER_SPACE}/debates/debate-7`
+    );
+  });
+
+  it('still offers the debate on a claim the graph cannot resolve', () => {
+    // Every card on the Matches tab is a match by definition, and its footer button is gone — the
+    // end slot is the only request control left. Both the match and the request are geo-chat's,
+    // against the very ids geo-chat handed us, so nothing in the offer needs the graph. Gating the
+    // slot on graph resolution took the action away from exactly the claims that are hardest to
+    // reach any other way, and masked a request the server would have accepted.
+    mocks.match = { id: 'match-1' };
+    const offGraph = { ...claim, claim_entity_id: 'not-a-graph-id' };
+
+    renderCard(<MatchmakingClaimCard claim={offGraph} positions={positions} readiness={readiness()} />);
+
+    expect(screen.getByText('Claim unavailable')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
+    expect(mocks.request).toHaveBeenCalled();
   });
 
   it('still heads the card with the space chip when the claim is not on the graph', () => {

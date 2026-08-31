@@ -10,7 +10,7 @@ import cx from 'classnames';
 import Link from 'next/link';
 
 import type { Debate } from '~/core/debates/api';
-import { NavUtils } from '~/core/utils/utils';
+import { debatePath } from '~/core/debates/debate-routes';
 
 import { useClaimMatchup } from './use-claim-matchup';
 
@@ -27,8 +27,12 @@ import { useClaimMatchup } from './use-claim-matchup';
  *
  *   1. Request debate — someone is standing ready on the side opposite the viewer's.
  *   2. Watch live     — a debate is running on this claim.
- *   3. Watch the debate — one has been recorded.
- *   4. Nothing        — the row simply ends, which is the common case and must cost no layout.
+ *   3. Nothing        — the row simply ends, which is the common case and must cost no layout.
+ *
+ * A fourth state, "Watch the debate" for a recorded one, was specified and built and then had no
+ * caller: no surface looks a past debate up, and the poster still it wanted needs a keyframe query
+ * per card. It is not here rather than here-but-unreachable, because a branch nothing can enter is
+ * read later as a state the product has.
  *
  * Request outranks live because it is the only one that needs the viewer: a live debate is still
  * there a second later, whereas a match evaporates when either party is taken.
@@ -37,7 +41,6 @@ export function ClaimEndSlot({
   claimId,
   spaceId,
   activeDebate,
-  pastDebate,
   enabled = true,
   variant = 'inline',
   className,
@@ -53,8 +56,6 @@ export function ClaimEndSlot({
    * nothing about the most compelling state a claim has.
    */
   activeDebate?: Debate | boolean | null;
-  /** The most recent recorded debate on this claim, for surfaces that have looked one up. */
-  pastDebate?: { id: string; name: string | null } | null;
   /** False where the host cannot resolve the claim on the graph, so there is nothing to request. */
   enabled?: boolean;
   /**
@@ -146,24 +147,16 @@ export function ClaimEndSlot({
 
   if (activeDebate) {
     // The room where it is happening, or the feed when all we were told is that it is happening.
-    const href =
-      typeof activeDebate === 'object' ? `/space/${spaceId}/debates/${activeDebate.id}` : `/space/${spaceId}/debates`;
+    //
+    // `debatePath` rather than this host's own `spaceId`: a debate room lives under the space its
+    // *claim* came from, and the two agree only for as long as every surface renders rows it
+    // fetched under the space it is showing. The panel already fetches its rows per claim space.
+    const href = typeof activeDebate === 'object' ? debatePath(activeDebate) : `/space/${spaceId}/debates`;
 
     return (
       <Link href={href} className={cx(base, 'border border-red-01 text-red-01 hover:bg-red-01/5', className)}>
         <span className="size-1 shrink-0 animate-pulse rounded-full bg-red-01" aria-hidden />
         Watch live
-      </Link>
-    );
-  }
-
-  if (pastDebate) {
-    return (
-      <Link
-        href={NavUtils.toEntity(spaceId, pastDebate.id)}
-        className={cx(base, 'border border-grey-02 text-text hover:border-text', className)}
-      >
-        Watch the debate
       </Link>
     );
   }

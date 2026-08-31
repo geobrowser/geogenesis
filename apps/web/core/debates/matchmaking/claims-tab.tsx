@@ -313,6 +313,24 @@ export function ClaimsTab() {
     });
   }, [featured, featuredEntities, featuredMatching, featuredRows.claims]);
 
+  // Which featured claims have a vocabulary rather than the `stance` fallback.
+  //
+  // The featured list comes from the search index, which arrives before either source of the kind
+  // does — geo-chat's row, or the entity's own "Is factual" value — and `featuredEntitiesLoading`
+  // is deliberately not part of the list's own loading state, because the claims are listable
+  // without it. So the cards render first, and this is the view the hub opens on.
+  //
+  // The kind selects `voteKind` on the write, so a press in that window does not just label a
+  // factual claim Agree/Disagree: it publishes a stance response against it. Held until one of the
+  // two sources has actually answered — not merely stopped loading, since a failed lookup also
+  // stops loading and would fall through to the same fallback.
+  const featuredKindResolved = React.useMemo(() => {
+    if (!featured) return new Set<string>();
+    const resolved = new Set(featuredRows.claims.map(row => row.claim_entity_id));
+    for (const entity of featuredEntities) resolved.add(entity.id);
+    return resolved;
+  }, [featured, featuredEntities, featuredRows.claims]);
+
   // Featured claims are not in geo-chat's index, so the server's topic facet says nothing about
   // them and its `topic_id` can't narrow them. Their topics come off the entities already fetched
   // for the response kind — which is what the whole tab did before GEO-2653 moved the paged list's
@@ -527,6 +545,9 @@ export function ClaimsTab() {
                 positions={entry.positions}
                 readiness={entry}
                 activeDebate={entry.active_debate}
+                // The paged list is geo-chat's own, so every row carries its kind already; only the
+                // featured list has to wait for one.
+                answersReady={!featured || featuredKindResolved.has(entry.claim.claim_entity_id)}
                 onRequireSignIn={onRequireSignIn}
               />
             ))}

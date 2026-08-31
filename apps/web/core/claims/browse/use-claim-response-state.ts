@@ -148,7 +148,15 @@ export function useClaimResponseState({
   return {
     responseKind,
     isResponseKindResolved,
-    isViewerResponseResolved: row !== null || !summary.isLoading,
+    // Both halves of the fallback below, not just the counts.
+    //
+    // `viewer_response` falls back to `summary.viewerDirection`, which rides a *second* query —
+    // gated on the personal space, itself a smart-account read plus a round trip. It settles after
+    // the counts do. Reading only `summary.isLoading` therefore called this resolved during the
+    // window where the counts had landed and the viewer's side had not: a signed-in viewer who has
+    // already agreed sees both pills unselected, and pressing the one they hold republishes it
+    // instead of clearing it — the exact failure this field exists to prevent.
+    isViewerResponseResolved: row !== null || (!summary.isLoading && !summary.isViewerResponseLoading),
     summary,
     claim,
     positions,

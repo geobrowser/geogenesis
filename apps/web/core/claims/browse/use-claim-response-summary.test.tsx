@@ -14,6 +14,8 @@ const SPACE = 'space-1';
 
 const mocks = vi.hoisted(() => ({
   batch: { managed: false, ready: true },
+  /** The viewer's personal space, which the indexed-response query is gated on. */
+  personalSpace: { personalSpaceId: 'space-viewer' as string | null, isLoading: false },
   /** What the indexing snapshot reports — not a query, so `enabled` never reaches it. */
   indexing: { status: 'idle', pending: null, runId: null } as {
     status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
@@ -23,7 +25,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId: VIEWER_SPACE, isLoading: false }),
+  usePersonalSpaceId: () => mocks.personalSpace,
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -55,6 +57,7 @@ function primeStanceCache() {
 beforeEach(() => {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   mocks.batch = { managed: false, ready: true };
+  mocks.personalSpace = { personalSpaceId: VIEWER_SPACE, isLoading: false };
   mocks.indexing = { status: 'idle', pending: null, runId: null };
 });
 
@@ -116,5 +119,87 @@ describe('useClaimResponseSummary when disabled', () => {
 
     expect(result.current.positive).toBe(9);
     expect(result.current.total).toBe(12);
+  });
+});
+
+/** Only the counts. The viewer's own indexed response is a separate key and stays unanswered. */
+function primeCountsOnly() {
+  queryClient.setQueryData(entityResponseCountsQueryKey(CLAIM, SPACE, CLAIM_RESPONSE_OBJECT_TYPE, 'stance'), {
+    positive: 9,
+    negative: 3,
+  });
+}
+
+describe('useClaimResponseSummary and the viewer’s own side', () => {
+  it('reports the viewer’s side as unsettled while the personal space is still resolving', () => {
+    // The bug this exists for. The counts and the viewer's own response are two queries, and the
+    // second is gated on the personal space — a smart-account read plus a round trip, so it settles
+    // *after* the counts. A caller reading `isLoading` for both sees the counts land, calls the
+    // viewer's side resolved while it is still null, draws both pills unselected for someone who
+    // already holds one, and turns a press on the side they hold into a republish.
+    primeCountsOnly();
+    mocks.personalSpace = { personalSpaceId: null, isLoading: true };
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isViewerResponseLoading).toBe(true);
+    expect(result.current.viewerDirection).toBeNull();
+  });
+
+  it('stays unsettled after the personal space lands but before its query answers', () => {
+    // The second half of the same window, and the reason this reads `isFetched` rather than the
+    // query's own `isLoading`: that reads false for a tick after a query becomes enabled and before
+    // it dispatches, which is precisely the gap being covered.
+    primeCountsOnly();
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(result.current.isViewerResponseLoading).toBe(true);
+  });
+
+  it('settles once the viewer’s own response has answered', () => {
+    primeStanceCache();
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(result.current.isViewerResponseLoading).toBe(false);
+    expect(result.current.viewerDirection).toBe('positive');
+  });
+
+  it('is settled immediately for a signed-out viewer, who is waiting for nothing', () => {
+    // No personal space and none coming. `null` here is a settled "no side", not a pending one, and
+    // reporting otherwise would leave the pills dead for every signed-out reader.
+    primeCountsOnly();
+    mocks.personalSpace = { personalSpaceId: null, isLoading: false };
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(result.current.isViewerResponseLoading).toBe(false);
+  });
+
+  it('follows the batch rather than its own queries while one manages the subtree', () => {
+    // Under a boundary neither query runs and the batch primes both keys, so the batch's readiness
+    // is the only thing either flag can wait on.
+    mocks.batch = { managed: true, ready: false };
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(result.current.isViewerResponseLoading).toBe(true);
+
+    mocks.batch = { managed: true, ready: true };
+    primeStanceCache();
+
+    const ready = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', true), { wrapper });
+
+    expect(ready.result.current.isViewerResponseLoading).toBe(false);
+  });
+
+  it('is settled while held back, which is not the same as waiting', () => {
+    mocks.personalSpace = { personalSpaceId: null, isLoading: true };
+
+    const { result } = renderHook(() => useClaimResponseSummary(CLAIM, SPACE, 'stance', false), { wrapper });
+
+    expect(result.current.isViewerResponseLoading).toBe(false);
   });
 });

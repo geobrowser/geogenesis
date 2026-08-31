@@ -16,6 +16,7 @@ import {
   type ResponseKind,
   entityRespondersQueryKey,
 } from '~/core/responses/entity-response';
+import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -60,9 +61,18 @@ export function ClaimSideResponders({
   // actually opened — a page of claim cards would otherwise fetch every side's profiles up front.
   const [open, setOpen] = React.useState(false);
 
+  // Stands down under a batch, the same as the other two callers of this key.
+  //
+  // `ClaimResponseBatchBoundary` primes exactly this key for every claim on the page, so asking
+  // here would be a per-row request for something already in the cache — and before the batch lands
+  // there is nothing to answer from anyway. Unreachable under a batch as things stand, since
+  // `ClaimSides` is only mounted by the claim page and the explore card; it was the odd one out of
+  // three otherwise-identical call sites, which is how the deferral got lost the last time.
+  const responseBatch = useClaimResponseBatchState();
   const { data: responders } = useQuery({
     queryKey: entityRespondersQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
     queryFn: () => Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)),
+    enabled: !responseBatch.managed,
     staleTime: 30_000,
   });
 

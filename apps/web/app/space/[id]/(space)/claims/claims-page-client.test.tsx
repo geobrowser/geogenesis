@@ -103,6 +103,9 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
     // so the batch's own readiness is what says whether there is anything to draw yet. Stubbing
     // this `false` unconditionally is what let the card look answerable with the batch still out.
     isLoading: !responseBatchReady,
+    // Same swap the real hook makes under a batch: the viewer's own side is primed by the batch
+    // too, so the batch's readiness is the only thing either flag waits on.
+    isViewerResponseLoading: !responseBatchReady,
     viewerDirection: null,
     viewerSpaceId: null,
   }),

@@ -46,6 +46,20 @@ export type ClaimResponseSummary = {
   isControversial: boolean;
   isLoading: boolean;
   /**
+   * Whether {@link viewerDirection} is still on its way, as opposed to being a settled "no side".
+   *
+   * Separate from `isLoading`, which reports the counts. The two settle independently and the
+   * viewer's own side settles *later*: it rides a second query gated on the personal space, which
+   * is a smart-account read plus a round trip of its own. A caller that read `isLoading` for this
+   * would see the counts land, call the viewer's side resolved while it is still `null`, and draw
+   * both pills unselected for someone who already holds one — so pressing the side they hold
+   * republishes it instead of clearing it.
+   *
+   * False while the hook is disabled, and false for a signed-out viewer: neither is waiting for
+   * anything.
+   */
+  isViewerResponseLoading: boolean;
+  /**
    * The side the viewer holds right now, optimistic included, and the space that identifies them.
    *
    * Exposed because the counts here are adjusted optimistically: anything drawing people onto the
@@ -94,7 +108,7 @@ export function claimSummaryTier(total: number): ClaimSummaryTier {
 export function summarizeClaimResponses(
   positive: number,
   negative: number
-): Omit<ClaimResponseSummary, 'isLoading' | 'viewerDirection' | 'viewerSpaceId'> {
+): Omit<ClaimResponseSummary, 'isLoading' | 'isViewerResponseLoading' | 'viewerDirection' | 'viewerSpaceId'> {
   const total = positive + negative;
   const percent = total > 0 ? Math.round((100 * positive) / total) : null;
   const meetsFloor = total >= CLAIM_RESPONSE_FLOOR;
@@ -146,7 +160,7 @@ export function useClaimResponseSummary(
    */
   enabled = true
 ): ClaimResponseSummary {
-  const { personalSpaceId } = usePersonalSpaceId();
+  const { personalSpaceId, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
 
   // A page that batches its claims — the space claims list, which asks for up to fifty at once —
   // primes exactly these two keys from one request. Asking here as well is not wrong, because the
@@ -165,7 +179,7 @@ export function useClaimResponseSummary(
   });
 
   // What the counts above already include for this viewer — the baseline the delta subtracts.
-  const { data: indexedDirection } = useQuery({
+  const { data: indexedDirection, isFetched: isIndexedDirectionFetched } = useQuery({
     queryKey: userEntityResponseQueryKey(personalSpaceId, entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
     queryFn: async () => {
       if (!personalSpaceId) return null;
@@ -210,6 +224,7 @@ export function useClaimResponseSummary(
       // Held back is not the same as loading: a caller that has not asked yet has nothing to wait
       // for, and reporting otherwise would leave a skeleton on a card that never asks.
       isLoading: false,
+      isViewerResponseLoading: false,
       viewerDirection: null,
       // Who the viewer is, not what they answered — safe to report, and the avatars need it to
       // place the viewer once there is something to place.
@@ -222,6 +237,19 @@ export function useClaimResponseSummary(
     // Under a batch the individual query never runs, so its `isLoading` is false from the start —
     // the batch's own readiness is what says whether there is anything to draw yet.
     isLoading: responseBatch.managed ? !responseBatch.ready : isLoading,
+    // The viewer's own side, which the counts do not wait for.
+    //
+    // Two things have to settle before `viewerDirection` means "no side" rather than "not yet":
+    // the personal space, and then the query it gates. `isFetched` rather than the query's own
+    // `isLoading` for the same reason `usePersonalSpaceId` uses it — `isLoading` reads false for a
+    // tick after a query becomes enabled but before it dispatches, which is precisely the window
+    // this is meant to cover.
+    //
+    // Under a batch the query never runs and the batch primes its key, so the batch's readiness is
+    // the only thing to wait on — the same swap `isLoading` makes above.
+    isViewerResponseLoading: responseBatch.managed
+      ? !responseBatch.ready
+      : isPersonalSpaceLoading || (Boolean(personalSpaceId) && !isIndexedDirectionFetched),
     viewerDirection: activeDirection ?? null,
     viewerSpaceId: personalSpaceId ?? null,
   };

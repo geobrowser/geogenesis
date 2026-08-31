@@ -15,10 +15,12 @@ import {
   useEntityResponseIndexingSnapshot,
   useResetEntityResponseIndexingSnapshot,
 } from '~/core/hooks/use-entity-vote';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
@@ -131,10 +133,43 @@ export function MatchmakingClaimCard({
   // asking the graph about it fails the request, so don't offer or ask.
   const isOnGraph = isResolvableClaim(claim);
 
+  // The response reads wait for the card to come into range.
+  //
+  // Three queries ride on each of these — the counts, the viewer's own indexed response, and the
+  // responder faces — all keyed per claim, so nothing is shared between rows the way the match
+  // lookup is. On the hub's Claims tab and the rematch picker, list surfaces that page in twenty
+  // more cards at a time and previously did no response reads at all, mounting them eagerly is
+  // sixty requests for claims nobody has scrolled to. `ClaimExploreFeedCard` gates its reads for
+  // exactly this reason; the shared card had not caught up.
+  const { ref: viewportRef, nearViewport } = useNearViewport();
+
+  // A batch is the exception, and must not be deferred. `ClaimResponseBatchBoundary` primes these
+  // very keys from one request for the whole page, so there is nothing per-card left to save — and
+  // holding the hook back would mask the primed cache the batch exists to serve, drawing an empty
+  // split instead of the batch's.
+  const responseBatch = useClaimResponseBatchState();
+  const readResponses = nearViewport || responseBatch.managed;
+
+  // The host's ref and the observer's, on the one element. The Matches tab hangs its infinite
+  // scroll sentinel off the former and popLayout measures the exiting row through it, so it cannot
+  // simply be replaced.
+  const setCardRef = React.useCallback(
+    (node: HTMLElement | null) => {
+      viewportRef(node);
+      if (typeof ref === 'function') ref(node);
+      else if (ref) (ref as React.RefObject<HTMLElement | null>).current = node;
+    },
+    [ref, viewportRef]
+  );
+
   return (
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
-    <motion.article ref={ref} {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
+    <motion.article
+      ref={setCardRef}
+      {...hubCardMotion}
+      className="w-full rounded-lg border border-grey-02 bg-white p-3"
+    >
       {isOnGraph ? (
         <RespondableControls
           claim={claim}
@@ -142,6 +177,7 @@ export function MatchmakingClaimCard({
           readiness={readiness}
           activeDebate={activeDebate}
           answersReady={answersReady}
+          readResponses={readResponses}
           onOpenClaim={onOpenClaim}
           viewerIdentityPending={viewerIdentityPending}
           onRequireSignIn={onRequireSignIn}
@@ -240,6 +276,7 @@ export function useClaimPositionControl({
   answersReady = true,
   viewerIdentityPending,
   onRequireSignIn,
+  offersDebate = true,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -264,6 +301,20 @@ export function useClaimPositionControl({
    * one they stay disabled, which is what the hub's cards have always done.
    */
   onRequireSignIn?: () => void;
+  /**
+   * Whether this host offers the account-level match at all.
+   *
+   * The one thing the match is used for here is filling a side that has no faces with the people
+   * the server based the offer on, so the card cannot offer a debate on a side showing nobody to
+   * debate. That is only coherent where the offer is on screen.
+   *
+   * The rematch picker is the host it is wrong for, and it says so itself: its `positions` come
+   * from a fixed pair, and it emits an empty side deliberately, because a rematch has nobody to
+   * send a request to. Merging there puts an unrelated online stranger's avatar — and a `+N`
+   * overflow — inside a pill that means "your opponent holds this side". False also drops the
+   * lookup, which that surface has no other use for.
+   */
+  offersDebate?: boolean;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -285,8 +336,11 @@ export function useClaimPositionControl({
   const { match } = useClaimMatchup({
     claimId: claim.claim_entity_id,
     spaceId: claim.space_id,
-    enabled: isResolvableClaim(claim),
+    enabled: offersDebate && isResolvableClaim(claim),
   });
+  // One gate, on the lookup. `useClaimMatchup` masks a disabled match to null rather than serving
+  // the shared cache another host primed, so a second check here would be unreachable — and an
+  // unreachable guard is the kind that gets trusted and then quietly stops matching the real one.
   const positionsWithOpponents = React.useMemo(
     () => withMatchParticipants(positions, match?.positions),
     [match?.positions, positions]
@@ -393,6 +447,7 @@ function RespondableControls({
   readiness,
   activeDebate,
   answersReady = true,
+  readResponses = true,
   onOpenClaim,
   viewerIdentityPending,
   onRequireSignIn,
@@ -403,16 +458,33 @@ function RespondableControls({
   readiness: MatchmakingReadiness;
   activeDebate?: Debate | boolean | null;
   answersReady?: boolean;
+  /** False while the card is still far enough below the fold that its reads are not worth making. */
+  readResponses?: boolean;
   onOpenClaim?: () => void;
   viewerIdentityPending?: boolean;
   onRequireSignIn?: () => void;
   hideEndSlot?: boolean;
 }) {
   const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
-    useClaimPositionControl({ claim, positions, readiness, answersReady, viewerIdentityPending, onRequireSignIn });
+    useClaimPositionControl({
+      claim,
+      positions,
+      readiness,
+      answersReady,
+      viewerIdentityPending,
+      onRequireSignIn,
+      // The faces the match implies belong with the offer the match makes. Where the slot is hidden
+      // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
+      offersDebate: !hideEndSlot,
+    });
   // One read for the card. The header flags a contested claim and the footer reports the split, and
   // deciding that twice is how the two would eventually disagree.
-  const summary = useClaimResponseSummary(claim.claim_entity_id, claim.space_id, readiness.response_kind);
+  const summary = useClaimResponseSummary(
+    claim.claim_entity_id,
+    claim.space_id,
+    readiness.response_kind,
+    readResponses
+  );
 
   return (
     <>
@@ -445,7 +517,10 @@ function RespondableControls({
           </Text>
         </div>
       ) : null}
-      {summary.isLoading ? null : (
+      {/* Nothing at all while the reads are held, rather than the summary's own "nobody has
+          answered yet" — a disabled hook reports a total of zero, and that is the absence of an
+          answer rather than an answer of none. */}
+      {!readResponses || summary.isLoading ? null : (
         <ClaimSummary
           entityId={claim.claim_entity_id}
           spaceId={claim.space_id}
@@ -570,15 +645,18 @@ function UnresolvableControls({
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
         endSlot={
-          /* A live debate is geo-chat state, so it can still be watched without a graph id — but
-             the graph cannot resolve this claim, so there is no match to request against it. */
+          /* The slot stays live even though the graph cannot resolve this claim, because nothing in
+             it needs the graph. Both the match and the debate are geo-chat state, and the request is
+             a geo-chat mutation against the very ids geo-chat handed us — so a match the server has
+             already made is one the server will honour, whatever the graph makes of the id.
+
+             It used to pass `enabled={false}`, which `useClaimMatchup` turns into `match: null`.
+             That took the request control off the Matches tab for exactly the claims that are
+             hardest to reach any other way: every card there is a match by definition, and the
+             footer button that used to offer it is gone. Masking an action the server would accept
+             is not the safe direction to be wrong in. */
           hideEndSlot ? null : (
-            <ClaimEndSlot
-              claimId={claim.claim_entity_id}
-              spaceId={claim.space_id}
-              activeDebate={activeDebate}
-              enabled={false}
-            />
+            <ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />
           )
         }
       />

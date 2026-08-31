@@ -108,7 +108,9 @@ const mocks = vi.hoisted(() => ({
   allowlistLoading: false,
   spaceTypes: {} as Record<string, 'DAO' | 'PERSONAL'>,
   publishableSpaceIds: null as Set<string> | null,
-  scrollSentinelIntoView: null as null | (() => void),
+  observerTriggers: [] as (() => void)[],
+  /** Scrolls everything observed into view — the sentinel among it. */
+  scrollSentinelIntoView: () => mocks.observerTriggers.forEach(fire => fire()),
   claimReadinessLoading: false,
   claimReadinessError: false,
   /** Every group list the per-space readiness lookup was asked for, in render order. */
@@ -167,6 +169,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
     meetsFloor: false,
     isControversial: false,
     isLoading: false,
+    isViewerResponseLoading: false,
     viewerDirection: null,
     viewerSpaceId: null,
   }),
@@ -532,15 +535,20 @@ beforeEach(() => {
   mocks.spaceTypes = {};
   mocks.publishableSpaceIds = null;
   // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
-  // the callback so a test can say the sentinel scrolled into view.
-  mocks.scrollSentinelIntoView = null;
+  // every callback so a test can say the sentinel scrolled into view.
+  //
+  // Every one of them, not just the last: each claim card now observes itself too, to hold its
+  // response reads until it is near the viewport. Keeping a single callback would hand back the
+  // last card's, and the sentinel — the only thing these tests scroll — would never fire.
+  mocks.observerTriggers = [];
   vi.stubGlobal(
     'IntersectionObserver',
     class {
       constructor(private readonly callback: IntersectionObserverCallback) {}
       observe(element: Element) {
-        mocks.scrollSentinelIntoView = () =>
-          this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never);
+        mocks.observerTriggers.push(() =>
+          this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never)
+        );
       }
       unobserve() {}
       disconnect() {}
@@ -1183,7 +1191,7 @@ describe('DebateRematchPageClient', () => {
 
     expect(mocks.fetchNextPage).not.toHaveBeenCalled();
 
-    act(() => mocks.scrollSentinelIntoView?.());
+    act(() => mocks.scrollSentinelIntoView());
 
     expect(mocks.fetchNextPage).toHaveBeenCalledOnce();
   });
