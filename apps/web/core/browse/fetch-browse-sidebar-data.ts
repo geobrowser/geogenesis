@@ -3,10 +3,11 @@ import * as Either from 'effect/Either';
 
 import { DOCUMENTATION_SPACE_ID, PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import type { Space } from '~/core/io/dto/spaces';
-import { getSpaces, getSpacesWhereMember } from '~/core/io/queries';
+import { getSpaces } from '~/core/io/queries';
 import { AbortError } from '~/core/io/subgraph/errors';
 import { fetchEditorSpaceIds } from '~/core/io/subgraph/fetch-editor-space-ids';
 import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
+import { fetchMemberSpaces } from '~/core/io/subgraph/fetch-member-spaces';
 import {
   fetchPendingEditorshipSpaceIds,
   fetchPendingMembershipSpaceIds,
@@ -94,7 +95,7 @@ async function fetchSpaceRows(
 async function fetchBrowseSidebarSources(memberSpaceId: string) {
   const [editorIds, memberSpaces, pendingMemberIds, pendingEditorIds] = await Promise.all([
     fetchEditorSpaceIds(memberSpaceId),
-    Effect.runPromise(getSpacesWhereMember(memberSpaceId)),
+    fetchMemberSpaces(memberSpaceId),
     fetchPendingMembershipSpaceIds(memberSpaceId).catch(() => [] as string[]),
     fetchPendingEditorshipSpaceIds(memberSpaceId).catch(() => [] as string[]),
   ]);

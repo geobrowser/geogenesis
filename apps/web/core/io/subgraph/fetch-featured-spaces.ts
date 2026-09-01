@@ -1,6 +1,6 @@
 import { Effect, Either } from 'effect';
 
-import { FEATURED_TAG_ID, ROOT_SPACE, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import { FEATURED_TAG_ID, ROOT_SPACE, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
@@ -14,21 +14,25 @@ import {
 } from './space-image';
 import { PLACEHOLDER_TOPIC_NAME } from './topic-space-usage';
 
-// Featured spaces are discovered by walking the Subtopic relation tree that
-// hangs off the Root space's topic entity, breadth-first. We start at the top
-// (Root's direct subtopics) and work down, so shallow — i.e. most prominent —
-// topics surface first. A topic becomes a pill only if it is tagged Featured in
-// the Root space and has at least one space claiming it; when several spaces
-// share a topic we feature the top-ranked one (see getTopRankedSpaceId).
+// Featured spaces are the Topic entities tagged Featured in the Root space, resolved to
+// the top-ranked space claiming each one (see getTopRankedSpaceId). A topic becomes a
+// pill only if a space claims it.
+//
+// This used to be discovered by walking the Subtopic tree hanging off the Root topic
+// breadth-first, checking every node for the tag. That walk was pure discovery overhead:
+// nothing downstream used tree position — the list is ordered by curated space rank, and
+// always was. Measured against testnet it cost five *sequential* round trips, 2.95s and
+// 276 KB to visit 3,038 nodes and find five spaces, all five of which were already found
+// by round three. It also never finished: MAX_NODES capped the walk at 2,500 nodes with
+// ~2,600 still queued, so a featured topic deep in the tree was simply invisible.
+//
+// The tag is an ordinary relation, so it can be asked for directly. One round trip,
+// ~0.33s, ~4.5 KB — at the measured floor for *any* request to the API, so there is
+// nothing further to win here by trimming fields. Optimise round trips, not selections.
 
-// How many entity ids we expand per round. Batching keeps the number of
-// sequential round-trips small while staying well under any query-size limit.
-const BATCH_SIZE = 200;
-
-// Hard ceilings so a pathological tree (the subtopic graph has cycles and
-// duplicate relations) can't balloon the SSR cost. Top-down BFS means the cap
-// trims the deepest, least-prominent topics first — exactly what we'd drop.
-const MAX_NODES = 2500;
+// Ceiling on the pill list. Also bounds the query: the Featured tag is applied to things
+// other than topics (rankings, for one), and the type filter below already narrows to
+// Topic, so this is a sanity bound rather than a working limit.
 const MAX_FEATURED = 60;
 
 export interface FeaturedSpace {
@@ -53,78 +57,61 @@ interface TopicNode {
   id: string;
   name: string | null;
   spacesByTopicIdConnection: {
-    totalCount: number;
     nodes: SpaceNode[];
   } | null;
-  featuredTags: Array<{ spaceId: string; toEntity: { id: string } | null }> | null;
-  subtopics: Array<{ toEntity: { id: string } | null }> | null;
 }
 
-interface RootResult {
-  space: { topicId: string | null } | null;
+interface FeaturedTopicsResult {
+  relations: Array<{ fromEntity: TopicNode | null }> | null;
 }
 
-interface FrontierResult {
-  entities: TopicNode[];
-}
-
-const ROOT_QUERY = `
+// Every Topic tagged Featured in Root, with the spaces claiming it and the page data the
+// pill renders from.
+//
+// The Topic type filter is enforced here rather than after the fact, and it is load
+// bearing: on testnet it takes the row count from 16 to 5 and the payload from 7.7 KB to
+// 4.5 KB, and leaves nothing for the caller to filter out.
+//
+// Written relations-first on purpose. The entities-first shape — asking `entities` for
+// Topic-typed rows carrying this relation — does not compile: `EntityToManyRelationFilter`
+// has no `typeId` field. It would also be the wrong shape anyway, starting from a scan of
+// every Topic rather than from the handful of indexed tag rows.
+const FEATURED_TOPICS_QUERY = `
   {
-    space(id: ${JSON.stringify(ROOT_SPACE)}) {
-      topicId
-    }
-  }
-`;
-
-// Resolve one frontier batch: each topic's claiming spaces (for pill data) and
-// its immediate subtopics (for the next frontier).
-function frontierQuery(ids: string[]): string {
-  return `
-  {
-    entities(filter: { id: { in: ${JSON.stringify(ids)} } }) {
-      id
-      name
-      spacesByTopicIdConnection(first: 20) {
-        totalCount
-        nodes {
-          id
-          page {
+    relations(filter: {
+      typeId: { is: ${JSON.stringify(TAG_PROPERTY_ID)} }
+      toEntityId: { is: ${JSON.stringify(FEATURED_TAG_ID)} }
+      spaceId: { is: ${JSON.stringify(ROOT_SPACE)} }
+      fromEntity: { typeIds: { overlaps: [${JSON.stringify(TOPIC_TYPE_ID)}] } }
+    }, first: ${MAX_FEATURED}) {
+      fromEntity {
+        id
+        name
+        spacesByTopicIdConnection(first: 20) {
+          nodes {
             id
-            name
-            relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
-              typeId
-              toEntity {
-                valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
-                  propertyId
-                  text
+            page {
+              id
+              name
+              relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
+                typeId
+                toEntity {
+                  valuesList(filter: { propertyId: { is: ${JSON.stringify(IMAGE_URL_PROPERTY_ID)} } }) {
+                    propertyId
+                    text
+                  }
                 }
               }
             }
+            members {
+              totalCount
+            }
           }
-          members {
-            totalCount
-          }
-        }
-      }
-      featuredTags: relationsList(filter: {
-        typeId: { is: ${JSON.stringify(TAG_PROPERTY_ID)} }
-        toEntityId: { is: ${JSON.stringify(FEATURED_TAG_ID)} }
-        spaceId: { is: ${JSON.stringify(ROOT_SPACE)} }
-      }) {
-        spaceId
-        toEntity {
-          id
-        }
-      }
-      subtopics: relationsList(filter: { typeId: { is: ${JSON.stringify(SUBTOPIC_RELATION_TYPE_ID)} } }) {
-        toEntity {
-          id
         }
       }
     }
   }
 `;
-}
 
 function resolveTopicName(name: string | null | undefined): string {
   if (!name || !name.trim()) return PLACEHOLDER_TOPIC_NAME;
@@ -148,21 +135,20 @@ async function runQuery<T>(query: string): Promise<T | null> {
 
 /**
  * How long a resolved Featured list is reused. The set is curated — an editor tags a
- * topic Featured in the Root space — so it changes on human timescales, while the
- * traversal that discovers it is the most expensive thing on the Explore path.
+ * topic Featured in the Root space — so it changes on human timescales.
  *
- * The cost is a real measurement, not a guess: against production the traversal is five
- * *sequential* round trips that visit 2,941 topic nodes and transfer 274 KB to discover
- * four featured spaces, and `/api/explore/feed` — which runs it on every request — takes
- * 4.2-4.5 s end to end while the ranked feed query it exists to serve is ~300 ms of that.
+ * Much less load-bearing than it was. This existed because discovering the list cost five
+ * sequential round trips and `/api/explore/feed` ran it per request, which put Explore at
+ * 4.2-4.5 s end to end while the ranked feed query it exists to serve was ~300 ms of that.
+ * A cold miss now costs one round trip, so this is an ordinary "don't re-ask constantly"
+ * cache rather than the thing standing between Explore and a four-second load.
  */
 const FEATURED_SPACES_TTL_MS = 5 * 60 * 1000;
 
 let shared: Promise<FeaturedSpace[]> | null = null;
 // `null` means "still in flight". Kept distinct from a timestamp of 0 on purpose: while the
-// traversal is unresolved there is nothing to expire, and treating it as infinitely stale
-// sends every concurrent caller off to start a traversal of its own — which is the exact
-// pile-up this function exists to stop.
+// list is unresolved there is nothing to expire, and treating it as infinitely stale sends
+// every concurrent caller off to fetch its own — which is the pile-up this exists to stop.
 let resolvedAt: number | null = null;
 
 /** Exported for tests; no caller should need to reach for this. */
@@ -172,20 +158,18 @@ export function clearFeaturedSpacesCache(): void {
 }
 
 /**
- * {@link fetchFeaturedSpaces} with the traversal shared rather than repeated.
+ * {@link fetchFeaturedSpaces} with the fetch shared rather than repeated.
  *
- * Two distinct wins, and the second is the one that showed up in production. Within the
- * TTL a resolved list is reused outright; *before* it resolves, concurrent callers join
- * the one in-flight traversal instead of each starting their own. `/api/explore/feed`
- * runs per request with no way to share a promise the way `app/explore/page.tsx` does
- * with the sidebar, so every simultaneous Explore load was walking the whole topic tree
- * on its own.
+ * Within the TTL a resolved list is reused outright; *before* it resolves, concurrent
+ * callers join the one request in flight instead of each starting their own.
+ * `/api/explore/feed` runs per request with no way to share a promise the way
+ * `app/explore/page.tsx` does with the sidebar.
  *
- * A rejection is never cached, so a transient GraphQL failure costs one traversal rather
- * than five minutes of empty Featured panels. That includes the cancellation
- * `resolveFeaturedSpaces` deliberately re-throws: an aborted caller must not leave an
- * aborted promise behind for everyone else. Nothing here is per-request, so no signal is
- * threaded through and one caller going away cannot cancel the traversal for the rest.
+ * A rejection is never cached, so a transient GraphQL failure costs one request rather
+ * than five minutes of empty Featured panels. That includes the cancellation `runQuery`
+ * deliberately re-throws: an aborted caller must not leave an aborted promise behind for
+ * everyone else. Nothing here is per-request, so no signal is threaded through and one
+ * caller going away cannot cancel the fetch for the rest.
  */
 export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
   if (shared && (resolvedAt === null || Date.now() - resolvedAt < FEATURED_SPACES_TTL_MS)) return shared;
@@ -194,7 +178,7 @@ export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
   shared = started;
   resolvedAt = null;
   // Only start the clock once the answer exists. Timing from the *call* would let a slow
-  // traversal burn its own TTL and expire the moment it landed.
+  // fetch burn its own TTL and expire the moment it landed.
   started.then(
     () => {
       if (shared === started) resolvedAt = Date.now();
@@ -207,59 +191,26 @@ export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
 }
 
 /**
- * Builds the explore panel's "Join spaces" list by walking the Root space's
- * subtopic tree top-down and emitting one entry per topic tagged Featured in
- * the Root space that has a claiming space. The Root topic itself is used only
- * as the traversal seed — it is not featured. Untagged topics are still
- * traversed so featured descendants remain discoverable. Spaces are deduped (a
- * space can claim multiple topics). Traversal order is top-down only so the node
- * cap trims the deepest topics first; the returned list is ordered by space rank
- * (then name), not tree position.
+ * Builds the explore panel's "Join spaces" list: one entry per Topic tagged Featured in
+ * the Root space that has a claiming space, resolved to the top-ranked claimant. Spaces
+ * are deduped (a space can claim several featured topics). Ordered by curated space rank,
+ * then name.
  */
 export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
-  const root = await runQuery<RootResult>(ROOT_QUERY);
-  // `runQuery` returns null only on a failed request (aborts already rethrew).
-  if (root === null) throw new Error('Failed to load featured spaces');
-  const rootTopicId = root.space?.topicId;
-  if (!rootTopicId) return [];
+  const result = await runQuery<FeaturedTopicsResult>(FEATURED_TOPICS_QUERY);
+  // `runQuery` returns null only on a failed request (aborts already rethrew). Throwing
+  // keeps a failure distinguishable from a genuinely empty Featured list, which is what
+  // lets `fetchFeaturedSpacesShared` decline to cache it.
+  if (result === null) throw new Error('Failed to load featured spaces');
 
-  // Seed the traversal with the Root topic's children so the Root topic (and
-  // therefore the Root space) is never featured in its own panel.
-  const visited = new Set<string>([rootTopicId]);
   const seenSpaceIds = new Set<string>();
   const featured: FeaturedSpace[] = [];
 
-  let frontier: string[] = [rootTopicId];
-
-  while (frontier.length > 0 && visited.size < MAX_NODES && featured.length < MAX_FEATURED) {
-    const batch = frontier.slice(0, BATCH_SIZE);
-    const overflow = frontier.slice(BATCH_SIZE);
-
-    const result = await runQuery<FrontierResult>(frontierQuery(batch));
-    const topics = result?.entities ?? [];
-
-    const nextFrontier: string[] = [];
-
-    for (const topic of topics) {
-      // Emit a pill if this topic is tagged Featured in Root and a space claims
-      // it. Skip the Root topic seed (it still comes back in round 1).
-      if (topic.id !== rootTopicId) {
-        addFeaturedFromTopic(topic, seenSpaceIds, featured);
-      }
-
-      for (const rel of topic.subtopics ?? []) {
-        const childId = rel.toEntity?.id;
-        if (!childId || visited.has(childId)) continue;
-        visited.add(childId);
-        nextFrontier.push(childId);
-      }
-    }
-
-    frontier = [...overflow, ...nextFrontier];
+  for (const relation of result.relations ?? []) {
+    if (relation.fromEntity) addFeaturedFromTopic(relation.fromEntity, seenSpaceIds, featured);
   }
 
-  // Display order is by curated space rank, then name — independent of where
-  // the space sat in the subtopic tree.
+  // Display order is by curated space rank, then name.
   featured.sort((a, b) => {
     const rankDelta = getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId);
     if (rankDelta !== 0) return rankDelta;
@@ -270,12 +221,12 @@ export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
 }
 
 function addFeaturedFromTopic(topic: TopicNode, seenSpaceIds: Set<string>, featured: FeaturedSpace[]): void {
-  const hasRootFeaturedTag = (topic.featuredTags ?? []).some(
-    relation => relation.spaceId === ROOT_SPACE && relation.toEntity?.id === FEATURED_TAG_ID
-  );
-  if (!hasRootFeaturedTag) return;
-
-  const spaceNodes = topic.spacesByTopicIdConnection?.nodes ?? [];
+  // Root is never offered in its own Join-spaces panel. The traversal got this for free by
+  // using the Root topic only as a seed and never emitting it; without a seed it has to be
+  // said outright. Dropping Root from the *candidates* rather than skipping the whole topic
+  // is the deliberate part: Root outranks everything (rank 0), so a topic claimed by both
+  // Root and a real space would otherwise resolve to Root and lose the space worth joining.
+  const spaceNodes = (topic.spacesByTopicIdConnection?.nodes ?? []).filter(s => s.id !== ROOT_SPACE);
   if (spaceNodes.length === 0) return;
 
   const topRankedId = getTopRankedSpaceId(spaceNodes.map(s => s.id));
