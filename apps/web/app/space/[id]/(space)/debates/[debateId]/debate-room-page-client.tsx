@@ -18,7 +18,6 @@ import {
   getServerTime,
 } from '~/core/debates/api';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
-import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import {
   CameraIcon,
@@ -64,13 +63,20 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
-import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
+import {
+  usePublishOptOutOffer,
+  useSetPublishOptOutRequest,
+  useSetThankingDebate,
+  useThankingDebate,
+} from '~/core/debates/thanking-debate-store';
+import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
+import { Toggle } from '~/design-system/toggle';
 
 type DebateRoomPageClientProps = {
   spaceId: string;
@@ -361,8 +367,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // teardown back until the answer is real.
   const rematchSessionStatus = rematchQuery.data?.status ?? null;
   const rematchQueryFailed = (rematchQuery.error ?? null) !== null;
-  const rematchOutcomeResolved =
-    !debate?.rematch_session_id || rematchSessionStatus !== null || rematchQueryFailed;
+  const rematchOutcomeResolved = !debate?.rematch_session_id || rematchSessionStatus !== null || rematchQueryFailed;
   const rematchSurvivesCancellation =
     Boolean(debate?.rematch_session_id) &&
     !rematchQueryFailed &&
@@ -392,10 +397,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             hasPendingLocalRecording: thankingHasPendingLocalRecording,
             hasUploadedRecording: thankingHasUploadedRecording,
             recordingCancelled: thankingRecordingCancelled,
+            showsPublishControl: locallyThanking,
           }
         : null
     );
   }, [
+    locallyThanking,
     setThankingDebate,
     thankingDebateId,
     thankingHasPendingLocalRecording,
@@ -2041,6 +2048,14 @@ function DebateRecordingModal({
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
+  // The publish control the thank-you card draws is the coordinator's opt-out, not this page's:
+  // the coordinator owns the upload queue and the cancel request, and says here whether there is
+  // still anything to opt out of. Off is the terminal state, so a cancelled recording keeps the
+  // row rather than dropping it — the answer to "Publish debate?" is no, not nothing.
+  const publishOptOutOffer = usePublishOptOutOffer();
+  const thankingDebate = useThankingDebate();
+  const setPublishOptOutRequest = useSetPublishOptOutRequest();
+  const publishing = publishOptOutOffer.debateId !== null ? true : thankingDebate?.recordingCancelled ? false : null;
   const localParticipant =
     (localSlot
       ? debate.participants.find(participant => participant.participant_slot === localSlot)
@@ -2245,6 +2260,9 @@ function DebateRecordingModal({
               remoteConsented={remoteConsented}
               busy={rematchBusy}
               onConsent={onRequestRematch}
+              publishing={publishing}
+              publishBusy={publishOptOutOffer.busy}
+              onStopPublishing={() => setPublishOptOutRequest(publishOptOutOffer.debateId)}
             />
           )}
         </div>
@@ -2687,15 +2705,43 @@ function DebateAgainCard({
   remoteConsented,
   busy,
   onConsent,
+  publishing,
+  publishBusy,
+  onStopPublishing,
 }: {
   opponentName: string;
   localConsented: boolean;
   remoteConsented: boolean;
   busy: boolean;
   onConsent: () => void;
+  /** Null when there is no recording to opt out of, which is when the row is left off. */
+  publishing: boolean | null;
+  publishBusy: boolean;
+  onStopPublishing: () => void;
 }) {
   return (
     <section className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg bg-white px-3 py-2 text-text shadow-card">
+      {publishing !== null && (
+        <div className="flex min-h-7 items-center justify-between gap-2.5">
+          <Text as="span" variant="smallTitle" color="text">
+            Publish debate?
+          </Text>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={publishing}
+            aria-label="Publish debate"
+            // Off is one-way — it cancels the upload — so the control only acts on the way down.
+            // Left interactive while on so the label and the switch still read as one thing.
+            onClick={publishing ? onStopPublishing : undefined}
+            disabled={publishBusy || !publishing}
+            className="flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 text-metadata disabled:cursor-default"
+          >
+            <Toggle checked={publishing} />
+            <span className={publishing ? 'text-text' : 'text-grey-04'}>{publishing ? 'Yes' : 'No'}</span>
+          </button>
+        </div>
+      )}
       <div className="flex min-h-7 items-center justify-between gap-2.5">
         <Text as="span" variant="smallTitle" color="text">
           Debate again?
@@ -2709,7 +2755,7 @@ function DebateAgainCard({
             localConsented ? 'bg-text' : 'bg-text hover:bg-text/90'
           )}
         >
-          {localConsented ? 'Waiting...' : busy ? 'Saving...' : 'Yes'}
+          {localConsented ? 'Waiting...' : busy ? 'Saving...' : "Let's go!"}
         </button>
       </div>
       <div className="flex min-h-7 items-center justify-between gap-2.5">

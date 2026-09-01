@@ -31,7 +31,12 @@ import {
   observeDebateRecordingUploads,
   scheduleDebateRecordingRetry,
 } from './recording-upload-queue';
-import { useThankingDebate } from './thanking-debate-store';
+import {
+  usePublishOptOutRequest,
+  useSetPublishOptOutOffer,
+  useSetPublishOptOutRequest,
+  useThankingDebate,
+} from './thanking-debate-store';
 
 const initialRetryDelayMs = 5_000;
 const maxRetryDelayMs = 5 * 60_000;
@@ -364,6 +369,49 @@ export function DebateRecordingUploadCoordinator() {
     thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null);
   const cancelPromptOpen = cancelTargetDebateId !== null;
 
+  // While the thank-you card is up it reports this debate itself, so the banner would be a second
+  // voice on the same upload — the bar at the bottom of the screen is exactly what GEO-2773
+  // replaces. Only for as long as the card is actually on screen: the server's thank-you window
+  // outlasts the countdown, and after it the banner is the only thing left to say anything.
+  // Uploads from other debates are still the banner's to report, and keep their own progress.
+  const cardOwnsPublishControl = Boolean(thankingDebate?.showsPublishControl);
+  const bannerUploads = cardOwnsPublishControl
+    ? publishableUploads.filter(upload => normalizeDebateId(upload.debateId) !== normalizedThankingDebateId)
+    : publishableUploads;
+  const bannerThankingUploadFinished = !cardOwnsPublishControl && thankingUploadFinished;
+  const bannerThankingRecordingPending = !cardOwnsPublishControl && thankingRecordingPending;
+
+  // The thank-you card draws the opt-out now, so tell it what there is to offer. Published in a
+  // layout effect for the same reason the room publishes its side in one: the control and the
+  // banner have to agree within a single paint at the countdown boundary, or one of them shows a
+  // state the other has already left.
+  const setPublishOptOutOffer = useSetPublishOptOutOffer();
+  React.useLayoutEffect(() => {
+    setPublishOptOutOffer({ debateId: cancellableDebateId, busy: cancelBusy });
+  }, [cancelBusy, cancellableDebateId, setPublishOptOutOffer]);
+  React.useEffect(() => () => setPublishOptOutOffer({ debateId: null, busy: false }), [setPublishOptOutOffer]);
+
+  // And take up what the card asks for. It opens the same confirmation the Cancel button did —
+  // the ticket calls for a new control, not a new behaviour, and a switch is easier to hit by
+  // accident than the button it replaces (GEO-2700 makes that expensive).
+  const publishOptOutRequest = usePublishOptOutRequest();
+  const setPublishOptOutRequest = useSetPublishOptOutRequest();
+  React.useEffect(() => {
+    if (!publishOptOutRequest) return;
+    // A request for some other debate is one whose moment has passed — the viewer has left that
+    // thank-you screen — so it is dropped rather than acted on.
+    if (normalizeDebateId(publishOptOutRequest) !== normalizedThankingDebateId) {
+      setPublishOptOutRequest(null);
+      return;
+    }
+    // Otherwise held until there is something to act on. The queue is read from IndexedDB, so
+    // `cancellableDebateId` can still be null on the render the request arrives in; consuming it
+    // there would swallow the flick and leave the switch off over a recording still uploading.
+    if (cancellableDebateId === null) return;
+    setPublishOptOutRequest(null);
+    setCancelTargetDebateId(cancellableDebateId);
+  }, [cancellableDebateId, normalizedThankingDebateId, publishOptOutRequest, setPublishOptOutRequest]);
+
   // Only poll debate activity while a banner might show, and hide it while the user is in a
   // live debate — the upload keeps running, it just shouldn't be on screen mid-debate.
   const { data: activity } = useDebateActivity(
@@ -377,8 +425,8 @@ export function DebateRecordingUploadCoordinator() {
   );
 
   // When the banner is showing upload progress, its percentage covers every queued recording.
-  const queuedBytes = publishableUploads.reduce((total, upload) => total + upload.byteSize, 0);
-  const transferredBytes = publishableUploads.reduce((transferred, upload) => {
+  const queuedBytes = bannerUploads.reduce((total, upload) => total + upload.byteSize, 0);
+  const transferredBytes = bannerUploads.reduce((transferred, upload) => {
     if (upload.stage === 'uploaded') return transferred + upload.byteSize;
     if (uploadProgress?.id === upload.id) return transferred + Math.min(uploadProgress.loaded, upload.byteSize);
     return transferred;
@@ -457,7 +505,7 @@ export function DebateRecordingUploadCoordinator() {
     }
   }, [cancelTargetDebateId, cancellableDebateId, uploadedDebateIds, uploads]);
 
-  const bannerVisible = publishableUploads.length > 0 || thankingUploadFinished || thankingRecordingPending;
+  const bannerVisible = bannerUploads.length > 0 || bannerThankingUploadFinished || bannerThankingRecordingPending;
   if ((!bannerVisible && !cancelPromptOpen) || inLiveDebate) {
     return null;
   }
@@ -466,13 +514,13 @@ export function DebateRecordingUploadCoordinator() {
     <>
       {bannerVisible && (
         <DebateRecordingUploadBanner
-          count={publishableUploads.length}
-          thankingRecordingPending={thankingRecordingPending}
-          thankingUploadFinished={thankingUploadFinished}
+          count={bannerUploads.length}
+          thankingRecordingPending={bannerThankingRecordingPending}
+          thankingUploadFinished={bannerThankingUploadFinished}
           percent={uploadPercent}
           waitingReason={waitingReason}
           errorMessage={latestFailedUpload?.lastError ?? null}
-          canCancel={cancellableDebateId !== null && !cancelPromptOpen}
+          canCancel={!cardOwnsPublishControl && cancellableDebateId !== null && !cancelPromptOpen}
           onCancel={() => setCancelTargetDebateId(cancellableDebateId)}
         />
       )}
