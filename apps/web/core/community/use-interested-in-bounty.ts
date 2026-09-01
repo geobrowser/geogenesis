@@ -6,6 +6,7 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
+import { CURRENT_BOUNTY_SPACE_IDS } from '~/core/bounties/constants';
 import { buildExpressInterestOps } from '~/core/bounties/interest-ops';
 import { INTERESTED_IN_BOUNTY_PROPERTY_ID } from '~/core/bounties/ontology';
 import { bountyQueryKeys } from '~/core/bounties/use-bounties';
@@ -39,9 +40,18 @@ export function useInterestedBountyIds(bountyIds: string[]) {
   const interestedIds = React.useMemo(() => {
     if (!personalSpaceId) return new Set<string>();
     const me = uuidToHex(personalSpaceId);
+    // A from-entity match alone is spoofable (anyone can author a relation
+    // from any entity in their own space): only rows in the viewer's personal
+    // space, or legacy rows written into a participating DAO space from the
+    // viewer's space entity, count as the viewer's.
+    const daoSpaces = new Set(CURRENT_BOUNTY_SPACE_IDS.map(uuidToHex));
     return new Set(
       (data ?? [])
-        .filter(relation => uuidToHex(relation.spaceId) === me || uuidToHex(relation.fromEntityId) === me)
+        .filter(relation => {
+          const rowSpace = uuidToHex(relation.spaceId);
+          if (rowSpace === me) return true;
+          return uuidToHex(relation.fromEntityId) === me && daoSpaces.has(rowSpace);
+        })
         .map(relation => relation.toEntityId)
         .filter(Boolean) as string[]
     );

@@ -48,6 +48,7 @@ vi.mock('~/core/hooks/use-publish', () => ({
   }),
 }));
 
+vi.mock('~/core/bounties/constants', () => ({ CURRENT_BOUNTY_SPACE_IDS: ['dao-1'] }));
 vi.mock('~/core/io/queries', () => ({
   getRelationsByToEntityIds: (...args: unknown[]) => mocks.relationsByToEntityIds(...args),
 }));
@@ -147,7 +148,7 @@ describe('useInterestedBountyIds', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
   });
 
-  it('collects the viewer\'s bounty ids across row shapes, ignoring other curators', async () => {
+  it("collects the viewer's bounty ids across row shapes, ignoring other curators", async () => {
     mocks.relationsByToEntityIds.mockReturnValue(
       Effect.succeed([
         // Current shape: authored in the viewer's personal space.
@@ -156,6 +157,8 @@ describe('useInterestedBountyIds', () => {
         { toEntityId: 'bounty-3', spaceId: 'dao-1', fromEntityId: PERSONAL_SPACE_ID },
         // Someone else's row — must not read as the viewer's interest.
         { toEntityId: 'bounty-2', spaceId: 'other-space', fromEntityId: 'other-person' },
+        // Spoof: authored FROM the viewer's entity, but in a stranger's space — not the viewer's.
+        { toEntityId: 'bounty-2', spaceId: 'attacker-space', fromEntityId: PERSONAL_SPACE_ID },
       ])
     );
 

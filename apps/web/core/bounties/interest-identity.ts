@@ -18,3 +18,22 @@ export function interestAllocationTarget(row: InterestRowLike, bountySpaceId: st
 export function distinctInterestedIds(interest: readonly InterestRowLike[], bountySpaceId: string): string[] {
   return [...new Set(interest.map(row => interestAllocationTarget(row, bountySpaceId)))];
 }
+
+/**
+ * The viewer's own interest rows. A from-entity match alone is spoofable —
+ * anyone can author a relation FROM any entity inside their own space — so a
+ * row only counts when it lives in the viewer's personal space, or is the
+ * legacy shape written into the bounty's own space from the viewer's identity.
+ */
+export function filterOwnInterestRows<T extends InterestRowLike>(
+  interest: readonly T[],
+  args: { identityIds: ReadonlySet<string>; personalSpaceId: string | null; bountySpaceId: string | null }
+): T[] {
+  const mySpace = args.personalSpaceId ? uuidToHex(args.personalSpaceId) : null;
+  const bountySpace = args.bountySpaceId ? uuidToHex(args.bountySpaceId) : null;
+  return interest.filter(row => {
+    if (!args.identityIds.has(uuidToHex(row.fromEntityId))) return false;
+    const rowSpace = uuidToHex(row.spaceId);
+    return rowSpace === mySpace || rowSpace === bountySpace;
+  });
+}

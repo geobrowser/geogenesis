@@ -6,6 +6,7 @@ import {
   type SubmissionItem,
   buildProposalSetKey,
   buildSubmissionKey,
+  filterReviewsByAuthorizedSpaces,
   groupSubmissions,
   reviewsBySubmissionKey,
 } from './group-submissions';
@@ -191,5 +192,18 @@ describe('reviewsBySubmissionKey', () => {
     ]);
     expect(matched.get(grouped[0].submissionKey)).toHaveLength(1);
     expect(buildProposalSetKey([proposalOneId, proposalOneId])).toBe(proposalOneId);
+  });
+});
+
+describe('filterReviewsByAuthorizedSpaces', () => {
+  it('keeps only reviews authored from an authorized (editor) space, dash-insensitively', () => {
+    const reviews = [
+      { id: 'r1', spaceId: 'aaaa0000-0000-0000-0000-000000000001' },
+      { id: 'r2', spaceId: 'eeee0000000000000000000000000009' },
+    ];
+    expect(filterReviewsByAuthorizedSpaces(reviews, ['aaaa0000000000000000000000000001']).map(r => r.id)).toEqual([
+      'r1',
+    ]);
+    expect(filterReviewsByAuthorizedSpaces(reviews, []).length).toBe(0);
   });
 });

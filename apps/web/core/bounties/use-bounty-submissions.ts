@@ -7,12 +7,12 @@ import * as React from 'react';
 import { Effect } from 'effect';
 
 import { uuidToHex } from '~/core/id/normalize';
-import { getBatchEntities } from '~/core/io/queries';
+import { getBatchEntities, getSpaces } from '~/core/io/queries';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 
 import type { BountyDetail } from './fetch-bounty-detail';
 import { fetchBountyReviews, fetchPayoutItems, fetchProposalStatuses, fetchSubmissionItems } from './fetch-submissions';
-import { type GroupedSubmission, groupSubmissions } from './group-submissions';
+import { type GroupedSubmission, filterReviewsByAuthorizedSpaces, groupSubmissions } from './group-submissions';
 import { bountyQueryKeys } from './use-bounties';
 import type { BountyRoles } from './use-bounty-roles';
 
@@ -43,10 +43,17 @@ export function useBountySubmissions(detail: BountyDetail | null | undefined, ro
     queryFn: () =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const [submissions, payoutsRaw] = yield* Effect.all(
-            [fetchSubmissionItems(submissionLinks, spaceId), fetchPayoutItems(bountyId)],
-            { concurrency: 2 }
+          const [submissions, payoutsRaw, bountySpaces] = yield* Effect.all(
+            [
+              fetchSubmissionItems(submissionLinks, spaceId),
+              // Payouts are authored by editors INTO the bounty's space; rows
+              // published anywhere else are not authoritative.
+              fetchPayoutItems(bountyId, spaceId),
+              getSpaces({ spaceIds: [spaceId] }),
+            ],
+            { concurrency: 3 }
           );
+          const editorSpaceIds = bountySpaces[0]?.editors ?? [];
           const recipientIds = [...new Set(payoutsRaw.map(p => p.recipientEntityId))];
           // Recipients are personal-space system entities (or legacy person entities).
           // A space entity's own name is just "Space <uuid>", so resolve the space's
@@ -57,7 +64,9 @@ export function useBountySubmissions(detail: BountyDetail | null | undefined, ro
               recipientIds.length > 0 ? getBatchEntities(recipientIds) : Effect.succeed([]),
               recipientIds.length > 0 ? fetchProfilesBySpaceIds(recipientIds) : Effect.succeed([]),
               fetchProposalStatuses(submissions.map(s => s.entityId)),
-              fetchBountyReviews(submissions.map(s => s.entityId)),
+              fetchBountyReviews(submissions.map(s => s.entityId)).pipe(
+                Effect.map(rows => filterReviewsByAuthorizedSpaces(rows, editorSpaceIds))
+              ),
             ],
             { concurrency: 4 }
           );

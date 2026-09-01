@@ -10,6 +10,7 @@ import { uuidToHex } from '~/core/id/normalize';
 
 import { buildBountyAllocationTargets } from './bounty-dto';
 import type { BountyBacklink } from './fetch-bounty-detail';
+import { filterOwnInterestRows } from './interest-identity';
 import type { BoardBounty } from './types';
 
 export type BountyRoles = {
@@ -45,7 +46,11 @@ export function useBountyRoles(
   return React.useMemo(() => {
     const personId = profile?.id && profile.id !== profile.spaceId && !profile.id.startsWith('0x') ? profile.id : null;
     const targets = new Set(buildBountyAllocationTargets(personalSpaceId, personId).map(uuidToHex));
-    const ownInterestRows = interest.filter(row => targets.has(uuidToHex(row.fromEntityId)));
+    const ownInterestRows = filterOwnInterestRows(interest, {
+      identityIds: targets,
+      personalSpaceId,
+      bountySpaceId: bounty?.spaceId ?? null,
+    });
     const isAllocated = !!bounty && bounty.allocatedIds.some(id => targets.has(uuidToHex(id)));
     const isMaintainer = !!bounty && bounty.maintainers.some(m => targets.has(uuidToHex(m.id)));
 

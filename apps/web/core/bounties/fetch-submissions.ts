@@ -143,7 +143,7 @@ type PayoutRelationsResult = {
  * the relation, amount/proposals on its relation-entity) — the exact shape
  * curator-app writes, so payouts authored by either app appear in both.
  */
-export function fetchPayoutItems(bountyId: string, recipientNames?: ReadonlyMap<string, string | null>) {
+export function fetchPayoutItems(bountyId: string, bountySpaceId?: string) {
   return Effect.gen(function* () {
     const bountyLinks = yield* getRelationsByToEntityIds([bountyId], PAYOUT_BOUNTY_PROPERTY_ID);
     const payoutEntityIds = [...new Set(bountyLinks.map(link => uuidToHex(link.fromEntityId)))];
@@ -171,26 +171,31 @@ export function fetchPayoutItems(bountyId: string, recipientNames?: ReadonlyMap<
 
     const result = yield* graphql<PayoutRelationsResult>({ endpoint: Environment.getConfig().api, query });
 
-    return result.relations
-      .filter(relation => relation.entity)
-      .map((relation): PayoutItem => {
-        const entity = relation.entity!;
-        const amountRaw = entity.valuesList.find(v => v.propertyId === PAYOUT_AMOUNT_PROPERTY_ID)?.decimal ?? '0';
-        const amount = Number(amountRaw);
-        const recipientEntityId = uuidToHex(relation.toEntityId);
-        return {
-          id: uuidToHex(relation.id),
-          payoutEntityId: uuidToHex(entity.id),
-          recipientEntityId,
-          recipientName: recipientNames?.get(recipientEntityId) ?? null,
-          amount: Number.isFinite(amount) ? amount : 0,
-          proposalIds: entity.relationsList
-            .filter(r => r.typeId === PAYOUT_PROPOSALS_PROPERTY_ID)
-            .map(r => uuidToHex(r.toEntityId)),
-          createdAt: toDate(entity.createdAt),
-        };
-      })
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return (
+      result.relations
+        .filter(relation => relation.entity)
+        // Only payouts published in the bounty's own space are authoritative —
+        // anyone can mint a Payout-shaped entity in their own space otherwise.
+        .filter(relation => !bountySpaceId || uuidToHex(relation.spaceId) === uuidToHex(bountySpaceId))
+        .map((relation): PayoutItem => {
+          const entity = relation.entity!;
+          const amountRaw = entity.valuesList.find(v => v.propertyId === PAYOUT_AMOUNT_PROPERTY_ID)?.decimal ?? '0';
+          const amount = Number(amountRaw);
+          const recipientEntityId = uuidToHex(relation.toEntityId);
+          return {
+            id: uuidToHex(relation.id),
+            payoutEntityId: uuidToHex(entity.id),
+            recipientEntityId,
+            recipientName: null,
+            amount: Number.isFinite(amount) ? amount : 0,
+            proposalIds: entity.relationsList
+              .filter(r => r.typeId === PAYOUT_PROPOSALS_PROPERTY_ID)
+              .map(r => uuidToHex(r.toEntityId)),
+            createdAt: toDate(entity.createdAt),
+          };
+        })
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    );
   });
 }
 

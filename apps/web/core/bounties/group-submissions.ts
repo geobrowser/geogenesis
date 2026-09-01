@@ -192,6 +192,20 @@ export function groupSubmissions({
   return grouped.sort((a, b) => b.lastActiveAt.getTime() - a.lastActiveAt.getTime());
 }
 
+/**
+ * The graph is permissionless: anyone can publish a Bounty-review-typed entity
+ * in their own space covering someone's proposals. Only reviews authored from
+ * a space that is an EDITOR of the bounty's space carry authority — everything
+ * else is dropped before status derivation and display.
+ */
+export function filterReviewsByAuthorizedSpaces<T extends { spaceId: string }>(
+  reviews: readonly T[],
+  authorizedSpaceIds: readonly string[]
+): T[] {
+  const authorized = new Set(authorizedSpaceIds.map(uuidToHex));
+  return reviews.filter(review => authorized.has(uuidToHex(review.spaceId)));
+}
+
 /** Reviews cover a proposal set; the key is the sorted, normalized set. Same rule as curator-app. */
 export function buildProposalSetKey(proposalIds: readonly string[]): string {
   return [...new Set(proposalIds.map(uuidToHex))].sort().join(':');
