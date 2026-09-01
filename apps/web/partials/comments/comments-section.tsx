@@ -35,10 +35,10 @@ import { Text } from '~/design-system/text';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import {
-  avatarBottomInRowPx,
   type CommentDensity,
   PAGE_DENSITY,
   PANEL_DENSITY,
+  avatarBottomInRowPx,
   threadArmCenterPx,
   threadSpineOffsetPx,
 } from './comment-density';

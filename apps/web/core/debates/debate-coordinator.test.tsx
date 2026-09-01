@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   gatewayPaused: false,
   gatewayPauseReason: null as string | null,
+  debateDebugging: false,
   currentUserId: 'user-for' as string | null,
   // What the token exchange answers with when the stored session hasn't been written yet.
   resolvedUserId: null as string | null,
@@ -118,7 +119,10 @@ vi.mock('./debate-return-navigation', () => ({
   rememberDebateReturnDestination: mocks.rememberDebateReturnDestination,
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({}));
+vi.mock('~/core/state/feature-flags', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
+  useFeatureFlag: (id: string) => (id === 'debateDebugging' ? mocks.debateDebugging : false),
+}));
 
 beforeEach(() => {
   sessionStorage.clear();
@@ -145,6 +149,7 @@ beforeEach(() => {
   mocks.authenticated = true;
   mocks.gatewayPaused = false;
   mocks.gatewayPauseReason = null;
+  mocks.debateDebugging = false;
   mocks.currentUserId = 'user-for';
   mocks.resolvedUserId = null;
   mocks.refetch.mockReset();
@@ -180,6 +185,7 @@ afterEach(() => {
 
 describe('DebateCoordinator', () => {
   it('shows a non-blocking warning while live updates are paused and clears it on recovery', () => {
+    mocks.debateDebugging = true;
     mocks.gatewayPaused = true;
     const { rerender } = render(<DebateCoordinator />);
 
@@ -197,6 +203,7 @@ describe('DebateCoordinator', () => {
    * something a reader can act on, and the reason reaches the DOM for the ones that get screenshot.
    */
   it('says what kind of pause it is, rather than always claiming to reconnect', () => {
+    mocks.debateDebugging = true;
     const expected: Array<[string | null, string]> = [
       ['rate_limited', 'Live debate updates are catching up.'],
       ['subscription_limit', 'Too many claims on this page to follow live. Some may be out of date.'],
@@ -219,6 +226,34 @@ describe('DebateCoordinator', () => {
 
       unmount();
     }
+  });
+
+  // Only debuggers see the banner, so the reason has to reach everyone else some other way.
+  it('keeps the paused banner off screen without the debate debugging flag, but still logs the pause', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.debateDebugging = false;
+    mocks.gatewayPaused = true;
+    mocks.gatewayPauseReason = 'subscription_limit';
+
+    const { rerender } = render(<DebateCoordinator />);
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('subscription_limit'));
+
+    // One line per transition. A pause holds for as long as it takes to reconnect, and re-render is
+    // exactly what a paused page does most, so logging per render would bury the line above.
+    rerender(<DebateCoordinator />);
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing about a gateway that was never paused', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+
+    render(<DebateCoordinator />);
+
+    expect(warn).not.toHaveBeenCalled();
+    expect(info).not.toHaveBeenCalled();
   });
 
   it('does not route another tab into a shared debate-again browser', async () => {
