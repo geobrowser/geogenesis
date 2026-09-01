@@ -140,11 +140,12 @@ describe('id-form and backlink edge cases', () => {
     expect(restored).toEqual({});
   });
 
-  it('keeps the column mode when a backlink filter shares the overridden column', () => {
+  it('drops the forward mode for a single selection even when a backlink shares the column', () => {
     const filters = [relationFilter(TOPICS, 't1'), relationFilter(TOPICS, 'b1', { isBacklink: true })];
     const result = applyDropdownSelectionsToFilters(filters, { [TOPICS]: 'OR' }, { [TOPICS]: ['t2'] }, [TOPICS]);
-    // One selection, but the surviving backlink still needs the OR group.
-    expect(result.modesByColumn[TOPICS]).toBe('OR');
+    // Backlinks live in their own logical group (filterGroupKey) and never
+    // read the forward group's mode, so a single selection can drop it.
+    expect(result.modesByColumn[TOPICS]).toBeUndefined();
     expect(result.filterState.some(f => f.isBacklink)).toBe(true);
   });
 });
@@ -194,7 +195,7 @@ describe('backlink-aware defaults and rebuilds', () => {
     expect(added?.typesRelationSpaceId).toBe('space-s');
   });
 
-  it('preserves legacy-marked backlinks and their OR mode while replacing forward filters', () => {
+  it('preserves legacy-marked backlinks while replacing forward filters', () => {
     const { filterState, modesByColumn } = applyDropdownSelectionsToFilters(
       [backlinkByName, forward],
       { p1: 'OR' },
@@ -203,7 +204,21 @@ describe('backlink-aware defaults and rebuilds', () => {
     );
     expect(filterState).toContain(backlinkByName);
     expect(filterState.some(f => f.value === 'v-1')).toBe(false);
-    // Single selection with a backlink sharing the column must not delete the mode.
+    // Backlinks live in their own logical group (filterGroupKey), so the
+    // forward group's mode entry can be dropped for a single selection.
+    expect(modesByColumn.p1).toBeUndefined();
+  });
+
+  it('multi-select ORs the forward group while the backlink stays its own required group', () => {
+    const { filterState, modesByColumn } = applyDropdownSelectionsToFilters(
+      [backlinkByName, forward],
+      {},
+      { p1: ['v-2', 'v-3'] },
+      ['p1']
+    );
+    expect(filterState).toContain(backlinkByName);
     expect(modesByColumn.p1).toBe('OR');
+    // The where-builder ANDs the backlink group with the OR-ed selections —
+    // covered end to end in filter-state-to-where.test.ts.
   });
 });

@@ -9,7 +9,6 @@ import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Property } from '~/core/types';
 
-import { isBacklinkFilter } from './filter-state-to-where';
 import type { Filter, ModesByColumn } from './filters';
 import type { Source } from './source';
 import { applyDropdownSelectionsToFilters } from './table-dropdown-selections';
@@ -98,16 +97,10 @@ export function useDropdownQueryOverlay({
 
   const appliedColumnIds = React.useMemo(() => {
     const pillProperties = [...filterableProperties, ...(extraPillProperties ?? []), ...collectionMemberProperties];
-    return (
-      configs
-        .map(config => config.propertyId)
-        .filter(id => pillProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION'))
-        // A column constrained by a backlink filter is unmanageable here:
-        // with 2+ selections the whole group would flip to OR, turning the
-        // backlink from a requirement into an alternative.
-        .filter(id => !baseFilterState.some(f => ID.equals(f.columnId, id) && isBacklinkFilter(f)))
-    );
-  }, [configs, filterableProperties, extraPillProperties, collectionMemberProperties, baseFilterState]);
+    return configs
+      .map(config => config.propertyId)
+      .filter(id => pillProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION'));
+  }, [configs, filterableProperties, extraPillProperties, collectionMemberProperties]);
 
   const isActive = !isEditing && supportsDropdowns && hydrated && appliedColumnIds.length > 0;
 

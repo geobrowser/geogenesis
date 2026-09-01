@@ -133,13 +133,12 @@ export function applyDropdownSelectionsToFilters(
         }
       );
     }
-    const keepsBacklinkOnColumn = filterState.some(f => ID.equals(f.columnId, columnId) && isBacklinkFilter(f));
     if (selections[columnId].length > 1) {
       nextModes[columnId] = 'OR';
-    } else if (!keepsBacklinkOnColumn) {
-      // With a single selection the mode is irrelevant — unless a backlink
-      // filter shares the column: deleting the mode would silently flip a
-      // persisted OR group to AND against the surviving backlink.
+    } else {
+      // With a single selection the forward group's mode is irrelevant.
+      // Backlink filters live in their own logical group (filterGroupKey)
+      // and never read this entry, so deleting is always safe.
       delete nextModes[columnId];
     }
   }
