@@ -15,8 +15,14 @@ import {
  * querying with a stale overlay and fighting over pagination anchors. One
  * external store per storage key keeps every instance on the same view.
  *
- * Persisted in localStorage (the Explore type-filter pattern): hydrated once
- * per key, written only after a real user change — never on hydration.
+ * Persisted in localStorage, hydrated LAZILY AND SYNCHRONOUSLY on the first
+ * client read (inside the snapshot getter) rather than in an effect: an
+ * effect-based hydration made the block's first query run with the base
+ * (unoverlaid) where and immediately re-key — one wasted, uncancellable
+ * full query per visit for anyone with stored selections. The server
+ * snapshot stays empty; useSyncExternalStore's server/client divergence
+ * handling re-renders after hydration without mismatch warnings. Writes
+ * happen only after a real user change — never on hydration.
  */
 type SelectionsEntry = {
   selections: DropdownSelections;
@@ -35,20 +41,27 @@ function getEntry(storageKey: string): SelectionsEntry {
   return entry;
 }
 
-function hydrate(storageKey: string) {
+/**
+ * The entry with storage read exactly once, on first CLIENT access. Safe to
+ * call from a snapshot getter: the one-time mutation happens before the
+ * first snapshot is consumed, and every later call returns the same
+ * references.
+ */
+function getHydratedEntry(storageKey: string): SelectionsEntry {
   const entry = getEntry(storageKey);
-  if (entry.hydrated) return;
-  try {
-    entry.selections = parseStoredDropdownSelections(window.localStorage.getItem(storageKey));
-  } catch {
-    entry.selections = {};
+  if (!entry.hydrated && typeof window !== 'undefined') {
+    try {
+      entry.selections = parseStoredDropdownSelections(window.localStorage.getItem(storageKey));
+    } catch {
+      entry.selections = {};
+    }
+    entry.hydrated = true;
   }
-  entry.hydrated = true;
-  entry.listeners.forEach(listener => listener());
+  return entry;
 }
 
 function update(storageKey: string, updater: (current: DropdownSelections) => DropdownSelections) {
-  const entry = getEntry(storageKey);
+  const entry = getHydratedEntry(storageKey);
   entry.selections = updater(entry.selections);
   try {
     if (Object.keys(entry.selections).length === 0) {
@@ -82,18 +95,14 @@ export function useTableDropdownSelections(blocksRelationEntityId: string) {
 
   const selections = React.useSyncExternalStore(
     subscribe,
-    () => (storageKey ? getEntry(storageKey).selections : EMPTY_SELECTIONS),
+    () => (storageKey ? getHydratedEntry(storageKey).selections : EMPTY_SELECTIONS),
     () => EMPTY_SELECTIONS
   );
   const hydrated = React.useSyncExternalStore(
     subscribe,
-    () => (storageKey ? getEntry(storageKey).hydrated : false),
+    () => (storageKey ? getHydratedEntry(storageKey).hydrated : false),
     () => false
   );
-
-  React.useEffect(() => {
-    if (storageKey) hydrate(storageKey);
-  }, [storageKey]);
 
   const updateSelections = React.useCallback(
     (updater: (current: DropdownSelections) => DropdownSelections) => {

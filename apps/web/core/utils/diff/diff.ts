@@ -3,6 +3,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { diffWords } from 'diff';
 import { Effect } from 'effect';
 
+import { BLOCK_CONFIG_RELATION_TYPE_IDS } from '~/core/blocks/data/shown-column-relations';
 import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
 import type { ApiEntityDiffShape } from '~/core/io/rest';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
@@ -35,9 +36,6 @@ const {
   MARKDOWN_CONTENT,
   IMAGE_URL_PROPERTY,
   COVER_PROPERTY,
-  VIEW_PROPERTY,
-  SHOWN_COLUMNS,
-  PROPERTIES,
 } = SystemIds;
 
 type ApiValueDiff = ApiEntityDiffShape['values'][number];
@@ -136,7 +134,11 @@ export const BLOCK_TYPE_IDS: string[] = [
 ];
 const BLOCK_TYPE_SET = new Set(BLOCK_TYPE_IDS);
 
-const BLOCK_CONFIG_RELATION_IDS: Set<string> = new Set([VIEW_PROPERTY, SHOWN_COLUMNS, PROPERTIES]);
+// The one shared definition of "relations that carry block view config" —
+// includes Dropdowns. A hand-maintained copy here previously drifted, making
+// dropdown-config changes vanish from grouped block diffs (folded but never
+// rendered) or show as orphan entities.
+const BLOCK_CONFIG_RELATION_IDS: Set<string> = new Set(BLOCK_CONFIG_RELATION_TYPE_IDS);
 
 export function computeTextDiff(before: string, after: string): DiffChunk[] {
   if (before === '' && after !== '') return [{ value: after, added: true }];
