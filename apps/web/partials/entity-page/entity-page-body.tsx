@@ -20,6 +20,7 @@ import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { BacklinksClientContainer } from '~/partials/entity-page/backlinks-client-container';
+import { CustomViewTabs } from '~/partials/entity-page/custom-view-tabs';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
@@ -181,12 +182,24 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   // generic value sheet and swapping it out from under the reader.
   if (customView === 'pending') return null;
 
-  if (customView === 'claim') {
-    return <ClaimPageView entityId={entityId} spaceId={spaceId} />;
-  }
-
-  if (customView === 'topic') {
-    return <TopicPageView entityId={entityId} spaceId={spaceId} />;
+  // The custom views replace the generic page rather than sitting inside it, so the entity's other
+  // tabs were unreachable from them until now. The custom view is the Overview tab; the wrapper
+  // renders it unchanged when the entity has no other tabs (GEO-2779).
+  if (customView === 'claim' || customView === 'topic') {
+    return (
+      <CustomViewTabs
+        entityId={entityId}
+        spaceId={spaceId}
+        initialTabRelations={initialTabRelations}
+        tabEntities={tabEntities}
+      >
+        {customView === 'claim' ? (
+          <ClaimPageView entityId={entityId} spaceId={spaceId} />
+        ) : (
+          <TopicPageView entityId={entityId} spaceId={spaceId} />
+        )}
+      </CustomViewTabs>
+    );
   }
 
   const tabsSection = (
