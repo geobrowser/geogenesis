@@ -23,6 +23,10 @@ export function hasProcessedVideo(media: DebateMediaResponse | undefined): boole
   return media?.artifacts.some(artifact => artifact.kind === 'final_video') ?? false;
 }
 
+export function hasSocialVideo(media: DebateMediaResponse | undefined): boolean {
+  return media?.artifacts.some(artifact => artifact.kind === 'social_video') ?? false;
+}
+
 export function normalizeTurnDurationsMs(values: number[]) {
   const normalized = values.filter(value => Number.isFinite(value) && value > 0);
   return normalized.length > 0 ? normalized : [30_000, 30_000];

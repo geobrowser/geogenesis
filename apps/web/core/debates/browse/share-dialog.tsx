@@ -5,6 +5,7 @@ import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 import * as React from 'react';
 
 import type { Debate } from '~/core/debates/api';
+import { useDebateMedia } from '~/core/debates/hooks';
 import { useToast } from '~/core/hooks/use-toast';
 import { NavUtils } from '~/core/utils/utils';
 
@@ -17,6 +18,7 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { XIcon } from '~/design-system/icons/x';
 import { Spinner } from '~/design-system/spinner';
 
+import { hasSocialVideo } from '../playback-utils';
 import { downloadPreparedVideo, usePreparedSocialVideo } from '../social-video-share';
 
 type Props = {
@@ -37,7 +39,9 @@ const LINKEDIN_TEXT_MAX = 700;
  * and a download of the prepared debate video.
  */
 export function DebateShareDialog({ open, onOpenChange, debate, spaceId }: Props) {
-  const download = useDebateVideoDownload(debate.id, open);
+  const media = useDebateMedia(debate.id, open);
+  const socialVideoReady = hasSocialVideo(media.data);
+  const download = useDebateVideoDownload(debate.id, open && socialVideoReady);
   const [, setToast] = useToast();
 
   const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, debate.id)}`;
@@ -116,30 +120,32 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId }: Props
                 onClick={onCopy}
                 tile={<GlyphTile icon={<Link />} />}
               />
-              <ShareAction
-                label={download.status === 'error' ? 'Retry' : 'Download'}
-                ariaLabel={download.status === 'error' ? 'Retry preparing debate video' : 'Download debate video'}
-                onClick={() => {
-                  if (download.status === 'error') {
-                    setToast(<span>{download.error ?? 'Could not prepare the video for download.'}</span>);
-                  }
-                  download.download();
-                }}
-                disabled={download.status === 'preparing'}
-                tile={
-                  <GlyphTile
-                    icon={
-                      download.status === 'preparing' ? (
-                        <Spinner />
-                      ) : download.status === 'error' ? (
-                        <RetrySmall />
-                      ) : (
-                        <Download />
-                      )
+              {socialVideoReady && (
+                <ShareAction
+                  label={download.status === 'error' ? 'Retry' : 'Download'}
+                  ariaLabel={download.status === 'error' ? 'Retry preparing debate video' : 'Download debate video'}
+                  onClick={() => {
+                    if (download.status === 'error') {
+                      setToast(<span>{download.error ?? 'Could not prepare the video for download.'}</span>);
                     }
-                  />
-                }
-              />
+                    download.download();
+                  }}
+                  disabled={download.status === 'preparing'}
+                  tile={
+                    <GlyphTile
+                      icon={
+                        download.status === 'preparing' ? (
+                          <Spinner />
+                        ) : download.status === 'error' ? (
+                          <RetrySmall />
+                        ) : (
+                          <Download />
+                        )
+                      }
+                    />
+                  }
+                />
+              )}
             </div>
           </div>
         </Content>
