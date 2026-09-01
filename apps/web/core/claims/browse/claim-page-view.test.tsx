@@ -5,14 +5,25 @@ import type React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
-
 import { ClaimPageView } from './claim-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
   /** Props the description's clamp received, or null if it rendered no clamp at all. */
   clamp: null as Record<string, unknown> | null,
+  /**
+   * Deliberately not 3.
+   *
+   * Asserting against the real constant proves nothing: its value is 3, so a page that wrote
+   * `maxLines={3}` — the duplication the shared constant exists to prevent — would satisfy it just
+   * as well. Stubbing the module to a value the page could not have arrived at on its own is what
+   * makes the assertion about where the number came from rather than what it happens to be.
+   */
+  maxLines: 5,
+}));
+
+vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
+  ENTITY_DESCRIPTION_MAX_LINES: mocks.maxLines,
 }));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
@@ -103,11 +114,12 @@ describe('ClaimPageView description', () => {
   });
 
   // The number lives with the entity-page component and is imported here. Restating `3` on this
-  // surface is what would let the two cut at different points after a change to either.
-  it('uses the same line budget as entity pages and the side panel', () => {
+  // surface is what would let the two cut at different points after a change to either — so the
+  // module is stubbed to a different number, and the page has to follow it.
+  it('takes its line budget from the shared constant rather than restating it', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(mocks.clamp?.maxLines).toBe(ENTITY_DESCRIPTION_MAX_LINES);
+    expect(mocks.clamp?.maxLines).toBe(mocks.maxLines);
   });
 
   it('renders no description block when the claim has none', () => {
