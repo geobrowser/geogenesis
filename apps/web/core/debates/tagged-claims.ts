@@ -1,4 +1,3 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { useQuery } from '@tanstack/react-query';
 
@@ -30,34 +29,30 @@ import { devLog } from '~/core/utils/dev-log';
  * v4s — a fixed shuffle with no relationship to anything a reader would recognise.
  */
 const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
-  query TaggedClaims(
-    $tagPropertyId: UUID!
-    $tagId: UUID!
-    $typesPropertyId: UUID!
-    $claimTypeId: UUID!
-    $first: Int!
-    $after: Cursor
-  ) {
-    relationsConnection(
+  query TaggedClaims($tagPropertyId: UUID!, $tagId: UUID!, $claimTypeId: UUID!, $first: Int!, $after: Cursor) {
+    entitiesConnection(
       first: $first
       after: $after
-      filter: {
-        typeId: { is: $tagPropertyId }
-        toEntityId: { is: $tagId }
-        fromEntity: { relations: { some: { typeId: { is: $typesPropertyId }, toEntityId: { is: $claimTypeId } } } }
-      }
+      orderBy: [RANKING_SCORE_DESC]
+      typeIds: { in: [$claimTypeId] }
+      filter: { relations: { some: { typeId: { is: $tagPropertyId }, toEntityId: { is: $tagId } } } }
     ) {
+      totalCount
       pageInfo {
         hasNextPage
         endCursor
       }
       nodes {
-        spaceId
-        fromEntity {
-          id
-          name
-          description
-          rankingScore
+        id
+        name
+        description
+        rankingScore
+        # The tag relation itself, for the space it was written in — the space the claim was tagged
+        # *in*, which is what groups the geo-chat lookups and what the allowlist is tested against.
+        # Asked for by the same two ids the filter uses, so a claim tagged in several spaces returns
+        # each one and the callers collapse them after filtering, as they always have.
+        relationsList(filter: { typeId: { is: $tagPropertyId }, toEntityId: { is: $tagId } }) {
+          spaceId
         }
       }
     }
@@ -65,17 +60,16 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
 `;
 
 type TaggedClaimsQuery = {
-  relationsConnection: {
+  entitiesConnection: {
+    totalCount: number | null;
     pageInfo: { hasNextPage: boolean; endCursor: string | null } | null;
     nodes: Array<{
-      spaceId: string | null;
-      fromEntity: {
-        id: string;
-        name: string | null;
-        description: string | null;
-        // `BigFloat`, so it arrives as a string.
-        rankingScore: string | null;
-      } | null;
+      id: string;
+      name: string | null;
+      description: string | null;
+      // `BigFloat`, so it arrives as a string.
+      rankingScore: string | null;
+      relationsList: Array<{ spaceId: string | null } | null> | null;
     } | null> | null;
   } | null;
 };
@@ -83,7 +77,6 @@ type TaggedClaimsQuery = {
 type TaggedClaimsVariables = {
   tagPropertyId: string;
   tagId: string;
-  typesPropertyId: string;
   claimTypeId: string;
   first: number;
   after: string | null;
@@ -150,44 +143,68 @@ export function dedupeTaggedClaims(claims: TaggedClaim[]): TaggedClaim[] {
   });
 }
 
-type TaggedClaimsPage = { claims: TaggedClaim[]; endCursor: string | null; hasNextPage: boolean };
+type TaggedClaimsPage = {
+  claims: TaggedClaim[];
+  endCursor: string | null;
+  hasNextPage: boolean;
+  /** How many tagged claims exist, whatever this page holds. Null where the server omits it. */
+  totalCount: number | null;
+};
 
 function decodeTaggedClaimsPage(data: TaggedClaimsQuery): TaggedClaimsPage {
   const claims: TaggedClaim[] = [];
 
-  for (const node of data.relationsConnection?.nodes ?? []) {
-    // A claim with no name has nothing to render, and one whose tag carries no space can't be
-    // grouped for the geo-chat lookups or tested against the viewer's spaces.
-    if (!node?.fromEntity?.name || !node.spaceId) continue;
-    claims.push({
-      claimEntityId: node.fromEntity.id,
-      spaceId: node.spaceId,
-      name: node.fromEntity.name,
-      description: node.fromEntity.description,
-      rankingScore: node.fromEntity.rankingScore === null ? null : Number(node.fromEntity.rankingScore),
-    });
+  for (const node of data.entitiesConnection?.nodes ?? []) {
+    // A claim with no name has nothing to render.
+    if (!node?.name) continue;
+    const rankingScore = node.rankingScore === null ? null : Number(node.rankingScore);
+
+    // One row per space the claim is tagged in, which is the shape the callers already expect: a
+    // claim tagged in three spaces arrives three times and is collapsed after filtering, so a tag
+    // in a space the viewer cannot see never stands for one in a space they can. A tag with no
+    // space can be neither grouped for the geo-chat lookups nor tested against the allowlist.
+    for (const relation of node.relationsList ?? []) {
+      if (!relation?.spaceId) continue;
+      claims.push({
+        claimEntityId: node.id,
+        spaceId: relation.spaceId,
+        name: node.name,
+        description: node.description,
+        rankingScore,
+      });
+    }
   }
 
   return {
     claims,
-    endCursor: data.relationsConnection?.pageInfo?.endCursor ?? null,
-    hasNextPage: data.relationsConnection?.pageInfo?.hasNextPage ?? false,
+    endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
+    hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
+    totalCount: data.entitiesConnection?.totalCount ?? null,
   };
 }
 
 /**
- * Every claim carrying `tagId`, ranked. `truncated` says the guard below stopped the paging, so a
- * caller can say so rather than quietly showing a slice of an unknown whole.
+ * Every claim carrying `tagId`, ranked.
+ *
+ * `total` is the server's own count of the tagged set, so `truncated` is a comparison rather than a
+ * guess: the guard stopping the loop and the corpus happening to end on the guard are the same
+ * shape from the inside, and only the count can tell them apart.
  */
-export type TaggedClaimsResult = { claims: TaggedClaim[]; truncated: boolean };
+export type TaggedClaimsResult = { claims: TaggedClaim[]; truncated: boolean; total: number | null };
 
 export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Promise<TaggedClaimsResult> {
   const claims: TaggedClaim[] = [];
   let after: string | null = null;
 
-  // Paged to exhaustion. Sorting can only happen once every page is in — the score belongs to the
-  // claim on the other end of the relation, so the connection can't order by it, and a partial set
-  // would be ranked against itself rather than against the whole tagged corpus.
+  let total: number | null = null;
+
+  // Paged to exhaustion, and ranked by the server on the way (`RANKING_SCORE_DESC`).
+  //
+  // This asks `entitiesConnection` for claims carrying the tag, rather than `relationsConnection`
+  // for the tags themselves. The score lives on the claim, so the entity connection can order by
+  // it — the relation connection could not, and the whole set had to arrive before it could be
+  // sorted client-side. Pages now arrive in rank order, which is what a paged read would need if
+  // this ever outgrows fetching the lot.
   while (claims.length < TAGGED_CLAIMS_LIMIT) {
     const page: TaggedClaimsPage = await Effect.runPromise(
       graphql({
@@ -196,7 +213,6 @@ export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Pr
         variables: {
           tagPropertyId: TAG_PROPERTY_ID,
           tagId,
-          typesPropertyId: SystemIds.TYPES_PROPERTY,
           claimTypeId: CLAIM_TYPE_ID,
           first: TAGGED_CLAIMS_PAGE_SIZE,
           after,
@@ -206,16 +222,23 @@ export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Pr
     );
 
     claims.push(...page.claims);
+    total = page.totalCount ?? total;
     if (!page.hasNextPage || !page.endCursor) break;
     after = page.endCursor;
   }
 
-  const truncated = claims.length >= TAGGED_CLAIMS_LIMIT;
+  // Measured against the server's count, not against the guard. A corpus of exactly the guard's
+  // size is complete; one row more is a slice, and without `total` those are indistinguishable —
+  // which is how a truncated list came to look identical to a whole one.
+  const truncated = total === null ? claims.length >= TAGGED_CLAIMS_LIMIT : total > claims.length;
   if (truncated) {
-    devLog(`[tagged-claims] stopped at the ${TAGGED_CLAIMS_LIMIT}-row guard for ${tagId}; the list is truncated.`);
+    devLog(`[tagged-claims] ${claims.length} of ${total ?? 'unknown'} rows for ${tagId}; the list is truncated.`);
   }
 
-  return { claims: claims.sort(compareTaggedClaims), truncated };
+  // Sorted here as well as by the server: a claim tagged in several spaces arrives once per tag, and
+  // `rankingScore` ties between those rows are broken by id so the duplicates sit together rather
+  // than being interleaved with their neighbours by page order.
+  return { claims: claims.sort(compareTaggedClaims), truncated, total };
 }
 
 /**

@@ -16,8 +16,13 @@ const graphqlMock = graphql as unknown as Mock;
 
 const SPACE = '019fedae72b67ab2927adf044d57c566';
 
-function node(id: string, name: string, rankingScore: string | null, spaceId = SPACE) {
-  return { spaceId, fromEntity: { id, name, description: null, rankingScore } };
+/**
+ * One claim as `entitiesConnection` returns it: the entity, with the tag relations that put it on
+ * the list. Several spaces means several relations, and the decoder emits one row apiece.
+ */
+function node(id: string, name: string, rankingScore: string | null, ...spaceIds: string[]) {
+  const spaces = spaceIds.length > 0 ? spaceIds : [SPACE];
+  return { id, name, description: null, rankingScore, relationsList: spaces.map(spaceId => ({ spaceId })) };
 }
 
 /** Runs the module's own decoder over one page of `nodes`, which is where the ordering lives. */
@@ -33,7 +38,15 @@ function respondWithPages(pages: unknown[][]) {
     const hasNextPage = index < pages.length - 1;
     index += 1;
     return Effect.succeed(
-      decoder({ relationsConnection: { pageInfo: { hasNextPage, endCursor: `cursor-${index}` }, nodes } })
+      decoder({
+        entitiesConnection: {
+          // The server's own count of the tagged set, which is what tells a truncated list from a
+          // complete one. Every page carries it, so the fixtures do too.
+          totalCount: pages.reduce((sum, page) => sum + page.length, 0),
+          pageInfo: { hasNextPage, endCursor: `cursor-${index}` },
+          nodes,
+        },
+      })
     );
   });
 }
@@ -106,12 +119,13 @@ describe('fetchTaggedClaims', () => {
     expect(graphqlMock.mock.calls.map(call => call[0].variables.after)).toEqual([null, 'cursor-1']);
   });
 
-  // A guard against a mis-tagging pointing the whole corpus at Featured, not a product limit.
+  // A guard against a mis-tagging pointing the whole corpus at one tag, not a product limit.
   it('stops at the runaway guard rather than paging forever', async () => {
     graphqlMock.mockImplementation(({ decoder }) =>
       Effect.succeed(
         decoder({
-          relationsConnection: {
+          entitiesConnection: {
+            totalCount: 50_000,
             pageInfo: { hasNextPage: true, endCursor: 'cursor' },
             nodes: Array.from({ length: 500 }, (_, index) => node(`a${index}`, `Claim ${index}`, '1')),
           },
@@ -119,10 +133,35 @@ describe('fetchTaggedClaims', () => {
       )
     );
 
-    const claims = (await fetchTaggedClaims(TAG)).claims;
+    const result = await fetchTaggedClaims(TAG);
 
-    expect(claims.length).toBeGreaterThanOrEqual(TAGGED_CLAIMS_LIMIT);
+    expect(result.claims.length).toBeGreaterThanOrEqual(TAGGED_CLAIMS_LIMIT);
     expect(graphqlMock.mock.calls.length).toBeLessThanOrEqual(Math.ceil(TAGGED_CLAIMS_LIMIT / 500));
+    // And says so, which is the whole point of stopping: a slice that looks complete is worse than
+    // a slow list.
+    expect(result.truncated).toBe(true);
+    expect(result.total).toBe(50_000);
+  });
+
+  // The guard and the corpus ending on it are the same shape from the inside; only the server's
+  // count separates them. Without it, a tag with exactly 5,000 claims reported itself truncated.
+  it('calls a complete list complete, even at exactly the guard', async () => {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(
+        decoder({
+          entitiesConnection: {
+            totalCount: TAGGED_CLAIMS_LIMIT,
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: Array.from({ length: TAGGED_CLAIMS_LIMIT }, (_, index) => node(`a${index}`, `Claim ${index}`, '1')),
+          },
+        })
+      )
+    );
+
+    const result = await fetchTaggedClaims(TAG);
+
+    expect(result.claims).toHaveLength(TAGGED_CLAIMS_LIMIT);
+    expect(result.truncated).toBe(false);
   });
 
   // A claim with no name has nothing to render, and one whose tag carries no space can't be grouped
