@@ -67,7 +67,6 @@ import {
   usePublishOptOutOffer,
   useSetPublishOptOutRequest,
   useSetThankingDebate,
-  useThankingDebate,
 } from '~/core/debates/thanking-debate-store';
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
@@ -2053,9 +2052,8 @@ function DebateRecordingModal({
   // still anything to opt out of. Off is the terminal state, so a cancelled recording keeps the
   // row rather than dropping it — the answer to "Publish debate?" is no, not nothing.
   const publishOptOutOffer = usePublishOptOutOffer();
-  const thankingDebate = useThankingDebate();
   const setPublishOptOutRequest = useSetPublishOptOutRequest();
-  const publishing = publishOptOutOffer.debateId !== null ? true : thankingDebate?.recordingCancelled ? false : null;
+  const publishing = publishOptOutOffer.debateId !== null ? true : publishOptOutOffer.cancelled ? false : null;
   const localParticipant =
     (localSlot
       ? debate.participants.find(participant => participant.participant_slot === localSlot)

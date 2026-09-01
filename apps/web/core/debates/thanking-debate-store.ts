@@ -37,9 +37,19 @@ export const useSetThankingDebate = () => useSetAtom(thankingDebateAtom);
 export type PublishOptOutOffer = {
   debateId: string | null;
   busy: boolean;
+  /**
+   * The thank-you debate has been opted out of, and there is no way back.
+   *
+   * Separate from `debateId` being null, which only says there is nothing to cancel — true of a
+   * debate that was never recorded as much as one already withdrawn. The coordinator knows this
+   * the moment the server accepts the cancellation, which is well before the room's own debate
+   * query has refreshed; the card would otherwise drop the row for the length of that gap, and
+   * keep it dropped if the refetch failed.
+   */
+  cancelled: boolean;
 };
 
-const publishOptOutOfferAtom = atom<PublishOptOutOffer>({ debateId: null, busy: false });
+const publishOptOutOfferAtom = atom<PublishOptOutOffer>({ debateId: null, busy: false, cancelled: false });
 
 export const usePublishOptOutOffer = () => useAtomValue(publishOptOutOfferAtom);
 

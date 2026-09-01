@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   // The card only owns the publish control while it is on screen; these cases are about the
   // banner, which is what is left when it isn't.
   thankingShowsPublishControl: false,
-  publishOptOutOffer: null as { debateId: string | null; busy: boolean } | null,
+  publishOptOutOffer: null as { debateId: string | null; busy: boolean; cancelled: boolean } | null,
   publishOptOutRequest: null as string | null,
   // Set to hold the presigned PUT open, so a test can read the banner mid-transfer and drive
   // progress itself through `reportProgress`.
@@ -81,7 +81,7 @@ vi.mock('./hooks', () => ({
   useDebateActivity: () => ({ data: mocks.activityDebate ? { debate: mocks.activityDebate } : undefined }),
 }));
 
-const setPublishOptOutOffer = (offer: { debateId: string | null; busy: boolean }) => {
+const setPublishOptOutOffer = (offer: { debateId: string | null; busy: boolean; cancelled: boolean }) => {
   mocks.publishOptOutOffer = offer;
 };
 const setPublishOptOutRequest = (debateId: string | null) => {
@@ -523,6 +523,27 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
+  // The room learns of a cancellation from its own debate query, which is a refetch away and may
+  // never arrive. The coordinator knows the moment the server accepts it, so it says so directly —
+  // otherwise the card cannot tell "withdrawn" from "never recorded" and drops the row in between.
+  it('tells the card a debate is withdrawn without waiting for the room to refetch', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingShowsPublishControl = true;
+    mocks.publishOptOutRequest = 'debate-1';
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    // `thankingRecordingCancelled` stays false throughout: the room has not refetched, and this
+    // must not depend on it doing so.
+    await waitFor(() => expect(mocks.publishOptOutOffer?.cancelled).toBe(true));
+    expect(mocks.thankingRecordingCancelled).toBe(false);
+    expect(mocks.publishOptOutOffer?.debateId).toBeNull();
+  });
+
   // Everything the banner says has to come off the uploads it is actually speaking for. Counting
   // one debate while reporting another debate's failure is the way that goes wrong, and the
   // thank-you debate is the one it stops speaking for.
@@ -547,6 +568,25 @@ describe('DebateRecordingUploadCoordinator', () => {
     // The plain wait, not the failure: debate-1 has nothing wrong with it.
     expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
     expect(screen.queryByText(/Upload failed spectacularly/)).not.toBeInTheDocument();
+  });
+
+  // Activity has to be measured against the uploads the banner speaks for. The one in flight can be
+  // the thank-you debate's, which the card reports — counted as the banner's, it claimed to be
+  // uploading while every recording it does report was sitting in backoff.
+  it('does not call itself uploading while only the card debate is in flight', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-2';
+    mocks.thankingShowsPublishControl = true;
+    mocks.queue = [
+      // Backing off, so it cannot be the upload in flight — the card's debate is.
+      { ...queuedRecording('debate-1'), nextAttemptAt: Date.now() + 60_000 },
+      queuedRecording('debate-2'),
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalled());
+    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
   });
 
   // Switching the control off asks for the same confirmation the Cancel button opened. The ticket

@@ -348,7 +348,11 @@ export function DebateRecordingUploadCoordinator() {
       });
   }, [accountKey, activeUploadId, getPrivyIdentityToken, online, publishableUploads, queryClient, userId, wakeAt]);
 
-  const waiting = !online || (!activeUploadId && bannerUploads.every(upload => upload.nextAttemptAt > Date.now()));
+  // Active *for the banner*, not for the queue. The upload in flight can be the thank-you debate's,
+  // which the banner has stopped speaking for — counting that as activity had it claim to be
+  // uploading while every recording it does report was sitting in backoff.
+  const bannerUploadActive = activeUploadId !== null && bannerUploads.some(upload => upload.id === activeUploadId);
+  const waiting = !online || (!bannerUploadActive && bannerUploads.every(upload => upload.nextAttemptAt > Date.now()));
   const latestFailedUpload = bannerUploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
     if (!upload.lastError) return latest;
     return !latest || upload.updatedAt > latest.updatedAt ? upload : latest;
@@ -396,11 +400,20 @@ export function DebateRecordingUploadCoordinator() {
   // layout effect for the same reason the room publishes its side in one: the control and the
   // banner have to agree within a single paint at the countdown boundary, or one of them shows a
   // state the other has already left.
+  // `cancelled` is what this knows and the room does not yet: the server has accepted the opt-out,
+  // whether or not the room's debate query has caught up. Without it the card has no way to tell
+  // "withdrawn" from "never recorded" until that refetch lands, and drops the row in between.
+  const thankingOptedOut =
+    normalizedThankingDebateId !== null &&
+    (cancelledDebateIds.has(normalizedThankingDebateId) || thankingDebate?.recordingCancelled === true);
   const setPublishOptOutOffer = useSetPublishOptOutOffer();
   React.useLayoutEffect(() => {
-    setPublishOptOutOffer({ debateId: cancellableDebateId, busy: cancelBusy });
-  }, [cancelBusy, cancellableDebateId, setPublishOptOutOffer]);
-  React.useEffect(() => () => setPublishOptOutOffer({ debateId: null, busy: false }), [setPublishOptOutOffer]);
+    setPublishOptOutOffer({ debateId: cancellableDebateId, busy: cancelBusy, cancelled: thankingOptedOut });
+  }, [cancelBusy, cancellableDebateId, setPublishOptOutOffer, thankingOptedOut]);
+  React.useEffect(
+    () => () => setPublishOptOutOffer({ debateId: null, busy: false, cancelled: false }),
+    [setPublishOptOutOffer]
+  );
 
   // And take up what the card asks for. It opens the same confirmation the Cancel button did —
   // the ticket calls for a new control, not a new behaviour, and a switch is easier to hit by

@@ -45,8 +45,7 @@ const mocks = vi.hoisted(() => ({
   supportsAudioOutputSelection: vi.fn(),
   selectAudioOutput: vi.fn(),
   setThankingDebate: vi.fn(),
-  thankingDebate: null as { recordingCancelled: boolean } | null,
-  publishOptOutOffer: { debateId: null as string | null, busy: false },
+  publishOptOutOffer: { debateId: null as string | null, busy: false, cancelled: false },
   setPublishOptOutRequest: vi.fn(),
   enumerateDevices: vi.fn(),
   getServerTime: vi.fn(),
@@ -128,7 +127,6 @@ vi.mock('~/core/debates/thanking-debate-store', () => ({
   useSetThankingDebate: () => mocks.setThankingDebate,
   // The publish control the thank-you card draws comes from the upload coordinator, which is a
   // sibling of this page rather than part of it. `publishOptOutOffer` is what it would be saying.
-  useThankingDebate: () => mocks.thankingDebate,
   usePublishOptOutOffer: () => mocks.publishOptOutOffer,
   useSetPublishOptOutRequest: () => mocks.setPublishOptOutRequest,
 }));
@@ -267,8 +265,7 @@ vi.mock('~/core/debates/use-prefetch-claim-space-allowlist', () => ({
 }));
 
 beforeEach(() => {
-  mocks.thankingDebate = null;
-  mocks.publishOptOutOffer = { debateId: null, busy: false };
+  mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
   mocks.setPublishOptOutRequest.mockReset();
   mocks.prefetchAllowlist.mockReset();
   clearDebateReturnDestination();
@@ -3210,7 +3207,7 @@ describe('DebateRoomPageClient', () => {
 
   it('offers the publish switch while the recording can still be pulled back', async () => {
     thankingDebateAtFinalTurn();
-    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false };
+    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
@@ -3228,7 +3225,7 @@ describe('DebateRoomPageClient', () => {
   // publish row — without it the card would open on a rule with nothing above it.
   it('rules off the publish row only when there is one', async () => {
     thankingDebateAtFinalTurn();
-    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false };
+    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
 
     const { rerender } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
@@ -3236,7 +3233,7 @@ describe('DebateRoomPageClient', () => {
     const card = screen.getByText('Debate again?').closest('section');
     expect(card?.querySelectorAll('.bg-divider')).toHaveLength(2);
 
-    mocks.publishOptOutOffer = { debateId: null, busy: false };
+    mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
     rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     await waitFor(() => expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull());
@@ -3245,9 +3242,9 @@ describe('DebateRoomPageClient', () => {
 
   it('reads as off once the recording has been pulled back, rather than vanishing', async () => {
     thankingDebateAtFinalTurn();
-    // Nothing left to cancel, because it already was.
-    mocks.publishOptOutOffer = { debateId: null, busy: false };
-    mocks.thankingDebate = { recordingCancelled: true };
+    // Nothing left to cancel, because it already was — which the coordinator reports directly
+    // rather than leaving the card to infer it from a debate refetch that may not have landed.
+    mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: true };
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
