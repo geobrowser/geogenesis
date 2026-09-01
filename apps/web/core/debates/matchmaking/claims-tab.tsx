@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
+import { FEATURED_TAG_ID } from '~/core/constants';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -25,13 +26,8 @@ import type {
 } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
-import {
-  type FeaturedClaim,
-  dedupeFeaturedClaims,
-  featuredClaimIdsBySpace,
-  useFeaturedClaims,
-} from '../featured-claims';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
+import { type TaggedClaim, dedupeTaggedClaims, taggedClaimIdsBySpace, useTaggedClaims } from '../tagged-claims';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useDebateRequests } from './hooks';
@@ -87,7 +83,7 @@ function filterOptionsFor(authenticated: boolean) {
 }
 
 /** Stable identity so the geo-chat lookups don't restart on every render of a non-featured list. */
-const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
+const NO_FEATURED_CLAIMS: TaggedClaim[] = [];
 
 /**
  * Cross-space claim discovery. Search, the space, topic and position filters, and the sort (people
@@ -238,7 +234,7 @@ export function ClaimsTab() {
     isLoading: featuredLoading,
     error: featuredError,
     refetch: refetchFeatured,
-  } = useFeaturedClaims(featured);
+  } = useTaggedClaims(FEATURED_TAG_ID, featured);
 
   // Collapsed to one row per claim *after* the space gates, not before. A claim can be tagged in
   // several spaces, and deduplicating first would let a space the viewer can't be shown stand for a
@@ -247,7 +243,7 @@ export function ClaimsTab() {
     () =>
       !featured || spacesPending
         ? NO_FEATURED_CLAIMS
-        : dedupeFeaturedClaims(featuredCatalog.filter(claim => spaceShowsClaims(claim.spaceId))),
+        : dedupeTaggedClaims(featuredCatalog.filter(claim => spaceShowsClaims(claim.spaceId))),
     [featured, featuredCatalog, spaceShowsClaims, spacesPending]
   );
 
@@ -287,7 +283,7 @@ export function ClaimsTab() {
   // and `viewer_debate_ready` onto these cards. Empty groups mean no key to read, and every field
   // it would have carried already has the graph-derived fallback below.
   const featuredGroups = React.useMemo(
-    () => (authenticated ? featuredClaimIdsBySpace(featuredAllowed) : []),
+    () => (authenticated ? taggedClaimIdsBySpace(featuredAllowed) : []),
     [authenticated, featuredAllowed]
   );
   const featuredRows = useDebateClaimsBySpaces(featuredGroups);

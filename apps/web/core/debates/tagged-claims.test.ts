@@ -3,7 +3,10 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { graphql } from '~/core/io/graphql-client';
 
-import { FEATURED_CLAIMS_LIMIT, dedupeFeaturedClaims, fetchFeaturedClaims } from './featured-claims';
+import { TAGGED_CLAIMS_LIMIT, dedupeTaggedClaims, fetchTaggedClaims } from './tagged-claims';
+
+/** Any tag: this module is the same query whichever entity it points at. */
+const TAG = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
 
 vi.mock('~/core/io/graphql-client', () => ({
   graphql: vi.fn(),
@@ -39,7 +42,7 @@ function namesOf(claims: Array<{ name: string }>) {
   return claims.map(claim => claim.name);
 }
 
-describe('fetchFeaturedClaims', () => {
+describe('fetchTaggedClaims', () => {
   beforeEach(() => {
     graphqlMock.mockReset();
   });
@@ -49,7 +52,7 @@ describe('fetchFeaturedClaims', () => {
   it('orders by ranking score, highest first', async () => {
     respondWith([node('a1', 'Middling', '120.5'), node('a2', 'Best', '900.25'), node('a3', 'Worst', '3')]);
 
-    expect(namesOf(await fetchFeaturedClaims())).toEqual(['Best', 'Middling', 'Worst']);
+    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Best', 'Middling', 'Worst']);
   });
 
   // `entities_ranked_for_feed` breaks ties on `entity_id DESC`, so two claims on the same score land
@@ -57,7 +60,7 @@ describe('fetchFeaturedClaims', () => {
   it('breaks a tie on entity id, descending, as the ranked feed does', async () => {
     respondWith([node('a1', 'Lower id', '500'), node('a3', 'Higher id', '500'), node('a2', 'Middle id', '500')]);
 
-    expect(namesOf(await fetchFeaturedClaims())).toEqual(['Higher id', 'Middle id', 'Lower id']);
+    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Higher id', 'Middle id', 'Lower id']);
   });
 
   // A claim the feed has never scored isn't in that table, so there is no place in the order for
@@ -65,7 +68,7 @@ describe('fetchFeaturedClaims', () => {
   it('puts an unscored claim last rather than dropping it', async () => {
     respondWith([node('a1', 'Unscored', null), node('a2', 'Scored', '1')]);
 
-    expect(namesOf(await fetchFeaturedClaims())).toEqual(['Scored', 'Unscored']);
+    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Scored', 'Unscored']);
   });
 
   // Every tag survives the fetch. Which space a viewer may be shown is a question only the callers
@@ -75,7 +78,7 @@ describe('fetchFeaturedClaims', () => {
     const OTHER_SPACE = '019fedae72b67ab2927adf044d57c599';
     respondWith([node('a1', 'Tagged twice', '10'), node('a1', 'Tagged twice', '10', OTHER_SPACE)]);
 
-    expect((await fetchFeaturedClaims()).map(claim => claim.spaceId)).toEqual([SPACE, OTHER_SPACE]);
+    expect((await fetchTaggedClaims(TAG)).claims.map(claim => claim.spaceId)).toEqual([SPACE, OTHER_SPACE]);
   });
 
   // A page-worth of tags is a sample, not the set: the connection orders by relation id, which is a
@@ -87,14 +90,18 @@ describe('fetchFeaturedClaims', () => {
       [node('a3', 'Page three, middling', '100')],
     ]);
 
-    expect(namesOf(await fetchFeaturedClaims())).toEqual(['Page two, high', 'Page three, middling', 'Page one, low']);
+    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual([
+      'Page two, high',
+      'Page three, middling',
+      'Page one, low',
+    ]);
     expect(graphqlMock).toHaveBeenCalledTimes(3);
   });
 
   it('passes the previous page cursor along', async () => {
     respondWithPages([[node('a1', 'One', '1')], [node('a2', 'Two', '2')]]);
 
-    await fetchFeaturedClaims();
+    await fetchTaggedClaims(TAG);
 
     expect(graphqlMock.mock.calls.map(call => call[0].variables.after)).toEqual([null, 'cursor-1']);
   });
@@ -112,10 +119,10 @@ describe('fetchFeaturedClaims', () => {
       )
     );
 
-    const claims = await fetchFeaturedClaims();
+    const claims = (await fetchTaggedClaims(TAG)).claims;
 
-    expect(claims.length).toBeGreaterThanOrEqual(FEATURED_CLAIMS_LIMIT);
-    expect(graphqlMock.mock.calls.length).toBeLessThanOrEqual(Math.ceil(FEATURED_CLAIMS_LIMIT / 500));
+    expect(claims.length).toBeGreaterThanOrEqual(TAGGED_CLAIMS_LIMIT);
+    expect(graphqlMock.mock.calls.length).toBeLessThanOrEqual(Math.ceil(TAGGED_CLAIMS_LIMIT / 500));
   });
 
   // A claim with no name has nothing to render, and one whose tag carries no space can't be grouped
@@ -129,11 +136,11 @@ describe('fetchFeaturedClaims', () => {
       null,
     ]);
 
-    expect(namesOf(await fetchFeaturedClaims())).toEqual(['Fine']);
+    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Fine']);
   });
 });
 
-describe('dedupeFeaturedClaims', () => {
+describe('dedupeTaggedClaims', () => {
   function claim(claimEntityId: string, spaceId: string) {
     return { claimEntityId, spaceId, name: claimEntityId, description: null, rankingScore: 1 };
   }
@@ -142,7 +149,7 @@ describe('dedupeFeaturedClaims', () => {
     const first = claim('a1', 'space-1');
     const second = claim('a1', 'space-2');
 
-    expect(dedupeFeaturedClaims([first, second, claim('a2', 'space-1')])).toEqual([first, claim('a2', 'space-1')]);
+    expect(dedupeTaggedClaims([first, second, claim('a2', 'space-1')])).toEqual([first, claim('a2', 'space-1')]);
   });
 
   // The point of deduplicating late: run after a space filter, the tag that survives is one the
@@ -150,7 +157,7 @@ describe('dedupeFeaturedClaims', () => {
   it('collapses onto whichever tag survived a space filter', () => {
     const allowed = claim('a1', 'space-2');
 
-    expect(dedupeFeaturedClaims([claim('a1', 'space-1'), allowed].filter(c => c.spaceId === 'space-2'))).toEqual([
+    expect(dedupeTaggedClaims([claim('a1', 'space-1'), allowed].filter(c => c.spaceId === 'space-2'))).toEqual([
       allowed,
     ]);
   });

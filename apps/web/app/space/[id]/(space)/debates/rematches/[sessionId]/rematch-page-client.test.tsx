@@ -75,6 +75,8 @@ const mocks = vi.hoisted(() => ({
   featuredCatalogLoading: false,
   featuredCatalogError: null as Error | null,
   featuredEnabledWith: [] as boolean[],
+  /** Which tag each render asked the graph for, in order. */
+  taggedClaimsAskedFor: [] as string[],
   entityQueryHasNextPage: false,
   /** The hub's claims query (the All tab) is still in flight. */
   entityQueryLoading: false,
@@ -266,10 +268,11 @@ vi.mock('~/core/debates/debate-entry-intent', () => ({
 
 // GEO-2683. Featured stands in for Recommended when no curator page exists, which is what most of
 // these suites run under — so without this every case here would reach the graph for the tag.
-vi.mock('~/core/debates/featured-claims', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/debates/featured-claims')>()),
-  useFeaturedClaims: (enabled: boolean) => {
+vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/debates/tagged-claims')>()),
+  useTaggedClaims: (tagId: string, enabled: boolean) => {
     mocks.featuredEnabledWith.push(enabled);
+    mocks.taggedClaimsAskedFor.push(tagId);
     // Rows are returned whether or not the query is enabled, as react-query does: `enabled: false`
     // stops the fetch, it does not clear the cache — and the hub shares this key, so a catalog it
     // fetched arrives here already warm.
@@ -544,6 +547,7 @@ beforeEach(() => {
   mocks.featuredCatalogLoading = false;
   mocks.featuredCatalogError = null;
   mocks.featuredEnabledWith = [];
+  mocks.taggedClaimsAskedFor = [];
   mocks.entityQueryHasNextPage = false;
   mocks.lastEnabledData = undefined;
   mocks.spacesHeldOver = false;

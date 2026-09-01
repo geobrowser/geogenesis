@@ -8,28 +8,31 @@ import { Effect } from 'effect';
 import { parse } from 'graphql';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
-import { FEATURED_TAG_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import { TAG_PROPERTY_ID } from '~/core/constants';
 import { graphql } from '~/core/io/graphql-client';
 import { devLog } from '~/core/utils/dev-log';
 
 /**
- * GEO-2683. A claim is featured when a curator tags it — a `Tags` relation pointing at the
- * `Featured` entity — and the tag is what this asks for, rather than the claims and then their
- * tags: featured claims are a few hundred out of three hundred thousand, so a filter applied to
- * pages of claims would page for a very long time before it found one.
+ * Claims carrying a given curation tag — a `Tags` relation pointing at one entity.
  *
- * The relation carries the space it was written in, which is the space the claim was featured
- * *in* — a better answer than ranking the claim's spaces after the fact, and the one both callers
- * use to group their geo-chat lookups.
+ * GEO-2683 for `Featured`, GEO-2771 for `Debate`. The tag is what gets asked for, rather than the
+ * claims and then their tags: a tagged set is a few hundred out of three hundred thousand, so a
+ * filter applied to pages of claims would page for a very long time before it found one. That ratio
+ * is also why these lists do not go through geo-chat at all — the graph owns tags, so it can answer
+ * *which* claims, leaving geo-chat to answer about them.
+ *
+ * The relation carries the space it was written in, which is the space the claim was tagged *in* —
+ * a better answer than ranking the claim's spaces after the fact, and the one every caller uses to
+ * group its geo-chat lookups.
  *
  * `rankingScore` rides along so the list can be ordered the way Explore's "Best" sort and geo-chat
  * both order theirs. Unordered, this connection comes back by relation id, and those are random
  * v4s — a fixed shuffle with no relationship to anything a reader would recognise.
  */
-const FEATURED_CLAIMS_SOURCE = /* GraphQL */ `
-  query FeaturedClaims(
+const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
+  query TaggedClaims(
     $tagPropertyId: UUID!
-    $featuredTagId: UUID!
+    $tagId: UUID!
     $typesPropertyId: UUID!
     $claimTypeId: UUID!
     $first: Int!
@@ -40,7 +43,7 @@ const FEATURED_CLAIMS_SOURCE = /* GraphQL */ `
       after: $after
       filter: {
         typeId: { is: $tagPropertyId }
-        toEntityId: { is: $featuredTagId }
+        toEntityId: { is: $tagId }
         fromEntity: { relations: { some: { typeId: { is: $typesPropertyId }, toEntityId: { is: $claimTypeId } } } }
       }
     ) {
@@ -61,7 +64,7 @@ const FEATURED_CLAIMS_SOURCE = /* GraphQL */ `
   }
 `;
 
-type FeaturedClaimsQuery = {
+type TaggedClaimsQuery = {
   relationsConnection: {
     pageInfo: { hasNextPage: boolean; endCursor: string | null } | null;
     nodes: Array<{
@@ -77,35 +80,32 @@ type FeaturedClaimsQuery = {
   } | null;
 };
 
-type FeaturedClaimsVariables = {
+type TaggedClaimsVariables = {
   tagPropertyId: string;
-  featuredTagId: string;
+  tagId: string;
   typesPropertyId: string;
   claimTypeId: string;
   first: number;
   after: string | null;
 };
 
-const featuredClaimsDocument = parse(FEATURED_CLAIMS_SOURCE) as TypedDocumentNode<
-  FeaturedClaimsQuery,
-  FeaturedClaimsVariables
->;
+const taggedClaimsDocument = parse(TAGGED_CLAIMS_SOURCE) as TypedDocumentNode<TaggedClaimsQuery, TaggedClaimsVariables>;
 
 /** Rows per request. The whole tagged set is what both callers filter and show, so it is paged
  * through to exhaustion rather than sampled — a single capped request would decide what to keep by
  * relation id, which is a random v4 and so has no relationship to the order this list is shown in. */
-const FEATURED_CLAIMS_PAGE_SIZE = 500;
+const TAGGED_CLAIMS_PAGE_SIZE = 500;
 
 /**
  * A runaway guard, not a product limit: a few hundred claims are tagged today, so this is an order
  * of magnitude of headroom, and reaching it means a mis-tagging has pointed the whole corpus at
- * Featured. If curation ever legitimately grows past it, the answer is a ranked server-side
+ * the tag. If curation ever legitimately grows past it, the answer is a ranked server-side
  * endpoint rather than a bigger number here — the client is already sorting the entire set.
  */
-export const FEATURED_CLAIMS_LIMIT = 5_000;
+export const TAGGED_CLAIMS_LIMIT = 5_000;
 
-/** A claim a curator has tagged Featured, and the space they tagged it in. */
-export type FeaturedClaim = {
+/** A claim a curator has tagged, and the space they tagged it in. */
+export type TaggedClaim = {
   claimEntityId: string;
   spaceId: string;
   name: string;
@@ -123,7 +123,7 @@ export type FeaturedClaim = {
  * for it. It goes last rather than being dropped: a curator tagged it deliberately, and leaving it
  * out would quietly overrule them.
  */
-export function compareFeaturedClaims(a: FeaturedClaim, z: FeaturedClaim): number {
+export function compareTaggedClaims(a: TaggedClaim, z: TaggedClaim): number {
   if (a.rankingScore !== z.rankingScore) {
     if (a.rankingScore === null) return 1;
     if (z.rankingScore === null) return -1;
@@ -138,10 +138,10 @@ export function compareFeaturedClaims(a: FeaturedClaim, z: FeaturedClaim): numbe
  * Deliberately not done while decoding. A claim can be tagged in several spaces, and which of those
  * a viewer may be shown is a question only the callers can answer — deduplicating first would make
  * an arbitrary space authoritative and drop the claim entirely when that one happens to be outside
- * the viewer's allowlist, even though it is featured in a space they can see. So every tag survives
+ * the viewer's allowlist, even though it is tagged in a space they can see. So every tag survives
  * the fetch and the callers collapse them *after* filtering.
  */
-export function dedupeFeaturedClaims(claims: FeaturedClaim[]): FeaturedClaim[] {
+export function dedupeTaggedClaims(claims: TaggedClaim[]): TaggedClaim[] {
   const seen = new Set<string>();
   return claims.filter(claim => {
     if (seen.has(claim.claimEntityId)) return false;
@@ -150,10 +150,10 @@ export function dedupeFeaturedClaims(claims: FeaturedClaim[]): FeaturedClaim[] {
   });
 }
 
-type FeaturedClaimsPage = { claims: FeaturedClaim[]; endCursor: string | null; hasNextPage: boolean };
+type TaggedClaimsPage = { claims: TaggedClaim[]; endCursor: string | null; hasNextPage: boolean };
 
-function decodeFeaturedClaimsPage(data: FeaturedClaimsQuery): FeaturedClaimsPage {
-  const claims: FeaturedClaim[] = [];
+function decodeTaggedClaimsPage(data: TaggedClaimsQuery): TaggedClaimsPage {
+  const claims: TaggedClaim[] = [];
 
   for (const node of data.relationsConnection?.nodes ?? []) {
     // A claim with no name has nothing to render, and one whose tag carries no space can't be
@@ -175,24 +175,30 @@ function decodeFeaturedClaimsPage(data: FeaturedClaimsQuery): FeaturedClaimsPage
   };
 }
 
-export async function fetchFeaturedClaims(signal?: AbortSignal): Promise<FeaturedClaim[]> {
-  const claims: FeaturedClaim[] = [];
+/**
+ * Every claim carrying `tagId`, ranked. `truncated` says the guard below stopped the paging, so a
+ * caller can say so rather than quietly showing a slice of an unknown whole.
+ */
+export type TaggedClaimsResult = { claims: TaggedClaim[]; truncated: boolean };
+
+export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Promise<TaggedClaimsResult> {
+  const claims: TaggedClaim[] = [];
   let after: string | null = null;
 
   // Paged to exhaustion. Sorting can only happen once every page is in — the score belongs to the
   // claim on the other end of the relation, so the connection can't order by it, and a partial set
   // would be ranked against itself rather than against the whole tagged corpus.
-  while (claims.length < FEATURED_CLAIMS_LIMIT) {
-    const page: FeaturedClaimsPage = await Effect.runPromise(
+  while (claims.length < TAGGED_CLAIMS_LIMIT) {
+    const page: TaggedClaimsPage = await Effect.runPromise(
       graphql({
-        query: featuredClaimsDocument,
-        decoder: decodeFeaturedClaimsPage,
+        query: taggedClaimsDocument,
+        decoder: decodeTaggedClaimsPage,
         variables: {
           tagPropertyId: TAG_PROPERTY_ID,
-          featuredTagId: FEATURED_TAG_ID,
+          tagId,
           typesPropertyId: SystemIds.TYPES_PROPERTY,
           claimTypeId: CLAIM_TYPE_ID,
-          first: FEATURED_CLAIMS_PAGE_SIZE,
+          first: TAGGED_CLAIMS_PAGE_SIZE,
           after,
         },
         signal,
@@ -204,11 +210,12 @@ export async function fetchFeaturedClaims(signal?: AbortSignal): Promise<Feature
     after = page.endCursor;
   }
 
-  if (claims.length >= FEATURED_CLAIMS_LIMIT) {
-    devLog(`[featured-claims] stopped at the ${FEATURED_CLAIMS_LIMIT}-row guard; the list is truncated.`);
+  const truncated = claims.length >= TAGGED_CLAIMS_LIMIT;
+  if (truncated) {
+    devLog(`[tagged-claims] stopped at the ${TAGGED_CLAIMS_LIMIT}-row guard for ${tagId}; the list is truncated.`);
   }
 
-  return claims.sort(compareFeaturedClaims);
+  return { claims: claims.sort(compareTaggedClaims), truncated };
 }
 
 /**
@@ -216,33 +223,35 @@ export async function fetchFeaturedClaims(signal?: AbortSignal): Promise<Feature
  * what the gateway reconciles and refetches on every (re)connect, and these rows come from the
  * knowledge graph rather than geo-chat, so a socket event says nothing about them.
  */
-export const featuredClaimsQueryKey = ['featured-claims', 'claims'] as const;
+export const taggedClaimsQueryKey = (tagId: string) => ['tagged-claims', 'claims', tagId] as const;
 
-const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
+const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
 
 /**
- * Every claim tagged Featured, in Explore's "Best" order and unfiltered. Callers narrow it to the
+ * Every claim carrying `tagId`, in Explore's "Best" order and unfiltered. Callers narrow it to the
  * spaces they may show — the viewer's allowlist and the acceptor's editor spaces — because which
  * spaces those are is a different question in the hub than it is in the rematch picker. Narrowing
  * preserves the order, so what survives is still ranked.
  *
- * Curation moves at human speed, so this stays fresh for a good while; both callers ask for the
- * same key and share the one request.
+ * Curation moves at human speed, so this stays fresh for a good while; every caller asking for the
+ * same tag shares one request.
  */
-export function useFeaturedClaims(enabled: boolean) {
+export function useTaggedClaims(tagId: string, enabled: boolean) {
   const query = useQuery({
-    queryKey: featuredClaimsQueryKey,
-    queryFn: ({ signal }) => fetchFeaturedClaims(signal),
+    queryKey: taggedClaimsQueryKey(tagId),
+    queryFn: ({ signal }) => fetchTaggedClaims(tagId, signal),
     staleTime: 5 * 60_000,
     enabled,
   });
 
-  const claims = query.data ?? NO_FEATURED_CLAIMS;
+  const claims = query.data?.claims ?? NO_TAGGED_CLAIMS;
   const claimIds = React.useMemo(() => claims.map(claim => claim.claimEntityId), [claims]);
 
   return {
     claims,
     claimIds,
+    /** The guard stopped the paging, so this list is a slice of an unknown whole. */
+    truncated: query.data?.truncated ?? false,
     // `enabled: false` leaves react-query pending forever, which a caller waiting on this would
     // read as "still looking" and never show its empty state.
     isLoading: enabled && query.isLoading,
@@ -251,8 +260,8 @@ export function useFeaturedClaims(enabled: boolean) {
   };
 }
 
-/** The featured claims grouped for geo-chat's per-space `debate-claims` lookup, in a stable order. */
-export function featuredClaimIdsBySpace(claims: FeaturedClaim[]): Array<{ spaceId: string; claimIds: string[] }> {
+/** The tagged claims grouped for geo-chat's per-space `debate-claims` lookup, in a stable order. */
+export function taggedClaimIdsBySpace(claims: TaggedClaim[]): Array<{ spaceId: string; claimIds: string[] }> {
   const bySpace = new Map<string, string[]>();
   for (const claim of claims) {
     const existing = bySpace.get(claim.spaceId);

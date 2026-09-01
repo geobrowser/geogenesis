@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
+import { FEATURED_TAG_ID } from '~/core/constants';
 import {
   type DebateClaimPositionSummary,
   type DebateRematchClaim,
@@ -27,7 +28,6 @@ import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
-import { type FeaturedClaim, dedupeFeaturedClaims, useFeaturedClaims } from '~/core/debates/featured-claims';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
   useAcceptDebateRematchRequest,
@@ -62,6 +62,7 @@ import { useScopedMatchmakingClaims } from '~/core/debates/matchmaking/use-scope
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { type TaggedClaim, dedupeTaggedClaims, useTaggedClaims } from '~/core/debates/tagged-claims';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
@@ -124,7 +125,7 @@ const CLAIMS_SOURCE_LABELS: Record<ClaimsSource, string> = {
 };
 
 /** Stable identity so the hydration below doesn't restart whenever Featured isn't the source. */
-const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
+const NO_FEATURED_CLAIMS: TaggedClaim[] = [];
 
 /**
  * The tab is narrow, so it carries the opponent's first name only: "Jenna Ruiz" -> "Jenna’s".
@@ -343,7 +344,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     claims: featuredCatalog,
     isLoading: featuredCatalogLoading,
     error: featuredCatalogError,
-  } = useFeaturedClaims(featuredEnabled);
+  } = useTaggedClaims(FEATURED_TAG_ID, featuredEnabled);
 
   // Collapsed to one row per claim *after* the allowlist, not before. A claim can be tagged in
   // several spaces, and deduplicating first would let a space outside the allowlist stand for a
@@ -359,7 +360,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () =>
       !featuredEnabled || allowlistPending
         ? NO_FEATURED_CLAIMS
-        : dedupeFeaturedClaims(featuredCatalog.filter(claim => isClaimSpaceAllowed(claim.spaceId, spaceAllowlist))),
+        : dedupeTaggedClaims(featuredCatalog.filter(claim => isClaimSpaceAllowed(claim.spaceId, spaceAllowlist))),
     [allowlistPending, featuredCatalog, featuredEnabled, spaceAllowlist]
   );
 

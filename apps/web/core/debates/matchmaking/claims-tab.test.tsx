@@ -237,9 +237,9 @@ vi.mock('../hooks', () => ({
   },
 }));
 
-vi.mock('../featured-claims', async importOriginal => ({
-  ...(await importOriginal<typeof import('../featured-claims')>()),
-  useFeaturedClaims: (enabled: boolean) => {
+vi.mock('../tagged-claims', async importOriginal => ({
+  ...(await importOriginal<typeof import('../tagged-claims')>()),
+  useTaggedClaims: (enabled: boolean) => {
     const claims = enabled ? mocks.featuredClaims : [];
     return {
       claims,

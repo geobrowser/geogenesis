@@ -13,6 +13,15 @@ import { KEY_FRAME_IMAGE_PROPERTY } from '~/core/constants';
 /** Debate (TYPE) — the top-level entity a published debate becomes. */
 export const DEBATE_TYPE_ID = 'fd51f93520634617be397b672b23364c';
 
+/**
+ * The entity a `Tags` relation points at to mark a Claim as one meant for debating (GEO-2771).
+ *
+ * Curation rather than a property on the claim, which is what lets the debates surfaces ask the
+ * graph for their whole corpus in one query: a few hundred tagged claims out of three hundred
+ * thousand, so the tag is what gets asked for and the claims come back with it.
+ */
+export const DEBATE_TAG_ID = '55c95b2626f8482cb9739ea99dfde438';
+
 /** Transcript (TYPE) — holds the per-turn text blocks of a debate. */
 export const TRANSCRIPT_TYPE_ID = '97042e6d9c7b4db5930c43d48debda84';
 
