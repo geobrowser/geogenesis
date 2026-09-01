@@ -935,9 +935,9 @@ export function PowerToolsScreen() {
 
   const hasActiveFilters = effectiveFilterState.length > 0;
 
-  const isQuerySource = browseDropdowns.isQuerySource;
-  const showBrowseDropdownsRow = !isEditing && isQuerySource && browseDropdowns.configs.length > 0;
-  const showPillsRow = hasActiveFilters || (isEditing && isQuerySource && browseDropdowns.configs.length > 0);
+  const supportsDropdowns = browseDropdowns.supportsDropdowns;
+  const showBrowseDropdownsRow = !isEditing && supportsDropdowns && browseDropdowns.configs.length > 0;
+  const showPillsRow = hasActiveFilters || (isEditing && supportsDropdowns && browseDropdowns.configs.length > 0);
 
   const filterGroups = React.useMemo(() => groupFilters(effectiveFilterState), [effectiveFilterState]);
 
@@ -1015,7 +1015,7 @@ export function PowerToolsScreen() {
             setFilterState={effectiveSetFilterState}
             modesByColumn={activeModesByColumn}
             afterFilterTrigger={
-              isEditing && isQuerySource ? (
+              isEditing && supportsDropdowns ? (
                 <TableBlockDropdownsConfigTrigger
                   configs={browseDropdowns.configs}
                   properties={data.properties}
@@ -1090,6 +1090,7 @@ export function PowerToolsScreen() {
             selections={browseDropdowns.selections}
             updateSelections={browseDropdowns.updateSelections}
             hydrated={browseDropdowns.hydrated}
+            collectionItemIds={browseDropdowns.collectionItemIds}
           />
         </div>
       )}
@@ -1097,7 +1098,7 @@ export function PowerToolsScreen() {
       {showPillsRow && (
         <div className="flex items-center gap-2 border-b border-grey-02 px-4 py-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            {isEditing && isQuerySource && (
+            {isEditing && supportsDropdowns && (
               <TableBlockDropdownsConfigChips
                 configs={browseDropdowns.configs}
                 properties={data.properties}

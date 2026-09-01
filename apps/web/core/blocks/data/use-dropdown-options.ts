@@ -6,31 +6,55 @@ import * as React from 'react';
 
 import { ID } from '~/core/id';
 
-import { type DropdownOption, fetchDropdownOptionsPage } from './fetch-dropdown-options';
+import { type DropdownOption, type DropdownPopulation, fetchDropdownOptionsPage } from './fetch-dropdown-options';
 import { filterStateToWhere } from './filter-state-to-where';
 import type { Filter, ModesByColumn } from './filters';
+import { type DropdownSelections, applyDropdownSelectionsToFilters } from './table-dropdown-selections';
 
 export type { DropdownOption } from './fetch-dropdown-options';
 
 /** Pages (× 1000 population rows) read without any user intent. */
 const AUTO_WALK_PAGES = 3;
 
+/** Cheap stable fingerprint for an id list — FNV-1a over the joined ids. */
+function fingerprintIds(ids: string[]): string {
+  let hash = 0x811c9dc5;
+  for (const id of ids) {
+    for (let i = 0; i < id.length; i++) {
+      hash ^= id.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    hash ^= 0x2c; // separator
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${ids.length}:${(hash >>> 0).toString(36)}`;
+}
+
 /**
- * The values of one property across the table's population — the block's
- * filter with this property's own constraint removed, so the list is not
- * narrowed by what is currently selected. The walk reads the first
- * AUTO_WALK_PAGES pages on its own; past that it advances only on demand
- * (the user scrolling to the end of the list, or a typed search), so a
- * dropdown on a huge scope cannot crawl the corpus just by sitting open.
- * Closing the menu stops the walk; reopening resumes from the cursor.
- * "No values"/"no matches" are only ever reported once the scope is
- * exhausted — a paused walk says so instead. Selected and filter-default
- * entities are always present so a preset never goes missing.
+ * The values of one property across the table's population, with per-option
+ * counts (rows carrying the value). The population is faceted the way the
+ * bounty board's filters are: the block's filter plus the OTHER dropdowns'
+ * selections apply, this property's own constraint is removed, so the list
+ * is never narrowed by what is currently selected here but does react to
+ * the other columns.
+ *
+ * The walk reads the first AUTO_WALK_PAGES pages on its own; past that it
+ * advances only on demand (the user scrolling to the end of the list, or a
+ * typed search), so a dropdown on a huge scope cannot crawl the corpus just
+ * by sitting open. Closing the menu stops the walk; reopening resumes from
+ * the cursor. "No values"/"no matches" are only ever reported once the
+ * scope is exhausted — a paused walk says so instead. Selected and
+ * filter-default entities are always present so a preset never goes
+ * missing. Counts are exact once the scope is exhausted and a lower bound
+ * ("N+") while it is not.
  */
 export function useDropdownOptions({
   columnId,
   baseFilterState,
   baseModesByColumn,
+  selections,
+  facetColumnIds,
+  collectionItemIds,
   pinned,
   enabled,
   demand = false,
@@ -38,28 +62,43 @@ export function useDropdownOptions({
   columnId: string;
   baseFilterState: Filter[];
   baseModesByColumn: ModesByColumn;
+  /** Personal selections; the ones on OTHER facet columns narrow this population. */
+  selections: DropdownSelections;
+  /** The overlay's applied columns — the facet dimensions. */
+  facetColumnIds: string[];
+  /** COLLECTION blocks: the ordered item ids that ARE the population; null for query sources. */
+  collectionItemIds: string[] | null;
   /** Ids (with names when known) that must appear regardless of what has loaded. */
   pinned: DropdownOption[];
   enabled: boolean;
   /** User intent to read past the auto-walk window: scrolled to the end, or searching. */
   demand?: boolean;
 }) {
-  const where = React.useMemo(() => {
-    const withoutColumn = baseFilterState.filter(f => !(ID.equals(f.columnId, columnId) && !f.isBacklink));
-    return filterStateToWhere(withoutColumn, baseModesByColumn);
-  }, [baseFilterState, baseModesByColumn, columnId]);
+  const population: DropdownPopulation = React.useMemo(() => {
+    const otherColumns = facetColumnIds.filter(id => !ID.equals(id, columnId));
+    const overlaid = applyDropdownSelectionsToFilters(baseFilterState, baseModesByColumn, selections, otherColumns);
+    const withoutColumn = overlaid.filterState.filter(f => !(ID.equals(f.columnId, columnId) && !f.isBacklink));
+    const where = filterStateToWhere(withoutColumn, overlaid.modesByColumn);
+    return collectionItemIds ? { kind: 'ids', ids: collectionItemIds, where } : { kind: 'query', where };
+  }, [baseFilterState, baseModesByColumn, selections, facetColumnIds, columnId, collectionItemIds]);
 
-  const whereKey = React.useMemo(() => JSON.stringify(where), [where]);
+  const populationKey = React.useMemo(
+    () =>
+      population.kind === 'ids'
+        ? `ids:${fingerprintIds(population.ids)}:${JSON.stringify(population.where)}`
+        : `query:${JSON.stringify(population.where)}`,
+    [population]
+  );
 
   const { data, isFetching, isError, fetchNextPage, hasNextPage, refetch } = useInfiniteQuery({
-    queryKey: ['data-block', 'dropdown-options', columnId, whereKey],
+    queryKey: ['data-block', 'dropdown-options', columnId, populationKey],
     enabled,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
-      fetchDropdownOptionsPage({ propertyId: columnId, where, after: pageParam, signal }),
+      fetchDropdownOptionsPage({ propertyId: columnId, population, after: pageParam, signal }),
     getNextPageParam: lastPage => (lastPage.hasNextPage ? lastPage.endCursor : undefined),
-    // The scope for a fixed where does not change mid-session, and a focus
-    // refetch would replay every accumulated page of the walk serially.
+    // The scope for a fixed population does not change mid-session, and a
+    // focus refetch would replay every accumulated page of the walk serially.
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
@@ -84,6 +123,9 @@ export function useDropdownOptions({
   /** More of the scope exists beyond what has been read. */
   const hasMoreInScope = Boolean(hasNextPage);
 
+  /** The whole scope has been read: counts are exact, absences are real. */
+  const scopeExhausted = enabled && !isError && data !== undefined && !hasMoreInScope && !isFetching;
+
   /** How many population rows the walk has checked so far. */
   const scannedCount = React.useMemo(
     () => (data?.pages ?? []).reduce((sum, page) => sum + page.populationCount, 0),
@@ -91,13 +133,18 @@ export function useDropdownOptions({
   );
 
   // Pinned first, then values in arrival order (each page name-sorted) so
-  // the list never reshuffles under the cursor as pages arrive.
+  // the list never reshuffles under the cursor as pages arrive. Walk pages
+  // partition the population, so per-option counts add across them.
   const options: DropdownOption[] = React.useMemo(() => {
     const byId = new Map<string, DropdownOption>();
     const add = (option: DropdownOption) => {
       const existing = byId.get(option.id);
-      if (!existing) byId.set(option.id, option);
-      else if (!existing.name && option.name) byId.set(option.id, { ...existing, name: option.name });
+      if (!existing) {
+        byId.set(option.id, { ...option });
+        return;
+      }
+      if (!existing.name && option.name) existing.name = option.name;
+      if (option.count !== undefined) existing.count = (existing.count ?? 0) + option.count;
     };
     pinned.forEach(add);
     for (const page of data?.pages ?? []) page.options.forEach(add);
@@ -109,5 +156,5 @@ export function useDropdownOptions({
     [options]
   );
 
-  return { options, nameOf, isWalking, hasMoreInScope, isError, retry: refetch, scannedCount };
+  return { options, nameOf, isWalking, hasMoreInScope, scopeExhausted, isError, retry: refetch, scannedCount };
 }

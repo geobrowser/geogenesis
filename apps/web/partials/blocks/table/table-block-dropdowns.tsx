@@ -43,6 +43,8 @@ type TableBlockDropdownsProps = {
   selections: DropdownSelections;
   updateSelections: (updater: (current: DropdownSelections) => DropdownSelections) => void;
   hydrated: boolean;
+  /** COLLECTION blocks: the ordered item ids forming the population; null for query sources. */
+  collectionItemIds: string[] | null;
 };
 
 /**
@@ -62,6 +64,7 @@ export function TableBlockDropdowns({
   selections,
   updateSelections,
   hydrated,
+  collectionItemIds,
 }: TableBlockDropdownsProps) {
   const [openColumnId, setOpenColumnId] = React.useState<string | null>(null);
 
@@ -88,6 +91,8 @@ export function TableBlockDropdowns({
           selections={selections}
           updateSelections={updateSelections}
           hydrated={hydrated}
+          facetColumnIds={appliedColumnIds}
+          collectionItemIds={collectionItemIds}
           open={openColumnId === config.propertyId}
           onOpenChange={open =>
             setOpenColumnId(current => (open ? config.propertyId : current === config.propertyId ? null : current))
@@ -106,11 +111,15 @@ function TableBlockDropdown({
   selections,
   updateSelections,
   hydrated,
+  facetColumnIds,
+  collectionItemIds,
   open,
   onOpenChange,
 }: Omit<TableBlockDropdownsProps, 'configs' | 'appliedColumnIds' | 'properties' | 'spaceId'> & {
   config: BlockDropdownConfig;
   property: Property | undefined;
+  /** The overlay's applied columns — the other facets narrowing this population. */
+  facetColumnIds: string[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -155,14 +164,18 @@ function TableBlockDropdown({
 
   // The dropdown's one scope: this property's values across the table's
   // population; the first pages load on their own, the rest on demand.
-  const { options, nameOf, isWalking, hasMoreInScope, isError, retry, scannedCount } = useDropdownOptions({
-    columnId,
-    baseFilterState,
-    baseModesByColumn,
-    pinned,
-    enabled: open,
-    demand: query.length > 0 || scrolledToEnd,
-  });
+  const { options, nameOf, isWalking, hasMoreInScope, scopeExhausted, isError, retry, scannedCount } =
+    useDropdownOptions({
+      columnId,
+      baseFilterState,
+      baseModesByColumn,
+      selections,
+      facetColumnIds,
+      collectionItemIds,
+      pinned,
+      enabled: open,
+      demand: query.length > 0 || scrolledToEnd,
+    });
 
   const visibleOptions = React.useMemo(() => {
     if (!query) return options;
@@ -313,17 +326,34 @@ function TableBlockDropdown({
           )}
           {renderedOptions.map(option => {
             const checked = selected.some(id => ID.equals(id, option.id));
+            // Counts follow the walk: exact once the scope is exhausted, a
+            // lower bound ("N+") while more of it remains, absent for pinned
+            // values the walk has not reached. A definite zero is shown but
+            // inert (bounty-board facet behavior) — unless checked, so it can
+            // still be unselected.
+            const count = option.count ?? (scopeExhausted ? 0 : undefined);
+            const isInertZero = scopeExhausted && (option.count ?? 0) === 0 && !checked;
             return (
               <button
                 key={option.id}
                 type="button"
                 role="menuitemcheckbox"
                 aria-checked={checked}
+                disabled={isInertZero}
                 onClick={() => toggle(option.id)}
-                className="flex items-center gap-2 rounded px-2 py-2 text-left text-sm text-text hover:bg-grey-01"
+                className={cx(
+                  'flex items-center gap-2 rounded px-2 py-2 text-left text-sm text-text hover:bg-grey-01',
+                  isInertZero && 'opacity-50 hover:bg-transparent'
+                )}
               >
                 <CheckboxVisual checked={checked} />
                 <span className="min-w-0 truncate">{option.name ?? option.id}</span>
+                {count !== undefined && (
+                  <span className="ml-auto shrink-0 pl-2 text-footnote text-grey-04">
+                    {count.toLocaleString()}
+                    {hasMoreInScope ? '+' : ''}
+                  </span>
+                )}
               </button>
             );
           })}

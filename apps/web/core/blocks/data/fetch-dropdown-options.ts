@@ -18,7 +18,24 @@ import {
 } from '~/core/io/type-filter';
 import type { WhereCondition } from '~/core/sync/experimental_query-layer';
 
-export type DropdownOption = { id: string; name: string | null };
+/**
+ * `count` is how many population rows carry this value, summed as the walk
+ * progresses: exact once the scope is exhausted, a lower bound while more of
+ * it remains. Undefined only for pinned entries the walk has not reached.
+ */
+export type DropdownOption = { id: string; name: string | null; count?: number };
+
+/**
+ * Where a dropdown's population comes from:
+ * - `query`: the block's (overlaid) filter, walked via entitiesConnection —
+ *   SPACES/GEO blocks.
+ * - `ids`: an explicit ordered id list — COLLECTION blocks, whose membership
+ *   is enumerated relations rather than a query. The `where` still applies
+ *   (block filters and other dropdowns' selections narrow the population);
+ *   it is evaluated server-side against each id slice.
+ */
+export type DropdownPopulation =
+  { kind: 'query'; where: WhereCondition } | { kind: 'ids'; ids: string[]; where: WhereCondition };
 
 /**
  * A dropdown's scope is the table's population: the entities the block's
@@ -31,6 +48,11 @@ export type DropdownOption = { id: string; name: string | null };
  * same normalized connection query the table runs, and each page's
  * relations for the property are read by `fromEntityId` (indexed). Pages
  * are pulled as the user scrolls or searches.
+ *
+ * Per-option counts ride along for free: the walk already reads every
+ * (row → value) relation, so counting rows per value is a tally, not a
+ * query. A server-side COUNT per option was measured at 2–22s on the live
+ * API and is deliberately not used.
  */
 export const DROPDOWN_POPULATION_PAGE_SIZE = 1000;
 /**
@@ -88,7 +110,7 @@ const POPULATION_PAGE_DOCUMENT = parse(/* GraphQL */ `
 `) as unknown as TypedDocumentNode<PopulationPageResult, PopulationPageVariables>;
 
 type RelationsResult = {
-  relations: { toEntity: { id: string; name: string | null } | null }[] | null;
+  relations: { fromEntityId: string | null; toEntity: { id: string; name: string | null } | null }[] | null;
 };
 type RelationsChunk = { options: DropdownOption[]; windowHit: boolean };
 type RelationsVariables = { propertyId: string; fromEntityIds: string[]; first: number };
@@ -100,6 +122,7 @@ const RELATIONS_DOCUMENT = parse(/* GraphQL */ `
       first: $first
       orderBy: TO_ENTITY_ID_ASC
     ) {
+      fromEntityId
       toEntity {
         id
         name
@@ -138,15 +161,59 @@ export function populationVariablesFromWhere(
   };
 }
 
-/** Distinct to-entities, name-sorted; a later relation never overwrites a known name with null. */
-export function toDropdownOptions(result: RelationsResult): DropdownOption[] {
-  const byId = new Map<string, DropdownOption>();
+/**
+ * Variables asking "which of these ids match the where" — the population
+ * check for an id-list (collection) slice. The id constraint joins the
+ * normalized filter; space/type promotion applies as usual.
+ */
+export function populationVariablesForIds(ids: string[], where: WhereCondition): PopulationPageVariables {
+  const variables = populationVariablesFromWhere(where, ids.length);
+  return {
+    ...variables,
+    filter: { ...(variables.filter ?? {}), id: { in: ids } } as EntityFilter,
+  };
+}
+
+/**
+ * Tally one relations result into options: distinct to-entities, name-sorted,
+ * each counting its DISTINCT from-entities — a row with duplicate relations
+ * to the same value counts once. A later relation never overwrites a known
+ * name with null.
+ */
+export function tallyDropdownOptions(result: RelationsResult): DropdownOption[] {
+  const byId = new Map<string, { id: string; name: string | null; fromIds: Set<string> }>();
   for (const relation of result.relations ?? []) {
     const target = relation.toEntity;
     if (!target?.id) continue;
     const existing = byId.get(target.id);
-    if (!existing || (!existing.name && target.name)) {
-      byId.set(target.id, { id: target.id, name: target.name ?? null });
+    if (!existing) {
+      byId.set(target.id, { id: target.id, name: target.name ?? null, fromIds: new Set() });
+    } else if (!existing.name && target.name) {
+      existing.name = target.name;
+    }
+    if (relation.fromEntityId) byId.get(target.id)?.fromIds.add(relation.fromEntityId);
+  }
+  return [...byId.values()]
+    .map(({ id, name, fromIds }) => ({ id, name, count: fromIds.size }))
+    .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+}
+
+/**
+ * Merge option lists whose underlying from-entity sets are DISJOINT (relation
+ * chunks of one page, split halves of one chunk, successive walk pages), so
+ * counts add. Names keep the first known value; order is name-sorted.
+ */
+export function mergeDropdownOptionCounts(lists: DropdownOption[][]): DropdownOption[] {
+  const byId = new Map<string, DropdownOption>();
+  for (const list of lists) {
+    for (const option of list) {
+      const existing = byId.get(option.id);
+      if (!existing) {
+        byId.set(option.id, { ...option });
+        continue;
+      }
+      if (!existing.name && option.name) existing.name = option.name;
+      if (option.count !== undefined) existing.count = (existing.count ?? 0) + option.count;
     }
   }
   return [...byId.values()].sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
@@ -180,7 +247,7 @@ function fetchRelationsForChunk({
     const chunk: RelationsChunk = yield* graphql({
       query: RELATIONS_DOCUMENT,
       decoder: (result: RelationsResult) => ({
-        options: toDropdownOptions(result),
+        options: tallyDropdownOptions(result),
         windowHit: (result.relations ?? []).length >= DROPDOWN_RELATION_WINDOW,
       }),
       variables: { propertyId, fromEntityIds, first: DROPDOWN_RELATION_WINDOW },
@@ -199,42 +266,90 @@ function fetchRelationsForChunk({
       ],
       { concurrency: 2 }
     );
-    return halves.flat();
+    // Halves partition the ids, so their per-option counts add.
+    return mergeDropdownOptionCounts(halves);
+  });
+}
+
+/** The next slice of an id-list population, with its cursor math. */
+export function slicePopulationIds(
+  ids: string[],
+  after: string | null | undefined
+): { slice: string[]; endCursor: string | null; hasNextPage: boolean } {
+  const offset = after ? Number.parseInt(after, 10) || 0 : 0;
+  const slice = ids.slice(offset, offset + DROPDOWN_POPULATION_PAGE_SIZE);
+  const end = offset + slice.length;
+  return { slice, endCursor: String(end), hasNextPage: end < ids.length };
+}
+
+function fetchPopulationIds(
+  population: DropdownPopulation,
+  after: string | null | undefined,
+  signal?: AbortSignal
+): Effect.Effect<{ ids: string[]; populationCount: number; endCursor: string | null; hasNextPage: boolean }, unknown> {
+  return Effect.gen(function* () {
+    if (population.kind === 'ids') {
+      const { slice, endCursor, hasNextPage } = slicePopulationIds(population.ids, after);
+      if (slice.length === 0) {
+        return { ids: [], populationCount: 0, endCursor, hasNextPage: false };
+      }
+      if (Object.keys(population.where).length === 0) {
+        return { ids: slice, populationCount: slice.length, endCursor, hasNextPage };
+      }
+      // The where narrows which collection rows belong to the population
+      // (block filters plus other dropdowns' selections); ask the server
+      // which of this slice's ids survive it.
+      const matching = yield* graphql({
+        query: POPULATION_PAGE_DOCUMENT,
+        decoder: (data: PopulationPageResult) => (data.entitiesConnection?.nodes ?? []).map(node => node.id),
+        variables: populationVariablesForIds(slice, population.where),
+        signal,
+      });
+      return { ids: matching, populationCount: slice.length, endCursor, hasNextPage };
+    }
+
+    const page = yield* graphql({
+      query: POPULATION_PAGE_DOCUMENT,
+      decoder: (data: PopulationPageResult) => ({
+        ids: (data.entitiesConnection?.nodes ?? []).map(node => node.id),
+        endCursor: data.entitiesConnection?.pageInfo.endCursor ?? null,
+        hasNextPage: data.entitiesConnection?.pageInfo.hasNextPage ?? false,
+      }),
+      variables: populationVariablesFromWhere(population.where, DROPDOWN_POPULATION_PAGE_SIZE, after),
+      signal,
+    });
+    return {
+      ids: page.ids,
+      populationCount: page.ids.length,
+      endCursor: page.endCursor,
+      hasNextPage: page.hasNextPage,
+    };
   });
 }
 
 /** One page of the scope: the property's values across the next slice of the table's population. */
 export function fetchDropdownOptionsPage({
   propertyId,
-  where,
+  population,
   after,
   signal,
 }: {
   propertyId: string;
-  where: WhereCondition;
+  population: DropdownPopulation;
   after?: string | null;
   signal?: AbortSignal;
 }): Promise<DropdownOptionsPage> {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const population = yield* graphql({
-        query: POPULATION_PAGE_DOCUMENT,
-        decoder: (data: PopulationPageResult) => ({
-          ids: (data.entitiesConnection?.nodes ?? []).map(node => node.id),
-          endCursor: data.entitiesConnection?.pageInfo.endCursor ?? null,
-          hasNextPage: data.entitiesConnection?.pageInfo.hasNextPage ?? false,
-        }),
-        variables: populationVariablesFromWhere(where, DROPDOWN_POPULATION_PAGE_SIZE, after),
-        signal,
-      });
+      const { ids, populationCount, endCursor, hasNextPage } = yield* fetchPopulationIds(population, after, signal);
 
-      if (population.ids.length === 0) {
-        return { options: [], endCursor: population.endCursor, hasNextPage: false, populationCount: 0 };
+      if (ids.length === 0) {
+        return { options: [], endCursor, hasNextPage, populationCount };
       }
 
       const chunks: string[][] = [];
-      for (let start = 0; start < population.ids.length; start += DROPDOWN_RELATION_CHUNK) {
-        chunks.push(population.ids.slice(start, start + DROPDOWN_RELATION_CHUNK));
+      for (let start = 0; start < ids.length; start += DROPDOWN_RELATION_CHUNK) {
+        chunks.push(ids.slice(start, start + DROPDOWN_RELATION_CHUNK));
       }
 
       const perChunk = yield* Effect.all(
@@ -243,12 +358,11 @@ export function fetchDropdownOptionsPage({
       );
 
       return {
-        options: toDropdownOptions({
-          relations: perChunk.flat().map(option => ({ toEntity: { id: option.id, name: option.name } })),
-        }),
-        endCursor: population.endCursor,
-        hasNextPage: population.hasNextPage,
-        populationCount: population.ids.length,
+        // Chunks partition the page's ids, so their counts add.
+        options: mergeDropdownOptionCounts(perChunk),
+        endCursor,
+        hasNextPage,
+        populationCount,
       };
     })
   );

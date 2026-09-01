@@ -21,6 +21,7 @@ import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-re
 import { Source } from '~/core/blocks/data/source';
 import { useBlockInfiniteScroll } from '~/core/blocks/data/use-block-infinite-scroll';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
+import { sourceSupportsDropdowns } from '~/core/blocks/data/use-dropdown-query-overlay';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import {
   isEntityVisibleInBlock,
@@ -752,8 +753,8 @@ const ConfiguredTableBlock = ({
     return out;
   }, [filterableProperties, properties]);
 
-  /** Dropdowns act on the block's query; Collection and Relations blocks have none. */
-  const isQuerySource = source.type === 'SPACES' || source.type === 'GEO';
+  /** Dropdowns cover query and collection populations; Relations blocks have none to filter. */
+  const supportsDropdowns = sourceSupportsDropdowns(source);
 
   // Infinite scroll is opt-in via the Infinite scroll BOOLEAN on the Blocks
   // relation entity (same entity that holds View and Properties).
@@ -1140,7 +1141,7 @@ const ConfiguredTableBlock = ({
 
         <BlockLinkIngestionPanel />
 
-        {!isEditing && isQuerySource && browseDropdowns.configs.length > 0 && (
+        {!isEditing && supportsDropdowns && browseDropdowns.configs.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 py-2" onMouseDown={e => e.stopPropagation()}>
             <TableBlockDropdowns
               configs={browseDropdowns.configs}
@@ -1152,6 +1153,7 @@ const ConfiguredTableBlock = ({
               selections={browseDropdowns.selections}
               updateSelections={browseDropdowns.updateSelections}
               hydrated={browseDropdowns.hydrated}
+              collectionItemIds={browseDropdowns.collectionItemIds}
             />
           </div>
         )}
@@ -1203,7 +1205,7 @@ const ConfiguredTableBlock = ({
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}
                         afterFilterTrigger={
-                          isQuerySource ? (
+                          supportsDropdowns ? (
                             <TableBlockDropdownsConfigTrigger
                               configs={browseDropdowns.configs}
                               properties={mergedBlockProperties}
@@ -1238,9 +1240,10 @@ const ConfiguredTableBlock = ({
                 </div>
 
                 {isEditing &&
-                  (filterGroupsForToolbarPills.length > 0 || (isQuerySource && browseDropdowns.configs.length > 0)) && (
+                  (filterGroupsForToolbarPills.length > 0 ||
+                    (supportsDropdowns && browseDropdowns.configs.length > 0)) && (
                     <div className="flex flex-wrap items-center gap-2">
-                      {isQuerySource && (
+                      {supportsDropdowns && (
                         <TableBlockDropdownsConfigChips
                           configs={browseDropdowns.configs}
                           properties={mergedBlockProperties}
