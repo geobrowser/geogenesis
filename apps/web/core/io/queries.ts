@@ -465,14 +465,17 @@ export function getRelationsByToEntityIds(
   signal?: AbortController['signal']
 ) {
   return Effect.gen(function* () {
-    if (toEntityIds.length === 0) return [];
+    // Dedupe (dash-insensitively) before chunking: the same id in two chunks
+    // would return its rows twice and inflate downstream counts.
+    const uniqueIds = [...new Map(toEntityIds.map(id => [id.replace(/-/g, '').toLowerCase(), id])).values()];
+    if (uniqueIds.length === 0) return [];
 
     type Row = { id: string; toEntityId: string; spaceId: string; fromEntityId: string };
     type RelationsPage = { nodes: Row[]; pageInfo: { hasNextPage: boolean; endCursor?: string | null } } | null;
     const rows: Row[] = [];
 
-    for (let start = 0; start < toEntityIds.length; start += ENTITY_ID_BATCH_SIZE) {
-      const chunk = toEntityIds.slice(start, start + ENTITY_ID_BATCH_SIZE);
+    for (let start = 0; start < uniqueIds.length; start += ENTITY_ID_BATCH_SIZE) {
+      const chunk = uniqueIds.slice(start, start + ENTITY_ID_BATCH_SIZE);
       // Cursor pagination, not offset: the server rejects offsets above 1000,
       // and well-linked chunks (e.g. submission backlinks) can exceed that.
       let after: string | null = null;

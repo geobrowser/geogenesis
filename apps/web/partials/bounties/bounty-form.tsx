@@ -114,6 +114,12 @@ export function BountyForm({ spaceId }: Props) {
   if (!enabled) return null;
 
   const onSubmit = async () => {
+    // The render guard only kicks in after access control resolves; a click in
+    // that window must not publish a proposal that would stall on the FAST path.
+    if (!access.isEditor) {
+      setToast(<>Only editors of this space can create bounties.</>);
+      return;
+    }
     const validation = validateBountyForm({
       name,
       budget,

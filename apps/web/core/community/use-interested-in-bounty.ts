@@ -15,7 +15,7 @@ import { usePublish } from '~/core/hooks/use-publish';
 import { uuidToHex } from '~/core/id/normalize';
 import { getRelationsByToEntityIds } from '~/core/io/queries';
 
-const INTERESTED_IN_QUERY_KEY = 'bounty-interested-in';
+export const INTERESTED_IN_QUERY_KEY = 'bounty-interested-in';
 
 export function useInterestedBountyIds(bountyIds: string[]) {
   const { personalSpaceId } = usePersonalSpaceId();

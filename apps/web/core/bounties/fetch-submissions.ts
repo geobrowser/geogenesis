@@ -223,29 +223,33 @@ export function fetchBountyReviews(proposalIds: readonly string[]) {
     const entities = yield* getBatchEntities(candidateIds);
     const spaceByEntity = new Map(links.map(link => [uuidToHex(link.fromEntityId), link.spaceId]));
 
-    return entities
-      .filter(entity => entity.types.some(type => uuidToHex(type.id) === BOUNTY_REVIEW_TYPE_ID))
-      .map((entity): BountyReview => {
-        const rating = (propertyId: string) => {
-          const parsed = Number(valueOf(entity, propertyId));
-          return Number.isFinite(parsed) ? parsed : 0;
-        };
-        return {
-          id: uuidToHex(entity.id),
-          spaceId: spaceByEntity.get(uuidToHex(entity.id)) ?? entity.spaces[0] ?? '',
-          proposalIds: entity.relations
-            .filter(r => r.type.id === REVIEW_PROPOSALS_PROPERTY_ID)
-            .map(r => uuidToHex(r.toEntity.id)),
-          pass: valueOf(entity, REVIEW_PASS_PROPERTY_ID) === 'true',
-          comment: valueOf(entity, REVIEW_COMMENT_PROPERTY_ID),
-          ratings: {
-            completeness: rating(REVIEW_COMPLETENESS_RATING_PROPERTY_ID),
-            accuracy: rating(REVIEW_ACCURACY_RATING_PROPERTY_ID),
-            skill: rating(REVIEW_SKILL_RATING_PROPERTY_ID),
-            effort: rating(REVIEW_EFFORT_RATING_PROPERTY_ID),
-          },
-          createdAt: toDate(entity.createdAt),
-        };
-      });
+    return (
+      entities
+        .filter(entity => entity.types.some(type => uuidToHex(type.id) === BOUNTY_REVIEW_TYPE_ID))
+        .map((entity): BountyReview => {
+          const rating = (propertyId: string) => {
+            const parsed = Number(valueOf(entity, propertyId));
+            return Number.isFinite(parsed) ? parsed : 0;
+          };
+          return {
+            id: uuidToHex(entity.id),
+            spaceId: spaceByEntity.get(uuidToHex(entity.id)) ?? entity.spaces[0] ?? '',
+            proposalIds: entity.relations
+              .filter(r => r.type.id === REVIEW_PROPOSALS_PROPERTY_ID)
+              .map(r => uuidToHex(r.toEntity.id)),
+            pass: valueOf(entity, REVIEW_PASS_PROPERTY_ID) === 'true',
+            comment: valueOf(entity, REVIEW_COMMENT_PROPERTY_ID),
+            ratings: {
+              completeness: rating(REVIEW_COMPLETENESS_RATING_PROPERTY_ID),
+              accuracy: rating(REVIEW_ACCURACY_RATING_PROPERTY_ID),
+              skill: rating(REVIEW_SKILL_RATING_PROPERTY_ID),
+              effort: rating(REVIEW_EFFORT_RATING_PROPERTY_ID),
+            },
+            createdAt: toDate(entity.createdAt),
+          };
+        })
+        // Newest first, so callers can treat index 0 as the latest review.
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    );
   });
 }

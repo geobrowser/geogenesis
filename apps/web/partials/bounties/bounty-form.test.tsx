@@ -81,6 +81,17 @@ describe('deadlineFromDateInput', () => {
   });
 });
 
+describe('BountyForm access race', () => {
+  it('refuses to publish while access control has not confirmed editorship', async () => {
+    mocks.access = { isEditor: false, isLoading: true };
+    render(<BountyForm spaceId="space-1" />);
+    fireEvent.change(screen.getByPlaceholderText('What needs curating?'), { target: { value: 'X' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Publish bounty' }));
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(mocks.setToast).toHaveBeenCalled();
+  });
+});
+
 describe('validateBountyForm', () => {
   const base = {
     name: 'X',

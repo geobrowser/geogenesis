@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { INTERESTED_IN_QUERY_KEY } from '~/core/community/use-interested-in-bounty';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
 
@@ -50,7 +51,12 @@ export function useBountyInterestActions(detail: BountyDetail | null | undefined
   const submittedBountyIds = React.useRef<Set<string>>(new Set());
 
   const invalidate = React.useCallback(
-    () => queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all }),
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all }),
+        // The board cards read a separate interest cache; without this they lag a stale window.
+        queryClient.invalidateQueries({ queryKey: [INTERESTED_IN_QUERY_KEY] }),
+      ]),
     [queryClient]
   );
 
@@ -140,7 +146,12 @@ export function useBountyAllocationActions(detail: BountyDetail | null | undefin
   const [pendingTargetId, setPendingTargetId] = React.useState<string | null>(null);
 
   const invalidate = React.useCallback(
-    () => queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all }),
+    () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all }),
+        // The board cards read a separate interest cache; without this they lag a stale window.
+        queryClient.invalidateQueries({ queryKey: [INTERESTED_IN_QUERY_KEY] }),
+      ]),
     [queryClient]
   );
 

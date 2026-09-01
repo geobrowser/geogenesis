@@ -28,7 +28,9 @@ export function formatDeadline(deadline: string | null): string | null {
   if (!deadline) return null;
   const ms = Date.parse(deadline);
   if (!Number.isFinite(ms)) return null;
-  return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  // Stored as end-of-day UTC; without an explicit zone, readers east of UTC
+  // would see the following calendar day.
+  return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
 }
 
 export function isBountyEnded(deadline: string | null, now: number = Date.now()): boolean {
