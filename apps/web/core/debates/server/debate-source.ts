@@ -28,31 +28,25 @@ function geoChatBaseUrl() {
 
 /**
  * The host published media URLs are built from. These URLs go on-chain and are opened by browsers,
- * so this must be a public host — never a cluster-internal one that `GEO_CHAT_API_BASE_URL` may
- * point at — and it can never change for already-published debates.
+ * so this must be a public host, and it can never change for already-published debates.
+ *
+ * Only `NEXT_PUBLIC_` variables are read, deliberately. `GEO_CHAT_API_BASE_URL` is the server-side
+ * host and is allowed to be cluster-internal; the publish sweep is a cron that runs server-side, so
+ * reading it here would let a deploy with only the server-side variable set publish perfectly
+ * healthy-looking URLs that no browser can reach — permanently, since they are on-chain. A
+ * `NEXT_PUBLIC_` value is browser-reachable by definition.
  *
  * `NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL` exists so media can be served from a dedicated hostname that
- * is independent of geo-chat's API host. Point it at geo-chat today; repointing it later (at a CDN,
- * or an object-store custom domain) then costs a DNS change instead of a migration of every
- * published entity. It falls back to the geo-chat host so nothing breaks when it is unset.
+ * is independent of geo-chat's API host. It is unset today (there is only the one geo-chat host);
+ * setting it later, to a CDN or an object-store custom domain, costs a DNS change instead of a
+ * migration of every published entity.
  */
 function debateMediaBaseUrl() {
-  const configured =
+  const base =
     process.env.NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL ||
     process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL ||
-    process.env.GEO_CHAT_API_BASE_URL;
-  const base = (configured || 'http://localhost:8080').replace(/\/+$/, '');
-  // A published URL cannot be edited once it is on-chain, so a misconfigured host is not a bug you
-  // fix by redeploying — every debate published under it is permanently broken. Refuse to build one
-  // outside development rather than bake a localhost default into the knowledge graph.
-  if (process.env.NODE_ENV === 'production' && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(base)) {
-    throw new Error(
-      'Refusing to publish debate media URLs pointing at ' +
-        `${base}: set NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL to a public host. ` +
-        'These URLs are written on-chain and cannot be changed afterwards.'
-    );
-  }
-  return base;
+    'http://localhost:8080';
+  return base.replace(/\/+$/, '');
 }
 
 /**
