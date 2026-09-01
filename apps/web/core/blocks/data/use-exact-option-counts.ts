@@ -45,13 +45,18 @@ export function useExactOptionCounts({
     })),
   });
 
-  // A screenful-sized map, rebuilt per render on purpose: memoizing on the
-  // per-option query results would need unstable spread deps, and consumers
-  // only ever call `.get` during render.
+  // Screenful-sized structures, rebuilt per render on purpose: memoizing on
+  // the per-option query results would need unstable spread deps, and
+  // consumers only read them during render. `pendingIds` marks options whose
+  // count query is genuinely in flight (never a disabled or settled one), so
+  // the UI can reserve the badge slot without pulsing forever where no count
+  // is coming.
   const counts = new Map<string, number>();
+  const pendingIds = new Set<string>();
   optionIds.forEach((optionId, index) => {
-    const count = results[index]?.data;
-    if (count !== undefined) counts.set(optionId, count);
+    const result = results[index];
+    if (result?.data !== undefined) counts.set(optionId, result.data);
+    else if (result?.isLoading) pendingIds.add(optionId);
   });
-  return counts;
+  return { counts, pendingIds };
 }

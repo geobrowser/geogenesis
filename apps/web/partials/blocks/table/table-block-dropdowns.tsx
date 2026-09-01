@@ -25,6 +25,7 @@ import { CheckboxVisual } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Menu } from '~/design-system/menu';
+import { Skeleton } from '~/design-system/skeleton';
 import { trapWheelToElement } from '~/design-system/trap-wheel-scroll';
 
 /** Above this many options the menu gets a search bar. */
@@ -195,7 +196,7 @@ function TableBlockDropdown({
   // Exact counts for just the revealed options, resolving in the background;
   // skipped entirely once the walk's own tally is exact.
   const revealedIds = React.useMemo(() => renderedOptions.map(option => option.id), [renderedOptions]);
-  const exactCounts = useExactOptionCounts({
+  const { counts: exactCounts, pendingIds: pendingCountIds } = useExactOptionCounts({
     columnId,
     population,
     optionIds: revealedIds,
@@ -359,9 +360,15 @@ function TableBlockDropdown({
               >
                 <CheckboxVisual checked={checked} />
                 <span className="min-w-0 truncate">{option.name ?? option.id}</span>
-                {count !== undefined && (
+                {count !== undefined ? (
                   <span className="ml-auto shrink-0 pl-2 text-footnote text-grey-04">{count.toLocaleString()}</span>
-                )}
+                ) : pendingCountIds.has(option.id) ? (
+                  // Reserve the badge slot while this option's count resolves,
+                  // so the number lands without a layout shift.
+                  <span className="ml-auto shrink-0 pl-2">
+                    <Skeleton className="h-3 w-5" aria-hidden />
+                  </span>
+                ) : null}
               </button>
             );
           })}
