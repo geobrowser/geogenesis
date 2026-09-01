@@ -56,7 +56,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId }: Props
     // `share-offsite` ignores any text param — it scrapes the page's OG tags. The feed composer is
     // the only hand-off that pre-fills text; putting the URL in the text still yields a link preview.
     openComposer(
-      `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareText} ${shareUrl()}`)}`
+      `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareText}\n${shareUrl()}`)}`
     );
   };
 
