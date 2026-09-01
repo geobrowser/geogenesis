@@ -13,7 +13,7 @@ import { claimRowKey } from './claim-row-key';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
-import { HubCardList } from './hub-motion';
+import { HubCardList, HubPinnedSlot } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
@@ -231,7 +231,7 @@ export function MatchesList({
           both claim `top-0` and overlap, and the outbound card is conditional so the filters
           couldn't be offset by a known height. */}
       <HubStickyControls>
-        {outbound ? <OutboundRequestCard request={outbound} /> : null}
+        <HubPinnedSlot>{outbound ? <OutboundRequestCard request={outbound} /> : null}</HubPinnedSlot>
         <Input
           withSearchIcon
           value={search}

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -26,6 +27,7 @@ import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebatePeople, useDebateRequests } from './hooks';
+import { hubRowMotion } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import type { PersonRecord } from './person-record';
@@ -389,7 +391,10 @@ function PersonRow({
     // row box with the name — where it was the tallest thing and set the name's line height. All
     // three tracks centre on the row: hanging them from the top clustered everything up there and
     // left the join date trailing under an empty right-hand side.
-    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
+    <motion.li
+      {...hubRowMotion}
+      className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0"
+    >
       {/* Everyone in this list is online by definition — the tab is "everyone online and available
           right now" — so the dot needs no condition, and it ties the faces here to the ones inside
           the claim pills, which mean the same thing. The clip sits on the inner span: on the
@@ -448,6 +453,6 @@ function PersonRow({
       >
         {person.in_debate ? 'In a debate' : 'Request debate'}
       </HubPillButton>
-    </li>
+    </motion.li>
   );
 }
