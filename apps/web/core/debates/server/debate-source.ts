@@ -1,4 +1,4 @@
-import { generateDebateOgImageResponse } from '~/core/debates/debate-og-image';
+import { type DebateOgCardData, type DebateOgSpeaker, generateDebateOgImageResponse } from '~/core/debates/debate-og-image';
 import { uploadGeoImage } from '~/core/sdk/geo-client';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -239,6 +239,48 @@ async function artifactUrl(debateId: string, kind: DebateMediaArtifactKind): Pro
  * whose stills are missing — anything rendered before geo-chat learned to produce them — is better
  * off with no card than with a wrong one that can never be corrected.
  */
+type DebateSpeakerLike = Debate['participants'][number];
+
+/** One speaker as the card wants them. Shared so the preview route cannot drift from the real card. */
+function cardSpeaker(participant: DebateSpeakerLike, stillSrc: string): DebateOgSpeaker {
+  return {
+    name: participant.display_name ?? 'Anonymous',
+    stance: participant.position_label,
+    avatarSrc: participant.avatar_cid ? getImagePath(participant.avatar_cid) : null,
+    stillSrc,
+  };
+}
+
+/**
+ * Everything the share card needs for one real debate, for the preview route (GEO-2755).
+ *
+ * The stills are presigned and expire in about fifteen minutes, which is fine here and is exactly
+ * why the preview resolves them per request rather than handing anyone a URL with them baked in.
+ * Throws `GeoChatRequestError` for an unknown id, and returns null when the debate is real but has
+ * no stills — the same bar the published card holds to.
+ */
+export async function loadDebateOgPreview(debateId: string): Promise<DebateOgCardData | null> {
+  const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
+  const media = await geoChatGet<DebateMediaResponse>(`/debates/${debateId}/media`);
+
+  const bySlot = (slot: number) => debate.participants.find(participant => participant.participant_slot === slot);
+  const [first, second] = [bySlot(1), bySlot(2)];
+  if (!first || !second) return null;
+
+  const hasStill = (kind: string) => media.artifacts.some(artifact => artifact.kind === kind);
+  if (!hasStill('speaker_still_slot_1') || !hasStill('speaker_still_slot_2')) return null;
+
+  const [stillOne, stillTwo] = await Promise.all([
+    artifactUrl(debateId, 'speaker_still_slot_1' as DebateMediaArtifactKind),
+    artifactUrl(debateId, 'speaker_still_slot_2' as DebateMediaArtifactKind),
+  ]);
+
+  return {
+    claim: debate.claim.claim,
+    speakers: [cardSpeaker(first, stillOne), cardSpeaker(second, stillTwo)],
+  };
+}
+
 async function buildDebateShareCard(
   debateId: string,
   debate: Debate,
@@ -262,16 +304,9 @@ async function buildDebateShareCard(
       artifactUrl(debateId, 'speaker_still_slot_2' as DebateMediaArtifactKind),
     ]);
 
-    const speaker = (participant: typeof first, stillSrc: string) => ({
-      name: participant.display_name ?? 'Anonymous',
-      stance: participant.position_label,
-      avatarSrc: participant.avatar_cid ? getImagePath(participant.avatar_cid) : null,
-      stillSrc,
-    });
-
     const response = generateDebateOgImageResponse({
       claim: debate.claim.claim,
-      speakers: [speaker(first, stillOne), speaker(second, stillTwo)],
+      speakers: [cardSpeaker(first, stillOne), cardSpeaker(second, stillTwo)],
     });
     const blob = new Blob([await response.arrayBuffer()], { type: 'image/png' });
     const { cid } = await uploadGeoImage({ blob });

@@ -1,4 +1,5 @@
 import { generateDebateOgImageResponse } from '~/core/debates/debate-og-image';
+import { GeoChatRequestError, loadDebateOgPreview } from '~/core/debates/server/debate-source';
 import { getImagePath } from '~/core/utils/utils';
 
 import { checkRankingOgIpRateLimit, getClientIp } from '../../ranking-og/rate-limit';
@@ -17,6 +18,14 @@ export const runtime = 'nodejs';
  * Shares the ranking card's IP limiter: this is public, unauthenticated image generation, and the
  * cost per request is the same shape.
  *
+ * `?debate=<uuid>` renders one real processed debate — its claim, both speakers, their avatars and
+ * their stills — and is the form worth sharing. The stills are presigned and expire in about
+ * fifteen minutes, so they are resolved per request here rather than baked into a URL that would
+ * quietly fall back to the placeholder field once they lapsed.
+ *
+ * Without it, every piece is a query parameter, which is what allows the design to be checked
+ * against claim strings no debate has produced yet.
+ *
  * `avatar1`/`avatar2` and `still1`/`still2` accept either an `ipfs://` URI or an `https://` URL.
  * The stills are the one part of the card that cannot be previewed from real data yet: they are
  * meant to come from each speaker's own recording, seeked into their first speaking turn, and that
@@ -33,9 +42,32 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   const url = new URL(req.url);
+
+  const debateId = url.searchParams.get('debate')?.trim();
+  if (debateId) {
+    try {
+      const card = await loadDebateOgPreview(debateId);
+      if (!card) {
+        return jsonResponse(404, {
+          ok: false,
+          error: 'no_stills',
+          hint: 'that debate has no speaker stills; it was rendered before geo-chat produced them',
+        });
+      }
+      return generateDebateOgImageResponse(card);
+    } catch (error) {
+      const status = error instanceof GeoChatRequestError ? error.status : 502;
+      return jsonResponse(status >= 400 && status < 500 ? 404 : 502, {
+        ok: false,
+        error: 'debate_unavailable',
+        hint: `could not load debate ${debateId}`,
+      });
+    }
+  }
+
   const claim = url.searchParams.get('claim')?.trim();
   if (!claim) {
-    return jsonResponse(400, { ok: false, error: 'missing_claim', hint: 'pass ?claim=…' });
+    return jsonResponse(400, { ok: false, error: 'missing_claim', hint: 'pass ?debate=<uuid>, or ?claim=…' });
   }
 
   return generateDebateOgImageResponse({
