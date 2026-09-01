@@ -97,9 +97,13 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
             {entity.name ?? entity.id}
           </h1>
 
-          {/* Clamped, like entity pages and the side panel (GEO-2772). Line-based rather than a
-              character count, so the same description cuts at the same place whether this page is
-              the route, the side panel or a phone — three widths of one layout, per the note above.
+          {/* Clamped, like entity pages and the side panel (GEO-2772). What is shared is the line
+              budget, not the cut: wrapping differs with width, so the route, the side panel and a
+              phone — three widths of one layout, per the note above — break at different words.
+              They give up the same three lines of vertical space, which a character count could
+              not do; the same count spends a different number of lines at each width, which is the
+              measurement the reader actually feels.
+
               `ClampedText` measures an unclamped clone, so the toggle appears only when something
               is genuinely hidden, and it is unaffected by the naive-overflow bug GEO-2756 fixed in
               the feed's own title. */}

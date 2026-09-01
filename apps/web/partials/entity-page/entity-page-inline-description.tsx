@@ -15,7 +15,8 @@ import { PageStringField } from '~/design-system/editable-fields/editable-fields
  * Exported because the custom claim page clamps its own description with the same primitive
  * rather than through this component (GEO-2772) — it has the entity in hand, renders no edit
  * field, and carries its own colour and spacing. Sharing the number is what keeps the two
- * surfaces cutting at the same place.
+ * surfaces spending the same amount of the page on a description before hiding the rest. Where
+ * each one breaks still depends on its own width, since that is where the wrapping happens.
  */
 export const ENTITY_DESCRIPTION_MAX_LINES = 3;
 
