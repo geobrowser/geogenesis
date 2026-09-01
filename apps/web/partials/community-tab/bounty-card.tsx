@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { availableBountyCta } from '~/core/bounties/community-adapter';
 import type { BountyContributor, SpaceBounty } from '~/core/community/bounty-types';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -306,13 +307,20 @@ export function AvailableBountyCard({
     <BountyCardShell bounty={bounty} height={height} width={width}>
       <div className="flex shrink-0 items-center justify-between gap-3">
         <BudgetBadge budget={bounty.budget} />
-        <InterestButton
-          isInterested={isInterested}
-          isPending={isPending}
-          isInterestLoading={isInterestLoading}
-          canRegisterInterest={canRegisterInterest}
-          onClick={() => onRegisterInterest(bounty)}
-        />
+        {availableBountyCta(bounty) === 'apply' || isInterested ? (
+          <InterestButton
+            isInterested={isInterested}
+            isPending={isPending}
+            isInterestLoading={isInterestLoading}
+            canRegisterInterest={canRegisterInterest}
+            onClick={() => onRegisterInterest(bounty)}
+          />
+        ) : (
+          // The detail page refuses these states; the card must not collect them either.
+          <span className={`${INTEREST_BUTTON_CLASS} bg-grey-01 text-grey-04`}>
+            {availableBountyCta(bounty) === 'ended' ? 'Ended' : 'Spots filled'}
+          </span>
+        )}
       </div>
 
       {/* 12px badge row → title, 8px title → description, 20px description → skills. */}

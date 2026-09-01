@@ -1,5 +1,7 @@
 import type { SpaceBounty } from '~/core/community/bounty-types';
+import { uuidToHex } from '~/core/id/normalize';
 
+import { isBountyEnded } from './payout';
 import type { BoardBounty } from './types';
 
 /**
@@ -19,7 +21,26 @@ export function toSpaceBounty(bounty: BoardBounty): SpaceBounty {
     skills: bounty.skills.map(skill => skill.name),
     isFeatured: bounty.isFeatured,
     contributors: bounty.contributors,
+    deadline: bounty.deadline,
+    maxContributors: bounty.maxContributors ?? null,
+    allocatedCount: new Set(bounty.allocatedIds.map(uuidToHex)).size,
   };
+}
+
+export type AvailableBountyCta = 'apply' | 'ended' | 'spots-filled';
+
+/**
+ * The state of an available card's interest CTA — the same two blocks the
+ * detail page's state machine applies (ended, spots filled), so the board and
+ * Community cards cannot collect interest the detail page would refuse.
+ */
+export function availableBountyCta(
+  bounty: Pick<SpaceBounty, 'deadline' | 'maxContributors' | 'allocatedCount'>,
+  now: number = Date.now()
+): AvailableBountyCta {
+  if (isBountyEnded(bounty.deadline ?? null, now)) return 'ended';
+  if (bounty.maxContributors != null && (bounty.allocatedCount ?? 0) >= bounty.maxContributors) return 'spots-filled';
+  return 'apply';
 }
 
 /** Distinct skill names across bounties, sorted — the community tab's skill checkbox options. */
