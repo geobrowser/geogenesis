@@ -105,6 +105,33 @@ describe('PositionRow', () => {
     expect(secondFace).toBeGreaterThan(firstFace);
   });
 
+  it('caps the overflow badge so a crowd cannot widen the stack back into the label', () => {
+    // Copilot's follow-up on PR #2325: the shedding rules are written against a 32px badge, which
+    // is its `min-w-5` floor. Measured, the text outgrows that floor between "+99" (32px) and
+    // "+100" (34.9px), so an uncapped count would widen a `shrink-0` stack and start taking width
+    // off the label again — the exact truncation the rules exist to prevent.
+    const crowded: DebateClaimPositionSummary[] = [
+      { ...withParticipants[0], total_count: 900, available_now_count: 900, present_count: 900 },
+    ];
+
+    render(<PositionRow positions={crowded} responseKind="stance" viewerPosition={null} />);
+
+    // 898 people beyond the two faces, printed as the widest thing that still fits the floor.
+    expect(screen.getByText('+99')).toBeInTheDocument();
+    expect(screen.queryByText('+898')).toBeNull();
+  });
+
+  it('prints the exact remainder while it fits', () => {
+    // The cap is a ceiling, not a rounding: an ordinary count is still reported precisely.
+    const few: DebateClaimPositionSummary[] = [
+      { ...withParticipants[0], total_count: 5, available_now_count: 5, present_count: 5 },
+    ];
+
+    render(<PositionRow positions={few} responseKind="stance" viewerPosition={null} />);
+
+    expect(screen.getByText('+3')).toBeInTheDocument();
+  });
+
   it('keeps the vocabulary for the response kind on both pills', () => {
     render(<PositionRow positions={positions} responseKind="veracity" viewerPosition={null} />);
 

@@ -871,6 +871,21 @@ export function presentCount(summary: Pick<DebateClaimPositionSummary, 'present_
  * beside them describe the same people, and describe the same people for every viewer.
  * `total_count` is left alone — it answers "who holds this position", which the card does not show.
  */
+/**
+ * Largest remainder the badge will print.
+ *
+ * The badge is `min-w-5` with `px-1`, so it sits at exactly 32px until its text outgrows that
+ * floor — measured, that happens between "+99" (32px) and "+100" (34.9px). The shedding rules below
+ * are written against a 32px badge, so an uncapped count would widen a `shrink-0` stack and start
+ * taking width back off the label, which is the whole thing they exist to prevent. Capping here
+ * rather than widening the rule keeps the badge a fixed size for every claim instead of sizing all
+ * of them for a crowd that almost never turns up.
+ *
+ * Understating is safe: the stack is `aria-hidden`, decorative beside a count the row states
+ * exactly, and a badge that reads "and at least this many more" is the convention anyway.
+ */
+const MAX_OVERFLOW_SHOWN = 99;
+
 function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
   const participants = summary.participants.slice(0, 2);
   const overflow = Math.max(0, presentCount(summary) - participants.length);
@@ -888,7 +903,8 @@ function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
   // "Disagree" = 76px) and the 8px gap before the stack. A face is 24px, a second adds 16px after
   // the 8px overlap, and the badge adds another 24px: 108px holds one face, 124px holds two, 148px
   // holds the lot. 108px is `claim-pills-wide` seen from inside a pill, which is where that
-  // threshold came from.
+  // threshold came from. The badge is 24px only because `MAX_OVERFLOW_SHOWN` keeps its text inside
+  // the `min-w-5` floor — without that cap it grows and the arithmetic here stops holding.
   //
   // The badge goes first and a face last, because the faces stay truthful as they are dropped: the
   // count is computed against the participants rendered, so hiding a face would leave a "+N" that
@@ -908,7 +924,7 @@ function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
       ))}
       {overflow > 0 && (
         <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums @max-[148px]:hidden">
-          +{overflow}
+          +{Math.min(overflow, MAX_OVERFLOW_SHOWN)}
         </span>
       )}
     </span>
