@@ -51,6 +51,19 @@ export function RelationChipSection({
   spaceId: string;
 }) {
   const [expanded, setExpanded] = React.useState(false);
+  const chipsRef = React.useRef<HTMLDivElement>(null);
+  // Only when the viewer asked for it — not on a section that renders expanded for another reason,
+  // and not on mount.
+  const focusAfterExpandRef = React.useRef(false);
+
+  // The `+N` removes itself by revealing everything, which leaves focus on a detached button and
+  // the browser drops it to `<body>`. A keyboard viewer would then have to tab from the top of the
+  // page to reach the very chips they just asked to see, so send them to the first of them.
+  React.useEffect(() => {
+    if (!expanded || !focusAfterExpandRef.current) return;
+    focusAfterExpandRef.current = false;
+    chipsRef.current?.querySelectorAll<HTMLAnchorElement>('a')[CHIP_CAP]?.focus();
+  }, [expanded]);
 
   if (relations.length === 0) return null;
 
@@ -60,7 +73,7 @@ export function RelationChipSection({
   return (
     <section aria-label={label}>
       <SectionTitle>{label}</SectionTitle>
-      <div className="flex flex-wrap gap-1.5">
+      <div ref={chipsRef} className="flex flex-wrap gap-1.5">
         {visible.map(relation => (
           <Link
             key={relation.id}
@@ -73,7 +86,11 @@ export function RelationChipSection({
         {hidden > 0 && (
           <button
             type="button"
-            onClick={() => setExpanded(true)}
+            aria-expanded={false}
+            onClick={() => {
+              focusAfterExpandRef.current = true;
+              setExpanded(true);
+            }}
             className={`${META_CHIP_CLASS} text-grey-04 tabular-nums transition-colors hover:border-text hover:text-text`}
           >
             +{hidden}
