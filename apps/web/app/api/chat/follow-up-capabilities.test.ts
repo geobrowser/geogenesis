@@ -30,8 +30,18 @@ describe('buildFollowUpCapabilityNote', () => {
   it('rules out the abilities the chat has no control for', () => {
     const note = buildFollowUpCapabilityNote(asTools('setEntityImage'));
 
-    expect(note).toContain('upload control');
-    expect(note).toMatch(/cannot receive files/);
+    expect(note).toMatch(/cannot receive a photo, image or document/);
+    expect(note).toMatch(/cannot send email/);
+  });
+
+  it('does not deny the spreadsheet attachment the import feature adds', () => {
+    // The chat does have one attachment control. Claiming otherwise made the
+    // assistant tell a user who had just attached a CSV that it could not
+    // receive files at all, and point them at a different part of the app.
+    const note = buildFollowUpCapabilityNote(asTools('proposeImportMapping'));
+
+    expect(note).toMatch(/CSV or Excel spreadsheet/);
+    expect(note).not.toMatch(/no upload control/);
   });
 
   it('makes the model name the tool before offering an option', () => {

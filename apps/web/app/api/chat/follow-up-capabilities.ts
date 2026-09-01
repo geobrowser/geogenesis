@@ -1,7 +1,7 @@
 import type { ToolSet } from 'ai';
 
 const NO_ABILITIES =
-  'It has no other abilities. It cannot receive files, photos or attachments from the user — there is no upload control in this chat — and it cannot send email, export or download anything, or act outside Geo. An image can only be attached from a URL or an image search.';
+  "It has no other abilities. The chat's one attachment control takes a CSV or Excel spreadsheet to import and nothing else, so the assistant cannot receive a photo, image or document from the user, and it cannot send email, export or download anything, or act outside Geo. An image can only be attached from a URL or an image search.";
 
 const SELF_CHECK =
   'Before offering an option, name to yourself the tool that would run when the user clicks it. If there is no such tool, do not offer that option.';
