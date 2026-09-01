@@ -164,18 +164,33 @@ describe('fetchTaggedClaims', () => {
     expect(result.truncated).toBe(false);
   });
 
-  // A claim with no name has nothing to render, and one whose tag carries no space can't be grouped
-  // for the geo-chat lookups or tested against the viewer's spaces.
+  // A claim with no name has nothing to render, and a tag carrying no space can't be grouped for the
+  // geo-chat lookups or tested against the viewer's spaces.
   it('drops rows it could not render or scope', async () => {
     respondWith([
       node('a1', 'Fine', '10'),
-      { spaceId: SPACE, fromEntity: { id: 'a2', name: null, description: null, rankingScore: '99' } },
-      { spaceId: null, fromEntity: { id: 'a3', name: 'No space', description: null, rankingScore: '99' } },
-      { spaceId: SPACE, fromEntity: null },
+      // Unnamed: nothing to draw.
+      { id: 'a2', name: null, description: null, rankingScore: '99', relationsList: [{ spaceId: SPACE }] },
+      // Named, but the tag relation carries no space.
+      { id: 'a3', name: 'No space', description: null, rankingScore: '99', relationsList: [{ spaceId: null }] },
+      // Named, but no tag relation came back at all.
+      { id: 'a4', name: 'No tag', description: null, rankingScore: '99', relationsList: [] },
+      { id: 'a5', name: 'Null relations', description: null, rankingScore: '99', relationsList: null },
       null,
     ]);
 
     expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Fine']);
+  });
+
+  // The multi-space shape the decoder emits, which is what `dedupeTaggedClaims` below collapses.
+  it('emits one row per space a claim is tagged in', async () => {
+    const OTHER = '019fedae72b67ab2927adf044d57c500';
+    respondWith([node('a1', 'Tagged twice', '10', SPACE, OTHER)]);
+
+    const claims = (await fetchTaggedClaims(TAG)).claims;
+
+    expect(claims.map(claim => claim.spaceId).sort()).toEqual([OTHER, SPACE].sort());
+    expect(new Set(claims.map(claim => claim.claimEntityId)).size).toBe(1);
   });
 });
 

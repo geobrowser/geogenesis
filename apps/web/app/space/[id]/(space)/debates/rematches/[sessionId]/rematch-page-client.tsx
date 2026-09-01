@@ -70,6 +70,7 @@ import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
+import { validateEntityId } from '~/core/utils/utils';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
@@ -322,6 +323,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // from, and geo-chat's session rows for readiness and this session's exclusions.
   const taggedEntitiesQuery = useClaimEntitiesByIds(taggedClaimIds);
 
+  // The session's saved claims, hydrated for their topics alone.
+  //
+  // These rows come from geo-chat whole — text, sides, flags — so nothing else here needs their
+  // entities. Their *topics* do: topics are graph data, and `topicsByClaimId` is built from
+  // entities. While the index answered the All tab this was covered by deferring to its server-side
+  // topic filter for the rows it returned; with that gone an unhydrated row carries no topics, and
+  // `carriesEveryTopic` reads no topics as "does not match" — so picking any topic dropped every
+  // claim the pair had already answered, which is the one row this list must never lose.
+  const savedClaimIds = React.useMemo(
+    () => (savedClaimsQuery.data?.claims ?? []).map(row => row.claim.claim_entity_id).filter(validateEntityId),
+    [savedClaimsQuery.data]
+  );
+  const savedEntitiesQuery = useClaimEntitiesByIds(savedClaimIds);
+
   const { pending: topicsSettling } = useDebouncedSelection(topicIds);
 
   // No index query here any more (GEO-2771). All claims is the Debate tag, which the graph answers
@@ -477,17 +492,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // accounted for.
   const topicsByClaimId = React.useMemo(() => {
     const map = new Map<string, MatchmakingTopic[]>();
-    for (const entity of [...opponentEntitiesQuery.entities, ...recommendedEntities, ...taggedEntitiesQuery.entities]) {
+    for (const entity of [
+      ...opponentEntitiesQuery.entities,
+      ...recommendedEntities,
+      ...taggedEntitiesQuery.entities,
+      ...savedEntitiesQuery.entities,
+    ]) {
       const topics = entity.relations
         .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
         .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
       if (topics.length > 0) map.set(entity.id, topics);
     }
     return map;
-    // Graph entities only. The browsed rows used to be folded in here too, which never added
-    // anything: geo-chat sends them back with `topics: []`. Reading as though it did was worse
-    // than useless, since the whole point below is that a browsed row's topics are unknowable.
-  }, [taggedEntitiesQuery.entities, opponentEntitiesQuery.entities, recommendedEntities]);
+    // Graph entities only, and now every row's. geo-chat sends its rows back with `topics: []`, so
+    // folding those in never added anything — the topics have to come from the entity or not at all,
+    // which is why the saved claims are hydrated above rather than trusted to carry their own.
+  }, [taggedEntitiesQuery.entities, opponentEntitiesQuery.entities, recommendedEntities, savedEntitiesQuery.entities]);
 
   // Which claims the server has already held to the topic filter.
   //

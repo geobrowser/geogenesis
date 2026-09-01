@@ -33,7 +33,7 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
     entitiesConnection(
       first: $first
       after: $after
-      orderBy: [RANKING_SCORE_DESC]
+      orderBy: [ID_DESC]
       typeIds: { in: [$claimTypeId] }
       filter: { relations: { some: { typeId: { is: $tagPropertyId }, toEntityId: { is: $tagId } } } }
     ) {
@@ -198,13 +198,17 @@ export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Pr
 
   let total: number | null = null;
 
-  // Paged to exhaustion, and ranked by the server on the way (`RANKING_SCORE_DESC`).
+  // Paged to exhaustion, ordered by id.
   //
-  // This asks `entitiesConnection` for claims carrying the tag, rather than `relationsConnection`
-  // for the tags themselves. The score lives on the claim, so the entity connection can order by
-  // it — the relation connection could not, and the whole set had to arrive before it could be
-  // sorted client-side. Pages now arrive in rank order, which is what a paged read would need if
-  // this ever outgrows fetching the lot.
+  // `ID_DESC`, not `RANKING_SCORE_DESC`, even though ranking is what this list is shown in. The
+  // score is nullable, and the cursor cannot express a null keyset: paging the Debate tag under
+  // `RANKING_SCORE_DESC` returns 264 of its 321 claims and then reports `hasNextPage: false` —
+  // every unscored claim silently unreachable, plus a duplicate across the seam. `ID_DESC` returns
+  // all 321 at every page size. Measured against api-testnet, 2026-09-01.
+  //
+  // So the server orders for *stability* and the client orders for *rank*: `compareTaggedClaims`
+  // below is the one that decides what the reader sees, as it always was. Ordering by a column that
+  // drops rows would be trading a correct list for a prettier fetch.
   while (claims.length < TAGGED_CLAIMS_LIMIT) {
     const page: TaggedClaimsPage = await Effect.runPromise(
       graphql({
@@ -230,14 +234,19 @@ export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Pr
   // Measured against the server's count, not against the guard. A corpus of exactly the guard's
   // size is complete; one row more is a slice, and without `total` those are indistinguishable —
   // which is how a truncated list came to look identical to a whole one.
-  const truncated = total === null ? claims.length >= TAGGED_CLAIMS_LIMIT : total > claims.length;
+  //
+  // Compared entity to entity. `totalCount` counts claims; `claims` holds one row per *tag*, so a
+  // claim tagged in three spaces is three rows — comparing the two directly would let a multi-space
+  // claim mask a real truncation, and an unnamed or space-less row invent one.
+  const distinctClaims = new Set(claims.map(claim => claim.claimEntityId)).size;
+  const truncated = total === null ? claims.length >= TAGGED_CLAIMS_LIMIT : total > distinctClaims;
   if (truncated) {
-    devLog(`[tagged-claims] ${claims.length} of ${total ?? 'unknown'} rows for ${tagId}; the list is truncated.`);
+    devLog(`[tagged-claims] ${distinctClaims} of ${total ?? 'unknown'} claims for ${tagId}; the list is truncated.`);
   }
 
-  // Sorted here as well as by the server: a claim tagged in several spaces arrives once per tag, and
-  // `rankingScore` ties between those rows are broken by id so the duplicates sit together rather
-  // than being interleaved with their neighbours by page order.
+  // The ranking the reader sees. The connection is ordered by id for paging's sake, so this is what
+  // puts the list in Explore's "Best" order — and what keeps a claim's several tag rows adjacent
+  // rather than interleaved by page order.
   return { claims: claims.sort(compareTaggedClaims), truncated, total };
 }
 

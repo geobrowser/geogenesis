@@ -2411,6 +2411,38 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.queryByText('Only featured')).toBeNull());
   });
 
+  /**
+   * The saved rows are geo-chat's, and geo-chat sends them with `topics: []` — so their topics can
+   * only come from the graph. While the index answered this tab, picking a topic was deferred to
+   * its server-side filter for the rows it returned; with the index gone, an unhydrated row carries
+   * no topics and `carriesEveryTopic` reads that as "does not match".
+   *
+   * Which dropped every claim the pair had already answered the moment any topic was picked — the
+   * one row this list exists to keep.
+   */
+  it('keeps a saved claim under a topic it carries', async () => {
+    // Reaching the saved claim through the *saved* path alone. With no opponent positions its id is
+    // absent from `opponentClaimIds`, and with no tagged catalog it is absent from that lookup too —
+    // so the only thing that can hydrate its topics is the saved-claims lookup this pins.
+    mocks.positions = [];
+    mocks.debateTagClaims = [];
+    mocks.entities = [
+      {
+        ...sharedEntity(),
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+        ],
+      },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
+
+    selectFilter('Any topic', 'Governance');
+
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
   it('keeps an untagged claim both debaters answered on the list', async () => {
     // The shared claim carries no Debate tag. It is what the rematch is *for*, so it stays.
     mocks.debateTagClaims = [];
