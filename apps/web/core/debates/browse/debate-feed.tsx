@@ -70,8 +70,7 @@ export function DebatesBrowseFeed({
   // So fetch the anchor by id instead of requiring it to appear. Gated on the listing having
   // settled without it, which keeps the common case at one request — this only fires where the
   // feed would otherwise have silently rendered the wrong page.
-  const anchorListed =
-    initialDebateId != null && listedDebates.some(debate => ID.equals(debate.id, initialDebateId));
+  const anchorListed = initialDebateId != null && listedDebates.some(debate => ID.equals(debate.id, initialDebateId));
   const anchorQuery = useDebate(
     initialDebateId ?? '',
     initialDebateId != null && !debatesQuery.isLoading && !anchorListed
@@ -258,7 +257,10 @@ export function DebatesBrowseFeed({
   const feed = (
     <div
       ref={setScrollEl}
-      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-dvh"
+      // `md:h-full` rather than a second `h-dvh`: the fixed parent is already the viewport, minus
+      // the top safe-area inset it pads by, and measuring the viewport again here would overshoot
+      // that box by exactly the inset — which is the offset this fixes.
+      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-full"
     >
       {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map((debate, index) => (
@@ -332,7 +334,7 @@ export function DebatesBrowseFeed({
   // Keep the feed in the same tree position whether or not a side panel is open, so
   // toggling the claims/join panel doesn't remount the players and restart playback.
   return (
-    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white">
+    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white md:pt-[env(safe-area-inset-top)]">
       <div className="min-w-0 flex-1">{feed}</div>
       {sidePanel}
     </div>

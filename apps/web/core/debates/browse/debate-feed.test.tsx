@@ -1155,3 +1155,29 @@ describe('DebatesBrowseFeed ordering', () => {
     expect(screen.queryByRole('heading', { name: 'Debates are useful' })).not.toBeInTheDocument();
   });
 });
+
+describe('DebatesBrowseFeed mobile viewport insets', () => {
+  function feedContainers() {
+    const { container } = render(<DebatesBrowseFeed spaceId="space-1" />);
+    const scroller = container.querySelector('.snap-y');
+    assert(scroller, 'Expected the feed to render a snapping scroll container');
+    const takeover = scroller.parentElement?.parentElement;
+    assert(takeover, 'Expected the scroll container to sit inside the full-screen takeover');
+    return { scroller, takeover };
+  }
+
+  it('pads the full-screen takeover by the top safe-area inset', () => {
+    const { takeover } = feedContainers();
+
+    expect(takeover).toHaveClass('md:fixed', 'md:inset-0', 'md:pt-[env(safe-area-inset-top)]');
+  });
+
+  it('sizes the scroll container against its padded parent rather than the viewport again', () => {
+    const { scroller } = feedContainers();
+
+    // A second `h-dvh` here would measure the whole viewport inside a parent that has already given
+    // the inset away, overshooting that box by exactly the inset the padding just added back.
+    expect(scroller).toHaveClass('md:h-full');
+    expect(scroller).not.toHaveClass('md:h-dvh');
+  });
+});
