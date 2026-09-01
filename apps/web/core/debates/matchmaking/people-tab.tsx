@@ -27,7 +27,7 @@ import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebatePeople, useDebateRequests } from './hooks';
-import { hubRowMotion } from './hub-motion';
+import { HubPinnedSlot, hubRowMotion } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import type { PersonRecord } from './person-record';
@@ -245,7 +245,9 @@ export function PeopleTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) =
           claim `top-0` and overlap, and the card is conditional so search couldn't be offset by a
           known height. */}
       <HubStickyControls>
-        {outboundChallenge ? <DebateChallengeCard challenge={outboundChallenge} role="requester" /> : null}
+        <HubPinnedSlot>
+          {outboundChallenge ? <DebateChallengeCard challenge={outboundChallenge} role="requester" /> : null}
+        </HubPinnedSlot>
         <Input
           withSearchIcon
           value={search}
