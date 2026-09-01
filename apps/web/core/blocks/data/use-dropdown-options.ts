@@ -45,8 +45,10 @@ function fingerprintIds(ids: string[]): string {
  * the cursor. "No values"/"no matches" are only ever reported once the
  * scope is exhausted — a paused walk says so instead. Selected and
  * filter-default entities are always present so a preset never goes
- * missing. Counts are exact once the scope is exhausted and a lower bound
- * ("N+") while it is not.
+ * missing. The tally's per-option counts are partial sums of the scanned
+ * pages: exact once the scope is exhausted, an internal lower bound before
+ * that — the UI shows them only when exact, and fills the gap with
+ * `useExactOptionCounts` (per-option server counts) for paused walks.
  */
 export function useDropdownOptions({
   columnId,
@@ -156,5 +158,15 @@ export function useDropdownOptions({
     [options]
   );
 
-  return { options, nameOf, isWalking, hasMoreInScope, scopeExhausted, isError, retry: refetch, scannedCount };
+  return {
+    options,
+    nameOf,
+    population,
+    isWalking,
+    hasMoreInScope,
+    scopeExhausted,
+    isError,
+    retry: refetch,
+    scannedCount,
+  };
 }

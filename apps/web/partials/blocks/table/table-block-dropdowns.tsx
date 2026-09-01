@@ -14,6 +14,7 @@ import {
 import type { BlockDropdownConfig } from '~/core/blocks/data/use-block-dropdowns';
 import type { DropdownOption } from '~/core/blocks/data/use-dropdown-options';
 import { useDropdownOptions } from '~/core/blocks/data/use-dropdown-options';
+import { useExactOptionCounts } from '~/core/blocks/data/use-exact-option-counts';
 import { useDebouncedValue } from '~/core/hooks/use-debounced-value';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { ID } from '~/core/id';
@@ -164,7 +165,7 @@ function TableBlockDropdown({
 
   // The dropdown's one scope: this property's values across the table's
   // population; the first pages load on their own, the rest on demand.
-  const { options, nameOf, isWalking, hasMoreInScope, scopeExhausted, isError, retry, scannedCount } =
+  const { options, nameOf, population, isWalking, hasMoreInScope, scopeExhausted, isError, retry, scannedCount } =
     useDropdownOptions({
       columnId,
       baseFilterState,
@@ -190,6 +191,16 @@ function TableBlockDropdown({
     setVisibleCount(REVEAL_STEP);
   }, [query, open]);
   const renderedOptions = React.useMemo(() => visibleOptions.slice(0, visibleCount), [visibleOptions, visibleCount]);
+
+  // Exact counts for just the revealed options, resolving in the background;
+  // skipped entirely once the walk's own tally is exact.
+  const revealedIds = React.useMemo(() => renderedOptions.map(option => option.id), [renderedOptions]);
+  const exactCounts = useExactOptionCounts({
+    columnId,
+    population,
+    optionIds: revealedIds,
+    enabled: open && !scopeExhausted,
+  });
   const hasMoreToReveal = visibleCount < visibleOptions.length;
   const revealMore = React.useCallback(() => setVisibleCount(count => count + REVEAL_STEP), []);
   const sentinelRef = useInfiniteScrollSentinel({
@@ -326,13 +337,13 @@ function TableBlockDropdown({
           )}
           {renderedOptions.map(option => {
             const checked = selected.some(id => ID.equals(id, option.id));
-            // Counts follow the walk: exact once the scope is exhausted, a
-            // lower bound ("N+") while more of it remains, absent for pinned
-            // values the walk has not reached. A definite zero is shown but
-            // inert (bounty-board facet behavior) — unless checked, so it can
-            // still be unselected.
-            const count = option.count ?? (scopeExhausted ? 0 : undefined);
-            const isInertZero = scopeExhausted && (option.count ?? 0) === 0 && !checked;
+            // Only exact numbers are ever shown: the walk's tally once the
+            // scope is fully read (collections, small tables), otherwise the
+            // option's own server-side count as it resolves — never a lower
+            // bound. A definite zero is shown but inert (bounty-board facet
+            // behavior) — unless checked, so it can still be unselected.
+            const count = scopeExhausted ? (option.count ?? 0) : exactCounts.get(option.id);
+            const isInertZero = count === 0 && !checked;
             return (
               <button
                 key={option.id}
@@ -349,10 +360,7 @@ function TableBlockDropdown({
                 <CheckboxVisual checked={checked} />
                 <span className="min-w-0 truncate">{option.name ?? option.id}</span>
                 {count !== undefined && (
-                  <span className="ml-auto shrink-0 pl-2 text-footnote text-grey-04">
-                    {count.toLocaleString()}
-                    {hasMoreInScope ? '+' : ''}
-                  </span>
+                  <span className="ml-auto shrink-0 pl-2 text-footnote text-grey-04">{count.toLocaleString()}</span>
                 )}
               </button>
             );

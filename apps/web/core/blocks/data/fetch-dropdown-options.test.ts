@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DROPDOWN_POPULATION_PAGE_SIZE,
   mergeDropdownOptionCounts,
+  optionCountVariables,
   populationVariablesForIds,
   populationVariablesFromWhere,
   slicePopulationIds,
@@ -124,6 +125,31 @@ describe('populationVariablesForIds', () => {
   it('produces a bare id filter for an empty where', () => {
     const variables = populationVariablesForIds(['id-1'], {});
     expect(variables.filter).toEqual({ id: { in: ['id-1'] } });
+    expect(variables.spaceId).toBeNull();
+  });
+});
+
+describe('optionCountVariables', () => {
+  it('AND-combines the option predicate with the residual filter, keeping promotion', () => {
+    const variables = optionCountVariables(
+      {
+        AND: [{ spaces: [{ equals: 'space-1' }] }, { name: { startsWith: 'foo' } }],
+      },
+      'prop-1',
+      'value-1'
+    );
+
+    expect(variables.spaceId).toBe('space-1');
+    expect(variables.filter).toMatchObject({
+      and: [{}, { relations: { some: { typeId: { is: 'prop-1' }, toEntityId: { is: 'value-1' } } } }],
+    });
+  });
+
+  it('uses the bare predicate when the where is empty', () => {
+    const variables = optionCountVariables({}, 'prop-1', 'value-1');
+    expect(variables.filter).toEqual({
+      relations: { some: { typeId: { is: 'prop-1' }, toEntityId: { is: 'value-1' } } },
+    });
     expect(variables.spaceId).toBeNull();
   });
 });

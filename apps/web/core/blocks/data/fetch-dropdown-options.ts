@@ -327,6 +327,94 @@ function fetchPopulationIds(
   });
 }
 
+type OptionCountResult = { entitiesConnection: { totalCount: number } | null };
+type OptionCountVariables = Omit<PopulationPageVariables, 'first' | 'after'>;
+
+const OPTION_COUNT_DOCUMENT = parse(/* GraphQL */ `
+  query DropdownOptionCount(
+    $filter: EntityFilter
+    $spaceId: UUID
+    $spaceIds: UUIDFilter
+    $typeId: UUID
+    $typeIds: UUIDFilter
+  ) {
+    entitiesConnection(
+      filter: $filter
+      spaceId: $spaceId
+      spaceIds: $spaceIds
+      typeId: $typeId
+      typeIds: $typeIds
+      first: 1
+    ) {
+      totalCount
+    }
+  }
+`) as unknown as TypedDocumentNode<OptionCountResult, OptionCountVariables>;
+
+/**
+ * Variables for one option's exact count: the population where (space/type
+ * promoted as usual) AND-combined with the option's relation predicate.
+ * Single-predicate counts measured 0.7–4.6s on the live API; the OR shapes
+ * that measured 22s never occur here — each badge is its own query.
+ */
+export function optionCountVariables(where: WhereCondition, columnId: string, optionId: string): OptionCountVariables {
+  const { filter, spaceId, spaceIds, typeId, typeIds } = populationVariablesFromWhere(where, 1);
+  const predicate = { relations: { some: { typeId: { is: columnId }, toEntityId: { is: optionId } } } } as EntityFilter;
+  return {
+    filter: filter ? ({ and: [filter, predicate] } as EntityFilter) : predicate,
+    spaceId,
+    spaceIds,
+    typeId,
+    typeIds,
+  };
+}
+
+/**
+ * Exact counts are fired per revealed option, so cap how many run at once:
+ * a screenful (25) at concurrency 6 measured ~4s wall on the live API, and
+ * an unbounded burst would contend with the population walk's own requests.
+ */
+const OPTION_COUNT_CONCURRENCY = 6;
+let activeCountRequests = 0;
+const countWaiters: (() => void)[] = [];
+
+async function withCountSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (activeCountRequests >= OPTION_COUNT_CONCURRENCY) {
+    await new Promise<void>(resolve => countWaiters.push(resolve));
+  }
+  activeCountRequests++;
+  try {
+    return await run();
+  } finally {
+    activeCountRequests--;
+    countWaiters.shift()?.();
+  }
+}
+
+/** The exact number of population rows carrying this option's value. */
+export function fetchExactOptionCount({
+  columnId,
+  optionId,
+  where,
+  signal,
+}: {
+  columnId: string;
+  optionId: string;
+  where: WhereCondition;
+  signal?: AbortSignal;
+}): Promise<number> {
+  return withCountSlot(() =>
+    Effect.runPromise(
+      graphql({
+        query: OPTION_COUNT_DOCUMENT,
+        decoder: (result: OptionCountResult) => result.entitiesConnection?.totalCount ?? 0,
+        variables: optionCountVariables(where, columnId, optionId),
+        signal,
+      })
+    )
+  );
+}
+
 /** One page of the scope: the property's values across the next slice of the table's population. */
 export function fetchDropdownOptionsPage({
   propertyId,
