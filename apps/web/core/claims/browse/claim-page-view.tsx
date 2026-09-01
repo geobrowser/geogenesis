@@ -13,15 +13,14 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
 
 import { ClampedText } from '~/design-system/clamped-text';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
 import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
+import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
 
 import { ClaimDebates } from './claim-debates';
 import { ClaimEndSlot } from './claim-end-slot';
@@ -30,9 +29,6 @@ import { ClaimRelatedClaims } from './claim-related-claims';
 import { ControversialTag } from './claim-summary';
 import { ClaimVerdict } from './claim-verdict';
 import { type ClaimResponseState, useClaimResponseState } from './use-claim-response-state';
-
-/** Topic chips shown inline before the rest collapse into a count. */
-const TOPIC_CHIP_CAP = 3;
 
 /**
  * The browse-mode read view for a Claim.
@@ -116,41 +112,26 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
             />
           )}
 
-          {/* What this is on the left, what it's about on the right. The two answer different
-              questions, so pushing them to opposite ends reads faster than one undifferentiated
-              run of chips — and `flex-wrap` lets the topics drop to their own line in the side
-              panel rather than crushing the type against them. */}
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-              {typeName && <MetaChip>{typeName}</MetaChip>}
-              {tags.map(tag => (
-                <MetaChip key={tag.id}>{tag.toEntity.name ?? tag.toEntity.id}</MetaChip>
-              ))}
-              {/* Among the chips that say what this is, which is what "contested" is — and the same
-                  component the cards use, rather than a second span at a size the scale lacks. */}
-              {summary.isControversial ? <ControversialTag /> : null}
-            </div>
-
-            {topics.length > 0 && (
-              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                {topics.slice(0, TOPIC_CHIP_CAP).map(topic => (
-                  <Link
-                    key={topic.id}
-                    href={NavUtils.toEntity(spaceId, topic.toEntity.id)}
-                    className={`${META_CHIP_CLASS} text-text transition-colors hover:border-text`}
-                  >
-                    <span className="truncate">{topic.toEntity.name ?? topic.toEntity.id}</span>
-                  </Link>
-                ))}
-                {topics.length > TOPIC_CHIP_CAP && (
-                  <span className={`${META_CHIP_CLASS} text-grey-04 tabular-nums`}>
-                    +{topics.length - TOPIC_CHIP_CAP}
-                  </span>
-                )}
-              </div>
-            )}
+          {/* What this is. Topics — what it is *about* — used to sit opposite these, pushed to the
+              right of the same row; they are their own section below now (GEO-2781), so this row
+              has one job and no longer has to survive being squeezed from both ends in the side
+              panel. */}
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            {typeName && <MetaChip>{typeName}</MetaChip>}
+            {tags.map(tag => (
+              <MetaChip key={tag.id}>{tag.toEntity.name ?? tag.toEntity.id}</MetaChip>
+            ))}
+            {/* Among the chips that say what this is, which is what "contested" is — and the same
+                component the cards use, rather than a second span at a size the scale lacks. */}
+            {summary.isControversial ? <ControversialTag /> : null}
           </div>
         </header>
+
+        {/* The topic view's Subtopics, drawing a claim's Topics (GEO-2781) — same question for the
+            reader, so the same answer rather than two that look alike until one of them changes.
+            Directly under the header, where the topic view puts its own: on a claim the thing worth
+            offering before the argument itself is somewhere else to take it. */}
+        <RelationChipSection label="Topics" relations={topics} spaceId={spaceId} />
 
         <ClaimVerdict entityId={entityId} spaceId={spaceId} responseKind={responseKind} summary={summary} />
 
@@ -262,14 +243,14 @@ function ClaimPositionSection({
 }
 
 /**
- * The chip a space homepage uses for its types, reused here for the claim's type, its tags and its
- * topics — the same shape in all three places, since they are the same kind of label.
+ * The chip a space homepage uses for its types, reused here for the claim's type and its tags —
+ * the same shape in both places, since they are the same kind of label.
  *
- * `asChild` is not used: the topic variant is a link and needs its own hover state, so the class
- * string is exported and composed rather than the element being wrapped.
+ * A plain span, and not a component wrapping the class: topics used to be drawn here too and
+ * needed to be links with their own hover state, which is why {@link META_CHIP_CLASS} is a string
+ * that callers compose rather than an element. Topics now come from `RelationChipSection`, which
+ * composes it the same way.
  */
-const META_CHIP_CLASS = 'flex h-6 max-w-full items-center rounded border border-grey-02 bg-white px-1.5 text-metadata';
-
 function MetaChip({ children }: { children: React.ReactNode }) {
   return (
     <span className={`${META_CHIP_CLASS} text-text`}>
