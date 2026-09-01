@@ -36,7 +36,7 @@ import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useDebateRequests } from './hooks';
 import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
-import { HubCardList } from './hub-motion';
+import { HubCardList, HubPinnedSlot } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
@@ -505,7 +505,7 @@ export function ClaimsTab() {
             and the only evidence was on another tab. It rides inside the sticky block rather than
             above it because two stickies would both claim `top-0` and overlap, and this one is
             conditional so the filters could not be offset by a known height. */}
-        {outbound ? <OutboundRequestCard request={outbound} /> : null}
+        <HubPinnedSlot>{outbound ? <OutboundRequestCard request={outbound} /> : null}</HubPinnedSlot>
 
         <Input
           withSearchIcon

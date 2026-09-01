@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { motion } from 'framer-motion';
+
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
 import { Avatar } from '~/design-system/avatar';
@@ -16,6 +18,7 @@ import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls } from './claims-tab';
 import { useDebatePeople, useDebateRequests } from './hooks';
+import { HubPinnedSlot, hubRowMotion } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import type { PersonRecord } from './person-record';
@@ -95,7 +98,9 @@ export function PeopleTab() {
           claim `top-0` and overlap, and the card is conditional so search couldn't be offset by a
           known height. */}
       <HubStickyControls>
-        {outboundChallenge ? <DebateChallengeCard challenge={outboundChallenge} role="requester" /> : null}
+        <HubPinnedSlot>
+          {outboundChallenge ? <DebateChallengeCard challenge={outboundChallenge} role="requester" /> : null}
+        </HubPinnedSlot>
         <Input
           withSearchIcon
           value={search}
@@ -172,7 +177,10 @@ function PersonRow({
     // row box with the name — where it was the tallest thing and set the name's line height. All
     // three tracks centre on the row: hanging them from the top clustered everything up there and
     // left the join date trailing under an empty right-hand side.
-    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
+    <motion.li
+      {...hubRowMotion}
+      className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0"
+    >
       <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full">
         <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
       </div>
@@ -199,6 +207,6 @@ function PersonRow({
       >
         {person.in_debate ? 'In a debate' : 'Request debate'}
       </HubPillButton>
-    </li>
+    </motion.li>
   );
 }

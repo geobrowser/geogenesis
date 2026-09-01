@@ -164,7 +164,7 @@ describe('PeopleTab', () => {
 
     const request = card();
     expect(request).toBeInTheDocument();
-    expect(request?.parentElement).toHaveClass('sticky', 'top-0');
+    expect(request?.closest('.sticky')).toHaveClass('sticky', 'top-0');
     expect(within(request!).getByText('Awaiting response')).toBeInTheDocument();
     expect(screen.queryByText(awaitingText)).not.toBeInTheDocument();
   });
