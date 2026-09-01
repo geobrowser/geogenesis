@@ -728,17 +728,13 @@ export function PositionRow({
   //
   // The pills are rendered in a feed card, a side panel and the claim page, at widths none of them
   // agrees on, so the row cannot ask the viewport how much space it has — a 1200px window says
-  // nothing about a 230px panel inside it. `@container` makes the question local: the query below
-  // reads this row's own width wherever it has been dropped.
-  //
-  // 272px is measured, not picked. The widest pill is "Disagree" at 100px of content — 24px of
-  // padding, a 12px icon, a 6px gap and a 58px label — and an avatar stack adds ~32px beside it,
-  // so a pill wants ~132px to render whole; two of those plus the 8px gap is 272px. Under that the
-  // label is what used to give way, because it carries `truncate` while the icon and the faces are
-  // `shrink-0` — which is how the button that says what pressing it does became "Dis...".
+  // nothing about a 230px panel inside it. `@container` makes the question local: `claim-pills-wide`
+  // reads this row's own width wherever it has been dropped, and styles.css carries the threshold
+  // and how it was measured. Stacking rather than clipping is the point: the label is the only part
+  // of a pill allowed to shrink, which is how a button came to read "Dis..." (GEO-2774).
   return (
     <div className="@container">
-      <div className="grid grid-cols-1 gap-2 @[272px]:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 claim-pills-wide:grid-cols-2">
         <PositionButton
           // Server labels win when a side has responders; otherwise fall back to the vocabulary for
           // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.

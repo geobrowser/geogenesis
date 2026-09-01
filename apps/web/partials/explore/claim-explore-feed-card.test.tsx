@@ -288,14 +288,14 @@ describe('ClaimExploreFeedCard', () => {
     // pills in row 4 would silently double the space under the claim.
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
-    expect(screen.getByTestId('pills').parentElement).not.toHaveClass('@max-[520px]:row-start-4');
+    expect(screen.getByTestId('pills').parentElement).not.toHaveClass('claim-card-narrow:row-start-4');
 
     cleanup();
     mocks.positive = 9;
     mocks.negative = 3;
     render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
-    expect(screen.getByTestId('pills').parentElement).toHaveClass('@max-[520px]:row-start-4');
+    expect(screen.getByTestId('pills').parentElement).toHaveClass('claim-card-narrow:row-start-4');
   });
 
   it('separates the two zones with a rule at card width and with the stack in a narrow card', () => {
@@ -309,8 +309,8 @@ describe('ClaimExploreFeedCard', () => {
 
     const verdict = screen.getByText('9 agree').closest('div.border-l') as HTMLElement;
     expect(verdict).not.toBeNull();
-    expect(verdict).toHaveClass('@max-[520px]:border-l-0');
-    expect(verdict.className).not.toContain('@max-[520px]:border-t');
+    expect(verdict).toHaveClass('claim-card-narrow:border-l-0');
+    expect(verdict.className).not.toContain('claim-card-narrow:border-t');
   });
 
   it('reports the split and both sides once anyone has answered', () => {

@@ -149,20 +149,19 @@ export function ClaimExploreFeedCard({
         of window the card was under 500px wide while `md:` (max-width 767px) still read false: the
         desktop two-column layout stayed on at a width that could not hold it, and the pills below
         truncated to "Ag..." and "Dis...". That is GEO-2774. The article carries `@container` above,
-        so the base rules are still the desktop layout and the `@max-[520px]:` rules still narrow
-        it — the same shape as before, asking about the card instead of the viewport.
+        so the base rules are still the desktop layout and `claim-card-narrow:` narrows them — the
+        same shape as before, asking about the card instead of the viewport.
 
-        520px is where the two-column arrangement stops paying for itself: it spends 220px on the
-        verdict and 24px on the gutter, so under 520px the left column drops below the 272px the
-        pill row needs to keep both labels whole (see `PositionRow`). Stacking gives the pills the
-        card's full width instead, which is the arrangement a phone already got.
+        That threshold is declared in styles.css beside `claim-pills-wide`, the pill-row width it is
+        derived from; the arithmetic lives there so the two cannot drift apart. Stacking gives the
+        pills the card's full width, which is the arrangement a phone already got.
       */}
       {/* `gap-x-6` to match the right column's `pl-6`, so the rule sits centred in a 24px gutter:
             the offer at the end of the meta row and the share below it are the same distance from
             it, rather than the offer floating 36px out while the number sits 24px in. */}
       <div
         className={cx(
-          'grid @max-[520px]:grid-cols-1 @max-[520px]:gap-y-4',
+          'grid claim-card-narrow:grid-cols-1 claim-card-narrow:gap-y-4',
           // No verdict, no column, no rule. A claim nobody has answered has nothing to report, and
           // an empty 220px cell behind a vertical line reads as something having failed to load —
           // where the claim simply taking the full width reads as a claim nobody has answered.
@@ -187,7 +186,7 @@ export function ClaimExploreFeedCard({
               className="ml-auto"
             />
           }
-          className="col-start-1 row-start-1 mb-3 @max-[520px]:mb-0"
+          className="col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0"
         />
 
         {/* No thumbnail: claims carry no image, so the generic card's 60px well is either an empty
@@ -205,11 +204,11 @@ export function ClaimExploreFeedCard({
 
         <div
           className={cx(
-            'col-start-1 row-start-3 mt-4 max-w-[360px] @max-[520px]:mt-0',
+            'col-start-1 row-start-3 mt-4 max-w-[360px] claim-card-narrow:mt-0',
             // Row 4 only when the verdict is in row 3. Without it the pills would sit a row below an
             // empty one, and an implicit row of zero height still costs the `gap-y-4` on either side
             // of it — so the space between the claim and the pills would silently double.
-            hasVerdict && '@max-[520px]:row-start-4'
+            hasVerdict && 'claim-card-narrow:row-start-4'
           )}
         >
           <PositionRow
@@ -233,7 +232,7 @@ export function ClaimExploreFeedCard({
             The narrow variant drops the rule rather than rotating it — see the note on the
             component. */}
         {hasVerdict ? (
-          <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 @max-[520px]:col-start-1 @max-[520px]:row-span-1 @max-[520px]:row-start-3 @max-[520px]:border-l-0 @max-[520px]:pl-0">
+          <div className="col-start-2 row-span-3 row-start-1 border-l border-divider pl-6 claim-card-narrow:col-start-1 claim-card-narrow:row-span-1 claim-card-narrow:row-start-3 claim-card-narrow:border-l-0 claim-card-narrow:pl-0">
             <ClaimVerdictColumn
               entityId={item.entityId}
               spaceId={item.spaceId}
@@ -283,21 +282,21 @@ function ClaimVerdictColumn({
           where this module is the claim page's module at the claim page's size. */}
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
         <span className="flex items-baseline gap-1.5">
-          <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums @max-[520px]:text-[2.5rem] @max-[520px]:tracking-[-1px]">
+          <span className="text-[2rem] leading-none font-semibold tracking-[-0.8px] text-text tabular-nums claim-card-narrow:text-[2.5rem] claim-card-narrow:tracking-[-1px]">
             {percent}%
           </span>
           <Text as="span" variant="metadata" color="grey-04">
             {copy.positiveAction.toLowerCase()}
           </Text>
         </span>
-        <Text as="span" variant="metadata" color="grey-04" className="hidden tabular-nums @max-[520px]:block">
+        <Text as="span" variant="metadata" color="grey-04" className="hidden tabular-nums claim-card-narrow:block">
           {summary.total} {summary.total === 1 ? 'response' : 'responses'}
         </Text>
       </div>
       <ClaimSplitBar
         percent={percent}
         responseKind={responseKind}
-        className="mt-3 h-1.5 @max-[520px]:mt-4 @max-[520px]:h-2"
+        className="mt-3 h-1.5 claim-card-narrow:mt-4 claim-card-narrow:h-2"
       />
       {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
           what kind of claim this is rather than adding a second voice to the split. */}
@@ -309,7 +308,7 @@ function ClaimVerdictColumn({
         spaceId={spaceId}
         responseKind={responseKind}
         summary={summary}
-        className="mt-3 flex flex-col gap-1.5 @max-[520px]:flex-row @max-[520px]:items-center @max-[520px]:justify-between @max-[520px]:gap-4"
+        className="mt-3 flex flex-col gap-1.5 claim-card-narrow:flex-row claim-card-narrow:items-center claim-card-narrow:justify-between claim-card-narrow:gap-4"
       />
     </div>
   );

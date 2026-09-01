@@ -10,9 +10,11 @@ import * as React from 'react';
  *
  * `32%` resolves against the flex row this sits in — the layout container, not the viewport — so
  * the rail narrows with the space actually available rather than with the window, and an open
- * browse sidebar is accounted for without measuring it. `min()` caps it at the design width so
- * nothing changes on a wide screen; `min-w` floors it, because a rail thinner than that stops
- * being readable. It is `shrink-0` so flexbox never takes it below that floor — past the floor the
+ * browse sidebar is accounted for without measuring it. It is 32% because the row maxes out at
+ * `ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH` (1142px) and 360/1142 is 31.5%: the share reaches the cap
+ * exactly where the layout stops growing, so a full-width screen is pixel-identical to before.
+ * `min()` applies that cap; `min-w` floors it, because a rail thinner than that stops being
+ * readable. It is `shrink-0` so flexbox never takes it below that floor — past the floor the
  * rail is dropped outright by `lg:hidden` rather than shaved further.
  */
 export function StickySideRail({ children }: { children: React.ReactNode }) {

@@ -26,7 +26,7 @@ describe('PositionRow', () => {
     // One column is the base, so a row that never gets a container query still renders both labels
     // whole rather than clipping them.
     expect([...grid.classList]).toContain('grid-cols-1');
-    expect([...grid.classList]).toContain('@[272px]:grid-cols-2');
+    expect([...grid.classList]).toContain('claim-pills-wide:grid-cols-2');
     // Deliberately not a media query: `md:grid-cols-2` would read the window, which says nothing
     // about the width of the panel this row was dropped into.
     expect(grid.className).not.toContain('md:grid-cols');
