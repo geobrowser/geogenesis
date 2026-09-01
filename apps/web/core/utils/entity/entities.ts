@@ -81,24 +81,29 @@ export function nameValue(values: Value[]): Value | undefined {
  * has no canonical space — an entity named in Crypto and nowhere else would render untitled to
  * every other space under that rule. This falls back to the ranked resolution across all spaces.
  */
-function resolveInSpace(
-  values: Value[],
-  spaceId: string | undefined,
-  resolve: (values: Value[]) => string | null
-): string | null {
-  if (!spaceId) return resolve(values);
-  // `|| null` so an empty string falls through: a cleared field is nothing written, which is the
-  // judgement `pickBySpaceRank` already makes when choosing between spaces.
-  return (resolve(values.filter(value => value.spaceId === spaceId)) || null) ?? resolve(values);
+function writtenIn(values: Value[], spaceId: string): Value[] {
+  return values.filter(value => value.spaceId === spaceId);
 }
 
 export function nameInSpace(values: Value[], spaceId?: string): string | null {
-  return resolveInSpace(values, spaceId, name);
+  if (!spaceId) return name(values);
+  // `|| null` so an empty string falls through: a cleared name is nothing written, the judgement
+  // `pickBySpaceRank` already makes when choosing between spaces.
+  return (name(writtenIn(values, spaceId)) || null) ?? name(values);
 }
 
-/** Companion to `nameInSpace`; see there for why the fallback exists. */
+/**
+ * Unlike `nameInSpace`, this does **not** fall back: a space that has not described the entity
+ * shows no description.
+ *
+ * The asymmetry is the point. A name is an identifier — an entity rendered untitled is unusable,
+ * and borrowing the graph's name costs a reader nothing because it names the same thing. A
+ * description is editorial: borrowing another space's prose puts words in this space's mouth, and
+ * silence is the honest answer. Empty and absent are the same answer here for that reason.
+ */
 export function descriptionInSpace(values: Value[], spaceId?: string): string | null {
-  return resolveInSpace(values, spaceId, description);
+  if (!spaceId) return description(values);
+  return description(writtenIn(values, spaceId)) || null;
 }
 
 /**

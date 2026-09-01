@@ -143,14 +143,22 @@ describe('nameInSpace / descriptionInSpace', () => {
     expect(nameInSpace(values, ROOT)).toBe('Root');
   });
 
-  it('falls back to the graph when that space wrote nothing', () => {
+  // A name is an identifier, so borrowing beats rendering untitled. A description is editorial:
+  // borrowing another space's prose would put words in this space's mouth.
+  it('borrows a name across spaces but never a description', () => {
     expect(nameInSpace([named(ROOT, 'Root')], CRYPTO)).toBe('Root');
-    expect(descriptionInSpace([described(ROOT, 'Root desc')], CRYPTO)).toBe('Root desc');
+    expect(descriptionInSpace([described(ROOT, 'Root desc')], CRYPTO)).toBeNull();
   });
 
   it('treats an empty value as nothing written', () => {
     expect(nameInSpace([named(ROOT, 'Root'), named(CRYPTO, '')], CRYPTO)).toBe('Root');
-    expect(descriptionInSpace([described(ROOT, 'Root desc'), described(CRYPTO, '')], CRYPTO)).toBe('Root desc');
+    expect(descriptionInSpace([described(ROOT, 'Root desc'), described(CRYPTO, '')], CRYPTO)).toBeNull();
+  });
+
+  it('shows the space its own description when it wrote one', () => {
+    expect(descriptionInSpace([described(ROOT, 'Root desc'), described(CRYPTO, 'Crypto desc')], CRYPTO)).toBe(
+      'Crypto desc'
+    );
   });
 
   it('resolves across spaces when no space is named', () => {

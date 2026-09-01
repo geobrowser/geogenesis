@@ -594,7 +594,10 @@ describe('GeoStore', () => {
         expect(entity!.description).toBe('Root description');
       });
 
-      it('falls back to the graph when the reader space has neither', () => {
+      // Name and description part company here. A name is an identifier, so borrowing the graph's
+      // beats rendering untitled. A description is editorial — borrowing another space's prose
+      // would put words in this space's mouth, so silence is the honest answer.
+      it('borrows a name it lacks but never a description', () => {
         reactiveValues.set([
           textValue('n-root', SystemIds.NAME_PROPERTY, ROOT, 'Root wording'),
           textValue('d-root', SystemIds.DESCRIPTION_PROPERTY, ROOT, 'Root description'),
@@ -603,13 +606,24 @@ describe('GeoStore', () => {
         const entity = store.getEntity('entity-1', { spaceId: CRYPTO });
 
         expect(entity!.name).toBe('Root wording');
-        expect(entity!.description).toBe('Root description');
+        expect(entity!.description).toBeNull();
+      });
+
+      // The synced entity carries the server's cross-space description, which must not sneak in
+      // behind the scoping.
+      it('does not fall through to the synced entity description', () => {
+        syncedEntities.set('entity-1', { ...mockEntity1, name: null, description: 'Server description' });
+        reactiveValues.set([textValue('d-root', SystemIds.DESCRIPTION_PROPERTY, ROOT, 'Root description')]);
+
+        expect(store.getEntity('entity-1', { spaceId: CRYPTO })!.description).toBeNull();
+        // Unscoped reads are unchanged.
+        expect(store.getEntity('entity-1')!.description).toBe('Root description');
       });
 
       // An empty string is how a cleared field reads, and `nameValue` already treats it as absent
       // when choosing between spaces. Scoping must make the same judgement or a space that once
       // cleared its name renders untitled while the graph has a perfectly good one.
-      it('treats an empty value in the reader space as absent', () => {
+      it('treats an empty value in the reader space as nothing written', () => {
         reactiveValues.set([
           textValue('n-root', SystemIds.NAME_PROPERTY, ROOT, 'Root wording'),
           textValue('n-crypto', SystemIds.NAME_PROPERTY, CRYPTO, ''),
@@ -620,7 +634,7 @@ describe('GeoStore', () => {
         const entity = store.getEntity('entity-1', { spaceId: CRYPTO });
 
         expect(entity!.name).toBe('Root wording');
-        expect(entity!.description).toBe('Root description');
+        expect(entity!.description).toBeNull();
       });
     });
   });

@@ -472,8 +472,13 @@ export class GeoStore {
     // description derived from it, so a view pinned to a space still showed the top-ranked space's
     // wording (GEO-2778). `nameInSpace` owns the rule and its fallback for every caller.
     const spaceValues = options.spaceId ? values.filter(v => v.spaceId === options.spaceId) : values;
-    const name = Entities.nameInSpace(values, options.spaceId);
-    const description = Entities.descriptionInSpace(values, options.spaceId);
+    const name = Entities.nameInSpace(values, options.spaceId) ?? entity?.name ?? null;
+    // No fall-through to the synced entity's description when a space was named: that value is the
+    // server's cross-space resolution, and letting it through would put another space's prose in
+    // this one's mouth — exactly what `descriptionInSpace` declines to do.
+    const description = options.spaceId
+      ? Entities.descriptionInSpace(values, options.spaceId)
+      : (Entities.description(values) ?? entity?.description ?? null);
     const types = readTypes(relations);
     const spaces = Entities.spaces(values, relations);
 
@@ -485,8 +490,8 @@ export class GeoStore {
             types,
             spaces,
             nameTripleSpaces: spaces,
-            name: name ?? entity.name,
-            description: description ?? entity.description,
+            name,
+            description,
           }
         : {
             id: id,
