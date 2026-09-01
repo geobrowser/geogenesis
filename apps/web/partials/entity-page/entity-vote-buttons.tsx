@@ -429,6 +429,16 @@ export function EntityVoteButtons({
             align="center"
             side="bottom"
             sideOffset={8}
+            // Kept clear of the fixed navbar, and gone once its trigger is.
+            //
+            // This list hangs off a row inside a scrolling panel — the debates hub — and it is
+            // portalled to a container above everything, so nothing clips it. Scroll the panel and
+            // the popover tracked its trigger up over the 44px app header and sat there.
+            // `collisionPadding.top` reserves that strip; `hideWhenDetached` retires the popover
+            // once the trigger is scrolled out of its own container, rather than leaving it
+            // floating over a row it no longer belongs to.
+            collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
+            hideWhenDetached
             className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
           >
             <RespondersPopoverContent
@@ -522,7 +532,14 @@ function DebateVotePill({
 
 type ResponderWithProfile = EntityResponder & { profile: Profile };
 
-function RespondersPopoverContent({
+/**
+ * Who took which side, sectioned by side.
+ *
+ * Exported so the claim card's responder cluster opens exactly this list rather than growing a
+ * second one. The popover already existed; it was only ever reachable from the bare number between
+ * the chevrons, which is a poor target for something worth pressing.
+ */
+export function RespondersPopoverContent({
   entityId,
   spaceId,
   objectType,
@@ -533,19 +550,34 @@ function RespondersPopoverContent({
   objectType: 0 | 1;
   responseKind: ResponseKind;
 }) {
-  const responseBatch = useClaimResponseBatchState();
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const respondersQueryKey = entityRespondersQueryKey(entityId, spaceId, objectType, responseKind);
+
+  // These two ask for themselves, batch or no batch.
+  //
+  // They used to stand down under a `ClaimResponseBatchBoundary`, on the same reasoning every other
+  // read here follows: the batch primes these keys, so asking is waste. The reasoning does not hold
+  // *here*, and it produced a wrong answer rather than a slow one. This content is inside a
+  // `Popover.Content` at both call sites, so it mounts for one claim when a reader opens the list —
+  // never for a page of them — and there is no per-row cost to protect.
+  //
+  // Meanwhile the profiles are primed by a *second* query that runs after the batch resolves and is
+  // not part of the boundary's `ready`. Disabled and unprimed, `profiles` stays undefined while
+  // `isLoading` reads false — a disabled query is not loading — so the list rendered its "nobody has
+  // responded yet" state over a claim with responders. Permanently, if that metadata query failed.
+  //
+  // Enabled, the primed cache still answers without a request: the batch writes it with
+  // `setQueryData`, which counts as fresh against the same `staleTime`. So the batch keeps every bit
+  // of its saving, and the one case it does not cover now fetches instead of lying.
   const { data: responders, isLoading: isLoadingResponders } = useQuery({
     queryKey: respondersQueryKey,
     queryFn: () => Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, objectType)),
-    enabled: !responseBatch.managed,
     staleTime: 30_000,
   });
   const responderSpaceIds = React.useMemo(() => responders?.map(responder => responder.userId) ?? [], [responders]);
   const { data: profiles, isLoading: isLoadingProfiles } = useQuery({
     queryKey: [...entityResponderProfilesQueryKey(entityId, spaceId, objectType, responseKind), responderSpaceIds],
-    enabled: !responseBatch.managed && responderSpaceIds.length > 0,
+    enabled: responderSpaceIds.length > 0,
     queryFn: () => Effect.runPromise(fetchProfilesBySpaceIds(responderSpaceIds)),
     staleTime: 30_000,
   });
@@ -572,12 +604,19 @@ function RespondersPopoverContent({
   }
 
   return (
-    <div className="max-h-[356px] overflow-y-auto">
+    // `overscroll-contain`: without it a wheel past either end of this list chains straight through
+    // to whatever is behind — the explore feed, or the hub's own claim list — so scrolling the
+    // responders scrolled the page under them. Every other scrolling surface in the design system
+    // already contains itself; these two lists were written without it.
+    <div className="max-h-[356px] overflow-y-auto overscroll-contain">
+      {/* The verb, not the noun. Every control on a claim says Agree and Disagree, so a list that
+          heads its sections "Agreements" and "Disagreements" makes the reader translate on arrival
+          — and "Verifications"/"Disputes" reads stranger still beside a button marked Verify. */}
       {positiveResponders.length > 0 && (
-        <ResponderSection label={copy.positiveSection} responders={positiveResponders} />
+        <ResponderSection label={copy.positiveAction} responders={positiveResponders} />
       )}
       {negativeResponders.length > 0 && (
-        <ResponderSection label={copy.negativeSection} responders={negativeResponders} />
+        <ResponderSection label={copy.negativeAction} responders={negativeResponders} />
       )}
     </div>
   );

@@ -75,8 +75,8 @@ const PostAuthRedirect = dynamic(
   { ssr: false }
 );
 
-const SignInDeepLinkHandler = dynamic(
-  () => import('~/partials/auth/sign-in-deep-link-handler').then(m => ({ default: m.SignInDeepLinkHandler })),
+const DeepLinkHandler = dynamic(
+  () => import('~/partials/deep-links/deep-link-handler').then(m => ({ default: m.DeepLinkHandler })),
   { ssr: false }
 );
 
@@ -149,7 +149,7 @@ export function App({ children }: { children: React.ReactNode }) {
           <SignInPrompt />
           <PostAuthRedirect />
           <React.Suspense fallback={null}>
-            <SignInDeepLinkHandler />
+            <DeepLinkHandler />
           </React.Suspense>
           <Toast />
           <GovernanceReopenEditLoadingBar />
@@ -159,7 +159,11 @@ export function App({ children }: { children: React.ReactNode }) {
           <ChatWidget />
           <FeatureFlagsDialog />
           <DebateCoordinator />
-          <DebatesHubPanel />
+          {/* Suspense: the panel reads `useSearchParams` to tell a debates deep link apart from
+              an ordinary navigation. */}
+          <React.Suspense fallback={null}>
+            <DebatesHubPanel />
+          </React.Suspense>
           <DebateRecordingUploadCoordinator />
           <Persistence />
         </ClientOnly>

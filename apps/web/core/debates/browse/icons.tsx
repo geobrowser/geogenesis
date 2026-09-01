@@ -10,12 +10,28 @@ function resolve(color?: ColorName) {
   return color ? colors.light[color] : 'currentColor';
 }
 
-export function Crown({ color, size = 16 }: Props & { size?: number }) {
+const CROWN_PATH =
+  'M2 4.5L4.5 7L8 2.5L11.5 7L14 4.5V12.5C14 12.7761 13.7761 13 13.5 13H2.5C2.22386 13 2 12.7761 2 12.5V4.5Z';
+
+/**
+ * `variant="outline"` draws the same crown stroked rather than filled, for the People row's stat
+ * line — `InfoSmall` and `Megaphone` beside it are both stroked, and a filled crown among them read
+ * as a status badge rather than as one more count.
+ */
+export function Crown({
+  color,
+  size = 16,
+  variant = 'filled',
+}: Props & { size?: number; variant?: 'filled' | 'outline' }) {
+  const themeColor = resolve(color);
+
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
-        d="M2 4.5L4.5 7L8 2.5L11.5 7L14 4.5V12.5C14 12.7761 13.7761 13 13.5 13H2.5C2.22386 13 2 12.7761 2 12.5V4.5Z"
-        fill={resolve(color)}
+        d={CROWN_PATH}
+        fill={variant === 'filled' ? themeColor : 'none'}
+        stroke={variant === 'outline' ? themeColor : undefined}
+        strokeLinejoin={variant === 'outline' ? 'round' : undefined}
       />
     </svg>
   );
