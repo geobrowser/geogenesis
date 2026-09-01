@@ -40,6 +40,7 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({ smartAccount: { account: { address: '0xabc' } }, isLoading: false }),
 }));
 vi.mock('~/core/hooks/use-geo-profile', () => ({ useGeoProfile: () => ({ profile: mocks.profile }) }));
+vi.mock('~/core/bounties/config', () => ({ useBountiesEnabled: () => true }));
 vi.mock('~/design-system/select-entity', () => ({
   SelectEntity: () => <input aria-label="entity search" />,
 }));

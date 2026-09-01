@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   lastInfoCardProps: null as null | Record<string, unknown>,
 }));
 
+const config = vi.hoisted(() => ({ enabled: true }));
+vi.mock('~/core/bounties/config', () => ({ useBountiesEnabled: () => config.enabled }));
 vi.mock('~/core/bounties/use-bounty-detail', () => ({
   useBountyDetail: () => mocks.detail,
 }));
@@ -37,6 +39,7 @@ vi.mock('./bounty-info-card-editable', () => ({
 }));
 
 beforeEach(() => {
+  config.enabled = true;
   mocks.detail = { data: undefined, isLoading: false, isError: false };
   mocks.roles = { isEditor: false };
   mocks.isEditing = false;
@@ -45,6 +48,13 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('BountyDetailHeader', () => {
+  it('renders nothing when the bountiesTab flag is off', () => {
+    config.enabled = false;
+    mocks.detail = { data: { bounty: { id: 'b' }, interest: [], submissions: [] }, isLoading: false, isError: false };
+    const { container } = render(<BountyDetailHeader spaceId="s" bountyId="b" />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it('shows a skeleton while loading', () => {
     mocks.detail = { data: undefined, isLoading: true, isError: false };
     render(<BountyDetailHeader spaceId="s" bountyId="b" />);

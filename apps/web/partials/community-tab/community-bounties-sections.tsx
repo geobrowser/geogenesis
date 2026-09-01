@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { collectSkillNames, skillIdsByName, toSpaceBounty } from '~/core/bounties/community-adapter';
+import { useBountiesEnabled } from '~/core/bounties/config';
 import {
   type CommunitySection,
   buildBountiesHref,
@@ -456,5 +457,9 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
 };
 
 export function BountiesStatusSection({ spaceId, status }: { spaceId: string; status: BountyStatusSlug }) {
+  // Bounty surfaces honor the network gate AND the per-browser bountiesTab
+  // flag; on mainnet these sections would otherwise render empty shells.
+  const enabled = useBountiesEnabled();
+  if (!enabled) return null;
   return <BountiesSection spaceId={spaceId} section={status} {...BOUNTY_STATUS_CONFIG[status]} />;
 }

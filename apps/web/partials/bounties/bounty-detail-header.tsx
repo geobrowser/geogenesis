@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useBountiesEnabled } from '~/core/bounties/config';
 import { useBountyDetail } from '~/core/bounties/use-bounty-detail';
 import { useBountyRoles } from '~/core/bounties/use-bounty-roles';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
@@ -23,10 +24,14 @@ type Props = {
  * backlinks are the ordinary entity page.
  */
 export function BountyDetailHeader({ spaceId, bountyId }: Props) {
+  // The network gate is checked server-side; the per-browser bountiesTab flag
+  // can only be honored here, in the client (same for the side panel).
+  const enabled = useBountiesEnabled();
   const { data, isLoading, isError } = useBountyDetail(spaceId, bountyId);
   const roles = useBountyRoles(data?.bounty, data?.interest ?? []);
   const isEditing = useUserIsEditing(spaceId);
 
+  if (!enabled) return null;
   if (isLoading) return <BountyDetailHeaderSkeleton />;
   if (isError || !data) return null;
 

@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import Textarea from 'react-textarea-autosize';
 
 import { type BountyFields, type EntityPick, buildCreateBountyOps } from '~/core/bounties/bounty-ops';
+import { useBountiesEnabled } from '~/core/bounties/config';
 import { deadlineFromDateInput } from '~/core/bounties/date-input';
 import {
   DIFFICULTIES,
@@ -104,6 +105,13 @@ export function BountyForm({ spaceId }: Props) {
 
   const isEasy = difficulty === 'easy';
   const backHref = NavUtils.toCommunity(spaceId);
+
+  // Soft gate (per-browser feature flag): defence in depth against a direct URL.
+  const enabled = useBountiesEnabled();
+  React.useEffect(() => {
+    if (!enabled) router.replace(NavUtils.toSpace(spaceId));
+  }, [enabled, router, spaceId]);
+  if (!enabled) return null;
 
   const onSubmit = async () => {
     const validation = validateBountyForm({

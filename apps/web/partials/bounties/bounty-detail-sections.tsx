@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useBountiesEnabled } from '~/core/bounties/config';
 import { type GroupedSubmission, reviewsBySubmissionKey } from '~/core/bounties/group-submissions';
 import { useBountyDetail } from '~/core/bounties/use-bounty-detail';
 import { useBountyRoles } from '~/core/bounties/use-bounty-roles';
@@ -25,6 +26,7 @@ type Props = {
  * and payout actions), payouts, and who is allocated.
  */
 export function BountyDetailSections({ spaceId, bountyId }: Props) {
+  const enabled = useBountiesEnabled();
   const { data } = useBountyDetail(spaceId, bountyId);
   const roles = useBountyRoles(data?.bounty, data?.interest ?? []);
   const submissions = useBountySubmissions(data, roles);
@@ -36,7 +38,7 @@ export function BountyDetailSections({ spaceId, bountyId }: Props) {
   );
   const reviewerNames = useEntityNames(submissions.reviews.map(review => review.spaceId));
 
-  if (!data) return null;
+  if (!enabled || !data) return null;
 
   return (
     <div className="flex flex-col gap-8" data-testid="bounty-detail-sections">
