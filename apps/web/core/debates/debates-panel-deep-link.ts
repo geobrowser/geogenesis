@@ -20,7 +20,12 @@ export const DEBATES_MODAL = DEEP_LINK_MODALS.debates;
 /** Where a link lands when the caller doesn't say. The hub itself works on any route. */
 const DEBATES_PATHNAME = '/explore';
 
-const TABS: readonly DebatesHubTab[] = ['claims', 'people', 'matches', 'requests'];
+/**
+ * Every tab a link may name. A record rather than an array so the compiler makes a new
+ * `DebatesHubTab` show up here, instead of letting it silently become the one tab no link can
+ * reach — `readonly DebatesHubTab[]` type-checks each entry but never that they are all present.
+ */
+const TABS: Record<DebatesHubTab, true> = { claims: true, people: true, matches: true, requests: true };
 
 /**
  * The hub's reading of `modalTarget`: a tab name, or null to let the hub pick its own landing tab.
@@ -33,7 +38,9 @@ const TABS: readonly DebatesHubTab[] = ['claims', 'people', 'matches', 'requests
  * that rule would be one to keep in step for no gain.
  */
 export function debatesPanelTab(target: string | null): DebatesHubTab | null {
-  return TABS.find(tab => tab === target) ?? null;
+  // `Object.hasOwn` rather than `in`, which would walk the prototype and resolve
+  // `?modalTarget=toString` to a tab.
+  return target !== null && Object.hasOwn(TABS, target) ? (target as DebatesHubTab) : null;
 }
 
 /**

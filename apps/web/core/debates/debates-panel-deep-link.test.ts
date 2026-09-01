@@ -55,6 +55,12 @@ describe('debatesPanelTab', () => {
     expect(debatesPanelTab(null)).toBeNull();
   });
 
+  // The tab list is an object, so a membership test that walked the prototype would resolve these
+  // to tabs and hand the hub a target it cannot render.
+  it.each(['toString', 'constructor', '__proto__'])('does not read %s off the prototype', key => {
+    expect(debatesPanelTab(key)).toBeNull();
+  });
+
   // Signed-out narrowing belongs to the hub (`visibleTab`, GEO-2725). Duplicating it here would
   // be a second copy of the rule to keep in step.
   it('passes a signed-in-only tab through rather than filtering it', () => {
