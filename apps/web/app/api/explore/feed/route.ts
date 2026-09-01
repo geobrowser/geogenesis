@@ -63,6 +63,7 @@ export async function GET(request: Request) {
     }
   }
 
+  const __t0 = Date.now();
   let browse: BrowseSidebarData;
   try {
     browse = await fetchBrowseSidebarData(personalMemberSpaceId);
@@ -79,6 +80,9 @@ export async function GET(request: Request) {
       };
     }
   }
+
+  const __tBrowse = Date.now() - __t0;
+  const __t1 = Date.now();
 
   let spaceFilter: string | null = null;
   if (spaceId && spaceId !== 'all') {
@@ -99,7 +103,10 @@ export async function GET(request: Request) {
       typeIds,
       requireName: true,
     });
-    return NextResponse.json(result);
+    return NextResponse.json({
+      ...result,
+      __timings: { browseSidebarMs: __tBrowse, exploreFeedMs: Date.now() - __t1, stage: (result as any).__stage },
+    });
   } catch (e) {
     console.error('explore feed', e);
     /** Degraded response so the Explore UI still mounts when GraphQL is down; client shows empty feed. */
