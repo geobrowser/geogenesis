@@ -6,7 +6,8 @@ import type { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Text } from '~/design-system/text';
+
+import { SectionTitle } from '~/partials/entity-page/section-title';
 
 /**
  * The small bordered chip the custom entity views label things with — a topic's type, a claim's
@@ -58,9 +59,7 @@ export function RelationChipSection({
 
   return (
     <section aria-label={label}>
-      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
-        {label}
-      </Text>
+      <SectionTitle>{label}</SectionTitle>
       <div className="flex flex-wrap gap-1.5">
         {visible.map(relation => (
           <Link

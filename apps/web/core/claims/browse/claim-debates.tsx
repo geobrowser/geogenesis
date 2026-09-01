@@ -29,6 +29,8 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
+import { SectionTitle } from '~/partials/entity-page/section-title';
+
 import { CursorPager, useCursorPages } from './use-cursor-pages';
 import { useDebateKeyframes } from './use-debate-keyframes';
 
@@ -131,9 +133,7 @@ export function ClaimDebates({
 
   return (
     <section aria-label="Debates on this claim">
-      <Text as="h2" variant="smallTitle" color="text" className="mb-3 block">
-        Debates on this claim
-      </Text>
+      <SectionTitle>Debates on this claim</SectionTitle>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {debates.map(debate => (
           <li key={debate.id}>

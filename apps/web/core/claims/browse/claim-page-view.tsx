@@ -21,6 +21,7 @@ import { Text } from '~/design-system/text';
 import { CommentSection } from '~/partials/comments/comments-section';
 import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
 import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
+import { SectionTitle } from '~/partials/entity-page/section-title';
 
 import { ClaimDebates } from './claim-debates';
 import { ClaimEndSlot } from './claim-end-slot';
@@ -207,9 +208,7 @@ function ClaimPositionSection({
     <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
       {/* No readiness switch — the Debate toggle is gone from the product. Master left the header
           row that used to hold it; with nothing on its right there is no row, just a label. */}
-      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-2.5 block">
-        Your position
-      </Text>
+      <SectionTitle>Your position</SectionTitle>
       <PositionRow
         positions={control.optimisticPositions}
         responseKind={readiness.response_kind}
