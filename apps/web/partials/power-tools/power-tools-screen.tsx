@@ -284,11 +284,11 @@ export function PowerToolsScreen() {
   // the overlay applies always resolves a name here.
   const dropdownUiProperties = React.useMemo(() => {
     const merged = [...data.properties];
-    for (const property of overlaySchemaProperties) {
+    for (const property of [...overlaySchemaProperties, ...browseDropdowns.collectionMemberProperties]) {
       if (!merged.some(existing => ID.equals(existing.id, property.id))) merged.push(property);
     }
     return merged;
-  }, [data.properties, overlaySchemaProperties]);
+  }, [data.properties, overlaySchemaProperties, browseDropdowns.collectionMemberProperties]);
 
   const propertyIds = React.useMemo(() => data.properties.map(p => p.id), [data.properties]);
   const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);

@@ -745,13 +745,13 @@ const ConfiguredTableBlock = ({
   /** Visible table columns (e.g. Cover) may be missing from `filterableProperties` when graph vs schema IDs differ. */
   const mergedBlockProperties = React.useMemo(() => {
     const out = [...filterableProperties];
-    for (const p of properties) {
+    for (const p of [...properties, ...browseDropdowns.collectionMemberProperties]) {
       if (!out.some(x => ID.equals(x.id, p.id))) {
         out.push(p);
       }
     }
     return out;
-  }, [filterableProperties, properties]);
+  }, [filterableProperties, properties, browseDropdowns.collectionMemberProperties]);
 
   /** Dropdowns cover query and collection populations; Relations blocks have none to filter. */
   const supportsDropdowns = sourceSupportsDropdowns(source);

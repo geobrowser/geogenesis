@@ -6,7 +6,12 @@ import * as React from 'react';
 
 import { ID } from '~/core/id';
 
-import { type DropdownOption, type DropdownPopulation, fetchDropdownOptionsPage } from './fetch-dropdown-options';
+import {
+  type DropdownOption,
+  type DropdownPopulation,
+  fetchDropdownOptionsPage,
+  fingerprintIdList,
+} from './fetch-dropdown-options';
 import { filterStateToWhere } from './filter-state-to-where';
 import type { Filter, ModesByColumn } from './filters';
 import { type DropdownSelections, applyDropdownSelectionsToFilters } from './table-dropdown-selections';
@@ -15,20 +20,6 @@ export type { DropdownOption } from './fetch-dropdown-options';
 
 /** Pages (× 1000 population rows) read without any user intent. */
 const AUTO_WALK_PAGES = 3;
-
-/** Cheap stable fingerprint for an id list — FNV-1a over the joined ids. */
-function fingerprintIds(ids: string[]): string {
-  let hash = 0x811c9dc5;
-  for (const id of ids) {
-    for (let i = 0; i < id.length; i++) {
-      hash ^= id.charCodeAt(i);
-      hash = Math.imul(hash, 0x01000193);
-    }
-    hash ^= 0x2c; // separator
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `${ids.length}:${(hash >>> 0).toString(36)}`;
-}
 
 /**
  * The values of one property across the table's population, with per-option
@@ -90,7 +81,7 @@ export function useDropdownOptions({
   const populationKey = React.useMemo(
     () =>
       population.kind === 'ids'
-        ? `ids:${fingerprintIds(population.ids)}:${JSON.stringify(population.where)}`
+        ? `ids:${fingerprintIdList(population.ids)}:${JSON.stringify(population.where)}`
         : `query:${JSON.stringify(population.where)}`,
     [population]
   );

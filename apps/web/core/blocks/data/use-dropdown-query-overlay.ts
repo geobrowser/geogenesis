@@ -14,6 +14,7 @@ import type { Filter, ModesByColumn } from './filters';
 import type { Source } from './source';
 import { applyDropdownSelectionsToFilters } from './table-dropdown-selections';
 import { useBlockDropdowns } from './use-block-dropdowns';
+import { useCollectionMemberSchema } from './use-collection-member-schema';
 import { useDataBlockInstance } from './use-data-block';
 import { useTableDropdownSelections } from './use-table-dropdown-selections';
 
@@ -90,8 +91,13 @@ export function useDropdownQueryOverlay({
   /** COLLECTION membership readable yet? Until then the population is unknown, not empty. */
   const populationReady = source.type !== 'COLLECTION' || collectionItemIds !== null;
 
+  // Collections derive their schema from the members (a collection has no
+  // type predicate for the filter-driven derivation to read). Shared here so
+  // the eye menu, the dropdown picker, and the overlay's gate all see it.
+  const collectionMemberProperties = useCollectionMemberSchema(collectionItemIds);
+
   const appliedColumnIds = React.useMemo(() => {
-    const pillProperties = [...filterableProperties, ...(extraPillProperties ?? [])];
+    const pillProperties = [...filterableProperties, ...(extraPillProperties ?? []), ...collectionMemberProperties];
     return (
       configs
         .map(config => config.propertyId)
@@ -101,7 +107,7 @@ export function useDropdownQueryOverlay({
         // backlink from a requirement into an alternative.
         .filter(id => !baseFilterState.some(f => ID.equals(f.columnId, id) && isBacklinkFilter(f)))
     );
-  }, [configs, filterableProperties, extraPillProperties, baseFilterState]);
+  }, [configs, filterableProperties, extraPillProperties, collectionMemberProperties, baseFilterState]);
 
   const isActive = !isEditing && supportsDropdowns && hydrated && appliedColumnIds.length > 0;
 
@@ -127,6 +133,7 @@ export function useDropdownQueryOverlay({
       supportsDropdowns,
       collectionItemIds,
       populationReady,
+      collectionMemberProperties,
     },
   };
 }

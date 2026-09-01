@@ -276,6 +276,20 @@ function fetchRelationsForChunk({
   });
 }
 
+/** Cheap stable fingerprint for an id list — FNV-1a over the joined ids. */
+export function fingerprintIdList(ids: string[]): string {
+  let hash = 0x811c9dc5;
+  for (const id of ids) {
+    for (let i = 0; i < id.length; i++) {
+      hash ^= id.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    hash ^= 0x2c; // separator
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${ids.length}:${(hash >>> 0).toString(36)}`;
+}
+
 /** The next slice of an id-list population, with its cursor math. */
 export function slicePopulationIds(
   ids: string[],
