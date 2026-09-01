@@ -95,8 +95,14 @@ export function DebatesHubPanel() {
   React.useEffect(() => {
     if (lastPathnameRef.current === pathname) return;
     lastPathnameRef.current = pathname;
+    // Only when it was already open — this closes a panel the viewer navigated out from, and a
+    // navigation that arrives with the hub shut was never showing one. That distinction is what
+    // makes `?modal=debates` work across a client-side navigation: the deep link opens the hub
+    // from this same commit, and `isOpen` is still false in the render this closure came from, so
+    // the open survives whichever order the two effects happen to run in.
+    if (!isOpen) return;
     close();
-  }, [close, pathname]);
+  }, [close, isOpen, pathname]);
 
   React.useEffect(() => {
     if (!isOpen) return;

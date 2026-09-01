@@ -1,7 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import * as React from 'react';
 
-import { Provider, createStore } from 'jotai';
+import { Provider, createStore, useSetAtom } from 'jotai';
+import { usePathname } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
@@ -277,4 +279,40 @@ it('closes itself once a navigation lands', () => {
   store.rerender();
 
   expect(store.get(debatesHubAtom)).toBeNull();
+});
+
+// `?modal=debates` reached by client-side navigation opens the hub from the same commit that
+// changes the pathname. The close-on-navigation effect above must not undo that — and must not
+// depend on `DeepLinkHandler` being mounted after this panel in `app/entry.tsx` to avoid it.
+it('stays open when a navigation is the deep link that opened it', () => {
+  const store = createStore();
+  const DEEP_LINK_PATH = '/explore';
+
+  // `DeepLinkHandler` reduced to what matters here: an effect that opens the hub on arrival.
+  // Mounted before the panel, matching the order `app/entry.tsx` renders them in.
+  function OpensHubOnArrival() {
+    const pathname = usePathname();
+    const setHub = useSetAtom(debatesHubAtom);
+    React.useEffect(() => {
+      if (pathname !== DEEP_LINK_PATH) return;
+      setHub({ tab: 'claims' });
+    }, [pathname, setHub]);
+    return null;
+  }
+
+  const tree = () => (
+    <Provider store={store}>
+      <OpensHubOnArrival />
+      <DebatesHubPanel />
+    </Provider>
+  );
+
+  mocks.pathname = '/space/space-1/claims';
+  const view = render(tree());
+  expect(store.get(debatesHubAtom)).toBeNull();
+
+  mocks.pathname = DEEP_LINK_PATH;
+  view.rerender(tree());
+
+  expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
 });
