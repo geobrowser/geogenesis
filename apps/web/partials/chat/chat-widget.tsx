@@ -29,6 +29,7 @@ import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher'
 import { useWebFetchDispatcher } from '~/core/chat/web-fetch-dispatcher';
 import { ROOT_SPACE } from '~/core/constants';
 import { useInjectJob } from '~/core/hooks/use-inject-job';
+import { useIsCompactLayout } from '~/core/hooks/use-is-compact-layout';
 import { useSpace } from '~/core/hooks/use-space';
 import { completeDailyUploadActivity } from '~/core/space/use-space-daily-activities';
 import {
@@ -49,24 +50,14 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
+import { debateFullscreenActiveAtom } from '~/atoms';
+
+import { shouldHideAssistant } from './assistant-visibility';
 import { ChatPanel } from './chat-panel';
 
 type AssistantSuggestionSource = 'welcome' | 'follow_up';
 type AssistantPanelAction = 'opened' | 'closed';
 type AssistantMessageSource = 'typed' | 'option_click';
-
-const FULLSCREEN_CHILD_ROUTE_SUFFIXES = ['/ranking-compose'] as const;
-
-// The claim-exploration picker is its own full-screen overlay, and it parks a voice dock in the
-// bottom-right corner — exactly where the assistant's launcher floats.
-const FULLSCREEN_CHILD_ROUTE_PATTERNS = [/\/debates\/rematches\/[^/]+$/] as const;
-
-function isFullscreenChildRoute(pathname: string): boolean {
-  return (
-    FULLSCREEN_CHILD_ROUTE_SUFFIXES.some(suffix => pathname.endsWith(suffix)) ||
-    FULLSCREEN_CHILD_ROUTE_PATTERNS.some(pattern => pattern.test(pathname))
-  );
-}
 
 // Guard router.push against hallucinated id shapes.
 function validId(value: string | undefined): value is string {
@@ -210,7 +201,10 @@ export function ChatWidget() {
   const currentChatIdRef = React.useRef<string | null>(persistedCurrent?.id ?? null);
 
   const pathname = usePathname() ?? '';
-  const hideAssistantOnRoute = isFullscreenChildRoute(pathname);
+  const isCompactLayout = useIsCompactLayout();
+  // The feed sets this while it fills the viewport, on whichever route it is rendering under.
+  const debateFullscreenActive = useAtomValue(debateFullscreenActiveAtom);
+  const hideAssistantOnRoute = shouldHideAssistant(pathname, isCompactLayout && debateFullscreenActive);
   const params = useParams();
 
   React.useLayoutEffect(() => {
