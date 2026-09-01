@@ -3,7 +3,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
-import { getSpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
+import { compareBySpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -25,20 +25,24 @@ export function description(values: Value[]): string | null {
 }
 
 /**
- * Resolved the same way as `nameValue`, and for the same reason. Taking the first match meant array
- * order decided which space's description won, and `entity.values` is re-partitioned on every store
- * merge — so the winner could change between renders for no reason a reader could see. Name already
- * ranked; description silently did not, which also made the space fallback in `store.getEntity`
- * arbitrary rather than deliberate (GEO-2778).
+ * The one value to show for a property an entity may carry in several spaces: skip the empty ones,
+ * then take the highest-ranked space.
+ *
+ * Shared by name and description because they had drifted. Name ranked; description took the first
+ * match, so array order decided the winner — and `entity.values` is re-partitioned on every store
+ * merge, so an entity described by two spaces could swap descriptions between renders. That also
+ * left the space fallback below arbitrary rather than deliberate (GEO-2778).
  */
-export function descriptionTriple(values: Value[]): Value | undefined {
-  const descriptionValues = values.filter(value => value.property.id === SystemIds.DESCRIPTION_PROPERTY);
-  if (descriptionValues.length <= 1) return descriptionValues[0];
+function pickBySpaceRank(values: Value[], propertyId: string): Value | undefined {
+  const candidates = values.filter(value => value.property.id === propertyId);
+  if (candidates.length <= 1) return candidates[0];
 
-  // Skip empty descriptions, then pick from the highest-ranked space.
-  const nonEmpty = descriptionValues.filter(v => v.value);
-  const candidates = nonEmpty.length > 0 ? nonEmpty : descriptionValues;
-  return candidates.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
+  const nonEmpty = candidates.filter(v => v.value);
+  return (nonEmpty.length > 0 ? nonEmpty : candidates).sort(compareBySpaceRank(value => value.spaceId))[0];
+}
+
+export function descriptionTriple(values: Value[]): Value | undefined {
+  return pickBySpaceRank(values, SystemIds.DESCRIPTION_PROPERTY);
 }
 
 /**
@@ -51,13 +55,7 @@ export function name(values: Value[]): string | null {
 }
 
 export function nameValue(values: Value[]): Value | undefined {
-  const nameValues = values.filter(value => value.property.id === SystemIds.NAME_PROPERTY);
-  if (nameValues.length <= 1) return nameValues[0];
-
-  // Skip empty names, then pick from the highest-ranked space
-  const nonEmpty = nameValues.filter(v => v.value);
-  const candidates = nonEmpty.length > 0 ? nonEmpty : nameValues;
-  return candidates.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
+  return pickBySpaceRank(values, SystemIds.NAME_PROPERTY);
 }
 
 /**
@@ -77,16 +75,30 @@ export function nameValue(values: Value[]): Value | undefined {
  *
  * Takes the unscoped values and does its own filtering, so the fallback has something to fall back
  * to and both callers cannot disagree about what scoping means.
+ *
+ * Deliberately not `scopeBySpacePrecedence`, which looks like the same shape and is not: its
+ * fallback is Root *only*, because it scopes schema and Root holds the canonical version. Content
+ * has no canonical space — an entity named in Crypto and nowhere else would render untitled to
+ * every other space under that rule. This falls back to the ranked resolution across all spaces.
  */
+function resolveInSpace(
+  values: Value[],
+  spaceId: string | undefined,
+  resolve: (values: Value[]) => string | null
+): string | null {
+  if (!spaceId) return resolve(values);
+  // `|| null` so an empty string falls through: a cleared field is nothing written, which is the
+  // judgement `pickBySpaceRank` already makes when choosing between spaces.
+  return (resolve(values.filter(value => value.spaceId === spaceId)) || null) ?? resolve(values);
+}
+
 export function nameInSpace(values: Value[], spaceId?: string): string | null {
-  if (!spaceId) return name(values);
-  return (name(values.filter(value => value.spaceId === spaceId)) || null) ?? name(values);
+  return resolveInSpace(values, spaceId, name);
 }
 
 /** Companion to `nameInSpace`; see there for why the fallback exists. */
 export function descriptionInSpace(values: Value[], spaceId?: string): string | null {
-  if (!spaceId) return description(values);
-  return (description(values.filter(value => value.spaceId === spaceId)) || null) ?? description(values);
+  return resolveInSpace(values, spaceId, description);
 }
 
 /**
