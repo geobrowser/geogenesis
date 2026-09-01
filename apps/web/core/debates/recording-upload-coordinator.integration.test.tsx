@@ -589,6 +589,22 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
   });
 
+  // The harder half of the same idea: the banner's own recording is past its next attempt, so its
+  // backoff says nothing is wrong — but uploads run one at a time and the card's debate has the
+  // slot, so it is queued rather than uploading. Ordered so the card's debate is picked first.
+  it('does not call itself uploading while its own recording is queued behind the card debate', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-2';
+    mocks.thankingShowsPublishControl = true;
+    mocks.queue = [queuedRecording('debate-2'), queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalled());
+    // Eligible, but behind the card's debate — so waiting, not uploading.
+    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
+  });
+
   // Switching the control off asks for the same confirmation the Cancel button opened. The ticket
   // called for a new control rather than a new behaviour, and a switch is easier to hit by
   // accident than the button it replaces.

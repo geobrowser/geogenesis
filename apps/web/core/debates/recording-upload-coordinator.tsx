@@ -349,10 +349,16 @@ export function DebateRecordingUploadCoordinator() {
   }, [accountKey, activeUploadId, getPrivyIdentityToken, online, publishableUploads, queryClient, userId, wakeAt]);
 
   // Active *for the banner*, not for the queue. The upload in flight can be the thank-you debate's,
-  // which the banner has stopped speaking for — counting that as activity had it claim to be
-  // uploading while every recording it does report was sitting in backoff.
+  // which the banner has stopped speaking for.
   const bannerUploadActive = activeUploadId !== null && bannerUploads.some(upload => upload.id === activeUploadId);
-  const waiting = !online || (!bannerUploadActive && bannerUploads.every(upload => upload.nextAttemptAt > Date.now()));
+  // Uploads run one at a time, so an upload in flight that isn't one of the banner's means every
+  // recording the banner does speak for is queued behind it — waiting, whatever their backoff says.
+  // The backoff check only decides the case where nothing is uploading at all: then a recording
+  // past its next attempt is about to start, and one still backing off is not.
+  const waiting =
+    !online ||
+    (!bannerUploadActive &&
+      (activeUploadId !== null || bannerUploads.every(upload => upload.nextAttemptAt > Date.now())));
   const latestFailedUpload = bannerUploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
     if (!upload.lastError) return latest;
     return !latest || upload.updatedAt > latest.updatedAt ? upload : latest;
