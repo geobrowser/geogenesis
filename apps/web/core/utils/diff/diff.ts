@@ -7,6 +7,7 @@ import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
 import type { ApiEntityDiffShape } from '~/core/io/rest';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import type { Entity, Relation, Value } from '~/core/types';
+import { isDirectMediaUrl } from '~/core/utils/media-url';
 
 import type {
   BlockChange,
@@ -39,6 +40,10 @@ const {
   SHOWN_COLUMNS,
   PROPERTIES,
 } = SystemIds;
+
+// Media entities published to object storage (e.g. debate videos/keyframes) carry their URL on
+// the canonical `Web URL` property instead of `IPFS URL`.
+const WEB_URL_PROPERTY = ContentIds.WEB_URL_PROPERTY;
 
 type ApiValueDiff = ApiEntityDiffShape['values'][number];
 type ApiRelationDiff = ApiEntityDiffShape['relations'][number];
@@ -282,6 +287,7 @@ export async function postProcessDiffs(
     // Prefer IMAGE_URL_PROPERTY — image entities also carry width/height values.
     const mediaValue =
       entity.values.find(v => v.propertyId === IMAGE_URL_PROPERTY && (v.after || v.before)) ??
+      entity.values.find(v => v.propertyId === WEB_URL_PROPERTY && (v.after || v.before)) ??
       entity.values.find(
         v => (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://'))
       );
@@ -865,6 +871,7 @@ export async function fromLocal(
   for (const diff of diffs) {
     const resolveMediaValue = () =>
       diff.values.find(v => v.propertyId === IMAGE_URL_PROPERTY && (v.after || v.before)) ??
+      diff.values.find(v => v.propertyId === WEB_URL_PROPERTY && (v.after || v.before)) ??
       diff.values.find(v => (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://')));
     if (imageEntityIds.has(diff.entityId)) {
       const ipfsValue = resolveMediaValue();
@@ -1039,9 +1046,11 @@ function isMediaRelationType(typeId: string): boolean {
 
 function resolveImageUrlFromEntity(entity: Entity | undefined): string | null {
   if (!entity) return null;
-  const imageValue = entity.values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+  const imageValue =
+    entity.values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://')) ??
+    entity.values.find(v => typeof v.value === 'string' && isDirectMediaUrl(v.value));
 
-  return imageValue?.value ?? null;
+  return typeof imageValue?.value === 'string' ? imageValue.value : null;
 }
 
 function computeRelationChanges(

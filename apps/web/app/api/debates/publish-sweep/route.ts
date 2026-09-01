@@ -10,10 +10,11 @@ export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 // Bound the work per invocation. Anything left over is picked up on the next tick, where the
-// idempotency check makes re-scanning already-published debates cheap. Each publish pins the final
-// video to IPFS before signing, so only a couple fit inside `maxDuration`. Counts attempts rather
-// than successes: a debate that pins its video and then fails on-chain has already spent the time.
-const MAX_PUBLISH_ATTEMPTS_PER_SWEEP = 2;
+// idempotency check makes re-scanning already-published debates cheap. Media stays in object
+// storage (no IPFS pinning), so a publish is dominated by on-chain signing and several fit inside
+// `maxDuration`. Counts attempts rather than successes: a failed on-chain publish has already
+// spent the time.
+const MAX_PUBLISH_ATTEMPTS_PER_SWEEP = 8;
 
 /**
  * Cron sweep: publish finished debates to the knowledge graph as the debate acceptor.

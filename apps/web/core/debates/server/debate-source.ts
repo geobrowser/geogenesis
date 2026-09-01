@@ -26,6 +26,35 @@ function geoChatBaseUrl() {
   return base.replace(/\/+$/, '');
 }
 
+/**
+ * The host published media URLs are built from. These URLs go on-chain and are opened by browsers,
+ * so this must be a public host — never a cluster-internal one that `GEO_CHAT_API_BASE_URL` may
+ * point at — and it can never change for already-published debates.
+ *
+ * `NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL` exists so media can be served from a dedicated hostname that
+ * is independent of geo-chat's API host. Point it at geo-chat today; repointing it later (at a CDN,
+ * or an object-store custom domain) then costs a DNS change instead of a migration of every
+ * published entity. It falls back to the geo-chat host so nothing breaks when it is unset.
+ */
+function debateMediaBaseUrl() {
+  const base =
+    process.env.NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL ||
+    process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL ||
+    process.env.GEO_CHAT_API_BASE_URL ||
+    'http://localhost:8080';
+  return base.replace(/\/+$/, '');
+}
+
+/**
+ * The durable URL for a debate media artifact: geo-chat 302-redirects it to a fresh presigned
+ * object-store GET on every request, and resolves it by (debate, kind), so it stays live across
+ * media reprocessing and 404s once the artifact is deleted. This is what lets published media
+ * stay off IPFS while remaining permanently deletable.
+ */
+function durableArtifactUrl(debateId: string, kind: DebateMediaArtifactKind): string {
+  return `${debateMediaBaseUrl()}/debates/${debateId}/media/artifacts/${kind}/content`;
+}
+
 /** Carries geo-chat's HTTP status so the route can tell a permanent 4xx (bad id) from a transient 5xx. */
 export class GeoChatRequestError extends Error {
   status: number;
@@ -38,19 +67,6 @@ export class GeoChatRequestError extends Error {
 
 async function geoChatGet<T>(path: string): Promise<T> {
   const response = await fetch(`${geoChatBaseUrl()}${path}`, { cache: 'no-store' });
-  if (!response.ok) {
-    throw new GeoChatRequestError(response.status, `geo-chat ${path} failed (${response.status})`);
-  }
-  return response.json() as Promise<T>;
-}
-
-async function geoChatPost<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${geoChatBaseUrl()}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    cache: 'no-store',
-  });
   if (!response.ok) {
     throw new GeoChatRequestError(response.status, `geo-chat ${path} failed (${response.status})`);
   }
@@ -145,9 +161,9 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   }
 
   const ogImageUrl = await buildDebateShareCard(debateId, debate, media);
-  const videoUrl = await pinArtifactToIpfs(debateId, 'final_video');
+  const videoUrl = durableArtifactUrl(debateId, 'final_video');
   const keyframeUrl = media.artifacts.some(artifact => artifact.kind === 'preview_image')
-    ? await pinKeyframeToIpfs(debateId)
+    ? durableArtifactUrl(debateId, 'preview_image')
     : null;
   // Prefer geo-chat's canonical turns + pre-attributed claims (extracted in its media job, next to
   // transcription). geo-chat is the single authority on turn boundaries, so its `turn_index` lines
@@ -209,16 +225,6 @@ function debatePublicationDeadline(debate: Debate): number | null {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-/**
- * Pin a geo-chat media artifact to IPFS and return its permanent `ipfs://` URI.
- *
- * geo-chat only hands out presigned object-store URLs, and those expire after 15 minutes, so a
- * published one is dead well before anyone opens the entity. Download the bytes while the URL is
- * still valid and pin those instead.
- *
- * Uploaded as a blob rather than by URL: the SDK's URL path rejects any body that isn't an image,
- * and the final video is a webm.
- */
 /** A presigned object-store URL for one media artifact. Expires in ~15 minutes. */
 async function artifactUrl(debateId: string, kind: DebateMediaArtifactKind): Promise<string> {
   const { upload } = await geoChatPost<{ upload: { url: string } }>(`/debates/${debateId}/media/artifacts/url`, {
@@ -313,28 +319,6 @@ async function buildDebateShareCard(
     return cid;
   } catch (error) {
     console.warn(`[debate-acceptor] could not build a share card for ${debateId}; publishing without one.`, error);
-    return null;
-  }
-}
-
-async function pinArtifactToIpfs(debateId: string, kind: DebateMediaArtifactKind): Promise<string> {
-  const { upload } = await geoChatPost<{ upload: { url: string } }>(`/debates/${debateId}/media/artifacts/url`, {
-    kind,
-  });
-  const response = await fetch(upload.url, { cache: 'no-store' });
-  if (!response.ok) {
-    throw new Error(`Downloading ${kind} for debate ${debateId} failed (${response.status}).`);
-  }
-  const { cid } = await uploadGeoImage({ blob: await response.blob() });
-  return cid;
-}
-
-async function pinKeyframeToIpfs(debateId: string): Promise<string | null> {
-  try {
-    return await pinArtifactToIpfs(debateId, 'preview_image');
-  } catch (error) {
-    // A missing poster shouldn't hold back the Debate + Video entities.
-    console.warn(`[debate-acceptor] could not pin keyframe for ${debateId}; publishing without one.`, error);
     return null;
   }
 }

@@ -15,7 +15,6 @@ import {
   DEBATE_TYPE_ID,
   DEBATE_VIDEOS_PROPERTY_ID,
   IMAGE_TYPE_ID,
-  IMAGE_URL_PROPERTY_ID,
   KEY_FRAME_IMAGE_PROPERTY_ID,
   OG_IMAGE_PROPERTY_ID,
   MARKDOWN_CONTENT_PROPERTY_ID,
@@ -26,6 +25,7 @@ import {
   TYPES_PROPERTY_ID,
   VIDEO_TYPE_ID,
   VIDEO_URL_PROPERTY_ID,
+  WEB_URL_PROPERTY_ID,
 } from './ontology';
 
 export type DebatePublishParticipant = {
@@ -74,11 +74,12 @@ export type DebatePublishInput = {
   claimText: string;
   participants: DebatePublishParticipant[];
   /**
-   * `ipfs://` URI for the rendered final video, or null to skip the Video entity. Goes on-chain,
-   * so it has to outlive geo-chat's presigned object-store URLs.
+   * Durable https URL for the rendered final video, or null to skip the Video entity. Goes
+   * on-chain, so it must outlive geo-chat's presigned object-store URLs — the geo-chat
+   * `…/media/artifacts/{kind}/content` redirect URL is the intended shape.
    */
   videoUrl: string | null;
-  /** `ipfs://` URI for the video's poster still, or null to publish the Video without one. */
+  /** Durable https URL for the video's poster still, or null to publish the Video without one. */
   keyframeUrl: string | null;
   /**
    * `ipfs://` URI for the rendered share card, or null to publish without one.
@@ -237,10 +238,11 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     const videoName = `${debateName} video`;
     const videoRef = { id: videoId, name: videoName };
     setText(videoId, videoName, NAME_PROPERTY_ID, videoName);
-    // Both carry the same ipfs:// URI: `Video URL` is what the debates ontology spec names,
-    // `IPFS URL` is what the relation decoder actually reads.
+    // Both carry the same https URL: `Video URL` is what the debates ontology spec names,
+    // `Web URL` is what the relation decoder reads for media entities (instead of `IPFS URL`,
+    // which would require pinning — Web URL keeps the media deletable).
     setText(videoId, videoName, VIDEO_URL_PROPERTY_ID, input.videoUrl);
-    setText(videoId, videoName, IMAGE_URL_PROPERTY_ID, input.videoUrl);
+    setText(videoId, videoName, WEB_URL_PROPERTY_ID, input.videoUrl);
     relate({
       fromEntity: videoRef,
       propertyId: TYPES_PROPERTY_ID,
@@ -259,7 +261,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       const keyframeName = `${debateName} keyframe`;
       const keyframeRef = { id: keyframeId, name: keyframeName };
       setText(keyframeId, keyframeName, NAME_PROPERTY_ID, keyframeName);
-      setText(keyframeId, keyframeName, IMAGE_URL_PROPERTY_ID, input.keyframeUrl);
+      setText(keyframeId, keyframeName, WEB_URL_PROPERTY_ID, input.keyframeUrl);
       relate({
         fromEntity: keyframeRef,
         propertyId: TYPES_PROPERTY_ID,

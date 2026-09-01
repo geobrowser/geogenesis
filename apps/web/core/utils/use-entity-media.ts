@@ -9,6 +9,16 @@ import { Effect } from 'effect';
 
 import { getRelationsByFromEntityId } from '~/core/io/queries';
 import { useRelation, useValues } from '~/core/sync/use-store';
+import { isDirectMediaUrl } from '~/core/utils/media-url';
+
+// ipfs:// stays preferred over http(s) so pre-existing IPFS-pinned media resolves exactly as
+// before; http(s) covers media left in object storage and referenced via `Web URL`.
+function findMediaUrlValue(values: { value: unknown }[]): string | undefined {
+  const ipfsValue = values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+  if (typeof ipfsValue?.value === 'string') return ipfsValue.value;
+  const directValue = values.find(v => typeof v.value === 'string' && isDirectMediaUrl(v.value));
+  return typeof directValue?.value === 'string' ? directValue.value : undefined;
+}
 
 export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId: string): string | undefined {
   const imageValues = useValues({
@@ -17,9 +27,7 @@ export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId
 
   if (!imageEntityId || imageValues.length === 0) return undefined;
 
-  const imageUrlValue = imageValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
-
-  return imageUrlValue?.value;
+  return findMediaUrlValue(imageValues);
 }
 
 export function useVideoUrlFromEntity(videoEntityId: string | undefined, spaceId: string): string | undefined {
@@ -29,9 +37,7 @@ export function useVideoUrlFromEntity(videoEntityId: string | undefined, spaceId
 
   if (!videoEntityId || videoValues.length === 0) return undefined;
 
-  const videoUrlValue = videoValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
-
-  return videoUrlValue?.value;
+  return findMediaUrlValue(videoValues);
 }
 
 export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string): string | undefined {
@@ -68,7 +74,7 @@ export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string
         if (!avatarRelation) return;
 
         const imageUrl = avatarRelation.toEntity.value;
-        if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('ipfs://')) {
+        if (typeof imageUrl === 'string' && isDirectMediaUrl(imageUrl)) {
           setFetchedAvatarUrl(imageUrl);
         }
       } catch {
@@ -116,7 +122,7 @@ export function useEntityCoverUrl(entityId: string | undefined, spaceId: string)
         if (!coverRelation) return;
 
         const imageUrl = coverRelation.toEntity.value;
-        if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('ipfs://')) {
+        if (typeof imageUrl === 'string' && isDirectMediaUrl(imageUrl)) {
           setFetchedCoverUrl(imageUrl);
         }
       } catch {
@@ -254,5 +260,5 @@ export function useEntityMedia(
 }
 
 function asImageUrl(value: unknown): string | undefined {
-  return typeof value === 'string' && value.startsWith('ipfs://') ? value : undefined;
+  return typeof value === 'string' && isDirectMediaUrl(value) ? value : undefined;
 }

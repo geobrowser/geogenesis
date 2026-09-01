@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { RemoteRelation } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
@@ -19,10 +19,21 @@ export function hasRelationTarget(relation: RemoteRelation): relation is RemoteR
 
 export function RelationDtoLive(relation: RemoteRelationWithTarget): Relation {
   const ipfsUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
-  const mediaEntityUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
+  const webUrlPropertyHex = ContentIds.WEB_URL_PROPERTY.replace(/-/g, '');
+  const ipfsUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
   const baseRenderableType = v2_getRenderableEntityType(relation.toEntity.types);
 
-  const renderableType = mediaEntityUrlValue && baseRenderableType === 'RELATION' ? 'IMAGE' : baseRenderableType;
+  // `Web URL` is the generic canonical-link property (sources, articles, …), so unlike `IPFS URL`
+  // it only counts as a media URL when the target is explicitly typed Image/Video — debate media
+  // published to object storage instead of IPFS carries its URL here. IPFS URL wins when both are
+  // present so pre-existing entities render byte-identically.
+  const webUrlValue =
+    baseRenderableType === 'IMAGE' || baseRenderableType === 'VIDEO'
+      ? (relation.toEntity.valuesList.find(v => v.propertyId === webUrlPropertyHex)?.text ?? null)
+      : null;
+  const mediaEntityUrlValue = ipfsUrlValue ?? webUrlValue;
+
+  const renderableType = ipfsUrlValue && baseRenderableType === 'RELATION' ? 'IMAGE' : baseRenderableType;
 
   const toEntityId = relation.toEntity.id;
   const toEntityName = resolveToEntityName(relation);

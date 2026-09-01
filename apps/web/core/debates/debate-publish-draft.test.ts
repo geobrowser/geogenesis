@@ -1,3 +1,4 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -18,7 +19,6 @@ import {
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TYPE_ID,
   IMAGE_TYPE_ID,
-  IMAGE_URL_PROPERTY_ID,
   KEY_FRAME_IMAGE_PROPERTY_ID,
   NAME_PROPERTY_ID,
   OG_IMAGE_PROPERTY_ID,
@@ -27,6 +27,7 @@ import {
   TYPES_PROPERTY_ID,
   VIDEO_TYPE_ID,
   VIDEO_URL_PROPERTY_ID,
+  WEB_URL_PROPERTY_ID,
 } from './ontology';
 
 const SPACE = '8b5c8625ff017732063d56e85d24dbed';
@@ -49,11 +50,12 @@ function baseInput(overrides: Partial<DebatePublishInput> = {}): DebatePublishIn
       { spaceEntityId: YES_SPACE, displayName: 'Arturas', position: true, participantSlot: 1 },
       { spaceEntityId: NO_SPACE, displayName: 'Preston', position: false, participantSlot: 2 },
     ],
-    videoUrl: 'ipfs://bafyfinalvideo',
+    videoUrl: 'https://chat.example/debates/11112222-3333-4444-5555-666677778888/media/artifacts/final_video/content',
     // Default off: most cases here are about the debate, video and transcript entities. The share
     // card gets its own block below, where its absence is also asserted.
     ogImageUrl: null,
-    keyframeUrl: 'ipfs://bafykeyframe',
+    keyframeUrl:
+      'https://chat.example/debates/11112222-3333-4444-5555-666677778888/media/artifacts/preview_image/content',
     transcriptTurns: [
       { turnIndex: 0, speakerSpaceEntityId: YES_SPACE, speakerName: 'Arturas', text: 'Iran was building a nuke.' },
       {
@@ -141,13 +143,17 @@ describe('buildDebatePublishDraft', () => {
     expect(draft.relations.some(r => r.toEntity.id === VIDEO_TYPE_ID)).toBe(false);
   });
 
-  // A Video that sets nothing but `Video URL` renders as an empty relation.
-  it('writes the video URL to both the unified IPFS URL property and Video URL', () => {
-    const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
+  // A Video that sets nothing but `Video URL` renders as an empty relation: the relation decoder
+  // reads media URLs from `Web URL` (or the legacy `IPFS URL`), never from `Video URL`.
+  it('writes the video URL to both the Web URL property and Video URL, and never to IPFS URL', () => {
+    const input = baseInput();
+    const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
     const videoId = draft.relations.find(r => r.toEntity.id === VIDEO_TYPE_ID)?.fromEntity.id;
     const videoValues = draft.values.filter(v => v.entity.id === videoId);
-    expect(videoValues.find(v => v.property.id === IMAGE_URL_PROPERTY_ID)?.value).toBe('ipfs://bafyfinalvideo');
-    expect(videoValues.find(v => v.property.id === VIDEO_URL_PROPERTY_ID)?.value).toBe('ipfs://bafyfinalvideo');
+    expect(videoValues.find(v => v.property.id === WEB_URL_PROPERTY_ID)?.value).toBe(input.videoUrl);
+    expect(videoValues.find(v => v.property.id === VIDEO_URL_PROPERTY_ID)?.value).toBe(input.videoUrl);
+    // Publishing to IPFS URL would imply pinning; the media must stay deletable in object storage.
+    expect(draft.values.some(v => v.property.id === SystemIds.IMAGE_URL_PROPERTY)).toBe(false);
   });
 
   it('hangs the share card off the debate, not the video', () => {
@@ -189,19 +195,20 @@ describe('buildDebatePublishDraft', () => {
   });
 
   it('links a Key frame Image onto the Video', () => {
-    const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
+    const input = baseInput();
+    const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
     const videoId = draft.relations.find(r => r.toEntity.id === VIDEO_TYPE_ID)?.fromEntity.id;
     const keyframe = draft.relations.find(r => r.type.id === KEY_FRAME_IMAGE_PROPERTY_ID);
     expect(keyframe?.fromEntity.id).toBe(videoId);
     expect(
-      draft.values.find(v => v.entity.id === keyframe?.toEntity.id && v.property.id === IMAGE_URL_PROPERTY_ID)?.value
-    ).toBe('ipfs://bafykeyframe');
+      draft.values.find(v => v.entity.id === keyframe?.toEntity.id && v.property.id === WEB_URL_PROPERTY_ID)?.value
+    ).toBe(input.keyframeUrl);
     expect(
       draft.relations.some(r => r.fromEntity.id === keyframe?.toEntity.id && r.toEntity.id === IMAGE_TYPE_ID)
     ).toBe(true);
   });
 
-  it('publishes the Video without a Key frame when no keyframe was pinned', () => {
+  it('publishes the Video without a Key frame when no keyframe was composed', () => {
     const draft = buildDebatePublishDraft(baseInput({ keyframeUrl: null }), {
       createEntityId: idFactory(),
       createPosition: () => 'a0',
