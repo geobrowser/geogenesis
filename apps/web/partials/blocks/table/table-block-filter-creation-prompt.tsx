@@ -65,6 +65,7 @@ import {
   popoverDraftsDifferFromSessionBaseline,
   reducer,
   seedColumnDraftFromCommittedFilters,
+  withPendingMode,
 } from './table-block-filter-prompt-state';
 
 export type { TableBlockNewFilterRow };
@@ -522,7 +523,11 @@ export const TableBlockFilterPrompt = React.forwardRef<TableBlockFilterPromptHan
         dispatch={dispatch}
         filterSuggestionSpaceId={filterSuggestionSpaceId}
         filterMode={pendingModes[state.selectedColumn] ?? seedModesByColumn[state.selectedColumn] ?? 'AND'}
-        onFilterModeChange={mode => setPendingModes(previous => ({ ...previous, [state.selectedColumn]: mode }))}
+        onFilterModeChange={mode =>
+          setPendingModes(previous =>
+            withPendingMode(previous, state.selectedColumn, mode, seedModesByColumn[state.selectedColumn] ?? 'AND')
+          )
+        }
         onSelectColumnToFilter={onSelectColumnToFilter}
         isEditing={isEditing}
         onValueDropdownOpenChange={setValueDropdownOpen}
@@ -931,12 +936,6 @@ function StaticRelationsFilters({ from, relationType, setFrom, setRelationType }
     </>
   );
 }
-
-type FilterValueDropdownFooterConfig = {
-  showClearAll: boolean;
-  onClearAll: () => void;
-  showDone: boolean;
-};
 
 interface TableBlockEntityFilterInputProps {
   onSelect?: (result: { id: string; name: string | null }) => void;

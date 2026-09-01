@@ -2,7 +2,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import equal from 'fast-deep-equal';
 
-import type { Filter } from '~/core/blocks/data/filters';
+import type { Filter, FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
 import type { Source } from '~/core/blocks/data/source';
 import { ID } from '~/core/id';
 import type { FilterableValueType } from '~/core/value-types';
@@ -838,6 +838,28 @@ export function pendingChipsNeedFilterMode(items: PendingFilterChipItem[]): bool
  * place. Shared by the real commit and by the preview the filter chips render from while
  * the popover is still open, so the chips can never disagree with what dismissing applies.
  */
+/**
+ * Record an AND/OR choice for the popover's pending chips. Choosing the mode the column
+ * already has committed removes the entry instead of storing it: it is not an edit, and
+ * now that dismissing the popover commits, a kept entry would turn an otherwise no-op
+ * dismiss into a write.
+ */
+export function withPendingMode(
+  previous: ModesByColumn,
+  columnId: string,
+  mode: FilterMode,
+  committedMode: FilterMode
+): ModesByColumn {
+  if (mode === committedMode) {
+    if (!(columnId in previous)) return previous;
+    const next = { ...previous };
+    delete next[columnId];
+    return next;
+  }
+  if (previous[columnId] === mode) return previous;
+  return { ...previous, [columnId]: mode };
+}
+
 export function mergeFilterRows(
   current: Filter[],
   rows: TableBlockNewFilterRow[],
