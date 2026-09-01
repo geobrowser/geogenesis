@@ -1,4 +1,8 @@
-import { type DebateOgCardData, type DebateOgSpeaker, generateDebateOgImageResponse } from '~/core/debates/debate-og-image';
+import {
+  type DebateOgCardData,
+  type DebateOgSpeaker,
+  generateDebateOgImageResponse,
+} from '~/core/debates/debate-og-image';
 import { uploadGeoImage } from '~/core/sdk/geo-client';
 import { getImagePath } from '~/core/utils/utils';
 
@@ -71,6 +75,19 @@ export class GeoChatRequestError extends Error {
 
 async function geoChatGet<T>(path: string): Promise<T> {
   const response = await fetch(`${geoChatBaseUrl()}${path}`, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new GeoChatRequestError(response.status, `geo-chat ${path} failed (${response.status})`);
+  }
+  return response.json() as Promise<T>;
+}
+
+async function geoChatPost<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${geoChatBaseUrl()}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
   if (!response.ok) {
     throw new GeoChatRequestError(response.status, `geo-chat ${path} failed (${response.status})`);
   }
@@ -299,9 +316,7 @@ async function buildDebateShareCard(
 
     const hasStill = (kind: string) => media.artifacts.some(artifact => artifact.kind === kind);
     if (!hasStill('speaker_still_slot_1') || !hasStill('speaker_still_slot_2')) {
-      console.warn(
-        `[debate-acceptor] debate ${debateId} has no speaker stills; publishing without a share card.`
-      );
+      console.warn(`[debate-acceptor] debate ${debateId} has no speaker stills; publishing without a share card.`);
       return null;
     }
 

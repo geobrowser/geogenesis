@@ -15,10 +15,11 @@ import {
   DEBATE_TYPE_ID,
   DEBATE_VIDEOS_PROPERTY_ID,
   IMAGE_TYPE_ID,
+  IMAGE_URL_PROPERTY_ID,
   KEY_FRAME_IMAGE_PROPERTY_ID,
-  OG_IMAGE_PROPERTY_ID,
   MARKDOWN_CONTENT_PROPERTY_ID,
   NAME_PROPERTY_ID,
+  OG_IMAGE_PROPERTY_ID,
   SOURCES_PROPERTY_ID,
   TEXT_BLOCK_TYPE_ID,
   TRANSCRIPT_TYPE_ID,
@@ -345,7 +346,12 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         const claimId = createEntityId();
         const claimRef = { id: claimId, name: claimEntityText };
         setText(claimId, claimEntityText, NAME_PROPERTY_ID, claimEntityText);
-        relate({ fromEntity: claimRef, propertyId: TYPES_PROPERTY_ID, toEntityId: CLAIM_TYPE_ID, toEntityName: 'Claim' });
+        relate({
+          fromEntity: claimRef,
+          propertyId: TYPES_PROPERTY_ID,
+          toEntityId: CLAIM_TYPE_ID,
+          toEntityName: 'Claim',
+        });
         if (claim.isFactual !== null) {
           setBoolean(claimId, claimEntityText, CLAIM_IS_FACTUAL_PROPERTY_ID, claim.isFactual);
         }

@@ -1,4 +1,5 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
@@ -19,6 +20,7 @@ import {
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TYPE_ID,
   IMAGE_TYPE_ID,
+  IMAGE_URL_PROPERTY_ID,
   KEY_FRAME_IMAGE_PROPERTY_ID,
   NAME_PROPERTY_ID,
   OG_IMAGE_PROPERTY_ID,
