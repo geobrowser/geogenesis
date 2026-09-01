@@ -160,45 +160,25 @@ function GlyphTile({ icon }: { icon: React.ReactNode }) {
   return <span className="grid size-10 place-items-center rounded-full bg-divider text-text">{icon}</span>;
 }
 
-type DownloadStatus = 'idle' | 'preparing' | 'ready' | 'error';
+type DownloadStatus = 'preparing' | 'ready' | 'error';
 
 /**
- * Prepares and downloads the debate's social video, but only once the viewer actually presses
- * Download.
+ * Prepares the debate's social video as soon as the sheet opens, so that pressing Download hands off
+ * an already-ready blob synchronously.
  */
 function useDebateVideoDownload(debateId: string, enabled: boolean) {
-  const [requested, setRequested] = React.useState(false);
-  const autoDownloadRef = React.useRef(false);
-  const prepared = usePreparedSocialVideo(debateId, { enabled: enabled && requested, includePreview: false });
+  const prepared = usePreparedSocialVideo(debateId, { enabled, includePreview: false });
 
-  React.useEffect(() => {
-    if (!enabled) {
-      setRequested(false);
-      autoDownloadRef.current = false;
-    }
-  }, [enabled]);
-
-  React.useEffect(() => {
-    if (!autoDownloadRef.current) return;
-    if (prepared.status === 'ready' && prepared.downloadUrl && prepared.file) {
-      autoDownloadRef.current = false;
-      downloadPreparedVideo(prepared.downloadUrl, prepared.file.name);
-    }
-  }, [prepared.status, prepared.downloadUrl, prepared.file]);
-
-  const status: DownloadStatus = requested ? prepared.status : 'idle';
+  const status: DownloadStatus = prepared.status;
 
   const download = () => {
     if (prepared.status === 'ready' && prepared.downloadUrl && prepared.file) {
       downloadPreparedVideo(prepared.downloadUrl, prepared.file.name);
       return;
     }
-    autoDownloadRef.current = true;
     if (prepared.status === 'error') {
       prepared.retry();
-      return;
     }
-    setRequested(true);
   };
 
   return { status, download };
