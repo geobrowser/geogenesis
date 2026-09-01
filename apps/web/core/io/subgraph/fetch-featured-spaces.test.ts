@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FEATURED_TAG_ID, ROOT_SPACE, TAG_PROPERTY_ID } from '~/core/constants';
+import { FEATURED_TAG_ID, ROOT_SPACE, TAG_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/constants';
 
 import { clearFeaturedSpacesCache, fetchFeaturedSpaces, fetchFeaturedSpacesShared } from './fetch-featured-spaces';
 
@@ -17,7 +17,7 @@ vi.mock('./graphql', () => ({
   graphql: (...args: unknown[]) => graphqlMock(...args),
 }));
 
-// Curated rank ids (from space-ranking): Crypto=2, AI=3.
+// Curated rank ids (from space-ranking): Root=0, Crypto=2, AI=3.
 const AI_SPACE = '41e851610e13a19441c4d980f2f2ce6b';
 const CRYPTO_SPACE = 'c9f267dcb0d270718c2a3c45a64afd32';
 
@@ -25,223 +25,85 @@ function spaceNode(id: string, name: string) {
   return { id, page: { id: `page-${id}`, name, relationsList: [] }, members: { totalCount: 1 } };
 }
 
-function featuredTags(isFeatured = true, spaceId = ROOT_SPACE) {
-  return isFeatured ? [{ spaceId, toEntity: { id: FEATURED_TAG_ID } }] : [];
+/** One row of the Featured-tag relation list: the tagged topic and the spaces claiming it. */
+function taggedTopic(id: string, name: string, spaces: ReturnType<typeof spaceNode>[]) {
+  return { fromEntity: { id, name, spacesByTopicIdConnection: { nodes: spaces } } };
 }
 
 function query(arg: unknown): string {
   return (arg as { query?: string } | undefined)?.query ?? '';
 }
 
+function respondWith(relations: unknown[]) {
+  graphqlMock.mockImplementation(() => Effect.succeed({ relations }));
+}
+
 describe('fetchFeaturedSpaces', () => {
   beforeEach(() => graphqlMock.mockReset());
 
-  it('walks the subtopic tree, excludes the root topic, and orders by space rank', async () => {
-    // Tree: root t0 -> [t1 (AI space), t2 (no space) -> t3 (Crypto space)].
-    // BFS discovers AI before Crypto, but the result must be rank-sorted (Crypto 2, AI 3).
-    graphqlMock.mockImplementation((arg: unknown) => {
-      const q = query(arg);
-      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 't0' } });
-      if (q.includes('"t3"')) {
-        return Effect.succeed({
-          entities: [
-            {
-              id: 't3',
-              name: 'Crypto',
-              spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(CRYPTO_SPACE, 'Crypto')] },
-              featuredTags: featuredTags(),
-              subtopics: [],
-            },
-          ],
-        });
-      }
-      if (q.includes('"t1"')) {
-        return Effect.succeed({
-          entities: [
-            {
-              id: 't1',
-              name: 'AI',
-              spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
-              featuredTags: featuredTags(),
-              subtopics: [],
-            },
-            {
-              id: 't2',
-              name: 'Science',
-              spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
-              featuredTags: featuredTags(false),
-              subtopics: [{ toEntity: { id: 't3' } }],
-            },
-          ],
-        });
-      }
-      // Root topic frontier (t0): no space of its own, two children.
-      return Effect.succeed({
-        entities: [
-          {
-            id: 't0',
-            name: 'Geo',
-            spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
-            featuredTags: featuredTags(false),
-            subtopics: [{ toEntity: { id: 't1' } }, { toEntity: { id: 't2' } }],
-          },
-        ],
-      });
-    });
+  it('asks only for Topic entities tagged Featured in Root, in a single request', async () => {
+    respondWith([taggedTopic('t1', 'AI', [spaceNode(AI_SPACE, 'AI')])]);
+
+    await fetchFeaturedSpaces();
+
+    // The whole point of the change: one round trip, not a tree walk.
+    expect(graphqlMock.mock.calls.length).toBe(1);
+
+    const q = query(graphqlMock.mock.calls[0][0]);
+    expect(q).toContain(TAG_PROPERTY_ID);
+    expect(q).toContain(FEATURED_TAG_ID);
+    expect(q).toContain(`spaceId: { is: "${ROOT_SPACE}" }`);
+    // Narrowing to Topic server-side is what keeps non-topic Featured things (rankings,
+    // for one) out of the pill list without a second pass here.
+    expect(q).toContain(TOPIC_TYPE_ID);
+  });
+
+  it('resolves each topic to its claiming space and orders by curated space rank', async () => {
+    // Returned AI-first to prove the ordering is rank-based, not response order.
+    respondWith([
+      taggedTopic('t1', 'AI', [spaceNode(AI_SPACE, 'AI')]),
+      taggedTopic('t2', 'Crypto', [spaceNode(CRYPTO_SPACE, 'Crypto')]),
+    ]);
 
     const result = await fetchFeaturedSpaces();
 
     expect(result.map(r => r.spaceId)).toEqual([CRYPTO_SPACE, AI_SPACE]);
     expect(result.map(r => r.name)).toEqual(['Crypto', 'AI']);
-    // Root topic ("Geo") is only a seed — never featured.
-    expect(result.some(r => r.name === 'Geo')).toBe(false);
-
-    const frontierQueries = graphqlMock.mock.calls
-      .map(([arg]) => query(arg))
-      .filter(q => q.includes('entities(filter:'));
-    expect(frontierQueries[0]).toContain(TAG_PROPERTY_ID);
-    expect(frontierQueries[0]).toContain(FEATURED_TAG_ID);
-    expect(frontierQueries[0]).toContain(`spaceId: { is: "${ROOT_SPACE}" }`);
+    expect(result.map(r => r.topicId)).toEqual(['t2', 't1']);
   });
 
-  it('dedupes a space that claims more than one topic', async () => {
-    graphqlMock.mockImplementation((arg: unknown) => {
-      const q = query(arg);
-      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 't0' } });
-      if (q.includes('"t1"')) {
-        // Both children resolve to the same claiming space.
-        return Effect.succeed({
-          entities: [
-            {
-              id: 't1',
-              name: 'AI',
-              spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
-              featuredTags: featuredTags(),
-              subtopics: [],
-            },
-            {
-              id: 't2',
-              name: 'AI (alias)',
-              spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
-              featuredTags: featuredTags(),
-              subtopics: [],
-            },
-          ],
-        });
-      }
-      return Effect.succeed({
-        entities: [
-          {
-            id: 't0',
-            name: 'Geo',
-            spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
-            featuredTags: featuredTags(false),
-            subtopics: [{ toEntity: { id: 't1' } }, { toEntity: { id: 't2' } }],
-          },
-        ],
-      });
-    });
+  it('dedupes a space that claims more than one featured topic', async () => {
+    respondWith([
+      taggedTopic('t1', 'AI', [spaceNode(AI_SPACE, 'AI')]),
+      taggedTopic('t2', 'AI (alias)', [spaceNode(AI_SPACE, 'AI')]),
+    ]);
 
-    const result = await fetchFeaturedSpaces();
-    expect(result.map(r => r.spaceId)).toEqual([AI_SPACE]);
+    expect((await fetchFeaturedSpaces()).map(r => r.spaceId)).toEqual([AI_SPACE]);
   });
 
-  it('skips untagged topics but still traverses them to find featured descendants', async () => {
-    const untaggedSpace = '11111111111111111111111111111111';
+  it('skips a tagged topic that no space claims', async () => {
+    respondWith([taggedTopic('t1', 'Unclaimed', []), taggedTopic('t2', 'AI', [spaceNode(AI_SPACE, 'AI')])]);
 
-    graphqlMock.mockImplementation((arg: unknown) => {
-      const q = query(arg);
-      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 'root' } });
-      if (q.includes('"featured-child"')) {
-        return Effect.succeed({
-          entities: [
-            {
-              id: 'featured-child',
-              name: 'AI',
-              spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
-              featuredTags: featuredTags(),
-              subtopics: [],
-            },
-          ],
-        });
-      }
-      if (q.includes('"untagged-parent"')) {
-        return Effect.succeed({
-          entities: [
-            {
-              id: 'untagged-parent',
-              name: 'Unfeatured',
-              spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(untaggedSpace, 'Unfeatured')] },
-              featuredTags: featuredTags(false),
-              subtopics: [{ toEntity: { id: 'featured-child' } }],
-            },
-          ],
-        });
-      }
-      return Effect.succeed({
-        entities: [
-          {
-            id: 'root',
-            name: 'Geo',
-            spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
-            featuredTags: featuredTags(false),
-            subtopics: [{ toEntity: { id: 'untagged-parent' } }],
-          },
-        ],
-      });
-    });
-
-    const result = await fetchFeaturedSpaces();
-
-    expect(result.map(r => r.spaceId)).toEqual([AI_SPACE]);
-    expect(result.some(r => r.spaceId === untaggedSpace)).toBe(false);
+    expect((await fetchFeaturedSpaces()).map(r => r.spaceId)).toEqual([AI_SPACE]);
   });
 
-  it('ignores a Featured tag attributed in a space other than Root', async () => {
-    graphqlMock.mockImplementation((arg: unknown) => {
-      const q = query(arg);
-      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 'root' } });
-      if (q.includes('"topic"')) {
-        return Effect.succeed({
-          entities: [
-            {
-              id: 'topic',
-              name: 'AI',
-              spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
-              featuredTags: featuredTags(true, '11111111111111111111111111111111'),
-              subtopics: [],
-            },
-          ],
-        });
-      }
-      return Effect.succeed({
-        entities: [
-          {
-            id: 'root',
-            name: 'Geo',
-            spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
-            featuredTags: featuredTags(false),
-            subtopics: [{ toEntity: { id: 'topic' } }],
-          },
-        ],
-      });
-    });
+  // Root is never offered in its own Join-spaces panel. It also outranks everything, so
+  // dropping it from the candidates rather than skipping the topic outright is what keeps
+  // a shared topic resolving to the space actually worth joining.
+  it('never features the Root space, and picks the next-ranked claimant instead', async () => {
+    respondWith([taggedTopic('t1', 'Geo', [spaceNode(ROOT_SPACE, 'Root'), spaceNode(AI_SPACE, 'AI')])]);
 
+    expect((await fetchFeaturedSpaces()).map(r => r.spaceId)).toEqual([AI_SPACE]);
+  });
+
+  it('returns [] when nothing is tagged Featured', async () => {
+    respondWith([]);
     expect(await fetchFeaturedSpaces()).toEqual([]);
   });
 
-  it('returns [] when the root space has no topic', async () => {
-    graphqlMock.mockImplementation(() => Effect.succeed({ space: { topicId: null } }));
-    expect(await fetchFeaturedSpaces()).toEqual([]);
-  });
-
-  it('throws when the root query fails, so a failure is not indistinguishable from no featured spaces', async () => {
+  it('throws when the query fails, so a failure is not indistinguishable from no featured spaces', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    graphqlMock.mockImplementation((arg: unknown) => {
-      const q = query(arg);
-      if (q.includes('space(id:')) return Effect.fail({ _tag: 'GraphqlRuntimeError' });
-      return Effect.succeed({ entities: [] });
-    });
+    graphqlMock.mockImplementation(() => Effect.fail({ _tag: 'GraphqlRuntimeError' }));
 
     await expect(fetchFeaturedSpaces()).rejects.toThrow();
     consoleError.mockRestore();
@@ -249,35 +111,13 @@ describe('fetchFeaturedSpaces', () => {
 });
 
 /**
- * The traversal is the most expensive thing on the Explore path — five sequential round
- * trips over ~2,900 topic nodes in production — and `/api/explore/feed` ran it per
- * request. These cover the sharing, not the traversal, which the suite above owns.
+ * These cover the sharing, not the fetch, which the suite above owns. Much less
+ * load-bearing than when this list cost five sequential round trips, but the in-flight
+ * join still matters: `/api/explore/feed` runs per request and cannot hand its promise to
+ * the next one the way `app/explore/page.tsx` hands one to the sidebar.
  */
 describe('fetchFeaturedSpacesShared', () => {
-  const AI_ONLY = () => {
-    graphqlMock.mockImplementation((arg: unknown) => {
-      const q = query(arg);
-      if (q.includes('space(id:')) return Effect.succeed({ space: { topicId: 't0' } });
-      return Effect.succeed({
-        entities: [
-          {
-            id: 't0',
-            name: 'Root',
-            spacesByTopicIdConnection: { totalCount: 0, nodes: [] },
-            featuredTags: featuredTags(false),
-            subtopics: [{ toEntity: { id: 't1' } }],
-          },
-          {
-            id: 't1',
-            name: 'AI',
-            spacesByTopicIdConnection: { totalCount: 1, nodes: [spaceNode(AI_SPACE, 'AI')] },
-            featuredTags: featuredTags(),
-            subtopics: [],
-          },
-        ],
-      });
-    });
-  };
+  const AI_ONLY = () => respondWith([taggedTopic('t1', 'AI', [spaceNode(AI_SPACE, 'AI')])]);
 
   beforeEach(() => {
     graphqlMock.mockReset();
@@ -285,7 +125,7 @@ describe('fetchFeaturedSpacesShared', () => {
     vi.useRealTimers();
   });
 
-  it('walks the tree once and reuses the answer', async () => {
+  it('fetches once and reuses the answer', async () => {
     AI_ONLY();
 
     const first = await fetchFeaturedSpacesShared();
@@ -297,11 +137,7 @@ describe('fetchFeaturedSpacesShared', () => {
     expect(graphqlMock.mock.calls.length).toBe(callsAfterFirst);
   });
 
-  // The one that matters in production: `/api/explore/feed` cannot hand its promise to the
-  // next request the way `app/explore/page.tsx` hands one to the sidebar, so simultaneous
-  // Explore loads were each walking the whole topic tree. Callers arriving *before* the
-  // first traversal resolves must join it, not start their own.
-  it('makes concurrent callers join the traversal already running', async () => {
+  it('makes concurrent callers join the fetch already running', async () => {
     AI_ONLY();
 
     const [a, b, c] = await Promise.all([
@@ -309,14 +145,13 @@ describe('fetchFeaturedSpacesShared', () => {
       fetchFeaturedSpacesShared(),
       fetchFeaturedSpacesShared(),
     ]);
-    const rootQueries = graphqlMock.mock.calls.filter(call => query(call[0]).includes('space(id:')).length;
 
-    expect(rootQueries).toBe(1);
+    expect(graphqlMock.mock.calls.length).toBe(1);
     expect(a).toEqual(b);
     expect(b).toEqual(c);
   });
 
-  it('walks again once the list has gone stale', async () => {
+  it('fetches again once the list has gone stale', async () => {
     AI_ONLY();
 
     await fetchFeaturedSpacesShared();
@@ -328,7 +163,7 @@ describe('fetchFeaturedSpacesShared', () => {
     expect(graphqlMock.mock.calls.length).toBeGreaterThan(callsAfterFirst);
   });
 
-  // A transient GraphQL failure must cost one traversal, not five minutes of an empty
+  // A transient GraphQL failure must cost one request, not five minutes of an empty
   // Featured panel. `runQuery` re-throws cancellation on purpose, so the same applies to an
   // aborted caller: it must not leave its rejection behind for everyone else.
   it('does not keep a rejection', async () => {

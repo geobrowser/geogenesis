@@ -6,7 +6,6 @@ import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { EntitiesOrderBy, type EntityFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
-import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 
 import {
@@ -273,7 +272,19 @@ export async function fetchExploreFeed(args: {
   time: ExploreTime;
   spaceFilterId: string | null;
   cursor: string | null;
-  walletAddress?: string | null;
+  /**
+   * The viewer's personal space, already resolved and validated by the caller.
+   *
+   * Passed in rather than re-derived here. Both routes resolve it before they get this
+   * far, so looking it up again cost a second `fetchProfile` for the same wallet in a
+   * later sequential stage — and the value they hold is the better one: `fetchProfile`
+   * puts the *wallet address* in `spaceId` on all three of its failure paths, which
+   * passes a truthy check and then reaches a `UUID!` argument (see the note on
+   * `getGovernanceHomeSpaceContext`). `resolveMemberSpaceFromWallet` validates it and
+   * falls back to `getSpaceByAddress`, so pending-membership state stops being silently
+   * wrong for exactly the users whose profile lookup already failed.
+   */
+  personalMemberSpaceId?: string | null;
   memberOrEditorSpaceIds: string[];
   /** Restrict surfaced entities to these type IDs (via `filter.typeIds.overlaps`). Omit for no type filter. */
   typeIds?: readonly string[];
@@ -304,17 +315,13 @@ export async function fetchExploreFeed(args: {
       hasPendingMembershipRequest: false,
     }));
 
-    const wallet = args.walletAddress;
-    if (!wallet) return out;
+    const memberSpaceId = args.personalMemberSpaceId;
+    if (!memberSpaceId) return out;
 
     const pendingTargets = [...new Set(out.filter(o => !o.isMemberOrEditor).map(o => o.spaceId))];
     if (pendingTargets.length === 0) return out;
 
     try {
-      const profile = await Effect.runPromise(fetchProfile(wallet));
-      const memberSpaceId = profile?.spaceId;
-      if (!memberSpaceId) return out;
-
       const pendingMap = new Map<string, boolean>();
       await Promise.all(
         pendingTargets.map(async sid => {
@@ -335,7 +342,7 @@ export async function fetchExploreFeed(args: {
         }
       }
     } catch {
-      /* Profile / membership checks must not drop the whole feed when subgraph is flaky. */
+      /* Membership checks must not drop the whole feed when subgraph is flaky. */
     }
     return out;
   };

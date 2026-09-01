@@ -71,7 +71,7 @@ export async function GET(request: Request) {
       time,
       spaceFilterId: spaceId,
       cursor,
-      walletAddress: cookieWallet ?? null,
+      personalMemberSpaceId,
       memberOrEditorSpaceIds,
       // Activity: no type whitelist, but keep the name requirement so unnamed
       // entities (e.g. property system rows) don't clutter the feed.

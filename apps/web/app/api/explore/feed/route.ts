@@ -34,6 +34,38 @@ function parseTime(raw: string | null): ExploreTime {
   return 'all';
 }
 
+const EMPTY_BROWSE: BrowseSidebarData = {
+  featured: [],
+  editorOf: [],
+  memberOf: [],
+  documentationImage: null,
+  personalSpaceId: null,
+};
+
+/** The viewer's own spaces, degrading to just their personal space if governance is down. */
+async function resolveMemberOrEditorSpaceIds(personalMemberSpaceId: string | null): Promise<string[]> {
+  if (!personalMemberSpaceId) return [];
+  try {
+    const ctx = await getGovernanceHomeSpaceContext(personalMemberSpaceId);
+    return [...new Set([...ctx.editorIds, ...ctx.myProposalSpaceIds, personalMemberSpaceId])];
+  } catch {
+    return [personalMemberSpaceId];
+  }
+}
+
+/** Sidebar data, retried signed-out before giving up, so one bad member lookup isn't fatal. */
+async function resolveBrowseSidebarData(personalMemberSpaceId: string | null): Promise<BrowseSidebarData> {
+  try {
+    return await fetchBrowseSidebarData(personalMemberSpaceId);
+  } catch {
+    try {
+      return await fetchBrowseSidebarData(null);
+    } catch {
+      return EMPTY_BROWSE;
+    }
+  }
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sort = parseSort(searchParams.get('sort'));
@@ -48,37 +80,18 @@ export async function GET(request: Request) {
 
   const cookieWallet = (await cookies()).get(WALLET_ADDRESS)?.value;
 
-  let personalMemberSpaceId: string | null = null;
-  let memberOrEditorSpaceIds: string[] = [];
+  const personalMemberSpaceId = cookieWallet ? await resolveMemberSpaceFromWalletSafe(cookieWallet) : null;
 
-  if (cookieWallet) {
-    personalMemberSpaceId = await resolveMemberSpaceFromWalletSafe(cookieWallet);
-    if (personalMemberSpaceId) {
-      try {
-        const ctx = await getGovernanceHomeSpaceContext(personalMemberSpaceId);
-        memberOrEditorSpaceIds = [...new Set([...ctx.editorIds, ...ctx.myProposalSpaceIds, personalMemberSpaceId])];
-      } catch {
-        memberOrEditorSpaceIds = [personalMemberSpaceId];
-      }
-    }
-  }
-
-  let browse: BrowseSidebarData;
-  try {
-    browse = await fetchBrowseSidebarData(personalMemberSpaceId);
-  } catch {
-    try {
-      browse = await fetchBrowseSidebarData(null);
-    } catch {
-      browse = {
-        featured: [],
-        editorOf: [],
-        memberOf: [],
-        documentationImage: null,
-        personalSpaceId: null,
-      };
-    }
-  }
+  // Concurrent, because neither consumes the other's output: both need only
+  // `personalMemberSpaceId`, and `memberOrEditorSpaceIds` is handed to `fetchExploreFeed`
+  // separately from the sidebar data. Awaiting them one after the other spent a round trip
+  // on nothing. (They do overlap in what they ask for — both want the viewer's editor and
+  // member spaces — but that is deduped by the request-level memos on `fetchEditorSpaceIds`
+  // and `fetchMemberSpaces` rather than by ordering.)
+  const [memberOrEditorSpaceIds, browse] = await Promise.all([
+    resolveMemberOrEditorSpaceIds(personalMemberSpaceId),
+    resolveBrowseSidebarData(personalMemberSpaceId),
+  ]);
 
   let spaceFilter: string | null = null;
   if (spaceId && spaceId !== 'all') {
@@ -94,7 +107,7 @@ export async function GET(request: Request) {
       time,
       spaceFilterId: spaceFilter,
       cursor,
-      walletAddress: cookieWallet ?? null,
+      personalMemberSpaceId,
       memberOrEditorSpaceIds,
       typeIds,
       requireName: true,
