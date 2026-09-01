@@ -19,7 +19,7 @@ vi.mock('~/core/state/editor/editor-provider', () => ({
   useActiveTabIdForEditor: () => mocks.activeTabId,
 }));
 
-// The tab bar and the editor are both exercised elsewhere; here they only need to be identifiable.
+// The tab bar and the editor are exercised elsewhere; here they only need to be identifiable.
 vi.mock('~/design-system/tab-group', () => ({
   TabGroup: ({ tabs }: { tabs: Array<{ label: string; href: string }> }) => (
     <nav data-testid="tab-group">
@@ -36,16 +36,25 @@ vi.mock('~/partials/editor/editor', () => ({
   Editor: () => <div data-testid="tab-blocks">tab blocks</div>,
 }));
 
-const { CustomViewTabs } = await import('./custom-view-tabs');
+const { useCustomViewTabs } = await import('./custom-view-tabs');
 
 const ENTITY = '07842862d2c3654c0324a07bc7cce1a4';
 const SPACE = 'a379046c74a140178e1c0545c72767c5';
 
-function view() {
-  return render(
-    <CustomViewTabs entityId={ENTITY} spaceId={SPACE} initialTabRelations={[]} tabEntities={[]}>
-      <div data-testid="custom-view">custom view</div>
-    </CustomViewTabs>
+/** Renders the slot the way a custom view does: the bar at its seam, the body under it. */
+function Harness() {
+  const { bar, body } = useCustomViewTabs({
+    entityId: ENTITY,
+    spaceId: SPACE,
+    initialTabRelations: [],
+    tabEntities: [],
+  });
+  return (
+    <div>
+      <div data-testid="shared-chrome">shared</div>
+      {bar}
+      {body ?? <div data-testid="overview-content">overview</div>}
+    </div>
   );
 }
 
@@ -58,14 +67,13 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe('CustomViewTabs', () => {
-  // A lone "Overview" tab is chrome that does nothing, which is what the generic page already
-  // decides for itself.
-  it('renders the custom view alone when the entity has no other tabs', () => {
-    view();
+describe('useCustomViewTabs', () => {
+  // A lone "Overview" is chrome that does nothing, which is what the generic page already decides.
+  it('offers no bar when the entity has no other tabs', () => {
+    render(<Harness />);
 
-    expect(screen.getByTestId('custom-view')).toBeInTheDocument();
     expect(screen.queryByTestId('tab-group')).not.toBeInTheDocument();
+    expect(screen.getByTestId('overview-content')).toBeInTheDocument();
   });
 
   it('puts the custom view first, as Overview, and the entity tabs after it in order', () => {
@@ -73,7 +81,7 @@ describe('CustomViewTabs', () => {
       { id: 'tab-sources', name: 'Sources' },
       { id: 'tab-timeline', name: 'Timeline' },
     ];
-    view();
+    render(<Harness />);
 
     expect(tabLabels()).toEqual(['Overview', 'Sources', 'Timeline']);
     // Overview is where the page lands, so it carries no tab parameter.
@@ -84,31 +92,39 @@ describe('CustomViewTabs', () => {
     );
   });
 
-  it('shows the custom view on the Overview tab', () => {
+  it('leaves the view its own content on the Overview tab', () => {
     mocks.tabs = [{ id: 'tab-sources', name: 'Sources' }];
-    view();
+    render(<Harness />);
 
-    expect(screen.getByTestId('custom-view')).toBeInTheDocument();
+    expect(screen.getByTestId('overview-content')).toBeInTheDocument();
     expect(screen.queryByTestId('tab-blocks')).not.toBeInTheDocument();
   });
 
-  it("shows the selected tab's blocks instead of the custom view", () => {
+  it("hands back the selected tab's blocks in place of the view's own content", () => {
     mocks.tabs = [{ id: 'tab-sources', name: 'Sources' }];
     mocks.activeTabId = 'tab-sources';
-    view();
+    render(<Harness />);
 
     expect(screen.getByTestId('tab-blocks')).toBeInTheDocument();
-    expect(screen.queryByTestId('custom-view')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('overview-content')).not.toBeInTheDocument();
   });
 
-  // There is only ever one Overview, and on these views it is always the custom view.
+  // Everything the view renders above the bar describes the entity, so it stays put.
+  it('replaces only what sits below the bar', () => {
+    mocks.tabs = [{ id: 'tab-sources', name: 'Sources' }];
+    mocks.activeTabId = 'tab-sources';
+    render(<Harness />);
+
+    expect(screen.getByTestId('shared-chrome')).toBeInTheDocument();
+  });
+
   describe('Overview collision', () => {
     it("drops the entity's own Overview tab", () => {
       mocks.tabs = [
         { id: 'tab-overview', name: 'Overview' },
         { id: 'tab-sources', name: 'Sources' },
       ];
-      view();
+      render(<Harness />);
 
       expect(tabLabels()).toEqual(['Overview', 'Sources']);
       expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('href', `/space/${SPACE}/${ENTITY}`);
@@ -121,32 +137,31 @@ describe('CustomViewTabs', () => {
         { id: 'tab-b', name: 'OVERVIEW' },
         { id: 'tab-c', name: 'Sources' },
       ];
-      view();
+      render(<Harness />);
 
       expect(tabLabels()).toEqual(['Overview', 'Sources']);
     });
 
-    // A link to the suppressed tab resolves to the custom view, since a dropped tab is not in the
-    // list the active tab is matched against.
+    // A dropped tab is not in the list the active tab is matched against, so a link to it lands on
+    // the custom view rather than on nothing.
     it('lands on the custom view when a link points at the suppressed tab', () => {
       mocks.tabs = [
         { id: 'tab-overview', name: 'Overview' },
         { id: 'tab-sources', name: 'Sources' },
       ];
       mocks.activeTabId = 'tab-overview';
-      view();
+      render(<Harness />);
 
-      expect(screen.getByTestId('custom-view')).toBeInTheDocument();
+      expect(screen.getByTestId('overview-content')).toBeInTheDocument();
       expect(screen.queryByTestId('tab-blocks')).not.toBeInTheDocument();
     });
 
-    // An entity whose only other tab is its own Overview has nothing to switch to.
-    it('renders no bar when the only other tab was the suppressed one', () => {
+    it('offers no bar when the only other tab was the suppressed one', () => {
       mocks.tabs = [{ id: 'tab-overview', name: 'Overview' }];
-      view();
+      render(<Harness />);
 
       expect(screen.queryByTestId('tab-group')).not.toBeInTheDocument();
-      expect(screen.getByTestId('custom-view')).toBeInTheDocument();
+      expect(screen.getByTestId('overview-content')).toBeInTheDocument();
     });
   });
 });

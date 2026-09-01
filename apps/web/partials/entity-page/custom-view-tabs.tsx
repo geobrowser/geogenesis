@@ -12,76 +12,75 @@ import { Editor } from '~/partials/editor/editor';
 
 import { OVERVIEW_TAB_LABEL, isOverviewTabName, useEntityTabEntities } from './use-entity-tab-entities';
 
-type CustomViewTabsProps = {
+/**
+ * The tab bar and the switched region, handed to a custom view to place itself.
+ *
+ * The view decides the seam, because only it knows which of its sections describe the entity and
+ * which are its Overview content: on a claim the split falls after My position, on a topic after
+ * the distribution strip. Everything the view renders above `bar` stays put whichever tab is open.
+ */
+export type CustomViewTabsSlot = {
+  /** The tab bar. `null` when the entity has no other tabs and there is nothing to switch to. */
+  bar: React.ReactNode;
+  /** The selected tab's blocks, or `null` while Overview is showing and the view renders its own. */
+  body: React.ReactNode | null;
+};
+
+export type CustomViewTabsInput = {
   entityId: string;
   spaceId: string;
   initialTabRelations: Relation[];
   tabEntities: TabEntity[];
-  /** The custom view. It is what the Overview tab shows. */
-  children: React.ReactNode;
 };
 
 /**
- * The column the custom claim and topic views lay themselves out in.
+ * An entity's other tabs, for a custom claim or topic view (GEO-2779).
  *
- * Repeated here rather than imported from either of them: the tab bar and a tab's blocks have to
- * line up with whichever view is underneath, and both use these measurements. Kept in one constant
- * so the three cannot drift apart.
- */
-const COLUMN_CLASS_NAME = 'mx-auto w-full max-w-[720px] px-4 @[560px]:px-5';
-
-/**
- * A custom view, with the underlying entity's other tabs beside it (GEO-2779).
- *
- * The claim and topic views replace the generic entity page rather than sitting inside it, so they
- * never reached the tab bar and an entity's other tabs were simply unreachable from them. Here the
- * custom view *is* the Overview tab — the first tab and the one the page lands on — and the
- * entity's own tabs follow, in the order the entity defines them.
+ * These views replace the generic entity page rather than sitting inside it, so they never reached
+ * the tab bar and an entity's other tabs were unreachable from them. Here the custom view *is* the
+ * Overview tab — the first tab and the one the page lands on — and the entity's own tabs follow, in
+ * the order the entity defines them.
  *
  * Two rules from the ticket fall out of that framing rather than needing to be enforced separately:
  *
- * - **No bar for a lone tab.** With nothing to switch to, a single "Overview" tab is chrome that
- *   does nothing, so the custom view renders alone — matching what the generic page already does.
+ * - **No bar for a lone tab.** With nothing to switch to, a single "Overview" is chrome that does
+ *   nothing, so the view renders alone — matching what the generic page already decides.
  * - **One Overview.** An entity that names one of its own tabs "Overview" does not get a second
- *   one; the custom view has taken that place. Its blocks are unreachable from this surface, which
- *   is the trade the ticket chose. A `?tabId=` pointing at it lands on the custom view, because a
- *   suppressed tab is not in the list this matches against.
+ *   one; the custom view has taken that place. A `?tabId=` pointing at it lands on the custom view,
+ *   because a suppressed tab is not in the list the active tab is matched against.
+ *
+ * A hook rather than a wrapper: the bar belongs partway down the view, under the sections that say
+ * what the entity is, and a component wrapped around the view could only put it above everything.
  */
-export function CustomViewTabs({ entityId, spaceId, initialTabRelations, tabEntities, children }: CustomViewTabsProps) {
+export function useCustomViewTabs({
+  entityId,
+  spaceId,
+  initialTabRelations,
+  tabEntities,
+}: CustomViewTabsInput): CustomViewTabsSlot {
   const { tabs } = useEntityTabEntities({ entityId, spaceId, initialTabRelations, tabEntities });
   const activeTabId = useActiveTabIdForEditor();
 
   const additionalTabs = React.useMemo(() => tabs.filter(tab => !isOverviewTabName(tab.name)), [tabs]);
 
-  if (additionalTabs.length === 0) {
-    return <>{children}</>;
-  }
+  return React.useMemo(() => {
+    if (additionalTabs.length === 0) return { bar: null, body: null };
 
-  const overviewHref = NavUtils.toEntity(spaceId, entityId);
-  const isAdditionalTabActive = additionalTabs.some(tab => tab.id === activeTabId);
+    const overviewHref = NavUtils.toEntity(spaceId, entityId);
+    const isAdditionalTabActive = additionalTabs.some(tab => tab.id === activeTabId);
 
-  return (
-    <div className="@container">
-      <div className={`${COLUMN_CLASS_NAME} pt-6 @[560px]:pt-8`}>
+    return {
+      bar: (
         <TabGroup
           tabs={[
             { label: OVERVIEW_TAB_LABEL, href: overviewHref },
-            ...additionalTabs.map(tab => ({
-              label: tab.name ?? '',
-              href: `${overviewHref}?tabId=${tab.id}`,
-            })),
+            ...additionalTabs.map(tab => ({ label: tab.name ?? '', href: `${overviewHref}?tabId=${tab.id}` })),
           ]}
         />
-      </div>
-      {isAdditionalTabActive ? (
-        // The editor is already scoped to `?tabId=` by `EditorBlocksProvider`, so this renders the
-        // selected tab's blocks without being told which tab is open.
-        <div className={`${COLUMN_CLASS_NAME} pt-6 pb-8 @[560px]:pt-8`}>
-          <Editor spaceId={spaceId} shouldHandleOwnSpacing />
-        </div>
-      ) : (
-        children
-      )}
-    </div>
-  );
+      ),
+      // The editor is already scoped to the active tab by `EditorBlocksProvider`, so this renders
+      // the selected tab's blocks without being told which one is open.
+      body: isAdditionalTabActive ? <Editor spaceId={spaceId} shouldHandleOwnSpacing /> : null,
+    };
+  }, [additionalTabs, activeTabId, entityId, spaceId]);
 }

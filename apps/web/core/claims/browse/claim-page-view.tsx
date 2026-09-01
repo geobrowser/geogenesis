@@ -21,6 +21,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import type { CustomViewTabsSlot } from '~/partials/entity-page/custom-view-tabs';
 import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
 
 import { ClaimDebates } from './claim-debates';
@@ -50,7 +51,16 @@ const TOPIC_CHIP_CAP = 3;
  * never been debated, that carries no topics and was authored by hand shows its text, its space,
  * and the controls to act on it — and nothing else.
  */
-export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+export function ClaimPageView({
+  entityId,
+  spaceId,
+  tabs,
+}: {
+  entityId: string;
+  spaceId: string;
+  /** The entity's other tabs. Everything above the bar is shared across all of them. */
+  tabs?: CustomViewTabsSlot;
+}) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
 
   // Hoisted so one lookup answers for the whole page. geo-chat's row and the graph's `Is factual`
@@ -156,17 +166,26 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
 
         <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
 
-        <ClaimDebates claimId={entityId} spaceId={spaceId} responseKind={responseKind} />
+        {/* The seam. What sits above says which claim this is and lets you take a side on it, and
+            that holds whichever tab is open; what sits below is this claim's Overview content, and
+            is what another tab replaces. */}
+        {tabs?.bar}
 
-        <ClaimProvenance claimId={entityId} claimRelations={entity.relations} spaceId={spaceId} />
+        {tabs?.body ?? (
+          <>
+            <ClaimDebates claimId={entityId} spaceId={spaceId} responseKind={responseKind} />
 
-        <ClaimRelatedClaims claimId={entityId} spaceId={spaceId} topicIds={topicIds} />
+            <ClaimProvenance claimId={entityId} claimRelations={entity.relations} spaceId={spaceId} />
 
-        {/* Last, and in the same `page` variant a regular entity uses — the entity body renders it
-            this way for both the route and the side panel, and only the dedicated comments panel
-            asks for the `panel` variant. Unlike the modules above, this one always renders: an
-            empty thread is an invitation to start it, not an absence to hide. */}
-        <CommentSection entityId={entityId} spaceId={spaceId} />
+            <ClaimRelatedClaims claimId={entityId} spaceId={spaceId} topicIds={topicIds} />
+
+            {/* Last, and in the same `page` variant a regular entity uses — the entity body renders
+                it this way for both the route and the side panel, and only the dedicated comments
+                panel asks for the `panel` variant. Unlike the modules above, this one always
+                renders: an empty thread is an invitation to start it, not an absence to hide. */}
+            <CommentSection entityId={entityId} spaceId={spaceId} />
+          </>
+        )}
       </div>
     </div>
   );

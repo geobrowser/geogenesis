@@ -15,6 +15,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import type { CustomViewTabsSlot } from '~/partials/entity-page/custom-view-tabs';
 
 import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
 import { TopicClaims } from './topic-claims';
@@ -47,7 +48,16 @@ const META_CHIP_CLASS = 'flex h-6 max-w-full items-center rounded border border-
  * Sections render only when they have something to show, and the order is fixed — the composition
  * strip carries the variation between topics instead, so every topic is structurally the same page.
  */
-export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+export function TopicPageView({
+  entityId,
+  spaceId,
+  tabs,
+}: {
+  entityId: string;
+  spaceId: string;
+  /** The entity's other tabs. Everything above the bar is shared across all of them. */
+  tabs?: CustomViewTabsSlot;
+}) {
   const { entity, isLoading } = useQueryEntity({ id: entityId, spaceId });
 
   const subtopics = React.useMemo(() => {
@@ -128,7 +138,7 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
               isn't either, so scaling this one down in the side panel would reintroduce exactly the
               mismatch it is here to remove. `text-pretty` stays — it governs where the line breaks,
               not how big it is. */}
-          <Text as="h1" variant="mainPage" color="text" className="block wrap-break-word text-pretty">
+          <Text as="h1" variant="mainPage" color="text" className="block text-pretty wrap-break-word">
             {entity.name ?? entity.id}
           </Text>
 
@@ -146,15 +156,24 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
 
         <TopicComposition topicId={entityId} spaceId={spaceId} />
 
-        <TopicSubtopics subtopics={subtopics} spaceId={spaceId} />
+        {/* The seam. What sits above says which topic this is and how it is made up, and that holds
+            whichever tab is open; what sits below is this topic's Overview content, and is what
+            another tab replaces. */}
+        {tabs?.bar}
 
-        <TopicDebates topicId={entityId} spaceId={spaceId} />
+        {tabs?.body ?? (
+          <>
+            <TopicSubtopics subtopics={subtopics} spaceId={spaceId} />
 
-        <TopicClaims topicId={entityId} spaceId={spaceId} />
+            <TopicDebates topicId={entityId} spaceId={spaceId} />
 
-        <TopicCoverage topicId={entityId} spaceId={spaceId} />
+            <TopicClaims topicId={entityId} spaceId={spaceId} />
 
-        <CommentSection entityId={entityId} spaceId={spaceId} />
+            <TopicCoverage topicId={entityId} spaceId={spaceId} />
+
+            <CommentSection entityId={entityId} spaceId={spaceId} />
+          </>
+        )}
       </div>
     </div>
   );
