@@ -14,6 +14,7 @@ import {
   mergeFilterRows,
   reducer,
   seedColumnDraftFromCommittedFilters,
+  withPendingMode,
 } from './table-block-filter-prompt-state';
 
 const TYPES_COLUMN = SystemIds.TYPES_PROPERTY;
@@ -229,5 +230,35 @@ describe('pending chip labels', () => {
 
     expect(chips).toHaveLength(1);
     expect(chips[0].columnName).toBe('Types');
+  });
+});
+
+describe('pending AND/OR choices', () => {
+  it('records a mode that differs from what the column has committed', () => {
+    expect(withPendingMode({}, TYPES_COLUMN, 'OR', 'AND')).toEqual({ [TYPES_COLUMN]: 'OR' });
+  });
+
+  it('records AND as a real override when the committed mode is OR', () => {
+    expect(withPendingMode({}, TYPES_COLUMN, 'AND', 'OR')).toEqual({ [TYPES_COLUMN]: 'AND' });
+  });
+
+  it('drops the entry when the mode is toggled back to the committed one', () => {
+    const withOverride = withPendingMode({}, TYPES_COLUMN, 'OR', 'AND');
+    // Now that dismissing commits, a kept entry here would turn an otherwise
+    // untouched dismiss into a write.
+    expect(withPendingMode(withOverride, TYPES_COLUMN, 'AND', 'AND')).toEqual({});
+  });
+
+  it('keeps the same reference when nothing changes', () => {
+    const previous = { [TYPES_COLUMN]: 'OR' } as const;
+    expect(withPendingMode(previous, TYPES_COLUMN, 'OR', 'AND')).toBe(previous);
+    expect(withPendingMode({}, TYPES_COLUMN, 'AND', 'AND')).toEqual({});
+  });
+
+  it("leaves other columns' choices alone", () => {
+    const previous = withPendingMode({}, TYPES_COLUMN, 'OR', 'AND');
+    const next = withPendingMode(previous, SystemIds.NAME_PROPERTY, 'OR', 'AND');
+    expect(next).toEqual({ [TYPES_COLUMN]: 'OR', [SystemIds.NAME_PROPERTY]: 'OR' });
+    expect(withPendingMode(next, SystemIds.NAME_PROPERTY, 'AND', 'AND')).toEqual({ [TYPES_COLUMN]: 'OR' });
   });
 });
