@@ -41,6 +41,35 @@ export function HubCardList({ children, className }: { children: React.ReactNode
   );
 }
 
+/**
+ * The slot pinned above a tab's filters, holding at most one card — today the request you've sent.
+ */
+export function HubPinnedSlot({ children }: { children: React.ReactNode }) {
+  return (
+    <AnimatePresence initial={false}>
+      {children ? (
+        <motion.div
+          key="hub-pinned-slot"
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={HUB_LAYOUT_TRANSITION}
+          className="overflow-hidden"
+        >
+          {children}
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+}
+
+export const hubRowMotion = {
+  layout: true,
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  transition: HUB_LAYOUT_TRANSITION,
+} as const;
+
 /** Cross-fades between two states of the same region — skeleton to content, tab to tab. */
 export function HubSwap({ activeKey, children }: { activeKey: string; children: React.ReactNode }) {
   return (
