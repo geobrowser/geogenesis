@@ -680,6 +680,9 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
   const size = RANKING_OG_VARIANT_SIZES[variant];
   const scale = scaleForVariant(variant);
   const entries = data.entries.slice(0, 5);
+  const brandTop = isStory ? 154 : 26;
+  const titleTop = isStory ? 242 : 114;
+  const listTop = isStory ? 560 : 114;
 
   return (
     <div
@@ -700,7 +703,17 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
         style={{
           position: 'absolute',
           left: scaled(isStory ? 78 : 52, scale),
-          top: scaled(isStory ? 154 : 64, scale),
+          top: scaled(brandTop, scale),
+          display: 'flex',
+        }}
+      >
+        <BrandMark variant={variant} scale={scale} />
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          left: scaled(isStory ? 78 : 52, scale),
+          top: scaled(titleTop, scale),
           width: scaled(isStory ? 680 : 318, scale),
           display: 'flex',
           flexDirection: 'column',
@@ -721,7 +734,7 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
         style={{
           position: 'absolute',
           left: scaled(isStory ? 110 : 384, scale),
-          top: scaled(isStory ? 560 : 114, scale),
+          top: scaled(listTop, scale),
           width: scaled(isStory ? 890 : 790, scale),
           display: 'flex',
           flexDirection: 'column',
@@ -741,16 +754,6 @@ function Card({ data, variant }: { data: RankingOgCardData; variant: RankingOgVa
             <EmptyRows variant={variant} scale={scale} />
           )}
         </div>
-      </div>
-      <div
-        style={{
-          position: 'absolute',
-          left: scaled(isStory ? 78 : 52, scale),
-          bottom: scaled(isStory ? 132 : 116, scale),
-          display: 'flex',
-        }}
-      >
-        <BrandMark variant={variant} scale={scale} />
       </div>
     </div>
   );
