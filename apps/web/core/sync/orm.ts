@@ -86,6 +86,26 @@ export function getSearchResultNameForTopSpace(
   return hasName(result.name) ? result.name : null;
 }
 
+/**
+ * Search hits the graph can no longer resolve.
+ *
+ * The search index outlives the entities it points at: `/search` still ranks an entity that has
+ * been deleted, and choosing one adds a collection item that resolves to nothing — a row with no
+ * name, no page to open, and no way to tell it apart from a real one. Search already asks the graph
+ * about every remote hit to widen their space lists, so an id missing from that answer is one the
+ * graph doesn't have.
+ *
+ * Only trusted when the answer carried something. An empty response to a non-empty ask is far more
+ * likely to be the graph having a bad moment than every hit being a ghost, and blanking the search
+ * results on that reading is the worse failure of the two.
+ */
+export function selectUnresolvableRemoteIds(requestedIds: string[], resolvedIds: string[]): Set<string> {
+  if (resolvedIds.length === 0) return new Set();
+
+  const resolved = new Set(resolvedIds);
+  return new Set(requestedIds.filter(id => !resolved.has(id)));
+}
+
 export function applyKnownEntitySpaces(
   result: SearchResult,
   knownEntity: Pick<Entity, 'spaces'> | null | undefined
@@ -567,9 +587,17 @@ export class E {
       remoteEntities.map(e => [e.id as string, applyKnownEntitySpaces(e, remoteEntityDetailsById.get(e.id))])
     );
 
-    const maybeEntities = mergedIds.map(entityId => {
-      return mergeSearchResult({ id: entityId, store, mergeWith: remoteById.get(entityId) });
-    });
+    const unresolvableRemoteIds = selectUnresolvableRemoteIds(
+      dedupedRemoteIds,
+      remoteEntityDetails.map(entity => entity.id)
+    );
+
+    const maybeEntities = mergedIds
+      // A local-only id was never in the remote answer to begin with, so it is never a ghost.
+      .filter(entityId => !unresolvableRemoteIds.has(entityId))
+      .map(entityId => {
+        return mergeSearchResult({ id: entityId, store, mergeWith: remoteById.get(entityId) });
+      });
 
     const entities = maybeEntities
       .filter(e => e !== null)
