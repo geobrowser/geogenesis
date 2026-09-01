@@ -1,6 +1,12 @@
 import { Effect, Either } from 'effect';
 
-import { FEATURED_TAG_ID, ROOT_SPACE, SUBTOPIC_RELATION_TYPE_ID, TAG_PROPERTY_ID } from '~/core/constants';
+import {
+  FEATURED_TAG_ID,
+  PLACEHOLDER_SPACE_IMAGE,
+  ROOT_SPACE,
+  SUBTOPIC_RELATION_TYPE_ID,
+  TAG_PROPERTY_ID,
+} from '~/core/constants';
 import { Environment } from '~/core/environment';
 import { getSpaceRank, getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 
@@ -216,57 +222,25 @@ export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
  * cap trims the deepest topics first; the returned list is ordered by space rank
  * (then name), not tree position.
  */
+/**
+ * EXPERIMENT ONLY — GEO-2777 isolation. Do not merge.
+ *
+ * The five spaces the live traversal actually returns, frozen. Skips every query the
+ * discovery step makes so a cold-instance measurement isolates the traversal's cost from
+ * everything else on the route.
+ */
+const HARDCODED_FEATURED: FeaturedSpace[] = [
+  { spaceId: 'c9f267dcb0d270718c2a3c45a64afd32', topicId: '0fcd62b5798f4078b84fa535ac95fcf3', name: 'Crypto', image: PLACEHOLDER_SPACE_IMAGE, memberCount: 297 },
+  { spaceId: '41e851610e13a19441c4d980f2f2ce6b', topicId: '8cb0a2b4adbf4627aa080cec5112099a', name: 'AI', image: PLACEHOLDER_SPACE_IMAGE, memberCount: 303 },
+  { spaceId: '52c7ae149838b6d47ce0f3b2a5974546', topicId: 'b97f07a619fd4ab0bb3d8296a8a26ab9', name: 'Health', image: PLACEHOLDER_SPACE_IMAGE, memberCount: 252 },
+  { spaceId: '89bd89bf28ff8a0963faf92a8c905e20', topicId: '49fbca0730974581a9f0300d52fd22d6', name: 'World affairs', image: PLACEHOLDER_SPACE_IMAGE, memberCount: 73 },
+  { spaceId: '4582fbbee28a16589154f7e36f1ee3c5', topicId: 'f51d68d17d544a96800bc447c8ecb0d3', name: 'US Politics', image: PLACEHOLDER_SPACE_IMAGE, memberCount: 42 },
+];
+
 export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
-  const root = await runQuery<RootResult>(ROOT_QUERY);
-  // `runQuery` returns null only on a failed request (aborts already rethrew).
-  if (root === null) throw new Error('Failed to load featured spaces');
-  const rootTopicId = root.space?.topicId;
-  if (!rootTopicId) return [];
-
-  // Seed the traversal with the Root topic's children so the Root topic (and
-  // therefore the Root space) is never featured in its own panel.
-  const visited = new Set<string>([rootTopicId]);
-  const seenSpaceIds = new Set<string>();
-  const featured: FeaturedSpace[] = [];
-
-  let frontier: string[] = [rootTopicId];
-
-  while (frontier.length > 0 && visited.size < MAX_NODES && featured.length < MAX_FEATURED) {
-    const batch = frontier.slice(0, BATCH_SIZE);
-    const overflow = frontier.slice(BATCH_SIZE);
-
-    const result = await runQuery<FrontierResult>(frontierQuery(batch));
-    const topics = result?.entities ?? [];
-
-    const nextFrontier: string[] = [];
-
-    for (const topic of topics) {
-      // Emit a pill if this topic is tagged Featured in Root and a space claims
-      // it. Skip the Root topic seed (it still comes back in round 1).
-      if (topic.id !== rootTopicId) {
-        addFeaturedFromTopic(topic, seenSpaceIds, featured);
-      }
-
-      for (const rel of topic.subtopics ?? []) {
-        const childId = rel.toEntity?.id;
-        if (!childId || visited.has(childId)) continue;
-        visited.add(childId);
-        nextFrontier.push(childId);
-      }
-    }
-
-    frontier = [...overflow, ...nextFrontier];
-  }
-
-  // Display order is by curated space rank, then name — independent of where
-  // the space sat in the subtopic tree.
-  featured.sort((a, b) => {
-    const rankDelta = getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId);
-    if (rankDelta !== 0) return rankDelta;
-    return a.name.localeCompare(b.name);
-  });
-
-  return featured.slice(0, MAX_FEATURED);
+  // EXPERIMENT ONLY — GEO-2777. Returns before any query so a cold-instance measurement
+  // isolates the traversal's cost from the rest of the route.
+  return HARDCODED_FEATURED;
 }
 
 function addFeaturedFromTopic(topic: TopicNode, seenSpaceIds: Set<string>, featured: FeaturedSpace[]): void {
