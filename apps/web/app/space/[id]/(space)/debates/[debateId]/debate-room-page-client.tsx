@@ -2699,6 +2699,11 @@ function DebateRecordingRemovedDialog({
   );
 }
 
+/** The hairline between the card's rows. `divider` is the design's own #F0F0F0. */
+function CardDivider() {
+  return <div className="h-px w-full shrink-0 bg-divider" />;
+}
+
 function DebateAgainCard({
   opponentName,
   localConsented,
@@ -2722,25 +2727,30 @@ function DebateAgainCard({
   return (
     <section className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg bg-white px-3 py-2 text-text shadow-card">
       {publishing !== null && (
-        <div className="flex min-h-7 items-center justify-between gap-2.5">
-          <Text as="span" variant="smallTitle" color="text">
-            Publish debate?
-          </Text>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={publishing}
-            aria-label="Publish debate"
-            // Off is one-way — it cancels the upload — so the control only acts on the way down.
-            // Left interactive while on so the label and the switch still read as one thing.
-            onClick={publishing ? onStopPublishing : undefined}
-            disabled={publishBusy || !publishing}
-            className="flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-3 text-metadata disabled:cursor-default"
-          >
-            <Toggle checked={publishing} />
-            <span className={publishing ? 'text-text' : 'text-grey-04'}>{publishing ? 'Yes' : 'No'}</span>
-          </button>
-        </div>
+        <>
+          <div className="flex min-h-7 items-center justify-between gap-2.5">
+            <Text as="span" variant="smallTitle" color="text">
+              Publish debate?
+            </Text>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={publishing}
+              aria-label="Publish debate"
+              // Off is one-way — it cancels the upload — so the control only acts on the way down.
+              // Left interactive while on so the label and the switch still read as one thing.
+              onClick={publishing ? onStopPublishing : undefined}
+              disabled={publishBusy || !publishing}
+              className="flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 text-metadata text-grey-04 disabled:cursor-default"
+            >
+              <Toggle checked={publishing} />
+              <span>{publishing ? 'Yes' : 'No'}</span>
+            </button>
+          </div>
+          {/* Inside the conditional: with no publish row above it this would be a hairline
+              hanging off the top of the card. */}
+          <CardDivider />
+        </>
       )}
       <div className="flex min-h-7 items-center justify-between gap-2.5">
         <Text as="span" variant="smallTitle" color="text">
@@ -2758,8 +2768,10 @@ function DebateAgainCard({
           {localConsented ? 'Waiting...' : busy ? 'Saving...' : "Let's go!"}
         </button>
       </div>
+      <CardDivider />
       <div className="flex min-h-7 items-center justify-between gap-2.5">
-        <Text as="span" variant="smallTitle" color="text" className="min-w-0 truncate">
+        {/* Grey until they are ready, like the pill beside it — the design shows the waiting state. */}
+        <Text as="span" variant="smallTitle" color={remoteConsented ? 'text' : 'grey-04'} className="min-w-0 truncate">
           {opponentName}
         </Text>
         <span

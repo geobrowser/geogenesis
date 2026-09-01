@@ -3224,6 +3224,25 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.setPublishOptOutRequest).toHaveBeenCalledWith('debate-1');
   });
 
+  // The card's rows are separated by hairlines in the design, and the first one belongs to the
+  // publish row — without it the card would open on a rule with nothing above it.
+  it('rules off the publish row only when there is one', async () => {
+    thankingDebateAtFinalTurn();
+    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false };
+
+    const { rerender } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByRole('switch', { name: 'Publish debate' });
+    const card = screen.getByText('Debate again?').closest('section');
+    expect(card?.querySelectorAll('.bg-divider')).toHaveLength(2);
+
+    mocks.publishOptOutOffer = { debateId: null, busy: false };
+    rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull());
+    expect(screen.getByText('Debate again?').closest('section')?.querySelectorAll('.bg-divider')).toHaveLength(1);
+  });
+
   it('reads as off once the recording has been pulled back, rather than vanishing', async () => {
     thankingDebateAtFinalTurn();
     // Nothing left to cancel, because it already was.
