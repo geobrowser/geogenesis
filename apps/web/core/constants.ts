@@ -67,6 +67,13 @@ export type BountyDifficultyLevel = (typeof BOUNTY_DIFFICULTY_LEVELS)[number];
 export const BOUNTY_EST_PAYOUT_RATIO = 0.2;
 export const PROPOSAL_TYPE_ID = '490a7c90ad4b4029b2b4d85d22fe203a';
 
+// Curator-program accretion analytics
+export const PAYOUT_TYPE_ID = 'f5132deb102d64553049f1e9cb662f50';
+export const PAYOUT_AMOUNT_PROPERTY_ID = '82fe45a31df74c0291afa6e68d41cddf';
+export const PAYOUT_BOUNTY_PROPERTY_ID = '1b595a8b81fc25856a9b503e3e993331';
+export const PAYOUT_PROPOSALS_PROPERTY_ID = '8128964c1ec54829beb380a21ab64c51';
+export const PAYOUT_RECIPIENT_PROPERTY_ID = '151b0bd3440d435ab093ed5fab73db6c';
+
 export const NEWS_STORY_TYPE_ID = 'e550fe517e904b2c8fffdf13408f5634';
 export const AVATAR_PROPERTY_ID = '1155befffad549b7a2e0da4777b8792c';
 
