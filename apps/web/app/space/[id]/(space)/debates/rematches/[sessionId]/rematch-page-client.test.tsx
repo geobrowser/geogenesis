@@ -2384,6 +2384,33 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
   });
 
+  /**
+   * Reported: flipping between Featured and All on first load left the list unchanged, and only
+   * started switching after a few goes.
+   *
+   * `useLastSettled` holds the last settled list while a new one loads, keyed on the session — which
+   * does not change when the source does. Before GEO-2771 that was safe, because Featured was the
+   * only tagged source and All came from a different variable entirely. Routing both through
+   * `taggedClaims` made the hold bridge two genuinely different lists: switch, and the previous
+   * source's rows stay up for as long as the new tag takes to fetch. Once both catalogs are cached
+   * the fetch is instant, which is why it comes right after a few switches.
+   */
+  it('does not hold the previous source’s claims while the new tag loads', async () => {
+    const ONLY_FEATURED = '019fedc4-5555-7000-8000-000000000005';
+    mocks.featuredClaims = [debateTag(ONLY_FEATURED, 'Only featured')];
+    mocks.debateTagClaims = [debateTag()];
+    mocks.entities = [sharedEntity(), publishedEntity(), publishedEntity(ONLY_FEATURED, 'Only featured')];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await waitFor(() => expect(screen.getByText('Only featured')).toBeInTheDocument());
+
+    // The Debate tag has never been fetched, so switching to All starts a load.
+    mocks.featuredCatalogLoading = true;
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.queryByText('Only featured')).toBeNull());
+  });
+
   it('keeps an untagged claim both debaters answered on the list', async () => {
     // The shared claim carries no Debate tag. It is what the rematch is *for*, so it stays.
     mocks.debateTagClaims = [];

@@ -626,7 +626,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       spaceAllowlist,
     ]
   );
-  const taggedClaims = useLastSettled(taggedClaimsNow, taggedClaimsSettling, sessionId);
+  // Keyed on the tag as well as the session.
+  //
+  // The hold exists so a refetch doesn't blank the list, and it can only do that honestly while the
+  // list is *the same list*. Featured and All are two catalogs behind one variable now, so without
+  // the tag in the key, switching source shows the previous source's rows until the new tag lands —
+  // and lands instantly once both are cached, which is why it looked like the first few clicks did
+  // nothing at all.
+  const taggedClaims = useLastSettled(taggedClaimsNow, taggedClaimsSettling, `${sessionId}:${claimsTagId}`);
 
   // The All tab: the Debate tag, plus everything this session already knows about.
   //
@@ -683,10 +690,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const browsedClaims = useStableListOrder(
     browsedRows,
     row => `${row.claim.space_id}:${row.claim.claim_entity_id}`,
-    // Topic belongs in the key for the same reason space does: it goes out as `topic_id`, so the
-    // server ranks a different list under it, and holding the previous order would arrange the
-    // new one by a ranking the viewer has already moved on from.
-    `${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}`
+    // The source leads, for the same reason the tag is in the hold above: Featured and All are
+    // ranked separately, so a claim on both would otherwise keep the position the source the viewer
+    // just left had given it.
+    //
+    // Topic and space belong here too: each narrows to a differently ranked list, and holding the
+    // previous order would arrange the new one by a ranking the viewer has already moved on from.
+    `${source}|${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}`
   );
 
   // The opponent is whichever participant isn't the local user; with no local user there is none.
