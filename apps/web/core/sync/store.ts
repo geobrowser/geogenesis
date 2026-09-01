@@ -468,8 +468,12 @@ export class GeoStore {
       return undefined;
     }
 
-    const name = Entities.name(values);
-    const description = Entities.description(values);
+    // `options.spaceId` used to filter the values array below without touching the name and
+    // description derived from it, so a view pinned to a space still showed the top-ranked space's
+    // wording (GEO-2778). `nameInSpace` owns the rule and its fallback for every caller.
+    const spaceValues = options.spaceId ? values.filter(v => v.spaceId === options.spaceId) : values;
+    const name = Entities.nameInSpace(values, options.spaceId);
+    const description = Entities.descriptionInSpace(values, options.spaceId);
     const types = readTypes(relations);
     const spaces = Entities.spaces(values, relations);
 
@@ -492,7 +496,7 @@ export class GeoStore {
             spaces,
             nameTripleSpaces: spaces,
           }),
-      values: values.filter(v => (options.spaceId ? v.spaceId === options.spaceId : true)),
+      values: spaceValues,
       relations: relations.filter(
         r => (includeDeleted || !r.isDeleted) && (options.spaceId ? r.spaceId === options.spaceId : true)
       ),

@@ -220,15 +220,20 @@ export class E {
 
     const mergedValues = merge(localEntity.values, remoteEntity.values);
 
-    const values = mergedValues.filter(v => !v.isDeleted && (spaceId ? v.spaceId === spaceId : true));
+    const liveValues = mergedValues.filter(v => !v.isDeleted);
+    const values = liveValues.filter(v => (spaceId ? v.spaceId === spaceId : true));
 
     const mergedRelations = mergeRelations(localEntity.relations, remoteEntity.relations);
     const relations = mergedRelations.filter(r => !r.isDeleted && (spaceId ? r.spaceId === spaceId : true));
 
     // Use the merged triples to derive the name instead of the remote entity
     // `name` property in case the name was deleted/changed locally.
-    const name = Entities.name(values);
-    const description = Entities.description(values);
+    //
+    // Read from `liveValues` rather than the space-filtered `values`: this path was already scoped
+    // but had no fallback, so an entity a space had never named rendered untitled there rather than
+    // borrowing the graph's name. `nameInSpace` scopes and falls back in one place (GEO-2778).
+    const name = Entities.nameInSpace(liveValues, spaceId);
+    const description = Entities.descriptionInSpace(liveValues, spaceId);
     const types = readTypes(relations);
     const derivedSpaces = Entities.spaces(values, relations);
     const spaces = derivedSpaces.length > 0 ? derivedSpaces : remoteEntity.spaces;

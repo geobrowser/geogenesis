@@ -538,6 +538,91 @@ describe('GeoStore', () => {
 
       expect(entity).toBeUndefined();
     });
+
+    /**
+     * GEO-2778. `spaceId` filtered the values array but not the name and description derived from
+     * it, so a view pinned to a space still showed the top-ranked space's wording.
+     *
+     * ROOT outranks Crypto in `SPACE_RANK`, so an unscoped read resolves to ROOT — which makes it
+     * the wrong answer whenever the reader named Crypto, and the right one when Crypto is silent.
+     */
+    describe('name and description come from the space the reader asked for (GEO-2778)', () => {
+      const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
+      const CRYPTO = 'c9f267dcb0d270718c2a3c45a64afd32';
+
+      function textValue(id: string, propertyId: string, spaceId: string, value: string): Value {
+        return {
+          id,
+          entity: { id: 'entity-1', name: null },
+          property: { id: propertyId, name: null, dataType: 'TEXT' as DataType },
+          value,
+          spaceId,
+          isDeleted: false,
+        } as unknown as Value;
+      }
+
+      beforeEach(() => {
+        syncedEntities.set('entity-1', { ...mockEntity1, name: null, description: null });
+        reactiveRelations.set([]);
+      });
+
+      it('prefers the reader space over the higher-ranked one', () => {
+        reactiveValues.set([
+          textValue('n-root', SystemIds.NAME_PROPERTY, ROOT, 'Root wording'),
+          textValue('n-crypto', SystemIds.NAME_PROPERTY, CRYPTO, 'Crypto wording'),
+          textValue('d-root', SystemIds.DESCRIPTION_PROPERTY, ROOT, 'Root description'),
+          textValue('d-crypto', SystemIds.DESCRIPTION_PROPERTY, CRYPTO, 'Crypto description'),
+        ]);
+
+        const entity = store.getEntity('entity-1', { spaceId: CRYPTO });
+
+        expect(entity!.name).toBe('Crypto wording');
+        expect(entity!.description).toBe('Crypto description');
+      });
+
+      it('still resolves across spaces when no space is named', () => {
+        reactiveValues.set([
+          textValue('n-crypto', SystemIds.NAME_PROPERTY, CRYPTO, 'Crypto wording'),
+          textValue('n-root', SystemIds.NAME_PROPERTY, ROOT, 'Root wording'),
+          textValue('d-crypto', SystemIds.DESCRIPTION_PROPERTY, CRYPTO, 'Crypto description'),
+          textValue('d-root', SystemIds.DESCRIPTION_PROPERTY, ROOT, 'Root description'),
+        ]);
+
+        const entity = store.getEntity('entity-1');
+
+        expect(entity!.name).toBe('Root wording');
+        expect(entity!.description).toBe('Root description');
+      });
+
+      it('falls back to the graph when the reader space has neither', () => {
+        reactiveValues.set([
+          textValue('n-root', SystemIds.NAME_PROPERTY, ROOT, 'Root wording'),
+          textValue('d-root', SystemIds.DESCRIPTION_PROPERTY, ROOT, 'Root description'),
+        ]);
+
+        const entity = store.getEntity('entity-1', { spaceId: CRYPTO });
+
+        expect(entity!.name).toBe('Root wording');
+        expect(entity!.description).toBe('Root description');
+      });
+
+      // An empty string is how a cleared field reads, and `nameValue` already treats it as absent
+      // when choosing between spaces. Scoping must make the same judgement or a space that once
+      // cleared its name renders untitled while the graph has a perfectly good one.
+      it('treats an empty value in the reader space as absent', () => {
+        reactiveValues.set([
+          textValue('n-root', SystemIds.NAME_PROPERTY, ROOT, 'Root wording'),
+          textValue('n-crypto', SystemIds.NAME_PROPERTY, CRYPTO, ''),
+          textValue('d-root', SystemIds.DESCRIPTION_PROPERTY, ROOT, 'Root description'),
+          textValue('d-crypto', SystemIds.DESCRIPTION_PROPERTY, CRYPTO, ''),
+        ]);
+
+        const entity = store.getEntity('entity-1', { spaceId: CRYPTO });
+
+        expect(entity!.name).toBe('Root wording');
+        expect(entity!.description).toBe('Root description');
+      });
+    });
   });
 
   describe('getEntities', () => {
