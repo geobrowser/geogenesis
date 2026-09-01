@@ -247,7 +247,16 @@ export class E {
     // `?? remoteEntity.name`: a space-scoped response carries no other space's name triples, but its
     // aggregate `name` still holds the graph's. Without this the merge discards the only fallback
     // available whenever those triples were never hydrated locally.
-    const name = Entities.nameInSpace(liveValues, spaceId) ?? remoteEntity.name;
+    //
+    // Gated on a local tombstone. `localEntity` is read *with* deleted values precisely so a pending
+    // local deletion can mask the remote one, and deriving the name from merged values alone is what
+    // honoured that before this fallback existed — see the line above. The aggregate covers triples
+    // that were never hydrated; a tombstone means this one was, and the reader deleted it, so
+    // resurrecting the server's pre-deletion name would undo their edit in front of them.
+    const nameDeletedLocally = mergedValues.some(
+      value => value.isDeleted === true && value.property.id === SystemIds.NAME_PROPERTY
+    );
+    const name = Entities.nameInSpace(liveValues, spaceId) ?? (nameDeletedLocally ? null : remoteEntity.name);
     const description = spaceId
       ? Entities.descriptionInSpace(liveValues, spaceId)
       : (Entities.description(liveValues) ?? remoteEntity.description);

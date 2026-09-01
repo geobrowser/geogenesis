@@ -201,6 +201,16 @@ describe('nameInSpace / descriptionInSpace', () => {
     expect(nameInSpace(values, undefined)).toBe(name(values));
   });
 
+  // `pickBySpaceRank` only skips empties when it has more than one candidate, so a lone empty
+  // triple survives. Returning `''` from here satisfies the `??` in `getEntity` and `E.merge` and
+  // blocks the aggregate fallback, rendering the entity untitled.
+  it('reports a lone empty name as nothing written, not as an empty string', () => {
+    expect(nameInSpace([named(CRYPTO, '')], CRYPTO)).toBeNull();
+    expect(nameInSpace([named(CRYPTO, '')], undefined)).toBeNull();
+    expect(descriptionInSpace([described(CRYPTO, '')], CRYPTO)).toBeNull();
+    expect(descriptionInSpace([described(CRYPTO, '')], undefined)).toBeNull();
+  });
+
   it('returns null when nobody wrote one', () => {
     expect(nameInSpace([], CRYPTO)).toBeNull();
     expect(descriptionInSpace([], CRYPTO)).toBeNull();

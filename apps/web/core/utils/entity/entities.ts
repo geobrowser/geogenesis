@@ -95,10 +95,13 @@ function writtenIn(values: Value[], spaceId: string): Value[] {
 }
 
 export function nameInSpace(values: Value[], spaceId?: string): string | null {
-  if (!spaceId) return name(values);
-  // `|| null` so an empty string falls through: a cleared name is nothing written, the judgement
-  // `pickBySpaceRank` already makes when choosing between spaces.
-  return (name(writtenIn(values, spaceId)) || null) ?? name(values);
+  // `|| null` on every branch, including the cross-space one. An empty name is nothing written, and
+  // a non-nullish `''` returned from here is worse than useless downstream: it satisfies the `??` in
+  // `getEntity` and `E.merge`, blocking the synced/remote aggregate and rendering the entity
+  // untitled — the exact opposite of the rule. `pickBySpaceRank` only skips empties when it has
+  // more than one candidate, so a lone empty triple reaches here intact.
+  if (!spaceId) return name(values) || null;
+  return (name(writtenIn(values, spaceId)) || null) ?? (name(values) || null);
 }
 
 /**
@@ -111,7 +114,7 @@ export function nameInSpace(values: Value[], spaceId?: string): string | null {
  * silence is the honest answer. Empty and absent are the same answer here for that reason.
  */
 export function descriptionInSpace(values: Value[], spaceId?: string): string | null {
-  if (!spaceId) return description(values);
+  if (!spaceId) return description(values) || null;
   return description(writtenIn(values, spaceId)) || null;
 }
 

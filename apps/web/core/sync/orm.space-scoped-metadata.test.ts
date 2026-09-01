@@ -151,6 +151,23 @@ describe('E.merge scopes name and description to the requested space', () => {
     expect(merged?.name).toBe('Aggregate name');
   });
 
+  // `localEntity` is read with tombstones so a pending local deletion masks the remote value. The
+  // aggregate fallback must not undo that: the reader deleted the name, and handing back the
+  // server's pre-deletion one would reverse their edit in front of them.
+  it('does not resurrect a name the reader deleted locally', async () => {
+    const deleted = { ...named(CRYPTO, 'Crypto wording'), isDeleted: true } as unknown as Value;
+    await seedStore(entity({ name: null, description: null, values: [deleted] }));
+
+    const merged = E.merge({
+      id: ENTITY_ID,
+      spaceId: CRYPTO,
+      store,
+      mergeWith: entity({ values: [named(CRYPTO, 'Crypto wording')] }),
+    });
+
+    expect(merged?.name).toBeNull();
+  });
+
   it('prefers the requested space over both', async () => {
     await seedStore(entity({ name: null, description: null, values: [named(CRYPTO, 'Crypto wording')] }));
 
