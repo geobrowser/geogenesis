@@ -2689,7 +2689,7 @@ function DebateRecordingRemovedDialog({
           <button
             type="button"
             onClick={onAcknowledge}
-            className="min-h-7 rounded-full bg-text px-3 text-metadata text-white transition-colors hover:bg-text/90"
+            className={cx(cardPill, 'bg-text text-white transition-colors hover:bg-text/90')}
           >
             Okay
           </button>
@@ -2701,8 +2701,21 @@ function DebateRecordingRemovedDialog({
 
 /** The hairline between the card's rows. `divider` is the design's own #F0F0F0. */
 function CardDivider() {
-  return <div className="h-px w-full shrink-0 bg-divider" />;
+  return <div aria-hidden className="h-px w-full shrink-0 bg-divider" />;
 }
+
+/** A row of the thank-you card: what is being asked on the left, the control for it on the right. */
+function CardRow({ children }: { children: React.ReactNode }) {
+  return <div className="flex min-h-7 items-center justify-between gap-2.5">{children}</div>;
+}
+
+/**
+ * The pill every control on these cards is cut from — 28px tall, fully rounded, metadata type.
+ *
+ * Shared as a class string rather than a component because the three that use it are a button, a
+ * disabled button and a plain span, and only the shape is common to them.
+ */
+const cardPill = 'inline-flex min-h-7 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-metadata';
 
 function DebateAgainCard({
   opponentName,
@@ -2728,7 +2741,7 @@ function DebateAgainCard({
     <section className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg bg-white px-3 py-2 text-text shadow-card">
       {publishing !== null && (
         <>
-          <div className="flex min-h-7 items-center justify-between gap-2.5">
+          <CardRow>
             <Text as="span" variant="smallTitle" color="text">
               Publish debate?
             </Text>
@@ -2746,13 +2759,13 @@ function DebateAgainCard({
               <Toggle checked={publishing} />
               <span>{publishing ? 'Yes' : 'No'}</span>
             </button>
-          </div>
+          </CardRow>
           {/* Inside the conditional: with no publish row above it this would be a hairline
               hanging off the top of the card. */}
           <CardDivider />
         </>
       )}
-      <div className="flex min-h-7 items-center justify-between gap-2.5">
+      <CardRow>
         <Text as="span" variant="smallTitle" color="text">
           Debate again?
         </Text>
@@ -2761,29 +2774,25 @@ function DebateAgainCard({
           onClick={onConsent}
           disabled={busy || localConsented}
           className={cx(
-            'min-h-7 rounded-full px-3 text-metadata text-white transition-colors disabled:cursor-default',
+            cardPill,
+            'text-white transition-colors disabled:cursor-default',
             localConsented ? 'bg-text' : 'bg-text hover:bg-text/90'
           )}
         >
           {localConsented ? 'Waiting...' : busy ? 'Saving...' : "Let's go!"}
         </button>
-      </div>
+      </CardRow>
       <CardDivider />
-      <div className="flex min-h-7 items-center justify-between gap-2.5">
+      <CardRow>
         {/* Grey until they are ready, like the pill beside it — the design shows the waiting state. */}
         <Text as="span" variant="smallTitle" color={remoteConsented ? 'text' : 'grey-04'} className="min-w-0 truncate">
           {opponentName}
         </Text>
-        <span
-          className={cx(
-            'inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-full px-3 text-metadata',
-            remoteConsented ? 'bg-green text-text' : 'bg-grey-01 text-grey-04'
-          )}
-        >
+        <span className={cx(cardPill, remoteConsented ? 'bg-green text-text' : 'bg-grey-01 text-grey-04')}>
           {remoteConsented && <Check />}
           {remoteConsented ? 'Ready' : 'Waiting...'}
         </span>
-      </div>
+      </CardRow>
     </section>
   );
 }

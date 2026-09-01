@@ -147,6 +147,26 @@ export function DebateRecordingUploadCoordinator() {
     () => uploads.filter(upload => !isUploadCancelled(upload)),
     [isUploadCancelled, uploads]
   );
+  // What the banner speaks for, which is not always the whole queue.
+  //
+  // While the thank-you card is up it reports its own debate, so the banner would be a second
+  // voice on the same upload — the bar at the bottom of the screen is exactly what GEO-2773
+  // replaces. Only for as long as the card is actually on screen: the server's thank-you window
+  // outlasts the countdown, and after it the banner is the only thing left to say anything.
+  // Uploads from other debates stay the banner's to report, and keep their own progress.
+  //
+  // Everything the banner renders comes off this — the count, the percentage, and the waiting and
+  // failure states below. Deriving those from the full queue instead would let the banner report
+  // one debate's count under another debate's error.
+  const cardOwnsPublishControl = Boolean(thankingDebate?.showsPublishControl);
+  const bannerUploads = React.useMemo(
+    () =>
+      cardOwnsPublishControl
+        ? publishableUploads.filter(upload => normalizeDebateId(upload.debateId) !== normalizedThankingDebateId)
+        : publishableUploads,
+    [cardOwnsPublishControl, normalizedThankingDebateId, publishableUploads]
+  );
+
   const activeUploadIdRef = React.useRef<string | null>(null);
   const lockRetryAtRef = React.useRef(0);
   const mountedRef = React.useRef(true);
@@ -328,8 +348,8 @@ export function DebateRecordingUploadCoordinator() {
       });
   }, [accountKey, activeUploadId, getPrivyIdentityToken, online, publishableUploads, queryClient, userId, wakeAt]);
 
-  const waiting = !online || (!activeUploadId && publishableUploads.every(upload => upload.nextAttemptAt > Date.now()));
-  const latestFailedUpload = publishableUploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
+  const waiting = !online || (!activeUploadId && bannerUploads.every(upload => upload.nextAttemptAt > Date.now()));
+  const latestFailedUpload = bannerUploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
     if (!upload.lastError) return latest;
     return !latest || upload.updatedAt > latest.updatedAt ? upload : latest;
   }, null);
@@ -369,15 +389,6 @@ export function DebateRecordingUploadCoordinator() {
     thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null);
   const cancelPromptOpen = cancelTargetDebateId !== null;
 
-  // While the thank-you card is up it reports this debate itself, so the banner would be a second
-  // voice on the same upload — the bar at the bottom of the screen is exactly what GEO-2773
-  // replaces. Only for as long as the card is actually on screen: the server's thank-you window
-  // outlasts the countdown, and after it the banner is the only thing left to say anything.
-  // Uploads from other debates are still the banner's to report, and keep their own progress.
-  const cardOwnsPublishControl = Boolean(thankingDebate?.showsPublishControl);
-  const bannerUploads = cardOwnsPublishControl
-    ? publishableUploads.filter(upload => normalizeDebateId(upload.debateId) !== normalizedThankingDebateId)
-    : publishableUploads;
   const bannerThankingUploadFinished = !cardOwnsPublishControl && thankingUploadFinished;
   const bannerThankingRecordingPending = !cardOwnsPublishControl && thankingRecordingPending;
 

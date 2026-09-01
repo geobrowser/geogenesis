@@ -523,6 +523,32 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
+  // Everything the banner says has to come off the uploads it is actually speaking for. Counting
+  // one debate while reporting another debate's failure is the way that goes wrong, and the
+  // thank-you debate is the one it stops speaking for.
+  it('does not report the card debate failure against another debate count', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-2';
+    mocks.thankingShowsPublishControl = true;
+    // Both are backing off, so nothing is uploading and the banner is in its waiting state — which
+    // is the only state that quotes a failure. Only the card's debate has actually failed.
+    mocks.queue = [
+      { ...queuedRecording('debate-1'), nextAttemptAt: Date.now() + 60_000 },
+      {
+        ...queuedRecording('debate-2'),
+        attemptCount: 3,
+        nextAttemptAt: Date.now() + 60_000,
+        lastError: 'Upload failed spectacularly',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    // The plain wait, not the failure: debate-1 has nothing wrong with it.
+    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
+    expect(screen.queryByText(/Upload failed spectacularly/)).not.toBeInTheDocument();
+  });
+
   // Switching the control off asks for the same confirmation the Cancel button opened. The ticket
   // called for a new control rather than a new behaviour, and a switch is easier to hit by
   // accident than the button it replaces.
