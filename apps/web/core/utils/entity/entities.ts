@@ -3,7 +3,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { HIDDEN_PROPERTIES } from '~/core/constants';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
-import { compareBySpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
+import { getTopRankedSpaceId, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -38,7 +38,16 @@ function pickBySpaceRank(values: Value[], propertyId: string): Value | undefined
   if (candidates.length <= 1) return candidates[0];
 
   const nonEmpty = candidates.filter(v => v.value);
-  return (nonEmpty.length > 0 ? nonEmpty : candidates).sort(compareBySpaceRank(value => value.spaceId))[0];
+  const contenders = nonEmpty.length > 0 ? nonEmpty : candidates;
+
+  // `getTopRankedSpaceId` rather than sorting on rank alone. Rank ties are the common case, not the
+  // exotic one — only a handful of spaces are ranked and every other one, personal spaces included,
+  // shares `UNRANKED`. A rank-only comparator leaves ties to sort stability, i.e. to array order,
+  // which is the non-determinism this function exists to remove: `entity.values` is re-partitioned
+  // on every store merge, so two unranked spaces could swap between renders. That helper already
+  // tie-breaks on the id itself.
+  const topSpaceId = getTopRankedSpaceId(contenders.map(value => value.spaceId));
+  return contenders.find(value => value.spaceId === topSpaceId) ?? contenders[0];
 }
 
 export function descriptionTriple(values: Value[]): Value | undefined {

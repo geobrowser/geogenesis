@@ -204,7 +204,10 @@ export class E {
   }): Entity | null {
     const remoteEntity = mergeWith;
 
-    const localEntity = store.getEntity(id, { includeDeleted: true, spaceId });
+    // Read unscoped and filter below. Reading it scoped meant `liveValues` held only the requested
+    // space, so the cross-space fallback had nothing to fall back to and an entity named in another
+    // locally-loaded space still rendered untitled (GEO-2778).
+    const localEntity = store.getEntity(id, { includeDeleted: true });
 
     if (!localEntity && !remoteEntity) {
       return null;
@@ -215,7 +218,16 @@ export class E {
     }
 
     if (!localEntity) {
-      return remoteEntity;
+      if (!spaceId) return remoteEntity;
+      // `EntityDtoLive` copies the API's aggregate `description`, which is the graph's rather than
+      // this space's — returning it unchanged would hand back the top-ranked space's prose behind
+      // the scoping. Names may legitimately come from the aggregate; descriptions may not.
+      const remoteValues = remoteEntity.values.filter(v => !v.isDeleted);
+      return {
+        ...remoteEntity,
+        name: Entities.nameInSpace(remoteValues, spaceId) ?? remoteEntity.name,
+        description: Entities.descriptionInSpace(remoteValues, spaceId),
+      };
     }
 
     const mergedValues = merge(localEntity.values, remoteEntity.values);
@@ -232,8 +244,13 @@ export class E {
     // Read from `liveValues` rather than the space-filtered `values`: this path was already scoped
     // but had no fallback, so an entity a space had never named rendered untitled there rather than
     // borrowing the graph's name. `nameInSpace` scopes and falls back in one place (GEO-2778).
-    const name = Entities.nameInSpace(liveValues, spaceId);
-    const description = Entities.descriptionInSpace(liveValues, spaceId);
+    // `?? remoteEntity.name`: a space-scoped response carries no other space's name triples, but its
+    // aggregate `name` still holds the graph's. Without this the merge discards the only fallback
+    // available whenever those triples were never hydrated locally.
+    const name = Entities.nameInSpace(liveValues, spaceId) ?? remoteEntity.name;
+    const description = spaceId
+      ? Entities.descriptionInSpace(liveValues, spaceId)
+      : (Entities.description(liveValues) ?? remoteEntity.description);
     const types = readTypes(relations);
     const derivedSpaces = Entities.spaces(values, relations);
     const spaces = derivedSpaces.length > 0 ? derivedSpaces : remoteEntity.spaces;

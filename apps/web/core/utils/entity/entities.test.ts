@@ -121,6 +121,40 @@ describe('Entity name helpers', () => {
 
 // The rule both `store.getEntity` and the orm merge read through, so scoping cannot drift between
 // the two paths a reader can arrive by (GEO-2778).
+// Only a handful of spaces carry a rank; every other one, personal spaces included, shares
+// UNRANKED. A rank-only comparator leaves those ties to array order, and `entity.values` is
+// re-partitioned on every store merge — so the winner could still swap between renders.
+describe('pickBySpaceRank breaks rank ties deterministically', () => {
+  const UNRANKED_A = 'ffffffffffffffffffffffffffffffff';
+  const UNRANKED_B = '11111111111111111111111111111111';
+
+  const described = (spaceId: string, text: string): Value =>
+    ({
+      id: `value-${spaceId}`,
+      entity: { id: 'entityId', name: null },
+      property: { id: SystemIds.DESCRIPTION_PROPERTY, name: null, dataType: 'TEXT' },
+      value: text,
+      spaceId,
+    }) as unknown as Value;
+
+  it('picks the same unranked space whichever order the values arrive in', () => {
+    const forwards = description([described(UNRANKED_A, 'A'), described(UNRANKED_B, 'B')]);
+    const backwards = description([described(UNRANKED_B, 'B'), described(UNRANKED_A, 'A')]);
+
+    expect(forwards).toBe(backwards);
+  });
+
+  it('does the same for names', () => {
+    const named = (spaceId: string, text: string): Value =>
+      ({ ...described(spaceId, text), property: { id: SystemIds.NAME_PROPERTY, name: null, dataType: 'TEXT' } }) as
+        unknown as Value;
+
+    expect(name([named(UNRANKED_A, 'A'), named(UNRANKED_B, 'B')])).toBe(
+      name([named(UNRANKED_B, 'B'), named(UNRANKED_A, 'A')])
+    );
+  });
+});
+
 describe('nameInSpace / descriptionInSpace', () => {
   const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
   const CRYPTO = 'c9f267dcb0d270718c2a3c45a64afd32';
