@@ -13,7 +13,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { TabGroup } from '~/design-system/tab-group';
 
 import { EditableTabGroup } from './editable-tab-group';
-import { OVERVIEW_TAB_LABEL, useEntityTabEntities } from './use-entity-tab-entities';
+import { entityTabLinks, useEntityTabEntities } from './use-entity-tab-entities';
 
 type EntityTabsProps = {
   entityId: string;
@@ -46,14 +46,16 @@ export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities
     return null;
   }
 
-  const overviewHref = NavUtils.toEntity(spaceId, entityId);
+  const allTabs = entityTabLinks({ spaceId, entityId, tabs: sortedTabEntities });
+  const [overviewLink] = allTabs;
+  const overviewHref = overviewLink.href;
 
   if (effectiveEditable) {
     const editableTabs = sortedTabRelations.map((relation, i) => ({
       relation,
       entityId: sortedTabEntities[i].id,
       name: sortedTabEntities[i].name ?? '',
-      href: `${overviewHref}?tabId=${sortedTabEntities[i].id}`,
+      href: NavUtils.toEntity(spaceId, entityId, undefined, undefined, { tabId: sortedTabEntities[i].id }),
     }));
 
     return (
@@ -61,26 +63,11 @@ export function EntityTabs({ entityId, spaceId, initialTabRelations, tabEntities
         entityId={entityId}
         spaceId={spaceId}
         editableTabs={editableTabs}
-        systemTabsBefore={[{ label: OVERVIEW_TAB_LABEL, href: overviewHref }]}
+        systemTabsBefore={[overviewLink]}
         overviewHref={overviewHref}
       />
     );
   }
-
-  // Build tabs in the correct order
-  const tabs = sortedTabEntities.map(entity => ({
-    label: entity.name ?? '',
-    href: `${overviewHref}?tabId=${entity.id}`,
-  }));
-
-  // Add Overview tab at the beginning
-  const allTabs = [
-    {
-      label: OVERVIEW_TAB_LABEL,
-      href: overviewHref,
-    },
-    ...tabs,
-  ];
 
   if (allTabs.length <= 1) {
     return null;

@@ -15,7 +15,22 @@ import { validateEntityId } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 interface TabGroupProps {
-  tabs: Array<{ href: string; label: string; badge?: string; disabled?: boolean; hidden?: boolean }>;
+  tabs: Array<{
+    href: string;
+    label: string;
+    badge?: string;
+    disabled?: boolean;
+    hidden?: boolean;
+    /**
+     * Overrides which tab reads as selected.
+     *
+     * Otherwise a tab is selected when its href matches the active one, which assumes the active
+     * tab is in this list. A surface that hides a tab while still showing its place — the custom
+     * claim and topic views, which drop the entity's own "Overview" and answer for it — has to say
+     * so, or a link to the hidden tab leaves every tab looking unselected.
+     */
+    active?: boolean;
+  }>;
   className?: string;
 }
 
@@ -137,6 +152,8 @@ interface TabProps {
   badge?: React.ReactNode;
   disabled?: boolean;
   hidden?: boolean;
+  /** See `TabGroupProps`. */
+  active?: boolean;
 }
 
 /** Shared with entity/space `TabGroup` and governance home tab rows (same underline behavior). */
@@ -166,7 +183,7 @@ function tabIdFromEntityTabHref(href: string): string | null {
   return validateEntityId(raw) ? raw : null;
 }
 
-function Tab({ href, label, badge, disabled, hidden }: TabProps) {
+function Tab({ href, label, badge, disabled, hidden, active: activeOverride }: TabProps) {
   const { editable } = useEditable();
 
   const path = usePathname();
@@ -174,11 +191,12 @@ function Tab({ href, label, badge, disabled, hidden }: TabProps) {
   const sidePanelTab = useEntitySidePanelActiveTab();
 
   const fullPath = activeTabId ? `${path}?tabId=${activeTabId}` : `${path}`;
-  const active = sidePanelTab
+  const derivedActive = sidePanelTab
     ? tabIdFromEntityTabHref(href) === null
       ? activeTabId === null
       : activeTabId === tabIdFromEntityTabHref(href)
     : href === fullPath;
+  const active = activeOverride ?? derivedActive;
 
   if (!editable && hidden) {
     return null;

@@ -21,10 +21,10 @@ vi.mock('~/core/state/editor/editor-provider', () => ({
 
 // The tab bar and the editor are exercised elsewhere; here they only need to be identifiable.
 vi.mock('~/design-system/tab-group', () => ({
-  TabGroup: ({ tabs }: { tabs: Array<{ label: string; href: string }> }) => (
+  TabGroup: ({ tabs }: { tabs: Array<{ label: string; href: string; active?: boolean }> }) => (
     <nav data-testid="tab-group">
       {tabs.map(tab => (
-        <a key={tab.href} href={tab.href}>
+        <a key={tab.href} href={tab.href} data-active={tab.active === undefined ? 'derived' : String(tab.active)}>
           {tab.label}
         </a>
       ))}
@@ -100,6 +100,16 @@ describe('useCustomViewTabs', () => {
     expect(screen.queryByTestId('tab-blocks')).not.toBeInTheDocument();
   });
 
+  // With a real tab open, the href comparison is right and is left to decide.
+  it('leaves the selected tab to be matched by href', () => {
+    mocks.tabs = [{ id: 'tab-sources', name: 'Sources' }];
+    mocks.activeTabId = 'tab-sources';
+    render(<Harness />);
+
+    expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('data-active', 'false');
+    expect(screen.getByRole('link', { name: 'Sources' })).toHaveAttribute('data-active', 'derived');
+  });
+
   it("hands back the selected tab's blocks in place of the view's own content", () => {
     mocks.tabs = [{ id: 'tab-sources', name: 'Sources' }];
     mocks.activeTabId = 'tab-sources';
@@ -154,6 +164,25 @@ describe('useCustomViewTabs', () => {
 
       expect(screen.getByTestId('overview-content')).toBeInTheDocument();
       expect(screen.queryByTestId('tab-blocks')).not.toBeInTheDocument();
+    });
+
+    /**
+     * `TabGroup` decides which tab is selected by matching hrefs, which assumes the active tab is
+     * in the list. It is not here: the URL names a tab that was dropped, so without saying outright
+     * that Overview is the selected one, every tab in the bar reads as unselected.
+     *
+     * Reachable from a shared link, and from leaving edit mode while the entity's own Overview tab
+     * is open — the editable bar still links to it.
+     */
+    it('keeps Overview reading as selected when the link points at the suppressed tab', () => {
+      mocks.tabs = [
+        { id: 'tab-overview', name: 'Overview' },
+        { id: 'tab-sources', name: 'Sources' },
+      ];
+      mocks.activeTabId = 'tab-overview';
+      render(<Harness />);
+
+      expect(screen.getByRole('link', { name: 'Overview' })).toHaveAttribute('data-active', 'true');
     });
 
     it('offers no bar when the only other tab was the suppressed one', () => {

@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import { useRelations, useValues } from '~/core/sync/use-store';
 import type { Relation, TabEntity } from '~/core/types';
-import { sortRelations } from '~/core/utils/utils';
+import { NavUtils, sortRelations } from '~/core/utils/utils';
 
 /**
  * The label the entity page gives its own blocks, and the one a custom view takes over.
@@ -81,4 +81,30 @@ export function useEntityTabEntities({ entityId, spaceId, initialTabRelations, t
   });
 
   return { tabRelations, tabs };
+}
+
+/**
+ * The Overview-first link list both tab bars render.
+ *
+ * Shared so the label, the ordering and the URL scheme are stated once: the generic page and the
+ * custom claim and topic views are the same bar over the same tabs, and only what fills Overview
+ * differs. Hrefs come from `NavUtils.toEntity`, which already knows how a tab is addressed — built
+ * by hand in three places before this, which is three places to update if the parameter ever moves.
+ */
+export function entityTabLinks({
+  spaceId,
+  entityId,
+  tabs,
+}: {
+  spaceId: string;
+  entityId: string;
+  tabs: TabEntity[];
+}): Array<{ label: string; href: string }> {
+  return [
+    { label: OVERVIEW_TAB_LABEL, href: NavUtils.toEntity(spaceId, entityId) },
+    ...tabs.map(tab => ({
+      label: tab.name ?? '',
+      href: NavUtils.toEntity(spaceId, entityId, undefined, undefined, { tabId: tab.id }),
+    })),
+  ];
 }

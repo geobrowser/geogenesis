@@ -4,13 +4,12 @@ import * as React from 'react';
 
 import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import type { Relation, TabEntity } from '~/core/types';
-import { NavUtils } from '~/core/utils/utils';
 
 import { TabGroup } from '~/design-system/tab-group';
 
 import { Editor } from '~/partials/editor/editor';
 
-import { OVERVIEW_TAB_LABEL, isOverviewTabName, useEntityTabEntities } from './use-entity-tab-entities';
+import { entityTabLinks, isOverviewTabName, useEntityTabEntities } from './use-entity-tab-entities';
 
 /**
  * The tab bar and the switched region, handed to a custom view to place itself.
@@ -66,15 +65,19 @@ export function useCustomViewTabs({
   return React.useMemo(() => {
     if (additionalTabs.length === 0) return { bar: null, body: null };
 
-    const overviewHref = NavUtils.toEntity(spaceId, entityId);
+    const [overview, ...rest] = entityTabLinks({ spaceId, entityId, tabs: additionalTabs });
     const isAdditionalTabActive = additionalTabs.some(tab => tab.id === activeTabId);
 
     return {
       bar: (
         <TabGroup
           tabs={[
-            { label: OVERVIEW_TAB_LABEL, href: overviewHref },
-            ...additionalTabs.map(tab => ({ label: tab.name ?? '', href: `${overviewHref}?tabId=${tab.id}` })),
+            // Said outright rather than left to the href comparison, which assumes the active tab
+            // is in this list. It is not when `?tabId=` names the entity's own suppressed
+            // "Overview" — reachable from a shared link, or from leaving edit mode while that tab
+            // is open — and the view answers for that tab, so Overview is what is selected.
+            { ...overview, active: !isAdditionalTabActive },
+            ...rest,
           ]}
         />
       ),
