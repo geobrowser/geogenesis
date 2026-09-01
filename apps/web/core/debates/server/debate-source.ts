@@ -37,12 +37,22 @@ function geoChatBaseUrl() {
  * published entity. It falls back to the geo-chat host so nothing breaks when it is unset.
  */
 function debateMediaBaseUrl() {
-  const base =
+  const configured =
     process.env.NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL ||
     process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL ||
-    process.env.GEO_CHAT_API_BASE_URL ||
-    'http://localhost:8080';
-  return base.replace(/\/+$/, '');
+    process.env.GEO_CHAT_API_BASE_URL;
+  const base = (configured || 'http://localhost:8080').replace(/\/+$/, '');
+  // A published URL cannot be edited once it is on-chain, so a misconfigured host is not a bug you
+  // fix by redeploying — every debate published under it is permanently broken. Refuse to build one
+  // outside development rather than bake a localhost default into the knowledge graph.
+  if (process.env.NODE_ENV === 'production' && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(base)) {
+    throw new Error(
+      'Refusing to publish debate media URLs pointing at ' +
+        `${base}: set NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL to a public host. ` +
+        'These URLs are written on-chain and cannot be changed afterwards.'
+    );
+  }
+  return base;
 }
 
 /**
@@ -89,11 +99,7 @@ export type DebateSource = {
  * backlog.
  */
 export type DebateNotPublishableCode =
-  | 'not_complete'
-  | 'recording_cancelled'
-  | 'cancellation_window_open'
-  | 'media_not_ready'
-  | 'media_failed';
+  'not_complete' | 'recording_cancelled' | 'cancellation_window_open' | 'media_not_ready' | 'media_failed';
 
 export class DebateNotPublishableError extends Error {
   code: DebateNotPublishableCode;
