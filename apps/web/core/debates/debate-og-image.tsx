@@ -34,8 +34,10 @@ export type DebateOgCardData = {
 /**
  * Card geometry, exported so the symmetry can be asserted rather than eyeballed.
  *
- * Review caught the panels differing by 64px and the divider sitting off-centre; both were a single
- * hardcoded seam position. A test is cheaper than another round of screenshots.
+ * Two rounds of review have gone on where the divider sits, so where it sits is asserted rather
+ * than eyeballed: the band is centred where it crosses the *top* edge of the block, and the VS
+ * badge is centred on the white bar's right edge. Both are choices among near-neighbours that a
+ * later edit could quietly undo — see `SEAM_X` and `BADGE_CENTRE_X` for why each was made.
  */
 export const DEBATE_OG_GEOMETRY = {
   get blockWidth() {
@@ -53,12 +55,27 @@ export const DEBATE_OG_GEOMETRY = {
   get rightPanelWidth() {
     return BLOCK_W - SEAM_X;
   },
+  /** Centre of the band at mid-height, which is *not* where it is centred — see `SEAM_X`. */
   get bandCentre() {
     return SEAM_X + DIVIDER_W / 2;
   },
-  /** Centre of the black bar, which the VS badge sits on. */
-  get blackBarCentre() {
-    return BLACK_BAR_CENTRE;
+  /** Centre of the band where it crosses the top edge of the block. This is the centred one. */
+  get topCrossingCentre() {
+    return SEAM_X + LEAN / 2 + DIVIDER_W / 2;
+  },
+  /** Right edge of the white bar, which the VS badge is centred on. */
+  get badgeCentre() {
+    return BADGE_CENTRE_X;
+  },
+  get badgeCentreY() {
+    return BADGE_CENTRE_Y;
+  },
+  get badgeRadius() {
+    return BADGE_R;
+  },
+  /** The white bar's right edge at a given height in the block — the line the badge sits on. */
+  whiteBarRightEdgeAt(y: number) {
+    return SEAM_X + DIVIDER_WHITE_W + ((SEAM_Y - y) / VIDEO_H) * LEAN;
   },
   /** The two bars of the divider, as offsets from the seam. Must tile the gap exactly. */
   get bars() {
@@ -96,29 +113,38 @@ const LEAN = 40;
 const DIVIDER_WHITE_W = 15;
 const DIVIDER_BLACK_W = 17;
 /**
- * Left edge of the divider band, and the point the whole divider pivots about.
+ * Left edge of the divider band at mid-height, and the point the whole divider pivots about.
  *
- * Derived rather than transcribed from the design's coordinates, which put the band 32px left of
- * centre — visibly off, and the first thing review caught. Deriving it also makes the two panels
- * exactly equal, since each runs from its own side to this band; hardcoding the edge is what made
- * them differ by 64px.
+ * The band leans 40px, so "centred" has to name a height, and the two candidates are 20px apart.
+ * It is centred where it crosses the **top** edge of the block: that is the crossing the eye
+ * checks, sitting directly under the claim and against white on both sides, and it is roughly
+ * where the design puts it (the artboard's band crosses the top at 572..604 against a card centre
+ * of 600). Centring at mid-height instead is what carried the top crossing 20px right and read as
+ * the whole split leaning off to the right of the card.
+ *
+ * The cost is that the panels are no longer exactly equal — the lean now falls entirely left of
+ * centre, so the left panel averages 40px narrower. The design carries the same asymmetry and more
+ * of it, so this is the direction it wants; what it cannot become again is the 64px difference
+ * review caught, which came from hardcoding an edge rather than deriving one.
  */
-const SEAM_X = BLOCK_W / 2 - DIVIDER_W / 2;
+const SEAM_X = BLOCK_W / 2 - DIVIDER_W / 2 - LEAN / 2;
 /**
- * Centre of the black bar, and where the VS badge sits — *not* the block's centre.
+ * Where the VS badge is centred: on the **right edge of the white bar**.
  *
- * The band is asymmetric, 15px white then 17px black, so its own centre and the black bar's centre
- * are 7.5px apart. The eye reads the black bar as the split (the white one is a rim on its left),
- * so the badge has to sit on that, or the line visibly misses the VS.
+ * The band leans, so no single x holds the line through the whole badge — the badge can only be
+ * centred on the line at its own height, and the lean then carries the line about 6px either way
+ * where it enters the badge and where it leaves. Sitting the badge on the white bar's right edge is
+ * what makes those two offsets symmetric.
  *
- * The alternative — shifting the whole band 7.5px so the black bar lands on the block's centre —
- * looks equivalent and is not: the panels are bounded by the band's outer edges, so moving it makes
- * the right panel 15px wider than the left. That is the first fault review caught, reintroduced to
- * fix the second. Moving the badge instead costs a 7.5px offset from the card's centre and keeps
- * the panels exactly equal.
+ * The black bar's centre, 8.5px right of here, does not: the line arrived at the top of the badge
+ * near enough flush and left the bottom 15px to its left, which read as the divider sliding out
+ * from under the badge on its way down rather than as a lean.
  */
-const BLACK_BAR_CENTRE = SEAM_X + DIVIDER_WHITE_W + DIVIDER_BLACK_W / 2;
+const BADGE_CENTRE_X = SEAM_X + DIVIDER_WHITE_W;
 const SEAM_Y = VIDEO_H / 2;
+const BADGE_R = 54;
+/** The badge sits on the pivot, which is what makes the lean's ±6px either side of it symmetric. */
+const BADGE_CENTRE_Y = SEAM_Y;
 /** Positive rotation is clockwise, which sends the bottom of a vertical edge left — the lean. */
 const LEAN_DEG = (Math.atan2(LEAN, VIDEO_H) * 180) / Math.PI;
 
@@ -282,6 +308,17 @@ function Panel({ side, speaker }: { side: 'left' | 'right'; speaker: DebateOgSpe
   // Where this panel's content sits, in block coordinates, then rebased into the box.
   const contentLeft = isLeft ? 0 : SEAM_X;
   const contentWidth = isLeft ? SEAM_X + DIVIDER_W : BLOCK_W - SEAM_X;
+  /**
+   * The block's outer top corner, carried by the still itself rather than by anything above it.
+   *
+   * It used to come from the block's own `overflow: hidden`, which {@link VideoBlock} can no longer
+   * have, and then from this wrapper's `border-radius` — which drew nothing, because a radius only
+   * rounds what it clips and the wrapper clips nothing: the still is an absolutely sized child that
+   * simply overran the curve and left a square corner. Putting the radius on the still (and on the
+   * placeholder field) rounds the pixels that actually reach that corner. The scrim and the speaker
+   * pill sit at the bottom, so they never meet it.
+   */
+  const outerCorner = isLeft ? `${RADIUS_XL}px 0 0 0` : `0 ${RADIUS_XL}px 0 0`;
 
   return (
     <div
@@ -305,18 +342,25 @@ function Panel({ side, speaker }: { side: 'left' | 'right'; speaker: DebateOgSpe
           width: contentWidth,
           height: VIDEO_H,
           display: 'flex',
-          // The block's top corner, which used to come from the block's own `overflow: hidden` —
-          // see {@link VideoBlock} for why that can no longer be there. Applied without
-          // `overflow: hidden`, so it stays a corner radius rather than a second clip.
-          borderRadius: isLeft ? `${RADIUS_XL}px 0 0 0` : `0 ${RADIUS_XL}px 0 0`,
           transform: `rotate(${-LEAN_DEG}deg)`,
           transformOrigin: `${SEAM_X - contentLeft + ORIGIN_EPSILON}px ${SEAM_Y}px`,
         }}
       >
         {speaker.stillSrc ? (
-          <img src={speaker.stillSrc} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img
+            src={speaker.stillSrc}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: outerCorner }}
+          />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: 'linear-gradient(160deg, #e8e8e8, #cfcfcf)' }} />
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              background: 'linear-gradient(160deg, #e8e8e8, #cfcfcf)',
+              borderRadius: outerCorner,
+            }}
+          />
         )}
         <div
           style={{
@@ -374,10 +418,10 @@ function VideoBlock({ speakers }: { speakers: [DebateOgSpeaker, DebateOgSpeaker]
       <div
         style={{
           position: 'absolute',
-          left: BLACK_BAR_CENTRE - 54,
-          top: SEAM_Y - 54,
-          width: 108,
-          height: 108,
+          left: BADGE_CENTRE_X - BADGE_R,
+          top: BADGE_CENTRE_Y - BADGE_R,
+          width: BADGE_R * 2,
+          height: BADGE_R * 2,
           borderRadius: 9999,
           background: CHROME,
           border: '11px solid #ffffff',

@@ -2,15 +2,28 @@ import { describe, expect, it } from 'vitest';
 
 import { DEBATE_OG_GEOMETRY as g } from './debate-og-image';
 
-describe('debate share card geometry', () => {
-  /// Review caught both of these on the first render: panels 64px apart, divider 32px left of
-  /// centre. Both came from one hardcoded seam, so both are asserted against one derivation.
-  it('splits the block into two equal panels', () => {
-    expect(g.leftPanelWidth).toBe(g.rightPanelWidth);
+describe('the divider band', () => {
+  /// Where the band sits has been through two rounds of review, and each round moved it by less
+  /// than the one before — 32px, then 20px. Every remaining candidate position is within 20px of
+  /// this one, so the choice is asserted rather than left to a comment.
+  it('is centred where it crosses the top edge of the block', () => {
+    expect(g.topCrossingCentre).toBe(g.blockWidth / 2);
   });
 
-  it('centres the divider band on the block, which is what makes the panels equal', () => {
-    expect(g.bandCentre).toBe(g.blockWidth / 2);
+  /// The near-neighbour that was there before: centring the band at mid-height instead. It looks
+  /// like the same intent and is half the lean away, which is exactly enough to read as the whole
+  /// split sitting off to the right of the card.
+  it('is therefore not centred at mid-height, which is the position it replaced', () => {
+    expect(g.bandCentre).not.toBe(g.blockWidth / 2);
+    expect(g.topCrossingCentre - g.bandCentre).toBe(20);
+  });
+
+  /// Centring the top crossing means the lean falls entirely left of centre, so the panels are no
+  /// longer equal. That is intended and matches the design, but only at exactly the lean's width —
+  /// a larger gap would mean an edge had been hardcoded again, which is what once put them 64px
+  /// apart.
+  it('leaves the panels differing by the lean, and by nothing else', () => {
+    expect(g.rightPanelWidth - g.leftPanelWidth).toBe(40);
   });
 
   it('leaves the panels meeting exactly under the band, with no gap and no visible overlap', () => {
@@ -18,9 +31,7 @@ describe('debate share card geometry', () => {
     // width, which is the overlap the divider covers.
     expect(g.leftPanelWidth + g.rightPanelWidth).toBe(g.blockWidth + g.dividerWidth);
   });
-});
 
-describe('the divider band', () => {
   /// The band is what the eye reads as "the split". Drawn 32px off, it sat beside the real gap
   /// rather than in it — which looked like three separate faults at once: the split missing the VS
   /// badge, the left panel narrowed by the white bar, and bare background showing before the right
@@ -34,34 +45,28 @@ describe('the divider band', () => {
     const total = bars.reduce((sum, bar) => sum + bar.width, 0);
     expect(total).toBe(g.dividerWidth);
   });
+});
 
-  it('spans the gap symmetrically about the block', () => {
-    const bars = g.bars;
-    const bandCentre = g.seamX + bars.reduce((sum, bar) => sum + bar.width, 0) / 2;
-    expect(bandCentre).toBe(g.bandCentre);
-    expect(bandCentre).toBe(g.blockWidth / 2);
+describe('the VS badge', () => {
+  /// The badge is centred on the *white* bar's right edge, not on the band's centre and not on the
+  /// black bar's. The three are 7.5px and 8.5px apart, so nothing about a render says which one a
+  /// given number was meant to be.
+  it('sits on the right edge of the white bar', () => {
+    const [white] = g.bars;
+    expect(g.badgeCentre).toBe(g.seamX + white.width);
+    expect(g.badgeCentre).toBe(g.whiteBarRightEdgeAt(g.badgeCentreY));
   });
 
-  /// Review's second complaint: the split missed the VS. The eye reads the black bar as the split
-  /// — the white one is a rim on its left — so the badge belongs on the *black bar's* centre, not
-  /// the band's. The two differ because the band is asymmetric, 15px against 17px.
-  it('puts the VS badge on the black bar rather than the band centre', () => {
-    const [white, black] = g.bars;
-    expect(white.width).not.toBe(black.width);
-    expect(g.blackBarCentre).toBe(g.seamX + white.width + black.width / 2);
-    expect(g.blackBarCentre).not.toBe(g.bandCentre);
-  });
+  /// Which is the point of it. The band leans, so no x holds the line through the whole badge; the
+  /// badge can only be centred on the line at one height, and the lean carries the line off centre
+  /// either side of that. Centring on the white bar's edge is what splits that error evenly.
+  /// On the black bar's centre it was near flush where the line entered the badge and 15px out
+  /// where it left, which read as the divider sliding out from under the badge on the way down.
+  it('takes the lean evenly above and below itself', () => {
+    const above = g.whiteBarRightEdgeAt(g.badgeCentreY - g.badgeRadius) - g.badgeCentre;
+    const below = g.whiteBarRightEdgeAt(g.badgeCentreY + g.badgeRadius) - g.badgeCentre;
 
-  /// The tempting fix for that — slide the whole band until the black bar lands on the block's
-  /// centre — reintroduces review's *first* complaint, so it is asserted against rather than left
-  /// as a comment. Each panel is bounded by the band's outer edges, so shifting the band by 7.5px
-  /// makes the right panel 15px wider than the left.
-  it('does not buy the badge alignment by unbalancing the panels', () => {
-    const shiftedSeam = g.blockWidth / 2 - g.bars[0].width - g.bars[1].width / 2;
-    const left = shiftedSeam;
-    const right = g.blockWidth - shiftedSeam - g.dividerWidth;
-
-    expect(right - left).toBe(15);
-    expect(g.seamX).not.toBe(shiftedSeam);
+    expect(above).toBeCloseTo(-below, 10);
+    expect(Math.abs(above)).toBeGreaterThan(0);
   });
 });
