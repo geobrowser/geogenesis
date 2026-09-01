@@ -26,6 +26,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   debate: Debate;
   spaceId: string;
+  openerRef: React.RefObject<HTMLElement | null>;
 };
 
 const SHARE_TAGLINE = 'Watch the debate on Geo!';
@@ -38,7 +39,7 @@ const LINKEDIN_TEXT_MAX = 700;
  * The Share sheet for a debate: one-tap social hand-offs (Reddit, X, LinkedIn), a copy-link button,
  * and a download of the prepared debate video.
  */
-export function DebateShareDialog({ open, onOpenChange, debate, spaceId }: Props) {
+export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerRef }: Props) {
   const media = useDebateMedia(debate.id, open);
   const socialVideoReady = hasSocialVideo(media.data);
 
@@ -101,6 +102,10 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId }: Props
         <Overlay className="fixed inset-0 z-[1000] bg-text/20" />
         <Content
           aria-describedby={undefined}
+          onCloseAutoFocus={event => {
+            event.preventDefault();
+            openerRef.current?.focus();
+          }}
           className="fixed top-1/2 left-1/2 z-[1001] -translate-x-1/2 -translate-y-1/2 focus:outline-hidden"
         >
           <div className="flex h-[142px] w-[316px] max-w-[calc(100vw-2rem)] flex-col rounded-xl bg-white px-6 py-5 shadow-card">

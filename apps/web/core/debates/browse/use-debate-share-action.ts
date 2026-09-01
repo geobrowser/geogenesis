@@ -6,6 +6,7 @@ export type DebateShareControls = {
   open: boolean;
   onOpen: () => void;
   onOpenChange: (open: boolean) => void;
+  openerRef: React.RefObject<HTMLElement | null>;
 };
 
 /**
@@ -14,10 +15,15 @@ export type DebateShareControls = {
  */
 export function useDebateShareAction(): DebateShareControls {
   const [open, setOpen] = React.useState(false);
-  const onOpen = React.useCallback(() => setOpen(true), []);
+  const openerRef = React.useRef<HTMLElement | null>(null);
+  const onOpen = React.useCallback(() => {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setOpen(true);
+  }, []);
   return {
     open,
     onOpen,
     onOpenChange: setOpen,
+    openerRef,
   };
 }

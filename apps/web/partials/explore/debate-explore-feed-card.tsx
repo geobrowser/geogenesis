@@ -195,13 +195,21 @@ function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string
       <button
         type="button"
         aria-label="Share debate"
+        aria-haspopup="dialog"
+        aria-expanded={share.open}
         onClick={share.onOpen}
         className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
       >
         <ExploreShareIcon />
         <span className="text-[14px] font-normal">Share</span>
       </button>
-      <DebateShareDialog open={share.open} onOpenChange={share.onOpenChange} debate={debate} spaceId={spaceId} />
+      <DebateShareDialog
+        open={share.open}
+        onOpenChange={share.onOpenChange}
+        debate={debate}
+        spaceId={spaceId}
+        openerRef={share.openerRef}
+      />
       {claimsOpen ? (
         <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
           <DebateClaimsPanel debate={debate} onClose={() => setClaimsOpen(false)} />
