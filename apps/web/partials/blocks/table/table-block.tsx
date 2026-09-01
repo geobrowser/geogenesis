@@ -11,6 +11,7 @@ import { produce } from 'immer';
 
 import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
+import { filterGroupKey } from '~/core/blocks/data/filter-state-to-where';
 import { Filter, FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
 import {
   buildAccumulationResetKey,
@@ -1220,7 +1221,7 @@ const ConfiguredTableBlock = ({
                   {!isEditing &&
                     filterGroupsForToolbarPills.length > 0 &&
                     filterGroupsForToolbarPills.map(group => (
-                      <React.Fragment key={group.columnId}>
+                      <React.Fragment key={group.groupKey}>
                         <TableBlockFilterGroupPill
                           group={group}
                           mode={activeModesByColumn[group.columnId] ?? 'AND'}
@@ -1232,7 +1233,7 @@ const ConfiguredTableBlock = ({
                             setActiveFilters(newFilterState);
                           }}
                           onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                            setActiveFilters(activeFilters.filter(f => filterGroupKey(f) !== group.groupKey));
                           }}
                           isEditing={isEditing}
                         />
@@ -1252,7 +1253,7 @@ const ConfiguredTableBlock = ({
                         />
                       )}
                       {filterGroupsForToolbarPills.map(group => (
-                        <React.Fragment key={group.columnId}>
+                        <React.Fragment key={group.groupKey}>
                           <TableBlockFilterGroupPill
                             group={group}
                             mode={activeModesByColumn[group.columnId] ?? 'AND'}
@@ -1264,7 +1265,7 @@ const ConfiguredTableBlock = ({
                               setActiveFilters(newFilterState);
                             }}
                             onClearGroup={() => {
-                              setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                              setActiveFilters(activeFilters.filter(f => filterGroupKey(f) !== group.groupKey));
                             }}
                             onAddSimilar={anchorEl => {
                               requestAnimationFrame(() => {

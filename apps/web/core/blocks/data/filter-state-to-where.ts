@@ -9,18 +9,23 @@ export function filterStateToWhere(filterState: Filter[], modesByColumn: ModesBy
   if (filterState.length === 0) return {};
   if (filterState.length === 1) return buildSingleFilterWhere(filterState[0]);
 
-  // Group filters by property. Each group chooses its own mode; distinct
-  // properties are always combined with AND by mergeWhereConditions.
+  // Group filters by property AND direction (see filterGroupKey). Each group
+  // chooses its own mode; distinct groups are always combined with AND by
+  // mergeWhereConditions.
   const groups = new Map<string, Filter[]>();
   for (const filter of filterState) {
-    const existing = groups.get(filter.columnId);
+    const key = filterGroupKey(filter);
+    const existing = groups.get(key);
     if (existing) existing.push(filter);
-    else groups.set(filter.columnId, [filter]);
+    else groups.set(key, [filter]);
   }
 
   const groupConditions: WhereCondition[] = [];
-  for (const [columnId, filters] of groups) {
-    const mode: FilterMode = modesByColumn[columnId] ?? 'AND';
+  for (const [, filters] of groups) {
+    const columnId = filters[0].columnId;
+    // A backlink group has no mode entry (singleton in persisted state); if
+    // several ever coexist in memory, each stays required.
+    const mode: FilterMode = isBacklinkFilter(filters[0]) ? 'AND' : (modesByColumn[columnId] ?? 'AND');
     if (filters.length === 1) {
       groupConditions.push(buildSingleFilterWhere(filters[0]));
     } else if (ID.equals(columnId, SystemIds.SPACE_FILTER)) {
@@ -101,6 +106,21 @@ function mergePlainConditions(conditions: WhereCondition[]): WhereCondition {
  */
 export function isBacklinkFilter(filter: Filter): boolean {
   return Boolean(filter.isBacklink) || filter.columnName === 'Backlink';
+}
+
+/**
+ * Identity of a filter's logical group. Direction is part of the key: a
+ * forward filter ("rows having Subtopics → X") and a backlink filter ("rows
+ * X lists via Subtopics") on the same property are DIFFERENT constraints and
+ * must never share one AND/OR mode — coalescing them meant a multi-value OR
+ * on the forward side silently demoted the backlink from a requirement to an
+ * alternative. Distinct groups are always ANDed, so splitting yields
+ * `backlink AND (v1 OR v2)` with no format change: the persisted format
+ * carries at most one backlink per block (a single `_relation` entry), so a
+ * backlink group is a singleton and needs no mode entry of its own.
+ */
+export function filterGroupKey(filter: Filter): string {
+  return isBacklinkFilter(filter) ? `backlink:${filter.columnId}` : filter.columnId;
 }
 
 function buildSingleFilterWhere(filter: Filter): WhereCondition {
