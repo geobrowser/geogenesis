@@ -45,6 +45,8 @@ export type { ExploreFeedItem };
 export type ExploreFeedResult = {
   items: ExploreFeedItem[];
   nextCursor: string | null;
+  /** EXPERIMENT ONLY — GEO-2777 stage timings. */
+  __stage?: { queryMs: number; rowsMs: number; attachMs: number; entities: number };
 };
 
 function normId(id: string): string {
@@ -349,6 +351,7 @@ export async function fetchExploreFeed(args: {
   const windowSize =
     args.sort === 'best' && (args.typeIds?.length ?? 0) !== 1 ? EXPLORE_DIVERSITY_WINDOW_SIZE : scanChunk;
 
+  const __tq = Date.now();
   const page =
     args.sort === 'best'
       ? await fetchBestEntitiesPage({
@@ -377,7 +380,10 @@ export async function fetchExploreFeed(args: {
           requireName: args.requireName,
         });
 
+  const __queryMs = Date.now() - __tq;
+  const __tr = Date.now();
   const rows = buildExploreFeedRows(page.entities, allowed, memberOrEditorSet);
+  const __rowsMs = Date.now() - __tr;
 
   // "Best" is the only sort that reorders (GEO-2690). "New" is reverse-chronological and
   // an activity log that shuffles is simply wrong; "Top" is an explicit "rank by score"
@@ -388,8 +394,14 @@ export async function fetchExploreFeed(args: {
   // 23-30 of every page before (GEO-2695). The offset keeps the rest reachable.
   const slice = ordered.slice(offset, offset + pageSize);
 
+  const __ta = Date.now();
+  const __items = await attachMeta(slice);
+  const __attachMs = Date.now() - __ta;
+
   return {
-    items: await attachMeta(slice),
+    // EXPERIMENT ONLY — GEO-2777
+    __stage: { queryMs: __queryMs, rowsMs: __rowsMs, attachMs: __attachMs, entities: page.entities.length },
+    items: __items,
     nextCursor: nextExploreWindowCursor({
       after,
       offset,

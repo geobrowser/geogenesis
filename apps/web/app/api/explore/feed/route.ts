@@ -105,7 +105,7 @@ export async function GET(request: Request) {
     });
     return NextResponse.json({
       ...result,
-      __timings: { browseSidebarMs: __tBrowse, exploreFeedMs: Date.now() - __t1 },
+      __timings: { browseSidebarMs: __tBrowse, exploreFeedMs: Date.now() - __t1, stage: (result as any).__stage },
     });
   } catch (e) {
     console.error('explore feed', e);
