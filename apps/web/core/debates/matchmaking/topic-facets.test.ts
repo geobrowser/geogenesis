@@ -4,6 +4,7 @@ import type { MatchmakingTopic } from '~/core/debates/api';
 
 import {
   availableTopics,
+  carriesEveryTopic,
   formatFacetCount,
   keepSelectableTopic,
   keepSelectableTopics,
@@ -97,6 +98,27 @@ describe('keepSelectableTopics', () => {
     const selected = ['ai', 'health'];
     expect(keepSelectableTopics(selected, [AI, HEALTH], true)).toBe(selected);
   });
+
+  // The race the co-occurrence menu opens: the second pick lands against the first one's facet,
+  // before the answer narrowing that facet has arrived. Giving back only the pick that didn't fit
+  // beats discarding the one the viewer chose deliberately alongside it.
+  it('gives back only the newest pick when the combination matches nothing', () => {
+    expect(keepSelectableTopics(['ai', 'health'], [], true)).toEqual(['ai']);
+  });
+
+  // A single held topic has no earlier pick to fall back to, so an empty menu still clears it —
+  // the space changing under a held topic, which is what this rule was written for.
+  it('still clears a lone topic the menu no longer offers', () => {
+    expect(keepSelectableTopics(['ai'], [], true)).toEqual([]);
+  });
+
+  // Each round asks about the shortened selection, so a genuinely expired one drains rather than
+  // sticking at one topic forever.
+  it('drains a stale selection one pick at a time', () => {
+    expect(keepSelectableTopics(['ai', 'health', 'crypto'], [], true)).toEqual(['ai', 'health']);
+    expect(keepSelectableTopics(['ai', 'health'], [], true)).toEqual(['ai']);
+    expect(keepSelectableTopics(['ai'], [], true)).toEqual([]);
+  });
 });
 
 describe('orderFacetOptions', () => {
@@ -114,6 +136,37 @@ describe('orderFacetOptions', () => {
   // before the next click lands.
   it('holds selected options at the top, whatever their count', () => {
     expect(orderFacetOptions(options, ['a']).map(o => o.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  // Selected rows are the ones being worked with, and their counts move on every tick — so
+  // ordering them by count made the already-chosen ones jump around as another was added.
+  it('holds selected options in the order they were picked, not by count', () => {
+    const picked = [
+      { id: 'a', count: 1 },
+      { id: 'b', count: 9 },
+      { id: 'c', count: 5 },
+    ];
+    expect(orderFacetOptions(picked, ['c', 'a']).map(o => o.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  // And the order survives the counts moving underneath them, which is what a tick does.
+  it('keeps that order when the counts change', () => {
+    const before = orderFacetOptions(
+      [
+        { id: 'a', count: 1 },
+        { id: 'b', count: 9 },
+      ],
+      ['b', 'a']
+    ).map(o => o.id);
+    const after = orderFacetOptions(
+      [
+        { id: 'a', count: 40 },
+        { id: 'b', count: 2 },
+      ],
+      ['b', 'a']
+    ).map(o => o.id);
+    expect(before).toEqual(['b', 'a']);
+    expect(after).toEqual(before);
   });
 
   it('keeps equal counts in a stable order rather than whatever order they arrived in', () => {
@@ -155,5 +208,30 @@ describe('keepSelectedVisible', () => {
 
   it('returns the same array when nothing is missing', () => {
     expect(keepSelectedVisible(options, ['a'])).toBe(options);
+  });
+});
+
+describe('carriesEveryTopic', () => {
+  const topics = [{ id: 'ai' }, { id: 'energy' }];
+
+  it('keeps everything when nothing is picked', () => {
+    expect(carriesEveryTopic(undefined, [])).toBe(true);
+    expect(carriesEveryTopic(topics, [])).toBe(true);
+  });
+
+  it('keeps a claim carrying the one picked topic', () => {
+    expect(carriesEveryTopic(topics, ['ai'])).toBe(true);
+  });
+
+  // The case that separates AND from OR. Under the old union rule this claim matched either topic
+  // alone and so matched both; under intersection it has to carry every one of them.
+  it('needs every picked topic, not any of them', () => {
+    expect(carriesEveryTopic(topics, ['ai', 'energy'])).toBe(true);
+    expect(carriesEveryTopic([{ id: 'ai' }], ['ai', 'energy'])).toBe(false);
+  });
+
+  it('drops a claim with no topics as soon as one is picked', () => {
+    expect(carriesEveryTopic(undefined, ['ai'])).toBe(false);
+    expect(carriesEveryTopic([], ['ai'])).toBe(false);
   });
 });

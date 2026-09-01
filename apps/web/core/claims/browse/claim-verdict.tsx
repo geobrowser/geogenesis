@@ -2,22 +2,27 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import { ENTITY_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
-import { type ClaimResponseSummary } from './claim-response-summary';
-import { ClaimSideResponders } from './claim-side-responders';
+import { type ClaimResponseSummary, claimSummaryTier } from './claim-response-summary';
+import { ClaimSides, ClaimSplitBar } from './claim-summary';
 
 /**
  * Where opinion sits on a claim: one number, the split, and who is on each side.
  *
- * Renders from the first response onward. Only a claim nobody has answered has nothing to divide,
- * and that is the one case this is absent for — the response floor governs whether the split can
- * be called *controversial*, not whether it can be shown at all.
+ * Reads the same `claimSummaryTier` every card reads, so the page and a card describing the same
+ * claim cannot say different things about it.
+ *
+ * At zero it invites a first response rather than rendering nothing at all, which is what it used
+ * to do on the state most claims are in — but only at a zero the server actually reported. A zero
+ * standing in for a failed or unasked question renders nothing, because the invitation is an
+ * assertion about the claim and those two are not. From the first response the share is shown, however small
+ * the sample: 93% of answered claims are unanimous and the median has two responses, so a "100%"
+ * here is usually standing on very little — and what keeps that honest is the responder counts
+ * directly beneath it, not withholding the number.
  */
 export function ClaimVerdict({
   entityId,
@@ -34,115 +39,70 @@ export function ClaimVerdict({
     return <Skeleton className="h-[132px] w-full rounded-lg" />;
   }
 
-  if (summary.percent === null) return null;
+  // Nothing, where the counts never answered.
+  //
+  // `total: 0` is also what a failed count query and a held-back hook produce, and this module is
+  // the one place that turns a zero into a *claim about the world* — "No responses yet", followed
+  // by an invitation to be the first. Said over a claim with two hundred responses that is not a
+  // missing verdict but a wrong one, and the reader has no way to tell. On the claim page the
+  // held-back case is reached on every load: the summary waits for the vocabulary, so until the
+  // entity lands there is a window where nothing is loading and nothing has been asked.
+  //
+  // Rendering nothing is what this did before it learned to invite, and it is the honest answer to
+  // a question that was never put.
+  if (!summary.hasCounts) return null;
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
-  const percent = summary.percent;
+  const tier = claimSummaryTier(summary.total);
+
+  // An invitation, where before there was nothing at all — and nothing is what the great majority
+  // of claims render, so this is the state most readers meet.
+  if (tier === 'invite') {
+    return (
+      <section aria-label="Response summary" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
+        <Text as="p" variant="metadataMedium" color="text">
+          No responses yet
+        </Text>
+        <Text as="p" variant="metadata" color="grey-04" className="mt-1">
+          {copy.firstResponsePrompt}
+        </Text>
+      </section>
+    );
+  }
+
+  const percent = summary.percent ?? 0;
 
   return (
     <section aria-label="Response summary" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-        {/* The share and what it is a share *of*, stacked — the number carries the emphasis and the
-            verb sits under it, rather than the two competing on one baseline. */}
-        <div className="flex flex-col">
+        {/* The share and what it is a share *of*, on one baseline. They were stacked, which gave the
+            verb a line of its own for one small word and pushed everything under it down. Sharing a
+            line reads as one statement — "68% agree" — which is what it is, and it matches the
+            explore card exactly. */}
+        <span className="flex items-baseline gap-1.5">
           <span className="text-[2.5rem] leading-none font-semibold tracking-[-1px] tabular-nums">{percent}%</span>
-          <Text as="span" variant="metadata" color="grey-04" className="mt-1">
+          <Text as="span" variant="metadata" color="grey-04">
             {/* "Agreements" → "agree", "Verifications" → "verify" reads wrong; use the action verb. */}
             {copy.positiveAction.toLowerCase()}
           </Text>
-        </div>
-        <div className="flex items-center gap-2">
-          {summary.isControversial && (
-            <span className="rounded-sm bg-orange/25 px-1.5 py-0.5 text-metadata font-medium text-text">
-              Controversial
-            </span>
-          )}
-          <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
-            {summary.total} {summary.total === 1 ? 'response' : 'responses'}
-          </Text>
-        </div>
+        </span>
+        {/* No Controversial tag here: it moved up to the hero chips, beside the type and tags, where
+            it says what kind of claim this is. Flagging it in both places said it twice. */}
+        <Text as="span" variant="metadata" color="grey-04" className="tabular-nums">
+          {summary.total} {summary.total === 1 ? 'response' : 'responses'}
+        </Text>
       </div>
 
-      <div
-        className="mt-4 flex h-2 overflow-hidden rounded-full bg-grey-01"
-        role="img"
-        aria-label={`${percent}% ${copy.positiveAction.toLowerCase()}, ${100 - percent}% ${copy.negativeAction.toLowerCase()}`}
-      >
-        <span className="bg-green" style={{ width: `${percent}%` }} />
-        <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
-      </div>
+      <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-4 h-2" />
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <SideSummary
-          swatchClassName="bg-green"
-          label={copy.positiveAction}
-          count={summary.positive}
-          direction="positive"
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          viewerDirection={summary.viewerDirection}
-          viewerSpaceId={summary.viewerSpaceId}
-        />
-        <SideSummary
-          swatchClassName="bg-red-01"
-          label={copy.negativeAction}
-          count={summary.negative}
-          direction="negative"
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          viewerDirection={summary.viewerDirection}
-          viewerSpaceId={summary.viewerSpaceId}
-          alignEnd
-        />
-      </div>
+      <ClaimSides
+        entityId={entityId}
+        spaceId={spaceId}
+        responseKind={responseKind}
+        summary={summary}
+        className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2"
+        alignSecondEnd
+      />
     </section>
-  );
-}
-
-/** One side of the split: its swatch, its count, and the people who took it. */
-function SideSummary({
-  swatchClassName,
-  label,
-  count,
-  direction,
-  entityId,
-  spaceId,
-  responseKind,
-  viewerDirection,
-  viewerSpaceId,
-  alignEnd = false,
-}: {
-  swatchClassName: string;
-  label: string;
-  count: number;
-  direction: 'positive' | 'negative';
-  entityId: string;
-  spaceId: string;
-  responseKind: ResponseKind;
-  viewerDirection: 'positive' | 'negative' | null;
-  viewerSpaceId: string | null;
-  alignEnd?: boolean;
-}) {
-  return (
-    <div className={cx('flex min-w-0 items-center gap-2', alignEnd && 'justify-end')}>
-      <span className={cx('size-2 shrink-0 rounded-xs', swatchClassName)} aria-hidden />
-      <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
-        {label} {count}
-      </Text>
-      {count > 0 && (
-        <ClaimSideResponders
-          entityId={entityId}
-          spaceId={spaceId}
-          responseKind={responseKind}
-          direction={direction}
-          label={label}
-          totalResponders={count}
-          viewerDirection={viewerDirection}
-          viewerSpaceId={viewerSpaceId}
-        />
-      )}
-    </div>
   );
 }

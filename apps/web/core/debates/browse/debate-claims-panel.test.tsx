@@ -20,6 +20,12 @@ const mocks = vi.hoisted(() => ({
   /** Props every rendered response control received, in render order. */
   responseControlProps: [] as Array<Record<string, unknown>>,
   rankByClaimId: new Map<string, number>(),
+  /** What the batched entity lookup resolves to. Empty means it answered with nothing. */
+  claimEntities: [] as Array<{ id: string }>,
+  /** Every set of per-space groups the row lookup was asked for. */
+  rowGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
+  /** Whether each rendered row's controls asked for the account-level match, in render order. */
+  positionControlOffersDebate: [] as boolean[],
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -51,10 +57,76 @@ vi.mock('~/core/debates/claims-best-order', async () => {
   };
 });
 
-vi.mock('~/partials/entity-page/entity-row-actions', () => ({
-  EntityRowActions: (props: Record<string, unknown>) => {
+// The rows carry the shared claim controls now — labelled pills and the shared summary —
+// rather than the data block's chevrons. Mocked at the summary, which is the one part that receives
+// the claim and its space, so these assertions still test what they always tested: which claim each row
+// is for, and which space it is scoped to.
+vi.mock('~/core/claims/browse/claim-summary', () => ({
+  ClaimSummary: (props: Record<string, unknown>) => {
     mocks.responseControlProps.push(props);
     return <div data-testid={`row-actions-${String(props.entityId)}`} />;
+  },
+}));
+
+// The pills publish through the entity-response stack, which is not what this panel is about.
+vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
+  PositionRow: ({ disabled }: { disabled?: boolean }) => (
+    <div data-testid="position-row" data-disabled={String(Boolean(disabled))} />
+  ),
+  // Honours `answersReady`, because the real hook does. The gate used to live in each caller's
+  // `disabled`, so a mock that hardcoded `canRespond: true` could still be caught by these
+  // assertions; now that it lives in the hook, a hardcoded mock would report every claim as
+  // answerable no matter what the lookups say — and these suites would go quiet on the bug they
+  // exist to catch.
+  useClaimPositionControl: ({
+    answersReady = true,
+    offersDebate = true,
+  }: {
+    answersReady?: boolean;
+    offersDebate?: boolean;
+  }) => {
+    mocks.positionControlOffersDebate.push(offersDebate);
+    return {
+      viewerPosition: null,
+      optimisticPositions: [],
+      respond: vi.fn(),
+      actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
+      responseError: null,
+      canRespond: answersReady,
+    };
+  },
+}));
+
+vi.mock('~/core/claims/browse/claim-response-summary', () => ({
+  useClaimResponseSummary: () => ({
+    positive: 0,
+    negative: 0,
+    total: 0,
+    percent: null,
+    meetsFloor: false,
+    isControversial: false,
+    isLoading: false,
+    isViewerResponseLoading: false,
+    hasCounts: true,
+    viewerDirection: null,
+    viewerSpaceId: null,
+  }),
+}));
+
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
+
+// The panel resolves the claim entities to answer the response vocabulary where geo-chat has no
+// row. That is a graph read, and these suites are about grouping and ordering.
+vi.mock('~/core/sync/use-store', () => ({
+  useQueryEntities: () => ({ entities: mocks.claimEntities, isLoading: false }),
+}));
+
+vi.mock('~/core/debates/hooks', () => ({
+  // Grouped per space, since a debate can quote a claim that lives somewhere else. `rowGroups`
+  // records what the panel asked for, so the suite can assert it did not flatten them into one.
+  useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
+    mocks.rowGroups.push(groups);
+    return { claims: [], isLoading: false, isError: false };
   },
 }));
 
@@ -116,6 +188,9 @@ beforeEach(() => {
   mocks.error = null;
   mocks.responseControlProps.length = 0;
   mocks.rankByClaimId = new Map();
+  mocks.claimEntities = [];
+  mocks.rowGroups = [];
+  mocks.positionControlOffersDebate = [];
   mocks.rankingReady = true;
 });
 
@@ -132,6 +207,20 @@ describe('DebateClaimsPanel', () => {
 
     expect(within(cardFor('Preston Mantel')).getByText('Waking up early provides more sunlight.')).toBeInTheDocument();
     expect(within(cardFor('Arturas Vil')).getByText('Sunlight exposure can cause skin cancer.')).toBeInTheDocument();
+  });
+
+  // The merge that fills an empty side with the people behind an account-level match belongs to the
+  // offer it explains — a card must not offer a debate on a side showing nobody to debate. This
+  // panel makes no offer: it has no end slot, because the reader is already watching the debate this
+  // claim is being argued in. Left on, the merge would drop an unrelated online stranger's face into
+  // a pill on a row about this debate's own participants.
+  it('does not borrow faces from an account-level match it never offers', () => {
+    mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'Sleep matters.')] });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    expect(mocks.positionControlOffersDebate).not.toHaveLength(0);
+    expect(mocks.positionControlOffersDebate.every(offers => offers === false)).toBe(true);
   });
 
   it('links each claim to its entity in the space the claim lives in', () => {
@@ -174,6 +263,41 @@ describe('DebateClaimsPanel', () => {
 
   // Both the link and the response target are space-scoped, so a claim with no space has nothing
   // correct to point at. Showing the text without controls beats guessing a space.
+  it('asks each claim\u2019s own space for its row, not the first space it saw', () => {
+    // `TranscriptClaim.spaceId` is allowed to differ per claim — a debate that quotes an external
+    // claim has at least two. Sending the whole list to one space returns nothing for the rest, and
+    // those rows lose their vocabulary and their available participants without saying so.
+    mocks.claims = grouped({
+      [PRESTON_SPACE]: [claim('claim-1', 'Local.'), claim('claim-2', 'External.', { spaceId: 'space-other' })],
+    });
+
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+
+    const groups = mocks.rowGroups.at(-1) ?? [];
+    expect(groups).toHaveLength(2);
+    expect(groups.find(group => group.spaceId === CLAIM_SPACE)?.claimIds).toEqual(['claim-1']);
+    expect(groups.find(group => group.spaceId === 'space-other')?.claimIds).toEqual(['claim-2']);
+  });
+
+  it('will not let anyone answer before the claim’s vocabulary is known', () => {
+    // `stance` is the fallback while the entity batch is in flight, so the pills would say Agree and
+    // Disagree on a claim that wants Verify and Dispute — and a click inside that window publishes a
+    // stance response against a factual claim. The kind selects `voteKind` on the write, so this is
+    // not a labelling problem; it is the wrong vote.
+    mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'One.')] });
+
+    const { unmount } = render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+    expect(screen.getByTestId('position-row').getAttribute('data-disabled')).toBe('true');
+    unmount();
+
+    // Answered, not merely settled. A graph timeout stops the batch loading too, and reading that
+    // as "no factual flag" is the same wrong vote with a longer fuse — so it takes an actual entity
+    // (or geo-chat's row, which would have answered sooner).
+    mocks.claimEntities = [{ id: 'claim-1' }];
+    render(<DebateClaimsPanel debate={debate()} onClose={vi.fn()} />);
+    expect(screen.getByTestId('position-row').getAttribute('data-disabled')).toBe('false');
+  });
+
   it('renders a claim with no space as plain text, with no link and no controls', () => {
     mocks.claims = grouped({ [PRESTON_SPACE]: [claim('claim-1', 'Homeless claim.', { spaceId: null })] });
 
