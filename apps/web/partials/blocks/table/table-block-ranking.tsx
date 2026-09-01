@@ -50,6 +50,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
   const {
     filterState,
     resolvedFilterState,
+    isFilterResolving,
     filterMode,
     setFilterState,
     setFilterMode,
@@ -205,6 +206,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                           setFilterState(resolvedFilterState.filter(f => f.columnId !== group.columnId));
                         }}
                         isEditing={isEditing}
+                        isResolvingNames={isFilterResolving}
                       />
                     ))}
                 </div>
@@ -234,6 +236,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                           });
                         }}
                         isEditing={isEditing}
+                        isResolvingNames={isFilterResolving}
                       />
                     ))}
                   </div>

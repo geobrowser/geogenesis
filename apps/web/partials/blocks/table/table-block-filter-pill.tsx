@@ -7,6 +7,7 @@ import { useName } from '~/core/state/entity-page-store/entity-store';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Plus } from '~/design-system/icons/plus';
+import { Skeleton } from '~/design-system/skeleton';
 
 function FilterIcon() {
   return (
@@ -54,6 +55,8 @@ type TableBlockFilterGroupPillProps = {
   onClearGroup: () => void;
   onAddSimilar?: (anchorEl: HTMLElement) => void;
   isEditing: boolean;
+  /** Names are still being looked up, so an unresolved one is a wait rather than an answer. */
+  isResolvingNames?: boolean;
 };
 
 type FilterChipBaseProps = {
@@ -72,7 +75,7 @@ function FilterChipShell({
   disabled,
   removable,
 }: {
-  displayLabel: string;
+  displayLabel: React.ReactNode;
   removeLabel: string;
   tone: 'white' | 'grey';
   onRemove: () => void;
@@ -109,10 +112,45 @@ function FilterChipShell({
   );
 }
 
-function FilterRelationChip({ label, valueId, ...rest }: FilterChipBaseProps & { valueId: string }) {
+/**
+ * A relation filter's value is an entity id, and its name has to be resolved before it can be
+ * shown. Rendering the id in the meantime isn't a degraded label — it's noise the reader has to
+ * look past, and it reads as the filter having changed under them.
+ *
+ * Once resolution finishes and the entity genuinely has no name, the chip falls back to the
+ * SHORT id — the same `id.slice(0, 8)` fallback this feature area already uses (query-setup
+ * popover, create-entity space dropdown). Still identifying, without a 32-character label.
+ */
+function FilterRelationChip({
+  valueName,
+  valueId,
+  isResolvingNames,
+  ...rest
+}: FilterChipBaseProps & { valueName: string | null; valueId: string; isResolvingNames: boolean }) {
   const hydratedName = useName(valueId);
-  const displayLabel = hydratedName ?? label;
-  return <FilterChipShell {...rest} displayLabel={displayLabel} removeLabel={label} />;
+  const name = hydratedName ?? valueName;
+
+  // `parseFiltersSync` provisionally types every persisted filter as RELATION until the
+  // property's data type resolves, so a text filter can land here on first load. Its value is
+  // literal text the reader typed — show it; only an id-shaped value is a lookup in progress.
+  const looksLikeEntityId = /^[0-9a-f]{32}$/i.test(valueId);
+
+  if (name === null && isResolvingNames && looksLikeEntityId) {
+    // The shell (and its per-value Remove button) stays mounted; only the label is a skeleton.
+    return <FilterChipShell {...rest} displayLabel={<ResolvingValueLabel />} removeLabel="unresolved value" />;
+  }
+
+  const displayLabel = name ?? (looksLikeEntityId ? valueId.slice(0, 8) : valueId);
+  return <FilterChipShell {...rest} displayLabel={displayLabel} removeLabel={displayLabel} />;
+}
+
+/** Announced to assistive tech as a status; visually the same small shimmer, sized to the chip. */
+function ResolvingValueLabel() {
+  return (
+    <span role="status" aria-label="Resolving filter value" className="inline-flex items-center">
+      <Skeleton aria-hidden className="h-3 w-16 rounded-[2px]" />
+    </span>
+  );
 }
 
 function FilterTextChip({ label, ...rest }: FilterChipBaseProps) {
@@ -127,6 +165,7 @@ export function TableBlockFilterGroupPill({
   onClearGroup,
   onAddSimilar,
   isEditing,
+  isResolvingNames = false,
 }: TableBlockFilterGroupPillProps) {
   const hasMultipleValues = group.filters.length > 1;
   const columnLabel = group.columnName ?? 'Property';
@@ -173,12 +212,13 @@ export function TableBlockFilterGroupPill({
           const key = `${filter.columnId}-${filter.value}-${originalIndex}`;
 
           if (filter.valueType === 'RELATION') {
-            const label = filter.valueName ?? filter.value ?? '';
             return (
               <FilterRelationChip
                 key={key}
-                label={label}
+                label={filter.valueName ?? filter.value ?? ''}
+                valueName={filter.valueName}
                 valueId={filter.value}
+                isResolvingNames={isResolvingNames}
                 tone="white"
                 disabled={!canDelete}
                 removable={removable}

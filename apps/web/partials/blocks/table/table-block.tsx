@@ -598,6 +598,7 @@ const ConfiguredTableBlock = ({
     source,
     setSource,
     filterState: activeFilters,
+    isFilterResolving,
     filterMode: activeFilterMode,
     setFilterState,
     setFilterMode,
@@ -1189,6 +1190,7 @@ const ConfiguredTableBlock = ({
                             setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
                           }}
                           isEditing={isEditing}
+                          isResolvingNames={isFilterResolving}
                         />
                       </React.Fragment>
                     ))}
@@ -1219,6 +1221,7 @@ const ConfiguredTableBlock = ({
                             });
                           }}
                           isEditing={isEditing}
+                          isResolvingNames={isFilterResolving}
                         />
                       </React.Fragment>
                     ))}

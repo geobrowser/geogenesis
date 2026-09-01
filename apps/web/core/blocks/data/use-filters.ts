@@ -139,6 +139,11 @@ export function useFilters(canEdit?: boolean) {
     filterStateRef.current = filterState;
   }, [filterState]);
 
+  const resolvedStateRef = React.useRef(effectiveResolvedState);
+  React.useEffect(() => {
+    resolvedStateRef.current = effectiveResolvedState;
+  }, [effectiveResolvedState]);
+
   const writeFilterTriple = React.useCallback(
     (filters: Filter[], mode: FilterMode) => {
       const newFiltersString = filters.length === 0 && mode === 'AND' ? '' : toGeoFilterState(filters, mode);
@@ -168,7 +173,12 @@ export function useFilters(canEdit?: boolean) {
 
   const setFilterState = React.useCallback(
     (filters: Filter[]) => {
-      setOptimisticFilterState(filters);
+      // Carry over the names we have already resolved. Callers build the new list from
+      // `filterState`, which is the raw parse and carries no names at all — so adding one filter
+      // used to blank out the names of every filter already on screen, leaving them as raw entity
+      // ids until the re-resolve came back. A filter that hasn't changed keeps its identity, so
+      // its name is still ours to reuse.
+      setOptimisticFilterState(mergeFilterDisplayNames(filters, resolvedStateRef.current));
       writeFilterTriple(filters, filterModeRef.current);
     },
     [writeFilterTriple]
@@ -197,8 +207,15 @@ export function useFilters(canEdit?: boolean) {
   };
 }
 
+/**
+ * What makes a filter "the same filter" across parses: column + value + direction. The value
+ * type is deliberately NOT part of the identity — it is derived from the property, and
+ * `parseFiltersSync` provisionally types every persisted filter as RELATION until the async
+ * resolve learns the real data type. Including it made the parsed and resolved lists of a mixed
+ * TEXT + RELATION filter set look like different sets, which discarded the carried names.
+ */
 function filterIdentity(f: Filter): string {
-  return `${f.columnId}\0${f.valueType}\0${f.value}\0${f.isBacklink === true ? '1' : '0'}`;
+  return `${f.columnId}\0${f.value}\0${f.isBacklink === true ? '1' : '0'}`;
 }
 
 function areSameFilterSet(a: Filter[], b: Filter[]): boolean {
@@ -210,7 +227,7 @@ function areSameFilterSet(a: Filter[], b: Filter[]): boolean {
   return aKeys.every((key, index) => key === bKeys[index]);
 }
 
-function mergeFilterDisplayNames(filters: Filter[], displayNameSource: Filter[]): Filter[] {
+export function mergeFilterDisplayNames(filters: Filter[], displayNameSource: Filter[]): Filter[] {
   const namesByKey = new Map(displayNameSource.map(f => [filterIdentity(f), f]));
 
   return filters.map(filter => {
@@ -222,6 +239,10 @@ function mergeFilterDisplayNames(filters: Filter[], displayNameSource: Filter[])
       columnName: filter.columnName ?? source.columnName,
       valueName: filter.valueName ?? source.valueName,
       relationValueTypes: filter.relationValueTypes ?? source.relationValueTypes,
+      // A provisional RELATION (the sync parse's placeholder) adopts the type the resolve
+      // already learned, so text chips render as text straight away.
+      valueType:
+        filter.valueType === 'RELATION' && source.valueType !== 'RELATION' ? source.valueType : filter.valueType,
     };
   });
 }
