@@ -41,7 +41,15 @@ const LINKEDIN_TEXT_MAX = 700;
 export function DebateShareDialog({ open, onOpenChange, debate, spaceId }: Props) {
   const media = useDebateMedia(debate.id, open);
   const socialVideoReady = hasSocialVideo(media.data);
-  const download = useDebateVideoDownload(debate.id, open && socialVideoReady);
+
+  // Prepare once the sheet has opened and keep it alive for the item's lifetime instead of re-doing
+  // it on every open.
+  const [everOpened, setEverOpened] = React.useState(false);
+  React.useEffect(() => {
+    if (open) setEverOpened(true);
+  }, [open]);
+
+  const download = useDebateVideoDownload(debate.id, everOpened && socialVideoReady);
   const [, setToast] = useToast();
 
   const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, debate.id)}`;
