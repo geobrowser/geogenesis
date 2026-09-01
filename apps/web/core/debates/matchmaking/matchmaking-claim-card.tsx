@@ -724,28 +724,42 @@ export function PositionRow({
   const forSide = positions.find(position => position.position === true);
   const againstSide = positions.find(position => position.position === false);
 
+  // Two across where there is room for both labels whole, stacked where there is not.
+  //
+  // The pills are rendered in a feed card, a side panel and the claim page, at widths none of them
+  // agrees on, so the row cannot ask the viewport how much space it has — a 1200px window says
+  // nothing about a 230px panel inside it. `@container` makes the question local: the query below
+  // reads this row's own width wherever it has been dropped.
+  //
+  // 272px is measured, not picked. The widest pill is "Disagree" at 100px of content — 24px of
+  // padding, a 12px icon, a 6px gap and a 58px label — and an avatar stack adds ~32px beside it,
+  // so a pill wants ~132px to render whole; two of those plus the 8px gap is 272px. Under that the
+  // label is what used to give way, because it carries `truncate` while the icon and the faces are
+  // `shrink-0` — which is how the button that says what pressing it does became "Dis...".
   return (
-    <div className="grid grid-cols-2 gap-2">
-      <PositionButton
-        // Server labels win when a side has responders; otherwise fall back to the vocabulary for
-        // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
-        label={forSide?.position_label ?? copy.positiveAction}
-        summary={forSide}
-        position
-        selected={viewerPosition === true}
-        onRespond={onRespond}
-        disabled={disabled}
-        title={titleFor?.(true)}
-      />
-      <PositionButton
-        label={againstSide?.position_label ?? copy.negativeAction}
-        summary={againstSide}
-        position={false}
-        selected={viewerPosition === false}
-        onRespond={onRespond}
-        disabled={disabled}
-        title={titleFor?.(false)}
-      />
+    <div className="@container">
+      <div className="grid grid-cols-1 gap-2 @[272px]:grid-cols-2">
+        <PositionButton
+          // Server labels win when a side has responders; otherwise fall back to the vocabulary for
+          // this response kind — Agree/Disagree, or Verify/Dispute for a factual claim.
+          label={forSide?.position_label ?? copy.positiveAction}
+          summary={forSide}
+          position
+          selected={viewerPosition === true}
+          onRespond={onRespond}
+          disabled={disabled}
+          title={titleFor?.(true)}
+        />
+        <PositionButton
+          label={againstSide?.position_label ?? copy.negativeAction}
+          summary={againstSide}
+          position={false}
+          selected={viewerPosition === false}
+          onRespond={onRespond}
+          disabled={disabled}
+          title={titleFor?.(false)}
+        />
+      </div>
     </div>
   );
 }

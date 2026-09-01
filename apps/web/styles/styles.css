@@ -75,8 +75,12 @@
   /* Breakpoints (max-width variants defined below) */
   --breakpoint-*: initial;
 
-  /* Shared width for the overview side rails (Explore + space home) */
+  /* Shared width for the overview side rails (Explore + space home).
+     The rail is fluid between these two: it takes a share of the layout row up to
+     `--width-side-rail`, and stops shrinking at `--width-side-rail-min`, below which
+     `StickySideRail` drops it entirely rather than showing a rail too narrow to read. */
   --width-side-rail: 360px;
+  --width-side-rail-min: 280px;
 
   /* Animations */
   /* One bounce cycle of the debates feed scroll nudge. Its duration is mirrored by
