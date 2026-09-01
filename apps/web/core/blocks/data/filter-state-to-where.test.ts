@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { convertWhereConditionToEntityFilter } from '~/core/io/converters';
 
-import { filterStateToWhere } from './filter-state-to-where';
+import { filterGroupKey, filterStateToWhere } from './filter-state-to-where';
 import type { Filter } from './filters';
 
 const PROPERTY_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -114,5 +114,50 @@ describe('filterStateToWhere', () => {
     expect(where.AND).toHaveLength(3);
     expect(where.AND?.[0]).toEqual({ spaces: [{ equals: 'space-1' }, { equals: 'space-2' }] });
     expect(where.AND?.slice(1).every(condition => condition.relations?.length === 1)).toBe(true);
+  });
+});
+
+describe('direction-aware grouping', () => {
+  const backlink: Filter = {
+    columnId: 'prop-1',
+    columnName: 'Backlink',
+    valueType: 'RELATION',
+    value: 'anchor',
+    valueName: null,
+  };
+  const forwardA: Filter = {
+    columnId: 'prop-1',
+    columnName: 'Subtopics',
+    valueType: 'RELATION',
+    value: 'v-a',
+    valueName: null,
+  };
+  const forwardB: Filter = {
+    columnId: 'prop-1',
+    columnName: 'Subtopics',
+    valueType: 'RELATION',
+    value: 'v-b',
+    valueName: null,
+  };
+
+  it('gives each direction its own group key on the same property', () => {
+    expect(filterGroupKey(backlink)).toBe('backlink:prop-1');
+    expect(filterGroupKey({ ...forwardA, columnName: 'Topics', isBacklink: true })).toBe('backlink:prop-1');
+    expect(filterGroupKey(forwardA)).toBe('prop-1');
+  });
+
+  it('keeps a backlink required while forward values on the same property OR among themselves', () => {
+    const where = filterStateToWhere([backlink, forwardA, forwardB], { 'prop-1': 'OR' });
+    expect(where).toEqual({
+      AND: [
+        { backlinks: [{ typeOf: { id: { equals: 'prop-1' } }, fromEntity: { id: { equals: 'anchor' } } }] },
+        {
+          OR: [
+            { relations: [{ typeOf: { id: { equals: 'prop-1' } }, toEntity: { id: { equals: 'v-a' } } }] },
+            { relations: [{ typeOf: { id: { equals: 'prop-1' } }, toEntity: { id: { equals: 'v-b' } } }] },
+          ],
+        },
+      ],
+    });
   });
 });
