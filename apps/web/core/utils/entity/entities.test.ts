@@ -5,7 +5,15 @@ import { describe, expect, it } from 'vitest';
 import { HIDDEN_PROPERTIES, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { Relation, Value } from '~/core/types';
 
-import { description, descriptionTriple, name, nameValue, spaces } from './entities';
+import {
+  description,
+  descriptionInSpace,
+  descriptionTriple,
+  name,
+  nameInSpace,
+  nameValue,
+  spaces,
+} from './entities';
 
 const valuesWithSystemDescriptionAttribute: Value[] = [
   {
@@ -66,6 +74,37 @@ const valuesWithSystemNameAttribute: Value[] = [
   },
 ];
 
+// Description now resolves the way name always has. Array order used to decide which space won,
+// and `entity.values` is re-partitioned on every store merge — so an entity described by two spaces
+// could swap descriptions between renders, and the space fallback in `store.getEntity` inherited
+// that arbitrariness (GEO-2778).
+describe('descriptionTriple ranks spaces the way nameValue does', () => {
+  const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
+  const CRYPTO = 'c9f267dcb0d270718c2a3c45a64afd32';
+
+  const describedIn = (spaceId: string, text: string): Value =>
+    ({
+      id: `value-${spaceId}`,
+      entity: { id: 'entityId', name: null },
+      property: { id: SystemIds.DESCRIPTION_PROPERTY, name: 'Description', dataType: 'TEXT' },
+      value: text,
+      spaceId,
+    }) as unknown as Value;
+
+  it('picks the highest-ranked space regardless of array order', () => {
+    expect(description([describedIn(CRYPTO, 'Crypto'), describedIn(ROOT, 'Root')])).toBe('Root');
+    expect(description([describedIn(ROOT, 'Root'), describedIn(CRYPTO, 'Crypto')])).toBe('Root');
+  });
+
+  it('skips an empty description in favour of a space that wrote one', () => {
+    expect(description([describedIn(ROOT, ''), describedIn(CRYPTO, 'Crypto')])).toBe('Crypto');
+  });
+
+  it('leaves a single description alone', () => {
+    expect(descriptionTriple([describedIn(CRYPTO, 'Crypto')])?.value).toBe('Crypto');
+  });
+});
+
 describe('Entity name helpers', () => {
   it('Entity.name should parse name from values where name property is the expected system Name', () => {
     expect(name(valuesWithSystemNameAttribute)).toBe('banana');
@@ -77,6 +116,52 @@ describe('Entity name helpers', () => {
 
   it('Entity.nameValue should return undefined if there is no Name value', () => {
     expect(nameValue([])).toBe(undefined);
+  });
+});
+
+// The rule both `store.getEntity` and the orm merge read through, so scoping cannot drift between
+// the two paths a reader can arrive by (GEO-2778).
+describe('nameInSpace / descriptionInSpace', () => {
+  const ROOT = 'a19c345ab9866679b001d7d2138d88a1';
+  const CRYPTO = 'c9f267dcb0d270718c2a3c45a64afd32';
+
+  const wrote = (spaceId: string, propertyId: string, text: string): Value =>
+    ({
+      id: `value-${spaceId}-${propertyId}`,
+      entity: { id: 'entityId', name: null },
+      property: { id: propertyId, name: null, dataType: 'TEXT' },
+      value: text,
+      spaceId,
+    }) as unknown as Value;
+
+  const named = (spaceId: string, text: string) => wrote(spaceId, SystemIds.NAME_PROPERTY, text);
+  const described = (spaceId: string, text: string) => wrote(spaceId, SystemIds.DESCRIPTION_PROPERTY, text);
+
+  it('reads the named space even when a higher-ranked one disagrees', () => {
+    const values = [named(ROOT, 'Root'), named(CRYPTO, 'Crypto')];
+    expect(nameInSpace(values, CRYPTO)).toBe('Crypto');
+    expect(nameInSpace(values, ROOT)).toBe('Root');
+  });
+
+  it('falls back to the graph when that space wrote nothing', () => {
+    expect(nameInSpace([named(ROOT, 'Root')], CRYPTO)).toBe('Root');
+    expect(descriptionInSpace([described(ROOT, 'Root desc')], CRYPTO)).toBe('Root desc');
+  });
+
+  it('treats an empty value as nothing written', () => {
+    expect(nameInSpace([named(ROOT, 'Root'), named(CRYPTO, '')], CRYPTO)).toBe('Root');
+    expect(descriptionInSpace([described(ROOT, 'Root desc'), described(CRYPTO, '')], CRYPTO)).toBe('Root desc');
+  });
+
+  it('resolves across spaces when no space is named', () => {
+    const values = [named(CRYPTO, 'Crypto'), named(ROOT, 'Root')];
+    expect(nameInSpace(values, undefined)).toBe('Root');
+    expect(nameInSpace(values, undefined)).toBe(name(values));
+  });
+
+  it('returns null when nobody wrote one', () => {
+    expect(nameInSpace([], CRYPTO)).toBeNull();
+    expect(descriptionInSpace([], CRYPTO)).toBeNull();
   });
 });
 

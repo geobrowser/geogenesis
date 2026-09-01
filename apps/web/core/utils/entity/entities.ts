@@ -24,8 +24,21 @@ export function description(values: Value[]): string | null {
   return value?.value ?? null;
 }
 
+/**
+ * Resolved the same way as `nameValue`, and for the same reason. Taking the first match meant array
+ * order decided which space's description won, and `entity.values` is re-partitioned on every store
+ * merge — so the winner could change between renders for no reason a reader could see. Name already
+ * ranked; description silently did not, which also made the space fallback in `store.getEntity`
+ * arbitrary rather than deliberate (GEO-2778).
+ */
 export function descriptionTriple(values: Value[]): Value | undefined {
-  return values.find(value => value.property.id === SystemIds.DESCRIPTION_PROPERTY);
+  const descriptionValues = values.filter(value => value.property.id === SystemIds.DESCRIPTION_PROPERTY);
+  if (descriptionValues.length <= 1) return descriptionValues[0];
+
+  // Skip empty descriptions, then pick from the highest-ranked space.
+  const nonEmpty = descriptionValues.filter(v => v.value);
+  const candidates = nonEmpty.length > 0 ? nonEmpty : descriptionValues;
+  return candidates.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
 }
 
 /**
@@ -45,6 +58,35 @@ export function nameValue(values: Value[]): Value | undefined {
   const nonEmpty = nameValues.filter(v => v.value);
   const candidates = nonEmpty.length > 0 ? nonEmpty : nameValues;
   return candidates.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
+}
+
+/**
+ * Name and description as a reader inside `spaceId` should see them (GEO-2778).
+ *
+ * A space's version of an entity should read as that space wrote it — the words belong to the
+ * people whose space it is. `name`/`description` above resolve across every space and pick the
+ * highest-ranked, which is right when nobody named a space and wrong the moment somebody did.
+ *
+ * The cross-space fallback is deliberate: a space that never named the entity should read as the
+ * graph does rather than render untitled. An empty string counts as absent, matching the judgement
+ * `nameValue` already makes when choosing between spaces.
+ *
+ * Deliberately narrower than it looks: this is for *content*, which is space-specific. Aggregate
+ * signals go the other way on purpose — GEO-2660 reads votes from the top-ranked space, because a
+ * vote count re-counted per space would mean nothing.
+ *
+ * Takes the unscoped values and does its own filtering, so the fallback has something to fall back
+ * to and both callers cannot disagree about what scoping means.
+ */
+export function nameInSpace(values: Value[], spaceId?: string): string | null {
+  if (!spaceId) return name(values);
+  return (name(values.filter(value => value.spaceId === spaceId)) || null) ?? name(values);
+}
+
+/** Companion to `nameInSpace`; see there for why the fallback exists. */
+export function descriptionInSpace(values: Value[], spaceId?: string): string | null {
+  if (!spaceId) return description(values);
+  return (description(values.filter(value => value.spaceId === spaceId)) || null) ?? description(values);
 }
 
 /**
