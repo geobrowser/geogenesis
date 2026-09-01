@@ -17,6 +17,7 @@ import {
   IMAGE_TYPE_ID,
   IMAGE_URL_PROPERTY_ID,
   KEY_FRAME_IMAGE_PROPERTY_ID,
+  OG_IMAGE_PROPERTY_ID,
   MARKDOWN_CONTENT_PROPERTY_ID,
   NAME_PROPERTY_ID,
   SOURCES_PROPERTY_ID,
@@ -79,6 +80,13 @@ export type DebatePublishInput = {
   videoUrl: string | null;
   /** `ipfs://` URI for the video's poster still, or null to publish the Video without one. */
   keyframeUrl: string | null;
+  /**
+   * `ipfs://` URI for the rendered share card, or null to publish without one.
+   *
+   * Null is the expected shape when the card could not be built, not an error: a debate published
+   * without a share card is a far better outcome than one that fails to publish (GEO-2755).
+   */
+  ogImageUrl: string | null;
   /** Merged per-turn transcript. Empty skips the Transcript entity. */
   transcriptTurns: DebatePublishTurn[];
   /**
@@ -196,6 +204,30 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       propertyId: DEBATE_PARTICIPANTS_PROPERTY_ID,
       toEntityId: p.spaceEntityId,
       toEntityName: p.displayName,
+    });
+  }
+
+  // --- Share card (OG image) ---
+  // Same shape as the keyframe block below: an Image entity, then a relation from the debate. It
+  // hangs off the debate rather than the Video because it describes the debate, and because it is
+  // generated once at publish time and never revisited.
+  if (input.ogImageUrl) {
+    const ogImageId = createEntityId();
+    const ogImageName = `${debateName} share card`;
+    const ogImageRef = { id: ogImageId, name: ogImageName };
+    setText(ogImageId, ogImageName, NAME_PROPERTY_ID, ogImageName);
+    setText(ogImageId, ogImageName, IMAGE_URL_PROPERTY_ID, input.ogImageUrl);
+    relate({
+      fromEntity: ogImageRef,
+      propertyId: TYPES_PROPERTY_ID,
+      toEntityId: IMAGE_TYPE_ID,
+      toEntityName: 'Image',
+    });
+    relate({
+      fromEntity: debateRef,
+      propertyId: OG_IMAGE_PROPERTY_ID,
+      toEntityId: ogImageId,
+      toEntityName: ogImageName,
     });
   }
 
