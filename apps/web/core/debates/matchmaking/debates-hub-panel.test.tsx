@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
 import { DebatesHubPanel } from './debates-hub-panel';
-import { debatesHubAtom } from '~/atoms';
+import { type DebatesHubTab, debatesHubAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -19,10 +19,14 @@ const mocks = vi.hoisted(() => ({
   peopleError: null as unknown,
   people: [] as unknown[],
   pathname: '/space/space-1/claims',
+  searchParams: new URLSearchParams(),
   isMobile: false,
 }));
 
-vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
+vi.mock('next/navigation', () => ({
+  usePathname: () => mocks.pathname,
+  useSearchParams: () => mocks.searchParams,
+}));
 
 vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobile }));
 
@@ -114,6 +118,7 @@ beforeEach(() => {
   mocks.peopleError = null;
   mocks.updateAvailability.mockReset();
   mocks.pathname = '/space/space-1/claims';
+  mocks.searchParams = new URLSearchParams();
   mocks.isMobile = false;
 });
 
@@ -282,14 +287,20 @@ it('closes itself once a navigation lands', () => {
 });
 
 // `?modal=debates` reached by client-side navigation opens the hub from the same commit that
-// changes the pathname. The close-on-navigation effect above must not undo that — and must not
-// depend on `DeepLinkHandler` being mounted after this panel in `app/entry.tsx` to avoid it.
-it('stays open when a navigation is the deep link that opened it', () => {
+// changes the pathname. The close-on-navigation effect above must not undo that — from either
+// starting state, and without depending on `DeepLinkHandler` being mounted after this panel in
+// `app/entry.tsx`. The already-open case is the one `isOpen` alone cannot save: the close fires,
+// so only the destination's own params can tell this navigation apart from leaving the hub.
+it.each<[string, { tab: DebatesHubTab } | null]>([
+  ['shut', null],
+  ['already open on another tab', { tab: 'people' }],
+])('stays open when a cross-route deep link arrives with the hub %s', (_state, initial) => {
   const store = createStore();
+  store.set(debatesHubAtom, initial);
   const DEEP_LINK_PATH = '/explore';
 
-  // `DeepLinkHandler` reduced to what matters here: an effect that opens the hub on arrival.
-  // Mounted before the panel, matching the order `app/entry.tsx` renders them in.
+  // `DeepLinkHandler` reduced to what matters here: an effect that opens the hub on arrival,
+  // mounted before the panel exactly as `app/entry.tsx` renders the two.
   function OpensHubOnArrival() {
     const pathname = usePathname();
     const setHub = useSetAtom(debatesHubAtom);
@@ -309,9 +320,9 @@ it('stays open when a navigation is the deep link that opened it', () => {
 
   mocks.pathname = '/space/space-1/claims';
   const view = render(tree());
-  expect(store.get(debatesHubAtom)).toBeNull();
 
   mocks.pathname = DEEP_LINK_PATH;
+  mocks.searchParams = new URLSearchParams({ modal: 'debates' });
   view.rerender(tree());
 
   expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });

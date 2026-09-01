@@ -159,7 +159,11 @@ export function App({ children }: { children: React.ReactNode }) {
           <ChatWidget />
           <FeatureFlagsDialog />
           <DebateCoordinator />
-          <DebatesHubPanel />
+          {/* Suspense: the panel reads `useSearchParams` to tell a debates deep link apart from
+              an ordinary navigation. */}
+          <React.Suspense fallback={null}>
+            <DebatesHubPanel />
+          </React.Suspense>
           <DebateRecordingUploadCoordinator />
           <Persistence />
         </ClientOnly>

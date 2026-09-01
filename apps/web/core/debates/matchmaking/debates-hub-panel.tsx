@@ -4,9 +4,11 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, type PanInfo, motion, useDragControls } from 'framer-motion';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
+import { DEBATES_MODAL } from '~/core/debates/debates-panel-deep-link';
+import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
@@ -88,6 +90,9 @@ export function DebatesHubPanel() {
   const sheetRef = useFocusTrap(isOpen && isMobile);
   const pathname = usePathname();
   const lastPathnameRef = React.useRef(pathname);
+  // Read during render, while the trigger is still in the URL: `useDeepLinkEffect` strips it in an
+  // effect, so by the time effects run the answer would depend on which of the two ran first.
+  const requestedByLink = requestsModal(useSearchParams(), DEBATES_MODAL);
 
   // Anything that navigates has taken the viewer somewhere they asked to go — accepting a request
   // walks them into the debate room — and the panel would otherwise sit on top of it. Only on a
@@ -95,14 +100,14 @@ export function DebatesHubPanel() {
   React.useEffect(() => {
     if (lastPathnameRef.current === pathname) return;
     lastPathnameRef.current = pathname;
-    // Only when it was already open — this closes a panel the viewer navigated out from, and a
-    // navigation that arrives with the hub shut was never showing one. That distinction is what
-    // makes `?modal=debates` work across a client-side navigation: the deep link opens the hub
-    // from this same commit, and `isOpen` is still false in the render this closure came from, so
-    // the open survives whichever order the two effects happen to run in.
-    if (!isOpen) return;
+    // Not when the destination is itself asking for the hub: `?modal=debates` reached by
+    // client-side navigation changes the pathname too, and closing here would undo the open the
+    // link just did. Decided from the render's params rather than from effect order, so the link
+    // wins whether this effect runs before or after `DeepLinkHandler`'s — and whether or not the
+    // hub was already open when the viewer followed it.
+    if (requestedByLink) return;
     close();
-  }, [close, isOpen, pathname]);
+  }, [close, pathname, requestedByLink]);
 
   React.useEffect(() => {
     if (!isOpen) return;
