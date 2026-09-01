@@ -55,13 +55,24 @@ export const DEBATE_OG_GEOMETRY = {
   get rightPanelWidth() {
     return BLOCK_W - SEAM_X;
   },
-  /** Centre of the band at mid-height, which is *not* where it is centred — see `SEAM_X`. */
+  /** Centre of the band at mid-height, where it is centred on the block. */
   get bandCentre() {
     return SEAM_X + DIVIDER_W / 2;
   },
-  /** Centre of the band where it crosses the top edge of the block. This is the centred one. */
+  /** Centre of the band where it crosses the top edge — 20px right of centre. See `SEAM_X`. */
   get topCrossingCentre() {
     return SEAM_X + LEAN / 2 + DIVIDER_W / 2;
+  },
+  /** The four panel edge widths review measures: each panel's width at the top and the bottom. */
+  get panelWidths() {
+    const bandLeftTop = SEAM_X + LEAN / 2;
+    const bandLeftBottom = SEAM_X - LEAN / 2;
+    return {
+      leftTop: bandLeftTop,
+      leftBottom: bandLeftBottom,
+      rightTop: BLOCK_W - (bandLeftTop + DIVIDER_W),
+      rightBottom: BLOCK_W - (bandLeftBottom + DIVIDER_W),
+    };
   },
   /** Right edge of the white bar, which the VS badge is centred on. */
   get badgeCentre() {
@@ -115,19 +126,21 @@ const DIVIDER_BLACK_W = 17;
 /**
  * Left edge of the divider band at mid-height, and the point the whole divider pivots about.
  *
- * The band leans 40px, so "centred" has to name a height, and the two candidates are 20px apart.
- * It is centred where it crosses the **top** edge of the block: that is the crossing the eye
- * checks, sitting directly under the claim and against white on both sides, and it is roughly
- * where the design puts it (the artboard's band crosses the top at 572..604 against a card centre
- * of 600). Centring at mid-height instead is what carried the top crossing 20px right and read as
- * the whole split leaning off to the right of the card.
+ * This position is the one that makes the two panels **mirror images**: the top of the left panel
+ * is exactly as wide as the bottom of the right (572px), and the bottom of the left exactly as
+ * wide as the top of the right (532px). Each speaker gets the same trapezoid, just flipped. That
+ * is the rule review settled on, and it is the only position that satisfies it — from
+ * `Lt = a`, `Rb = BLOCK_W - b - DIVIDER_W` and `a - b = LEAN`, `Lt = Rb` forces
+ * `a + b = BLOCK_W - DIVIDER_W`, whose midpoint is exactly this.
  *
- * The cost is that the panels are no longer exactly equal — the lean now falls entirely left of
- * centre, so the left panel averages 40px narrower. The design carries the same asymmetry and more
- * of it, so this is the direction it wants; what it cannot become again is the 64px difference
- * review caught, which came from hardcoding an edge rather than deriving one.
+ * It cannot also be centred where it crosses the *top* edge, and that is arithmetic rather than a
+ * missed detail: top-centred needs the band's top crossing at `BLOCK_W / 2`, mirror-symmetry needs
+ * it 20px to the right of that, and the gap between them is `LEAN / 2`. The two coincide only at
+ * `LEAN = 0`. An earlier round asked for the top crossing and got it, at the cost of the left
+ * panel being 40px narrower overall; this asks for equal panels and pays 20px of top offset.
+ * Shrinking `LEAN` is the only way to buy both, and it costs the divider its lean.
  */
-const SEAM_X = BLOCK_W / 2 - DIVIDER_W / 2 - LEAN / 2;
+const SEAM_X = BLOCK_W / 2 - DIVIDER_W / 2;
 /**
  * Where the VS badge is centred: on the **right edge of the white bar**.
  *
@@ -142,6 +155,18 @@ const SEAM_X = BLOCK_W / 2 - DIVIDER_W / 2 - LEAN / 2;
  */
 const BADGE_CENTRE_X = SEAM_X + DIVIDER_WHITE_W;
 const SEAM_Y = VIDEO_H / 2;
+/** The speaker pill's inset from its panel's edges, and its height. */
+const PILL_INSET = 14;
+const PILL_H = 40;
+/**
+ * How far the divider has leaned at a given height, as an offset from its position at `SEAM_Y`.
+ *
+ * Positive above the pivot, negative below it, because the band's top edge sits to the right of
+ * its bottom edge.
+ */
+function leanOffsetAt(y: number) {
+  return ((SEAM_Y - y) / VIDEO_H) * LEAN;
+}
 const BADGE_R = 54;
 /** The badge sits on the pivot, which is what makes the lean's ±6px either side of it symmetric. */
 const BADGE_CENTRE_Y = SEAM_Y;
@@ -216,16 +241,16 @@ function Slab({ offset, width, background }: { offset: number; width: number; ba
   );
 }
 
-function SpeakerPill({ speaker }: { speaker: DebateOgSpeaker }) {
+function SpeakerPill({ speaker, left }: { speaker: DebateOgSpeaker; left: number }) {
   return (
     <div
       style={{
         position: 'absolute',
-        left: 14,
-        bottom: 14,
+        left,
+        bottom: PILL_INSET,
         display: 'flex',
         alignItems: 'center',
-        height: 40,
+        height: PILL_H,
         borderRadius: 9999,
         background: CHROME,
         padding: '0 6px 0 5px',
@@ -238,7 +263,15 @@ function SpeakerPill({ speaker }: { speaker: DebateOgSpeaker }) {
           width={30}
           height={30}
           alt=""
-          style={{ width: 30, height: 30, borderRadius: 9999, border: '2px solid rgba(255,255,255,0.42)' }}
+          // `cover`, because a profile photo is almost never square and without this Satori
+          // stretches it to fit — a face comes out visibly squeezed on one axis.
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 9999,
+            border: '2px solid rgba(255,255,255,0.42)',
+            objectFit: 'cover',
+          }}
         />
       ) : (
         // The design's fallback, not a plain swatch: initials over a name-seeded gradient, reusing
@@ -319,6 +352,16 @@ function Panel({ side, speaker }: { side: 'left' | 'right'; speaker: DebateOgSpe
    * pill sit at the bottom, so they never meet it.
    */
   const outerCorner = isLeft ? `${RADIUS_XL}px 0 0 0` : `0 ${RADIUS_XL}px 0 0`;
+  /**
+   * Where the speaker pill starts, inside this panel's content box.
+   *
+   * The left panel measures from the card edge, so a flat inset is right. The right panel measures
+   * from the *divider*, which leans — and its content box starts at `SEAM_X`, back under the band,
+   * so a flat inset put the pill within a couple of pixels of the line. It is measured from the
+   * band's right edge at the pill's own top, which is the closest the two come over the pill's
+   * height (the band moves right as it rises).
+   */
+  const pillLeft = isLeft ? PILL_INSET : DIVIDER_W + leanOffsetAt(VIDEO_H - PILL_INSET - PILL_H) + PILL_INSET;
 
   return (
     <div
@@ -372,7 +415,7 @@ function Panel({ side, speaker }: { side: 'left' | 'right'; speaker: DebateOgSpe
             background: 'linear-gradient(180deg, rgba(17,17,17,0) 0%, rgba(17,17,17,0.42) 100%)',
           }}
         />
-        <SpeakerPill speaker={speaker} />
+        <SpeakerPill speaker={speaker} left={pillLeft} />
       </div>
     </div>
   );
