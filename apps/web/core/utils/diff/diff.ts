@@ -284,14 +284,9 @@ export async function postProcessDiffs(
   for (const entityId of mediaPropertyEntityIds) {
     const entity = entityMap.get(entityId);
     if (!entity) continue;
-    // Prefer IMAGE_URL_PROPERTY — image entities also carry width/height values.
-    const mediaValue =
-      entity.values.find(v => v.propertyId === IMAGE_URL_PROPERTY && (v.after || v.before)) ??
-      entity.values.find(v => v.propertyId === WEB_URL_PROPERTY && (v.after || v.before)) ??
-      entity.values.find(
-        v => (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://'))
-      );
-    if (mediaValue) {
+    const before = resolveMediaUrlSide(entity.values, 'before');
+    const after = resolveMediaUrlSide(entity.values, 'after');
+    if (before || after) {
       let mediaType: 'image' | 'video' = 'image';
       for (const rel of entity.relations) {
         if (rel.typeId === TYPES_PROPERTY) {
@@ -301,7 +296,7 @@ export async function postProcessDiffs(
           }
         }
       }
-      mediaPropertyEntityUrls.set(entityId, { before: mediaValue.before, after: mediaValue.after, mediaType });
+      mediaPropertyEntityUrls.set(entityId, { before, after, mediaType });
     }
   }
 
@@ -869,19 +864,17 @@ export async function fromLocal(
   const imageEntityUrls = new Map<string, MediaSides>();
   const videoEntityUrls = new Map<string, MediaSides>();
   for (const diff of diffs) {
-    const resolveMediaValue = () =>
-      diff.values.find(v => v.propertyId === IMAGE_URL_PROPERTY && (v.after || v.before)) ??
-      diff.values.find(v => v.propertyId === WEB_URL_PROPERTY && (v.after || v.before)) ??
-      diff.values.find(v => (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://')));
+    const sides = () => ({
+      before: resolveMediaUrlSide(diff.values, 'before'),
+      after: resolveMediaUrlSide(diff.values, 'after'),
+    });
     if (imageEntityIds.has(diff.entityId)) {
-      const ipfsValue = resolveMediaValue();
-      if (ipfsValue)
-        imageEntityUrls.set(diff.entityId, { before: ipfsValue.before ?? null, after: ipfsValue.after ?? null });
+      const media = sides();
+      if (media.before || media.after) imageEntityUrls.set(diff.entityId, media);
     }
     if (videoEntityIds.has(diff.entityId)) {
-      const ipfsValue = resolveMediaValue();
-      if (ipfsValue)
-        videoEntityUrls.set(diff.entityId, { before: ipfsValue.before ?? null, after: ipfsValue.after ?? null });
+      const media = sides();
+      if (media.before || media.after) videoEntityUrls.set(diff.entityId, media);
     }
   }
   // Fall back to remote entity for media entities with no local changes.
@@ -1042,6 +1035,31 @@ function computeValueChanges(localValues: Value[], remoteEntity: Entity | undefi
 
 function isMediaRelationType(typeId: string): boolean {
   return typeId === ContentIds.AVATAR_PROPERTY || typeId === COVER_PROPERTY;
+}
+
+/**
+ * The media URL on one side of a diff, IPFS URL first and Web URL second.
+ *
+ * Each side is resolved independently, and that is the whole point. Picking one value entry and
+ * reading both its sides breaks the proposal that moves an entity off IPFS: the IPFS value matches
+ * first (it has a `before`), its `after` is null, and the diff renders the media as deleted even
+ * though the same proposal added a Web URL. Resolving per side shows the real replacement.
+ *
+ * `IMAGE_URL_PROPERTY` stays preferred so image entities, which also carry width/height values,
+ * don't resolve to one of those.
+ */
+export function resolveMediaUrlSide(
+  values: Array<{ propertyId: string; before: string | null; after: string | null }>,
+  side: 'before' | 'after'
+): string | null {
+  const pick = (predicate: (value: (typeof values)[number]) => boolean) =>
+    values.find(value => value[side] && predicate(value))?.[side] ?? null;
+
+  return (
+    pick(value => value.propertyId === IMAGE_URL_PROPERTY) ??
+    pick(value => value.propertyId === WEB_URL_PROPERTY) ??
+    pick(value => Boolean(value[side]?.startsWith('ipfs://')))
+  );
 }
 
 function resolveImageUrlFromEntity(entity: Entity | undefined): string | null {

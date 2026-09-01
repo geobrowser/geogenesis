@@ -46,11 +46,24 @@ function geoChatBaseUrl() {
  * migration of every published entity.
  */
 function debateMediaBaseUrl() {
-  const base =
+  const base = (
     process.env.NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL ||
     process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL ||
-    'http://localhost:8080';
-  return base.replace(/\/+$/, '');
+    'http://localhost:8080'
+  ).replace(/\/+$/, '');
+  // A relative base is a real configuration, not a hypothetical: `next.config.ts` documents
+  // pointing NEXT_PUBLIC_GEO_CHAT_API_BASE_URL at `/geo-chat-proxy` to dodge CORS in development.
+  // It works for the browser's own API calls and is meaningless on-chain — a published
+  // `/geo-chat-proxy/...` value resolves against whatever origin later renders it, if at all.
+  // Refuse rather than write one, since a published URL cannot be corrected afterwards.
+  if (!/^https?:\/\//i.test(base)) {
+    throw new Error(
+      `Refusing to publish debate media URLs built on ${base}: the media host must be an absolute ` +
+        'http(s) URL, because it is written on-chain and cannot be changed afterwards. ' +
+        'Set NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL to a public host.'
+    );
+  }
+  return base;
 }
 
 /**

@@ -85,11 +85,33 @@ describe('loadDebatePublishSource media gating', () => {
     expect(input.videoUrl).toBe(`https://media.example/debates/${DEBATE_ID}/media/artifacts/final_video/content`);
   });
 
+  // `next.config.ts` documents pointing NEXT_PUBLIC_GEO_CHAT_API_BASE_URL at `/geo-chat-proxy` to
+  // dodge CORS in development. That works for the browser's own API calls and is meaningless
+  // on-chain, so publishing must fail rather than bake a relative URL into a published entity.
+  it('refuses to publish when the media host is not an absolute URL', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '/geo-chat-proxy');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/absolute http\(s\) URL/);
+  });
+
   it('uses geo-chat canonical turns + pre-attributed claims when available', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), {
       turns: [
-        { turn_index: 0, participant_slot: 1, attributed_space_id: 'space-1', speaker_name: 'Specter', text: 'Nuclear program was advancing.' },
-        { turn_index: 1, participant_slot: 2, attributed_space_id: 'space-2', speaker_name: 'Antispecter', text: 'There was no congressional approval.' },
+        {
+          turn_index: 0,
+          participant_slot: 1,
+          attributed_space_id: 'space-1',
+          speaker_name: 'Specter',
+          text: 'Nuclear program was advancing.',
+        },
+        {
+          turn_index: 1,
+          participant_slot: 2,
+          attributed_space_id: 'space-2',
+          speaker_name: 'Antispecter',
+          text: 'There was no congressional approval.',
+        },
       ],
       claims: [
         { text: 'The nuclear program was advancing.', is_factual: true, turn_index: 0 },
