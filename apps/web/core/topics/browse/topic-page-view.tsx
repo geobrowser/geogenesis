@@ -10,11 +10,13 @@ import type { Relation } from '~/core/types';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 import { NavUtils } from '~/core/utils/utils';
 
+import { ClampedText } from '~/design-system/clamped-text';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
 
 import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
 import { TopicClaims } from './topic-claims';
@@ -132,10 +134,24 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
             {entity.name ?? entity.id}
           </Text>
 
+          {/* Clamped, like entity pages, the side panel and the claim page (GEO-2776). What is
+              shared is the line budget, not the cut: wrapping decides where the break lands and
+              wrapping follows width, so the route view, the side panel and a phone stop at
+              different words. They give up the same three lines of the page, which a character
+              count could not do — the same count spends a different number of lines at each width,
+              and lines are what the reader is actually paying.
+
+              `ClampedText` measures an unclamped clone, so the toggle appears only when something
+              is genuinely hidden. The naive-overflow bug GEO-2756 fixed lived in the debates
+              feed's own title, which clamps a heading inside a link and so has its own
+              implementation. */}
           {entity.description && (
-            <Text as="p" variant="body" color="grey-04">
-              {entity.description}
-            </Text>
+            <ClampedText
+              text={entity.description}
+              maxLines={ENTITY_DESCRIPTION_MAX_LINES}
+              variant="body"
+              textClassName="wrap-break-word text-grey-04"
+            />
           )}
 
           <div className="flex flex-wrap items-center gap-1.5">
