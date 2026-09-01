@@ -23,19 +23,18 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   debate: Debate;
   spaceId: string;
-  entityType?: string;
 };
 
 /**
  * The Share sheet for a debate: one-tap social hand-offs (Reddit, X, LinkedIn), a copy-link button,
  * and a download of the prepared debate video.
  */
-export function DebateShareDialog({ open, onOpenChange, debate, spaceId, entityType = 'debate' }: Props) {
+export function DebateShareDialog({ open, onOpenChange, debate, spaceId }: Props) {
   const download = useDebateVideoDownload(debate.id, open);
   const [, setToast] = useToast();
 
   const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, debate.id)}`;
-  const shareText = `Check out this ${entityType} on Geo!`;
+  const shareText = 'Watch the debate on Geo!';
 
   const openComposer = (href: string) => {
     window.open(href, '_blank', 'noopener,noreferrer');
@@ -54,7 +53,11 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, entityT
   };
 
   const onLinkedIn = () => {
-    openComposer(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl())}`);
+    // `share-offsite` ignores any text param — it scrapes the page's OG tags. The feed composer is
+    // the only hand-off that pre-fills text; putting the URL in the text still yields a link preview.
+    openComposer(
+      `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareText} ${shareUrl()}`)}`
+    );
   };
 
   const onCopy = async () => {
