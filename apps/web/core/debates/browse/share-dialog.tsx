@@ -4,6 +4,7 @@ import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
+import { capture } from '~/core/analytics';
 import type { Debate } from '~/core/debates/api';
 import { useDebateMedia } from '~/core/debates/hooks';
 import { useToast } from '~/core/hooks/use-toast';
@@ -28,6 +29,8 @@ type Props = {
   spaceId: string;
   openerRef: React.RefObject<HTMLElement | null>;
 };
+
+type ShareMethod = 'reddit' | 'x' | 'linkedin' | 'copy_link' | 'download';
 
 const SHARE_TAGLINE = 'Watch the debate on Geo!';
 
@@ -67,16 +70,25 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     window.open(href, '_blank', 'noopener,noreferrer');
   };
 
+  // The sheet's own success metric.
+  const captureShare = (method: ShareMethod) => {
+    try {
+      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method });
+    } catch {}
+  };
+
   const onReddit = () => {
     openComposer(
       `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl())}&title=${encodeURIComponent(shareMessage(REDDIT_TITLE_MAX))}`
     );
+    captureShare('reddit');
   };
 
   const onX = () => {
     const url = shareUrl();
     const text = shareMessage(X_TWEET_MAX - url.length - 1);
     openComposer(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`);
+    captureShare('x');
   };
 
   const onLinkedIn = () => {
@@ -85,12 +97,14 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     openComposer(
       `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareMessage(LINKEDIN_TEXT_MAX)}\n${shareUrl()}`)}`
     );
+    captureShare('linkedin');
   };
 
   const onCopy = async () => {
     try {
       await navigator.clipboard.writeText(shareUrl());
       setToast(<span>Link copied!</span>);
+      captureShare('copy_link');
     } catch {
       setToast(<span>Could not copy link.</span>);
     }
@@ -138,7 +152,9 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
                   label={download.status === 'error' ? 'Retry' : 'Download'}
                   ariaLabel={download.status === 'error' ? 'Retry preparing debate video' : 'Download debate video'}
                   onClick={() => {
-                    if (download.status === 'error') {
+                    if (download.status === 'ready') {
+                      captureShare('download');
+                    } else if (download.status === 'error') {
                       setToast(<span>{download.error ?? 'Could not prepare the video for download.'}</span>);
                     }
                     download.download();
