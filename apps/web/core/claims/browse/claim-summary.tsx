@@ -1,0 +1,402 @@
+'use client';
+
+import * as Popover from '@radix-ui/react-popover';
+import { useQueryClient } from '@tanstack/react-query';
+
+import * as React from 'react';
+
+import cx from 'classnames';
+import { Effect } from 'effect';
+
+import { getEntityResponders } from '~/core/io/queries';
+import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
+import {
+  type ActiveResponseDirection,
+  ENTITY_RESPONSE_COPY,
+  type ResponseKind,
+  entityResponderProfilesQueryKey,
+  entityRespondersQueryKey,
+} from '~/core/responses/entity-response';
+
+import { Tag } from '~/design-system/tag';
+import { Text } from '~/design-system/text';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
+
+import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
+import { RespondersPopoverContent } from '~/partials/entity-page/entity-vote-buttons';
+
+import { CLAIM_RESPONSE_OBJECT_TYPE, type ClaimResponseSummary, claimSummaryTier } from './claim-response-summary';
+import { ClaimSideResponders } from './claim-side-responders';
+
+/**
+ * Where opinion sits on a claim, and how many people put it there.
+ *
+ * The one place any card-sized surface reports a claim's responses, so the hub, the topic page, the
+ * related-claims gallery and the explore feed cannot drift apart — and cannot disagree with the
+ * claim page, which reads the same tier from the same helper.
+ *
+ * Two states, `claimSummaryTier`'s, and the reason is written there: nothing at all where nobody
+ * has answered, and the share with its bar from the first response onward. There is no
+ * below-the-floor tally — an earlier revision had one, and the floor now governs only the
+ * Controversial band.
+ */
+export function ClaimSummary({
+  entityId,
+  spaceId,
+  responseKind,
+  summary,
+  className,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  summary: ClaimResponseSummary;
+  className?: string;
+}) {
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const tier = claimSummaryTier(summary.total);
+
+  // Nothing where the counts never answered, before asking what the tier is.
+  //
+  // The hook zeroes its arithmetic without a baseline, so `total` already collapses to the invite
+  // tier here. Said again anyway, because this renderer takes its summary as a *prop*: six surfaces
+  // hand it one, and it cannot assume every one of them got it from the hook. A percentage is the
+  // most confident thing on the card, and it must never be the loudest statement about a population
+  // nobody reported.
+  if (!summary.hasCounts) return null;
+
+  // Nothing at all where nobody has answered.
+  //
+  // This used to invite one — "Be the first to verify it" — which is a line telling the reader what
+  // the two buttons directly above it already say, on the state the great majority of claims are in.
+  // The pills are the invitation; a sentence restating them is a footer that exists to have a
+  // footer.
+  if (tier === 'invite') return null;
+
+  const responders = (
+    <ClaimResponders
+      entityId={entityId}
+      spaceId={spaceId}
+      responseKind={responseKind}
+      summary={summary}
+      label={copy.viewResponders}
+    />
+  );
+
+  const percent = summary.percent ?? 0;
+
+  return (
+    <div className={className}>
+      <ClaimSplitBar percent={percent} responseKind={responseKind} className="h-1.5" />
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <span className="flex items-center gap-1.5">
+          <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
+            {percent}%
+          </Text>
+          <Text as="span" variant="metadata" color="grey-04">
+            {copy.positiveAction.toLowerCase()}
+          </Text>
+        </span>
+        {responders}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The split itself: green for the positive side, red for the negative.
+ *
+ * Its own component because it was written out three times — the claim page's verdict, the explore
+ * card's rail and the compact card summary — each with its own copy of the same `role="img"` and
+ * the same `100 - percent` arithmetic in the label. Three copies of an accessible name is three
+ * chances for a screen reader to be told something the sighted reader is not.
+ *
+ * Height is the caller's, because that genuinely differs: 8px where the page has room for it, 6px
+ * in a card. Everything else is the same everywhere and now says so.
+ */
+export function ClaimSplitBar({
+  percent,
+  responseKind,
+  className,
+}: {
+  percent: number;
+  responseKind: ResponseKind;
+  className?: string;
+}) {
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+
+  return (
+    <div
+      className={cx('flex overflow-hidden rounded-full bg-grey-01', className)}
+      role="img"
+      aria-label={`${percent}% ${copy.positiveAction.toLowerCase()}, ${100 - percent}% ${copy.negativeAction.toLowerCase()}`}
+    >
+      <span className="bg-green" style={{ width: `${percent}%` }} />
+      <span className="bg-red-01" style={{ width: `${100 - percent}%` }} />
+    </div>
+  );
+}
+
+/**
+ * Both sides of the split, with their counts and their faces.
+ *
+ * The pair rather than two calls, because the eleven props they share were being written out twice
+ * — identically — and a claim whose two sides were handed different ids or a different viewer would
+ * be wrong in a way nothing would catch.
+ *
+ * The arrangement is the caller's: the page has the width to push them to opposite ends, the
+ * explore rail is 220px and stacks them.
+ */
+export function ClaimSides({
+  entityId,
+  spaceId,
+  responseKind,
+  summary,
+  className,
+  alignSecondEnd = false,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  summary: ClaimResponseSummary;
+  className?: string;
+  /** True where the two sit on one row with room between them, so the second reads as its end. */
+  alignSecondEnd?: boolean;
+}) {
+  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const shared = {
+    entityId,
+    spaceId,
+    responseKind,
+    viewerDirection: summary.viewerDirection,
+    viewerSpaceId: summary.viewerSpaceId,
+  };
+
+  return (
+    <div className={className}>
+      <ClaimSideSummary
+        {...shared}
+        swatchClassName="bg-green"
+        label={copy.positiveAction}
+        count={summary.positive}
+        direction="positive"
+      />
+      <ClaimSideSummary
+        {...shared}
+        swatchClassName="bg-red-01"
+        label={copy.negativeAction}
+        count={summary.negative}
+        direction="negative"
+        alignEnd={alignSecondEnd}
+      />
+    </div>
+  );
+}
+
+/**
+ * A claim the responses are genuinely split over.
+ *
+ * Lives beside the space chip rather than down in the summary: it says what *kind* of claim this is,
+ * which is the question the meta row answers, and it is the one thing on a claim card worth
+ * spotting from across a list. Built on the design system's `Tag` so it matches every other tag in
+ * the product — it was a hand-rolled span at a size the scale does not contain.
+ *
+ * Only ever rendered past the response floor, because "contested" off two responses is not a fact
+ * about the claim, it is a fact about how few people have read it.
+ */
+export function ControversialTag({ className }: { className?: string }) {
+  return <Tag className={cx('bg-orange/25 text-text', className)}>Controversial</Tag>;
+}
+
+/**
+ * One side of the split: its swatch, its count, and the people who took it.
+ *
+ * Lifted out of the claim page's verdict so the explore card can use the same thing. Two of these
+ * say more than one combined cluster does — the faces beside a count belong to *that* side, and
+ * pressing a count opens that side's list rather than a mixed one you then have to read through.
+ *
+ * That is worth the extra row. The single `ClaimResponders` cluster still exists for the compact
+ * card, where there is one line to spend and no room to split it.
+ */
+export function ClaimSideSummary({
+  swatchClassName,
+  label,
+  count,
+  direction,
+  entityId,
+  spaceId,
+  responseKind,
+  viewerDirection,
+  viewerSpaceId,
+  alignEnd = false,
+}: {
+  swatchClassName: string;
+  label: string;
+  count: number;
+  direction: ActiveResponseDirection;
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  viewerDirection: ActiveResponseDirection | null;
+  viewerSpaceId: string | null;
+  alignEnd?: boolean;
+}) {
+  return (
+    <div className={cx('flex min-w-0 items-center gap-2', alignEnd && 'justify-end')}>
+      <span className={cx('size-2 shrink-0 rounded-xs', swatchClassName)} aria-hidden />
+      {/* Count first, and the verb lowercase: "12 agree" is a sentence, where "Agree 12" is a label
+          with a number stuck to it. It also matches the share directly above — "68% agree" — so the
+          three lines of the verdict read in one voice instead of two. */}
+      <Text as="span" variant="metadataMedium" color="text" className="tabular-nums">
+        {count} {label.toLowerCase()}
+      </Text>
+      {count > 0 && (
+        <ClaimSideResponders
+          entityId={entityId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          direction={direction}
+          label={label}
+          totalResponders={count}
+          viewerDirection={viewerDirection}
+          viewerSpaceId={viewerSpaceId}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The people who responded, as one control rather than two things that happen to sit together.
+ *
+ * Faces and count were already on screen and already fetched; what they lacked was somewhere to
+ * go. The list behind this is the entity page's own — sectioned by side — so pressing it answers
+ * the question the faces raise, which is not "how many" but "who, and on which side".
+ *
+ * Distinct from the faces inside the position pills, deliberately: those are people standing
+ * *ready to argue* a side, a viewer-relative offer. These are people who *responded*, a fact about
+ * the claim. Two populations, two places, so neither has to be explained.
+ */
+function ClaimResponders({
+  entityId,
+  spaceId,
+  responseKind,
+  summary,
+  label,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  summary: ClaimResponseSummary;
+  label: string;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const warm = useWarmResponders(entityId, spaceId, responseKind);
+
+  // Portalled above the container, not just above the page.
+  //
+  // Radix's own portal lands the popper on `document.body` with no z-index of its own, so this list
+  // sits at the content's `z-100` in the root stacking context. That clears an ordinary page and
+  // loses to every panel the card is drawn inside: the debates hub is `z-[200]`, so pressing the
+  // faces there opened the list *behind* the panel — nothing appeared to happen, on the one surface
+  // whose whole purpose is browsing claims. The entity side panel is higher still.
+  //
+  // `useElevatedPopoverPortal` is the existing answer to exactly this, and it handles both: inside
+  // the side panel it returns that panel's own portal, and otherwise a body-level `.elevated-popover`
+  // container whose popper wrapper is lifted above any of them.
+  const elevatedPopoverPortal = useElevatedPopoverPortal();
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          title={label}
+          aria-label={label}
+          // Opening used to be the first anyone asked, and the list is two round trips deep — who
+          // responded, then who those people are — so it sat on a spinner for both. Hover, focus and
+          // touch are the earliest honest signals of intent, and by the time the popover mounts the
+          // cache usually has both. Nothing is fetched for a card merely scrolled past.
+          onMouseEnter={warm}
+          onFocus={warm}
+          onTouchStart={warm}
+          className="flex shrink-0 items-center rounded transition-opacity hover:opacity-80"
+        >
+          <ClaimResponderAvatars
+            entityId={entityId}
+            spaceId={spaceId}
+            objectType={CLAIM_RESPONSE_OBJECT_TYPE}
+            responseKind={responseKind}
+            totalResponders={summary.total}
+            viewerSpaceId={summary.viewerSpaceId}
+            optimisticViewerResponse={summary.viewerDirection}
+          />
+        </button>
+      </Popover.Trigger>
+      {elevatedPopoverPortal && (
+        <Popover.Portal container={elevatedPopoverPortal}>
+          <Popover.Content
+            align="end"
+            side="bottom"
+            sideOffset={8}
+            // Kept clear of the fixed navbar, and gone once its trigger is. The card this hangs off
+            // rides in a scrolling panel, and the popover is portalled above everything so nothing
+            // clips it: scrolling the hub tracked the list up over the 44px header and left it
+            // sitting there. `collisionPadding.top` reserves that strip; `hideWhenDetached` retires
+            // the popover when its trigger scrolls out of the panel instead.
+            collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
+            hideWhenDetached
+            className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+          >
+            <RespondersPopoverContent
+              entityId={entityId}
+              spaceId={spaceId}
+              objectType={CLAIM_RESPONSE_OBJECT_TYPE}
+              responseKind={responseKind}
+            />
+          </Popover.Content>
+        </Popover.Portal>
+      )}
+    </Popover.Root>
+  );
+}
+
+/**
+ * Fetch the responder list and its profiles before the reader asks for them.
+ *
+ * The same query keys and functions `RespondersPopoverContent` uses, so this warms its cache rather
+ * than becoming a second source, and it is idempotent — both calls are no-ops against fresh data.
+ *
+ * The two requests are sequential by necessity: the profile lookup is keyed on the ids the first one
+ * returns. That is exactly why warming helps. Opening the popover cold meant waiting out a chain two
+ * requests deep, and a list of faces is not worth a spinner that long.
+ */
+function useWarmResponders(entityId: string, spaceId: string, responseKind: ResponseKind) {
+  const queryClient = useQueryClient();
+
+  return React.useCallback(() => {
+    void queryClient
+      .fetchQuery({
+        queryKey: entityRespondersQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
+        queryFn: () =>
+          Effect.runPromise(getEntityResponders(entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)),
+        staleTime: 30_000,
+      })
+      .then(responders => {
+        const spaceIds = responders?.map(responder => responder.userId) ?? [];
+        if (spaceIds.length === 0) return;
+
+        return queryClient.prefetchQuery({
+          queryKey: [
+            ...entityResponderProfilesQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
+            spaceIds,
+          ],
+          queryFn: () => Effect.runPromise(fetchProfilesBySpaceIds(spaceIds)),
+          staleTime: 30_000,
+        });
+      })
+      // A warm-up that fails is not a failure the reader should hear about — opening the popover
+      // asks again and reports it there.
+      .catch(() => {});
+  }, [entityId, queryClient, responseKind, spaceId]);
+}

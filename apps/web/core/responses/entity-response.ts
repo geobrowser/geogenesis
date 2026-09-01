@@ -49,8 +49,14 @@ export type EntityResponseCopy = {
   negativeAction: string;
   removePositive: string;
   removeNegative: string;
-  positiveSection: string;
-  negativeSection: string;
+  /**
+   * The whole invitation, not a verb to interpolate.
+   *
+   * "Be the first to {positiveAction}" reads correctly for `verify` and `upvote` and not for
+   * `agree`, which takes an object through "with". A per-kind sentence costs one line each and
+   * cannot be assembled wrongly.
+   */
+  firstResponsePrompt: string;
   empty: string;
   loading: string;
   viewResponders: string;
@@ -64,8 +70,7 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     negativeAction: 'Downvote',
     removePositive: 'Remove upvote',
     removeNegative: 'Remove downvote',
-    positiveSection: 'Upvotes',
-    negativeSection: 'Downvotes',
+    firstResponsePrompt: 'Be the first to upvote this claim.',
     empty: 'No votes yet',
     loading: 'Loading voters…',
     viewResponders: 'View voters',
@@ -77,8 +82,7 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     negativeAction: 'Disagree',
     removePositive: 'Remove agreement',
     removeNegative: 'Remove disagreement',
-    positiveSection: 'Agreements',
-    negativeSection: 'Disagreements',
+    firstResponsePrompt: 'Be the first to agree with this claim.',
     empty: 'No stances yet',
     loading: 'Loading responders…',
     viewResponders: 'View stances',
@@ -90,8 +94,7 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
     negativeAction: 'Dispute',
     removePositive: 'Remove verification',
     removeNegative: 'Remove dispute',
-    positiveSection: 'Verifications',
-    negativeSection: 'Disputes',
+    firstResponsePrompt: 'Be the first to verify this claim.',
     empty: 'No veracity responses yet',
     loading: 'Loading responders…',
     viewResponders: 'View veracity responses',
@@ -136,16 +139,27 @@ export function hasUnpublishedClaimResponseKindEdit(
   entity: Pick<Entity, 'relations' | 'values'> | null | undefined,
   spaceId: string
 ) {
+  // Optional throughout, past what the types promise.
+  //
+  // `Entity` declares both arrays and every field read below, and from the sync store they are all
+  // there. But this is now on the render path of six claim surfaces rather than one vote button,
+  // and they source their entities from several lookups with different projections — a narrow one
+  // that omits `values`, a partial built for a list. A missing field here should cost a false
+  // negative, which is the pills staying live on a claim that has a draft edit; the alternative is
+  // an exception thrown during render, which takes the whole surface down.
   return (
-    entity?.values.some(
+    entity?.values?.some(
       value =>
+        value?.property?.id != null &&
         uuidToHex(value.spaceId) === uuidToHex(spaceId) &&
         uuidToHex(value.property.id) === CLAIM_IS_FACTUAL &&
         value.isLocal === true &&
         value.hasBeenPublished !== true
     ) ||
-    entity?.relations.some(
+    entity?.relations?.some(
       relation =>
+        relation?.type?.id != null &&
+        relation.toEntity?.id != null &&
         uuidToHex(relation.spaceId) === uuidToHex(spaceId) &&
         uuidToHex(relation.type.id) === TYPES_PROPERTY &&
         uuidToHex(relation.toEntity.id) === CLAIM_TYPE &&

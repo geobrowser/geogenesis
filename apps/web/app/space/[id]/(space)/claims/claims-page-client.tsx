@@ -4,15 +4,15 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { resolveClaimResponseKind, useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import { buildClaimDraft } from '~/core/claims/claim-draft';
-import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { isClaimPublishedInSpace } from '~/core/claims/publish';
-import { claimResponseKind } from '~/core/claims/response-kind';
 import type { DebateClaim } from '~/core/debates/api';
-import { DebateEntityResponseControls } from '~/core/debates/debate-entity-response-controls';
 import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
-import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import { useDebateClaims } from '~/core/debates/hooks';
+import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useRetireConfirmedResponseIndexing } from '~/core/debates/retire-confirmed-response-indexing';
 import {
   ClaimResponseBatchBoundary,
   useClaimResponseSummaryBatch,
@@ -20,7 +20,7 @@ import {
 import { useDiff } from '~/core/state/diff-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities } from '~/core/sync/use-store';
-import type { Entity, Relation } from '~/core/types';
+import type { Entity } from '~/core/types';
 
 import { Button } from '~/design-system/button';
 import { Plus } from '~/design-system/icons/plus';
@@ -83,7 +83,7 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
           .filter(isPublishedHere)
           .map(claim => [
             claim.id,
-            debateClaimsByEntityId.get(claim.id)?.response_kind ?? claimResponseKind(claim, spaceId),
+            resolveClaimResponseKind(debateClaimsByEntityId.get(claim.id) ?? null, claim, spaceId),
           ])
       ),
     [claims, debateClaimsByEntityId, isPublishedHere, spaceId]
@@ -128,7 +128,6 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
             isLoading={isLoading}
             spaceId={spaceId}
             debateClaimsByEntityId={debateClaimsByEntityId}
-            responseKindsByEntityId={responseKindsByEntityId}
             debateStatus={debateClaimsQuery.error instanceof Error ? debateClaimsQuery.error.message : null}
           />
         </ClaimResponseBatchBoundary>
@@ -247,14 +246,12 @@ function ClaimsList({
   isLoading,
   spaceId,
   debateClaimsByEntityId,
-  responseKindsByEntityId,
   debateStatus,
 }: {
   claims: Entity[];
   isLoading: boolean;
   spaceId: string;
   debateClaimsByEntityId: Map<string, DebateClaim>;
-  responseKindsByEntityId: Map<string, 'stance' | 'veracity'>;
   debateStatus: string | null;
 }) {
   if (isLoading && claims.length === 0) {
@@ -291,26 +288,35 @@ function ClaimsList({
           claim={claim}
           spaceId={spaceId}
           debateClaim={debateClaimsByEntityId.get(claim.id) ?? null}
-          responseKind={responseKindsByEntityId.get(claim.id) ?? claimResponseKind(claim, spaceId)}
         />
       ))}
     </div>
   );
 }
 
+/**
+ * One claim in a space's editing view, drawn as the card every other claim surface draws.
+ *
+ * This was a third card shape — its own shadow, its own title size, chevron response controls, and
+ * a topic chip group nothing else showed. The response controls in particular were the entity-row
+ * chevrons, which name neither side; on a page that is nothing but claims, that is exactly backwards.
+ *
+ * No readiness switch: GEO-2740 removed the per-claim Debate toggle from the product. An earlier
+ * revision of this work kept one here on the grounds that this is where an editor stages claims for
+ * debate, which stopped being possible when the control stopped existing.
+ */
 function ClaimListItem({
   claim,
   spaceId,
   debateClaim,
-  responseKind,
 }: {
   claim: Entity;
   spaceId: string;
   debateClaim: DebateClaim | null;
-  responseKind: 'stance' | 'veracity';
 }) {
-  const topics = relationsForProperty(claim.relations, TOPICS_PROPERTY_ID);
   const published = isClaimPublishedInSpace(claim, spaceId);
+  const activeDebate = debateClaim?.active_debate ?? null;
+
   // Kept when the Debate toggle went (GEO-2740): the toggle drew this side effect, but the
   // snapshot it retires is what drives the notification that now creates readiness server-side.
   useRetireConfirmedResponseIndexing({ debateClaim, entityId: claim.id, spaceId });
@@ -318,81 +324,43 @@ function ClaimListItem({
   // the hook.
   useBackfillReadinessForHeldPosition({ debateClaim, entityId: claim.id, spaceId });
 
-  return (
-    <article className="rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
-      <div className="min-w-0">
+  // The page resolved the kind already, to batch its response reads; the hook resolves it again from
+  // the same two inputs and by construction gets the same answer.
+  const state = useClaimResponseState({
+    claimId: claim.id,
+    spaceId,
+    row: debateClaim,
+    entity: claim,
+    title: claim.name ?? claim.id,
+    description: claim.description,
+  });
+
+  // A draft has no on-chain identity to respond to or debate over, so the card would offer controls
+  // that cannot work. Say what to do about it instead.
+  if (!published) {
+    return (
+      <article className="rounded-lg border border-grey-02 bg-white px-5 py-4">
         <Text as="h3" variant="bodySemibold" color="text" className="block">
           {claim.name ?? claim.id}
         </Text>
-
-        {!published && (
-          <Text as="p" variant="body" color="grey-04" className="mt-2">
-            Publish this claim before starting a debate.
-          </Text>
-        )}
-      </div>
-
-      {published && (
-        <div className="mt-3 flex items-center gap-4">
-          <DebateEntityResponseControls entityId={claim.id} spaceId={spaceId} responseKind={responseKind} />
-        </div>
-      )}
-
-      <ClaimDebateStatus debateClaim={debateClaim} published={published} />
-
-      {topics.length > 0 && (
-        <div className="mt-3 grid gap-2 md:grid-cols-3">
-          <RelationChipGroup label="Topics" relations={topics} />
-        </div>
-      )}
-    </article>
-  );
-}
-
-function ClaimDebateStatus({ debateClaim, published }: { debateClaim: DebateClaim | null; published: boolean }) {
-  if (!published) return null;
-
-  if (debateClaim?.active_debate) {
-    return (
-      <Text as="p" variant="body" color="grey-04" className="mt-3">
-        Debate {debateClaim.active_debate.status.replace('_', ' ')}
-      </Text>
+        <Text as="p" variant="body" color="grey-04" className="mt-2">
+          Publish this claim before starting a debate.
+        </Text>
+      </article>
     );
   }
 
-  return null;
-}
-
-function RelationChipGroup({
-  label,
-  relations,
-  className,
-}: {
-  label: string;
-  relations: Relation[];
-  className?: string;
-}) {
-  if (relations.length === 0) return null;
-
+  // No footer. `ClaimDebateStatus` used to print "Debate in progress" here from `active_debate` —
+  // the same value the card's end slot now turns into a "Watch live" link. One fact, stated twice,
+  // and the sentence was the half you could not press.
   return (
-    <div className={className}>
-      <Text as="div" variant="metadataMedium" color="grey-04" className="mb-1">
-        {label}
-      </Text>
-      <div className="flex flex-wrap gap-1.5">
-        {relations.map(relation => (
-          <span
-            key={relation.id}
-            className="inline-flex max-w-full items-center rounded-md border border-grey-02 bg-bg px-2 py-1 text-[0.8125rem] text-text"
-          >
-            <span className="truncate">{relation.toEntity.name ?? relation.toEntity.id}</span>
-          </span>
-        ))}
-      </div>
-    </div>
+    <MatchmakingClaimCard
+      claim={state.claim}
+      positions={state.positions}
+      readiness={state.readiness}
+      answersReady={state.isResponseKindResolved && state.isViewerResponseResolved}
+      responseBlockedReason={state.responseBlockedReason}
+      activeDebate={activeDebate}
+    />
   );
-}
-
-function relationsForProperty(relations: Relation[], propertyId: string): Relation[] {
-  return relations.filter(relation => relation.type.id === propertyId && relation.isDeleted !== true);
 }

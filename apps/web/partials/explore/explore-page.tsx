@@ -51,6 +51,7 @@ export function ExplorePage({
           showSortFilter
           showTypeFilter
           dividerBeforeFeed
+          titleOpensSidePanel
           feedTopSpacingClassName=""
         />
       </main>

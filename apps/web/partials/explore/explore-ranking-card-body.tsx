@@ -32,6 +32,8 @@ import { RankingBlockGlobalPagination } from '~/partials/blocks/table/ranking-bl
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
+import { ExploreCardEntityLink } from './explore-card-entity-link';
+
 const EXPLORE_RANKING_PAGE_SIZE = 4;
 const ROW_IMAGE_SIZE = 32;
 
@@ -177,7 +179,15 @@ export function RankingRow({
 }
 
 /** Ranking Block body: ordered leaderboard rows; images only when the entry has avatar/cover. */
-export function RankingCardBody({ item, actions }: { item: ExploreFeedItem; actions?: React.ReactNode }) {
+export function RankingCardBody({
+  item,
+  actions,
+  titleOpensSidePanel = false,
+}: {
+  item: ExploreFeedItem;
+  actions?: React.ReactNode;
+  titleOpensSidePanel?: boolean;
+}) {
   const [pageNumber, setPageNumber] = React.useState(0);
   const { globalRankingEntityIds, aggregatedSubmitterSpaceIds, aggregatedRankingCount, isBlockLoading } =
     useExploreRankingBlockData(item.entityId, item.spaceId);
@@ -203,11 +213,11 @@ export function RankingCardBody({ item, actions }: { item: ExploreFeedItem; acti
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex min-w-0 items-center gap-3">
-        <Link href={NavUtils.toEntity(item.spaceId, item.entityId)} className="min-w-0 flex-1">
+        <ExploreCardEntityLink item={item} opensSidePanel={titleOpensSidePanel} className="min-w-0 flex-1">
           <h2 className="mt-0! truncate text-[19px]! leading-[21px]! font-medium! text-[#2A2B2E] hover:underline">
             {item.title}
           </h2>
-        </Link>
+        </ExploreCardEntityLink>
         <RankingVoteButton item={item} />
       </div>
 

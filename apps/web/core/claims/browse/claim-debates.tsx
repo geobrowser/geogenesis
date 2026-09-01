@@ -163,7 +163,17 @@ export function ClaimDebates({
   );
 }
 
-export type WinnerShare = { spaceId: string; percent: number; totalVotes: number };
+export type WinnerShare = {
+  spaceId: string;
+  percent: number;
+  totalVotes: number;
+  /**
+   * Several debaters share the top count, so `spaceId` is one of them rather than the winner.
+   * The leader is picked with a strict `>`, which on a tie keeps whichever was counted first —
+   * fine for "who is ahead", wrong for anything that derives a win from it.
+   */
+  tied: boolean;
+};
 
 /**
  * Who each debate's viewers picked as the winner, as a share of that debate's votes.
@@ -178,16 +188,40 @@ export type WinnerShare = { spaceId: string; percent: number; totalVotes: number
  * `voteSharePercentages` then rounds by largest remainder so the shares add to 100.
  */
 export function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
-  const { entities: votes } = useQueryEntities({
+  return useWinnerSharesWithStatus(debateIds).shares;
+}
+
+/**
+ * As `useWinnerShares`, but says whether the shares still describe the debates that were asked for.
+ *
+ * Retention is opt-in because it is only safe for a caller that reads one share per debate. A
+ * caller deriving an aggregate across a *set* of debates — a person's win rate — would otherwise
+ * compute it from whatever overlap the previous set happened to contain and show a number that is
+ * simply wrong, which is worse than showing none. `isStale` is how such a caller knows to wait.
+ */
+export function useWinnerSharesWithStatus(
+  debateIds: string[],
+  { keepPreviousWhileLoading = false }: { keepPreviousWhileLoading?: boolean } = {}
+): { shares: Map<string, WinnerShare>; isStale: boolean } {
+  const {
+    entities: votes,
+    isPlaceholderData,
+    isFetched,
+    error,
+  } = useQueryEntities({
     where: {
       types: [{ id: { equals: VOTE_TYPE_ID } }],
       relations: [{ typeOf: { id: { equals: VOTE_DEBATES_PROPERTY_ID } }, toEntity: { id: { in: debateIds } } }],
     },
     first: VOTE_FETCH_CAP,
     enabled: debateIds.length > 0,
+    // The debate set is part of the key, so it changes whenever the caller's list does — paging a
+    // browse page, or someone coming online on the People tab. Holding the previous answer keeps
+    // shares on screen for debates that are still there instead of blanking every one of them.
+    placeholderData: keepPreviousWhileLoading ? keepPreviousData : undefined,
   });
 
-  return React.useMemo(() => {
+  const shares = React.useMemo(() => {
     // A truncated page is an arbitrary subset of the votes across every debate on screen, so any
     // share computed from it could name the wrong winner and would state a total that is simply
     // untrue. No share at all is the honest answer; a confidently wrong percentage is not.
@@ -235,14 +269,23 @@ export function useWinnerShares(debateIds: string[]): Map<string, WinnerShare> {
       });
 
       const leaderHex = entries[leaderIndex]![0];
+      const leaderCount = entries[leaderIndex]![1];
       shares.set(debateId, {
         spaceId: spaceIdByHex.get(leaderHex) ?? leaderHex,
         percent: percentages[leaderIndex] ?? 0,
         totalVotes,
+        tied: entries.filter(([, count]) => count === leaderCount).length > 1,
       });
     }
     return shares;
   }, [votes]);
+
+  // Not just "is this the previous page's answer". Before the first remote fetch this query answers
+  // from whatever matching votes happen to be in the local store, which is an arbitrary subset and
+  // is not flagged as placeholder data; a failed fetch reads the same way. Any of the three means
+  // the shares do not describe the debates that were asked for, which is the only question an
+  // aggregate caller needs answered.
+  return { shares, isStale: isPlaceholderData || !isFetched || Boolean(error) };
 }
 
 export function DebateRow({
