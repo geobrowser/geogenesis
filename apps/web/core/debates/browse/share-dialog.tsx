@@ -26,6 +26,12 @@ type Props = {
   spaceId: string;
 };
 
+const SHARE_TAGLINE = 'Watch the debate on Geo!';
+
+const REDDIT_TITLE_MAX = 300;
+const X_TWEET_MAX = 280;
+const LINKEDIN_TEXT_MAX = 700;
+
 /**
  * The Share sheet for a debate: one-tap social hand-offs (Reddit, X, LinkedIn), a copy-link button,
  * and a download of the prepared debate video.
@@ -35,29 +41,36 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId }: Props
   const [, setToast] = useToast();
 
   const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, debate.id)}`;
-  const shareText = 'Watch the debate on Geo!';
+
+  const shareMessage = (maxLength: number) => {
+    const suffix = `. ${SHARE_TAGLINE}`;
+    const claim = debate.claim.claim.trim();
+    const claimRoom = maxLength - suffix.length;
+    const trimmedClaim = claim.length > claimRoom ? `${claim.slice(0, Math.max(0, claimRoom - 1)).trimEnd()}…` : claim;
+    return `${trimmedClaim}${suffix}`;
+  };
 
   const openComposer = (href: string) => {
     window.open(href, '_blank', 'noopener,noreferrer');
   };
 
   const onReddit = () => {
-    const url = shareUrl();
-    openComposer(`https://www.reddit.com/submit?url=${encodeURIComponent(url)}&title=${encodeURIComponent(shareText)}`);
+    openComposer(
+      `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl())}&title=${encodeURIComponent(shareMessage(REDDIT_TITLE_MAX))}`
+    );
   };
 
   const onX = () => {
     const url = shareUrl();
-    openComposer(
-      `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(url)}`
-    );
+    const text = shareMessage(X_TWEET_MAX - url.length - 1);
+    openComposer(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`);
   };
 
   const onLinkedIn = () => {
     // `share-offsite` ignores any text param — it scrapes the page's OG tags. The feed composer is
     // the only hand-off that pre-fills text; putting the URL in the text still yields a link preview.
     openComposer(
-      `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareText}\n${shareUrl()}`)}`
+      `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareMessage(LINKEDIN_TEXT_MAX)}\n${shareUrl()}`)}`
     );
   };
 
