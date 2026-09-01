@@ -258,11 +258,15 @@
 @custom-variant 3xl (@media (max-width: 1920px));
 
 /* Container-query breakpoints for claim surfaces (GEO-2774).
-   These ask the element's own width, not the window's, because the same claim card and the same
-   Agree/Disagree row are rendered in a feed, a side panel and the claim page at widths none of them
-   agrees on — a 1200px window says nothing about a 230px panel inside it. Both numbers are measured
-   and the second is derived from the first, so they live together rather than being spelled out at
-   every call site.
+   NOTE: no apostrophes below. Tailwind reads an apostrophe as a string delimiter even inside a
+   comment, so an odd number of them swallows the closing marker and the whole stylesheet fails to
+   parse — which it did, once, right here.
+
+   These ask the width of the element itself, not the window, because the same claim card and the
+   same Agree/Disagree row are rendered in a feed, a side panel and the claim page at widths none of
+   them agrees on — a 1200px window says nothing about a 230px panel inside it. Both numbers are
+   measured and the second is derived from the first, so they live together rather than being
+   spelled out at every call site.
 
    `claim-pills-wide`  — the width the pill row needs to render both labels whole. The widest pill is
      "Disagree" at 100px of content (24px padding + 12px icon + 6px gap + 58px label) and an avatar
@@ -276,8 +280,8 @@
      Change `claim-pills-wide` and this has to move with it.
 
    One is a floor and the other a ceiling on purpose: the pill row is stacked until it earns two
-   columns, while the card starts from the wide arrangement and gives it up — which is the shape
-   each component already had, so neither one's base rules had to be rewritten. */
+   columns, while the card starts from the wide arrangement and gives it up — the shape each
+   component already had, so neither set of base rules had to be rewritten. */
 @custom-variant claim-pills-wide (@container (width >= 272px));
 @custom-variant claim-card-narrow (@container (width < 520px));
 

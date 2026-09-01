@@ -809,8 +809,10 @@ function PositionButton({
   disabled?: boolean;
   title?: string;
 }) {
+  // `@container` so the avatar stack can measure the pill it is sitting in — see `PositionAvatars`,
+  // which sheds faces rather than letting the label truncate.
   const className = cx(
-    'flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text',
+    '@container flex min-h-7 items-center justify-between gap-2 rounded-full px-3 text-button text-text',
     selected ? (position ? 'bg-green' : 'bg-red-01') : 'bg-grey-01'
   );
   const content = (
@@ -873,18 +875,39 @@ function PositionAvatars({ summary }: { summary: DebateClaimPositionSummary }) {
   const participants = summary.participants.slice(0, 2);
   const overflow = Math.max(0, presentCount(summary) - participants.length);
 
+  // The stack sheds pieces as the pill narrows, so the label never has to.
+  //
+  // The stack is `shrink-0` and the label is not, so any shortfall used to come out of the word:
+  // "Disagree" became "Dis..." on exactly the claims that have people to show. Sizing the row for a
+  // full stack instead would stack the pills on every claim to protect the rare crowded one, so the
+  // faces give way rather than the layout.
+  //
+  // These thresholds are against the pill's *content* box, which is what a container query measures
+  // — 24px of `px-3` is already excluded, so they read 24px smaller than the pill widths they
+  // correspond to. Inside that box sit the label group (a 12px icon, a 6px gap and 58px of
+  // "Disagree" = 76px) and the 8px gap before the stack. A face is 24px, a second adds 16px after
+  // the 8px overlap, and the badge adds another 24px: 108px holds one face, 124px holds two, 148px
+  // holds the lot. 108px is `claim-pills-wide` seen from inside a pill, which is where that
+  // threshold came from.
+  //
+  // The badge goes first and a face last, because the faces stay truthful as they are dropped: the
+  // count is computed against the participants rendered, so hiding a face would leave a "+N" that
+  // no longer adds up, while hiding the badge only stops advertising a remainder.
   return (
     <span aria-hidden="true" className="flex shrink-0 items-center -space-x-2">
-      {participants.map(participant => (
+      {participants.map((participant, index) => (
         <span
           key={participant.user_id}
-          className="relative box-content block size-5 overflow-hidden rounded-full border-2 border-white"
+          className={cx(
+            'relative box-content block size-5 overflow-hidden rounded-full border-2 border-white',
+            index === 0 ? '@max-[108px]:hidden' : '@max-[124px]:hidden'
+          )}
         >
           <Avatar avatarUrl={participant.avatar_cid} value={participant.profile_space_id} size={20} />
         </span>
       ))}
       {overflow > 0 && (
-        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums">
+        <span className="relative box-content flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-grey-02 px-1 text-[11px] leading-5 text-grey-04 tabular-nums @max-[148px]:hidden">
           +{overflow}
         </span>
       )}
