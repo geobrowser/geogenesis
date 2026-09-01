@@ -13,6 +13,7 @@ import { Download } from '~/design-system/icons/download';
 import { Link } from '~/design-system/icons/link';
 import { LinkedIn } from '~/design-system/icons/linkedin';
 import { Reddit } from '~/design-system/icons/reddit';
+import { RetrySmall } from '~/design-system/icons/retry-small';
 import { XIcon } from '~/design-system/icons/x';
 import { Spinner } from '~/design-system/spinner';
 
@@ -103,11 +104,28 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId }: Props
                 tile={<GlyphTile icon={<Link />} />}
               />
               <ShareAction
-                label="Download"
-                ariaLabel="Download debate video"
-                onClick={download.download}
+                label={download.status === 'error' ? 'Retry' : 'Download'}
+                ariaLabel={download.status === 'error' ? 'Retry preparing debate video' : 'Download debate video'}
+                onClick={() => {
+                  if (download.status === 'error') {
+                    setToast(<span>{download.error ?? 'Could not prepare the video for download.'}</span>);
+                  }
+                  download.download();
+                }}
                 disabled={download.status === 'preparing'}
-                tile={<GlyphTile icon={download.status === 'preparing' ? <Spinner /> : <Download />} />}
+                tile={
+                  <GlyphTile
+                    icon={
+                      download.status === 'preparing' ? (
+                        <Spinner />
+                      ) : download.status === 'error' ? (
+                        <RetrySmall />
+                      ) : (
+                        <Download />
+                      )
+                    }
+                  />
+                }
               />
             </div>
           </div>
@@ -181,5 +199,5 @@ function useDebateVideoDownload(debateId: string, enabled: boolean) {
     }
   };
 
-  return { status, download };
+  return { status, error: prepared.error, download };
 }
