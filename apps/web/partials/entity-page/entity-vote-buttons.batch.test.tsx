@@ -7,13 +7,17 @@ import type { ReactNode } from 'react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { entityResponseCountsQueryKey, userEntityResponseQueryKey } from '~/core/responses/entity-response';
+import {
+  entityRespondersQueryKey,
+  entityResponseCountsQueryKey,
+  userEntityResponseQueryKey,
+} from '~/core/responses/entity-response';
 import {
   ClaimResponseBatchBoundary,
   useClaimResponseSummaryBatch,
 } from '~/core/responses/use-claim-response-summaries';
 
-import { EntityVoteButtons } from './entity-vote-buttons';
+import { EntityVoteButtons, RespondersPopoverContent } from './entity-vote-buttons';
 
 const mocks = vi.hoisted(() => ({
   getCounts: vi.fn(),
@@ -25,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   smartAccount: null as object | null,
   submitResponse: vi.fn(),
   responderAvatarProps: [] as unknown[],
+  getProfiles: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -65,7 +70,7 @@ vi.mock('~/core/io/queries', () => ({
 }));
 
 vi.mock('~/core/io/subgraph/fetch-profile', () => ({
-  fetchProfilesBySpaceIds: () => Effect.succeed([]),
+  fetchProfilesBySpaceIds: (...args: unknown[]) => Effect.succeed(mocks.getProfiles(...args)),
 }));
 
 vi.mock('~/core/state/pending-personal-space', () => ({
@@ -100,6 +105,8 @@ beforeEach(() => {
   mocks.smartAccount = null;
   mocks.submitResponse.mockReset();
   mocks.responderAvatarProps.length = 0;
+  mocks.getProfiles.mockReset();
+  mocks.getProfiles.mockReturnValue([]);
 });
 
 afterEach(cleanup);
@@ -269,3 +276,72 @@ function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance
     }
   );
 }
+
+/**
+ * The responder list is the one read here that must not stand down for the batch.
+ *
+ * Every other query on this page defers to `ClaimResponseBatchBoundary`, because the batch primes
+ * its key and a page of rows would otherwise fetch one apiece. This content is different in the way
+ * that matters: it lives inside a `Popover.Content`, so it mounts for a single claim when a reader
+ * opens the list, and there is no per-row cost to protect. Deferring bought nothing and cost an
+ * answer — the profiles are primed by a *second* query that runs after the batch resolves and is
+ * not part of the boundary's `ready`.
+ */
+describe('RespondersPopoverContent under a batch', () => {
+  const renderPopover = (queryClient: QueryClient) =>
+    render(
+      <ClaimResponseBatchBoundary ready>
+        <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind="stance" />
+      </ClaimResponseBatchBoundary>,
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      }
+    );
+
+  it('fetches the profiles the batch has not primed instead of reporting nobody', async () => {
+    // Responders primed by the batch; their profiles not, which is the window between the batch
+    // resolving and its metadata query landing — and the permanent state if that query fails.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityRespondersQueryKey('claim-1', 'space-1', 0, 'stance'), [
+      { userId: 'profile-9', direction: 'positive' },
+    ]);
+    mocks.getProfiles.mockReturnValue([{ id: 'profile-9', name: 'Dovile', avatarUrl: null }]);
+
+    const view = renderPopover(queryClient);
+
+    await waitFor(() => expect(view.getByText('Dovile')).toBeInTheDocument());
+    // Not the empty state, which is what a disabled profile query rendered over a real responder.
+    expect(view.queryByText('No responses yet')).not.toBeInTheDocument();
+    expect(mocks.getProfiles).toHaveBeenCalled();
+  });
+
+  it('still answers from the batch’s cache without refetching the responders', async () => {
+    // The saving the batch exists for survives: a primed key is fresh against the same `staleTime`,
+    // so an enabled query serves it without a request.
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityRespondersQueryKey('claim-1', 'space-1', 0, 'stance'), [
+      { userId: 'profile-9', direction: 'positive' },
+    ]);
+    mocks.getProfiles.mockReturnValue([{ id: 'profile-9', name: 'Dovile', avatarUrl: null }]);
+
+    const view = renderPopover(queryClient);
+
+    await waitFor(() => expect(view.getByText('Dovile')).toBeInTheDocument());
+    expect(mocks.getResponders).not.toHaveBeenCalled();
+  });
+
+  it('contains its own scrolling rather than chaining to the page behind', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityRespondersQueryKey('claim-1', 'space-1', 0, 'stance'), [
+      { userId: 'profile-9', direction: 'positive' },
+    ]);
+    mocks.getProfiles.mockReturnValue([{ id: 'profile-9', name: 'Dovile', avatarUrl: null }]);
+
+    const view = renderPopover(queryClient);
+
+    await waitFor(() => expect(view.getByText('Dovile')).toBeInTheDocument());
+    expect(view.container.querySelector('.overflow-y-auto')?.className).toContain('overscroll-contain');
+  });
+});

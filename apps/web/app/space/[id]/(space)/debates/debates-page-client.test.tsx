@@ -37,7 +37,13 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: mocks.replace }),
+  // `prefetch` is for PrefetchLink, which the feed header's space and claim links use.
+  useRouter: () => ({ replace: mocks.replace, prefetch: vi.fn() }),
+}));
+
+// PrefetchLink hydrates the entity it points at on hover, which reaches for the sync engine.
+vi.mock('~/core/sync/use-sync-engine', () => ({
+  useSyncEngine: () => ({ hydrate: vi.fn() }),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -45,6 +51,7 @@ vi.mock('~/core/state/feature-flags', () => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
+  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'user-a' }),
   useSpaceDebates: () => ({ data: { debates: [completedDebate()], matches: [] }, isLoading: false, error: null }),
   useProcessedVideoDebateIds: () => mocks.media,
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
@@ -52,6 +59,9 @@ vi.mock('~/core/debates/hooks', () => ({
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  // The feed resolves an anchor by id when the space listing does not contain it (GEO-2764).
+  // These tests never anchor, so it stays idle.
+  useDebate: () => ({ data: null, isLoading: false, error: null }),
 }));
 
 // The feed orders itself by the explore "Best" ranking. These tests are about readiness and
@@ -59,6 +69,12 @@ vi.mock('~/core/debates/hooks', () => ({
 // they were written against.
 vi.mock('~/core/debates/browse/use-debates-best-order', () => ({
   useDebatesBestOrder: () => ({ rankByDebateId: new Map(), isLoading: false, isError: false }),
+}));
+
+// The feed's "Join a debate" button opens the login when signed out, and that hook reaches for
+// next-navigation and Privy context this suite does not stand up.
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({
+  usePrivySignIn: () => vi.fn(),
 }));
 
 vi.mock('~/core/hooks/use-space', () => ({
@@ -78,6 +94,17 @@ vi.mock('~/partials/comments/entity-comments-panel', () => ({
 
 vi.mock('~/core/hooks/use-comments', () => ({
   useComments: () => ({ comments: [], totalCount: 0, isLoading: false, error: null, refetch: vi.fn() }),
+}));
+
+// The feed's Claims badge reads the debate's transcript claims through react-query, and this
+// suite renders the feed without a QueryClientProvider. Stub it the way the other debate suites do;
+// the grouping and ordering have their own unit tests.
+vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
+  useDebateTranscriptClaims: () => ({
+    claims: { all: [], byAuthorSpaceId: new Map(), unattributed: [], totalCount: 0 },
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({

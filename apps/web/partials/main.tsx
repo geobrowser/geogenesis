@@ -25,7 +25,6 @@ export const Main = ({ children }: MainProps) => {
   const debateFullscreenActive = useAtomValue(debateFullscreenActiveAtom);
   const isFullWidth =
     debateFullscreenActive ||
-    pathname === '/explore' ||
     /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname) ||
     /^\/space\/[^/]+\/debates(\/|$)/.test(pathname);
 

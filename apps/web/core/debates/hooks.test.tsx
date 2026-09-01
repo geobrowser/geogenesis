@@ -56,7 +56,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, back: mocks.back }),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({}));
+// The coordinator reads `debateDebugging` to decide whether to draw the paused banner. Nothing here
+// asserts on it, so it stays off, and the rest of the module is kept rather than blanked.
+vi.mock('~/core/state/feature-flags', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
+  useFeatureFlag: () => false,
+}));
 
 vi.mock('@geogenesis/auth', () => ({
   getIdentityToken: mocks.getIdentityToken,

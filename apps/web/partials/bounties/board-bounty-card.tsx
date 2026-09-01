@@ -9,19 +9,21 @@ import type { SpaceBounty } from '~/core/community/bounty-types';
 
 import {
   AVAILABLE_CARD_HEIGHT_PX,
-  AVAILABLE_CARD_WIDTH_PX,
   AvailableBountyCard,
   BountyCard,
   InProgressBountyCard,
 } from '~/partials/community-tab/bounty-card';
 
 /**
- * The board mixes statuses in one grid, so every card gets the same
- * footprint — the available card's, the largest of the three. The Community
- * tab keeps each card's own size because its sections never mix.
+ * The board mixes statuses in one grid, so every card gets the same HEIGHT —
+ * the available card's, the tallest of the three. Width is fluid: cards fill
+ * whatever column the grid gives them (a fixed width is what put the
+ * Community-tab grids one column short; see bounty-card's cardStyle).
  */
-export const BOARD_CARD_WIDTH_PX = AVAILABLE_CARD_WIDTH_PX;
 export const BOARD_CARD_HEIGHT_PX = AVAILABLE_CARD_HEIGHT_PX;
+
+/** Same column threshold as the Community tab's available grid. */
+export const BOARD_GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] gap-4';
 
 /**
  * The interest bindings an available card needs, lifted to the grid so one
@@ -46,16 +48,15 @@ export function BoardBountyCard({ bounty, interest }: { bounty: BoardBounty; int
   switch (statusKeyForId(bounty.statusId)) {
     case 'done':
     case 'cancelled':
-      return <BountyCard bounty={spaceBounty} width={BOARD_CARD_WIDTH_PX} height={BOARD_CARD_HEIGHT_PX} />;
+      return <BountyCard bounty={spaceBounty} height={BOARD_CARD_HEIGHT_PX} />;
     case 'in-progress':
     case 'in-review':
-      return <InProgressBountyCard bounty={spaceBounty} width={BOARD_CARD_WIDTH_PX} height={BOARD_CARD_HEIGHT_PX} />;
+      return <InProgressBountyCard bounty={spaceBounty} height={BOARD_CARD_HEIGHT_PX} />;
     case 'backlog':
     case 'todo':
       return (
         <AvailableBountyCard
           bounty={spaceBounty}
-          width={BOARD_CARD_WIDTH_PX}
           height={BOARD_CARD_HEIGHT_PX}
           isInterested={interest.interestedIds.has(bounty.id)}
           isPending={interest.pendingBountyId === bounty.id}

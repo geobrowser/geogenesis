@@ -12,6 +12,10 @@ import { EntityFeed } from './entity-feed';
 const mocks = vi.hoisted(() => ({
   queryOptions: null as Record<string, unknown> | null,
   fetch: vi.fn(),
+  /** Pages the mocked infinite query hands back, so a test can put a card on the page. */
+  pages: null as { items: Record<string, unknown>[] }[] | null,
+  /** Props the last rendered card received. */
+  cardProps: null as Record<string, unknown> | null,
 }));
 
 function createLocalStorage(): Storage {
@@ -33,7 +37,7 @@ vi.mock('@tanstack/react-query', () => ({
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
     return {
-      data: undefined,
+      data: mocks.pages ? { pages: mocks.pages } : undefined,
       isLoading: false,
       isFetchingNextPage: false,
       fetchNextPage: vi.fn(),
@@ -62,12 +66,17 @@ vi.mock('~/design-system/menu', () => ({
 }));
 
 vi.mock('~/partials/explore/explore-feed-card', () => ({
-  ExploreFeedCard: () => null,
+  ExploreFeedCard: (props: Record<string, unknown>) => {
+    mocks.cardProps = props;
+    return null;
+  },
 }));
 
 beforeEach(() => {
   vi.stubGlobal('localStorage', createLocalStorage());
   mocks.queryOptions = null;
+  mocks.pages = null;
+  mocks.cardProps = null;
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [], nextCursor: null }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -288,5 +297,40 @@ describe('EntityFeed Explore type filter', () => {
     // The time slot is empty rather than 'week': this feed sorts by New, which carries no range,
     // so there is nothing to send and nothing to key on. Same positions otherwise.
     expect(mocks.queryOptions?.queryKey).toEqual(['/api/activity/feed', 'new', undefined, 'space-id', null]);
+  });
+  // GEO-2757. Explore opts its cards into opening the side panel; the space activity tab, which
+  // renders this same feed, does not. The flag is a single forward, so nothing but a test says it
+  // is still being made.
+  describe('titleOpensSidePanel', () => {
+    const item = {
+      entityId: 'entity-1',
+      spaceId: 'space-1',
+      spaceName: 'Space',
+      spaceImage: null,
+      types: [],
+      createdAtSec: 0,
+      title: 'An entity',
+      description: null,
+      imageUrl: null,
+      commentCount: 0,
+      recordingUrls: [],
+      debateVideoUrls: [],
+      isMemberOrEditor: true,
+      hasPendingMembershipRequest: false,
+    };
+
+    it('hands the flag to every card when the feed is opted in', () => {
+      mocks.pages = [{ items: [item] }];
+      render(<EntityFeed apiEndpoint="/api/explore/feed" titleOpensSidePanel />);
+
+      expect(mocks.cardProps?.titleOpensSidePanel).toBe(true);
+    });
+
+    it('leaves cards navigating when it is not', () => {
+      mocks.pages = [{ items: [item] }];
+      render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-1" />);
+
+      expect(mocks.cardProps?.titleOpensSidePanel).toBe(false);
+    });
   });
 });

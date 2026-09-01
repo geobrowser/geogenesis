@@ -27,7 +27,6 @@ vi.mock('~/partials/community-tab/bounty-card', () => {
       );
     };
   return {
-    AVAILABLE_CARD_WIDTH_PX: 378,
     AVAILABLE_CARD_HEIGHT_PX: 240,
     BountyCard: sized('completed-card'),
     InProgressBountyCard: sized('in-progress-card'),
@@ -81,8 +80,7 @@ describe('BoardBountyCard', () => {
       const { unmount } = render(<BoardBountyCard bounty={bounty(statusId)} interest={interest} />);
       const card = screen.getByTestId(testId);
       expect(card).toBeInTheDocument();
-      // Every card on the board gets the same footprint.
-      expect(card).toHaveAttribute('data-width', '378');
+      // Every card on the board gets the same height; width is the grid's.
       expect(card).toHaveAttribute('data-height', '240');
       unmount();
     }

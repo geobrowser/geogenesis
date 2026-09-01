@@ -9,7 +9,7 @@ export const featureFlagDefinitions = [
   {
     id: 'debateDebugging',
     label: 'Debate debugging',
-    description: 'Show manual debugging controls during debate recording.',
+    description: 'Show debate recording debug controls and the paused live-updates banner.',
   },
   {
     id: 'debateFormatSelector',

@@ -1,4 +1,21 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook, waitFor } from '@testing-library/react';
+
+import * as React from 'react';
+
+import { Effect } from 'effect';
+
 import { describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({ graphql: vi.fn(), attention: true }));
+
+// The hook's own `queryFn` calls the real `fetchParticipantPositions`, which reaches the graph
+// through this module — so this is the seam for a hook-level test. The pure-function tests below
+// inject `fetchPage` directly and are unaffected.
+vi.mock('~/core/io/graphql-client', () => ({
+  graphql: (...args: unknown[]) => mocks.graphql(...args),
+}));
+vi.mock('./debate-attention', () => ({ useDebateAttention: () => mocks.attention }));
 
 import type { DebateRematchParticipant } from './api';
 import {
@@ -7,6 +24,7 @@ import {
   isParticipantPositionsQueryKey,
   participantPositionsQueryKey,
   participantSidesOn,
+  useParticipantPositions,
 } from './participant-positions';
 
 const LOCAL: DebateRematchParticipant = {
@@ -143,4 +161,50 @@ it('keys the query outside the debates family, in participant order', () => {
   expect(key).toEqual(participantPositionsQueryKey(['a', 'b']));
   expect(isParticipantPositionsQueryKey(key)).toBe(true);
   expect(isParticipantPositionsQueryKey(['debates', 'claims'])).toBe(false);
+});
+
+/**
+ * GEO-2599. Preston: "randomly the positions also dissapear. I just lost all of Dovile's positions
+ * without doing anything whilst I was typing."
+ *
+ * The list is grouped from `query.data`, which is `undefined` for any key the cache has not seen —
+ * so a key change emptied the whole thing rather than showing the previous answer. And the trigger
+ * need not be a real change: `enabled` is `profileSpaceIds.length > 0`, so a session refetch that
+ * momentarily yields no participants swaps to the empty-ids key, which holds no data.
+ */
+describe('useParticipantPositions holding its list', () => {
+  const row = (userId: string, objectId: string) => ({
+    userId,
+    objectId,
+    spaceId: '019fedae72b67ab2927adf044d57c560',
+    voteType: 0,
+    voteKind: 1,
+  });
+
+  const renderPositions = (initial: DebateRematchParticipant[]) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return renderHook(({ participants }) => useParticipantPositions(participants), {
+      initialProps: { participants: initial },
+      wrapper: ({ children }) => React.createElement(QueryClientProvider, { client }, children),
+    });
+  };
+
+  it('keeps the previous positions on screen while a new set loads', async () => {
+    mocks.attention = true;
+    // One page, short, so `fetchParticipantPositions` stops after it.
+    // `graphql()` returns an Effect of the *decoded* rows — the real one applies the decoder
+    // internally, so succeeding with the decoded shape is the honest stub.
+    mocks.graphql.mockImplementation(() => Effect.succeed([row(LOCAL.profile_space_id, 'claim-1')]));
+
+    const { result, rerender } = renderPositions([LOCAL, REMOTE]);
+    await waitFor(() => expect(result.current.byClaim.size).toBe(1));
+
+    // A different participant set is a different query key, so the cache has nothing for it. The
+    // list must not blank in the meantime — that is the reported bug.
+    // Never settles, so the new key stays pending and only the placeholder can satisfy the assert.
+    mocks.graphql.mockImplementation(() => Effect.never);
+    rerender({ participants: [LOCAL] });
+
+    expect(result.current.byClaim.size).toBe(1);
+  });
 });

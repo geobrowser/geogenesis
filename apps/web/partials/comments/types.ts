@@ -46,7 +46,10 @@ export interface CreateCommentParams {
   text: string;
   targetEntityId: string;
   targetSpaceId: string;
-  /** All ancestor comments from immediate parent up to the root, each with its space */
+  /**
+   * The reply chain ordered [immediate parent, ..., root]; omit for a top-level comment on the
+   * page entity. The hook maps index 0 (the immediate parent) to the SDK's `replyTo` target.
+   */
   ancestorComments?: Array<{ id: string; spaceId: string }>;
 }
 

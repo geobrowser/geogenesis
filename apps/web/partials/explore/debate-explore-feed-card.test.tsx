@@ -9,6 +9,16 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 
+// Reached through the claims panel, which now carries the shared response controls. The module's
+// top-level `atomWithStorage` runs on import, and under Node's own webstorage — which shadows
+// jsdom's with an object that has no getItem — that import takes the suite down before a test runs.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: () => false,
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+}));
+
 const mocks = vi.hoisted(() => ({
   debateQuery: { data: undefined as Debate | undefined, isError: false },
   mediaQuery: { data: undefined as { artifacts: { kind: string }[] } | undefined, isError: false },
@@ -47,6 +57,14 @@ vi.mock('~/core/debates/browse/debate-feed-player', () => ({
 
 vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
   useDebateShareAction: () => ({ state: 'ready', method: 'share', tooltipMessage: undefined, onActivate: vi.fn() }),
+}));
+
+vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
+  useDebateTranscriptClaims: () => ({
+    claims: { byAuthorSpaceId: new Map(), unattributed: [], totalCount: 3 },
+    isLoading: false,
+    error: null,
+  }),
 }));
 
 vi.mock('~/core/debates/browse/debate-claims-panel', () => ({
@@ -96,6 +114,15 @@ function watchableDebate(): Debate {
   return {
     id: 'fd51f935-2063-4617-8039-7b672b23364c',
     status: 'complete',
+    // The card reads `claim.space_id` to scope its transcript-claims lookup to the space the
+    // debate was published to, so the fixture carries the claim the type has always required.
+    claim: {
+      id: 'claim-summary-1',
+      space_id: '52c7ae149838b6d47ce0f3b2a5974546',
+      claim_entity_id: 'claim-entity-1',
+      claim: 'Waking up early improves health and productivity',
+      description: null,
+    },
     recordings: [{ participant_slot: 1 }, { participant_slot: 2 }],
     participants: [],
   } as unknown as Debate;

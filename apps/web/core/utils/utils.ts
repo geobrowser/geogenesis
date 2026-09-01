@@ -5,12 +5,14 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
+import { toSignIn as toSignInLink } from '~/core/auth/sign-in-deep-link';
 import {
   FILEBASE_GATEWAY_READ_PATH,
   LIGHTHOUSE_GATEWAY_READ_PATH,
   PINATA_GATEWAY_READ_PATH,
   ROOT_SPACE,
 } from '~/core/constants';
+import { toDebatesPanel as toDebatesPanelLink } from '~/core/debates/debates-panel-deep-link';
 import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
@@ -21,6 +23,16 @@ import { Entities } from './entity';
 export const NavUtils = {
   toRoot: () => '/root',
   toExplore: () => '/explore',
+  /**
+   * Explore, with the Privy sign-in modal opening on arrival. Built for the marketing site's
+   * "Sign in / Sign up" button — see `core/auth/sign-in-deep-link` for the param contract.
+   */
+  toSignIn: toSignInLink,
+  /**
+   * Any page, with the debates hub opening on arrival — optionally on a named tab. See
+   * `core/debates/debates-panel-deep-link` for the param contract.
+   */
+  toDebatesPanel: toDebatesPanelLink,
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),

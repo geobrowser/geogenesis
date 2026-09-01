@@ -323,8 +323,8 @@ export function BrowseSidebar() {
   const allRequestedSpaces = useAtomValue(requestedMembershipSpacesAtom);
   const setRequestedSpaces = useSetAtom(requestedMembershipSpacesAtom);
   const requestedSpaces = React.useMemo(
-    () => activeRequestedSpacesForOwner(allRequestedSpaces, personalSpaceId, Date.now()),
-    [allRequestedSpaces, personalSpaceId]
+    () => activeRequestedSpacesForOwner(allRequestedSpaces, personalSpaceId, Date.now(), walletAddress),
+    [allRequestedSpaces, personalSpaceId, walletAddress]
   );
 
   const serverTrackedIds = React.useMemo(() => {
@@ -337,15 +337,21 @@ export function BrowseSidebar() {
   // Persist reconciliation: drop expired entries and this account's entries the
   // server now tracks (pending row, member, or editor) so localStorage self-cleans.
   React.useEffect(() => {
-    setRequestedSpaces(prev => reconcileRequestedSpaces(prev, personalSpaceId, serverTrackedIds, Date.now()));
-  }, [serverTrackedIds, setRequestedSpaces, personalSpaceId]);
+    setRequestedSpaces(prev =>
+      reconcileRequestedSpaces(prev, personalSpaceId, serverTrackedIds, Date.now(), walletAddress)
+    );
+  }, [serverTrackedIds, setRequestedSpaces, personalSpaceId, walletAddress]);
 
   const memberOfRows = React.useMemo<BrowseSpaceRow[]>(() => {
     const base = data?.memberOf ?? [];
     if (requestedSpaces.length === 0) return base;
     const extras: BrowseSpaceRow[] = [];
+
+    const seen = new Set<string>();
     for (const space of requestedSpaces) {
-      if (serverTrackedIds.has(normId(space.id))) continue;
+      const key = normId(space.id);
+      if (serverTrackedIds.has(key) || seen.has(key)) continue;
+      seen.add(key);
       extras.push({
         id: space.id,
         name: space.name ?? space.id.slice(0, 8),

@@ -25,9 +25,18 @@ function findSpaceIdsClause(filter: EntityFilter): UuidListFilter | undefined {
 /**
  * Extract a single space ID from the filter's spaceIds field.
  *
- * Handles `anyEqualTo` (scalar match) and single-element `in` arrays.
- * Returns undefined for multi-space or unrecognized operators — those
- * fall through to `extractSpaceIdsFromFilter` or remain in the filter.
+ * Handles `anyEqualTo` (scalar match) and single-element `in`/`overlaps`
+ * arrays. Returns undefined for multi-space or unrecognized operators —
+ * those fall through to `extractSpaceIdsFromFilter` or remain in the filter.
+ *
+ * `overlaps` is the operator the where-converter emits for `spaces`, since
+ * `spaceIds` is an array column and `in` there compares whole arrays. It
+ * means the same thing the top-level arg does — the entity is in one of
+ * these spaces — so it promotes identically. Missing it here does not
+ * change which rows come back (the clause stays on the residual filter and
+ * the server still applies it), but it silently costs the indexed
+ * top-level path and leaves the per-row `valuesList`/`relationsList`
+ * selections unscoped, which is how values from another space reach a row.
  *
  * Also looks one level deep into a top-level `and` (see {@link findSpaceIdsClause}).
  */
@@ -44,13 +53,18 @@ export function extractSingleSpaceIdFromFilter(filter?: EntityFilter): string | 
     return spaceIds.in[0];
   }
 
+  if (spaceIds.overlaps && spaceIds.overlaps.length === 1 && spaceIds.overlaps[0]) {
+    return spaceIds.overlaps[0];
+  }
+
   return undefined;
 }
 
 /**
  * Extract a multi-space filter from the filter's spaceIds field.
  *
- * Handles multi-element `in` arrays and `anyEqualTo` (as a fallback).
+ * Handles multi-element `in`/`overlaps` arrays and `anyEqualTo` (as a
+ * fallback).
  * Returns a `UuidFilter` suitable for the top-level `spaceIds` query arg.
  *
  * Note: `UuidListFilter` (array column) and `UuidFilter` (scalar) have
@@ -64,8 +78,9 @@ export function extractSpaceIdsFromFilter(filter?: EntityFilter): UuidFilter | u
   const spaceIds = findSpaceIdsClause(filter);
   if (!spaceIds) return undefined;
 
-  if (spaceIds.in && spaceIds.in.length > 1) {
-    const validIds = spaceIds.in.filter((v): v is string => typeof v === 'string');
+  const listed = (spaceIds.in?.length ?? 0) > 1 ? spaceIds.in : (spaceIds.overlaps?.length ?? 0) > 1 ? spaceIds.overlaps : undefined;
+  if (listed) {
+    const validIds = listed.filter((v): v is string => typeof v === 'string');
     if (validIds.length > 0) {
       return { in: validIds };
     }

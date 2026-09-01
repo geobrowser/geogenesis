@@ -1,0 +1,330 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+
+import { Effect } from 'effect';
+
+import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { getEntityResponseCounts, getUserEntityResponse } from '~/core/io/queries';
+import {
+  type ActiveResponseDirection,
+  type ResponseKind,
+  entityResponseCountsQueryKey,
+  userEntityResponseQueryKey,
+} from '~/core/responses/entity-response';
+import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+
+/** Entity responses rather than relation responses, matching what `EntityVoteButtons` asks for. */
+export const CLAIM_RESPONSE_OBJECT_TYPE = 0;
+
+/**
+ * How many responses a claim needs before it can be called contested.
+ *
+ * One-vs-one is 50%, so an unguarded band lands on nearly every barely-touched claim — loudest
+ * exactly where the data is thinnest, and marking brand-new claims as contested, which is
+ * backwards.
+ *
+ * Scoped to the tag, deliberately. The floor used to gate the percentage too, which meant the
+ * whole verdict disappeared on any claim with fewer than ten responses — i.e. almost all of them
+ * — and hid the page's most important module in the name of precision nobody asked for. A split
+ * off four responses is worth showing; calling it *controversial* is not.
+ */
+export const CLAIM_RESPONSE_FLOOR = 10;
+
+const CONTROVERSIAL_LOW = 40;
+const CONTROVERSIAL_HIGH = 60;
+
+export type ClaimResponseSummary = {
+  positive: number;
+  negative: number;
+  total: number;
+  /** Whole-percent share of positive responses. Null only when nobody has responded at all. */
+  percent: number | null;
+  /** Whether there are enough responses to characterize the split, rather than just report it. */
+  meetsFloor: boolean;
+  isControversial: boolean;
+  isLoading: boolean;
+  /**
+   * Whether the counts are an answer, as opposed to the zero that stands in for one.
+   *
+   * `total: 0` has three causes and only one of them is "nobody has responded": the counts query
+   * can fail, and a held-back hook reports zero without asking anything. Neither is a population,
+   * and a reader told "No responses yet" about a claim with two hundred of them has been given a
+   * fact rather than a gap. Anything that would *assert* emptiness has to check this first;
+   * anything that merely needs a number can keep reading `total`, which is zero either way.
+   */
+  hasCounts: boolean;
+  /**
+   * Whether {@link viewerDirection} is still on its way, as opposed to being a settled "no side".
+   *
+   * Separate from `isLoading`, which reports the counts. The two settle independently and the
+   * viewer's own side settles *later*: it rides a second query gated on the personal space, which
+   * is a smart-account read plus a round trip of its own. A caller that read `isLoading` for this
+   * would see the counts land, call the viewer's side resolved while it is still `null`, and draw
+   * both pills unselected for someone who already holds one — so pressing the side they hold
+   * republishes it instead of clearing it.
+   *
+   * False while the hook is disabled, and false for a signed-out viewer: neither is waiting for
+   * anything.
+   */
+  isViewerResponseLoading: boolean;
+  /**
+   * The side the viewer holds right now, optimistic included, and the space that identifies them.
+   *
+   * Exposed because the counts here are adjusted optimistically: anything drawing people onto the
+   * two sides has to make the same adjustment, or the number moves while the face stays put.
+   */
+  viewerDirection: ActiveResponseDirection | null;
+  viewerSpaceId: string | null;
+};
+
+/**
+ * Whether there is a split to draw at all.
+ *
+ * Two states, not three:
+ *
+ *   - `invite`  nobody has answered. `percent` is null, there is nothing to divide, and the honest
+ *               thing to show is an invitation rather than a 0%.
+ *   - `full`    somebody has. Draw the share and the bar.
+ *
+ * An earlier version withheld the percentage below the response floor and printed a tally instead,
+ * on the grounds that 93% of answered claims are unanimous and the median has two responses — so a
+ * "100%" is usually standing on a sample of two. The reasoning about the data holds; the remedy was
+ * wrong twice over. It made a column of cards look arbitrary, some with a bar and some without, so
+ * the caution read as inconsistency rather than as care. And it was solving a problem the layout
+ * already solves: the responder cluster sits directly beneath the number and says how many people
+ * it is a percentage *of*. The sample size is shown, so the rate does not have to hedge.
+ *
+ * The floor still governs `isControversial` above, which is the one claim that genuinely needs a
+ * population behind it — a 1–1 split is not a contested claim, it is two people.
+ *
+ * One helper for every surface deliberately: the card, the feed and the claim page draw the same
+ * number, and a rule decided twice is a rule that will eventually disagree with itself.
+ */
+export type ClaimSummaryTier = 'invite' | 'full';
+
+export function claimSummaryTier(total: number): ClaimSummaryTier {
+  return total <= 0 ? 'invite' : 'full';
+}
+
+/**
+ * The split, or null where there is nothing to divide.
+ *
+ * Pure so the floor and the band can be tested without a query. `percent` is null rather than 0 on
+ * an untouched claim because the two mean different things and callers render them differently:
+ * no module at all, versus a genuine 0%.
+ */
+export function summarizeClaimResponses(
+  positive: number,
+  negative: number
+): Omit<
+  ClaimResponseSummary,
+  'isLoading' | 'isViewerResponseLoading' | 'hasCounts' | 'viewerDirection' | 'viewerSpaceId'
+> {
+  const total = positive + negative;
+  const percent = total > 0 ? Math.round((100 * positive) / total) : null;
+  const meetsFloor = total >= CLAIM_RESPONSE_FLOOR;
+
+  return {
+    positive,
+    negative,
+    total,
+    percent,
+    meetsFloor,
+    isControversial: meetsFloor && percent !== null && percent >= CONTROVERSIAL_LOW && percent <= CONTROVERSIAL_HIGH,
+  };
+}
+
+/** How many of each side a given response direction is worth, for the optimistic adjustment below. */
+function sideWeights(direction: ActiveResponseDirection | null | undefined): [positive: number, negative: number] {
+  if (direction === 'positive') return [1, 0];
+  if (direction === 'negative') return [0, 1];
+  return [0, 0];
+}
+
+/**
+ * The split of on-chain responses on a claim, in one space.
+ *
+ * Deliberately the same query keys `EntityVoteButtons` uses, so the verdict, the response pills and
+ * this share one fetch each — the three are on screen together and must never disagree.
+ *
+ * Space-scoped, and the space is the caller's. Responses are published against a space, so a claim
+ * that lives in several has a different population in each; reading one space's counts under
+ * another space's heading would report a number that belongs to neither.
+ *
+ * Counts the viewer's own response optimistically. Publishing, indexing and the read-back take a
+ * few seconds, so without this the bar sits at the old split while the pills next to it have
+ * already moved — which reads as the response not having counted. The adjustment is a delta rather
+ * than an increment: it adds the side the viewer now holds and removes the one the indexed counts
+ * still have them on, so it stays correct when they switch sides or clear their response, and
+ * collapses to zero the moment the server agrees.
+ */
+export function useClaimResponseSummary(
+  entityId: string,
+  spaceId: string,
+  responseKind: ResponseKind,
+  /**
+   * False to hold both reads back.
+   *
+   * For a feed, which mounts cards thousands of pixels below the fold: two queries apiece across a
+   * page of twenty-two is forty-four requests for claims nobody is looking at. Callers that are
+   * always on screen leave this alone.
+   */
+  enabled = true
+): ClaimResponseSummary {
+  const { personalSpaceId, isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
+
+  // A page that batches its claims — the space claims list, which asks for up to fifty at once —
+  // primes exactly these two keys from one request. Asking here as well is not wrong, because the
+  // primed cache answers it; but before the batch lands there is nothing to answer from, and fifty
+  // rows would each fire their own pair first. So while a batch is managing this subtree, the
+  // individual reads stand down and wait for it. `EntityVoteButtons` has always done this, and the
+  // deferral was lost when the claim card replaced it on that page.
+  const responseBatch = useClaimResponseBatchState();
+
+  const {
+    data,
+    isLoading,
+    isSuccess: haveCountsAnswered,
+  } = useQuery({
+    queryKey: entityResponseCountsQueryKey(entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
+    queryFn: () =>
+      Effect.runPromise(getEntityResponseCounts(entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)),
+    enabled: enabled && !responseBatch.managed,
+    staleTime: 30_000,
+  });
+
+  // What the counts above already include for this viewer — the baseline the delta subtracts.
+  const { data: indexedDirection, isSuccess: hasViewerResponseAnswered } = useQuery({
+    queryKey: userEntityResponseQueryKey(personalSpaceId, entityId, spaceId, CLAIM_RESPONSE_OBJECT_TYPE, responseKind),
+    queryFn: async () => {
+      if (!personalSpaceId) return null;
+      return Effect.runPromise(
+        getUserEntityResponse(personalSpaceId, entityId, spaceId, responseKind, CLAIM_RESPONSE_OBJECT_TYPE)
+      );
+    },
+    enabled: enabled && Boolean(personalSpaceId) && !responseBatch.managed,
+    staleTime: 30_000,
+  });
+
+  const indexing = useEntityResponseIndexingSnapshot({ entityId, spaceId, responseKind });
+  // Any non-idle snapshot means we know the viewer's intent, `indexed` included — dropping back to
+  // the server's copy the moment indexing reports done, but before the count query has refetched,
+  // is what would make a landed response flicker back to the old split.
+  const pending = indexing.status === 'idle' ? null : indexing.pending;
+  const activeDirection = pending ? pending.expectedResponse : indexedDirection;
+
+  const [activePositive, activeNegative] = sideWeights(activeDirection);
+  const [indexedPositive, indexedNegative] = sideWeights(indexedDirection);
+
+  // Whether the counts are an answer. Decided once: it gates the arithmetic below and is what the
+  // hook reports.
+  //
+  // Under a batch it takes both halves. `responseBatch.ready` says the batch answered; it does not
+  // say this claim is in the answer. The batch keys its query on the whole target list and serves
+  // the previous key's data through a change (`keepPreviousData`, for GEO-2599), so adding a claim
+  // — or any local edit while typing, on a page that includes unpublished rows — leaves `ready`
+  // true against a response that predates the new claim. Its own key is unprimed, and the row would
+  // report an authoritative zero rather than waiting.
+  //
+  // The query's own `isSuccess` is what says this key has data: `setQueryData` from the batch marks
+  // it success even though the query itself never runs here.
+  const haveCounts = responseBatch.managed ? responseBatch.ready && haveCountsAnswered : haveCountsAnswered;
+
+  // Whether the viewer's own side is still coming — one condition, because both branches below need
+  // it and they had drifted.
+  //
+  // There has to *be* a viewer for it to be coming. Signed out there is no personal space, so the
+  // key is never written by either path — the query is disabled without one, and the batch guards
+  // its own write with `if (personalSpaceId)`. Reading that absence as "still loading" is a wait
+  // that never ends: on the batched claims page it left every signed-out reader with dead pills and
+  // no split at all, because the card's summary read is gated on the same flag.
+  //
+  // Absence of a viewer is a settled "no side", exactly as it is for a signed-out reader anywhere
+  // else.
+  const awaitingViewerResponse = Boolean(personalSpaceId) && !hasViewerResponseAnswered;
+
+  // A delta needs a baseline.
+  //
+  // The adjustment below is the viewer's own in-flight response applied *to a reported population*.
+  // Where the counts never answered there is no population to adjust, and applying it anyway leaves
+  // the viewer's single uncommitted response standing as the entire one — a claim with two hundred
+  // responses reporting "100% verify, 1 response" the moment its owner presses a pill behind a
+  // failed count query. Nobody has to have responded for the number to be wrong; it is wrong
+  // because it is arithmetic on a figure we do not have.
+  //
+  // Zero rather than a guess, so `total` means "the reported population" on every surface and
+  // `total > 0` can be trusted to imply there is something real behind it.
+  //
+  // Clamped as well: the counts and the viewer's indexed response are two queries that can settle
+  // out of step, and a negative side would render as a bar sliver pointing the wrong way.
+  const positive = haveCounts ? Math.max(0, (data?.positive ?? 0) + activePositive - indexedPositive) : 0;
+  const negative = haveCounts ? Math.max(0, (data?.negative ?? 0) + activeNegative - indexedNegative) : 0;
+
+  // Disabled means no answer, not a stale one.
+  //
+  // `enabled: false` stops the two queries from *fetching*; it does not stop them handing back
+  // whatever is already cached under their key — and the key includes `responseKind`. A caller that
+  // disabled this hook precisely because the kind is still the `stance` fallback would otherwise
+  // read a stance split that some other surface primed, which is the exact number it was trying not
+  // to show. The indexing snapshot is not a query at all and answers regardless, so the viewer's
+  // own side needs masking too.
+  //
+  // The batch is the opposite case and must not be masked: there `enabled` is true, the queries are
+  // held for a different reason, and the cache *is* the intended source because
+  // `ClaimResponseBatchBoundary` primes exactly these two keys.
+  if (!enabled) {
+    return {
+      ...summarizeClaimResponses(0, 0),
+      // Held back is not the same as loading: a caller that has not asked yet has nothing to wait
+      // for, and reporting otherwise would leave a skeleton on a card that never asks.
+      isLoading: false,
+      isViewerResponseLoading: false,
+      // Nothing was asked, so the zero above stands for nothing. A caller that draws "no responses
+      // yet" off a hook it deliberately held back would be asserting the one thing it took care
+      // not to find out.
+      hasCounts: false,
+      viewerDirection: null,
+      // Who the viewer is, not what they answered — safe to report, and the avatars need it to
+      // place the viewer once there is something to place.
+      viewerSpaceId: personalSpaceId ?? null,
+    };
+  }
+
+  return {
+    ...summarizeClaimResponses(positive, negative),
+    // Under a batch the individual query never runs, so its `isLoading` is false from the start —
+    // the batch's own readiness is what says whether there is anything to draw yet.
+    isLoading: responseBatch.managed ? !responseBatch.ready : isLoading,
+    // Answered, not merely finished — the same distinction `isViewerResponseLoading` draws below,
+    // and for the same reason. A counts query that exhausts its retries leaves `data` undefined, so
+    // `total` falls to zero while nothing is loading any more: the shape of an unanswered claim,
+    // which is exactly what it is not.
+    hasCounts: haveCounts,
+    // The viewer's own side, which the counts do not wait for.
+    //
+    // Two things have to settle before `viewerDirection` means "no side" rather than "not yet": the
+    // personal space, and then the query it gates.
+    //
+    // `isSuccess`, not the query's own `isLoading` and not `isFetched`. `isLoading` reads false for
+    // a tick after a query becomes enabled and before it dispatches, which is the very window this
+    // covers. `isFetched` closes that but opens another: it is true once a fetch *finishes*, a
+    // failure included. So a viewer-response read that exhausts its retries would hand back `null`
+    // as though it were an answer, re-enable both pills, and turn a press on the side the viewer
+    // holds into a republish — the failure this flag exists to prevent, reached the long way round.
+    // Only a successful read is an answer.
+    //
+    // Under a batch the query never runs and the batch primes its key, so the batch's readiness is
+    // what to wait on — plus this key actually having been primed, for the reason `haveCounts`
+    // gives above: a batch can be ready against a response that predates this claim.
+    //
+    // `isPersonalSpaceLoading` is not repeated here because the batch already waits on it: it is
+    // part of that query's own `enabled`, so `ready` cannot be true while the space is resolving.
+    isViewerResponseLoading: responseBatch.managed
+      ? !responseBatch.ready || awaitingViewerResponse
+      : isPersonalSpaceLoading || awaitingViewerResponse,
+    viewerDirection: activeDirection ?? null,
+    viewerSpaceId: personalSpaceId ?? null,
+  };
+}

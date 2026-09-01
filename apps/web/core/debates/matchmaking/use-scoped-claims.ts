@@ -31,6 +31,22 @@ export type ScopedClaims = {
   facetsSettled: boolean;
   /** Nothing this query could return is showable, so it was never asked. */
   unusable: boolean;
+  /**
+   * The facets in hand answer a filter the viewer has since moved on from.
+   *
+   * They keep being rendered — blanking the menu under the cursor is worse than a beat of staleness
+   * — but their *counts* are the part that is provably wrong: a topic facet is co-occurrence, so a
+   * stale one can show an option counted above the selection itself, which is impossible for a
+   * real answer.
+   *
+   * Callers cover the numbers while this is true, though deliberately not the instant it goes
+   * true. `HubMultiFilterMenu` waits out a grace period first, which means a short pending spell
+   * shows the previous counts rather than a placeholder. That is the trade, and it is the right
+   * way round: a wrong number needs to be read to mislead, and nobody reads one inside a couple of
+   * hundred milliseconds, whereas a placeholder flashing in and out is noticed every single time
+   * and was the complaint that led here. The skeleton is for a wait long enough to be seen.
+   */
+  countsPending: boolean;
   /** Already masked: a sentinel rendered on this can't page a corpus the caller can't show. */
   hasNextPage: boolean;
   isLoading: boolean;
@@ -96,11 +112,25 @@ export function useScopedMatchmakingClaims(
   const facetsSettled =
     !scope.pending && (unusable || (facets !== undefined && !claimsQuery.isLoading && !claimsQuery.isPlaceholderData));
 
+  // Placeholder data is the previous key's answer, and since GEO-2696 a topic facet is narrowed by
+  // the topic selection — so on a filter change the held counts don't merely lag, they describe a
+  // question the viewer is no longer asking.
+  //
+  // Not while unusable, for the same reason `facetsSettled` treats it as an answer: the query is
+  // deliberately never made, so nothing is on its way. React Query still hands back the previous
+  // key's rows through `placeholderData` when the key moves under a disabled query, and no request
+  // will ever replace them — so reading that as "pending" would leave the counts waiting forever
+  // on a request that was never going to happen. The callers in that state have client-derived
+  // counts that are already current: the hub's Featured source, and a rematch selection with no
+  // browsable space.
+  const countsPending = !unusable && (claimsQuery.isPlaceholderData || claimsQuery.isLoading);
+
   return {
     pages,
     facets,
     facetsSettled,
     unusable,
+    countsPending,
     hasNextPage: !masked && Boolean(claimsQuery.hasNextPage),
     isLoading: claimsQuery.isLoading,
     isFetchingNextPage: claimsQuery.isFetchingNextPage,

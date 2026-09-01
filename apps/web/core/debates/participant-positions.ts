@@ -1,7 +1,7 @@
 'use client';
 
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -108,19 +108,26 @@ function defaultFetchPage(filter: ParticipantPositionsFilter, first: number, off
   );
 }
 
+/**
+ * The `userVotes` rows that count as a position someone currently holds.
+ *
+ * Exported because the People tab counts the same rows and must not drift from what this reads:
+ * kind 0 is curation rather than a position, a withdrawn response is a different *vote type* and
+ * means "no side", and `objectType` 0 keeps this to responses on claims.
+ */
+export const POSITION_VOTE_FILTER = {
+  objectType: { is: 0 },
+  voteType: { in: [0, 1] },
+  voteKind: { in: [...VOTE_KIND_TO_RESPONSE_KIND.keys()] },
+};
+
 export async function fetchParticipantPositions(
   profileSpaceIds: string[],
   signal?: AbortSignal,
   fetchPage: FetchPage = defaultFetchPage
 ): Promise<ParticipantPosition[]> {
   if (profileSpaceIds.length === 0) return [];
-  const filter = {
-    userId: { in: profileSpaceIds },
-    objectType: { is: 0 },
-    // Active responses only: a withdrawn one is a different vote type and means "no side".
-    voteType: { in: [0, 1] },
-    voteKind: { in: [...VOTE_KIND_TO_RESPONSE_KIND.keys()] },
-  };
+  const filter = { userId: { in: profileSpaceIds }, ...POSITION_VOTE_FILTER };
 
   const rows: ParticipantPositionRow[] = [];
   let offset = 0;
@@ -210,6 +217,27 @@ export function useParticipantPositions(participants: DebateRematchParticipant[]
     // can respond somewhere it doesn't, and that claim should still turn up. A slow poll covers it.
     refetchInterval: foreground ? PARTICIPANT_POSITIONS_POLL_MS : false,
     staleTime: 5_000,
+    /**
+     * Hold the last list while a new one is fetched (GEO-2599). Preston: "randomly the positions
+     * also dissapear. I just lost all of Dovile's positions without doing anything whilst I was
+     * typing."
+     *
+     * Without this, `query.data` is `undefined` for any key the cache has not seen, and `byClaim`
+     * below collapses to an empty map — so the whole list blanks rather than showing the previous
+     * answer. The trigger does not have to be a real change: `enabled` is `profileSpaceIds.length >
+     * 0`, so a session refetch that momentarily yields no participants swaps to the empty-ids key,
+     * which has no data, and every position vanishes with nothing having actually happened.
+     *
+     * Stale rows cannot leak to the wrong people, which is what makes this safe rather than merely
+     * nicer: every read goes through `participantSidesOn`, which matches on the *current*
+     * participants' profile space ids, so a row belonging to someone no longer here is filtered out
+     * rather than displayed.
+     *
+     * Note the key itself is already stable — `profileSpaceIds` is deduped and sorted, and React
+     * Query hashes keys structurally, so a session refetch returning an equal-but-new array is the
+     * same cache entry. This is for the cases where the key genuinely differs.
+     */
+    placeholderData: keepPreviousData,
   });
 
   const byClaim = React.useMemo(() => groupParticipantPositions(query.data ?? []), [query.data]);

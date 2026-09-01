@@ -20,7 +20,7 @@ import { useInterestedBountyIds, useInterestedInBounty } from '~/core/community/
 
 import { Text } from '~/design-system/text';
 
-import { BoardBountyCard, type BoardInterestBindings } from './board-bounty-card';
+import { BOARD_GRID_CLASS, BoardBountyCard, type BoardInterestBindings } from './board-bounty-card';
 import { BountyBoardSkeleton } from './bounty-board-skeleton';
 import { BountyFilterBar } from './bounty-filter-bar';
 
@@ -136,7 +136,7 @@ export function BountyBoard({ header }: Props) {
                   </Text>
                 </div>
               ) : null}
-              <div className="flex flex-wrap gap-4">
+              <div className={BOARD_GRID_CLASS}>
                 {group.bounties.map(bounty => (
                   <BoardBountyCard key={bounty.id} bounty={bounty} interest={interest} />
                 ))}

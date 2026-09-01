@@ -11,8 +11,10 @@ import {
   endDebateTurn,
   getDebateActivity,
   getGeoChatSession,
+  getRematchLiveKitToken,
   joinDebateQueue,
   listDebateClaims,
+  listDebatePeople,
   listMatchmakingClaims,
   notifyClaimResponseIndexed,
   resetGeoChatSession,
@@ -367,6 +369,77 @@ describe('debate queue readiness', () => {
   });
 });
 
+// GEO-2725 opened both matchmaking reads to signed-out viewers. The risk in doing that is the
+// mirror of the case below: a blanket `auth: 'optional'` would also treat a signed-in viewer's
+// failed token exchange as "no account" and fetch anonymously, and that answer would be cached
+// under their account key — leaving viewer-relative fields like `can_challenge` quietly wrong.
+describe('matchmaking read authentication', () => {
+  const okResponse = (body: unknown) =>
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+
+  beforeEach(() => {
+    resetGeoChatSession();
+    window.localStorage.removeItem('geo:chat-session');
+  });
+
+  it('reads people anonymously when nobody is signed in', async () => {
+    const fetch = okResponse({ people: [] });
+    vi.stubGlobal('fetch', fetch);
+
+    // Passed but never consulted: with no account there is no exchange to make, which is what
+    // keeps this path anonymous rather than merely tokenless.
+    const getPrivyIdentityToken = vi.fn();
+
+    await expect(listDebatePeople(getPrivyIdentityToken, null)).resolves.toEqual({ people: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/matchmaking/people',
+      expect.objectContaining({ headers: {} })
+    );
+    expect(getPrivyIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade a signed-in people request to anonymous when the token exchange fails', async () => {
+    const fetch = okResponse({ people: [] });
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(listDebatePeople(getPrivyIdentityToken, 'user-a')).rejects.toThrow('Identity token unavailable');
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('reads matchmaking claims anonymously when nobody is signed in', async () => {
+    const fetch = okResponse({ claims: [], next_cursor: null });
+    vi.stubGlobal('fetch', fetch);
+
+    const getPrivyIdentityToken = vi.fn();
+
+    await expect(listMatchmakingClaims({ filter: 'all' }, getPrivyIdentityToken, null)).resolves.toEqual({
+      claims: [],
+      next_cursor: null,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/matchmaking/claims'),
+      expect.objectContaining({ headers: {} })
+    );
+    expect(getPrivyIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade a signed-in claims request to anonymous when the token exchange fails', async () => {
+    const fetch = okResponse({ claims: [], next_cursor: null });
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(listMatchmakingClaims({ filter: 'all' }, getPrivyIdentityToken, 'user-a')).rejects.toThrow(
+      'Identity token unavailable'
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('debate claim hydration authentication', () => {
   it('does not silently downgrade a signed-in claim request to anonymous access', async () => {
     resetGeoChatSession();
@@ -386,6 +459,77 @@ describe('debate claim hydration authentication', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  /**
+   * GEO-2724. `ClaimDebateButton` renders per entity row and asks only for its own claim, so a table
+   * of fifty claim entities made fifty requests to an endpoint that takes all fifty ids — each one
+   * sending geo-chat to the Knowledge Graph, which is the load it answers 503 to.
+   */
+  it('collapses concurrent single-claim reads for one space into one request', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ claims: [{ claim_entity_id: 'claim-1' }, { claim_entity_id: 'claim-2' }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    const [first, second] = await Promise.all([
+      listDebateClaims('space-1', ['claim-1']),
+      listDebateClaims('space-1', ['claim-2']),
+    ]);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/spaces/space-1/debate-claims?claim_ids=claim-1%2Cclaim-2',
+      expect.objectContaining({ headers: {} })
+    );
+    // Each caller is answered with what it asked for, not the union. A superset would be a real
+    // behaviour change: `claims-page-client` derives its active debates from every row in its
+    // response and would pick up a sibling's.
+    expect(first.claims.map(claim => claim.claim_entity_id)).toEqual(['claim-1']);
+    expect(second.claims.map(claim => claim.claim_entity_id)).toEqual(['claim-2']);
+  });
+
+  /** A fresh `Response` per call: these tests make more than one request, and a body reads once. */
+  function stubFreshJson(body: unknown) {
+    const fetch = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        )
+      );
+    vi.stubGlobal('fetch', fetch);
+    return fetch;
+  }
+
+  const claimRequests = (fetch: ReturnType<typeof vi.fn>) =>
+    fetch.mock.calls.filter(([url]) => String(url).includes('/debate-claims'));
+
+  it('keeps a whole-space read out of the id batch', async () => {
+    const fetch = stubFreshJson({ claims: [] });
+
+    // No ids means every claim in the space. Folding that into a batch of ids, or answering it from
+    // one, would silently narrow it.
+    await Promise.all([listDebateClaims('space-1', []), listDebateClaims('space-1', ['claim-1'])]);
+
+    expect(claimRequests(fetch)).toHaveLength(2);
+  });
+
+  it('never answers one account from another account\u2019s response', async () => {
+    const fetch = stubFreshJson({ claims: [] });
+    const getPrivyIdentityToken = vi.fn().mockResolvedValue('token');
+
+    // Readiness is per viewer, so two identities asking about the same claim are asking different
+    // questions and must not share a response.
+    await Promise.all([
+      listDebateClaims('space-1', ['claim-1'], getPrivyIdentityToken, 'user-a'),
+      listDebateClaims('space-1', ['claim-1'], getPrivyIdentityToken, 'user-b'),
+    ]);
+
+    expect(claimRequests(fetch)).toHaveLength(2);
+  });
+
   it('keeps anonymous claim browsing available without an authorization header', async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ claims: [] }), {
@@ -400,6 +544,56 @@ describe('debate claim hydration authentication', () => {
       'http://localhost:8080/spaces/space-1/debate-claims?claim_ids=claim-1',
       expect.objectContaining({ headers: {} })
     );
+  });
+});
+
+describe('rematch voice tokens', () => {
+  it('mints a token for the session with an authenticated bodyless POST', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          token: 'jwt',
+          url: 'wss://livekit.test',
+          room_name: 'geo-rematch-session-1',
+          participant_slot: 2,
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(getRematchLiveKitToken('session-1', vi.fn(), 'user-a')).resolves.toEqual({
+      token: 'jwt',
+      url: 'wss://livekit.test',
+      room_name: 'geo-rematch-session-1',
+      participant_slot: 2,
+    });
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/debate-rematches/session-1/livekit-token', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer access-token' },
+      body: undefined,
+      signal: undefined,
+    });
+  });
+
+  // The dock reads the code to decide between rendering nothing and offering a retry, so it has to
+  // survive the request layer intact.
+  it('surfaces the backend refusal code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'livekit_not_configured', message: 'No LiveKit' } }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    await expect(getRematchLiveKitToken('session-1', vi.fn(), 'user-a')).rejects.toMatchObject({
+      status: 503,
+      code: 'livekit_not_configured',
+    });
   });
 });
 

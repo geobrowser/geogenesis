@@ -6,15 +6,21 @@ import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
+import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
+import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
+import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
 import {
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
   useResetEntityResponseIndexingSnapshot,
 } from '~/core/hooks/use-entity-vote';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
@@ -26,33 +32,53 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import type {
+  Debate,
   DebateClaimPositionSummary,
   DebateClaimSummary,
   DebateParticipantSummary,
   MatchmakingReadiness,
 } from '../api';
-import { ClaimReadinessToggle } from './claim-readiness-toggle';
 import { hubCardMotion } from './hub-motion';
 
 type Props = {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
-  /** Drives the response buttons and the readiness toggle. */
+  /** Drives the response buttons and the vocabulary the sides are labelled in. */
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
-  /** Rendered under the controls — e.g. the Matches tab's "Request debate" button. */
+  /**
+   * The live debate on this claim, as either geo-chat shape — the `DebateClaim` row carries the
+   * debate, the paged index carries only a flag. The end slot surfaces it as "Watch live".
+   */
+  activeDebate?: Debate | boolean | null;
+  /**
+   * False while the claim's own state is still arriving, which holds the pills.
+   *
+   * Two things have to have landed before a press means what it looks like it means: the vocabulary,
+   * or the pills publish a stance response against a claim that wants Verify/Dispute; and the
+   * viewer's own side, or the side they already hold is drawn unselected and pressing it republishes
+   * instead of clearing.
+   *
+   * Defaults to true for hosts that have already resolved both — the hub's own tabs, whose rows come
+   * from geo-chat carrying both.
+   */
+  answersReady?: boolean;
+  /** Why responding is refused outright — an unpublished edit to the claim's own vocabulary. */
+  responseBlockedReason?: string | null;
+  /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
+  /**
+   * Leaves the end slot out.
+   *
+   * For the one host whose offer is not the card's offer: the rematch picker sends a rematch
+   * request, its own mutation with its own gating, from a control in its footer. A slot offering
+   * `Request debate` above it would be a different button wearing the same words.
+   */
+  hideEndSlot?: boolean;
   /**
    * Replaces the claim's link to its entity page. The rematch picker opens the side panel instead:
    * following a link there would navigate out of the app shell and abandon the live session.
    */
   onOpenClaim?: () => void;
-  /**
-   * Leaves the readiness switch out. For hosts that can't yet say whether the viewer is standing
-   * ready — the switch reads `viewer_debate_ready`, so drawing it from an unresolved lookup would
-   * report "not ready" on a claim they are in fact ready on.
-   */
-  hideReadinessToggle?: boolean;
   /**
    * Set when `positions` cannot be trusted to say which side the viewer is on — the rematch picker
    * identifies the viewer inside the summaries by geo-chat user id, which is null until its token
@@ -60,6 +86,12 @@ type Props = {
    * that only means "don't know yet", which would draw the viewer onto two sides at once.
    */
   viewerIdentityPending?: boolean;
+  /**
+   * Sends a signed-out viewer to Privy instead of publishing. Set by hosts that render to signed-out
+   * viewers — the hub's Claims tab and the claim page — and left unset when signing in is not a
+   * possibility the host has to handle, which keeps the response path unchanged for everyone else.
+   */
+  onRequireSignIn?: () => void;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -75,38 +107,85 @@ export function isResolvableClaim(claim: Pick<DebateClaimSummary, 'space_id' | '
 }
 
 /**
- * Taking a side is an on-chain claim response, so the two side buttons are the only way to do it —
- * there are deliberately no separate vote arrows here. Readiness, the geo-chat half, rides
- * alongside them.
+ * One claim, drawn the same way everywhere a claim appears as a card.
+ *
+ * Taking a side is an on-chain claim response, so the two side pills are the only way to do it —
+ * there are deliberately no separate vote arrows here. The pills carry labels and faces and no
+ * counts: a control should say what pressing it does, and the faces inside one mean *ready to argue
+ * this side*, a viewer-relative offer. How many people have answered is a different question, about
+ * the claim rather than the reader, and it lives in the summary underneath.
+ *
+ * The readiness switch used to ride in the header. It has moved off the card entirely, and the
+ * corner it held is now the end slot — which always offers something the reader can act on.
  */
 export function MatchmakingClaimCard({
   claim,
   positions,
   readiness,
   activeDebate,
+  answersReady,
+  responseBlockedReason,
   footer,
   onOpenClaim,
-  hideReadinessToggle,
   viewerIdentityPending,
+  onRequireSignIn,
+  hideEndSlot,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
   // asking the graph about it fails the request, so don't offer or ask.
   const isOnGraph = isResolvableClaim(claim);
 
+  // The response reads wait for the card to come into range.
+  //
+  // Three queries ride on each of these — the counts, the viewer's own indexed response, and the
+  // responder faces — all keyed per claim, so nothing is shared between rows the way the match
+  // lookup is. On the hub's Claims tab and the rematch picker, list surfaces that page in twenty
+  // more cards at a time and previously did no response reads at all, mounting them eagerly is
+  // sixty requests for claims nobody has scrolled to. `ClaimExploreFeedCard` gates its reads for
+  // exactly this reason; the shared card had not caught up.
+  const { ref: viewportRef, nearViewport } = useNearViewport();
+
+  // A batch is the exception, and must not be deferred. `ClaimResponseBatchBoundary` primes these
+  // very keys from one request for the whole page, so there is nothing per-card left to save — and
+  // holding the hook back would mask the primed cache the batch exists to serve, drawing an empty
+  // split instead of the batch's.
+  const responseBatch = useClaimResponseBatchState();
+  const readResponses = nearViewport || responseBatch.managed;
+
+  // The host's ref and the observer's, on the one element. The Matches tab hangs its infinite
+  // scroll sentinel off the former and popLayout measures the exiting row through it, so it cannot
+  // simply be replaced.
+  const setCardRef = React.useCallback(
+    (node: HTMLElement | null) => {
+      viewportRef(node);
+      if (typeof ref === 'function') ref(node);
+      else if (ref) (ref as React.RefObject<HTMLElement | null>).current = node;
+    },
+    [ref, viewportRef]
+  );
+
   return (
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
-    <motion.article ref={ref} {...hubCardMotion} className="w-full rounded-lg border border-grey-02 bg-white p-3">
+    <motion.article
+      ref={setCardRef}
+      {...hubCardMotion}
+      className="w-full rounded-lg border border-grey-02 bg-white p-3"
+    >
       {isOnGraph ? (
         <RespondableControls
           claim={claim}
           positions={positions}
           readiness={readiness}
           activeDebate={activeDebate}
+          answersReady={answersReady}
+          responseBlockedReason={responseBlockedReason}
+          readResponses={readResponses}
           onOpenClaim={onOpenClaim}
-          hideReadinessToggle={hideReadinessToggle}
           viewerIdentityPending={viewerIdentityPending}
+          onRequireSignIn={onRequireSignIn}
+          hideEndSlot={hideEndSlot}
         />
       ) : (
         <UnresolvableControls
@@ -115,7 +194,7 @@ export function MatchmakingClaimCard({
           claim={claim}
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
-          hideReadinessToggle={hideReadinessToggle}
+          hideEndSlot={hideEndSlot}
         />
       )}
 
@@ -125,69 +204,130 @@ export function MatchmakingClaimCard({
 }
 
 /**
- * Space chip, readiness toggle, and the claim itself — the chrome both control variants share.
- * The toggle rides in the header's top right per the design, but whether it can be turned on
- * depends on response state only the respondable variant tracks, so each passes its own.
+ * Space chip, the end slot, and the claim itself — the chrome both control variants share.
+ *
+ * The meta row answers two things and no more: whose space this is, and what the claim offers the
+ * reader right now. Topics used to sit here and no longer do — 15% of claims carry one, and where
+ * it appears it usually restates the space chip beside it.
+ *
+ * The claim is set larger than the chrome around it and clamped to three lines. It is the content;
+ * nothing else on the card competes. The clamp is not cosmetic: claim text runs to a median of 108
+ * characters and a maximum of 222, and unclamped, one long claim sets the row height for its
+ * neighbour in the topic page's two-up grid.
  */
 function ClaimHeader({
   claim,
   isOnGraph,
-  toggle,
+  endSlot,
+  isControversial,
   onOpenClaim,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
-  toggle: React.ReactNode;
+  endSlot: React.ReactNode;
+  /** Flagged beside the space chip — what kind of claim this is, which is the row's own question. */
+  isControversial?: boolean;
   onOpenClaim?: () => void;
 }) {
+  const claimTextClassName = 'mb-3 block text-metadataMedium leading-snug text-pretty line-clamp-3';
+
   const openable = isOnGraph ? (
     onOpenClaim ? (
-      <button type="button" onClick={onOpenClaim} className="mb-3 block text-left text-metadataMedium hover:underline">
+      <button type="button" onClick={onOpenClaim} className={`${claimTextClassName} text-left hover:underline`}>
         {claim.claim}
       </button>
     ) : (
       <Link
         href={NavUtils.toEntity(claim.space_id, claim.claim_entity_id)}
-        className="mb-3 block text-metadataMedium hover:underline"
+        className={`${claimTextClassName} hover:underline`}
       >
         {claim.claim}
       </Link>
     )
   ) : (
-    <Text as="p" variant="metadataMedium" className="mb-3">
-      {claim.claim}
-    </Text>
+    <p className={claimTextClassName}>{claim.claim}</p>
   );
 
   return (
     <>
-      {/* `items-start` so the chip stays put when the toggle stacks an explanation beneath it. */}
+      {/* `items-start` so the chip stays put when the slot stacks a blocked reason beneath it. No
+          reserved height: the slot is now the height of the chip beside it, so the row does not grow
+          when the match lookup answers. */}
       <div className="mb-2 flex items-start justify-between gap-3">
-        <SpaceChip spaceId={claim.space_id} />
-        {toggle}
+        <span className="flex min-w-0 items-center gap-1.5">
+          <SpaceChip spaceId={claim.space_id} />
+          {isControversial ? <ControversialTag /> : null}
+        </span>
+        {endSlot}
       </div>
       {openable}
     </>
   );
 }
 
-/** The live case: the side buttons publish the viewer's on-chain response. */
-function RespondableControls({
+/**
+ * The viewer's side of a claim, and everything needed to change it.
+ *
+ * Extracted from the card so surfaces that draw their own layout around the same controls — the
+ * claim page's "Your position" block — publish responses through exactly this path rather than
+ * growing a second copy of the optimistic and indexing handling below, which exists to fix bugs
+ * that are not obvious from the outside.
+ */
+export function useClaimPositionControl({
   claim,
   positions,
   readiness,
-  activeDebate,
-  onOpenClaim,
-  hideReadinessToggle,
+  answersReady = true,
+  responseBlockedReason = null,
   viewerIdentityPending,
+  onRequireSignIn,
+  offersDebate = true,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
-  onOpenClaim?: () => void;
-  hideReadinessToggle?: boolean;
+  /**
+   * False while the claim's own state is still arriving.
+   *
+   * Two things have to have landed before a press means what it looks like it means: the vocabulary,
+   * or a press publishes a stance response against a claim that wants Verify/Dispute; and the
+   * viewer's own side, or the side they already hold is drawn unselected and pressing it republishes
+   * instead of clearing.
+   *
+   * Held here rather than at each caller's `disabled`, because a pill that is unpressable while its
+   * tooltip still says "Agree" is worse than one that says why. Three surfaces were adding this to
+   * their own disabled condition and none of them could reach the title.
+   */
+  answersReady?: boolean;
+  /**
+   * Why responding is refused outright, or null.
+   *
+   * Not the same shape as `answersReady`, which means "not yet" and clears itself — this is a
+   * standing condition with something the reader can do about it, so it is a sentence rather than a
+   * flag and it outranks every other reason the pills might be dead.
+   */
+  responseBlockedReason?: string | null;
   viewerIdentityPending?: boolean;
+  /**
+   * What to do when a signed-out visitor presses a side. Given one, the pills stay live while
+   * signed out and pressing prompts sign-in — matching the vote arrows on an entity page. Without
+   * one they stay disabled, which is what the hub's cards have always done.
+   */
+  onRequireSignIn?: () => void;
+  /**
+   * Whether this host offers the account-level match at all.
+   *
+   * The one thing the match is used for here is filling a side that has no faces with the people
+   * the server based the offer on, so the card cannot offer a debate on a side showing nobody to
+   * debate. That is only coherent where the offer is on screen.
+   *
+   * The rematch picker is the host it is wrong for, and it says so itself: its `positions` come
+   * from a fixed pair, and it emits an empty side deliberately, because a rematch has nobody to
+   * send a request to. Merging there puts an unrelated online stranger's avatar — and a `+N`
+   * overflow — inside a pill that means "your opponent holds this side". False also drops the
+   * lookup, which that surface has no other use for.
+   */
+  offersDebate?: boolean;
 }) {
   const target = {
     entityId: claim.claim_entity_id,
@@ -203,6 +343,21 @@ function RespondableControls({
 
   const copy = ENTITY_RESPONSE_COPY[readiness.response_kind];
   const [responseError, setResponseError] = React.useState<string | null>(null);
+
+  // The offer and the faces it implies, from one fact. Same shared query the end slot reads, so this
+  // costs nothing beyond the merge.
+  const { match } = useClaimMatchup({
+    claimId: claim.claim_entity_id,
+    spaceId: claim.space_id,
+    enabled: offersDebate && isResolvableClaim(claim),
+  });
+  // One gate, on the lookup. `useClaimMatchup` masks a disabled match to null rather than serving
+  // the shared cache another host primed, so a second check here would be unreachable — and an
+  // unreachable guard is the kind that gets trusted and then quietly stops matching the real one.
+  const positionsWithOpponents = React.useMemo(
+    () => withMatchParticipants(positions, match?.positions),
+    [match?.positions, positions]
+  );
 
   // The client knows its own response long before geo-chat does — publishing, indexing, and then
   // the notification round trip all have to finish first. Any non-idle snapshot means we know,
@@ -223,9 +378,9 @@ function RespondableControls({
   const optimisticPositions = React.useMemo(
     () =>
       viewerIdentityPending
-        ? positions
+        ? positionsWithOpponents
         : withViewerPosition({
-            positions,
+            positions: positionsWithOpponents,
             responseKind: readiness.response_kind,
             serverPosition: readiness.viewer_response?.position ?? null,
             viewerPosition,
@@ -235,7 +390,7 @@ function RespondableControls({
           }),
     [
       personalSpaceId,
-      positions,
+      positionsWithOpponents,
       readiness.response_kind,
       readiness.viewer_response?.position,
       viewerIdentityPending,
@@ -258,7 +413,11 @@ function RespondableControls({
   }, [readiness.viewer_response, resetResponseIndexing, responseIndexing]);
 
   const respond = (position: boolean) => {
-    if (!isConnected || isAccountSetupPending) return;
+    if (!isConnected) {
+      onRequireSignIn?.();
+      return;
+    }
+    if (isAccountSetupPending) return;
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
@@ -269,11 +428,94 @@ function RespondableControls({
   };
 
   const actionTitle = (position: boolean) => {
+    // First of all, because it is the only one with an action in it. The others describe a state
+    // the reader waits out; this one names the thing they can go and do.
+    if (responseBlockedReason) return responseBlockedReason;
+    // Ahead of the rest: it is the only one of these the reader can do nothing about, and naming
+    // the side they cannot take yet is the least useful thing to say about a dead control.
+    if (!answersReady) return 'Loading this claim’s responses…';
     if (!isConnected) return copy.connect;
     if (isAccountSetupPending) return 'Finishing account setup…';
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
     return position ? copy.positiveAction : copy.negativeAction;
   };
+
+  return {
+    viewerPosition,
+    optimisticPositions,
+    respond,
+    actionTitle,
+    responseError,
+    /**
+     * False only while the account genuinely cannot publish, never while one is in flight.
+     *
+     * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
+     * control gives a visitor nothing to press and no way to learn what to do about it.
+     */
+    canRespond:
+      (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending && answersReady && !responseBlockedReason,
+  };
+}
+
+/** The live case: the side buttons publish the viewer's on-chain response. */
+function RespondableControls({
+  claim,
+  positions,
+  readiness,
+  activeDebate,
+  answersReady = true,
+  responseBlockedReason = null,
+  readResponses = true,
+  onOpenClaim,
+  viewerIdentityPending,
+  onRequireSignIn,
+  hideEndSlot,
+}: {
+  claim: DebateClaimSummary;
+  positions: DebateClaimPositionSummary[];
+  readiness: MatchmakingReadiness;
+  activeDebate?: Debate | boolean | null;
+  answersReady?: boolean;
+  responseBlockedReason?: string | null;
+  /** False while the card is still far enough below the fold that its reads are not worth making. */
+  readResponses?: boolean;
+  onOpenClaim?: () => void;
+  viewerIdentityPending?: boolean;
+  onRequireSignIn?: () => void;
+  hideEndSlot?: boolean;
+}) {
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
+    useClaimPositionControl({
+      claim,
+      positions,
+      readiness,
+      answersReady,
+      responseBlockedReason,
+      viewerIdentityPending,
+      onRequireSignIn,
+      // The faces the match implies belong with the offer the match makes. Where the slot is hidden
+      // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
+      offersDebate: !hideEndSlot,
+    });
+  // One read for the card. The header flags a contested claim and the footer reports the split, and
+  // deciding that twice is how the two would eventually disagree.
+  //
+  // Held on `answersReady` as well as proximity, because the response kind is part of both query
+  // keys. Asking under the `stance` fallback does not merely waste a pair of requests on a factual
+  // claim: it fetches and *draws* the stance split until the vocabulary lands, then swaps it for
+  // the veracity one. Disabling the pills stops the wrong write; it does not stop the wrong number,
+  // and the number is the part the reader believes.
+  //
+  // `answersReady` is a superset of what this strictly needs — it also waits on the viewer's own
+  // side, which the counts do not depend on. That costs nothing: hosts that resolve the kind
+  // through `useClaimResponseState` have already primed this exact key by then, so the extra beat
+  // is a cache read, and on the hub's own tabs the rows carry their kind and it is never false.
+  const summary = useClaimResponseSummary(
+    claim.claim_entity_id,
+    claim.space_id,
+    readiness.response_kind,
+    readResponses && answersReady
+  );
 
   return (
     <>
@@ -281,9 +523,10 @@ function RespondableControls({
         claim={claim}
         isOnGraph
         onOpenClaim={onOpenClaim}
-        toggle={
-          hideReadinessToggle ? null : (
-            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
+        isControversial={summary.isControversial}
+        endSlot={
+          hideEndSlot ? null : (
+            <ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />
           )
         }
       />
@@ -295,7 +538,7 @@ function RespondableControls({
         // Deliberately not disabled while the response publishes. `useEntityResponse` serializes
         // overlapping submissions, so there is nothing to protect against — and dimming the pills
         // for the length of an indexing round trip read as the response not having landed.
-        disabled={!isConnected || isAccountSetupPending}
+        disabled={!canRespond}
         titleFor={actionTitle}
       />
       {responseError ? (
@@ -305,6 +548,18 @@ function RespondableControls({
           </Text>
         </div>
       ) : null}
+      {/* Nothing at all while the reads are held, rather than the summary's own "nobody has
+          answered yet" — a disabled hook reports a total of zero, and that is the absence of an
+          answer rather than an answer of none. */}
+      {!readResponses || summary.isLoading ? null : (
+        <ClaimSummary
+          entityId={claim.claim_entity_id}
+          spaceId={claim.space_id}
+          responseKind={readiness.response_kind}
+          summary={summary}
+          className="mt-3 border-t border-divider pt-3"
+        />
+      )}
     </>
   );
 }
@@ -405,14 +660,14 @@ function UnresolvableControls({
   readiness,
   activeDebate,
   onOpenClaim,
-  hideReadinessToggle,
+  hideEndSlot,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
-  activeDebate?: boolean;
+  activeDebate?: Debate | boolean | null;
   onOpenClaim?: () => void;
-  hideReadinessToggle?: boolean;
+  hideEndSlot?: boolean;
 }) {
   return (
     <>
@@ -420,10 +675,19 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
-        toggle={
-          /* Readiness is geo-chat state, so it still works without a graph id. */
-          hideReadinessToggle ? null : (
-            <ClaimReadinessToggle claim={claim} readiness={readiness} activeDebate={activeDebate} />
+        endSlot={
+          /* The slot stays live even though the graph cannot resolve this claim, because nothing in
+             it needs the graph. Both the match and the debate are geo-chat state, and the request is
+             a geo-chat mutation against the very ids geo-chat handed us — so a match the server has
+             already made is one the server will honour, whatever the graph makes of the id.
+
+             It used to pass `enabled={false}`, which `useClaimMatchup` turns into `match: null`.
+             That took the request control off the Matches tab for exactly the claims that are
+             hardest to reach any other way: every card there is a match by definition, and the
+             footer button that used to offer it is gone. Masking an action the server would accept
+             is not the safe direction to be wrong in. */
+          hideEndSlot ? null : (
+            <ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />
           )
         }
       />
@@ -441,7 +705,7 @@ function UnresolvableControls({
   );
 }
 
-function PositionRow({
+export function PositionRow({
   positions,
   responseKind,
   viewerPosition,

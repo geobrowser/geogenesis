@@ -37,6 +37,19 @@ export const DEBATE_SUPPORTED_BY_PROPERTY_ID = 'd19fad5651364a7f8309daf5c7bf99dd
 export const DEBATE_OPPOSED_BY_PROPERTY_ID = 'c57de77c3eee4e7ba0d2258d18aab11c';
 
 /**
+ * Participants (RELATION) → both participants, regardless of side.
+ *
+ * Supported by / Opposed by already name everyone in a debate, but they answer "who argued which
+ * way" and so cannot be filtered as one set: a data block of "debates I was in" would have to union
+ * two relations and know which side to look on. This is the side-agnostic membership.
+ *
+ * `SystemIds.PARTICIPANTS_PROPERTY` rather than a debates-specific id, deliberately — a query for
+ * the canonical property finds these debates alongside anything else that uses it, which is the
+ * point of a shared ontology. A private id would have needed every consumer to learn about it.
+ */
+export const DEBATE_PARTICIPANTS_PROPERTY_ID = SystemIds.PARTICIPANTS_PROPERTY; // 0b9b1a35…
+
+/**
  * Vote (TYPE) — one viewer's pick of who won a debate. Lives in the voter's personal
  * space and is auto-published there, the same way comments are.
  */
