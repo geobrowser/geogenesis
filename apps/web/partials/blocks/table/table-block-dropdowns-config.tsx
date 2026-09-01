@@ -61,7 +61,6 @@ export function TableBlockDropdownsConfigTrigger({
       asChild
       open={open}
       onOpenChange={setOpen}
-      onCloseAutoFocus={event => event.preventDefault()}
       className="max-w-[280px]"
       trigger={
         <SmallButton icon={<CreateSmall />} variant="secondary">
@@ -69,7 +68,7 @@ export function TableBlockDropdownsConfigTrigger({
         </SmallButton>
       }
     >
-      <div className="flex flex-col p-2">
+      <div className="flex flex-col p-2" role="group" aria-label="Dropdown properties">
         <div className="pb-2">
           <Input
             withSearchIcon
@@ -91,7 +90,7 @@ export function TableBlockDropdownsConfigTrigger({
             <button
               key={property.id}
               type="button"
-              role="menuitemcheckbox"
+              role="checkbox"
               aria-checked={checked}
               onClick={() => toggleDropdownProperty({ id: property.id, name: property.name })}
               className="flex items-center gap-2 rounded px-2 py-2 text-left text-sm text-text hover:bg-grey-01"

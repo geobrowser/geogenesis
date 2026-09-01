@@ -1,5 +1,6 @@
 import { ID } from '~/core/id';
 
+import { isBacklinkFilter } from './filter-state-to-where';
 import type { Filter, FilterMode } from './filters';
 
 /**
@@ -40,7 +41,7 @@ export function parseStoredDropdownSelections(raw: string | null): DropdownSelec
 
 /** The block filter's own values for a column — the dropdown's default. */
 export function filterDefaultsForColumn(filterState: Filter[], columnId: string): string[] {
-  return filterState.filter(f => ID.equals(f.columnId, columnId) && !f.isBacklink).map(f => f.value);
+  return filterState.filter(f => ID.equals(f.columnId, columnId) && !isBacklinkFilter(f)).map(f => f.value);
 }
 
 function sameIdSet(a: string[], b: string[]): boolean {
@@ -108,23 +109,31 @@ export function applyDropdownSelectionsToFilters(
   if (overriddenColumns.length === 0) return { filterState, modesByColumn };
 
   const nextFilters = filterState.filter(
-    f => !overriddenColumns.some(columnId => ID.equals(f.columnId, columnId) && !f.isBacklink)
+    f => !overriddenColumns.some(columnId => ID.equals(f.columnId, columnId) && !isBacklinkFilter(f))
   );
   const nextModes: Record<string, FilterMode> = { ...modesByColumn };
 
   for (const columnId of overriddenColumns) {
-    const template = filterState.find(f => ID.equals(f.columnId, columnId) && !f.isBacklink);
+    const baseForColumn = filterState.filter(f => ID.equals(f.columnId, columnId) && !isBacklinkFilter(f));
+    const template = baseForColumn[0];
     for (const entityId of selections[columnId]) {
-      nextFilters.push({
-        columnId,
-        columnName: template?.columnName ?? null,
-        valueType: 'RELATION',
-        value: entityId,
-        valueName: null,
-        relationValueTypes: template?.relationValueTypes,
-      });
+      // A still-checked base filter is kept verbatim, so its valueName and
+      // space scoping (typesRelationSpaceId) survive; only genuinely new
+      // values are synthesized — inheriting the column's scoping fields.
+      const existing = baseForColumn.find(f => ID.equals(f.value, entityId));
+      nextFilters.push(
+        existing ?? {
+          columnId,
+          columnName: template?.columnName ?? null,
+          valueType: 'RELATION',
+          value: entityId,
+          valueName: null,
+          relationValueTypes: template?.relationValueTypes,
+          typesRelationSpaceId: template?.typesRelationSpaceId,
+        }
+      );
     }
-    const keepsBacklinkOnColumn = filterState.some(f => ID.equals(f.columnId, columnId) && f.isBacklink);
+    const keepsBacklinkOnColumn = filterState.some(f => ID.equals(f.columnId, columnId) && isBacklinkFilter(f));
     if (selections[columnId].length > 1) {
       nextModes[columnId] = 'OR';
     } else if (!keepsBacklinkOnColumn) {

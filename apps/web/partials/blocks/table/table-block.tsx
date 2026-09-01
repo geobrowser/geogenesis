@@ -1141,7 +1141,7 @@ const ConfiguredTableBlock = ({
 
         <BlockLinkIngestionPanel />
 
-        {!isEditing && supportsDropdowns && browseDropdowns.configs.length > 0 && (
+        {!isEditing && supportsDropdowns && browseDropdowns.appliedColumnIds.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 py-2" onMouseDown={e => e.stopPropagation()}>
             <TableBlockDropdowns
               configs={browseDropdowns.configs}
@@ -1154,6 +1154,7 @@ const ConfiguredTableBlock = ({
               updateSelections={browseDropdowns.updateSelections}
               hydrated={browseDropdowns.hydrated}
               collectionItemIds={browseDropdowns.collectionItemIds}
+              populationReady={browseDropdowns.populationReady}
             />
           </div>
         )}

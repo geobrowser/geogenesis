@@ -5,6 +5,7 @@ import { parse } from 'graphql';
 
 import type { EntityFilter, UuidFilter } from '~/core/gql/graphql';
 import { convertWhereConditionToEntityFilter } from '~/core/io/converters';
+import { collapseOrFilter } from '~/core/io/filter-or-collapse';
 import { graphql } from '~/core/io/graphql-client';
 import {
   extractSingleSpaceIdFromFilter,
@@ -146,7 +147,11 @@ export function populationVariablesFromWhere(
   const typeId = extractSingleTypeIdFromFilter(filter);
   const typeIds = typeId ? undefined : extractTypeIdsFromFilter(filter);
 
-  let normalized = filter;
+  // Collapse OR-ed branches before anything else uses the filter — the OR
+  // forms make Postgres scan until the 30s statement timeout (see
+  // filter-or-collapse.ts). Same normalization, same order, as
+  // core/io/queries.ts.
+  let normalized = collapseOrFilter(filter);
   if (spaceId || spaceIds) normalized = removeSpaceIdsFromFilter(normalized);
   if (typeId || typeIds) normalized = removeTypeIdsFromFilter(normalized);
 

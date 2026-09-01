@@ -5,9 +5,11 @@ import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import { ID } from '~/core/id';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Property } from '~/core/types';
 
+import { isBacklinkFilter } from './filter-state-to-where';
 import type { Filter, ModesByColumn } from './filters';
 import type { Source } from './source';
 import { applyDropdownSelectionsToFilters } from './table-dropdown-selections';
@@ -64,27 +66,42 @@ export function useDropdownQueryOverlay({
   // row filter can never disagree about membership. Mirrors useCollection's
   // own enumeration (dedupe by target, Position order).
   const { entityId, spaceId } = useDataBlockInstance();
+  const { initialBlockEntities } = useEditorStoreLite();
   const { entity: blockEntity } = useQueryEntity({
     spaceId,
     id: entityId,
     enabled: source.type === 'COLLECTION',
   });
+  // Same membership source as useCollection: the queried entity, else the
+  // SSR-provided initial block entity while hydration is in flight. While
+  // NEITHER is available the ids are null — "unknown", never "empty", so a
+  // hydrating collection can't present the definitive empty state.
+  const effectiveBlockEntity =
+    source.type === 'COLLECTION' ? (blockEntity ?? initialBlockEntities.find(b => b.id === entityId) ?? null) : null;
   const collectionItemIds = React.useMemo(() => {
-    if (source.type !== 'COLLECTION' || !blockEntity) return source.type === 'COLLECTION' ? [] : null;
+    if (source.type !== 'COLLECTION' || !effectiveBlockEntity) return null;
     const seen = new Set<string>();
-    return blockEntity.relations
+    return effectiveBlockEntity.relations
       .filter(r => r.fromEntity.id === source.value && r.type.id === SystemIds.COLLECTION_ITEM_RELATION_TYPE)
       .sort((a, z) => Position.compare(a.position ?? null, z.position ?? null))
       .map(r => r.toEntity.id)
       .filter(id => (seen.has(id) ? false : (seen.add(id), true)));
-  }, [source, blockEntity]);
+  }, [source, effectiveBlockEntity]);
+  /** COLLECTION membership readable yet? Until then the population is unknown, not empty. */
+  const populationReady = source.type !== 'COLLECTION' || collectionItemIds !== null;
 
   const appliedColumnIds = React.useMemo(() => {
     const pillProperties = [...filterableProperties, ...(extraPillProperties ?? [])];
-    return configs
-      .map(config => config.propertyId)
-      .filter(id => pillProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION'));
-  }, [configs, filterableProperties, extraPillProperties]);
+    return (
+      configs
+        .map(config => config.propertyId)
+        .filter(id => pillProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION'))
+        // A column constrained by a backlink filter is unmanageable here:
+        // with 2+ selections the whole group would flip to OR, turning the
+        // backlink from a requirement into an alternative.
+        .filter(id => !baseFilterState.some(f => ID.equals(f.columnId, id) && isBacklinkFilter(f)))
+    );
+  }, [configs, filterableProperties, extraPillProperties, baseFilterState]);
 
   const isActive = !isEditing && supportsDropdowns && hydrated && appliedColumnIds.length > 0;
 
@@ -109,6 +126,7 @@ export function useDropdownQueryOverlay({
       appliedColumnIds,
       supportsDropdowns,
       collectionItemIds,
+      populationReady,
     },
   };
 }

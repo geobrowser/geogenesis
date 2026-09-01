@@ -47,6 +47,8 @@ type TableBlockDropdownsProps = {
   hydrated: boolean;
   /** COLLECTION blocks: the ordered item ids forming the population; null for query sources. */
   collectionItemIds: string[] | null;
+  /** False while a COLLECTION's membership is still hydrating — the population is unknown, not empty. */
+  populationReady: boolean;
 };
 
 /**
@@ -67,6 +69,7 @@ export function TableBlockDropdowns({
   updateSelections,
   hydrated,
   collectionItemIds,
+  populationReady,
 }: TableBlockDropdownsProps) {
   const [openColumnId, setOpenColumnId] = React.useState<string | null>(null);
 
@@ -95,6 +98,7 @@ export function TableBlockDropdowns({
           hydrated={hydrated}
           facetColumnIds={appliedColumnIds}
           collectionItemIds={collectionItemIds}
+          populationReady={populationReady}
           open={openColumnId === config.propertyId}
           onOpenChange={open =>
             setOpenColumnId(current => (open ? config.propertyId : current === config.propertyId ? null : current))
@@ -115,6 +119,7 @@ function TableBlockDropdown({
   hydrated,
   facetColumnIds,
   collectionItemIds,
+  populationReady,
   open,
   onOpenChange,
 }: Omit<TableBlockDropdownsProps, 'configs' | 'appliedColumnIds' | 'properties' | 'spaceId'> & {
@@ -153,14 +158,22 @@ function TableBlockDropdown({
   const [listEl, setListEl] = React.useState<HTMLDivElement | null>(null);
   const [rawQuery, setRawQuery] = React.useState('');
   const query = useDebouncedValue(rawQuery, 200).trim();
-  // Reading past the auto-walk window requires intent: the user scrolled to
-  // the end of the loaded list, or is searching.
-  const [scrolledToEnd, setScrolledToEnd] = React.useState(false);
+  // Reading past the auto-walk window requires intent, granted one bounded
+  // window at a time: crossing INTO the list's end zone grants once (again
+  // only after leaving and returning), and the "Scan more rows" control
+  // grants explicitly — reachable even when the loaded list is too short to
+  // scroll. A typed search walks continuously instead.
+  const [demandGrants, setDemandGrants] = React.useState(0);
+  const atListEndRef = React.useRef(false);
+  // Restore trigger focus on keyboard (Escape) closes only; pointer closes
+  // suppress it so switching between sibling menus doesn't steal focus.
+  const closedByEscapeRef = React.useRef(false);
 
   React.useEffect(() => {
     if (!open) {
       setRawQuery('');
-      setScrolledToEnd(false);
+      setDemandGrants(0);
+      atListEndRef.current = false;
     }
   }, [open]);
 
@@ -175,9 +188,12 @@ function TableBlockDropdown({
       facetColumnIds,
       collectionItemIds,
       pinned,
-      enabled: open,
-      demand: query.length > 0 || scrolledToEnd,
+      enabled: open && populationReady,
+      searchDemand: query.length > 0,
+      demandGrants,
     });
+
+  const showLoading = isWalking || (open && !populationReady);
 
   const visibleOptions = React.useMemo(() => {
     if (!query) return options;
@@ -200,7 +216,7 @@ function TableBlockDropdown({
     columnId,
     population,
     optionIds: revealedIds,
-    enabled: open && !scopeExhausted,
+    enabled: open && populationReady && !scopeExhausted,
   });
   const hasMoreToReveal = visibleCount < visibleOptions.length;
   const revealMore = React.useCallback(() => setVisibleCount(count => count + REVEAL_STEP), []);
@@ -258,7 +274,10 @@ function TableBlockDropdown({
       asChild
       open={open}
       onOpenChange={onOpenChange}
-      onCloseAutoFocus={event => event.preventDefault()}
+      onCloseAutoFocus={event => {
+        if (!closedByEscapeRef.current) event.preventDefault();
+        closedByEscapeRef.current = false;
+      }}
       className="max-w-[280px]"
       // The Menu viewport stops scrolling; the option list below the search
       // bar scrolls instead, so the bar never leaves view.
@@ -280,7 +299,12 @@ function TableBlockDropdown({
         </button>
       }
     >
-      <div className="flex min-h-0 flex-col">
+      <div
+        className="flex min-h-0 flex-col"
+        onKeyDown={event => {
+          if (event.key === 'Escape') closedByEscapeRef.current = true;
+        }}
+      >
         {showSearch && (
           <div className="shrink-0 px-2 pt-2 pb-2">
             <Input
@@ -295,9 +319,13 @@ function TableBlockDropdown({
         )}
         <div
           ref={setListEl}
+          role="group"
+          aria-label={`${label} options`}
           onScroll={e => {
             const el = e.currentTarget;
-            if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) setScrolledToEnd(true);
+            const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 200;
+            if (atEnd && !atListEndRef.current) setDemandGrants(grants => grants + 1);
+            atListEndRef.current = atEnd;
           }}
           onWheel={e => {
             // The Menu's own wheel trap would cancel scrolling here because
@@ -327,10 +355,10 @@ function TableBlockDropdown({
             <p className="px-2 py-2 text-sm text-grey-04">
               {isError
                 ? "Couldn't load values"
-                : isWalking
+                : showLoading
                   ? 'Loading…'
                   : hasMoreInScope
-                    ? `No values in the first ${scannedCount.toLocaleString()} rows — scroll or search to check the rest`
+                    ? `No values in the first ${scannedCount.toLocaleString()} rows scanned`
                     : query
                       ? 'No matches'
                       : 'No values in this table'}
@@ -349,7 +377,7 @@ function TableBlockDropdown({
               <button
                 key={option.id}
                 type="button"
-                role="menuitemcheckbox"
+                role="checkbox"
                 aria-checked={checked}
                 disabled={isInertZero}
                 onClick={() => toggle(option.id)}
@@ -382,15 +410,19 @@ function TableBlockDropdown({
             </button>
           )}
           {hasMoreToReveal && <div ref={sentinelRef} className="h-px w-full shrink-0" aria-hidden />}
-          {isWalking && renderedOptions.length > 0 && (
+          {showLoading && renderedOptions.length > 0 && (
             <p className="px-2 pt-1 text-footnote text-grey-04">
               {scannedCount >= 2000 ? `Loading… (${scannedCount.toLocaleString()} rows scanned)` : 'Loading…'}
             </p>
           )}
-          {!isWalking && !isError && hasMoreInScope && renderedOptions.length > 0 && (
-            <p className="px-2 pt-1 text-footnote text-grey-04">
-              {`Scroll or search to load more (${scannedCount.toLocaleString()} rows scanned)`}
-            </p>
+          {!showLoading && !isError && hasMoreInScope && (
+            <button
+              type="button"
+              onClick={() => setDemandGrants(grants => grants + 1)}
+              className="rounded px-2 py-1.5 text-left text-footnote text-grey-04 underline hover:bg-grey-01 hover:text-text"
+            >
+              {`Scan more rows (${scannedCount.toLocaleString()} scanned)`}
+            </button>
           )}
         </div>
       </div>

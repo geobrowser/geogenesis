@@ -39,10 +39,10 @@ function fingerprintIds(ids: string[]): string {
  * the other columns.
  *
  * The walk reads the first AUTO_WALK_PAGES pages on its own; past that it
- * advances only on demand (the user scrolling to the end of the list, or a
- * typed search), so a dropdown on a huge scope cannot crawl the corpus just
- * by sitting open. Closing the menu stops the walk; reopening resumes from
- * the cursor. "No values"/"no matches" are only ever reported once the
+ * advances in bounded grants — reaching the end of the list or the "scan
+ * more" control adds one more window, while a typed search keeps it walking
+ * — so a dropdown on a huge scope cannot crawl the corpus just by sitting
+ * open. Closing the menu stops the walk; reopening resumes from the cursor. "No values"/"no matches" are only ever reported once the
  * scope is exhausted — a paused walk says so instead. Selected and
  * filter-default entities are always present so a preset never goes
  * missing. The tally's per-option counts are partial sums of the scanned
@@ -59,7 +59,8 @@ export function useDropdownOptions({
   collectionItemIds,
   pinned,
   enabled,
-  demand = false,
+  searchDemand = false,
+  demandGrants = 0,
 }: {
   columnId: string;
   baseFilterState: Filter[];
@@ -73,8 +74,10 @@ export function useDropdownOptions({
   /** Ids (with names when known) that must appear regardless of what has loaded. */
   pinned: DropdownOption[];
   enabled: boolean;
-  /** User intent to read past the auto-walk window: scrolled to the end, or searching. */
-  demand?: boolean;
+  /** A typed search wants the whole scope — continuous demand. */
+  searchDemand?: boolean;
+  /** One-shot intents (end of list, "scan more"); each extends the walk by one more auto window. */
+  demandGrants?: number;
 }) {
   const population: DropdownPopulation = React.useMemo(() => {
     const otherColumns = facetColumnIds.filter(id => !ID.equals(id, columnId));
@@ -110,17 +113,18 @@ export function useDropdownOptions({
   // The walk advances on its own for the first pages, then only on demand.
   // An error stops it — without the guard a failing page refires forever —
   // and `retry` resumes it.
+  const targetPages = AUTO_WALK_PAGES * (1 + demandGrants);
   React.useEffect(() => {
     if (!enabled || !hasNextPage || isFetching || isError) return;
-    if (pageCount >= AUTO_WALK_PAGES && !demand) return;
+    if (pageCount >= targetPages && !searchDemand) return;
     void fetchNextPage();
-  }, [enabled, hasNextPage, isFetching, isError, fetchNextPage, pageCount, demand]);
+  }, [enabled, hasNextPage, isFetching, isError, fetchNextPage, pageCount, targetPages, searchDemand]);
 
-  /** Actively reading the scope now (auto window, or demand-driven). */
+  /** Actively reading the scope now (auto window, granted windows, or a search). */
   const isWalking =
     enabled &&
     !isError &&
-    (data === undefined || isFetching || (Boolean(hasNextPage) && (pageCount < AUTO_WALK_PAGES || demand)));
+    (data === undefined || isFetching || (Boolean(hasNextPage) && (pageCount < targetPages || searchDemand)));
 
   /** More of the scope exists beyond what has been read. */
   const hasMoreInScope = Boolean(hasNextPage);

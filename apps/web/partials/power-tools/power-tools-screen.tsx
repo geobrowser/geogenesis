@@ -16,6 +16,7 @@ import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { columnPropertyIdFromRelation, useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { useProperties } from '~/core/hooks/use-properties';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
@@ -235,6 +236,18 @@ export function PowerToolsScreen() {
     return { propertyId: sortState.columnId, direction: sortState.direction };
   }, [sortState]);
 
+  // Shown-column schema entries (e.g. Cover) can be missing from
+  // filterableProperties — the same graph-vs-schema gap useDataBlock
+  // compensates for. Feed them to the overlay so both surfaces compute the
+  // SAME appliedColumnIds for the same block.
+  const { orderedShownColumnRelations: shownRelationsForOverlay } = useView();
+  const shownColumnIdsForOverlay = React.useMemo(
+    () => shownRelationsForOverlay.map(columnPropertyIdFromRelation),
+    [shownRelationsForOverlay]
+  );
+  const overlaySchemaById = useProperties(shownColumnIdsForOverlay, spaceId);
+  const overlaySchemaProperties = React.useMemo(() => Object.values(overlaySchemaById), [overlaySchemaById]);
+
   // Browse-mode personal dropdowns overlay the query (never the persisted
   // filters). Power Tools runs its own filter state, so it applies the
   // shared overlay hook to that state rather than reusing useDataBlock's.
@@ -249,6 +262,7 @@ export function PowerToolsScreen() {
     baseFilterState: effectiveFilterState,
     baseModesByColumn: activeModesByColumn,
     filterableProperties,
+    extraPillProperties: overlaySchemaProperties,
   });
 
   const data = usePowerToolsData({
@@ -264,6 +278,17 @@ export function PowerToolsScreen() {
   });
 
   const { orderedShownColumnRelations, setShownColumnOrder } = useView();
+
+  // Property list for the dropdown config/browse UI: discovered properties
+  // plus the shown-column schema entries the overlay considers, so a column
+  // the overlay applies always resolves a name here.
+  const dropdownUiProperties = React.useMemo(() => {
+    const merged = [...data.properties];
+    for (const property of overlaySchemaProperties) {
+      if (!merged.some(existing => ID.equals(existing.id, property.id))) merged.push(property);
+    }
+    return merged;
+  }, [data.properties, overlaySchemaProperties]);
 
   const propertyIds = React.useMemo(() => data.properties.map(p => p.id), [data.properties]);
   const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);
@@ -936,7 +961,7 @@ export function PowerToolsScreen() {
   const hasActiveFilters = effectiveFilterState.length > 0;
 
   const supportsDropdowns = browseDropdowns.supportsDropdowns;
-  const showBrowseDropdownsRow = !isEditing && supportsDropdowns && browseDropdowns.configs.length > 0;
+  const showBrowseDropdownsRow = !isEditing && supportsDropdowns && browseDropdowns.appliedColumnIds.length > 0;
   const showPillsRow = hasActiveFilters || (isEditing && supportsDropdowns && browseDropdowns.configs.length > 0);
 
   const filterGroups = React.useMemo(() => groupFilters(effectiveFilterState), [effectiveFilterState]);
@@ -1018,7 +1043,7 @@ export function PowerToolsScreen() {
               isEditing && supportsDropdowns ? (
                 <TableBlockDropdownsConfigTrigger
                   configs={browseDropdowns.configs}
-                  properties={data.properties}
+                  properties={dropdownUiProperties}
                   toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                 />
               ) : null
@@ -1083,7 +1108,7 @@ export function PowerToolsScreen() {
           <TableBlockDropdowns
             configs={browseDropdowns.configs}
             appliedColumnIds={browseDropdowns.appliedColumnIds}
-            properties={data.properties}
+            properties={dropdownUiProperties}
             spaceId={spaceId}
             baseFilterState={effectiveFilterState}
             baseModesByColumn={activeModesByColumn}
@@ -1091,6 +1116,7 @@ export function PowerToolsScreen() {
             updateSelections={browseDropdowns.updateSelections}
             hydrated={browseDropdowns.hydrated}
             collectionItemIds={browseDropdowns.collectionItemIds}
+            populationReady={browseDropdowns.populationReady}
           />
         </div>
       )}
@@ -1101,7 +1127,7 @@ export function PowerToolsScreen() {
             {isEditing && supportsDropdowns && (
               <TableBlockDropdownsConfigChips
                 configs={browseDropdowns.configs}
-                properties={data.properties}
+                properties={dropdownUiProperties}
                 toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
               />
             )}

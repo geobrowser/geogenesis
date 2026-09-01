@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { convertWhereConditionToEntityFilter } from '~/core/io/converters';
 
-import { filterStateToWhere } from './filter-state-to-where';
+import { filterStateToWhere, isBacklinkFilter } from './filter-state-to-where';
 import type { Filter } from './filters';
 
 const PROPERTY_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -114,5 +114,15 @@ describe('filterStateToWhere', () => {
     expect(where.AND).toHaveLength(3);
     expect(where.AND?.[0]).toEqual({ spaces: [{ equals: 'space-1' }, { equals: 'space-2' }] });
     expect(where.AND?.slice(1).every(condition => condition.relations?.length === 1)).toBe(true);
+  });
+});
+
+describe('isBacklinkFilter', () => {
+  const base: Filter = { columnId: 'p', columnName: 'Topics', valueType: 'RELATION', value: 'v', valueName: null };
+
+  it('detects the flag and the legacy columnName marker identically', () => {
+    expect(isBacklinkFilter({ ...base, isBacklink: true })).toBe(true);
+    expect(isBacklinkFilter({ ...base, columnName: 'Backlink' })).toBe(true);
+    expect(isBacklinkFilter(base)).toBe(false);
   });
 });

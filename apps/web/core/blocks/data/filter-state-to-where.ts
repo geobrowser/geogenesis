@@ -93,6 +93,16 @@ function mergePlainConditions(conditions: WhereCondition[]): WhereCondition {
   return { AND: [merged, ...unmerged] };
 }
 
+/**
+ * A backlink filter matches rows the value points AT, not rows carrying the
+ * value. Both encodings appear in stored filters (the flag, and the legacy
+ * columnName marker) — every layer must detect them identically or a filter's
+ * direction silently inverts.
+ */
+export function isBacklinkFilter(filter: Filter): boolean {
+  return Boolean(filter.isBacklink) || filter.columnName === 'Backlink';
+}
+
 function buildSingleFilterWhere(filter: Filter): WhereCondition {
   if (filter.valueType === 'TEXT') {
     if (ID.equals(filter.columnId, SystemIds.NAME_PROPERTY)) {
@@ -121,7 +131,7 @@ function buildSingleFilterWhere(filter: Filter): WhereCondition {
       }
       return { types: [{ id: { equals: filter.value } }] };
     }
-    if (filter.isBacklink || filter.columnName === 'Backlink') {
+    if (isBacklinkFilter(filter)) {
       return {
         backlinks: [{ typeOf: { id: { equals: filter.columnId } }, fromEntity: { id: { equals: filter.value } } }],
       };

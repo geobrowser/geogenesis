@@ -178,3 +178,15 @@ describe('slicePopulationIds', () => {
     expect(hasNextPage).toBe(false);
   });
 });
+
+describe('populationVariablesFromWhere OR collapse', () => {
+  it('collapses OR-of-single-type branches like core/io/queries.ts (statement-timeout guard)', () => {
+    const variables = populationVariablesFromWhere(
+      { OR: [{ types: [{ id: { equals: 'type-a' } }] }, { types: [{ id: { equals: 'type-b' } }] }] },
+      100
+    );
+    const json = JSON.stringify(variables.filter);
+    expect(json).toContain('overlaps');
+    expect(json).not.toContain('"or"');
+  });
+});

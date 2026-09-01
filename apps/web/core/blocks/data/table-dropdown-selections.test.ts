@@ -155,3 +155,55 @@ describe('dropdownSelectionsStorageKey', () => {
     expect(dropdownSelectionsStorageKey('rel-1')).not.toBe(dropdownSelectionsStorageKey('rel-2'));
   });
 });
+
+describe('backlink-aware defaults and rebuilds', () => {
+  const backlinkByFlag: Filter = {
+    columnId: 'p1',
+    columnName: 'Topics',
+    valueType: 'RELATION',
+    value: 'b-1',
+    valueName: null,
+    isBacklink: true,
+  };
+  const backlinkByName: Filter = {
+    columnId: 'p1',
+    columnName: 'Backlink',
+    valueType: 'RELATION',
+    value: 'b-2',
+    valueName: null,
+  };
+  const forward: Filter = {
+    columnId: 'p1',
+    columnName: 'Topics',
+    valueType: 'RELATION',
+    value: 'v-1',
+    valueName: 'Value One',
+    typesRelationSpaceId: 'space-s',
+  };
+
+  it('excludes both backlink encodings from the column defaults', () => {
+    expect(filterDefaultsForColumn([backlinkByFlag, backlinkByName, forward], 'p1')).toEqual(['v-1']);
+  });
+
+  it('keeps a still-checked base filter verbatim and scopes new values like the template', () => {
+    const { filterState } = applyDropdownSelectionsToFilters([forward], {}, { p1: ['v-1', 'v-2'] }, ['p1']);
+    const kept = filterState.find(f => f.value === 'v-1');
+    const added = filterState.find(f => f.value === 'v-2');
+    // Reused object: valueName and space scoping survive untouched.
+    expect(kept).toBe(forward);
+    expect(added?.typesRelationSpaceId).toBe('space-s');
+  });
+
+  it('preserves legacy-marked backlinks and their OR mode while replacing forward filters', () => {
+    const { filterState, modesByColumn } = applyDropdownSelectionsToFilters(
+      [backlinkByName, forward],
+      { p1: 'OR' },
+      { p1: ['v-2'] },
+      ['p1']
+    );
+    expect(filterState).toContain(backlinkByName);
+    expect(filterState.some(f => f.value === 'v-1')).toBe(false);
+    // Single selection with a backlink sharing the column must not delete the mode.
+    expect(modesByColumn.p1).toBe('OR');
+  });
+});
