@@ -4,8 +4,19 @@ import { renderHook, waitFor } from '@testing-library/react';
 import * as React from 'react';
 
 import { Effect } from 'effect';
-
 import { describe, expect, it, vi } from 'vitest';
+
+import type { DebateRematchParticipant } from './api';
+import type { ParticipantPosition } from './participant-positions';
+import {
+  applyPendingPositions,
+  fetchParticipantPositions,
+  groupParticipantPositions,
+  isParticipantPositionsQueryKey,
+  participantPositionsQueryKey,
+  participantSidesOn,
+  useParticipantPositions,
+} from './participant-positions';
 
 const mocks = vi.hoisted(() => ({ graphql: vi.fn(), attention: true }));
 
@@ -16,16 +27,6 @@ vi.mock('~/core/io/graphql-client', () => ({
   graphql: (...args: unknown[]) => mocks.graphql(...args),
 }));
 vi.mock('./debate-attention', () => ({ useDebateAttention: () => mocks.attention }));
-
-import type { DebateRematchParticipant } from './api';
-import {
-  fetchParticipantPositions,
-  groupParticipantPositions,
-  isParticipantPositionsQueryKey,
-  participantPositionsQueryKey,
-  participantSidesOn,
-  useParticipantPositions,
-} from './participant-positions';
 
 const LOCAL: DebateRematchParticipant = {
   user_id: 'user-local',
@@ -206,5 +207,59 @@ describe('useParticipantPositions holding its list', () => {
     rerender({ participants: [LOCAL] });
 
     expect(result.current.byClaim.size).toBe(1);
+  });
+});
+
+describe('applyPendingPositions (GEO-2784)', () => {
+  const FETCHED: ParticipantPosition[] = [
+    { profileSpaceId: 'me', claimId: 'c1', spaceId: 's1', responseKind: 'stance', position: true },
+    { profileSpaceId: 'them', claimId: 'c2', spaceId: 's1', responseKind: 'stance', position: false },
+  ];
+
+  it('shows an in-flight position that the fetch has not returned yet', () => {
+    const pending: ParticipantPosition[] = [
+      { profileSpaceId: 'me', claimId: 'c9', spaceId: 's1', responseKind: 'stance', position: true },
+    ];
+    const merged = applyPendingPositions(FETCHED, pending);
+    expect(merged).toHaveLength(3);
+    expect(merged.find(r => r.claimId === 'c9')?.position).toBe(true);
+  });
+
+  it('a pending write overrides a stale fetched row for the same claim', () => {
+    const pending: ParticipantPosition[] = [
+      { profileSpaceId: 'me', claimId: 'c1', spaceId: 's1', responseKind: 'stance', position: false },
+    ];
+    const merged = applyPendingPositions(FETCHED, pending);
+    expect(merged).toHaveLength(2);
+    expect(merged.find(r => r.claimId === 'c1')?.position).toBe(false);
+  });
+
+  /* The removal case, and the reason a tombstone is carried rather than dropped: without it the
+     stale fetched row keeps the position on screen until the next refetch. */
+  it('a pending removal hides the fetched row immediately', () => {
+    const pending = [
+      { profileSpaceId: 'me', claimId: 'c1', spaceId: 's1', responseKind: 'stance', position: null },
+    ] as unknown as ParticipantPosition[];
+    const merged = applyPendingPositions(FETCHED, pending);
+    expect(merged.map(r => r.claimId)).toEqual(['c2']);
+  });
+
+  it('matches ids regardless of dash spelling, like every other comparison here', () => {
+    const pending: ParticipantPosition[] = [
+      { profileSpaceId: 'ME', claimId: 'C1', spaceId: 's1', responseKind: 'stance', position: false },
+    ];
+    expect(applyPendingPositions(FETCHED, pending)).toHaveLength(2);
+  });
+
+  it('leaves the fetched list untouched when nothing is in flight', () => {
+    expect(applyPendingPositions(FETCHED, [])).toBe(FETCHED);
+  });
+
+  it("does not touch the opponent's rows", () => {
+    const pending: ParticipantPosition[] = [
+      { profileSpaceId: 'me', claimId: 'c2', spaceId: 's1', responseKind: 'stance', position: true },
+    ];
+    const merged = applyPendingPositions(FETCHED, pending);
+    expect(merged.filter(r => r.claimId === 'c2')).toHaveLength(2);
   });
 });

@@ -22,8 +22,13 @@ describe('EntityPageSidebarLayout', () => {
 
     const rail = screen.getByRole('complementary');
 
-    expect([...rail.classList]).toContain('w-[var(--width-side-rail)]');
+    // Fluid between the two tokens rather than a flat 360px: a fixed rail was what starved the
+    // feed beside it between 1024px and ~1200px (GEO-2774).
+    expect([...rail.classList]).toContain('w-[min(var(--width-side-rail),32%)]');
+    expect([...rail.classList]).toContain('min-w-[var(--width-side-rail-min)]');
+    // Still shrink-0, so flexbox cannot take it under the floor — past the floor it is dropped.
     expect([...rail.classList]).toContain('shrink-0');
+    expect([...rail.classList]).toContain('lg:hidden');
     expect(rail.textContent).toBe('Rail');
     expect(
       screen

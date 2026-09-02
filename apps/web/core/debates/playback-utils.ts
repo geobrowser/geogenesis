@@ -23,6 +23,10 @@ export function hasProcessedVideo(media: DebateMediaResponse | undefined): boole
   return media?.artifacts.some(artifact => artifact.kind === 'final_video') ?? false;
 }
 
+export function hasSocialVideo(media: DebateMediaResponse | undefined): boolean {
+  return media?.artifacts.some(artifact => artifact.kind === 'social_video') ?? false;
+}
+
 export function normalizeTurnDurationsMs(values: number[]) {
   const normalized = values.filter(value => Number.isFinite(value) && value > 0);
   return normalized.length > 0 ? normalized : [30_000, 30_000];
@@ -99,4 +103,46 @@ export function orderedParticipants(debate: Debate) {
 
 export function speakerLabel(participant: Pick<DebateParticipant, 'display_name' | 'profile_space_id'>) {
   return participant.display_name || participant.profile_space_id;
+}
+
+/** The two elements this helper needs, so tests do not have to build a whole `HTMLVideoElement`. */
+export type PlayableVideo = Pick<HTMLVideoElement, 'muted' | 'paused'> & { play: () => Promise<void> };
+
+export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked';
+
+/**
+ * Start both recordings, falling back to muted when the browser blocks unmuted autoplay
+ * (GEO-2783).
+ *
+ * `play()` is rejected — or resolves while leaving the element paused — when it is not driven by a
+ * user gesture and the video has audio. The debate feed calls this from an effect as a debate
+ * scrolls into view, and the viewer's mute preference is a session-wide atom, so once anything has
+ * been unmuted every later autoplay is blocked and the viewer sees "Could not play both videos"
+ * for doing nothing.
+ *
+ * A blocked unmuted play is a request the browser will honour muted, so it is asked again muted
+ * before giving up. `'playing-muted'` is reported rather than folded into `'playing'` because the
+ * caller has to record that audio is now off — otherwise the UI offers a "mute" control on a
+ * silent video and the next autoplay fails identically.
+ *
+ * Both elements are checked for `paused` as well as the promise settling: a rejected `play()` and
+ * a resolved-but-still-paused one are both blocks, and only one of them throws.
+ */
+export async function playBothWithMutedFallback(
+  primary: PlayableVideo,
+  secondary: PlayableVideo
+): Promise<PlayBothOutcome> {
+  const attempt = async () => {
+    const results = await Promise.allSettled([primary.play(), secondary.play()]);
+    return results.every(result => result.status === 'fulfilled') && !primary.paused && !secondary.paused;
+  };
+
+  if (await attempt()) return 'playing';
+
+  // Nothing to retry if audio was already off — the block is not the autoplay policy.
+  if (primary.muted && secondary.muted) return 'blocked';
+
+  primary.muted = true;
+  secondary.muted = true;
+  return (await attempt()) ? 'playing-muted' : 'blocked';
 }

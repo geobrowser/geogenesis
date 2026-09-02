@@ -15,13 +15,6 @@ const mocks = vi.hoisted(() => ({
   processedIds: null as string[] | null,
   mediaLoading: false,
   mediaError: false,
-  mediaMutate: vi.fn(),
-  fetch: vi.fn(),
-  share: vi.fn(),
-  canShare: vi.fn(),
-  createObjectURL: vi.fn(() => 'blob:https://geo.test/social-video'),
-  revokeObjectURL: vi.fn(),
-  downloadClick: vi.fn(),
   entityVoteProps: [] as Array<Record<string, unknown>>,
   /** Debate entity ids in "Best" order. Empty = the ranking covers nothing, so recency stands. */
   bestOrderIds: [] as string[],
@@ -61,7 +54,6 @@ vi.mock('~/core/debates/hooks', () => ({
     isLoading: mocks.mediaLoading,
     hasError: mocks.mediaError,
   }),
-  useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate }),
   useDebate: () => ({ data: mocks.anchorDebate, isLoading: mocks.anchorLoading, error: mocks.anchorError }),
 }));
 
@@ -129,6 +121,9 @@ vi.mock('./debate-scroll-hint', () => ({
 vi.mock('./debate-claims-panel', () => ({
   DebateClaimsPanel: ({ debate }: { debate: Debate }) => <div>Claims panel for {debate.id}</div>,
 }));
+vi.mock('./share-dialog', () => ({
+  DebateShareDialog: () => null,
+}));
 vi.mock('~/core/debates/matchmaking/use-debates-hub', () => ({
   useDebatesHub: () => ({
     isOpen: mocks.hubIsOpen,
@@ -182,14 +177,6 @@ beforeEach(() => {
   mocks.claimsCount = 0;
   mocks.mediaLoading = false;
   mocks.mediaError = false;
-  mocks.createObjectURL.mockReturnValue('blob:https://geo.test/social-video');
-  mocks.fetch.mockResolvedValue(videoResponse());
-  mocks.canShare.mockReturnValue(false);
-  mocks.mediaMutate.mockImplementation((variables, options) => {
-    if (variables.request.kind === 'social_video') {
-      options.onSuccess({ upload: { url: `https://video.test/${variables.debateId}.mp4` } });
-    }
-  });
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -218,15 +205,6 @@ beforeEach(() => {
       disconnect() {}
     }
   );
-  vi.stubGlobal('fetch', mocks.fetch);
-  Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
-  Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
-  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: mocks.createObjectURL });
-  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: mocks.revokeObjectURL });
-  Object.defineProperty(HTMLAnchorElement.prototype, 'click', {
-    configurable: true,
-    value: mocks.downloadClick,
-  });
 });
 
 afterEach(() => {
@@ -260,7 +238,7 @@ describe('DebatesBrowseFeed header links', () => {
   });
 });
 
-describe('DebatesBrowseFeed video sharing', () => {
+describe('DebatesBrowseFeed layout and scroll nudge', () => {
   it('uses the full-screen responsive layout and design copy', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
 
@@ -549,209 +527,6 @@ describe('DebatesBrowseFeed video sharing', () => {
     render(<DebatesBrowseFeed spaceId="space-1" />);
     expect(screen.getAllByTestId('scroll-hint')).toHaveLength(1);
   });
-
-  it('waits for five seconds of active dwell and never prepares an adjacent debate', async () => {
-    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(4_999);
-    expect(mocks.mediaMutate).not.toHaveBeenCalled();
-
-    await advance(1);
-    expect(mocks.mediaMutate).toHaveBeenCalledTimes(1);
-    expect(mocks.mediaMutate).toHaveBeenCalledWith(
-      { debateId: 'debate-1', request: { kind: 'social_video' } },
-      expect.any(Object)
-    );
-    expect(mocks.mediaMutate.mock.calls.every(([variables]) => variables.request.kind !== 'social_preview_image')).toBe(
-      true
-    );
-    expect(mocks.mediaMutate).not.toHaveBeenCalledWith(
-      { debateId: 'debate-2', request: expect.anything() },
-      expect.anything()
-    );
-  });
-
-  it('cancels a fast-scroll dwell and starts a fresh five-second dwell for the new active debate', async () => {
-    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(3_000);
-    activateDebate('Adjacent debate');
-    await advance(4_999);
-    expect(mocks.mediaMutate).not.toHaveBeenCalled();
-
-    await advance(1);
-    expect(mocks.mediaMutate).toHaveBeenCalledTimes(1);
-    expect(mocks.mediaMutate).toHaveBeenCalledWith(
-      { debateId: 'debate-2', request: { kind: 'social_video' } },
-      expect.any(Object)
-    );
-  });
-
-  it('aborts an in-flight preparation and revokes a ready blob when scrolling away', async () => {
-    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
-    let downloadSignal: AbortSignal | undefined;
-    mocks.fetch.mockImplementationOnce((_url, init) => {
-      downloadSignal = init.signal;
-      return new Promise(() => undefined);
-    });
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    expect(downloadSignal).toBeDefined();
-    activateDebate('Adjacent debate');
-    expect(downloadSignal?.aborted).toBe(true);
-
-    cleanup();
-    mocks.fetch.mockResolvedValue(videoResponse());
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-    await advance(5_000);
-    await flushPromises();
-    expect(mocks.createObjectURL).toHaveBeenCalled();
-
-    activateDebate('Adjacent debate');
-    expect(mocks.revokeObjectURL).toHaveBeenCalledWith('blob:https://geo.test/social-video');
-  });
-
-  it('does not start an MP4 download when the artifact URL arrives after deactivation', async () => {
-    mocks.debates.push(completedDebate('debate-2', 'Adjacent debate', '2026-07-01T00:01:10.000Z'));
-    let videoRequestOptions: { onSuccess: (response: { upload: { url: string } }) => void } | undefined;
-    mocks.mediaMutate.mockImplementation((variables, options) => {
-      if (variables.request.kind === 'social_video') videoRequestOptions = options;
-    });
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    expect(videoRequestOptions).toBeDefined();
-    activateDebate('Adjacent debate');
-    videoRequestOptions?.onSuccess({ upload: { url: 'https://video.test/debate-1.mp4' } });
-    await flushPromises();
-
-    expect(mocks.fetch).not.toHaveBeenCalled();
-  });
-
-  it('keeps both preparing controls focusable, unavailable, and explained by a tooltip', async () => {
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    const shareButtons = screen.getAllByRole('button', { name: 'Share debate video (preparing)' });
-    expect(shareButtons).toHaveLength(2);
-    for (const button of shareButtons) {
-      expect(button).toHaveAttribute('aria-disabled', 'true');
-      expect(button).not.toBeDisabled();
-    }
-
-    fireEvent.focus(shareButtons[0]);
-    await advance(300);
-    expect(screen.getAllByText('Preparing video for sharing… You can share soon.').length).toBeGreaterThan(0);
-  });
-
-  it('turns preparation failure into an enabled retry that starts immediately while active', async () => {
-    let requestCount = 0;
-    mocks.mediaMutate.mockImplementation((variables, options) => {
-      if (variables.request.kind !== 'social_video') return;
-      requestCount += 1;
-      if (requestCount === 1) options.onError(new Error('Video unavailable'));
-    });
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    const retryButtons = screen.getAllByRole('button', { name: 'Retry debate video preparation' });
-    expect(retryButtons).toHaveLength(2);
-    expect(retryButtons[0]).toHaveAttribute('aria-disabled', 'false');
-
-    fireEvent.click(retryButtons[0]);
-    expect(requestCount).toBe(2);
-  });
-
-  it('shares only the claim title and prepared MP4 from either ready control', async () => {
-    mocks.canShare.mockReturnValue(true);
-    mocks.share.mockResolvedValue(undefined);
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    await flushPromises();
-    const shareButtons = screen.getAllByRole('button', { name: 'Share debate video' });
-    expect(shareButtons).toHaveLength(2);
-    expect(shareButtons.every(button => button.getAttribute('aria-disabled') === 'false')).toBe(true);
-    fireEvent.focus(shareButtons[0]);
-    await advance(300);
-    expect(screen.queryByText('Share the debate video.')).not.toBeInTheDocument();
-
-    fireEvent.click(shareButtons[1]);
-    const file = mocks.share.mock.calls[0]?.[0].files[0] as File;
-    expect(file).toBeInstanceOf(File);
-    expect(file.name).toBe('debate-debate-1-social.mp4');
-    expect(mocks.share).toHaveBeenCalledWith({ title: 'Debates are useful', files: [file] });
-    expect(mocks.share.mock.calls[0]?.[0]).not.toHaveProperty('url');
-    expect(mocks.share.mock.calls[0]?.[0]).not.toHaveProperty('text');
-  });
-
-  it('downloads the prepared MP4 when native file sharing is unsupported', async () => {
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    await flushPromises();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Download debate video' })[0]);
-
-    expect(mocks.downloadClick).toHaveBeenCalledTimes(1);
-    const downloadLink = mocks.downloadClick.mock.instances[0] as HTMLAnchorElement;
-    expect(downloadLink.href).toBe('blob:https://geo.test/social-video');
-    expect(downloadLink.download).toBe('debate-debate-1-social.mp4');
-    expect(mocks.share).not.toHaveBeenCalled();
-  });
-
-  it('keeps cancellation silent and a real handoff failure retryable without redownloading', async () => {
-    mocks.canShare.mockReturnValue(true);
-    mocks.share
-      .mockRejectedValueOnce(new DOMException('Cancelled', 'AbortError'))
-      .mockRejectedValueOnce(new Error('Share service unavailable'))
-      .mockResolvedValueOnce(undefined);
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    await flushPromises();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Share debate video' })[0]);
-    await flushPromises();
-    expect(screen.queryByRole('button', { name: /try sharing/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Share debate video' })[0]);
-    await flushPromises();
-    const retryButtons = screen.getAllByRole('button', { name: 'Try sharing debate video again' });
-    expect(retryButtons).toHaveLength(2);
-    expect(mocks.mediaMutate).toHaveBeenCalledTimes(1);
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(retryButtons[1]);
-    await flushPromises();
-    expect(mocks.share).toHaveBeenCalledTimes(3);
-    expect(mocks.mediaMutate).toHaveBeenCalledTimes(1);
-    expect(mocks.fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it('prevents duplicate handoffs across the horizontal and vertical controls', async () => {
-    mocks.canShare.mockReturnValue(true);
-    let resolveShare: (() => void) | undefined;
-    mocks.share.mockReturnValue(new Promise<void>(resolve => (resolveShare = resolve)));
-    render(<DebatesBrowseFeed spaceId="space-1" />);
-
-    await advance(5_000);
-    await flushPromises();
-    const shareButtons = screen.getAllByRole('button', { name: 'Share debate video' });
-    fireEvent.click(shareButtons[0]);
-    fireEvent.click(shareButtons[1]);
-
-    expect(mocks.share).toHaveBeenCalledTimes(1);
-    const sharingButtons = screen.getAllByRole('button', { name: 'Sharing debate video' });
-    expect(sharingButtons).toHaveLength(2);
-    expect(sharingButtons.every(button => button.getAttribute('aria-disabled') === 'true')).toBe(true);
-    fireEvent.focus(sharingButtons[0]);
-    await advance(300);
-    expect(screen.queryByText('Opening sharing options…')).not.toBeInTheDocument();
-
-    resolveShare?.();
-    await flushPromises();
-  });
 });
 
 describe('DebatesBrowseFeed comments', () => {
@@ -1021,13 +796,6 @@ function activateDebate(claim: string) {
       ],
       observer.instance
     );
-  });
-}
-
-function videoResponse() {
-  return new Response(new Uint8Array([1, 2, 3]), {
-    status: 200,
-    headers: { 'content-length': '3', 'content-type': 'video/mp4' },
   });
 }
 

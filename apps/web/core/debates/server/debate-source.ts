@@ -1,4 +1,10 @@
+import {
+  type DebateOgCardData,
+  type DebateOgSpeaker,
+  generateDebateOgImageResponse,
+} from '~/core/debates/debate-og-image';
 import { uploadGeoImage } from '~/core/sdk/geo-client';
+import { getImagePath } from '~/core/utils/utils';
 
 import type {
   Debate,
@@ -22,6 +28,84 @@ function geoChatBaseUrl() {
   const base =
     process.env.GEO_CHAT_API_BASE_URL || process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL || 'http://localhost:8080';
   return base.replace(/\/+$/, '');
+}
+
+/**
+ * The public host published media URLs are built from. Published URLs are written on-chain and
+ * opened by browsers, so only `NEXT_PUBLIC_` variables are read; `GEO_CHAT_API_BASE_URL` may be a
+ * cluster-internal host. `NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL` allows media to move to its own
+ * hostname later without touching published entities.
+ */
+function debateMediaBaseUrl() {
+  const configured = process.env.NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL || process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL;
+  // The localhost fallback is for development only.
+  if (!configured && process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'Refusing to publish debate media URLs: no public media host is configured. Set ' +
+        'NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL (or NEXT_PUBLIC_GEO_CHAT_API_BASE_URL) to the browser-reachable ' +
+        'geo-chat host, because published URLs are written on-chain and cannot be changed afterwards.'
+    );
+  }
+  const base = (configured || 'http://localhost:8080').replace(/\/+$/, '');
+  // The `/geo-chat-proxy` dev setup in `next.config.ts` makes this a relative path, which cannot
+  // be used as a published URL.
+  const parsed = parseAbsoluteHttpUrl(base);
+  if (!parsed) {
+    throw new Error(
+      `Refusing to publish debate media URLs built on ${base}: the media host must be an absolute ` +
+        'http(s) URL, because it is written on-chain and cannot be changed afterwards. ' +
+        'Set NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL to a public host.'
+    );
+  }
+  // A query or fragment on the base would take the artifact path into the query string.
+  if (/[?#]/.test(base)) {
+    throw new Error(
+      `Refusing to publish debate media URLs built on ${base}: the media host must not carry a query string or fragment.`
+    );
+  }
+  // Geo is served over https; http media would be blocked as mixed content.
+  if (process.env.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
+    throw new Error(
+      `Refusing to publish debate media URLs built on ${base}: the media host must use https in production.`
+    );
+  }
+  return base;
+}
+
+function parseAbsoluteHttpUrl(value: string): URL | null {
+  if (!/^https?:\/\//i.test(value)) return null;
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+/** Throws if the media host cannot produce a valid published URL. The sweep calls this once up front. */
+export function assertDebateMediaHostConfigured(): void {
+  debateMediaBaseUrl();
+}
+
+/**
+ * The durable URL for a debate media artifact. geo-chat resolves it by (debate, kind) and
+ * 302-redirects to a fresh presigned GET, so it survives reprocessing and 404s once deleted.
+ */
+function durableArtifactUrl(debateId: string, kind: DebateMediaArtifactKind): string {
+  return `${debateMediaBaseUrl()}/debates/${debateId}/media/artifacts/${kind}/content`;
+}
+
+/**
+ * Checks that geo-chat serves the durable URL before it is written on-chain. A non-2xx/3xx answer
+ * is treated as not ready (typically geo-chat has not deployed the content route yet). The 302 is
+ * the expected answer, so redirects are not followed.
+ */
+async function assertDurableArtifactUrlResolves(debateId: string, url: string): Promise<void> {
+  const response = await fetch(url, { method: 'HEAD', redirect: 'manual', cache: 'no-store' });
+  if (response.status >= 200 && response.status < 400) return;
+  throw new DebateNotPublishableError(
+    'media_not_ready',
+    `Debate ${debateId} durable media URL ${url} does not resolve yet (${response.status}).`
+  );
 }
 
 /** Carries geo-chat's HTTP status so the route can tell a permanent 4xx (bad id) from a transient 5xx. */
@@ -71,11 +155,7 @@ export type DebateSource = {
  * backlog.
  */
 export type DebateNotPublishableCode =
-  | 'not_complete'
-  | 'recording_cancelled'
-  | 'cancellation_window_open'
-  | 'media_not_ready'
-  | 'media_failed';
+  'not_complete' | 'recording_cancelled' | 'cancellation_window_open' | 'media_not_ready' | 'media_failed';
 
 export class DebateNotPublishableError extends Error {
   code: DebateNotPublishableCode;
@@ -96,6 +176,15 @@ export async function listSweepCandidateDebateIds(spaceId: string): Promise<stri
   const response = await geoChatGet<SpaceDebatesResponse>(`/spaces/${spaceId}/debates`);
   const now = Date.now();
   return response.debates.filter(debate => isDebatePublishableNow(debate, now)).map(debate => debate.id);
+}
+
+/**
+ * The space a debate publishes into (its claim's space). Lets the acceptor check editor rights
+ * before {@link loadDebatePublishSource} renders and pins the share card.
+ */
+export async function loadDebateClaimSpaceId(debateId: string): Promise<string> {
+  const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
+  return debate.claim.space_id;
 }
 
 /**
@@ -142,10 +231,16 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     );
   }
 
-  const videoUrl = await pinArtifactToIpfs(debateId, 'final_video');
+  // Build and check the durable URLs before the share card is pinned, so a refused publish does not
+  // leave an orphaned IPFS pin.
+  const videoUrl = durableArtifactUrl(debateId, 'final_video');
   const keyframeUrl = media.artifacts.some(artifact => artifact.kind === 'preview_image')
-    ? await pinKeyframeToIpfs(debateId)
+    ? durableArtifactUrl(debateId, 'preview_image')
     : null;
+  await assertDurableArtifactUrlResolves(debateId, videoUrl);
+  if (keyframeUrl) await assertDurableArtifactUrlResolves(debateId, keyframeUrl);
+
+  const ogImageUrl = await buildDebateShareCard(debateId, debate, media);
   // Prefer geo-chat's canonical turns + pre-attributed claims (extracted in its media job, next to
   // transcription). geo-chat is the single authority on turn boundaries, so its `turn_index` lines
   // the published transcript blocks up with the claims exactly. Falls back to merging the raw
@@ -169,6 +264,7 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     participants,
     videoUrl,
     keyframeUrl,
+    ogImageUrl,
     transcriptTurns,
     claims,
   };
@@ -205,34 +301,98 @@ function debatePublicationDeadline(debate: Debate): number | null {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-/**
- * Pin a geo-chat media artifact to IPFS and return its permanent `ipfs://` URI.
- *
- * geo-chat only hands out presigned object-store URLs, and those expire after 15 minutes, so a
- * published one is dead well before anyone opens the entity. Download the bytes while the URL is
- * still valid and pin those instead.
- *
- * Uploaded as a blob rather than by URL: the SDK's URL path rejects any body that isn't an image,
- * and the final video is a webm.
- */
-async function pinArtifactToIpfs(debateId: string, kind: DebateMediaArtifactKind): Promise<string> {
+/** A presigned object-store URL for one media artifact. Expires in ~15 minutes. */
+async function artifactUrl(debateId: string, kind: DebateMediaArtifactKind): Promise<string> {
   const { upload } = await geoChatPost<{ upload: { url: string } }>(`/debates/${debateId}/media/artifacts/url`, {
     kind,
   });
-  const response = await fetch(upload.url, { cache: 'no-store' });
-  if (!response.ok) {
-    throw new Error(`Downloading ${kind} for debate ${debateId} failed (${response.status}).`);
-  }
-  const { cid } = await uploadGeoImage({ blob: await response.blob() });
-  return cid;
+  return upload.url;
 }
 
-async function pinKeyframeToIpfs(debateId: string): Promise<string | null> {
+/**
+ * Render the share card and pin it, or return null (GEO-2755).
+ *
+ * Null on any failure, deliberately. This sits in the path that writes the Debate and Video
+ * entities on-chain, and a debate that fails to publish is a far worse outcome than one published
+ * without a share card.
+ *
+ * **Both speaker stills are required.** The card is generated once at publish time and never
+ * revisited, so falling back to the placeholder panels would bake them in permanently. A debate
+ * whose stills are missing — anything rendered before geo-chat learned to produce them — is better
+ * off with no card than with a wrong one that can never be corrected.
+ */
+type DebateSpeakerLike = Debate['participants'][number];
+
+/** One speaker as the card wants them. Shared so the preview route cannot drift from the real card. */
+function cardSpeaker(participant: DebateSpeakerLike, stillSrc: string): DebateOgSpeaker {
+  return {
+    name: participant.display_name ?? 'Anonymous',
+    stance: participant.position_label,
+    avatarSrc: participant.avatar_cid ? getImagePath(participant.avatar_cid) : null,
+    stillSrc,
+  };
+}
+
+/**
+ * Everything the share card needs for one real debate, for the preview route (GEO-2755).
+ *
+ * The stills are presigned and expire in about fifteen minutes, which is fine here and is exactly
+ * why the preview resolves them per request rather than handing anyone a URL with them baked in.
+ * Throws `GeoChatRequestError` for an unknown id, and returns null when the debate is real but has
+ * no stills — the same bar the published card holds to.
+ */
+export async function loadDebateOgPreview(debateId: string): Promise<DebateOgCardData | null> {
+  const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
+  const media = await geoChatGet<DebateMediaResponse>(`/debates/${debateId}/media`);
+
+  const bySlot = (slot: number) => debate.participants.find(participant => participant.participant_slot === slot);
+  const [first, second] = [bySlot(1), bySlot(2)];
+  if (!first || !second) return null;
+
+  const hasStill = (kind: string) => media.artifacts.some(artifact => artifact.kind === kind);
+  if (!hasStill('speaker_still_slot_1') || !hasStill('speaker_still_slot_2')) return null;
+
+  const [stillOne, stillTwo] = await Promise.all([
+    artifactUrl(debateId, 'speaker_still_slot_1' as DebateMediaArtifactKind),
+    artifactUrl(debateId, 'speaker_still_slot_2' as DebateMediaArtifactKind),
+  ]);
+
+  return {
+    claim: debate.claim.claim,
+    speakers: [cardSpeaker(first, stillOne), cardSpeaker(second, stillTwo)],
+  };
+}
+
+async function buildDebateShareCard(
+  debateId: string,
+  debate: Debate,
+  media: DebateMediaResponse
+): Promise<string | null> {
   try {
-    return await pinArtifactToIpfs(debateId, 'preview_image');
+    const bySlot = (slot: number) => debate.participants.find(participant => participant.participant_slot === slot);
+    const [first, second] = [bySlot(1), bySlot(2)];
+    if (!first || !second) return null;
+
+    const hasStill = (kind: string) => media.artifacts.some(artifact => artifact.kind === kind);
+    if (!hasStill('speaker_still_slot_1') || !hasStill('speaker_still_slot_2')) {
+      console.warn(`[debate-acceptor] debate ${debateId} has no speaker stills; publishing without a share card.`);
+      return null;
+    }
+
+    const [stillOne, stillTwo] = await Promise.all([
+      artifactUrl(debateId, 'speaker_still_slot_1' as DebateMediaArtifactKind),
+      artifactUrl(debateId, 'speaker_still_slot_2' as DebateMediaArtifactKind),
+    ]);
+
+    const response = generateDebateOgImageResponse({
+      claim: debate.claim.claim,
+      speakers: [cardSpeaker(first, stillOne), cardSpeaker(second, stillTwo)],
+    });
+    const blob = new Blob([await response.arrayBuffer()], { type: 'image/png' });
+    const { cid } = await uploadGeoImage({ blob });
+    return cid;
   } catch (error) {
-    // A missing poster shouldn't hold back the Debate + Video entities.
-    console.warn(`[debate-acceptor] could not pin keyframe for ${debateId}; publishing without one.`, error);
+    console.warn(`[debate-acceptor] could not build a share card for ${debateId}; publishing without one.`, error);
     return null;
   }
 }
