@@ -1,6 +1,6 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { HIDDEN_PROPERTIES } from '~/core/constants';
+import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY } from '~/core/constants';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
 import { getSpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -69,6 +69,53 @@ export function cover(relations?: Relation[]): string | null {
   // For now, return the relation value directly since we can't use hooks in utility functions
   // The calling components should handle fetching the actual image URL
   return coverRelation.toEntity.value ?? null;
+}
+
+/**
+ * The image to put on a share card, in the order an entity would want it chosen.
+ *
+ * OG Image first, because it is the only one of the three actually chosen for this job — a cover is
+ * framed to sit behind a page and an avatar to read at 20px, and a 600x315 card in someone else's
+ * feed is neither. Cover and then avatar behind it, unchanged, so an entity that has never heard of
+ * the new property shares exactly as it did before; `generateOgImage` still supplies the default
+ * card when all three are absent.
+ *
+ * Read like `cover` because it is shaped like `cover`: relation-typed, pointing at an Image entity
+ * that carries the URL.
+ */
+export function ogImage(relations?: Relation[]): string | null {
+  if (!relations) return null;
+  const ogImageRelation = relations.find(r => r.type.id === EntityId(OG_IMAGE_PROPERTY));
+  if (!ogImageRelation) return null;
+  // `RelationDtoLive` fills `toEntity.value` from the *target*: the IPFS URL when the target is an
+  // Image, and the target's own entity id when it is not. Checking `renderableType` is what tells
+  // those two apart — without it, an OG Image pointed at some ordinary entity would hand a bare id
+  // to the card as though it were a URL.
+  if (ogImageRelation.renderableType !== 'IMAGE') return null;
+  return usableImageUrl(ogImageRelation.toEntity.value);
+}
+
+/**
+ * Guards the two ways a relation can name no usable image.
+ *
+ * Empty is not hypothetical: `RelationDtoLive` writes `''` whenever the target resolves as an Image
+ * but carries no `IMAGE_URL_PROPERTY` yet, which is what an upload mid-flight looks like. And `??`
+ * falls through on null but *not* on `''`, so an OG Image in that state at the front of the chain
+ * would shadow a cover that works and put a broken card on every share of the entity — setting the
+ * property badly would be worse than never having set it.
+ */
+function usableImageUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * The whole share-image chain in one call, so the routes that need it cannot disagree about the
+ * order. Returns null when the entity offers nothing and the caller should fall back to the default
+ * card.
+ */
+export function shareImage(relations?: Relation[]): string | null {
+  return ogImage(relations) ?? usableImageUrl(cover(relations)) ?? usableImageUrl(avatar(relations));
 }
 
 export function spaces(values?: Value[], relations?: Relation[]): string[] {

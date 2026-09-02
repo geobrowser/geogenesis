@@ -14,6 +14,6 @@ export default async function Image({ params }: Props) {
   const { id } = await params;
   const space = await cachedFetchSpace(id);
   const entity = space?.entity;
-  const imageUrl = Entities.cover(entity?.relations) ?? Entities.avatar(entity?.relations);
+  const imageUrl = Entities.shareImage(entity?.relations);
   return generateOgImage(imageUrl ?? undefined);
 }

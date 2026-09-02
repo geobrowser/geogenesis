@@ -1,11 +1,21 @@
-import { SystemIds } from '@geoprotocol/geo-sdk';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 
 import { describe, expect, it } from 'vitest';
 
-import { HIDDEN_PROPERTIES, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
 import { Relation, Value } from '~/core/types';
 
-import { description, descriptionTriple, name, nameValue, spaces } from './entities';
+import {
+  avatar,
+  cover,
+  description,
+  descriptionTriple,
+  name,
+  nameValue,
+  ogImage,
+  shareImage,
+  spaces,
+} from './entities';
 
 const valuesWithSystemDescriptionAttribute: Value[] = [
   {
@@ -123,5 +133,77 @@ describe('Entity space helpers', () => {
     } as Relation;
 
     expect(spaces([value(SCORE_SYSTEM_PROPERTY, 'hidden-space')], [relation])).toEqual(['relation-space']);
+  });
+});
+
+/**
+ * GEO-2782. OG Image goes in front of the chain because it is the only one of the three actually
+ * chosen for a share card: a cover is framed to sit behind a page and an avatar to read at 20px.
+ *
+ * It is relation-typed and points at an Image entity — the same shape as Cover and Avatar, checked
+ * against the graph rather than assumed — so it is read the same way.
+ */
+const imageRelation = (propertyId: string, url: string, spaceId = 'space-1'): Relation => ({
+  id: `relation-${propertyId}-${spaceId}`,
+  entityId: 'relation-entity',
+  type: { id: propertyId, name: 'Image property' },
+  fromEntity: { id: 'entity-1', name: 'Entity' },
+  toEntity: { id: `image-${url}`, name: 'Image', value: url },
+  renderableType: 'IMAGE',
+  spaceId,
+});
+
+const OG = imageRelation(OG_IMAGE_PROPERTY, 'ipfs://og');
+const COVER = imageRelation(SystemIds.COVER_PROPERTY, 'ipfs://cover');
+const AVATAR = imageRelation(ContentIds.AVATAR_PROPERTY, 'ipfs://avatar');
+
+describe('Entity share-image helpers', () => {
+  it('reads the OG Image relation the same way cover and avatar are read', () => {
+    expect(ogImage([OG])).toBe('ipfs://og');
+    expect(cover([COVER])).toBe('ipfs://cover');
+    expect(avatar([AVATAR])).toBe('ipfs://avatar');
+  });
+
+  it('returns null when the entity has no OG Image', () => {
+    expect(ogImage([COVER, AVATAR])).toBeNull();
+    expect(ogImage([])).toBeNull();
+    expect(ogImage(undefined)).toBeNull();
+  });
+
+  it('puts OG Image in front of a cover and an avatar', () => {
+    // Order in the relation list must not matter — the chain decides, not the graph.
+    expect(shareImage([COVER, AVATAR, OG])).toBe('ipfs://og');
+    expect(shareImage([OG, COVER, AVATAR])).toBe('ipfs://og');
+  });
+
+  it('leaves the existing order untouched below the new first position', () => {
+    // The point of the ticket is that this is purely additive: an entity that has never heard of
+    // the property shares exactly what it shared before.
+    expect(shareImage([COVER, AVATAR])).toBe('ipfs://cover');
+    expect(shareImage([AVATAR])).toBe('ipfs://avatar');
+    expect(shareImage([])).toBeNull();
+    expect(shareImage(undefined)).toBeNull();
+  });
+
+  it('falls through an OG Image pointed at something that is not an image', () => {
+    // `RelationDtoLive` puts the target's entity id in `value` when the target is not an Image, so
+    // without the renderable-type check the card would be handed a bare id as though it were a URL.
+    const notAnImage: Relation = {
+      ...OG,
+      renderableType: 'RELATION',
+      toEntity: { id: 'some-entity', name: 'Some entity', value: 'some-entity' },
+    };
+
+    expect(ogImage([notAnImage])).toBeNull();
+    expect(shareImage([notAnImage, COVER])).toBe('ipfs://cover');
+  });
+
+  it('falls through an OG Image relation that carries no URL', () => {
+    // A relation pointing at an Image entity with an empty value is not a share image, and must not
+    // shadow the cover underneath it — otherwise setting the property badly loses the old card.
+    const emptyOg: Relation = { ...OG, toEntity: { ...OG.toEntity, value: '' } };
+
+    expect(ogImage([emptyOg])).toBeNull();
+    expect(shareImage([emptyOg, COVER])).toBe('ipfs://cover');
   });
 });
