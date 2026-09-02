@@ -47,14 +47,8 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   const media = useDebateMedia(debate.id, open);
   const socialVideoReady = hasSocialVideo(media.data);
 
-  // Prepare once the sheet has opened and keep it alive for the item's lifetime instead of re-doing
-  // it on every open.
-  const [everOpened, setEverOpened] = React.useState(false);
-  React.useEffect(() => {
-    if (open) setEverOpened(true);
-  }, [open]);
-
-  const download = useDebateVideoDownload(debate.id, everOpened && socialVideoReady);
+  // Prepare only while the sheet is open: closing aborts the in-flight fetch and revokes the blob.
+  const download = useDebateVideoDownload(debate.id, open && socialVideoReady);
   const [, setToast] = useToast();
 
   const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))}`;
