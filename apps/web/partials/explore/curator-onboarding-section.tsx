@@ -4,7 +4,10 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { CURATOR_ONBOARDING_PROGRESS_COLOR, CURATOR_ONBOARDING_STEPS } from '~/core/explore/curator-onboarding-steps';
+import {
+  CURATOR_ONBOARDING_PROGRESS_COLOR,
+  VISIBLE_CURATOR_ONBOARDING_STEPS,
+} from '~/core/explore/curator-onboarding-steps';
 import { useChecklistExpansion } from '~/core/hooks/use-checklist-expansion';
 import { useCuratorOnboardingStatus } from '~/core/hooks/use-curator-onboarding-status';
 
@@ -43,7 +46,7 @@ export function CuratorOnboardingSection() {
   return (
     <section className="flex flex-col rounded-lg border border-grey-02 bg-white p-5 shadow-panel">
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-[24px] leading-[28px] font-semibold tracking-[-0.02em] text-text">Curator onboarding</h2>
+        <h2 className="text-[24px] leading-[28px] font-semibold tracking-[-0.02em] text-text">Debates Onboarding</h2>
         <button
           type="button"
           aria-expanded={expanded}
@@ -74,7 +77,7 @@ export function CuratorOnboardingSection() {
 
       {expanded ? (
         <ul className="mt-5 flex flex-col gap-5">
-          {CURATOR_ONBOARDING_STEPS.map(step => {
+          {VISIBLE_CURATOR_ONBOARDING_STEPS.map(step => {
             const complete = completion[step.id];
 
             return (
