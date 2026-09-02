@@ -48,6 +48,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
+import { VOTE_SELECTED_CLASS } from '~/partials/entity-page/vote-button-styles';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
@@ -337,15 +338,16 @@ export function EntityVoteButtons({
       return direction === 'up' ? <ThumbUp filled={active} /> : <ThumbDown filled={active} />;
     }
 
-    return <VoteArrow direction={direction} filled={active} color="grey-03" />;
+    // No `color`: the arrow takes `currentColor` from the button, so the one selected treatment
+    // below reaches curation too. Pinned to `grey-03` it stayed grey once picked, and `fill` alone
+    // had to carry the whole signal.
+    return <VoteArrow direction={direction} filled={active} />;
   };
 
-  const claimResponseButtonColor = (active: boolean) => {
-    if (variant === 'chevrons') {
-      return active ? 'text-[#2A2B2E]' : 'text-grey-03 hover:text-grey-04';
-    }
-    return isClaimVariant && (active ? 'text-grey-04' : 'text-grey-03 hover:text-grey-04');
-  };
+  // Every inline variant, curation included. It used to branch three ways — a hand-written
+  // near-black for chevrons, `grey-04` for thumbs, and nothing at all for curation, whose arrows
+  // pinned their own colour instead.
+  const responseButtonColor = (active: boolean) => (active ? VOTE_SELECTED_CLASS : 'text-grey-03 hover:text-grey-04');
 
   const claimResponderAvatars = isClaimVariant ? (
     <ClaimResponderAvatars
@@ -408,7 +410,7 @@ export function EntityVoteButtons({
         title={positiveTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          claimResponseButtonColor(positiveActive),
+          responseButtonColor(positiveActive),
           responseDisabled && 'cursor-default opacity-50'
         )}
       >
@@ -456,7 +458,7 @@ export function EntityVoteButtons({
         title={negativeTitle}
         className={cx(
           'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          claimResponseButtonColor(negativeActive),
+          responseButtonColor(negativeActive),
           responseDisabled && 'cursor-default opacity-50'
         )}
       >
@@ -510,9 +512,12 @@ function DebateVotePill({
         disabled={disabled}
         title={positiveTitle}
         onClick={onPositive}
-        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50 aria-pressed:text-ctaPrimary"
+        className={cx(
+          'group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50',
+          positiveActive && VOTE_SELECTED_CLASS
+        )}
       >
-        <VoteArrow direction="up" filled={positiveActive} color={positiveActive ? 'ctaPrimary' : undefined} />
+        <VoteArrow direction="up" filled={positiveActive} />
       </button>
       <span className="text-metadataMedium text-text tabular-nums">{score}</span>
       <button
@@ -522,9 +527,12 @@ function DebateVotePill({
         disabled={disabled}
         title={negativeTitle}
         onClick={onNegative}
-        className="group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50 aria-pressed:text-red-01"
+        className={cx(
+          'group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50',
+          negativeActive && VOTE_SELECTED_CLASS
+        )}
       >
-        <VoteArrow direction="down" filled={negativeActive} color={negativeActive ? 'red-01' : undefined} />
+        <VoteArrow direction="down" filled={negativeActive} />
       </button>
     </div>
   );
