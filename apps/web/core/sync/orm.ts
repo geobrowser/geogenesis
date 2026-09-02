@@ -253,13 +253,20 @@ export class E {
     // honoured that before this fallback existed — see the line above. The aggregate covers triples
     // that were never hydrated; a tombstone means this one was, and the reader deleted it, so
     // resurrecting the server's pre-deletion name would undo their edit in front of them.
-    const nameDeletedLocally = mergedValues.some(
-      value => value.isDeleted === true && value.property.id === SystemIds.NAME_PROPERTY
-    );
-    const name = Entities.nameInSpace(liveValues, spaceId) ?? (nameDeletedLocally ? null : remoteEntity.name);
-    const description = spaceId
-      ? Entities.descriptionInSpace(liveValues, spaceId)
-      : (Entities.description(liveValues) ?? remoteEntity.description);
+    const deletedLocally = (propertyId: string) =>
+      mergedValues.some(value => value.isDeleted === true && value.property.id === propertyId);
+
+    const name =
+      Entities.nameInSpace(liveValues, spaceId) ??
+      (deletedLocally(SystemIds.NAME_PROPERTY) ? null : remoteEntity.name);
+
+    // The aggregate applies only to an unscoped read: when a space was named, borrowing the graph's
+    // prose is what `descriptionInSpace` exists to decline. And only when nothing was deleted, for
+    // the same reason as the name above. Resolved through the helper rather than `Entities.description`
+    // so an empty triple normalises to null here too, instead of blocking the fallback with `''`.
+    const description =
+      Entities.descriptionInSpace(liveValues, spaceId) ??
+      (spaceId || deletedLocally(SystemIds.DESCRIPTION_PROPERTY) ? null : remoteEntity.description);
     const types = readTypes(relations);
     const derivedSpaces = Entities.spaces(values, relations);
     const spaces = derivedSpaces.length > 0 ? derivedSpaces : remoteEntity.spaces;

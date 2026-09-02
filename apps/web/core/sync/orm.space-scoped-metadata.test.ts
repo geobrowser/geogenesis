@@ -168,6 +168,29 @@ describe('E.merge scopes name and description to the requested space', () => {
     expect(merged?.name).toBeNull();
   });
 
+  // Same rule as the name above, on the branch that still has an aggregate to fall back to. An
+  // unscoped read is the only one that consults `remoteEntity.description` at all.
+  it('does not resurrect a description the reader deleted locally, unscoped', async () => {
+    const deleted = { ...described(ROOT, 'Root description'), isDeleted: true } as unknown as Value;
+    await seedStore(entity({ name: null, description: null, values: [deleted] }));
+
+    const merged = E.merge({
+      id: ENTITY_ID,
+      store,
+      mergeWith: entity({ values: [described(ROOT, 'Root description')] }),
+    });
+
+    expect(merged?.description).toBeNull();
+  });
+
+  it('still borrows the aggregate description on an unscoped read with nothing deleted', async () => {
+    await seedStore(entity({ name: null, description: null, values: [] }));
+
+    const merged = E.merge({ id: ENTITY_ID, store, mergeWith: entity({ values: [] }) });
+
+    expect(merged?.description).toBe('Aggregate description');
+  });
+
   it('prefers the requested space over both', async () => {
     await seedStore(entity({ name: null, description: null, values: [named(CRYPTO, 'Crypto wording')] }));
 
