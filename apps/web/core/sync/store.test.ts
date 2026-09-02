@@ -609,6 +609,15 @@ describe('GeoStore', () => {
         expect(entity!.description).toBeNull();
       });
 
+      // An empty triple must not block the synced fallback on an unscoped read: a non-nullish `''`
+      // satisfies the `??` and renders the entity description-less. Same shape as the name leak.
+      it('does not let an empty description block the synced fallback when unscoped', () => {
+        syncedEntities.set('entity-1', { ...mockEntity1, name: null, description: 'Server description' });
+        reactiveValues.set([textValue('d-root', SystemIds.DESCRIPTION_PROPERTY, ROOT, '')]);
+
+        expect(store.getEntity('entity-1')!.description).toBe('Server description');
+      });
+
       // The synced entity carries the server's cross-space description, which must not sneak in
       // behind the scoping.
       it('does not fall through to the synced entity description', () => {

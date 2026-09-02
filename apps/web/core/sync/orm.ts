@@ -214,7 +214,11 @@ export class E {
     }
 
     if (!remoteEntity) {
-      return store.getEntity(id) ?? null;
+      // Scoped, like every other exit from this function. A local-only or unpublished entity takes
+      // this branch whenever the network lookup comes back empty, and dropping `spaceId` here handed
+      // back the top-ranked name and cross-space description — the very thing being fixed, reached
+      // by the one path that never consults the remote (GEO-2778).
+      return store.getEntity(id, { spaceId }) ?? null;
     }
 
     if (!localEntity) {

@@ -476,9 +476,11 @@ export class GeoStore {
     // No fall-through to the synced entity's description when a space was named: that value is the
     // server's cross-space resolution, and letting it through would put another space's prose in
     // this one's mouth — exactly what `descriptionInSpace` declines to do.
-    const description = options.spaceId
-      ? Entities.descriptionInSpace(values, options.spaceId)
-      : (Entities.description(values) ?? entity?.description ?? null);
+    // Resolved through the helper on both branches so an empty triple normalises to null rather than
+    // blocking the synced fallback with `''`, and the synced value applies only to an unscoped read.
+    const description =
+      Entities.descriptionInSpace(values, options.spaceId) ??
+      (options.spaceId ? null : (entity?.description ?? null));
     const types = readTypes(relations);
     const spaces = Entities.spaces(values, relations);
 

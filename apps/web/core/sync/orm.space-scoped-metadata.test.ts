@@ -151,6 +151,23 @@ describe('E.merge scopes name and description to the requested space', () => {
     expect(merged?.name).toBe('Aggregate name');
   });
 
+  // Nothing remote to merge with: a local-only or unpublished entity, or a network lookup that came
+  // back empty. This is the one exit that never touches `remoteEntity`, and it dropped the scope.
+  it('scopes the store copy when there is nothing remote to merge', async () => {
+    await seedStore(
+      entity({
+        name: null,
+        description: null,
+        values: [named(ROOT, 'Root wording'), named(CRYPTO, 'Crypto wording'), described(ROOT, 'Root description')],
+      })
+    );
+
+    const merged = E.merge({ id: ENTITY_ID, spaceId: CRYPTO, store });
+
+    expect(merged?.name).toBe('Crypto wording');
+    expect(merged?.description).toBeNull();
+  });
+
   // `localEntity` is read with tombstones so a pending local deletion masks the remote value. The
   // aggregate fallback must not undo that: the reader deleted the name, and handing back the
   // server's pre-deletion one would reverse their edit in front of them.
