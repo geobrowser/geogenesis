@@ -197,6 +197,10 @@ export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Pr
   let after: string | null = null;
 
   let total: number | null = null;
+  // Whether the connection still had a page when we stopped asking. That is the only honest signal
+  // for truncation: a count comparison cannot tell a guard-stopped list from a complete one whose
+  // decoder legitimately dropped a row.
+  let moreRemaining = false;
 
   // Paged to exhaustion, ordered by id.
   //
@@ -228,20 +232,22 @@ export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Pr
     claims.push(...page.claims);
     total = page.totalCount ?? total;
     if (!page.hasNextPage || !page.endCursor) break;
+    moreRemaining = true;
     after = page.endCursor;
   }
 
-  // Measured against the server's count, not against the guard. A corpus of exactly the guard's
-  // size is complete; one row more is a slice, and without `total` those are indistinguishable —
-  // which is how a truncated list came to look identical to a whole one.
+  // Truncated means the loop stopped while the connection still had more to give — which only the
+  // guard can cause, since the other exit is `hasNextPage: false`.
   //
-  // Compared entity to entity. `totalCount` counts claims; `claims` holds one row per *tag*, so a
-  // claim tagged in three spaces is three rows — comparing the two directly would let a multi-space
-  // claim mask a real truncation, and an unnamed or space-less row invent one.
-  const distinctClaims = new Set(claims.map(claim => claim.claimEntityId)).size;
-  const truncated = total === null ? claims.length >= TAGGED_CLAIMS_LIMIT : total > distinctClaims;
+  // Deliberately not a count comparison. `totalCount` counts entities while `claims` holds one row
+  // per *tag*, so a multi-space claim inflates the row count and a row the decoder legitimately
+  // dropped — unnamed, or a tag with no space — deflates it. Both directions produce a wrong answer
+  // about a complete list, and neither is what the caller is asking about.
+  const truncated = moreRemaining;
   if (truncated) {
-    devLog(`[tagged-claims] ${distinctClaims} of ${total ?? 'unknown'} claims for ${tagId}; the list is truncated.`);
+    devLog(
+      `[tagged-claims] stopped at the ${TAGGED_CLAIMS_LIMIT}-row guard for ${tagId} (${total ?? 'unknown'} exist); the list is truncated.`
+    );
   }
 
   // The ranking the reader sees. The connection is ordered by id for paging's sake, so this is what

@@ -182,6 +182,30 @@ describe('fetchTaggedClaims', () => {
     expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Fine']);
   });
 
+  // A row the decoder drops is not a truncated list. `totalCount` counts entities and the decoder
+  // legitimately discards unrenderable ones, so comparing the two called a complete page a slice.
+  it('does not call a complete page truncated because a row was dropped', async () => {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(
+        decoder({
+          entitiesConnection: {
+            totalCount: 2,
+            pageInfo: { hasNextPage: false, endCursor: null },
+            nodes: [
+              node('a1', 'Fine', '10'),
+              { id: 'a2', name: null, description: null, rankingScore: '9', relationsList: [{ spaceId: SPACE }] },
+            ],
+          },
+        })
+      )
+    );
+
+    const result = await fetchTaggedClaims(TAG);
+
+    expect(namesOf(result.claims)).toEqual(['Fine']);
+    expect(result.truncated).toBe(false);
+  });
+
   // The multi-space shape the decoder emits, which is what `dedupeTaggedClaims` below collapses.
   it('emits one row per space a claim is tagged in', async () => {
     const OTHER = '019fedae72b67ab2927adf044d57c500';

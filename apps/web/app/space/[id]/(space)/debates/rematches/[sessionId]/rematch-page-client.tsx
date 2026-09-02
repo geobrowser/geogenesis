@@ -60,7 +60,7 @@ import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-o
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
-import { type TaggedClaim, dedupeTaggedClaims, useTaggedClaims } from '~/core/debates/tagged-claims';
+import { type TaggedClaim, useTaggedClaims } from '~/core/debates/tagged-claims';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
@@ -309,15 +309,23 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Gated on `taggedEnabled` too, not only on the fetch: `enabled: false` leaves react-query's
   // cached rows in place, and the hub shares this key, so a catalog fetched there would otherwise
   // keep the hydration below mounted and refetching behind Recommended or the opponent's tab.
+  // One row per tag still, collapsed only once the row gates below have run. A claim tagged in two
+  // spaces has two chances to pass `canPublishDebateIn`, and picking the wrong one here would drop
+  // it on the strength of a space it is also tagged somewhere better than.
   const taggedSelection = React.useMemo(
     () =>
       !taggedEnabled || allowlistPending
         ? NO_TAGGED_CLAIMS
-        : dedupeTaggedClaims(taggedCatalog.filter(claim => isClaimSpaceAllowed(claim.spaceId, spaceAllowlist))),
+        : taggedCatalog.filter(claim => isClaimSpaceAllowed(claim.spaceId, spaceAllowlist)),
     [allowlistPending, taggedCatalog, taggedEnabled, spaceAllowlist]
   );
 
-  const taggedClaimIds = React.useMemo(() => taggedSelection.map(claim => claim.claimEntityId), [taggedSelection]);
+  // Deduplicated here rather than upstream: the lookup wants each claim once, while the rows above
+  // want every tag. (`useClaimEntitiesByIds` also de-dupes internally; this keeps the intent local.)
+  const taggedClaimIds = React.useMemo(
+    () => [...new Set(taggedSelection.map(claim => claim.claimEntityId))],
+    [taggedSelection]
+  );
 
   // The same two lookups the curated source makes: the claim entities the picker's rows are built
   // from, and geo-chat's session rows for readiness and this session's exclusions.
@@ -620,22 +628,37 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // The allowlist is one of its inputs — the ids are empty while it resolves — so it belongs in the
   // settling state, or the empty message paints and is then replaced by the list.
+  // The saved hydration counts, but only for All — it is the only source that merges those rows.
+  //
+  // Without it a warm catalog can settle first, and `keepSelectableTopics` reconciles against a menu
+  // built while the saved rows still look topicless: it drops the viewer's topic selection, and the
+  // rows it was about vanish. The other sources never see those rows, so waiting for them there
+  // would hold Featured behind a lookup it does not use.
   const taggedClaimsSettling =
-    allowlistPending || taggedCatalogLoading || taggedEntitiesQuery.isLoading || taggedClaimsQuery.isLoading;
+    allowlistPending ||
+    taggedCatalogLoading ||
+    taggedEntitiesQuery.isLoading ||
+    taggedClaimsQuery.isLoading ||
+    (source === 'all' && savedEntitiesQuery.isLoading);
   const taggedClaimsNow = React.useMemo(
     () =>
       taggedClaimsSettling
         ? []
-        : taggedSelection.flatMap(featured => {
-            if (excludedClaimIds.has(featured.claimEntityId)) return [];
-            const entity = taggedEntitiesQuery.entities.find(candidate => candidate.id === featured.claimEntityId);
-            const row = entity ? rowFromEntity(entity, featured.spaceId) : null;
-            // Both gates, against the space the row actually carries. `rowFromEntity` takes geo-chat's
-            // session row whole where it has one, and that row names its own space — so checking the
-            // tag's space alone would let a claim through in one the viewer may not be shown.
-            if (!row || !canPublishDebateIn(row.claim.space_id)) return [];
-            return isClaimSpaceAllowed(row.claim.space_id, spaceAllowlist) ? [row] : [];
-          }),
+        : // Collapsed after the gates, not before: `taggedSelection` carries one row per tag, so a
+          // claim tagged in several spaces gets a chance in each and keeps the first that passes.
+          dedupeRowsByClaim(
+            taggedSelection.flatMap(featured => {
+              if (excludedClaimIds.has(featured.claimEntityId)) return [];
+              const entity = taggedEntitiesQuery.entities.find(candidate => candidate.id === featured.claimEntityId);
+              const row = entity ? rowFromEntity(entity, featured.spaceId) : null;
+              // Both gates, against the space the row actually carries. `rowFromEntity` takes
+              // geo-chat's session row whole where it has one, and that row names its own space — so
+              // checking the tag's space alone would let a claim through in one the viewer may not
+              // be shown.
+              if (!row || !canPublishDebateIn(row.claim.space_id)) return [];
+              return isClaimSpaceAllowed(row.claim.space_id, spaceAllowlist) ? [row] : [];
+            })
+          ),
     [
       canPublishDebateIn,
       excludedClaimIds,
@@ -989,7 +1012,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     (tab === 'opponent'
       ? (positions.error ?? opponentEntitiesQuery.error)
       : source === 'featured' || source === 'all'
-        ? (taggedCatalogError ?? taggedEntitiesQuery.error ?? taggedClaimsQuery.error)
+        ? // `savedEntitiesQuery` only for All, and only because its rows are merged there: a failed
+          // hydration leaves them on screen with no topics, so picking any topic removes them
+          // silently. Better an error than a list that looks filtered.
+          (taggedCatalogError ??
+          taggedEntitiesQuery.error ??
+          taggedClaimsQuery.error ??
+          (source === 'all' ? savedEntitiesQuery.error : null))
         : curatedClaimsQuery.error);
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
@@ -1534,6 +1563,22 @@ function RecommendedSection({ name, count, children }: { name: string; count: nu
       {open ? <div id={contentId}>{children}</div> : null}
     </section>
   );
+}
+
+/**
+ * One row per claim, keeping the first that survived the gates.
+ *
+ * The tagged rows arrive one per tag, so a claim tagged in several spaces gets a chance in each —
+ * which is the point, since only some of them may be publishable or shown to this viewer. Once the
+ * gates have run, the list wants the claim once.
+ */
+function dedupeRowsByClaim(rows: DebateRematchClaim[]): DebateRematchClaim[] {
+  const seen = new Set<string>();
+  return rows.filter(row => {
+    if (seen.has(row.claim.claim_entity_id)) return false;
+    seen.add(row.claim.claim_entity_id);
+    return true;
+  });
 }
 
 /** Both sides of a rematch claim, in the shape the shared card draws avatars from. */

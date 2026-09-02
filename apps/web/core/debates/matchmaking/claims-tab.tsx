@@ -280,14 +280,16 @@ export function ClaimsTab() {
     refetch: refetchTagged,
   } = useTaggedClaims(claimsTagId, graphSourced);
 
-  // Collapsed to one row per claim *after* the space gates, not before. A claim can be tagged in
-  // several spaces, and deduplicating first would let a space the viewer can't be shown stand for a
-  // claim that is tagged in one they can — dropping it from the list entirely.
+  // Narrowed to spaces the viewer may be shown, one row per tag still. A claim can be tagged in
+  // several spaces, and collapsing it to one here would let an arbitrary space stand for the claim —
+  // dropping it from the list whenever that space is one the viewer can't see, or isn't the one they
+  // picked. Every gate the space takes part in has to run first; the collapse happens once they have,
+  // in `taggedMatching`.
   const taggedAllowed = React.useMemo(
     () =>
       !graphSourced || spacesPending
         ? NO_FEATURED_CLAIMS
-        : dedupeTaggedClaims(taggedCatalog.filter(claim => spaceShowsClaims(claim.spaceId))),
+        : taggedCatalog.filter(claim => spaceShowsClaims(claim.spaceId)),
     [graphSourced, taggedCatalog, spaceShowsClaims, spacesPending]
   );
 
@@ -307,8 +309,11 @@ export function ClaimsTab() {
     [spaceIds]
   );
 
+  // The last gate the space takes part in, so this is where a claim collapses to one row. Before
+  // this it is one row per tag: the space facet counts those rows, and a claim tagged in two spaces
+  // genuinely belongs to both of their counts.
   const taggedMatching = React.useMemo(
-    () => taggedSearched.filter(claim => inPickedSpace(claim.spaceId)),
+    () => dedupeTaggedClaims(taggedSearched.filter(claim => inPickedSpace(claim.spaceId))),
     [taggedSearched, inPickedSpace]
   );
 
