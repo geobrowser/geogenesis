@@ -46,6 +46,8 @@ const mocks = vi.hoisted(() => ({
   supportsAudioOutputSelection: vi.fn(),
   selectAudioOutput: vi.fn(),
   setThankingDebate: vi.fn(),
+  publishOptOutOffer: { debateId: null as string | null, busy: false, cancelled: false },
+  setPublishOptOutRequest: vi.fn(),
   enumerateDevices: vi.fn(),
   getServerTime: vi.fn(),
   refetchDebate: vi.fn(),
@@ -125,6 +127,10 @@ vi.mock('~/core/debates/recording-upload-queue', () => ({
 
 vi.mock('~/core/debates/thanking-debate-store', () => ({
   useSetThankingDebate: () => mocks.setThankingDebate,
+  // The publish control the thank-you card draws comes from the upload coordinator, which is a
+  // sibling of this page rather than part of it. `publishOptOutOffer` is what it would be saying.
+  usePublishOptOutOffer: () => mocks.publishOptOutOffer,
+  useSetPublishOptOutRequest: () => mocks.setPublishOptOutRequest,
 }));
 
 vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
@@ -261,6 +267,8 @@ vi.mock('~/core/debates/use-prefetch-claim-space-allowlist', () => ({
 }));
 
 beforeEach(() => {
+  mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
+  mocks.setPublishOptOutRequest.mockReset();
   mocks.prefetchAllowlist.mockReset();
   clearDebateReturnDestination();
   setHistoryLength(1);
@@ -3176,6 +3184,107 @@ describe('DebateRoomPageClient', () => {
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
   });
 
+  // GEO-2773. The publish opt-out used to be a Cancel button on a bar at the bottom of the screen;
+  // it is a switch on the thank-you card now. The behaviour behind it is deliberately unchanged,
+  // so the switch opens the coordinator's confirmation rather than cancelling on the spot.
+  function thankingDebateAtFinalTurn() {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.500Z'));
+    mocks.createLocalTracks.mockResolvedValue([
+      { mediaStreamTrack: { kind: 'audio', enabled: false }, stop: vi.fn(), detach: vi.fn() },
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 1,
+      current_turn_index: 1,
+      current_speaker_slot: 2,
+      turn_durations_ms: [10_000, 10_000],
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:20.000Z',
+      completed_at: null,
+    };
+  }
+
+  // The card lives inside the recording modal, which the room drops when the connection goes idle.
+  // Telling the coordinator the card is carrying the control while it isn't rendered leaves the
+  // viewer with neither: no switch here, and a banner that has stood down for this debate.
+  it('does not claim to carry the publish control once the room has gone idle', async () => {
+    thankingDebateAtFinalTurn();
+    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
+    // An ownership conflict, which is what drops the room to idle mid-countdown.
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByText('This debate is already open in another tab.');
+    expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull();
+
+    // So the banner has to keep speaking for it.
+    const published = mocks.setThankingDebate.mock.calls.at(-1)?.[0];
+    expect(published?.showsPublishControl ?? false).toBe(false);
+  });
+
+  it('offers the publish switch while the recording can still be pulled back', async () => {
+    thankingDebateAtFinalTurn();
+    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const control = await screen.findByRole('switch', { name: 'Publish debate' });
+    expect(control).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Publish debate?')).toBeInTheDocument();
+
+    fireEvent.click(control);
+
+    // The request, not the cancellation — the coordinator owns the confirmation and the upload.
+    expect(mocks.setPublishOptOutRequest).toHaveBeenCalledWith('debate-1');
+  });
+
+  // The card's rows are separated by hairlines in the design, and the first one belongs to the
+  // publish row — without it the card would open on a rule with nothing above it.
+  it('rules off the publish row only when there is one', async () => {
+    thankingDebateAtFinalTurn();
+    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
+
+    const { rerender } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByRole('switch', { name: 'Publish debate' });
+    const card = screen.getByText('Debate again?').closest('section');
+    expect(card?.querySelectorAll('.bg-divider')).toHaveLength(2);
+
+    mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
+    rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull());
+    expect(screen.getByText('Debate again?').closest('section')?.querySelectorAll('.bg-divider')).toHaveLength(1);
+  });
+
+  it('reads as off once the recording has been pulled back, rather than vanishing', async () => {
+    thankingDebateAtFinalTurn();
+    // Nothing left to cancel, because it already was — which the coordinator reports directly
+    // rather than leaving the card to infer it from a debate refetch that may not have landed.
+    mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: true };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const control = await screen.findByRole('switch', { name: 'Publish debate' });
+    expect(control).toHaveAttribute('aria-checked', 'false');
+    expect(control).toBeDisabled();
+  });
+
+  // A debate with no recording behind it has nothing to answer for, and a switch that cannot move
+  // reads as a broken one.
+  it('leaves the publish row off when there is no recording to opt out of', async () => {
+    thankingDebateAtFinalTurn();
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Debate again?')).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull();
+  });
+
   it('advances from the final turn to thanking without waiting for a debate refresh', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.500Z'));
     const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: false }, stop: vi.fn(), detach: vi.fn() };
@@ -3203,7 +3312,7 @@ describe('DebateRoomPageClient', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Debate again?')).toBeInTheDocument();
     expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Yes' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: "Let's go!" })).toBeEnabled();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
     expectNoMutedIndicator('local');
@@ -3279,7 +3388,7 @@ describe('DebateRoomPageClient', () => {
     for (const phaseTimer of phaseTimers) {
       expect(phaseTimer.querySelector('[data-countdown-progress]')).toHaveAttribute('stroke', '#FFFFFF');
     }
-    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    fireEvent.click(screen.getByRole('button', { name: "Let's go!" }));
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalled());
   });
 
@@ -3300,7 +3409,7 @@ describe('DebateRoomPageClient', () => {
     mocks.rematch = rematchSession('deciding');
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Yes' }));
+    fireEvent.click(await screen.findByRole('button', { name: "Let's go!" }));
 
     expect(await screen.findByRole('button', { name: 'Waiting...' })).toBeDisabled();
   });

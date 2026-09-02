@@ -6,13 +6,12 @@ import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pag
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
 import { type SpaceLabel, spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 
-import { useTopicSpaceScope } from '../use-topic-space-scope';
-
 import { Skeleton } from '~/design-system/skeleton';
-import { Text } from '~/design-system/text';
 
+import { SectionTitle } from '~/partials/entity-page/section-title';
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
+import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { useTopicCoverage } from './use-topic-coverage';
 
 const COVERAGE_PAGE_SIZE = 8;
@@ -70,9 +69,7 @@ export function TopicCoverage({ topicId, spaceId }: { topicId: string; spaceId: 
 
   return (
     <section aria-label="Coverage">
-      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
-        Coverage
-      </Text>
+      <SectionTitle>Coverage</SectionTitle>
       {/* Cards as direct siblings, exactly as the feed renders them: their bottom rule is a
           `last:border-b-0` on the card itself, so a wrapper around each one would leave a rule
           hanging under the final row.

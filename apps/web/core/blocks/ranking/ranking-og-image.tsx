@@ -11,7 +11,7 @@ import {
   PLACEHOLDER_SPACE_IMAGE,
 } from '~/core/constants';
 import { ogImageToJpeg } from '~/core/og-jpeg';
-import { getImagePath } from '~/core/utils/utils';
+import { toSatoriImageSrc } from '~/core/og-share-image';
 
 import type { RankingOgCardData, RankingOgEntryData } from './ranking-og-data';
 import { RANKING_OG_VARIANT_SIZES, type RankingOgVariant } from './ranking-og-storage';
@@ -90,20 +90,12 @@ const ALLOWED_IMAGE_HOSTS = new Set(
     .filter((host): host is string => Boolean(host))
 );
 
-// next/og (Satori) can only fetch http(s) or data: images.
+// next/og (Satori) can only fetch http(s) or data: images. Shared with the entity share-image chain
+// (GEO-2782), which needed the same rule and had grown a second, weaker copy of it. The host set is
+// what stays local: this card composes many third-party images and would rather fetch none than an
+// arbitrary host, while an entity card renders the single image its author chose.
 function toRenderableImageSrc(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const resolved = getImagePath(value);
-  if (resolved.startsWith('data:')) return resolved;
-  try {
-    const url = new URL(resolved);
-    if ((url.protocol === 'https:' || url.protocol === 'http:') && ALLOWED_IMAGE_HOSTS.has(url.host)) {
-      return resolved;
-    }
-  } catch {
-    // Not an absolute URL — not renderable by Satori.
-  }
-  return null;
+  return toSatoriImageSrc(value, ALLOWED_IMAGE_HOSTS);
 }
 
 export function initials(name: string): string {
