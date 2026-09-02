@@ -63,6 +63,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
     periodLabel,
     hasRankedByOthers,
     submissions,
+    aggregatedSubmitterRefs,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
     openRankingCompose,
@@ -122,6 +123,7 @@ export function TableBlockRanking({ spaceId, rankingStartDate = '', rankingEndDa
                 periodLabel={periodLabel}
                 hasRankedByOthers={hasRankedByOthers}
                 submissions={submissions}
+                aggregatedSubmitterRefs={aggregatedSubmitterRefs}
                 aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
                 aggregatedRankingCount={aggregatedRankingCount}
               />
