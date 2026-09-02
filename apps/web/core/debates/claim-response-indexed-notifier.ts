@@ -38,6 +38,38 @@ export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: un
   };
 }
 
+/**
+ * The same parse as {@link claimResponseIndexedEvent}, but for a response that is still *in
+ * flight* rather than one the indexer has confirmed (GEO-2784).
+ *
+ * `claimResponseIndexedEvent` deliberately waits for `status === 'indexed'`, because its job is to
+ * tell geo-chat something true. This one exists for the opposite reason: the viewer's own button
+ * should not wait on the indexer. `web.write.entity_response` measures p50 9.9s / p95 48.6s, and
+ * `pending.expectedResponse` is known locally the instant the write starts — so the UI can show
+ * the position immediately and let the real row replace it when it lands.
+ *
+ * `expectedResponse === null` is a *removal*, and callers must honour it: clicking a position off
+ * should disappear as fast as clicking one on.
+ */
+export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown) {
+  const [scope, , entityId, spaceId, responseKind] = queryKey;
+  const indexingState = data as EntityResponseIndexingState | undefined;
+  if (
+    scope !== 'entity-response-indexing' ||
+    !indexingState?.pending ||
+    (responseKind !== 'stance' && responseKind !== 'veracity')
+  ) {
+    return null;
+  }
+  return {
+    entityId: String(entityId),
+    position:
+      indexingState.pending.expectedResponse === null ? null : indexingState.pending.expectedResponse === 'positive',
+    responseKind: responseKind as DebateResponseKind,
+    spaceId: String(spaceId),
+  };
+}
+
 export function useClaimResponseIndexedNotifier(
   enabled: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,
