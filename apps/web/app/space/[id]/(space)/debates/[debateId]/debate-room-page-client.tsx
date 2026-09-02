@@ -18,7 +18,6 @@ import {
   getServerTime,
 } from '~/core/debates/api';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
-import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import {
   CameraIcon,
@@ -44,6 +43,7 @@ import {
   useEndDebateTurn,
   useLeaveDebateRematch,
   useLiveKitJoin,
+  useMarkDebateCapturing,
   useMarkDebateJoined,
   useMarkDebateReady,
 } from '~/core/debates/hooks';
@@ -65,6 +65,7 @@ import {
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
+import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
@@ -231,6 +232,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const liveKitJoin = useLiveKitJoin(debateId);
   const markJoined = useMarkDebateJoined(debateId);
   const markReady = useMarkDebateReady(debateId);
+  const markCapturing = useMarkDebateCapturing(debateId);
   const abortDebate = useAbortDebate(debateId);
   const endDebateTurn = useEndDebateTurn(debateId);
   const clearDebateActivity = useClearDebateActivity();
@@ -305,6 +307,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionFailureRedirectTimerRef = React.useRef<number | null>(null);
   const remoteParticipantRefetchTimerRef = React.useRef<number | null>(null);
   const serverNowRef = React.useRef(serverClock.now);
+  // Held in a ref rather than closed over: `useMutation` returns a fresh object whenever its state
+  // changes, and `startLocalRecorder` feeds an effect that clears and re-arms the capture timers.
+  // Depending on the mutation object directly would churn that effect on every retry.
+  const markCapturingRef = React.useRef<() => void>(() => undefined);
   const preflightEndsAtMsRef = React.useRef<number | null>(null);
   const finalizedDebateRef = React.useRef<string | null>(null);
   const debateExitStartedRef = React.useRef(false);
@@ -361,8 +367,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // teardown back until the answer is real.
   const rematchSessionStatus = rematchQuery.data?.status ?? null;
   const rematchQueryFailed = (rematchQuery.error ?? null) !== null;
-  const rematchOutcomeResolved =
-    !debate?.rematch_session_id || rematchSessionStatus !== null || rematchQueryFailed;
+  const rematchOutcomeResolved = !debate?.rematch_session_id || rematchSessionStatus !== null || rematchQueryFailed;
   const rematchSurvivesCancellation =
     Boolean(debate?.rematch_session_id) &&
     !rematchQueryFailed &&
@@ -512,7 +517,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
-  }, [serverClock]);
+    markCapturingRef.current = () => void markCapturing.mutateAsync().catch(() => undefined);
+  }, [markCapturing, serverClock]);
 
   React.useEffect(() => {
     setLocalTrackPreferences(
@@ -645,6 +651,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       'start',
       () => {
         recordingStartedAtRef.current = serverNowRef.current();
+        // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
+        // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
+        // room connection, both before LiveKit has published the tracks this recorder consumes —
+        // so the window used to open while one participant was still acquiring a device, costing
+        // 20-50s off the head of their recording, permanently.
+        //
+        // Fire-and-forget: the mutation retries itself, and a failure must not stop a recorder
+        // that is already running. The worst case is the server waiting out its grace, which is
+        // the old behaviour rather than a new one.
+        markCapturingRef.current();
       },
       { once: true }
     );

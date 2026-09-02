@@ -55,6 +55,7 @@ import {
   listDebateRematchClaims,
   listDebateSharePrompts,
   listSpaceDebates,
+  markDebateCapturing,
   markDebateJoined,
   markDebateReady,
   rejectDebateChallenge,
@@ -560,6 +561,29 @@ export function useMarkDebateReady(debateId: string) {
     onSuccess: debate => {
       queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
+    },
+  });
+}
+
+/**
+ * Tells the server this participant is genuinely capturing, which is what arms the clock
+ * (GEO-2644).
+ *
+ * Retried, unlike `useMarkDebateReady`. A dropped `/ready` leaves a visible stuck button someone
+ * will press again; a dropped `/capturing` is silent, and its cost is that the debate waits out the
+ * full grace and then starts without this participant's head — the exact failure this replaces. The
+ * request is idempotent server-side, so a retry cannot move the timestamp.
+ */
+export function useMarkDebateCapturing(debateId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: () => markDebateCapturing(debateId, getPrivyIdentityToken, accountKey),
+    retry: 3,
+    retryDelay: attempt => Math.min(1_000 * 2 ** attempt, 5_000),
+    onSuccess: debate => {
+      queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
     },
   });
 }
