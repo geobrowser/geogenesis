@@ -4,6 +4,8 @@ import { useCallback } from 'react';
 
 import { useAtom } from 'jotai';
 
+import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
+
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
@@ -32,6 +34,9 @@ export function ExploreWelcomeBanner() {
 
 function WelcomeBanner() {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
+  // `open()` with no argument lands on the hub's Claims tab, which is where the sentence above
+  // sends the reader: taking a position on a claim is the first step, not requests or matches.
+  const { open: openDebatesHub } = useDebatesHub();
 
   // Functional setter form so concurrent dismissals can't drop each other via a stale
   // closure, and the guard keeps the id from being appended twice on a repeat click.
@@ -62,8 +67,18 @@ function WelcomeBanner() {
           Welcome to Geo - Find your first debate!
         </h2>
         <p className="mt-2 max-w-[338px] text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-white">
-          Take a position on claims you care about, then get matched with someone who wants to take the other side.
-          Record the debate and publish it. Open the debate hub to get started!
+          Take a position on claims you care about, then match with someone on the other side. Record the debate and
+          publish it. Open the{' '}
+          {/* The hub is a panel rather than a route, so this is a button and not a link — there is no
+              href to give it. Underlined so it still reads as the one actionable phrase in the sentence. */}
+          <button
+            type="button"
+            onClick={() => openDebatesHub()}
+            className="underline decoration-white/50 underline-offset-2 transition-colors duration-200 hover:decoration-white"
+          >
+            debate hub
+          </button>{' '}
+          to get started!
         </p>
       </div>
 
