@@ -8,7 +8,7 @@ import cx from 'classnames';
 import { useSetAtom } from 'jotai';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import type { Debate } from '~/core/debates/api';
+import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
@@ -187,11 +187,21 @@ export function DebatesBrowseFeed({
 
   const anchorUnresolved = initialDebateId != null && !anchorPresent;
 
+  // A 404 is the exception to the rule below: it is a definitive answer, not a failed lookup. The
+  // debate is not there -- it never existed, or it has been hidden (GEO-2785, which makes every
+  // by-id route read as absent). Treating that as "unknown" would hold the feed on an error state
+  // for a debate that is deliberately gone, so it falls through to `anchorMissing` and the
+  // caller's fallback view instead.
+  const anchorGone = anchorQuery.error instanceof GeoChatRequestError && anchorQuery.error.status === 404;
+
   // An anchor absent after a failed lookup is *unknown*, not missing: falling
   // back would misread a transient readiness/query error as "this debate has no
   // video", so the feed stays up and shows its own error state instead.
   const anchorErrored =
-    anchorUnresolved && !isLoading && (mediaError || debatesQuery.error != null || anchorQuery.error != null);
+    anchorUnresolved &&
+    !isLoading &&
+    !anchorGone &&
+    (mediaError || debatesQuery.error != null || anchorQuery.error != null);
 
   // Hold an anchored feed until the anchor itself is ready: the per-debate
   // readiness lookups resolve one at a time, so painting the partial list would
