@@ -345,9 +345,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // topic filter for the rows it returned; with that gone an unhydrated row carries no topics, and
   // `carriesEveryTopic` reads no topics as "does not match" — so picking any topic dropped every
   // claim the pair had already answered, which is the one row this list must never lose.
+  // Gated on the source that shows these rows, like every other lookup here. Ungated it fanned out
+  // graph batches behind the opponent's tab and Recommended, neither of which lists them.
   const savedClaimIds = React.useMemo(
-    () => (savedClaimsQuery.data?.claims ?? []).map(row => row.claim.claim_entity_id).filter(validateEntityId),
-    [savedClaimsQuery.data]
+    () =>
+      tab === 'claims' && source === 'all'
+        ? (savedClaimsQuery.data?.claims ?? []).map(row => row.claim.claim_entity_id).filter(validateEntityId)
+        : [],
+    [savedClaimsQuery.data, source, tab]
   );
   const savedEntitiesQuery = useClaimEntitiesByIds(savedClaimIds);
 
@@ -640,12 +645,26 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // built while the saved rows still look topicless: it drops the viewer's topic selection, and the
   // rows it was about vanish. The other sources never see those rows, so waiting for them there
   // would hold Featured behind a lookup it does not use.
+  // All merges four sets, and three of them carry their topics only through an entity lookup — so
+  // the tab is settled when *every* one of those has answered, not just the tagged one.
+  //
+  // The saved, opponent and curated rows are all in this list, and `topicsByClaimId` is built from
+  // their entities. Miss one and `keepSelectableTopics` reconciles against a menu those rows have
+  // not contributed to yet, dropping the viewer's topic selection and the rows it was about. The
+  // opponent's is the one that moves: a new response remints its id list, which empties `entities`
+  // until the batch lands.
+  //
+  // Only for All, because only All merges them. Featured would otherwise wait on lookups it never
+  // shows.
+  const mergedHydrationSettling =
+    source === 'all' &&
+    (savedEntitiesQuery.isLoading || opponentEntitiesQuery.isLoading || curatedClaimsQuery.isLoading);
   const taggedClaimsSettling =
     allowlistPending ||
     taggedCatalogLoading ||
     taggedEntitiesQuery.isLoading ||
     taggedClaimsQuery.isLoading ||
-    (source === 'all' && savedEntitiesQuery.isLoading);
+    mergedHydrationSettling;
   // Indexed once rather than scanned per row: the tagged list is the largest of the four and a
   // `.find` inside the map is quadratic in it. The hub builds the same map for the same job.
   const taggedEntitiesById = React.useMemo(
@@ -858,13 +877,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // reached the menu through a *row* has already passed whatever its own tab requires, and the
   // opponent and curated tabs are deliberately not narrowed by the viewer's allowlist — so
   // re-applying it would drop the space of a claim those tabs are still showing.
-  const seenFacetsRef = React.useRef<{ rowSpaceIds: Set<string>; facetSpaceIds: Set<string> }>({
-    rowSpaceIds: new Set(),
-    facetSpaceIds: new Set(),
-  });
+  const seenFacetsRef = React.useRef<{ rowSpaceIds: Set<string> }>({ rowSpaceIds: new Set() });
 
   const facetSpaceIds = React.useMemo(() => {
-    const { rowSpaceIds, facetSpaceIds: fromFacet } = seenFacetsRef.current;
+    const { rowSpaceIds } = seenFacetsRef.current;
     for (const claim of [...opponentClaims, ...curatedClaims, ...taggedClaims, ...browsedClaims])
       rowSpaceIds.add(claim.claim.space_id);
 
@@ -880,12 +896,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // it can resolve after the row landed, and the allowlist is not because the graph-backed tabs
     // are not narrowed by it.
     for (const id of rowSpaceIds) if (canPublishDebateIn(id)) menu.add(id);
-    // `fromFacet` is the index's own space list, which nothing supplies since the tag became the
-    // corpus. Kept in the accumulator rather than deleted: it still holds what earlier renders put
-    // there, and dropping spaces already offered would take options out of an open menu.
-    for (const id of fromFacet) if (isClaimSpaceAllowed(id, spaceAllowlist) && canPublishDebateIn(id)) menu.add(id);
     return [...menu];
-  }, [browsedClaims, canPublishDebateIn, curatedClaims, taggedClaims, opponentClaims, spaceAllowlist]);
+  }, [browsedClaims, canPublishDebateIn, curatedClaims, taggedClaims, opponentClaims]);
 
   // The menu's ids with counts against them. The server counts the browsed corpus; anything only
   // the rows know about is counted from the rows, which is all there is to count — see

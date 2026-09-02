@@ -96,8 +96,8 @@ const TAG_FOR_FILTER: Partial<Record<ClaimsTabFilter, string>> = {
 const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
   featured: 'No claims have been featured yet.',
   all: 'No claims have been tagged for debate yet.',
-  mine: 'No debatable claims yet.',
-  debate_now: 'No debatable claims yet.',
+  mine: 'You haven’t taken a position on any claims yet.',
+  debate_now: 'Nobody is ready to debate you on a claim right now.',
 };
 
 function filterOptionsFor(authenticated: boolean) {
@@ -547,9 +547,16 @@ export function ClaimsTab() {
   // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
   // empty Featured tab should say nothing is featured — not that filters are hiding things — and
   // "Clear filters" should leave the viewer on the tab they picked.
-  const hasFilters = Boolean(
-    debouncedSearch || spaceIds.length || topicIds.length || (!graphSourced && filter !== 'all')
-  );
+  // Two questions, and they had one answer.
+  //
+  // What the viewer has *narrowed* by decides what an empty list means: with nothing narrowing it,
+  // the list is empty because there is nothing there, and saying "no claims match these filters" of
+  // an untouched My positions blames filters the viewer never set.
+  //
+  // What "Clear filters" should undo is wider, and does include the position filter — resetting to
+  // All claims is exactly what a viewer stuck on an empty My positions wants.
+  const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
+  const hasFilters = hasNarrowingFilters || (!graphSourced && filter !== 'all');
 
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: claimsQuery.hasNextPage,
@@ -612,7 +619,7 @@ export function ClaimsTab() {
           // says nothing carries the Debate tag. Both are statements about curation, not about the
           // viewer's filters, so they only show when no filter is narrowing anything.
           emptyMessage={
-            hasFilters
+            hasNarrowingFilters
               ? filter === 'featured'
                 ? 'No featured claims match these filters.'
                 : 'No claims match these filters.'

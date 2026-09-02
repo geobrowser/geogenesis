@@ -303,8 +303,11 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
 vi.mock('~/core/debates/claim-picker-page', () => ({
   useClaimEntitiesByIds: (ids: string[]) => {
     mocks.entityIdLookups.push(ids);
+    // Answerless while loading, as react-query is on a cold key. Without that a "loading" lookup
+    // still handed back its fixtures, so nothing downstream could tell the two apart — and the
+    // states that exist to wait for hydration were untestable.
     return {
-      entities: mocks.entities.filter(entity => ids.includes(entity.id as string)),
+      entities: mocks.entityHydrationLoading ? [] : mocks.entities.filter(entity => ids.includes(entity.id as string)),
       isLoading: mocks.entityHydrationLoading,
       error: null,
     };
@@ -2441,6 +2444,17 @@ describe('DebateRematchPageClient', () => {
     selectFilter('Any topic', 'Governance');
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  // Every other entity lookup on this page is gated by the source that shows its rows. Ungated, this
+  // one fanned out graph batches behind the opponent's tab and Recommended, which never list them.
+  it('does not hydrate the saved claims on tabs that do not show them', async () => {
+    mocks.positions = [];
+    mocks.debateTagClaims = [];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(mocks.entityIdLookups.flat()).not.toContain(CLAIM_SHARED);
   });
 
   it('keeps an untagged claim both debaters answered on the list', async () => {

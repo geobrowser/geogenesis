@@ -731,8 +731,9 @@ describe('ClaimsTab', () => {
     render(<ClaimsTab />);
     await showIndexedClaims();
 
-    // A viewer-relative filter is itself a filter, so the empty state says so.
-    expect(screen.getByText('No claims match these filters.')).toBeInTheDocument();
+    // Nothing is narrowing the list — the viewer simply holds no positions — so it says that rather
+    // than blaming filters they never set.
+    expect(screen.getByText('You haven’t taken a position on any claims yet.')).toBeInTheDocument();
     expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
 
     act(() => mocks.trigger());
@@ -894,6 +895,18 @@ describe('All claims reads the Debate tag', () => {
     expect(screen.getByText('Only featured')).toBeInTheDocument();
     expect(screen.queryByText('Only debatable')).toBeNull();
     expect(mocks.tagsAskedFor).toContain(FEATURED_TAG);
+  });
+
+  // An untouched list is empty because it is empty, not because filters hid it. The position filter
+  // still counts as something "Clear filters" should undo — the two questions had one answer, and
+  // an unfiltered My positions was being blamed on filters the viewer never set.
+  it('says why an unfiltered list is empty rather than blaming filters', async () => {
+    mocks.claims = [];
+    render(<ClaimsTab />);
+    await showIndexedClaims();
+
+    expect(screen.getByText('You haven’t taken a position on any claims yet.')).toBeInTheDocument();
+    expect(screen.queryByText('No claims match these filters.')).toBeNull();
   });
 
   // The batch query key *is* the id list, so hydrating the searched slice mints a fresh key on every
