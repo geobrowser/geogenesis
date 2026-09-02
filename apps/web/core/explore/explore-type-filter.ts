@@ -88,3 +88,29 @@ export function toggleExploreTypeId(selectedTypeIds: readonly string[], typeId: 
 export function exploreTypeFilterLabel(selectedCount: number): string {
   return `${selectedCount} ${selectedCount === 1 ? 'type' : 'types'}`;
 }
+
+/**
+ * Does this entity carry at least one of the selected types?
+ *
+ * Client-side counterpart to the server's `typeIds` argument, which Best no longer sends
+ * (GEO-2793). `entities_ranked_for_feed` abandons its ranked index walk the moment `type_ids` is
+ * present and sorts all ~48.9M rows of `entity_ranking_scores` instead: 43ms without the argument,
+ * 5.8s with the twelve Explore types, and a statement timeout with a single rare one. The rows come
+ * back ranked either way, so the whitelist is cheap to apply here and ruinous to apply there.
+ *
+ * An empty selection means "no restriction", matching the server reading a missing argument the
+ * same way. An entity with no types is dropped when a selection is active, which is also what the
+ * server did — its predicate is an EXISTS on a TYPES relation, so an untyped entity never matched.
+ *
+ * Measured before relying on it: of a 66-row Best window, 64 carry a whitelisted type — 97%, against
+ * the 22 a page serves. Both the unscoped `types` field and the in-space TYPES relations agree on
+ * all 64, so the fact that a card's types are space-scoped does not narrow this in practice.
+ */
+export function entityMatchesExploreTypeIds(
+  entity: { types: readonly { id: string }[] },
+  selectedTypeIds: readonly string[]
+): boolean {
+  if (selectedTypeIds.length === 0) return true;
+  const selected = new Set(selectedTypeIds.map(normalizeId));
+  return entity.types.some(type => selected.has(normalizeId(type.id)));
+}

@@ -5,6 +5,7 @@ import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPE_IDS, NEWS_STORY_TYPE_ID } from './explore-constants';
 import {
+  entityMatchesExploreTypeIds,
   exploreTypeFilterLabel,
   parseExploreTypeIdsParam,
   parseStoredExploreTypeIds,
@@ -112,5 +113,51 @@ describe('exploreTypeFilterLabel', () => {
     expect(exploreTypeFilterLabel(0)).toBe('0 types');
     expect(exploreTypeFilterLabel(1)).toBe('1 type');
     expect(exploreTypeFilterLabel(11)).toBe('11 types');
+  });
+});
+
+// GEO-2793. Best stopped sending `typeIds` to the server, because supplying it makes
+// `entities_ranked_for_feed` sort all ~48.9M rows of `entity_ranking_scores` instead of walking
+// its ranked index — 43ms without, 5.8s with twelve types, statement timeout with one rare type.
+// This predicate is what replaces it, so it has to mean the same thing the SQL predicate did.
+describe('entityMatchesExploreTypeIds', () => {
+  const entity = (...typeIds: string[]) => ({ types: typeIds.map(id => ({ id })) });
+
+  it('keeps an entity carrying any one of the selected types', () => {
+    expect(entityMatchesExploreTypeIds(entity(DEBATE_TYPE_ID), [NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID])).toBe(true);
+    expect(entityMatchesExploreTypeIds(entity(CLAIM_TYPE_ID, DEBATE_TYPE_ID), [DEBATE_TYPE_ID])).toBe(true);
+  });
+
+  it('drops an entity carrying none of them', () => {
+    expect(entityMatchesExploreTypeIds(entity(CLAIM_TYPE_ID), [NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID])).toBe(false);
+  });
+
+  // The server predicate is an EXISTS on a TYPES relation, so an untyped entity never matched it
+  // either. Keeping it here would surface rows the old query provably excluded.
+  it('drops an untyped entity when a selection is active', () => {
+    expect(entityMatchesExploreTypeIds(entity(), [DEBATE_TYPE_ID])).toBe(false);
+  });
+
+  // An empty selection is "no restriction", matching the server reading a missing argument the
+  // same way. If this returned false the feed would go blank rather than unfiltered.
+  it('keeps everything when nothing is selected', () => {
+    expect(entityMatchesExploreTypeIds(entity(), [])).toBe(true);
+    expect(entityMatchesExploreTypeIds(entity(CLAIM_TYPE_ID), [])).toBe(true);
+  });
+
+  // Ids reach this from two directions — the constants are unhyphenated, a card's relation ids
+  // come back from the API hyphenated — so comparing them raw silently matches nothing.
+  it('matches regardless of hyphenation or case', () => {
+    const hyphenated = 'fd51f935-2063-4617-be39-7b672b23364c';
+    expect(hyphenated.replace(/-/g, '')).toBe(DEBATE_TYPE_ID);
+    expect(entityMatchesExploreTypeIds(entity(hyphenated), [DEBATE_TYPE_ID])).toBe(true);
+    expect(entityMatchesExploreTypeIds(entity(DEBATE_TYPE_ID.toUpperCase()), [DEBATE_TYPE_ID])).toBe(true);
+    expect(entityMatchesExploreTypeIds(entity(DEBATE_TYPE_ID), [hyphenated])).toBe(true);
+  });
+
+  it('accepts the full twelve-type whitelist the menu can produce', () => {
+    for (const id of EXPLORE_ENTITY_TYPE_IDS) {
+      expect(entityMatchesExploreTypeIds(entity(id), [...EXPLORE_ENTITY_TYPE_IDS])).toBe(true);
+    }
   });
 });
