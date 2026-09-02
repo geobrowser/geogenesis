@@ -15,9 +15,20 @@ import { normId } from '~/core/utils/norm-id';
  *
  * ## When the default applies
  *
- * Once per mount, on the first render where the viewer's spaces and the options on offer have both
- * settled. The selection is not persisted, which is what it already was: both surfaces started from
- * an empty selection on every mount and still do. So "first open" means this visit — a viewer who
+ * At most once per mount, on the first render where the viewer's spaces are known and there is
+ * something on the menu to draw from. Callers must therefore report loading through `pending`
+ * honestly — including whether their *options* have finished arriving, not only their gates —
+ * because the seed is spent the moment it fires and a half-built menu spends it badly.
+ *
+ * A settled-empty menu does not spend it. That is deliberate rather than an oversight of the
+ * "once per mount" rule: a surface opened before any claim exists has nothing to default *to*, and
+ * consuming the seed there would deny the viewer the default for the whole visit on the strength
+ * of a list that was empty for a moment. If options appear later the seed applies then, which is
+ * the first point at which it could mean anything. Nothing can override a viewer who has acted —
+ * that is what the returned marker is for — so late is the only risk, and never is the worse one.
+ *
+ * The selection is not persisted, which is what it already was: both surfaces started from an
+ * empty selection on every mount and still do. So "first open" means this visit — a viewer who
  * narrows or widens the filter keeps that while the surface is up, and starts fresh next time.
  *
  * That also disposes of the case a persisted default would have to answer: a viewer who
@@ -62,8 +73,8 @@ export function useMemberSpaceDefault({
 
   React.useEffect(() => {
     if (seededRef.current || pending || memberSpaceIds === null) return;
-    // Nothing on offer yet is not an answer about the viewer. Seeding against it would spend the
-    // one seed this gets on an empty list and leave the default permanently unapplied.
+    // An empty menu is not an answer about the viewer, settled or not — see the note above on why
+    // this holds the seed rather than spending it.
     if (availableSpaceIds.length === 0) return;
 
     seededRef.current = true;

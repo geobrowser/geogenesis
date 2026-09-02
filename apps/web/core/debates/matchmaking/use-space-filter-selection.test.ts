@@ -70,6 +70,19 @@ describe('useMemberSpaceDefault', () => {
     expect(onSeed).toHaveBeenCalledExactlyOnceWith([A]);
   });
 
+  // Deliberate, and the reason `pending` has to be honest: an empty menu holds the seed rather
+  // than spending it, so a surface opened before any claim exists still gets its default once
+  // there is something to apply it to.
+  it('keeps the seed for a menu that fills in later, having had nothing to seed from', () => {
+    const { rerender, onSeed } = seed({ memberSpaceIds: new Set([A]), availableSpaceIds: [], pending: false });
+
+    expect(onSeed).not.toHaveBeenCalled();
+
+    rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).toHaveBeenCalledExactlyOnceWith([A]);
+  });
+
   // The rule the ticket asked for: this is a default, not a policy. Once it has applied, a viewer's
   // own choice stands — including their choice to widen it back to everything.
   it('never seeds twice, so a later change of memberships cannot overrule the viewer', () => {

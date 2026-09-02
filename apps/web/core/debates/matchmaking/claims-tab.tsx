@@ -409,10 +409,18 @@ export function ClaimsTab() {
   const offeredSpaceIds = React.useMemo(() => offeredSpaces.map(space => space.id), [offeredSpaces]);
 
   // Defaults to the spaces the viewer belongs to (GEO-2789), in the menu's own ids.
+  // Featured's menu settles with its entity lookup, which is where its topics come from — the
+  // server facets it would otherwise read never arrive, since the query is never made.
+  const facetsSettled = featured ? !featuredLoading && !featuredEntitiesLoading : claimsQuery.facetsSettled;
+
   const markSpacesChosen = useMemberSpaceDefault({
     memberSpaceIds,
     availableSpaceIds: offeredSpaceIds,
-    pending: spacesPending,
+    // The gates *and* the options. `spacesPending` alone says nothing about whether this menu has
+    // finished arriving — Featured's builds up as its entity lookup resolves — and the seed fires
+    // once, so taking it against a half-built list would leave a member space that turned up a
+    // moment later unselected for the visit.
+    pending: spacesPending || !facetsSettled,
     onSeed: setSpaceIds,
   });
 
@@ -467,10 +475,6 @@ export function ClaimsTab() {
       : (facets?.topic_facets ?? []);
     return orderFacetOptions(source, topicIds);
   }, [carriesPickedTopic, facets?.topic_facets, featured, featuredMatching, featuredTopicsByClaimId, topicIds]);
-
-  // Featured's menu settles with its entity lookup, which is where its topics come from — the
-  // server facets it would otherwise read never arrive, since the query is never made.
-  const facetsSettled = featured ? !featuredLoading && !featuredEntitiesLoading : claimsQuery.facetsSettled;
 
   // The space is let go on the condition that actually means "not yours to pick" — the gates
   // stopped admitting it — rather than on its absence from the facet.

@@ -1033,6 +1033,31 @@ describe('topic menu', () => {
     expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
   });
 
+  // Featured's menu builds up as its own lookup resolves, so `spacesPending` alone says nothing
+  // about whether the options have finished arriving. Seeding against a half-built list spends the
+  // one seed badly and leaves a member space that turned up a moment later unselected.
+  it('waits for the featured menu to finish arriving before seeding', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([OTHER_SPACE_ID.replace(/-/g, '')]);
+    // Still loading, so the menu is only whatever has landed so far.
+    mocks.featuredLoading = true;
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy', SPACE_ID)];
+    const view = render(<ClaimsTab />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+
+    // The viewer's own space arrives with the rest of the list.
+    mocks.featuredLoading = false;
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy', SPACE_ID),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown', OTHER_SPACE_ID),
+    ];
+    view.rerender(<ClaimsTab />);
+
+    // Seeded with theirs, which a seed taken against the partial list would have missed.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull());
+  });
+
   // The empty state's own "Clear filters" is a second way to ask for the unfiltered list, and it
   // is reachable while the seed is still armed. Putting the default's spaces back afterwards would
   // answer the request with its opposite.
