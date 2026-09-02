@@ -18,6 +18,9 @@ import { VOTE_BUTTON_CLASS, VOTE_CHEVRON_SELECTED_CLASS } from './vote-button-st
  * pill went blue for up and red for down.
  *
  * They now all say it the way curation always did — grey, with the filled icon carrying the signal.
+ * The shade is `grey-04` rather than the lighter `grey-03` most of them rested at: these icons are
+ * the control, so WCAG 1.4.11 asks 3:1 of them, and `grey-03` gives 2.03:1 on white.
+ *
  * The chevrons keep their darker selected colour, since a chevron has no filled form to switch to.
  */
 const SPACE = '41e851610e13a19441c4d980f2f2ce6b';
@@ -90,17 +93,18 @@ describe('the selected vote treatment', () => {
       render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind={responseKind} />, { wrapper });
 
       const { up, down } = inlineButtons();
-      expect(up).toHaveClass('text-grey-03');
-      expect(down).toHaveClass('text-grey-03');
+      expect(up).toHaveClass('text-grey-04');
+      expect(down).toHaveClass('text-grey-04');
     });
 
-    // The thumbs used to darken to `grey-04` when picked, which is the drift this closes.
-    it('does not darken the picked direction', () => {
+    // The thumbs used to darken when picked, which is the drift this closes: the two directions
+    // now differ only by fill.
+    it('does not colour the picked direction differently from the other', () => {
       mocks.optimisticResponse = 'positive';
       render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind={responseKind} />, { wrapper });
 
-      expect(inlineButtons().up).not.toHaveClass('text-text');
-      expect(inlineButtons().up.className).not.toMatch(/(^|\s)text-grey-04(\s|$)/);
+      const { up, down } = inlineButtons();
+      expect(up.className).toBe(down.className);
     });
   });
 
@@ -124,7 +128,7 @@ describe('the selected vote treatment', () => {
       render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="veracity" />, { wrapper });
 
       const { up } = inlineButtons();
-      expect(up).not.toHaveClass('text-grey-03');
+      expect(up).not.toHaveClass('text-grey-04');
       expect(up.className.match(/(^|\s)text-/g) ?? []).toHaveLength(1);
     });
 
@@ -134,7 +138,7 @@ describe('the selected vote treatment', () => {
 
       const { down } = inlineButtons();
       expect(down).not.toHaveClass(VOTE_CHEVRON_SELECTED_CLASS);
-      expect(down).toHaveClass('text-grey-03');
+      expect(down).toHaveClass('text-grey-04');
     });
   });
 
@@ -174,23 +178,15 @@ describe('the selected vote treatment', () => {
       mocks.optimisticResponse = 'positive';
       const { pressed, unpressed } = renderPill();
 
-      expect(pressed).toHaveClass('text-grey-03');
-      expect(unpressed).toHaveClass('text-grey-03');
-    });
-
-    // It rested a shade darker than the inline controls and hovered all the way to black, which is
-    // the same divergence one state over.
-    it('no longer rests darker or hovers to black', () => {
-      mocks.optimisticResponse = 'positive';
-      const { pressed } = renderPill();
-
-      expect(pressed.className).not.toMatch(/(^|\s)text-grey-04(\s|$)/);
-      expect(pressed).not.toHaveClass('hover:text-text');
+      expect(pressed).toHaveClass('text-grey-04');
+      expect(unpressed).toHaveClass('text-grey-04');
     });
   });
 
-  // One definition, so the greys cannot drift apart again.
+  // One definition, so the greys cannot drift apart again. Pinned to the literal because the
+  // *value* is the point: `grey-03` reads 2.03:1 on white and fails WCAG 1.4.11's 3:1 for a
+  // control, which is what these icons are.
   it('shares one class between the pill and the inline controls', () => {
-    expect(VOTE_BUTTON_CLASS).toBe('text-grey-03 hover:text-grey-04');
+    expect(VOTE_BUTTON_CLASS).toBe('text-grey-04 hover:text-text');
   });
 });

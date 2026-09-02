@@ -344,9 +344,10 @@ export function EntityVoteButtons({
     return <VoteArrow direction={direction} filled={active} />;
   };
 
-  // Grey either way; the filled icon says which one you picked. The thumbs used to darken to
-  // `grey-04` when picked and curation got no class at all, pinning its arrows' colour on the icon
-  // instead — three spellings of a control that should look the same everywhere.
+  // Grey either way; the filled icon says which one you picked. The thumbs used to rest lighter
+  // and darken when picked, and curation got no class at all, pinning its arrows' colour on the
+  // icon instead — three spellings of a control that should look the same everywhere. See
+  // `vote-button-styles` for why the shade is `grey-04` rather than the lighter `grey-03`.
   //
   // Chevrons are the exception, unchanged: a chevron has no filled form to switch to, so colour is
   // the only signal it has.
