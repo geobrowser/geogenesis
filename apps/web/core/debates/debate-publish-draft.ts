@@ -19,12 +19,14 @@ import {
   KEY_FRAME_IMAGE_PROPERTY_ID,
   MARKDOWN_CONTENT_PROPERTY_ID,
   NAME_PROPERTY_ID,
+  OG_IMAGE_PROPERTY_ID,
   SOURCES_PROPERTY_ID,
   TEXT_BLOCK_TYPE_ID,
   TRANSCRIPT_TYPE_ID,
   TYPES_PROPERTY_ID,
   VIDEO_TYPE_ID,
   VIDEO_URL_PROPERTY_ID,
+  WEB_URL_PROPERTY_ID,
 } from './ontology';
 
 export type DebatePublishParticipant = {
@@ -73,12 +75,19 @@ export type DebatePublishInput = {
   claimText: string;
   participants: DebatePublishParticipant[];
   /**
-   * `ipfs://` URI for the rendered final video, or null to skip the Video entity. Goes on-chain,
-   * so it has to outlive geo-chat's presigned object-store URLs.
+   * Durable https URL for the rendered final video (the geo-chat `…/media/artifacts/{kind}/content`
+   * redirect), or null to skip the Video entity.
    */
   videoUrl: string | null;
-  /** `ipfs://` URI for the video's poster still, or null to publish the Video without one. */
+  /** Durable https URL for the video's poster still, or null to publish the Video without one. */
   keyframeUrl: string | null;
+  /**
+   * `ipfs://` URI for the rendered share card, or null to publish without one.
+   *
+   * Null is the expected shape when the card could not be built, not an error: a debate published
+   * without a share card is a far better outcome than one that fails to publish (GEO-2755).
+   */
+  ogImageUrl: string | null;
   /** Merged per-turn transcript. Empty skips the Transcript entity. */
   transcriptTurns: DebatePublishTurn[];
   /**
@@ -199,16 +208,40 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     });
   }
 
+  // --- Share card (OG image) ---
+  // Same shape as the keyframe block below: an Image entity, then a relation from the debate. It
+  // hangs off the debate rather than the Video because it describes the debate, and because it is
+  // generated once at publish time and never revisited.
+  if (input.ogImageUrl) {
+    const ogImageId = createEntityId();
+    const ogImageName = `${debateName} share card`;
+    const ogImageRef = { id: ogImageId, name: ogImageName };
+    setText(ogImageId, ogImageName, NAME_PROPERTY_ID, ogImageName);
+    setText(ogImageId, ogImageName, IMAGE_URL_PROPERTY_ID, input.ogImageUrl);
+    relate({
+      fromEntity: ogImageRef,
+      propertyId: TYPES_PROPERTY_ID,
+      toEntityId: IMAGE_TYPE_ID,
+      toEntityName: 'Image',
+    });
+    relate({
+      fromEntity: debateRef,
+      propertyId: OG_IMAGE_PROPERTY_ID,
+      toEntityId: ogImageId,
+      toEntityName: ogImageName,
+    });
+  }
+
   // --- Video entity (+ its Key frame Image) ---
   if (input.videoUrl) {
     const videoId = createEntityId();
     const videoName = `${debateName} video`;
     const videoRef = { id: videoId, name: videoName };
     setText(videoId, videoName, NAME_PROPERTY_ID, videoName);
-    // Both carry the same ipfs:// URI: `Video URL` is what the debates ontology spec names,
-    // `IPFS URL` is what the relation decoder actually reads.
+    // Both carry the same URL: `Video URL` is what the debates ontology spec names, `Web URL` is
+    // what the relation decoder reads for media entities.
     setText(videoId, videoName, VIDEO_URL_PROPERTY_ID, input.videoUrl);
-    setText(videoId, videoName, IMAGE_URL_PROPERTY_ID, input.videoUrl);
+    setText(videoId, videoName, WEB_URL_PROPERTY_ID, input.videoUrl);
     relate({
       fromEntity: videoRef,
       propertyId: TYPES_PROPERTY_ID,
@@ -227,7 +260,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       const keyframeName = `${debateName} keyframe`;
       const keyframeRef = { id: keyframeId, name: keyframeName };
       setText(keyframeId, keyframeName, NAME_PROPERTY_ID, keyframeName);
-      setText(keyframeId, keyframeName, IMAGE_URL_PROPERTY_ID, input.keyframeUrl);
+      setText(keyframeId, keyframeName, WEB_URL_PROPERTY_ID, input.keyframeUrl);
       relate({
         fromEntity: keyframeRef,
         propertyId: TYPES_PROPERTY_ID,
@@ -311,7 +344,12 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         const claimId = createEntityId();
         const claimRef = { id: claimId, name: claimEntityText };
         setText(claimId, claimEntityText, NAME_PROPERTY_ID, claimEntityText);
-        relate({ fromEntity: claimRef, propertyId: TYPES_PROPERTY_ID, toEntityId: CLAIM_TYPE_ID, toEntityName: 'Claim' });
+        relate({
+          fromEntity: claimRef,
+          propertyId: TYPES_PROPERTY_ID,
+          toEntityId: CLAIM_TYPE_ID,
+          toEntityName: 'Claim',
+        });
         if (claim.isFactual !== null) {
           setBoolean(claimId, claimEntityText, CLAIM_IS_FACTUAL_PROPERTY_ID, claim.isFactual);
         }

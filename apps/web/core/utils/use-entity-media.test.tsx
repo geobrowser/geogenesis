@@ -43,7 +43,7 @@ vi.mock('effect', () => ({
   },
 }));
 
-const { useEntityMedia } = await import('./use-entity-media');
+const { findMediaUrlValue, useEntityMedia } = await import('./use-entity-media');
 const { ContentIds } = await import('@geoprotocol/geo-sdk/lite');
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
@@ -56,6 +56,24 @@ beforeEach(() => {
   mocks.relationsByEntity = {};
   mocks.gates = new Map();
   mocks.failing = new Set();
+});
+
+describe('findMediaUrlValue', () => {
+  const WEB_URL = 'https://chat.example/debates/1/media/artifacts/final_video/content';
+  const value = (propertyId: string, value: string) => ({ value, property: { id: propertyId } });
+
+  it('reads an http(s) URL from the Web URL property', () => {
+    expect(findMediaUrlValue([value('width', '1080'), value(ContentIds.WEB_URL_PROPERTY, WEB_URL)])).toBe(WEB_URL);
+  });
+
+  it('ignores http(s) values on any other property', () => {
+    expect(findMediaUrlValue([value('some-source-property', 'https://example.com/article')])).toBeUndefined();
+  });
+
+  it('prefers an ipfs:// value from any property', () => {
+    const values = [value(ContentIds.WEB_URL_PROPERTY, WEB_URL), value('unlabelled', 'ipfs://bafylegacy')];
+    expect(findMediaUrlValue(values)).toBe('ipfs://bafylegacy');
+  });
 });
 
 /** Holds every request for `entityId` until the returned function is called. */

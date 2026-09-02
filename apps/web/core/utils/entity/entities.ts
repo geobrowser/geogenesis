@@ -1,6 +1,6 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { HIDDEN_PROPERTIES } from '~/core/constants';
+import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY } from '~/core/constants';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
 import { getSpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -69,6 +69,31 @@ export function cover(relations?: Relation[]): string | null {
   // For now, return the relation value directly since we can't use hooks in utility functions
   // The calling components should handle fetching the actual image URL
   return coverRelation.toEntity.value ?? null;
+}
+
+/**
+ * The image an entity nominates for a share card, ahead of its cover and its avatar.
+ *
+ * Only reads the property — whether the value can actually be fetched by the card renderer is a
+ * different question with a different answer on the server, and lives in `core/og-share-image.ts`
+ * with the chain that asks it.
+ *
+ * Read like `cover` because it is shaped like `cover`: relation-typed, pointing at an Image entity
+ * that carries the URL.
+ */
+export function ogImage(relations?: Relation[]): string | null {
+  if (!relations) return null;
+  const ogImageRelation = relations.find(r => r.type.id === EntityId(OG_IMAGE_PROPERTY));
+  if (!ogImageRelation) return null;
+  // `RelationDtoLive` fills `toEntity.value` from the *target*: the IPFS URL when the target is an
+  // Image, and the target's own entity id when it is not. Checking `renderableType` is what tells
+  // those two apart — without it, an OG Image pointed at some ordinary entity would report a bare
+  // id as though it were a URL.
+  if (ogImageRelation.renderableType !== 'IMAGE') return null;
+  const trimmed = ogImageRelation.toEntity.value?.trim();
+  // `RelationDtoLive` writes `''` when the target resolves as an Image but carries no
+  // `IMAGE_URL_PROPERTY` yet, which is what an upload mid-flight looks like.
+  return trimmed ? trimmed : null;
 }
 
 export function spaces(values?: Value[], relations?: Relation[]): string[] {
