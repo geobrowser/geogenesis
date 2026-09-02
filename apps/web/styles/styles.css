@@ -245,6 +245,22 @@
   --text-recordingLabel--font-weight: 600;
 }
 
+/* Page titles scale down on narrow viewports. Override the token here
+   so every `text-mainPage` consumer stays in sync — including entity vs topic on the same route. */
+@media (max-width: 767px) {
+  :root {
+    --text-mainPage: 2.25rem; /* 36px */
+    --text-mainPage--line-height: 2.375rem; /* 38px */
+  }
+}
+
+@media (max-width: 409px) {
+  :root {
+    --text-mainPage: 1.625rem; /* 26px */
+    --text-mainPage--line-height: 1.875rem; /* 30px */
+  }
+}
+
 /* Desktop-first breakpoints (max-width) */
 @custom-variant sm (@media (max-width: 639px));
 @custom-variant md (@media (max-width: 767px));

@@ -218,7 +218,12 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                   fallbackDescription={previewDescription}
                 />
               )}
-              {!isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} isVoteable />}
+              <EntityPageMetadataHeader
+                id={entityId}
+                spaceId={spaceId}
+                isVoteable={!isRelationPage}
+                hideTypes={isRelationPage}
+              />
             </div>
             <Spacer height={40} />
             {tabsSection}

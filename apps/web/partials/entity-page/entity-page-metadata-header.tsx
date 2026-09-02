@@ -4,6 +4,8 @@ import { IdUtils, Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import {
   DATA_TYPE_ENTITY_IDS,
   DATA_TYPE_PROPERTY,
@@ -49,9 +51,15 @@ interface EntityPageMetadataHeaderProps {
   id: string;
   spaceId: string;
   isVoteable?: boolean;
+  hideTypes?: boolean;
 }
 
-export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: EntityPageMetadataHeaderProps) {
+export function EntityPageMetadataHeader({
+  id,
+  spaceId,
+  isVoteable = false,
+  hideTypes = false,
+}: EntityPageMetadataHeaderProps) {
   const { id: entityId } = useEntityStoreInstance();
   const relations = useRelations({
     selector: r => r.fromEntity.id === entityId && r.spaceId === spaceId,
@@ -285,32 +293,34 @@ export function EntityPageMetadataHeader({ id, spaceId, isVoteable = false }: En
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4 text-text">
-        <div className="flex min-w-0 items-center gap-1">
-          {isPropertyEntity && editable && (
-            <>
-              <RenderableTypeDropdown value={currentRenderableType} onChange={handlePropertyTypeChange} />
-              <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
-            </>
-          )}
-          {propertyDataType && !editable && (
-            <DataTypePill
-              dataType={propertyDataType.dataType}
-              renderableType={propertyDataType.renderableType}
-              spaceId={spaceId}
-            />
-          )}
-          {editable ? (
-            <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
-          ) : (
-            <ReadableRelationsGroup
-              entityId={id}
-              spaceId={spaceId}
-              propertyId={SystemIds.TYPES_PROPERTY}
-              isMetadataHeader={true}
-            />
-          )}
-        </div>
+      <div className={cx('flex items-center gap-4 text-text', hideTypes ? 'justify-end' : 'justify-between')}>
+        {hideTypes ? null : (
+          <div className="flex min-w-0 items-center gap-1">
+            {isPropertyEntity && editable && (
+              <>
+                <RenderableTypeDropdown value={currentRenderableType} onChange={handlePropertyTypeChange} />
+                <Divider type="vertical" style="solid" className="h-[12px] border-divider" />
+              </>
+            )}
+            {propertyDataType && !editable && (
+              <DataTypePill
+                dataType={propertyDataType.dataType}
+                renderableType={propertyDataType.renderableType}
+                spaceId={spaceId}
+              />
+            )}
+            {editable ? (
+              <EditableRelationsGroup id={id} spaceId={spaceId} propertyId={SystemIds.TYPES_PROPERTY} />
+            ) : (
+              <ReadableRelationsGroup
+                entityId={id}
+                spaceId={spaceId}
+                propertyId={SystemIds.TYPES_PROPERTY}
+                isMetadataHeader={true}
+              />
+            )}
+          </div>
+        )}
         <div className="flex shrink-0 items-center gap-5">
           <EntityPageContextMenu entityId={id} entityName={name || ''} spaceId={spaceId} />
           <HistoryPanel open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
