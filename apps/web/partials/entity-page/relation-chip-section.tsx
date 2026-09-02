@@ -56,6 +56,23 @@ export function RelationChipSection({
   // and not on mount.
   const focusAfterExpandRef = React.useRef(false);
 
+  // Collapse again when the section is pointed at a different entity.
+  //
+  // Not paranoia about a case that cannot happen: the route path does not remount these views on
+  // navigation. `default-entity-page` renders `EntityPageBody` unkeyed, so following a chip from
+  // one topic to the next — the whole point of this section — reuses this component, and an
+  // expansion left over from the previous entity would render the next one's chips uncapped. The
+  // side panel escapes it only because `EntitySidePanelBody` is keyed on the entity; the route is
+  // not, and the route is where the chips lead.
+  //
+  // Keyed on the relation ids rather than the array, which is a fresh reference on every render.
+  // Same shape as `ClampedText`, which collapses its own toggle when its text changes.
+  const relationIds = relations.map(relation => relation.id).join('|');
+  React.useLayoutEffect(() => {
+    setExpanded(false);
+    focusAfterExpandRef.current = false;
+  }, [relationIds]);
+
   // The `+N` removes itself by revealing everything, which leaves focus on a detached button and
   // the browser drops it to `<body>`. A keyboard viewer would then have to tab from the top of the
   // page to reach the very chips they just asked to see, so send them to the first of them.

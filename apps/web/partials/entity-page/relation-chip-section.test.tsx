@@ -105,6 +105,33 @@ describe('RelationChipSection', () => {
       expect(screen.getByRole('link', { name: 'Topic 8' })).toHaveFocus();
     });
 
+    // The route does not remount these views on navigation, so following a chip from one entity to
+    // the next reuses this component. An expansion carried across would render the next entity's
+    // chips with no cap at all — and following a chip is exactly what this section is for.
+    it('collapses again when it is pointed at a different entity', () => {
+      const { rerender } = render(<RelationChipSection label="Topics" relations={relations(11)} spaceId="space-1" />);
+      fireEvent.click(screen.getByRole('button', { name: EXPANDER_NAME }));
+      expect(screen.getAllByRole('link')).toHaveLength(11);
+
+      const next = Array.from({ length: 12 }, (_, index) => relation(`other-${index}`, `Other ${index}`));
+      rerender(<RelationChipSection label="Topics" relations={next} spaceId="space-1" />);
+
+      expect(screen.getAllByRole('link')).toHaveLength(8);
+      expect(screen.getByRole('button', { name: '+4, show 4 more Topics' })).toBeInTheDocument();
+    });
+
+    // Re-rendering the same entity is not navigation; a parent re-render must not shut the section
+    // the viewer just opened.
+    it('stays open across a re-render of the same relations', () => {
+      const same = relations(11);
+      const { rerender } = render(<RelationChipSection label="Topics" relations={same} spaceId="space-1" />);
+      fireEvent.click(screen.getByRole('button', { name: EXPANDER_NAME }));
+
+      rerender(<RelationChipSection label="Topics" relations={[...same]} spaceId="space-1" />);
+
+      expect(screen.getAllByRole('link')).toHaveLength(11);
+    });
+
     // Expands in place rather than linking away — the section exists to be scanned without
     // leaving the page.
     it('reveals the rest in place and then has nothing left to offer', () => {
