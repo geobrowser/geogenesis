@@ -1852,6 +1852,25 @@ describe('DebateRematchPageClient', () => {
     expect(rows[0]).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // The subtle half of "settled": while the session is in flight the claim lookups keyed off it are
+  // *disabled*, so they report nothing pending. A seed taken then is spent on whatever the browsed
+  // facet happened to supply, and a member space arriving with those rows stays unselected.
+  it('waits for the session before seeding, not merely for the queries it gates', async () => {
+    mocks.sessionLoading = true;
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // Nothing seeded while the chain below the session is disabled rather than loading.
+    await waitFor(() => expect(mocks.entityQueries.length).toBeGreaterThan(0));
+    expect(screen.queryByRole('button', { name: /Crypto/ })).toBeNull();
+
+    mocks.sessionLoading = false;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+  });
+
   // This menu's options accumulate from rows as they arrive, so they are pickable before the seed
   // is ready. A default that overwrote that choice would be a policy, not a default.
   it('does not overwrite a space the viewer picked before the default was ready', async () => {
