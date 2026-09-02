@@ -34,6 +34,7 @@ import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
 import { exceedsLineClamp } from './line-clamp-overflow';
+import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -70,8 +71,7 @@ export function DebatesBrowseFeed({
   // So fetch the anchor by id instead of requiring it to appear. Gated on the listing having
   // settled without it, which keeps the common case at one request — this only fires where the
   // feed would otherwise have silently rendered the wrong page.
-  const anchorListed =
-    initialDebateId != null && listedDebates.some(debate => ID.equals(debate.id, initialDebateId));
+  const anchorListed = initialDebateId != null && listedDebates.some(debate => ID.equals(debate.id, initialDebateId));
   const anchorQuery = useDebate(
     initialDebateId ?? '',
     initialDebateId != null && !debatesQuery.isLoading && !anchorListed
@@ -368,7 +368,7 @@ function DebateFeedItem({
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const winnerVotes = useDebateVotes(debate);
-  const shareAction = useDebateShareAction(debate, active);
+  const share = useDebateShareAction();
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
   // Same arguments as the Comments panel's own useComments, so the two share a
@@ -400,7 +400,8 @@ function DebateFeedItem({
     claimsCount: claims.totalCount,
     onComment: onOpenComments,
     onClaims: onOpenClaims,
-    shareAction,
+    onShare: share.onOpen,
+    shareOpen: share.open,
   };
 
   return (
@@ -453,6 +454,13 @@ function DebateFeedItem({
           <DebateInteractionBar orientation="vertical" {...interactionProps} />
         </div>
       </div>
+      <DebateShareDialog
+        open={share.open}
+        onOpenChange={share.onOpenChange}
+        debate={debate}
+        spaceId={spaceId}
+        openerRef={share.openerRef}
+      />
     </section>
   );
 }

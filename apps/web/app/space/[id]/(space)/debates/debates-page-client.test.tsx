@@ -56,6 +56,7 @@ vi.mock('~/core/debates/hooks', () => ({
   useProcessedVideoDebateIds: () => mocks.media,
   useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaArtifactMutate }),
+  useDebateMedia: () => ({ data: undefined, isLoading: false, isError: false }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
   useDebateClaims: () => ({ data: { claims: [] } }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false }),
