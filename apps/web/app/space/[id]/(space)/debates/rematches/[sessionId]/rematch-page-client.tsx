@@ -513,8 +513,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     recommendedEntities,
     savedClaimsQuery.data,
   ]);
-  const { spacesById: candidateSpaces } = useSpacesByIds(candidateSpaceIds);
+  const {
+    spacesById: candidateSpaces,
+    isLoading: candidateSpacesPending,
+    isPlaceholderData: candidateSpacesHeldOver,
+  } = useSpacesByIds(candidateSpaceIds);
   const spaceTypePublishable = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
+  /**
+   * Whether {@link canPublishDebateIn} can be trusted yet.
+   *
+   * An unresolved type reads as publishable — deliberately, so a slow lookup doesn't empty the
+   * picker — so while this is true the predicate admits spaces it will go on to reject, a personal
+   * space among them. Held-over counts: `useSpacesByIds` answers from the previous id set rather
+   * than blanking, and it knows nothing about an id it was never asked for.
+   *
+   * Named here rather than at the reader, because this is the lookup that decides it. The picker
+   * has a second `useSpacesByIds` for the allowlist, whose pending state `scope.pending` carries;
+   * they are different questions about different ids and neither covers the other.
+   */
+  const publishabilityPending = candidateSpacesPending || candidateSpacesHeldOver;
   const canPublishDebateIn = React.useCallback(
     (spaceId: string | null | undefined) =>
       isSpaceDebatePublishable(spaceId, publishableSpaceIds) && spaceTypePublishable(spaceId),
@@ -1012,11 +1029,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // loading and report nothing pending — the same chain `opponentCountPending` documents. Read
   // without them, this says "settled" before anything has started.
   const facetSpacesPending =
-    // `scope.pending` rather than its parts. It already carries the publishability lookup —
-    // including the held-over window where an absent type reads as publishable, which is precisely
-    // when a space this gate exists to exclude is still in the menu. Listing its terms by hand here
-    // is how those two went missing.
+    // `scope.pending` rather than its parts: it already carries the *allowlist* space lookup, and
+    // listing its terms by hand is how two of them went missing.
     scope.pending ||
+    // The other space lookup, which is the one `canPublishDebateIn` reads. Different ids, different
+    // query, and `scope.pending` says nothing about it.
+    publishabilityPending ||
     sessionQuery.isLoading ||
     positions.isLoading ||
     savedClaimsQuery.isLoading ||
