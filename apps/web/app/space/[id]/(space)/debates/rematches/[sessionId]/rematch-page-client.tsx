@@ -1012,8 +1012,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // loading and report nothing pending — the same chain `opponentCountPending` documents. Read
   // without them, this says "settled" before anything has started.
   const facetSpacesPending =
-    allowlistPending ||
-    publishablePending ||
+    // `scope.pending` rather than its parts. It already carries the publishability lookup —
+    // including the held-over window where an absent type reads as publishable, which is precisely
+    // when a space this gate exists to exclude is still in the menu. Listing its terms by hand here
+    // is how those two went missing.
+    scope.pending ||
     sessionQuery.isLoading ||
     positions.isLoading ||
     savedClaimsQuery.isLoading ||
@@ -1021,6 +1024,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     curatedClaimsSettling ||
     featuredClaimsSettling ||
     recommendedLoading ||
+    // The source debate's own claim is excluded from the rows once this lands, and a space whose
+    // only claim was that one leaves the menu with it.
+    sourceDebateQuery.isLoading ||
     !browsedClaimsQuery.facetsSettled;
 
   // Defaults to the spaces the viewer belongs to (GEO-2789). Seeded from `facetSpaceIds` rather
