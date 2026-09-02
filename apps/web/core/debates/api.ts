@@ -1036,6 +1036,27 @@ export async function markDebateReady(
   });
 }
 
+/**
+ * Report that this participant's recorder is producing frames (GEO-2644).
+ *
+ * The debate clock waits on this rather than on `/ready` or `/joined`, both of which fire before a
+ * camera is delivering anything — `/joined` deliberately so, to keep the connecting deadline about
+ * room presence rather than device setup. Called from the `MediaRecorder` `start` event, which is
+ * the first moment capture is genuinely underway.
+ */
+export async function markDebateCapturing(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<Debate>(`/debates/${debateId}/capturing`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function endDebateTurn(
   debateId: string,
   turnIndex: number,
