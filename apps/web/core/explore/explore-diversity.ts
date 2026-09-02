@@ -1,7 +1,7 @@
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
-import { EXPLORE_ENTITY_TYPES, EXPLORE_PAGE_SIZE } from './explore-constants';
+import { EXPLORE_ENTITY_TYPE_IDS, EXPLORE_PAGE_SIZE } from './explore-constants';
 
 /**
  * Read-time diversity cap for the "Best" feed (GEO-2690).
@@ -77,10 +77,9 @@ const CLASSIFIES_LAST = [DEBATE_TYPE_ID, CLAIM_TYPE_ID];
  * Membership is still derived, so a type added to the menu is classifiable without a second edit;
  * only the ordering intent is stated by hand.
  */
-const TYPE_PRIORITY = [
-  ...EXPLORE_ENTITY_TYPES.map(type => type.id).filter(id => !CLASSIFIES_LAST.includes(id)),
-  ...CLASSIFIES_LAST,
-].map(normId);
+const TYPE_PRIORITY = [...EXPLORE_ENTITY_TYPE_IDS.filter(id => !CLASSIFIES_LAST.includes(id)), ...CLASSIFIES_LAST].map(
+  normId
+);
 
 /** Types the feed shows but that carry no useful signal for diversity. */
 export const UNTYPED_DIVERSITY_KEY = '';

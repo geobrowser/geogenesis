@@ -1,4 +1,4 @@
-import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from './explore-constants';
+import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES, EXPLORE_ENTITY_TYPE_IDS } from './explore-constants';
 
 export const EXPLORE_TYPE_FILTER_STORAGE_KEY = 'exploreSelectedTypeIds';
 
@@ -16,7 +16,19 @@ function normalizeId(id: string): string {
  * who had just ticked all twelve.
  */
 function allExploreTypeIds(): string[] {
-  return EXPLORE_ENTITY_TYPES.map(type => type.id);
+  return [...EXPLORE_ENTITY_TYPE_IDS];
+}
+
+/**
+ * A selection, put back into the order the menu declares.
+ *
+ * Order is not cosmetic here. The feed keys its query on the joined ids and compares selections by
+ * length, so the same three types in two orders would look like two different selections and refetch
+ * for a change nobody made. Both callers below build a set and then need it ordered, so the rule
+ * lives once rather than being spelled out at each of them.
+ */
+function inCanonicalOrder(selected: ReadonlySet<string>): string[] {
+  return EXPLORE_ENTITY_TYPE_IDS.filter(id => selected.has(id));
 }
 
 export function sanitizeExploreTypeIds(ids: readonly unknown[]): string[] {
@@ -28,7 +40,7 @@ export function sanitizeExploreTypeIds(ids: readonly unknown[]): string[] {
     if (canonical) selected.add(canonical);
   }
 
-  return EXPLORE_ENTITY_TYPES.map(type => type.id).filter(id => selected.has(id));
+  return inCanonicalOrder(selected);
 }
 
 /**
@@ -70,7 +82,7 @@ export function toggleExploreTypeId(selectedTypeIds: readonly string[], typeId: 
   if (selected.has(canonicalTypeId)) selected.delete(canonicalTypeId);
   else selected.add(canonicalTypeId);
 
-  return EXPLORE_ENTITY_TYPES.map(type => type.id).filter(id => selected.has(id));
+  return inCanonicalOrder(selected);
 }
 
 export function exploreTypeFilterLabel(selectedCount: number): string {
