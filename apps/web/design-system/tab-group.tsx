@@ -131,7 +131,15 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
       >
         <div className="relative flex w-max items-center gap-6 pb-2">
           {tabs.map(t => (
-            <Tab key={t.href} href={t.href} label={t.label} badge={t.badge} disabled={t.disabled} hidden={t.hidden} />
+            <Tab
+              key={t.href}
+              href={t.href}
+              label={t.label}
+              badge={t.badge}
+              disabled={t.disabled}
+              hidden={t.hidden}
+              active={t.active}
+            />
           ))}
         </div>
         <div className="sticky right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
