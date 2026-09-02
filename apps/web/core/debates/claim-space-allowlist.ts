@@ -45,6 +45,51 @@ export function buildClaimSpaceAllowlist({
   return allowed;
 }
 
+/**
+ * The subset of the allowlist the viewer actually belongs to — the spaces they are a member or an
+ * editor of, plus their own.
+ *
+ * The allowlist above is what a viewer may *see*; this is what is theirs. Featured spaces are the
+ * difference: they are on offer to everyone, so they widen what can be browsed without saying
+ * anything about who the viewer is. GEO-2789 defaults the space filter to this narrower set.
+ *
+ * Pending rows are excluded on the same reasoning as the allowlist: a space the viewer has asked
+ * to join is not one they belong to, and defaulting a filter to it would answer a request that
+ * has not been granted.
+ */
+export function buildMemberSpaceIds({
+  editorOf,
+  memberOf,
+  personalSpaceId,
+}: {
+  editorOf: BrowseSpaceRow[];
+  memberOf: BrowseSpaceRow[];
+  /** The viewer's own space, which the sidebar's `memberOf` deliberately leaves out. */
+  personalSpaceId: string | null | undefined;
+}): Set<string> {
+  const mine = new Set<string>();
+
+  for (const row of [...editorOf, ...memberOf]) {
+    if (row.pendingLabel) continue;
+    mine.add(normId(row.id));
+  }
+
+  if (personalSpaceId) mine.add(normId(personalSpaceId));
+
+  return mine;
+}
+
+export function browseSidebarMemberSpaceIds(
+  data: BrowseSidebarData,
+  personalSpaceId: string | null | undefined
+): Set<string> {
+  return buildMemberSpaceIds({
+    editorOf: data.editorOf,
+    memberOf: data.memberOf,
+    personalSpaceId: personalSpaceId ?? data.personalSpaceId,
+  });
+}
+
 export function browseSidebarClaimSpaceAllowlist(
   data: BrowseSidebarData,
   personalSpaceId: string | null | undefined

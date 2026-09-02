@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   pageSize: null as number | null,
   lastEnabledData: undefined as unknown,
   spaceAllowlist: null as Set<string> | null,
+  memberSpaceIds: null as Set<string> | null,
   allowlistLoading: false,
   publishableSpaceIds: null as Set<string> | null,
   publishableLoading: false,
@@ -67,7 +68,13 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 }));
 
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
-  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
+  useClaimSpaceAllowlist: () => ({
+    allowlist: mocks.spaceAllowlist,
+    // Null rather than empty by default: unknown, so the space filter is left alone. The cases
+    // about the member default set it explicitly.
+    memberSpaceIds: mocks.memberSpaceIds,
+    isLoading: mocks.allowlistLoading,
+  }),
 }));
 
 vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => ({
@@ -379,6 +386,7 @@ beforeEach(() => {
   // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
   // unfiltered list — what every pre-existing case here runs under.
   mocks.spaceAllowlist = null;
+  mocks.memberSpaceIds = null;
   mocks.allowlistLoading = false;
   // Same shape, same reason: settled-with-no-answer does not filter, which is what every
   // pre-existing case here runs under.
@@ -976,6 +984,49 @@ describe('topic menu', () => {
     await waitFor(() => expect(screen.queryByText('Models are getting cheaper')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
     expect(screen.queryByRole('button', { name: /^AI/ })).toBeNull();
+  });
+
+  // GEO-2789. The filter opens on the spaces the viewer belongs to rather than on everything they
+  // are allowed to see, which are different sets: the allowlist also carries featured spaces.
+  it('opens on the spaces the viewer belongs to', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    // The eligible set's own ids, which is what the seed is drawn from — geo-chat normalizes.
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] }));
+  });
+
+  // The fallback, and the signed-out case with it: nobody is left on an empty list filtered by a
+  // membership they do not have. An empty selection is what this filter reads as "any space".
+  it('opens on everything when the viewer belongs to none of the spaces on offer', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set();
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    await waitFor(() => expect(mocks.lastQuery).toBeTruthy());
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+  });
+
+  // A default, not a policy: once it has applied, the viewer's own choice stands — including the
+  // choice to widen it back to everything.
+  it('lets the viewer clear the default back to every space', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+    await showAllClaims();
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] }));
+
+    // The trigger is named after the one selected space, which is the default that just applied.
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Any space' }));
+
+    // Back to the whole eligible scope, which is what an empty selection means here.
+    await waitFor(() =>
+      expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')) })
+    );
   });
 
   it('sends the picked space alone, never alongside the eligible list', async () => {

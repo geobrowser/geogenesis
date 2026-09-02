@@ -59,6 +59,7 @@ import {
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
 import { useScopedMatchmakingClaims } from '~/core/debates/matchmaking/use-scoped-claims';
+import { useMemberSpaceDefault } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
@@ -223,7 +224,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // whether the source is worth showing. Applying it there emptied both tabs in the ordinary case:
   // a debater's claims live in their personal space, which nobody else is a member of, so the
   // opponent's positions and a curator's page were dropped wholesale on the other side.
-  const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+  const { allowlist: spaceAllowlist, memberSpaceIds, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
 
   // While it is still resolving there is no telling an allowed space from one the viewer has
   // nothing to do with. Every list waits for it rather than showing the unfiltered set and
@@ -999,6 +1000,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       return kept.length === current.length ? current : kept;
     });
   }, [allowlistPending, facetSpaceIds]);
+
+  // Defaults to the spaces the viewer belongs to (GEO-2789). Seeded from `facetSpaceIds` rather
+  // than the eligible set, because that is what this menu offers and what the effect above polices:
+  // seeding a space the menu has not reached yet would have it dropped on the next render and never
+  // put back. Held until the browsed facets have landed, since until then the menu is only the
+  // spaces whose rows happen to have arrived.
+  useMemberSpaceDefault({
+    memberSpaceIds,
+    availableSpaceIds: facetSpaceIds,
+    pending: allowlistPending || publishablePending || !browsedClaimsQuery.facetsSettled,
+    onSeed: setSpaceIds,
+  });
 
   // The claims the topic menu describes on the graph-backed tabs: everything the other filters
   // allow, topic aside. Narrowing by the current topic too would collapse the menu to the one

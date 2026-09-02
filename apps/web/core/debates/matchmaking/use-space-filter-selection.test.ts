@@ -1,0 +1,97 @@
+import { renderHook } from '@testing-library/react';
+
+import { describe, expect, it, vi } from 'vitest';
+
+import { useMemberSpaceDefault } from './use-space-filter-selection';
+
+const A = '019fedae-72b6-7ab2-927a-df044d57c566';
+const B = '019fedae-72b6-7ab2-927a-df044d57c567';
+const STRANGER = '019fedae-72b6-7ab2-927a-df044d57c568';
+
+type Props = {
+  memberSpaceIds: ReadonlySet<string> | null;
+  availableSpaceIds: string[];
+  pending: boolean;
+};
+
+function seed(initial: Props) {
+  const onSeed = vi.fn();
+  const view = renderHook((props: Props) => useMemberSpaceDefault({ ...props, onSeed }), { initialProps: initial });
+  return { ...view, onSeed };
+}
+
+describe('useMemberSpaceDefault', () => {
+  it('selects the spaces the viewer belongs to that are on offer', () => {
+    const { onSeed } = seed({
+      memberSpaceIds: new Set([A, STRANGER]),
+      availableSpaceIds: [A, B],
+      pending: false,
+    });
+
+    // Not `STRANGER`: theirs, but not something this surface offers.
+    expect(onSeed).toHaveBeenCalledExactlyOnceWith([A]);
+  });
+
+  // The fallback. An empty selection is what this filter reads as "any space", so they see
+  // everything rather than an empty list filtered by a membership they do not have.
+  it('leaves the selection alone for a viewer who belongs to none of them', () => {
+    const { onSeed } = seed({ memberSpaceIds: new Set([STRANGER]), availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).not.toHaveBeenCalled();
+  });
+
+  it('leaves the selection alone when the viewer belongs to nothing at all, as signed out', () => {
+    const { onSeed } = seed({ memberSpaceIds: new Set(), availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).not.toHaveBeenCalled();
+  });
+
+  // Null is "not known yet", which is a different answer from "nothing", and seeding on it would
+  // spend the one seed this gets and land every viewer on the fallback.
+  it('waits for the viewer spaces to be known rather than treating unknown as none', () => {
+    const { rerender, onSeed } = seed({ memberSpaceIds: null, availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).not.toHaveBeenCalled();
+
+    rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).toHaveBeenCalledExactlyOnceWith([A]);
+  });
+
+  it('waits for the options too, rather than seeding against a list that has not arrived', () => {
+    const { rerender, onSeed } = seed({ memberSpaceIds: new Set([A]), availableSpaceIds: [], pending: true });
+
+    expect(onSeed).not.toHaveBeenCalled();
+
+    rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [], pending: false });
+    expect(onSeed).not.toHaveBeenCalled();
+
+    rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false });
+    expect(onSeed).toHaveBeenCalledExactlyOnceWith([A]);
+  });
+
+  // The rule the ticket asked for: this is a default, not a policy. Once it has applied, a viewer's
+  // own choice stands — including their choice to widen it back to everything.
+  it('never seeds twice, so a later change of memberships cannot overrule the viewer', () => {
+    const { rerender, onSeed } = seed({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).toHaveBeenCalledExactlyOnceWith([A]);
+
+    rerender({ memberSpaceIds: new Set([A, B]), availableSpaceIds: [A, B], pending: false });
+    rerender({ memberSpaceIds: new Set([B]), availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).toHaveBeenCalledTimes(1);
+  });
+
+  // The two sets reach this by different routes, and this codebase has had id-shape mismatches
+  // before. One here would look exactly like a viewer who belongs to nothing.
+  it('matches across id formats', () => {
+    const { onSeed } = seed({
+      memberSpaceIds: new Set([A.replace(/-/g, '')]),
+      availableSpaceIds: [A, B],
+      pending: false,
+    });
+
+    expect(onSeed).toHaveBeenCalledExactlyOnceWith([A]);
+  });
+});

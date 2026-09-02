@@ -51,6 +51,7 @@ import {
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
+import { useMemberSpaceDefault } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 
 /**
@@ -131,7 +132,7 @@ export function ClaimsTab() {
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
 
-  const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+  const { allowlist: spaceAllowlist, memberSpaceIds, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
 
   // Until the allowlist settles there is no telling an allowed space from one the viewer has
   // nothing to do with, so the tab waits instead of showing the unfiltered set and trimming it
@@ -176,6 +177,17 @@ export function ClaimsTab() {
     () => eligibleClaimSpaceIds(candidateSpaceIds, spaceShowsClaims),
     [candidateSpaceIds, spaceShowsClaims]
   );
+
+  // Defaults to the spaces the viewer belongs to (GEO-2789), drawn from what this tab is actually
+  // offering rather than from every space they belong to.
+  useMemberSpaceDefault({
+    memberSpaceIds,
+    // Null while the gates are still resolving, which the hook reads as nothing on offer yet and
+    // waits out rather than spending its one seed on.
+    availableSpaceIds: eligibleSpaceIds ?? [],
+    pending: spacesPending,
+    onSeed: setSpaceIds,
+  });
 
   const featured = filter === 'featured';
 

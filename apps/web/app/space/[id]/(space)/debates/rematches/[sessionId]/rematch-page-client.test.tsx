@@ -105,6 +105,7 @@ const mocks = vi.hoisted(() => ({
   browsedLookupLoading: false,
   currentUserId: 'user-local' as string | null,
   spaceAllowlist: null as Set<string> | null,
+  memberSpaceIds: null as Set<string> | null,
   allowlistLoading: false,
   spaceTypes: {} as Record<string, 'DAO' | 'PERSONAL'>,
   publishableSpaceIds: null as Set<string> | null,
@@ -473,7 +474,13 @@ vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => 
 
 // Null is "the allowlist hasn't resolved", which every case that isn't about it runs under.
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
-  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
+  useClaimSpaceAllowlist: () => ({
+    allowlist: mocks.spaceAllowlist,
+    // Null rather than empty by default: unknown, so the space filter is left alone. The cases
+    // about the member default set it explicitly.
+    memberSpaceIds: mocks.memberSpaceIds,
+    isLoading: mocks.allowlistLoading,
+  }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
@@ -570,6 +577,7 @@ beforeEach(() => {
   mocks.browsedLookupLoading = false;
   mocks.currentUserId = 'user-local';
   mocks.spaceAllowlist = null;
+  mocks.memberSpaceIds = null;
   mocks.allowlistLoading = false;
   mocks.spaceTypes = {};
   mocks.publishableSpaceIds = null;
@@ -1825,6 +1833,26 @@ describe('DebateRematchPageClient', () => {
   // menu was filtered by the viewer's allowlist but not by whether this pairing can publish a
   // debate there — and `browsedRows` drops every claim in a space it cannot. The server's topic
   // facet knows nothing about that, so it offered all of the space's topics over an empty list.
+  // GEO-2789, the debate-again half. Seeded from the menu rather than the eligible set, because
+  // the effect above polices the selection against exactly what the menu offers.
+  it('opens on the spaces the viewer belongs to', async () => {
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // The trigger takes the name of the one selected space rather than reading "Any space".
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+  });
+
+  it('opens on everything when the viewer belongs to none of the spaces on offer', async () => {
+    mocks.memberSpaceIds = new Set();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+  });
+
   it('does not offer a space no debate can be published into', async () => {
     mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
     render(<DebateRematchPageClient sessionId="rematch-1" />);

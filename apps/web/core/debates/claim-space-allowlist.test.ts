@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
+import { normId } from '~/core/utils/norm-id';
 
 import {
   browseSidebarClaimSpaceAllowlist,
+  browseSidebarMemberSpaceIds,
   buildClaimSpaceAllowlist,
+  buildMemberSpaceIds,
   isClaimSpaceAllowed,
 } from './claim-space-allowlist';
 
@@ -106,5 +109,52 @@ describe('isClaimSpaceAllowed', () => {
   it('rejects a claim with no home space once the allowlist is known', () => {
     expect(isClaimSpaceAllowed(null, new Set([FEATURED]))).toBe(false);
     expect(isClaimSpaceAllowed('', new Set([FEATURED]))).toBe(false);
+  });
+});
+
+// GEO-2789. The space filter defaults to what the viewer belongs to, which is the allowlist minus
+// the part of it that is on offer to everybody.
+describe('buildMemberSpaceIds', () => {
+  it('covers the spaces the viewer belongs to, and their own', () => {
+    const mine = buildMemberSpaceIds({
+      editorOf: [row(EDITOR)],
+      memberOf: [row(MEMBER)],
+      personalSpaceId: PERSONAL,
+    });
+
+    expect([...mine].sort()).toEqual([EDITOR, MEMBER, PERSONAL].map(normId).sort());
+  });
+
+  // The difference from the allowlist, and the whole point of a second function: a featured space
+  // is one the viewer may browse, not one that is theirs, so defaulting the filter to it would
+  // answer a question about them with a list about everyone.
+  it('leaves out featured spaces, which the allowlist includes', () => {
+    const data = {
+      featured: [row(FEATURED)],
+      editorOf: [row(EDITOR)],
+      memberOf: [],
+      personalSpaceId: PERSONAL,
+    } as unknown as BrowseSidebarData;
+
+    expect(browseSidebarClaimSpaceAllowlist(data, PERSONAL).has(normId(FEATURED))).toBe(true);
+    expect(browseSidebarMemberSpaceIds(data, PERSONAL).has(normId(FEATURED))).toBe(false);
+    expect(browseSidebarMemberSpaceIds(data, PERSONAL).has(normId(EDITOR))).toBe(true);
+  });
+
+  // Asked to join is not joined. Defaulting a filter to a request that has not been granted would
+  // show the viewer an empty list on the strength of it.
+  it('leaves out spaces the viewer has only asked to join', () => {
+    const mine = buildMemberSpaceIds({
+      editorOf: [],
+      memberOf: [row(MEMBER), row(PENDING, { pendingLabel: 'Membership pending' })],
+      personalSpaceId: null,
+    });
+
+    expect(mine.has(normId(MEMBER))).toBe(true);
+    expect(mine.has(normId(PENDING))).toBe(false);
+  });
+
+  it('is empty for a viewer who belongs to nothing, which is the fallback case', () => {
+    expect(buildMemberSpaceIds({ editorOf: [], memberOf: [], personalSpaceId: null }).size).toBe(0);
   });
 });
