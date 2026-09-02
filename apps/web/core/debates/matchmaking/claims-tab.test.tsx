@@ -883,6 +883,25 @@ describe('All claims reads the Debate tag', () => {
     expect(mocks.tagsAskedFor).toContain(FEATURED_TAG);
   });
 
+  // The batch query key *is* the id list, so hydrating the searched slice mints a fresh key on every
+  // settled keystroke and refetches entities the client already holds. Searching a list it is
+  // holding should cost no requests.
+  it('does not re-ask for entities while the viewer searches', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    render(<ClaimsTab />);
+    await showAllClaims();
+    await waitFor(() => expect(mocks.claimEntityLookups.length).toBeGreaterThan(0));
+
+    const askedBefore = mocks.claimEntityLookups.at(-1);
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nuclear' } });
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+
+    expect(mocks.claimEntityLookups.at(-1)).toEqual(askedBefore);
+  });
+
   it('stops paging the index, which is no longer answering this list', async () => {
     // The sentinel is what walked geo-chat's cursor. A graph-sourced list has every row in hand, so
     // a sentinel here would page a corpus nothing is reading.

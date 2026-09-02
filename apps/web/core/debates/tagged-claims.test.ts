@@ -43,7 +43,7 @@ function respondWithPages(pages: unknown[][]) {
           // The server's own count of the tagged set, which is what tells a truncated list from a
           // complete one. Every page carries it, so the fixtures do too.
           totalCount: pages.reduce((sum, page) => sum + page.length, 0),
-          pageInfo: { hasNextPage, endCursor: `cursor-${index}` },
+          pageInfo: { hasNextPage },
           nodes,
         },
       })
@@ -94,55 +94,6 @@ describe('fetchTaggedClaims', () => {
     expect((await fetchTaggedClaims(TAG)).claims.map(claim => claim.spaceId)).toEqual([SPACE, OTHER_SPACE]);
   });
 
-  // A page-worth of tags is a sample, not the set: the connection orders by relation id, which is a
-  // random v4, so a capped single request would drop rows at random from a list that is then ranked.
-  it('pages to exhaustion and ranks the whole set, not the first page', async () => {
-    respondWithPages([
-      [node('a1', 'Page one, low', '10')],
-      [node('a2', 'Page two, high', '900')],
-      [node('a3', 'Page three, middling', '100')],
-    ]);
-
-    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual([
-      'Page two, high',
-      'Page three, middling',
-      'Page one, low',
-    ]);
-    expect(graphqlMock).toHaveBeenCalledTimes(3);
-  });
-
-  it('passes the previous page cursor along', async () => {
-    respondWithPages([[node('a1', 'One', '1')], [node('a2', 'Two', '2')]]);
-
-    await fetchTaggedClaims(TAG);
-
-    expect(graphqlMock.mock.calls.map(call => call[0].variables.after)).toEqual([null, 'cursor-1']);
-  });
-
-  // A guard against a mis-tagging pointing the whole corpus at one tag, not a product limit.
-  it('stops at the runaway guard rather than paging forever', async () => {
-    graphqlMock.mockImplementation(({ decoder }) =>
-      Effect.succeed(
-        decoder({
-          entitiesConnection: {
-            totalCount: 50_000,
-            pageInfo: { hasNextPage: true, endCursor: 'cursor' },
-            nodes: Array.from({ length: 500 }, (_, index) => node(`a${index}`, `Claim ${index}`, '1')),
-          },
-        })
-      )
-    );
-
-    const result = await fetchTaggedClaims(TAG);
-
-    expect(result.claims.length).toBeGreaterThanOrEqual(TAGGED_CLAIMS_LIMIT);
-    expect(graphqlMock.mock.calls.length).toBeLessThanOrEqual(Math.ceil(TAGGED_CLAIMS_LIMIT / 500));
-    // And says so, which is the whole point of stopping: a slice that looks complete is worse than
-    // a slow list.
-    expect(result.truncated).toBe(true);
-    expect(result.total).toBe(50_000);
-  });
-
   // The guard and the corpus ending on it are the same shape from the inside; only the server's
   // count separates them. Without it, a tag with exactly 5,000 claims reported itself truncated.
   it('calls a complete list complete, even at exactly the guard', async () => {
@@ -151,7 +102,7 @@ describe('fetchTaggedClaims', () => {
         decoder({
           entitiesConnection: {
             totalCount: TAGGED_CLAIMS_LIMIT,
-            pageInfo: { hasNextPage: false, endCursor: null },
+            pageInfo: { hasNextPage: false },
             nodes: Array.from({ length: TAGGED_CLAIMS_LIMIT }, (_, index) => node(`a${index}`, `Claim ${index}`, '1')),
           },
         })
@@ -182,6 +133,53 @@ describe('fetchTaggedClaims', () => {
     expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Fine']);
   });
 
+  // One request, not a paged loop — `RANKING_SCORE_DESC` cannot be paged (the score is nullable and
+  // the cursor cannot express a null keyset), and paging by id instead would make the ceiling an
+  // arbitrary slice that can omit the highest-ranked claims.
+  it('asks once, for the server’s own maximum', async () => {
+    respondWith([node('a1', 'Only', '10')]);
+
+    await fetchTaggedClaims(TAG);
+
+    expect(graphqlMock).toHaveBeenCalledTimes(1);
+    expect(graphqlMock.mock.calls[0][0].variables).toMatchObject({ first: TAGGED_CLAIMS_LIMIT });
+    expect(graphqlMock.mock.calls[0][0].variables.after).toBeUndefined();
+  });
+
+  // What makes the ceiling honest. Ordered by rank, the claims left out are the lowest-ranked;
+  // ordered by anything else — id, say, which is what pages correctly — the same ceiling takes an
+  // arbitrary slice and can drop the highest-ranked claims of all.
+  it('asks the server to rank, so the ceiling cuts from the bottom', async () => {
+    respondWith([node('a1', 'Only', '10')]);
+
+    await fetchTaggedClaims(TAG);
+
+    const source = graphqlMock.mock.calls[0][0].query?.loc?.source?.body ?? '';
+    expect(source).toContain('RANKING_SCORE_DESC');
+  });
+
+  // The ceiling cuts the lowest-ranked, which is the only honest thing for a ranked list to lose —
+  // and it says so, rather than presenting a slice as the whole tag.
+  it('reports a list the ceiling cut, with the true size', async () => {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(
+        decoder({
+          entitiesConnection: {
+            totalCount: 4_000,
+            pageInfo: { hasNextPage: true },
+            nodes: [node('a1', 'Top ranked', '10')],
+          },
+        })
+      )
+    );
+
+    const result = await fetchTaggedClaims(TAG);
+
+    expect(result.truncated).toBe(true);
+    expect(result.total).toBe(4_000);
+    expect(namesOf(result.claims)).toEqual(['Top ranked']);
+  });
+
   // A row the decoder drops is not a truncated list. `totalCount` counts entities and the decoder
   // legitimately discards unrenderable ones, so comparing the two called a complete page a slice.
   it('does not call a complete page truncated because a row was dropped', async () => {
@@ -190,7 +188,7 @@ describe('fetchTaggedClaims', () => {
         decoder({
           entitiesConnection: {
             totalCount: 2,
-            pageInfo: { hasNextPage: false, endCursor: null },
+            pageInfo: { hasNextPage: false },
             nodes: [
               node('a1', 'Fine', '10'),
               { id: 'a2', name: null, description: null, rankingScore: '9', relationsList: [{ spaceId: SPACE }] },

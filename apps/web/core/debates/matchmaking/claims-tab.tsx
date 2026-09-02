@@ -295,10 +295,10 @@ export function ClaimsTab() {
 
   // Search and the space menu run over the loaded list. The server-side versions belong to
   // geo-chat's index, which knows nothing about this list.
-  // Search only, deliberately. The space facet counts claims *outside* the picked spaces — no facet
-  // is narrowed by its own dimension — and to narrow it by topic instead, those claims' topics have
-  // to be resolvable. So the entity lookup below runs over this set rather than the space-filtered
-  // one, and picking a space no longer decides which topics the client can see.
+  //
+  // Search only, deliberately: the space facet counts claims *outside* the picked spaces — no facet
+  // is narrowed by its own dimension — so the picked space must not decide which claims exist here.
+  // The entity lookup below is wider still, over the unsearched set, so it holds a stable key.
   const taggedSearched = React.useMemo(() => {
     const needle = debouncedSearch.toLowerCase();
     return needle === '' ? taggedAllowed : taggedAllowed.filter(claim => claim.name.toLowerCase().includes(needle));
@@ -343,9 +343,15 @@ export function ClaimsTab() {
   // The picker's narrow projection rather than `useQueryEntities`: that one defaults to nine rows
   // and slices to them. It asks in batches of a hundred and pulls six fields instead of every value
   // and relation on the entity.
+  // Over the whole allowed catalog, not the searched slice.
+  //
+  // The batch query key *is* the id list, so narrowing it by the search term mints a fresh key on
+  // every settled keystroke and refetches entities already held under the wider one — for claims
+  // that were fetched on first load, when the box was empty. Searching a list the client is holding
+  // should cost no requests at all, and now does not.
   const taggedEntityIds = React.useMemo(
-    () => [...new Set(taggedSearched.map(claim => claim.claimEntityId).filter(validateEntityId))],
-    [taggedSearched]
+    () => [...new Set(taggedAllowed.map(claim => claim.claimEntityId).filter(validateEntityId))],
+    [taggedAllowed]
   );
   const { entities: taggedEntities, isLoading: taggedEntitiesLoading } = useClaimEntitiesByIds(taggedEntityIds);
 

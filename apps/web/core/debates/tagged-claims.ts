@@ -29,18 +29,16 @@ import { devLog } from '~/core/utils/dev-log';
  * v4s — a fixed shuffle with no relationship to anything a reader would recognise.
  */
 const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
-  query TaggedClaims($tagPropertyId: UUID!, $tagId: UUID!, $claimTypeId: UUID!, $first: Int!, $after: Cursor) {
+  query TaggedClaims($tagPropertyId: UUID!, $tagId: UUID!, $claimTypeId: UUID!, $first: Int!) {
     entitiesConnection(
       first: $first
-      after: $after
-      orderBy: [ID_DESC]
+      orderBy: [RANKING_SCORE_DESC]
       typeIds: { in: [$claimTypeId] }
       filter: { relations: { some: { typeId: { is: $tagPropertyId }, toEntityId: { is: $tagId } } } }
     ) {
       totalCount
       pageInfo {
         hasNextPage
-        endCursor
       }
       nodes {
         id
@@ -79,23 +77,25 @@ type TaggedClaimsVariables = {
   tagId: string;
   claimTypeId: string;
   first: number;
-  after: string | null;
 };
 
 const taggedClaimsDocument = parse(TAGGED_CLAIMS_SOURCE) as TypedDocumentNode<TaggedClaimsQuery, TaggedClaimsVariables>;
 
-/** Rows per request. The whole tagged set is what both callers filter and show, so it is paged
- * through to exhaustion rather than sampled — a single capped request would decide what to keep by
- * relation id, which is a random v4 and so has no relationship to the order this list is shown in. */
-const TAGGED_CLAIMS_PAGE_SIZE = 500;
-
 /**
- * A runaway guard, not a product limit: a few hundred claims are tagged today, so this is an order
- * of magnitude of headroom, and reaching it means a mis-tagging has pointed the whole corpus at
- * the tag. If curation ever legitimately grows past it, the answer is a ranked server-side
- * endpoint rather than a bigger number here — the client is already sorting the entire set.
+ * How many claims a tag's list can hold, which is the server's own ceiling on `first`.
+ *
+ * One request, not a paged loop. The connection is ordered by `RANKING_SCORE_DESC`, and that
+ * ordering cannot be paged: the score is nullable and the cursor cannot express a null keyset, so
+ * continuing past the first page drops every unscored claim and duplicates one across the seam
+ * (measured: 264 of 321 returned, `hasNextPage` then false). Ordering by id pages correctly but
+ * makes the cap an arbitrary slice — take the first 5,000 by id and the highest-ranked claims can
+ * be the ones missing, which is the opposite of what a ranked list should drop.
+ *
+ * So the list is one ranked page. `truncated` then means "more exist", and what was left out is the
+ * lowest-ranked, which is the only honest thing to lose. Growing past this needs a server-side
+ * ranked endpoint rather than a bigger number here.
  */
-export const TAGGED_CLAIMS_LIMIT = 5_000;
+export const TAGGED_CLAIMS_LIMIT = 1_000;
 
 /** A claim a curator has tagged, and the space they tagged it in. */
 export type TaggedClaim = {
@@ -145,7 +145,6 @@ export function dedupeTaggedClaims(claims: TaggedClaim[]): TaggedClaim[] {
 
 type TaggedClaimsPage = {
   claims: TaggedClaim[];
-  endCursor: string | null;
   hasNextPage: boolean;
   /** How many tagged claims exist, whatever this page holds. Null where the server omits it. */
   totalCount: number | null;
@@ -177,7 +176,6 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery): TaggedClaimsPage {
 
   return {
     claims,
-    endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
     hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
     totalCount: data.entitiesConnection?.totalCount ?? null,
   };
@@ -193,67 +191,32 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery): TaggedClaimsPage {
 export type TaggedClaimsResult = { claims: TaggedClaim[]; truncated: boolean; total: number | null };
 
 export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Promise<TaggedClaimsResult> {
-  const claims: TaggedClaim[] = [];
-  let after: string | null = null;
+  const page = await Effect.runPromise(
+    graphql({
+      query: taggedClaimsDocument,
+      decoder: decodeTaggedClaimsPage,
+      variables: {
+        tagPropertyId: TAG_PROPERTY_ID,
+        tagId,
+        claimTypeId: CLAIM_TYPE_ID,
+        first: TAGGED_CLAIMS_LIMIT,
+      },
+      signal,
+    })
+  );
 
-  let total: number | null = null;
-  // Whether the connection still had a page when we stopped asking. That is the only honest signal
-  // for truncation: a count comparison cannot tell a guard-stopped list from a complete one whose
-  // decoder legitimately dropped a row.
-  let moreRemaining = false;
-
-  // Paged to exhaustion, ordered by id.
-  //
-  // `ID_DESC`, not `RANKING_SCORE_DESC`, even though ranking is what this list is shown in. The
-  // score is nullable, and the cursor cannot express a null keyset: paging the Debate tag under
-  // `RANKING_SCORE_DESC` returns 264 of its 321 claims and then reports `hasNextPage: false` —
-  // every unscored claim silently unreachable, plus a duplicate across the seam. `ID_DESC` returns
-  // all 321 at every page size. Measured against api-testnet, 2026-09-01.
-  //
-  // So the server orders for *stability* and the client orders for *rank*: `compareTaggedClaims`
-  // below is the one that decides what the reader sees, as it always was. Ordering by a column that
-  // drops rows would be trading a correct list for a prettier fetch.
-  while (claims.length < TAGGED_CLAIMS_LIMIT) {
-    const page: TaggedClaimsPage = await Effect.runPromise(
-      graphql({
-        query: taggedClaimsDocument,
-        decoder: decodeTaggedClaimsPage,
-        variables: {
-          tagPropertyId: TAG_PROPERTY_ID,
-          tagId,
-          claimTypeId: CLAIM_TYPE_ID,
-          first: TAGGED_CLAIMS_PAGE_SIZE,
-          after,
-        },
-        signal,
-      })
-    );
-
-    claims.push(...page.claims);
-    total = page.totalCount ?? total;
-    if (!page.hasNextPage || !page.endCursor) break;
-    moreRemaining = true;
-    after = page.endCursor;
-  }
-
-  // Truncated means the loop stopped while the connection still had more to give — which only the
-  // guard can cause, since the other exit is `hasNextPage: false`.
-  //
-  // Deliberately not a count comparison. `totalCount` counts entities while `claims` holds one row
-  // per *tag*, so a multi-space claim inflates the row count and a row the decoder legitimately
-  // dropped — unnamed, or a tag with no space — deflates it. Both directions produce a wrong answer
-  // about a complete list, and neither is what the caller is asking about.
-  const truncated = moreRemaining;
-  if (truncated) {
+  // `hasNextPage` is the whole truncation signal now: one ranked page, so more remaining means the
+  // cap cut it, and what it cut is the lowest-ranked. No count comparison — `totalCount` counts
+  // entities while these are one row per tag, and the decoder drops unrenderable rows besides.
+  if (page.hasNextPage) {
     devLog(
-      `[tagged-claims] stopped at the ${TAGGED_CLAIMS_LIMIT}-row guard for ${tagId} (${total ?? 'unknown'} exist); the list is truncated.`
+      `[tagged-claims] ${TAGGED_CLAIMS_LIMIT}-claim ceiling reached for ${tagId} (${page.totalCount ?? 'unknown'} exist); the lowest-ranked are not shown.`
     );
   }
 
-  // The ranking the reader sees. The connection is ordered by id for paging's sake, so this is what
-  // puts the list in Explore's "Best" order — and what keeps a claim's several tag rows adjacent
-  // rather than interleaved by page order.
-  return { claims: claims.sort(compareTaggedClaims), truncated, total };
+  // Ranked by the server already; this pins the contract `compareTaggedClaims` documents — nulls
+  // last, id as the tiebreak — so the order does not quietly become whatever the connection does.
+  return { claims: page.claims.sort(compareTaggedClaims), truncated: page.hasNextPage, total: page.totalCount };
 }
 
 /**
