@@ -23,12 +23,16 @@ function debateBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Routes each geo-chat path the loader touches to a canned response. */
-function mockGeoChat(media: unknown, debate = debateBody(), claims: unknown = null) {
+/**
+ * Routes each geo-chat path the loader touches to a canned response. `contentStatus` is what the
+ * durable `/content` route answers to the pre-publish HEAD probe.
+ */
+function mockGeoChat(media: unknown, debate = debateBody(), claims: unknown = null, contentStatus = 200) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string | URL) => {
       const url = String(input);
+      if (url.endsWith('/content')) return new Response(null, { status: contentStatus });
       const body = url.endsWith('/media')
         ? media
         : url.endsWith('/claims')
@@ -39,6 +43,11 @@ function mockGeoChat(media: unknown, debate = debateBody(), claims: unknown = nu
       return new Response(JSON.stringify(body), { status: 200 });
     })
   );
+}
+
+/** Whether the loader got as far as rendering the share card (the one IPFS pin left on this path). */
+function shareCardWasBuilt(): boolean {
+  return vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/media/artifacts/url'));
 }
 
 afterEach(() => {
@@ -93,6 +102,48 @@ describe('loadDebatePublishSource media gating', () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
 
     await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/absolute http\(s\) URL/);
+    // Refused before the share card is pinned, or every refused tick leaves an orphan on IPFS.
+    expect(shareCardWasBuilt()).toBe(false);
+  });
+
+  // The localhost fallback exists for development only. A production deploy carrying just the
+  // server-side GEO_CHAT_API_BASE_URL reads every debate fine and would otherwise write
+  // `http://localhost:8080/...` on-chain for each of them.
+  it('refuses to publish in production when no public media host is configured', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/no public media host is configured/);
+    expect(shareCardWasBuilt()).toBe(false);
+  });
+
+  it('falls back to localhost outside production when no public media host is configured', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    expect(input.videoUrl).toBe(`http://localhost:8080/debates/${DEBATE_ID}/media/artifacts/final_video/content`);
+  });
+
+  // The URL is string-built, so this probe is the only thing standing between "geo-chat has not
+  // deployed the content route yet" and a permanently dead URL on-chain. A wait, not a failure.
+  it('waits when the durable content URL does not resolve yet', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), null, 404);
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toMatchObject({ code: 'media_not_ready' });
+    expect(shareCardWasBuilt()).toBe(false);
+  });
+
+  // The healthy answer from the content route is the redirect itself, not what it points at.
+  it('accepts a redirect from the durable content URL as resolving', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), null, 302);
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    expect(input.videoUrl).toBe(`${PUBLIC_GEO_CHAT_HOST}/debates/${DEBATE_ID}/media/artifacts/final_video/content`);
+    const probes = vi.mocked(fetch).mock.calls.filter(([input]) => String(input).endsWith('/content'));
+    expect(probes.map(([, init]) => init?.method)).toEqual(['HEAD']);
+    expect(probes.map(([, init]) => init?.redirect)).toEqual(['manual']);
   });
 
   it('uses geo-chat canonical turns + pre-attributed claims when available', async () => {

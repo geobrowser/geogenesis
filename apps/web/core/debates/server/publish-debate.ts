@@ -15,7 +15,7 @@ import { Publish } from '~/core/utils/publish';
 
 import { buildDebatePublishDraft } from '../debate-publish-draft';
 import { getDebateAcceptorConfig } from './acceptor-config';
-import { loadDebatePublishSource } from './debate-source';
+import { loadDebateClaimSpaceId, loadDebatePublishSource } from './debate-source';
 
 export type PublishDebateResult =
   | { status: 'published'; debateEntityId: string; spaceId: string; userOpHash: string }
@@ -43,33 +43,35 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
     return { status: 'already_published', debateEntityId };
   }
 
-  const { input } = await loadDebatePublishSource(debateId);
-  const draft = buildDebatePublishDraft(input);
-
-  const space = await Effect.runPromise(getSpace(input.spaceId));
-  if (!space) {
-    throw new Error(`Space ${input.spaceId} could not be loaded for debate publishing.`);
-  }
-
   // Only auto-publish into spaces the acceptor actually edits. Publishing needs editor rights (a
   // member can propose but not vote+execute), and attempting it elsewhere just reverts on-chain
-  // (CanNotExecute).
+  // (CanNotExecute). Checked before loading the publish source, which renders and pins the share
+  // card: a not-editor debate is terminal and would otherwise leave a new orphan on IPFS per tick.
+  const spaceId = await loadDebateClaimSpaceId(debateId);
+  const space = await Effect.runPromise(getSpace(spaceId));
+  if (!space) {
+    throw new Error(`Space ${spaceId} could not be loaded for debate publishing.`);
+  }
+
   const access = await Effect.runPromise(getSpaceAccess(space, config.spaceId));
   if (!access.isEditor) {
     // `console.error`, not `log`: this is terminal, not a retry. The debate is recorded, its claim
     // lives somewhere the acceptor can never publish, and every sweep from here on will reach this
-    // same line and spend one of its attempt slots doing it. A personal space is the usual cause —
-    // editor rights there belong to the owner alone — which is why the rematch picker refuses to
-    // offer such a claim in the first place (see `isDebatePublishableSpace`). Reaching here means a
-    // debate got past that, so it wants looking at rather than filing under routine.
+    // same line. A personal space is the usual cause — editor rights there belong to the owner
+    // alone — which is why the rematch picker refuses to offer such a claim in the first place
+    // (see `isDebatePublishableSpace`). Reaching here means a debate got past that, so it wants
+    // looking at rather than filing under routine.
     console.error('[debate-acceptor] debate cannot be published: acceptor is not an editor of the space', {
       debateId,
-      spaceId: input.spaceId,
+      spaceId,
       spaceType: space.type,
       acceptorSpaceId: config.spaceId,
     });
-    return { status: 'not_editor', debateEntityId: draft.debateEntityId, spaceId: input.spaceId };
+    return { status: 'not_editor', debateEntityId, spaceId };
   }
+
+  const { input } = await loadDebatePublishSource(debateId);
+  const draft = buildDebatePublishDraft(input);
 
   const ops = await Effect.runPromise(
     Publish.prepareLocalDataForPublishing(draft.values, draft.relations, input.spaceId)

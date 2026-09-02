@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 
 import { getDebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
-import { DebateNotPublishableError, listSweepCandidateDebateIds } from '~/core/debates/server/debate-source';
+import {
+  DebateNotPublishableError,
+  assertDebateMediaHostConfigured,
+  listSweepCandidateDebateIds,
+} from '~/core/debates/server/debate-source';
 import { listEditorSpaceIds } from '~/core/debates/server/editor-spaces';
 import { publishDebateAsAcceptor } from '~/core/debates/server/publish-debate';
 
@@ -10,11 +14,18 @@ export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 // Bound the work per invocation. Anything left over is picked up on the next tick, where the
-// idempotency check makes re-scanning already-published debates cheap. Media stays in object
-// storage (no IPFS pinning), so a publish is dominated by on-chain signing and several fit inside
-// `maxDuration`. Counts attempts rather than successes: a failed on-chain publish has already
-// spent the time.
+// idempotency check makes re-scanning already-published debates cheap. The video and keyframe no
+// longer get downloaded and pinned to IPFS, so what remains per publish is the share-card pin and
+// two or three confirmed on-chain user operations. Counts attempts rather than successes: a failed
+// on-chain publish has already spent the time.
 const MAX_PUBLISH_ATTEMPTS_PER_SWEEP = 8;
+
+// No publish *starts* after this point in the run, whatever the attempt count. What matters is
+// that the function is never killed at `maxDuration` in the middle of one: a publish cut off
+// after its proposal lands but before the vote leaves no Debate entity for the idempotency check
+// to find, so the next tick mints a second set of Video, keyframe, Transcript and Claim entities
+// (all random ids) for the same debate. The remaining headroom is for the publish in flight.
+const PUBLISH_START_DEADLINE_MS = 180_000;
 
 /**
  * Cron sweep: publish finished debates to the knowledge graph as the debate acceptor.
@@ -37,6 +48,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, skipped: 'acceptor_not_configured' });
   }
 
+  // A media host that can never yield a valid on-chain URL fails the whole run here, once, rather
+  // than as one failed attempt per candidate debate on every tick.
+  try {
+    assertDebateMediaHostConfigured();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[debate-acceptor] sweep refused: media host misconfigured', { error: message });
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
+
+  const startedAt = Date.now();
+  const budgetExhausted = (attempted: number) =>
+    attempted >= MAX_PUBLISH_ATTEMPTS_PER_SWEEP || Date.now() - startedAt >= PUBLISH_START_DEADLINE_MS;
+
   const spaceIds = await listEditorSpaceIds(config.spaceId);
   const published: string[] = [];
   const failed: Array<{ debateId: string; error: string }> = [];
@@ -50,6 +75,7 @@ export async function GET(request: Request) {
   const mediaFailed: string[] = [];
 
   for (const spaceId of spaceIds) {
+    if (budgetExhausted(attempted)) break;
     let debateIds: string[];
     try {
       debateIds = await listSweepCandidateDebateIds(spaceId);
@@ -59,16 +85,21 @@ export async function GET(request: Request) {
     }
 
     for (const debateId of debateIds) {
-      if (attempted >= MAX_PUBLISH_ATTEMPTS_PER_SWEEP) break;
+      if (budgetExhausted(attempted)) break;
       try {
         const result = await publishDebateAsAcceptor(debateId);
         if (result.status === 'already_published') {
           alreadyPublished += 1;
           continue;
         }
+        if (result.status === 'not_editor') {
+          // Terminal and cheap (the editor check runs before any source is loaded), so it does not
+          // spend a slot: a handful of debates parked in personal spaces must not stall the queue.
+          notEditor += 1;
+          continue;
+        }
         attempted += 1;
         if (result.status === 'published') published.push(debateId);
-        else if (result.status === 'not_editor') notEditor += 1;
       } catch (error) {
         if (error instanceof DebateNotPublishableError) {
           if (error.code === 'media_failed') {
