@@ -104,6 +104,23 @@ describe('loadDebatePublishSource media gating', () => {
     expect(shareCardWasBuilt()).toBe(false);
   });
 
+  it('refuses a media host that carries a query string or fragment', async () => {
+    vi.stubEnv('NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL', 'https://media.example?health=1');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/query string or fragment/);
+    expect(shareCardWasBuilt()).toBe(false);
+  });
+
+  it('refuses a plain http media host in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', 'http://chat.example');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/https in production/);
+    expect(shareCardWasBuilt()).toBe(false);
+  });
+
   it('falls back to localhost outside production when no public media host is configured', async () => {
     vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '');
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });

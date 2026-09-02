@@ -48,6 +48,13 @@ describe('resolveMediaUrlSide', () => {
     expect(resolveMediaUrlSide(values, 'after')).toBe('https://chat.example/after');
   });
 
+  // `Web URL` is a general link property, so only loadable media schemes count.
+  it('ignores a Web URL value that is not a loadable media URL', () => {
+    const values = [value(WEB_URL_PROPERTY, null, 'mailto:someone@example.com')];
+
+    expect(resolveMediaUrlSide(values, 'after')).toBeNull();
+  });
+
   // Image entities also carry width/height values.
   it('ignores unrelated properties and reports no URL when none is present', () => {
     const values = [value('width', '1080', '1080'), value('height', '1640', '1640')];

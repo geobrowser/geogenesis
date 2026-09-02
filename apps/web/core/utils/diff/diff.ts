@@ -1051,7 +1051,7 @@ export function resolveMediaUrlSide(
 
   return (
     pick(value => value.propertyId === IMAGE_URL_PROPERTY) ??
-    pick(value => value.propertyId === WEB_URL_PROPERTY) ??
+    pick(value => value.propertyId === WEB_URL_PROPERTY && isDirectMediaUrl(value[side])) ??
     pick(value => Boolean(value[side]?.startsWith('ipfs://')))
   );
 }

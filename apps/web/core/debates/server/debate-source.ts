@@ -49,14 +49,36 @@ function debateMediaBaseUrl() {
   const base = (configured || 'http://localhost:8080').replace(/\/+$/, '');
   // The `/geo-chat-proxy` dev setup in `next.config.ts` makes this a relative path, which cannot
   // be used as a published URL.
-  if (!/^https?:\/\//i.test(base)) {
+  const parsed = parseAbsoluteHttpUrl(base);
+  if (!parsed) {
     throw new Error(
       `Refusing to publish debate media URLs built on ${base}: the media host must be an absolute ` +
         'http(s) URL, because it is written on-chain and cannot be changed afterwards. ' +
         'Set NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL to a public host.'
     );
   }
+  // A query or fragment on the base would take the artifact path into the query string.
+  if (/[?#]/.test(base)) {
+    throw new Error(
+      `Refusing to publish debate media URLs built on ${base}: the media host must not carry a query string or fragment.`
+    );
+  }
+  // Geo is served over https; http media would be blocked as mixed content.
+  if (process.env.NODE_ENV === 'production' && parsed.protocol !== 'https:') {
+    throw new Error(
+      `Refusing to publish debate media URLs built on ${base}: the media host must use https in production.`
+    );
+  }
   return base;
+}
+
+function parseAbsoluteHttpUrl(value: string): URL | null {
+  if (!/^https?:\/\//i.test(value)) return null;
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
 }
 
 /** Throws if the media host cannot produce a valid published URL. The sweep calls this once up front. */
