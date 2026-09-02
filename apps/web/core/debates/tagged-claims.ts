@@ -92,16 +92,22 @@ const TAGGED_CLAIMS_PAGE_SIZE = 1_000;
  * size the guard allows — reaching this means a mis-tagging has pointed the corpus at the tag, not
  * that curation grew.
  *
- * Ranking cannot be the paging order, which is why the sort is ours. `RANKING_SCORE_DESC` cannot be
- * paged at all: the score is nullable and the cursor cannot express a null keyset, so continuing
- * past the first page silently drops every unscored claim (measured: 297 of 353, with a duplicate
- * across the seam). `ID_DESC` pages exactly — 353 of 353 at every page size — and since every page
- * is fetched before `compareTaggedClaims` runs, ordering by id costs nothing: the reader still sees
- * Explore's "Best" order over the complete set.
+ * Ranking cannot be the paging order, which is why the sort is ours — and that is a workaround for
+ * GEO-2795, not a design. `RANKING_SCORE_DESC` cannot be paged at all on this API: continuing past
+ * the first page loses rows and duplicates others, and the connection then reports `hasNextPage:
+ * false` while entities are still missing (measured: 297 of 353, one duplicated across the seam;
+ * excluding null scores does not help, and an explicit tiebreak is ignored). `ID_DESC` pages exactly
+ * — 353 of 353 at every page size — and since every page is fetched before `compareTaggedClaims`
+ * runs, ordering by id costs nothing: the reader still sees Explore's "Best" order over the complete
+ * set.
  *
- * That is also why the guard is set where a mis-tagging lives rather than where curation might
- * reach. If it ever does bite, the slice is arbitrary — which is the one thing this design cannot
- * make honest, and the signal to move to a ranked server-side endpoint.
+ * That is also why the guard sits where a mis-tagging lives rather than where curation might reach.
+ * If it ever does bite, the slice is arbitrary — the one thing this design cannot make honest.
+ *
+ * **Reverts with GEO-2795 and GEO-2796** (see GEO-2798). Once ranked cursors work and the API can
+ * count facets, this whole module pages server-side: no exhaustion loop, no guard, and no
+ * client-side sort. Do not preserve any of it out of respect for the reasoning above — the
+ * reasoning is about an API limitation, and it expires with the limitation.
  */
 export const TAGGED_CLAIMS_LIMIT = 10_000;
 
@@ -187,9 +193,13 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery): TaggedClaimsPage {
 /**
  * Every claim carrying `tagId`, ranked over the whole set.
  *
- * `truncated` means the runaway guard stopped the paging, which is a mis-tagging rather than a
- * corpus that grew. Deliberately no `totalCount`: it is a COUNT over the filtered set on every
- * fetch, and nothing reads it.
+ * `truncated` says the runaway guard stopped the paging. It is deliberately *not* passed on by
+ * `useTaggedClaims`: it means a mis-tagging rather than a corpus that grew, so there is nothing a
+ * reader could do about it, and a flag no surface reads is a contract nobody is keeping. The dev log
+ * is where it belongs, and this field is what the tests hold the guard to.
+ *
+ * Deliberately no `totalCount` either — a COUNT over the filtered set on every fetch, for a number
+ * nothing would read.
  */
 export type TaggedClaimsResult = { claims: TaggedClaim[]; truncated: boolean };
 
@@ -265,8 +275,6 @@ export function useTaggedClaims(tagId: string, enabled: boolean) {
   return {
     claims,
     claimIds,
-    /** The guard stopped the paging, so this list is a slice of an unknown whole. */
-    truncated: query.data?.truncated ?? false,
     // `enabled: false` leaves react-query pending forever, which a caller waiting on this would
     // read as "still looking" and never show its empty state.
     isLoading: enabled && query.isLoading,
