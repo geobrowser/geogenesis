@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { isDebateEntity } from '~/core/explore/explore-card-item';
+import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { isModifiedClick } from '~/core/utils/is-modified-click';

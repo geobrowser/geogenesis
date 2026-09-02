@@ -1,7 +1,7 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { getRecordingUrls } from '~/core/community-calls/recordings';
-import { DEBATE_TYPE_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
+import { DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
 import { EntityDecoder } from '~/core/io/decoders/entity';
 import type { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
@@ -48,21 +48,6 @@ export type ExploreFeedItem = {
  * the browse sidebar it already has, Coverage looks up arbitrary spaces it has never seen.
  */
 export type ExploreFeedRow = Omit<ExploreFeedItem, 'spaceName' | 'spaceImage' | 'hasPendingMembershipRequest'>;
-
-/**
- * Whether the entity behind a card is a debate.
- *
- * Keyed on the entity's own types rather than on which card component drew it, which is the part
- * that matters: `ExploreFeedCard` hands a debate to `DebateExploreFeedCard`, but that card falls
- * back to the generic one whenever the debate cannot actually be watched — so a rule written
- * against the card would quietly stop applying to exactly the debates that took the fallback.
- *
- * `normId` because ids reach the feed in both UUID and hyphenless spellings depending on the query
- * that found them.
- */
-export function isDebateEntity(types: readonly { id: string }[]): boolean {
-  return types.some(type => normId(type.id) === normId(DEBATE_TYPE_ID));
-}
 
 /** A decoded entity plus the two fields the card needs that aren't part of `Entity`. */
 export type ExploreCardEntity = Entity & { commentCount: number; createdAt?: string };

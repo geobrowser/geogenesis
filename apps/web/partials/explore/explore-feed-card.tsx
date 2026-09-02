@@ -5,7 +5,7 @@ import * as React from 'react';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
-import { isDebateEntity } from '~/core/explore/explore-card-item';
+import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { normId } from '~/core/utils/norm-id';
