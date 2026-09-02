@@ -35,6 +35,10 @@ export const KEY_FRAME_IMAGE_PROPERTY = '7379342cf33e48e1b54fb015b3ef0f86';
  * Relation-typed and pointing at an Image entity, the same shape as Cover and Avatar, so it is read
  * the same way — confirmed against the graph rather than assumed: Data type `Relation`, To entity
  * types `Image`, Renderable type `Image`. Not exported by the SDK yet, hence the literal here.
+ *
+ * Written as well as read: publishing a debate mints a share card and relates it through this same
+ * property (`debates/ontology.ts` re-exports this id as `OG_IMAGE_PROPERTY_ID`), so a published
+ * debate serves that generated card rather than the default one.
  */
 export const OG_IMAGE_PROPERTY = '7abfeb2d147a464e8e26efdd26441189';
 

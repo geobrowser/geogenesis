@@ -3,6 +3,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk';
 import { describe, expect, it } from 'vitest';
 
 import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY, SCORE_SYSTEM_PROPERTY } from '~/core/constants';
+import { OG_IMAGE_PROPERTY_ID } from '~/core/debates/ontology';
 import { Relation, Value } from '~/core/types';
 
 import {
@@ -183,6 +184,19 @@ describe('Entity share-image helpers', () => {
     expect(shareImage([AVATAR])).toBe('ipfs://avatar');
     expect(shareImage([])).toBeNull();
     expect(shareImage(undefined)).toBeNull();
+  });
+
+  it('reads the share card a published debate writes', () => {
+    // Not a coincidence worth leaving undocumented: publishing a debate already mints a share card
+    // and relates it through this same property (GEO-2755), so putting OG Image at the front of the
+    // chain means a published debate now serves that generated card instead of the default one.
+    // `debate-publish-draft` builds exactly this shape — an Image entity carrying the URL, related
+    // from the debate — so the two features meet here, and this asserts they still use one property.
+    expect(OG_IMAGE_PROPERTY_ID).toBe(OG_IMAGE_PROPERTY);
+
+    const publishedDebateCard = imageRelation(OG_IMAGE_PROPERTY_ID, 'ipfs://QmDebateShareCard');
+
+    expect(shareImage([publishedDebateCard])).toBe('ipfs://QmDebateShareCard');
   });
 
   it('falls through an OG Image pointed at something that is not an image', () => {

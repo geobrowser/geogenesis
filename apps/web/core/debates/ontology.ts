@@ -1,6 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { KEY_FRAME_IMAGE_PROPERTY } from '~/core/constants';
+import { KEY_FRAME_IMAGE_PROPERTY, OG_IMAGE_PROPERTY } from '~/core/constants';
 
 /**
  * GRC-20 ontology for publishing a finished debate to the knowledge graph.
@@ -28,9 +28,16 @@ export const DEBATE_CLAIMS_PROPERTY_ID = 'e614cce1c4ce45868304fd1237119eb2';
 /** Transcripts (RELATION) → Transcript. */
 export const DEBATE_TRANSCRIPTS_PROPERTY_ID = 'c504c7d5c3374016a5f083e4b5a92911';
 
+/**
+ * The debate entity's social share card, generated once at publish time (GEO-2755).
+ *
+ * Re-exported rather than a second literal, per the note above: the same property now heads the
+ * share-image chain every entity page reads (GEO-2782), so the id has a home outside this ontology
+ * and the two must not drift.
+ */
+export const OG_IMAGE_PROPERTY_ID = OG_IMAGE_PROPERTY;
+
 /** Key frame (RELATION) → Image. The still the app shows as a video's poster. */
-/** The debate entity's social share card, generated once at publish time (GEO-2755). */
-export const OG_IMAGE_PROPERTY_ID = '7abfeb2d147a464e8e26efdd26441189';
 export const KEY_FRAME_IMAGE_PROPERTY_ID = KEY_FRAME_IMAGE_PROPERTY;
 
 /** Supported by (RELATION) → participant space entity arguing "yes". */
