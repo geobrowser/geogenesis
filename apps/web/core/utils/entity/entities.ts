@@ -3,6 +3,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY } from '~/core/constants';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
+import { isRenderableImageSrc } from '~/core/utils/image-src';
 import { getSpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 /**
@@ -96,17 +97,24 @@ export function ogImage(relations?: Relation[]): string | null {
 }
 
 /**
- * Guards the two ways a relation can name no usable image.
+ * Guards the ways a relation can name no usable image.
  *
  * Empty is not hypothetical: `RelationDtoLive` writes `''` whenever the target resolves as an Image
  * but carries no `IMAGE_URL_PROPERTY` yet, which is what an upload mid-flight looks like. And `??`
  * falls through on null but *not* on `''`, so an OG Image in that state at the front of the chain
  * would shadow a cover that works and put a broken card on every share of the entity — setting the
  * property badly would be worse than never having set it.
+ *
+ * Nor is "non-empty" the same as "usable". The URL is free text an author types, so it can be
+ * `hello`, and `getImagePath` passes anything that is not `ipfs://` straight through to the `<img>`.
+ * `isRenderableImageSrc` is the check the codebase already keeps for exactly this — the comment on
+ * it names the same hazard — so the chain reuses it rather than growing its own idea of a URL.
+ * Anything it rejects falls through to the next candidate, which is the whole point of a chain.
  */
 function usableImageUrl(value: string | null | undefined): string | null {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : null;
+  if (!trimmed) return null;
+  return isRenderableImageSrc(trimmed) ? trimmed : null;
 }
 
 /**

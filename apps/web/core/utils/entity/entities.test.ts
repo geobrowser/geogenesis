@@ -212,6 +212,28 @@ describe('Entity share-image helpers', () => {
     expect(shareImage([notAnImage, COVER])).toBe('ipfs://cover');
   });
 
+  it('falls through an OG Image whose URL is not a URL', () => {
+    // Copilot caught this on PR #2333. The value is free text an author types, and `getImagePath`
+    // passes anything that is not `ipfs://` straight through to the `<img>`, so "non-empty" is not
+    // the same as "usable" — and at the front of the chain a typo would shadow a cover that works.
+    for (const junk of ['hello', 'not a url', 'www.example.com/x.png', '   ']) {
+      const bad: Relation = { ...OG, toEntity: { ...OG.toEntity, value: junk } };
+
+      expect(ogImage([bad])).toBeNull();
+      expect(shareImage([bad, COVER])).toBe('ipfs://cover');
+    }
+  });
+
+  it('accepts the URL shapes an image value legitimately takes', () => {
+    // ipfs:// parses as absolute and is resolved to a gateway later; http(s) and root-relative are
+    // handed to the card as-is. None of these may be rejected by the guard above.
+    for (const good of ['ipfs://QmAbc', 'https://cdn.example.com/a.png', '/static/a.png']) {
+      const ok: Relation = { ...OG, toEntity: { ...OG.toEntity, value: good } };
+
+      expect(ogImage([ok])).toBe(good);
+    }
+  });
+
   it('falls through an OG Image relation that carries no URL', () => {
     // A relation pointing at an Image entity with an empty value is not a share image, and must not
     // shadow the cover underneath it — otherwise setting the property badly loses the old card.
