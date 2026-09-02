@@ -114,6 +114,20 @@ describe('the selected vote treatment', () => {
       expect(inlineButtons().up).toHaveClass(VOTE_CHEVRON_SELECTED_CLASS);
     });
 
+    // Presence is not enough, and this is the assertion the first version of this file was missing.
+    // `cx` is `classnames`: it concatenates rather than resolving conflicting Tailwind utilities,
+    // so emitting the grey alongside the darker colour leaves the winner to whichever rule Tailwind
+    // emits second — and it emitted grey, silently deleting this exception. jsdom evaluates no
+    // cascade, so only the absence of the competing class can catch it.
+    it('does not also carry the grey it is meant to override', () => {
+      mocks.optimisticResponse = 'positive';
+      render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="veracity" />, { wrapper });
+
+      const { up } = inlineButtons();
+      expect(up).not.toHaveClass('text-grey-03');
+      expect(up.className.match(/(^|\s)text-/g) ?? []).toHaveLength(1);
+    });
+
     it('leaves the direction the viewer did not pick grey', () => {
       mocks.optimisticResponse = 'positive';
       render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="veracity" />, { wrapper });

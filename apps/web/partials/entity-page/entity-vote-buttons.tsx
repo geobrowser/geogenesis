@@ -350,8 +350,13 @@ export function EntityVoteButtons({
   //
   // Chevrons are the exception, unchanged: a chevron has no filled form to switch to, so colour is
   // the only signal it has.
+  //
+  // One class or the other, never both. `cx` is `classnames`, which concatenates — it does not
+  // resolve conflicting Tailwind utilities the way `tailwind-merge` would, and this repo does not
+  // use that. Emitting `text-grey-03` alongside `text-[#2A2B2E]` leaves the winner to whichever
+  // rule Tailwind happens to emit second, which is not something this file gets to decide.
   const responseButtonColor = (active: boolean) =>
-    cx(VOTE_BUTTON_CLASS, variant === 'chevrons' && active && VOTE_CHEVRON_SELECTED_CLASS);
+    variant === 'chevrons' && active ? VOTE_CHEVRON_SELECTED_CLASS : VOTE_BUTTON_CLASS;
 
   const claimResponderAvatars = isClaimVariant ? (
     <ClaimResponderAvatars
