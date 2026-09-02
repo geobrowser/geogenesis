@@ -2,6 +2,7 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { RemoteRelation } from '~/core/io/schema';
 import { Relation, RenderableEntityType } from '~/core/types';
+import { isDirectMediaUrl } from '~/core/utils/media-url';
 import { getSpaceRank } from '~/core/utils/space/space-ranking';
 
 /** A relation whose target entity resolved. Dangling relations (`toEntity: null`) are dropped upstream. */
@@ -28,7 +29,8 @@ export function RelationDtoLive(relation: RemoteRelationWithTarget): Relation {
   // target is typed Image/Video. IPFS URL wins when both are present.
   const webUrlValue =
     baseRenderableType === 'IMAGE' || baseRenderableType === 'VIDEO'
-      ? relation.toEntity.valuesList.find(v => v.propertyId === webUrlPropertyHex)?.text || null
+      ? (relation.toEntity.valuesList.find(v => v.propertyId === webUrlPropertyHex && isDirectMediaUrl(v.text))?.text ??
+        null)
       : null;
   const mediaEntityUrlValue = ipfsUrlValue ?? webUrlValue;
 

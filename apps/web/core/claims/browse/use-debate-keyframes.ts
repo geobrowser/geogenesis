@@ -11,6 +11,7 @@ import {
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
+import { isDirectMediaUrl } from '~/core/utils/media-url';
 
 /**
  * The poster still for each debate, keyed by debate id.
@@ -62,7 +63,8 @@ export function useDebateKeyframes(debates: Entity[]): Map<string, string> {
     for (const keyframe of keyframes) {
       // `IPFS URL` first for pinned stills; `Web URL` carries the geo-chat URL for stills left in
       // object storage.
-      const url = valueForProperty(keyframe, IMAGE_URL_PROPERTY_ID) ?? valueForProperty(keyframe, WEB_URL_PROPERTY_ID);
+      const webUrl = valueForProperty(keyframe, WEB_URL_PROPERTY_ID);
+      const url = valueForProperty(keyframe, IMAGE_URL_PROPERTY_ID) ?? (isDirectMediaUrl(webUrl) ? webUrl : null);
       if (url) map.set(keyframe.id, url);
     }
     return map;

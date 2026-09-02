@@ -63,6 +63,14 @@ describe('RelationDtoLive media URL resolution', () => {
     expect(relation.toEntity.value).toBe(IPFS_URL);
   });
 
+  it('ignores a Web URL value that is not a loadable media URL', () => {
+    const relation = RelationDtoLive(
+      remoteRelation({ types: [{ id: VIDEO_TYPE_HEX }], valuesList: [value(WEB_URL_PROPERTY_HEX, 'mailto:a@b.c')] })
+    );
+    expect(relation.renderableType).toBe('VIDEO');
+    expect(relation.toEntity.value).toBe('');
+  });
+
   it('falls through to the Web URL when the IPFS URL value is blank', () => {
     const relation = RelationDtoLive(
       remoteRelation({
