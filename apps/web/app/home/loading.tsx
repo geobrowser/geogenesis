@@ -1,8 +1,8 @@
 import { LoadingSkeleton } from './loading-skeleton';
 
 /**
- * Scopes to the page (the list) only. The header, tabs, filter menus and sidebar
- * now live in `layout.tsx`.
+ * Page-level loading UI for `/home` navigations. Layout keeps the header and chrome
+ * provider.
  */
 export default function Loading() {
   return (

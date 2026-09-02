@@ -5,6 +5,12 @@ import type {
 
 export type GovernanceTab = 'review' | 'my';
 
+export type GovernanceFilters = {
+  spaceId: string;
+  category: GovernanceHomeReviewCategory;
+  status: GovernanceHomeStatusFilter;
+};
+
 export function parseGovernanceTab(raw?: string | null): GovernanceTab {
   return raw === 'my' ? 'my' : 'review';
 }

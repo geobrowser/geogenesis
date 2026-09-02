@@ -23,15 +23,10 @@ import {
   type GovernanceHomeStatusFilter,
 } from './fetch-active-proposals-in-editor-spaces';
 import { useGovernanceHomeChrome } from './governance-home-chrome-context';
-
-type GovernanceFilters = {
-  spaceId: string;
-  category: GovernanceHomeReviewCategory;
-  status: GovernanceHomeStatusFilter;
-};
+import type { GovernanceFilters, GovernanceTab } from './governance-home-filter-params';
 
 function buildHomeHref(parts: {
-  tab: 'review' | 'my';
+  tab: GovernanceTab;
   space: string;
   category: GovernanceHomeReviewCategory;
   status: GovernanceHomeStatusFilter;
@@ -60,7 +55,7 @@ const statusLabels: Record<GovernanceHomeStatusFilter, string> = {
 
 type PersonalHomeDashboardProps = {
   children: React.ReactNode;
-  governanceTab: 'review' | 'my';
+  governanceTab: GovernanceTab;
   governanceFilters: GovernanceFilters;
 };
 
@@ -68,10 +63,10 @@ function GovernanceTabsRow({
   governanceTab,
   filterState,
 }: {
-  governanceTab: 'review' | 'my';
+  governanceTab: GovernanceTab;
   filterState: { space: string; category: GovernanceHomeReviewCategory; status: GovernanceHomeStatusFilter };
 }) {
-  const hrefForTab = (target: 'review' | 'my') =>
+  const hrefForTab = (target: GovernanceTab) =>
     buildHomeHref({
       tab: target,
       space: filterState.space,

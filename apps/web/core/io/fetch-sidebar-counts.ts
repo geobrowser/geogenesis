@@ -197,19 +197,20 @@ export async function fetchSidebarCounts(spaceId: string): Promise<SidebarCounts
     fetchVoteBasedSidebarCounts(spaceId),
   ]);
 
+  let myProposals = EMPTY_COUNTS.myProposals;
   if (Either.isLeft(myResult)) {
     logBatchError('my proposals', myResult.left);
-    return EMPTY_COUNTS;
-  }
-
-  const my = myResult.right;
-
-  return {
-    myProposals: {
+  } else {
+    const my = myResult.right;
+    myProposals = {
       inProgress: my.myInProgress.totalCount,
       accepted: my.myAccepted.totalCount,
       rejected: my.myRejected.totalCount,
-    },
+    };
+  }
+
+  return {
+    myProposals,
     votedOn: {
       accepted: votes.votedOnAccepted,
       rejected: votes.votedOnRejected,

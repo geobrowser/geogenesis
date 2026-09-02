@@ -6,10 +6,13 @@ import { WALLET_ADDRESS } from '~/core/cookie';
 import { cachedFetchProfile } from '~/core/io/subgraph';
 
 import {
-  type GovernanceHomeReviewCategory,
-  type GovernanceHomeStatusFilter,
-} from './fetch-active-proposals-in-editor-spaces';
-import { parseCategory, parseSpace, parseStatus } from './governance-home-filter-params';
+  type GovernanceFilters,
+  type GovernanceTab,
+  parseCategory,
+  parseGovernanceTab,
+  parseSpace,
+  parseStatus,
+} from './governance-home-filter-params';
 import { getGovernanceHomeSpaceContext } from './governance-home-space-ids';
 import { HomeProposalsInfiniteScroll } from './home-proposals-infinite-scroll';
 import { LoadingSkeleton } from './loading-skeleton';
@@ -27,17 +30,11 @@ interface Props {
   }>;
 }
 
-type GovernanceFilters = {
-  spaceId: string;
-  category: GovernanceHomeReviewCategory;
-  status: GovernanceHomeStatusFilter;
-};
-
 export default async function PersonalHomePage(props: Props) {
   const [cookieStore, sp] = await Promise.all([cookies(), props.searchParams]);
   const connectedAddress = cookieStore.get(WALLET_ADDRESS)?.value;
 
-  const tab = sp.tab === 'my' ? 'my' : 'review';
+  const tab = parseGovernanceTab(sp.tab);
   const governanceFilters: GovernanceFilters = {
     spaceId: parseSpace(sp.space),
     category: parseCategory(sp.proposalCategory, sp.proposalType),
@@ -69,7 +66,7 @@ async function renderList({
   proposalType,
   governanceFilters,
 }: {
-  tab: 'review' | 'my';
+  tab: GovernanceTab;
   connectedAddress?: string;
   connectedSpaceId?: string;
   proposalType?: 'membership' | 'content';
@@ -120,8 +117,14 @@ function ListSkeleton({ count }: { count: number }) {
   );
 }
 
-function NoActivity() {
-  return <p className="mb-4 text-body text-grey-04">You have no pending requests or proposals.</p>;
+function NoActivity({ status }: { status: GovernanceFilters['status'] }) {
+  if (status === 'pending') {
+    return <p className="mb-4 text-body text-grey-04">You have no pending requests or proposals.</p>;
+  }
+  if (status === 'accepted') {
+    return <p className="mb-4 text-body text-grey-04">You have no accepted requests or proposals.</p>;
+  }
+  return <p className="mb-4 text-body text-grey-04">You have no rejected requests or proposals.</p>;
 }
 
 async function PendingProposals({
@@ -144,7 +147,7 @@ async function PendingProposals({
   });
 
   if (!node) {
-    return <NoActivity />;
+    return <NoActivity status={governanceFilters.status} />;
   }
 
   return (
