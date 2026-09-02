@@ -1,3 +1,6 @@
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
+
 import { EXPLORE_ENTITY_TYPES, EXPLORE_PAGE_SIZE } from './explore-constants';
 
 /**
@@ -51,16 +54,33 @@ export const EXPLORE_DIVERSITY_SCAN_MULTIPLIER = 3;
 export const EXPLORE_DIVERSITY_WINDOW_SIZE = EXPLORE_PAGE_SIZE * EXPLORE_DIVERSITY_SCAN_MULTIPLIER;
 
 /**
- * Explore's declared type order, used as a classification priority.
+ * Types that lose every classification tie, least specific last.
  *
- * Entities carry several `types` relations and the relation order is not meaningful, so
- * the run cap needs one deterministic type per item. Walking `EXPLORE_ENTITY_TYPES` in
- * its declared order gives that, and gives it a useful bias for free: Claim is declared
- * last, so an entity that is both a Claim and something more specific is classified as
- * the something more specific. That is both the more informative label and the safer
- * default here — it lets such an item break a claim run rather than extend one.
+ * Deliberately separate from the menu order. This priority used to *be* `EXPLORE_ENTITY_TYPES` in
+ * its declared order, which worked only because Debate and Claim happened to sit at the bottom of
+ * that list. GEO-2790 moved them to the top so the default boxes read first — a presentational
+ * change that silently inverted this one, reclassifying a Claim-and-Episode entity as a Claim and
+ * letting it *extend* a claim run rather than break one. The two orders answer different questions
+ * and are now written down separately.
  */
-const TYPE_PRIORITY = EXPLORE_ENTITY_TYPES.map(type => normId(type.id));
+const CLASSIFIES_LAST = [DEBATE_TYPE_ID, CLAIM_TYPE_ID];
+
+/**
+ * Classification priority: one deterministic type per item, most specific first.
+ *
+ * Entities carry several `types` relations and the relation order is not meaningful, so the run cap
+ * needs to pick one. Everything the menu knows about, in menu order, except the types above — which
+ * go last so an entity that is both a Claim and something more specific is classified as the
+ * something more specific. That is the more informative label and the safer default here: such an
+ * item can break a claim run instead of extending one.
+ *
+ * Membership is still derived, so a type added to the menu is classifiable without a second edit;
+ * only the ordering intent is stated by hand.
+ */
+const TYPE_PRIORITY = [
+  ...EXPLORE_ENTITY_TYPES.map(type => type.id).filter(id => !CLASSIFIES_LAST.includes(id)),
+  ...CLASSIFIES_LAST,
+].map(normId);
 
 /** Types the feed shows but that carry no useful signal for diversity. */
 export const UNTYPED_DIVERSITY_KEY = '';

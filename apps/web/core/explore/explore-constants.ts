@@ -6,9 +6,18 @@ export const EPISODE_TYPE_ID = '972d201ad78045689e01543f67b26bee';
 export const TWEET_TYPE_ID = 'd6f0506def324d8e9de4976b986e78ec';
 export const PAPER_TYPE_ID = '5e24fb52856c4189a9716af4387b1b89';
 
-/** Entity types shown on Explore (Geo ontology IDs, hyphenless for GraphQL variables). */
+/**
+ * Entity types shown on Explore (Geo ontology IDs, hyphenless for GraphQL variables).
+ *
+ * This array is the single source of order: the dropdown maps it directly, and
+ * `sanitizeExploreTypeIds` sorts every selection into it. The three defaults lead the list so the
+ * boxes a reader arrives with are the ones they see first, instead of being scattered down it —
+ * Debate and Claim used to sit at the bottom. The rest keep the order they already had.
+ */
 export const EXPLORE_ENTITY_TYPES = [
   { id: NEWS_STORY_TYPE_ID, label: 'News story' },
+  { id: DEBATE_TYPE_ID, label: 'Debate' },
+  { id: CLAIM_TYPE_ID, label: 'Claim' },
   { id: EPISODE_TYPE_ID, label: 'Episode' },
   { id: 'f3d4461486b74d2583d89709c9d84f65', label: 'Post' },
   { id: TWEET_TYPE_ID, label: 'Tweet' },
@@ -18,8 +27,6 @@ export const EXPLORE_ENTITY_TYPES = [
   { id: '484a18c5030a499cb0f2ef588ff16d50', label: 'Project' },
   { id: '150db6defe2344f0805afa57502e2c32', label: 'Ranking block' },
   { id: '0419ca20118b4cdb84dfdb9ed73b50c2', label: 'Community call event' },
-  { id: DEBATE_TYPE_ID, label: 'Debate' },
-  { id: CLAIM_TYPE_ID, label: 'Claim' },
 ] as const;
 
 export const EXPLORE_ENTITY_TYPE_IDS = EXPLORE_ENTITY_TYPES.map(type => type.id);
@@ -30,9 +37,11 @@ export const EXPLORE_ENTITY_TYPE_IDS = EXPLORE_ENTITY_TYPES.map(type => type.id)
  * A narrower opening view, not a narrower feed: every option above stays in the dropdown and a
  * reader can tick any of them. This is only what is selected before anyone touches it.
  *
- * Derived from `EXPLORE_ENTITY_TYPES` rather than written out, so the order always matches the
- * canonical list — `sanitizeExploreTypeIds` sorts selections into that order, and a default in a
- * different one would compare unequal to the same set chosen by hand.
+ * Still derived from `EXPLORE_ENTITY_TYPES` by membership rather than sliced off the front, even
+ * though these now lead the list. `sanitizeExploreTypeIds` sorts selections into that order and the
+ * feed compares them as joined keys, so a default ordered differently would look like a different
+ * selection from the same three ticked by hand — deriving it keeps the two in step through any
+ * future reshuffle, where a `slice(0, 3)` would silently follow the list somewhere else.
  */
 const DEFAULT_SELECTED_TYPE_IDS: ReadonlySet<string> = new Set([NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID, CLAIM_TYPE_ID]);
 

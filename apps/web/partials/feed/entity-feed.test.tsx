@@ -4,7 +4,11 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
+import {
+  DEFAULT_EXPLORE_TYPE_IDS,
+  EXPLORE_ENTITY_TYPES,
+  EXPLORE_ENTITY_TYPE_IDS,
+} from '~/core/explore/explore-constants';
 import { EXPLORE_TYPE_FILTER_STORAGE_KEY, exploreTypeFilterLabel } from '~/core/explore/explore-type-filter';
 
 import { EntityFeed } from './entity-feed';
@@ -282,20 +286,27 @@ describe('EntityFeed Explore type filter', () => {
   });
 
   it('applies rapid toggles to the latest selection', async () => {
-    const [first, second, third] = EXPLORE_ENTITY_TYPE_IDS;
-    window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify([first]));
+    // Labels and ids both come from `EXPLORE_ENTITY_TYPES`, so the test clicks the same entries it
+    // asserts on. It used to take the first three ids positionally while clicking Episode and Post
+    // by name, which only agreed because those happened to be positions two and three — reordering
+    // the menu for GEO-2790 broke it. Which types these are does not matter to what is being
+    // tested; that they are the same ones does.
+    const [first, second, third] = EXPLORE_ENTITY_TYPES;
+    window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify([first.id]));
 
     render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} showSortFilter showTypeFilter />);
     await screen.findByText('1 type');
 
     act(() => {
-      screen.getByRole('button', { name: /Episode/ }).click();
-      screen.getByRole('button', { name: /Post/ }).click();
+      screen.getByRole('button', { name: new RegExp(second.label) }).click();
+      screen.getByRole('button', { name: new RegExp(third.label) }).click();
     });
 
     await screen.findByText('3 types');
     await waitFor(() =>
-      expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe(JSON.stringify([first, second, third]))
+      expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe(
+        JSON.stringify([first.id, second.id, third.id])
+      )
     );
   });
 

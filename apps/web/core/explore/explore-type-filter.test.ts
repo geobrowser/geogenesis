@@ -20,6 +20,12 @@ describe('Explore default types', () => {
     expect(parseStoredExploreTypeIds(null)).toEqual(DEFAULT_EXPLORE_TYPE_IDS);
   });
 
+  it('lists the defaults first, so the boxes on arrival are the ones seen first', () => {
+    // The dropdown maps `EXPLORE_ENTITY_TYPES` directly, so this array is the menu order. Debate and
+    // Claim used to sit at the bottom of it, which put two of the three checked boxes out of view.
+    expect(EXPLORE_ENTITY_TYPE_IDS.slice(0, DEFAULT_EXPLORE_TYPE_IDS.length)).toEqual(DEFAULT_EXPLORE_TYPE_IDS);
+  });
+
   it('keeps every type available to choose', () => {
     // The scope of GEO-2790 is what is checked on arrival, not what the feed can show. Every
     // default has to still be an option, and the options list has to still be the longer one.
