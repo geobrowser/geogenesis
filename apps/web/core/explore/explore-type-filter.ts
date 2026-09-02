@@ -1,4 +1,4 @@
-import { EXPLORE_ENTITY_TYPES } from './explore-constants';
+import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES, EXPLORE_ENTITY_TYPE_IDS } from './explore-constants';
 
 export const EXPLORE_TYPE_FILTER_STORAGE_KEY = 'exploreSelectedTypeIds';
 
@@ -8,8 +8,27 @@ function normalizeId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
 }
 
-function defaultExploreTypeIds(): string[] {
-  return EXPLORE_ENTITY_TYPES.map(type => type.id);
+/**
+ * Every type there is. Distinct from `DEFAULT_EXPLORE_TYPE_IDS`, and the distinction matters more
+ * than it looks: these two were one function until GEO-2790, and collapsing them again would be a
+ * quiet bug. The client omits the `typeIds` param *precisely when every type is selected*, so the
+ * server reading a missing param as "the default three" would hand back three types to the reader
+ * who had just ticked all twelve.
+ */
+function allExploreTypeIds(): string[] {
+  return [...EXPLORE_ENTITY_TYPE_IDS];
+}
+
+/**
+ * A selection, put back into the order the menu declares.
+ *
+ * Order is not cosmetic here. The feed keys its query on the joined ids and compares selections by
+ * length, so the same three types in two orders would look like two different selections and refetch
+ * for a change nobody made. Both callers below build a set and then need it ordered, so the rule
+ * lives once rather than being spelled out at each of them.
+ */
+function inCanonicalOrder(selected: ReadonlySet<string>): string[] {
+  return EXPLORE_ENTITY_TYPE_IDS.filter(id => selected.has(id));
 }
 
 export function sanitizeExploreTypeIds(ids: readonly unknown[]): string[] {
@@ -21,24 +40,36 @@ export function sanitizeExploreTypeIds(ids: readonly unknown[]): string[] {
     if (canonical) selected.add(canonical);
   }
 
-  return EXPLORE_ENTITY_TYPES.map(type => type.id).filter(id => selected.has(id));
+  return inCanonicalOrder(selected);
 }
 
-/** Missing or corrupt cache means the default: every Explore type selected. */
+/**
+ * What the dropdown opens with. Nothing stored, or something unreadable, means the default.
+ *
+ * Only a deliberate toggle writes this key, so "nothing stored" is the same population as "has
+ * never touched the filter" — which is why a reader who once chose their own types keeps them, and
+ * only someone who never expressed a preference is given the new one. A default is a guess about
+ * what someone wants before they say; a stored selection is them having said.
+ */
 export function parseStoredExploreTypeIds(raw: string | null): string[] {
-  if (raw === null) return defaultExploreTypeIds();
+  if (raw === null) return [...DEFAULT_EXPLORE_TYPE_IDS];
 
   try {
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? sanitizeExploreTypeIds(parsed) : defaultExploreTypeIds();
+    return Array.isArray(parsed) ? sanitizeExploreTypeIds(parsed) : [...DEFAULT_EXPLORE_TYPE_IDS];
   } catch {
-    return defaultExploreTypeIds();
+    return [...DEFAULT_EXPLORE_TYPE_IDS];
   }
 }
 
-/** Missing query params preserve the historical all-types API behavior; an empty value means none. */
+/**
+ * Missing query params preserve the historical all-types API behavior; an empty value means none.
+ *
+ * Deliberately *not* the new default. The client drops the param when every type is selected, so
+ * this is the "all twelve" path, not the "hasn't chosen yet" one — see `allExploreTypeIds`.
+ */
 export function parseExploreTypeIdsParam(raw: string | null): string[] {
-  if (raw === null) return defaultExploreTypeIds();
+  if (raw === null) return allExploreTypeIds();
   if (raw === '') return [];
   return sanitizeExploreTypeIds(raw.split(','));
 }
@@ -51,7 +82,7 @@ export function toggleExploreTypeId(selectedTypeIds: readonly string[], typeId: 
   if (selected.has(canonicalTypeId)) selected.delete(canonicalTypeId);
   else selected.add(canonicalTypeId);
 
-  return EXPLORE_ENTITY_TYPES.map(type => type.id).filter(id => selected.has(id));
+  return inCanonicalOrder(selected);
 }
 
 export function exploreTypeFilterLabel(selectedCount: number): string {
