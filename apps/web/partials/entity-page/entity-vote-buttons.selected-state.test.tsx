@@ -10,15 +10,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ResponseKind } from '~/core/responses/entity-response';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
-import { VOTE_SELECTED_CLASS } from './vote-button-styles';
+import { VOTE_BUTTON_CLASS, VOTE_CHEVRON_SELECTED_CLASS } from './vote-button-styles';
 
 /**
  * GEO-2792. Four surfaces had four answers for "this is the one you picked": curation said it with
- * fill alone, stance said `grey-04`, veracity said a hand-written `#2A2B2E`, and the debates pill
- * said blue for up and red for down.
+ * fill alone, stance darkened to `grey-04`, veracity used a hand-written `#2A2B2E`, and the debates
+ * pill went blue for up and red for down.
  *
- * These assert the shared class rather than a literal, so the treatment can be changed in one place
- * — but they still fail if a surface stops reading it, which is the drift that produced the ticket.
+ * They now all say it the way curation always did — grey, with the filled icon carrying the signal.
+ * The chevrons keep their darker selected colour, since a chevron has no filled form to switch to.
  */
 const SPACE = '41e851610e13a19441c4d980f2f2ce6b';
 
@@ -79,26 +79,47 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the selected vote treatment', () => {
-  // Every inline response kind, including curation — which used to get no colour class at all and
-  // pinned its arrow to `grey-03`, so a curated row looked the same voted or not.
+  // Grey in both states. Being picked is said by the icon filling in, not by the colour changing —
+  // which is how the curation arrows on tables and Explore have always worked.
   describe.each<[string, ResponseKind]>([
     ['curation arrows', 'curation'],
     ['stance thumbs', 'stance'],
-    ['veracity chevrons', 'veracity'],
   ])('%s', (_label, responseKind) => {
-    it('marks the picked direction with the shared class', () => {
+    it('stays grey whether or not it is the one picked', () => {
       mocks.optimisticResponse = 'positive';
       render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind={responseKind} />, { wrapper });
 
-      expect(inlineButtons().up).toHaveClass(VOTE_SELECTED_CLASS);
+      const { up, down } = inlineButtons();
+      expect(up).toHaveClass('text-grey-03');
+      expect(down).toHaveClass('text-grey-03');
+    });
+
+    // The thumbs used to darken to `grey-04` when picked, which is the drift this closes.
+    it('does not darken the picked direction', () => {
+      mocks.optimisticResponse = 'positive';
+      render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind={responseKind} />, { wrapper });
+
+      expect(inlineButtons().up).not.toHaveClass('text-text');
+      expect(inlineButtons().up.className).not.toMatch(/(^|\s)text-grey-04(\s|$)/);
+    });
+  });
+
+  // Deliberately exempt, and unchanged from what shipped: a chevron has no filled form, so colour
+  // is the only signal it has.
+  describe('veracity chevrons', () => {
+    it('keeps its own darker selected colour', () => {
+      mocks.optimisticResponse = 'positive';
+      render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="veracity" />, { wrapper });
+
+      expect(inlineButtons().up).toHaveClass(VOTE_CHEVRON_SELECTED_CLASS);
     });
 
     it('leaves the direction the viewer did not pick grey', () => {
       mocks.optimisticResponse = 'positive';
-      render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind={responseKind} />, { wrapper });
+      render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="veracity" />, { wrapper });
 
       const { down } = inlineButtons();
-      expect(down).not.toHaveClass(VOTE_SELECTED_CLASS);
+      expect(down).not.toHaveClass(VOTE_CHEVRON_SELECTED_CLASS);
       expect(down).toHaveClass('text-grey-03');
     });
   });
@@ -121,16 +142,6 @@ describe('the selected vote treatment', () => {
       };
     }
 
-    it.each([
-      ['up', 'positive' as const],
-      ['down', 'negative' as const],
-    ])('marks a picked %s with the same class as everywhere else', (_direction, response) => {
-      mocks.optimisticResponse = response;
-      const { pressed } = renderPill();
-
-      expect(pressed).toHaveClass(VOTE_SELECTED_CLASS);
-    });
-
     // The specific complaint: full screen rendered `ctaPrimary` for up and `red-01` for down, the
     // only surface in the app using either for this.
     it.each([
@@ -145,18 +156,27 @@ describe('the selected vote treatment', () => {
       expect(pressed.className).not.toMatch(/aria-pressed:text-(ctaPrimary|red-01)/);
     });
 
-    it('leaves the direction the viewer did not pick grey', () => {
+    it('reads the same grey as every other surface, picked or not', () => {
       mocks.optimisticResponse = 'positive';
-      const { unpressed } = renderPill();
+      const { pressed, unpressed } = renderPill();
 
-      expect(unpressed).not.toHaveClass(VOTE_SELECTED_CLASS);
-      expect(unpressed).toHaveClass('text-grey-04');
+      expect(pressed).toHaveClass('text-grey-03');
+      expect(unpressed).toHaveClass('text-grey-03');
+    });
+
+    // It rested a shade darker than the inline controls and hovered all the way to black, which is
+    // the same divergence one state over.
+    it('no longer rests darker or hovers to black', () => {
+      mocks.optimisticResponse = 'positive';
+      const { pressed } = renderPill();
+
+      expect(pressed.className).not.toMatch(/(^|\s)text-grey-04(\s|$)/);
+      expect(pressed).not.toHaveClass('hover:text-text');
     });
   });
 
-  // The token, not a near-black typed by hand. `#2A2B2E` appears in a dozen files and is not in the
-  // theme; `text` is, at `#202020`.
-  it('uses a theme token rather than a hardcoded colour', () => {
-    expect(VOTE_SELECTED_CLASS).toBe('text-text');
+  // One definition, so the greys cannot drift apart again.
+  it('shares one class between the pill and the inline controls', () => {
+    expect(VOTE_BUTTON_CLASS).toBe('text-grey-03 hover:text-grey-04');
   });
 });

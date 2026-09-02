@@ -48,7 +48,7 @@ import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
-import { VOTE_SELECTED_CLASS } from '~/partials/entity-page/vote-button-styles';
+import { VOTE_BUTTON_CLASS, VOTE_CHEVRON_SELECTED_CLASS } from '~/partials/entity-page/vote-button-styles';
 import { avatarAtom, nameAtom, spaceIdAtom, stepAtom, topicIdAtom } from '~/partials/onboarding/dialog';
 
 import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
@@ -338,16 +338,20 @@ export function EntityVoteButtons({
       return direction === 'up' ? <ThumbUp filled={active} /> : <ThumbDown filled={active} />;
     }
 
-    // No `color`: the arrow takes `currentColor` from the button, so the one selected treatment
-    // below reaches curation too. Pinned to `grey-03` it stayed grey once picked, and `fill` alone
-    // had to carry the whole signal.
+    // No `color`: the arrow takes `currentColor` from the button, which is where the grey now lives
+    // for every variant. Pinning it here meant this one icon answered for its own colour while the
+    // other two read the button's, which is how the three drifted apart.
     return <VoteArrow direction={direction} filled={active} />;
   };
 
-  // Every inline variant, curation included. It used to branch three ways — a hand-written
-  // near-black for chevrons, `grey-04` for thumbs, and nothing at all for curation, whose arrows
-  // pinned their own colour instead.
-  const responseButtonColor = (active: boolean) => (active ? VOTE_SELECTED_CLASS : 'text-grey-03 hover:text-grey-04');
+  // Grey either way; the filled icon says which one you picked. The thumbs used to darken to
+  // `grey-04` when picked and curation got no class at all, pinning its arrows' colour on the icon
+  // instead — three spellings of a control that should look the same everywhere.
+  //
+  // Chevrons are the exception, unchanged: a chevron has no filled form to switch to, so colour is
+  // the only signal it has.
+  const responseButtonColor = (active: boolean) =>
+    cx(VOTE_BUTTON_CLASS, variant === 'chevrons' && active && VOTE_CHEVRON_SELECTED_CLASS);
 
   const claimResponderAvatars = isClaimVariant ? (
     <ClaimResponderAvatars
@@ -513,8 +517,8 @@ function DebateVotePill({
         title={positiveTitle}
         onClick={onPositive}
         className={cx(
-          'group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50',
-          positiveActive && VOTE_SELECTED_CLASS
+          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
+          VOTE_BUTTON_CLASS
         )}
       >
         <VoteArrow direction="up" filled={positiveActive} />
@@ -528,8 +532,8 @@ function DebateVotePill({
         title={negativeTitle}
         onClick={onNegative}
         className={cx(
-          'group/vote flex items-center justify-center text-grey-04 transition-colors hover:text-text disabled:cursor-default disabled:opacity-50',
-          negativeActive && VOTE_SELECTED_CLASS
+          'group/vote flex items-center justify-center transition-colors disabled:cursor-default disabled:opacity-50',
+          VOTE_BUTTON_CLASS
         )}
       >
         <VoteArrow direction="down" filled={negativeActive} />

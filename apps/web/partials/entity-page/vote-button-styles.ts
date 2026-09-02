@@ -1,25 +1,27 @@
 /**
- * How an upvote / downvote button says it is the one you picked (GEO-2792).
+ * How an upvote / downvote button is coloured, picked or not (GEO-2792).
  *
- * One constant, because four surfaces had four answers and none of them referenced the others:
+ * `grey-03`, in both states. Being the one you picked is said by the icon filling in — an arrow, a
+ * thumb — not by the colour changing. That is how the curation arrows on tables and Explore have
+ * always worked, and it is the treatment the other surfaces had drifted away from:
  *
- * - curation arrows on tables and entity pages said it with `fill` alone, leaving the arrow
- *   `grey-03` whether or not you had voted
- * - the stance thumbs said `text-grey-04`
- * - the veracity chevrons said `text-[#2A2B2E]`, which is not a token — it is a near-black used
- *   informally in a dozen files, ten units off the one the theme actually defines
- * - the debates pill said `ctaPrimary` for up and `red-01` for down: blue and red, on the only
- *   surface that used either
+ * - the stance thumbs darkened to `grey-04` when picked
+ * - the debates pill went `ctaPrimary` for up and `red-01` for down — blue and red, on the only
+ *   surface in the app using either for this
  *
- * `text` is the theme's own ink (`#202020`), which is what the chevrons were reaching for when
- * they wrote `#2A2B2E` by hand. Selected means ink; everything else stays grey. The direction is
- * already carried by the icon — an arrow, a thumb or a chevron, and its filled shape — so colour
- * does not have to say it a second time, which is why up and down converge on one value rather
- * than keeping the pill's blue/red pair.
+ * The veracity chevrons are the deliberate exception and keep their own darker selected state. A
+ * chevron has no filled form to switch to, so colour is the only signal it has.
  *
- * The resting and hover greys are deliberately *not* here. They differ by surface for a reason the
- * selected state does not share: the pill sits on white with a border and rests at `grey-04`,
- * while an inline row rests at the lighter `grey-03`. That is contrast against different
- * backgrounds, not a disagreement about what "picked" looks like.
+ * One definition so the greys cannot drift apart again; the pill also rested a shade darker at
+ * `grey-04`, which is the same divergence one state over.
  */
-export const VOTE_SELECTED_CLASS = 'text-text';
+export const VOTE_BUTTON_CLASS = 'text-grey-03 hover:text-grey-04';
+
+/**
+ * The veracity chevrons' selected colour, kept exactly as it shipped.
+ *
+ * Not a token: `#2A2B2E` is a near-black written by hand in about a dozen files, ten units off the
+ * theme's own `text` (`#202020`). Left alone here because this ticket is about the greys, but it is
+ * the one hardcoded colour still in this control.
+ */
+export const VOTE_CHEVRON_SELECTED_CLASS = 'text-[#2A2B2E]';
