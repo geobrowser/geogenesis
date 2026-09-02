@@ -40,9 +40,6 @@ function respondWithPages(pages: unknown[][]) {
     return Effect.succeed(
       decoder({
         entitiesConnection: {
-          // The server's own count of the tagged set, which is what tells a truncated list from a
-          // complete one. Every page carries it, so the fixtures do too.
-          totalCount: pages.reduce((sum, page) => sum + page.length, 0),
           pageInfo: { hasNextPage },
           nodes,
         },
@@ -160,12 +157,11 @@ describe('fetchTaggedClaims', () => {
 
   // The ceiling cuts the lowest-ranked, which is the only honest thing for a ranked list to lose —
   // and it says so, rather than presenting a slice as the whole tag.
-  it('reports a list the ceiling cut, with the true size', async () => {
+  it('reports a list the ceiling cut', async () => {
     graphqlMock.mockImplementation(({ decoder }) =>
       Effect.succeed(
         decoder({
           entitiesConnection: {
-            totalCount: 4_000,
             pageInfo: { hasNextPage: true },
             nodes: [node('a1', 'Top ranked', '10')],
           },
@@ -176,7 +172,6 @@ describe('fetchTaggedClaims', () => {
     const result = await fetchTaggedClaims(TAG);
 
     expect(result.truncated).toBe(true);
-    expect(result.total).toBe(4_000);
     expect(namesOf(result.claims)).toEqual(['Top ranked']);
   });
 
@@ -187,7 +182,6 @@ describe('fetchTaggedClaims', () => {
       Effect.succeed(
         decoder({
           entitiesConnection: {
-            totalCount: 2,
             pageInfo: { hasNextPage: false },
             nodes: [
               node('a1', 'Fine', '10'),

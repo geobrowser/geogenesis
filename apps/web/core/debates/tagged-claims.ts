@@ -36,7 +36,6 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
       typeIds: { in: [$claimTypeId] }
       filter: { relations: { some: { typeId: { is: $tagPropertyId }, toEntityId: { is: $tagId } } } }
     ) {
-      totalCount
       pageInfo {
         hasNextPage
       }
@@ -59,8 +58,7 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
 
 type TaggedClaimsQuery = {
   entitiesConnection: {
-    totalCount: number | null;
-    pageInfo: { hasNextPage: boolean; endCursor: string | null } | null;
+    pageInfo: { hasNextPage: boolean } | null;
     nodes: Array<{
       id: string;
       name: string | null;
@@ -143,12 +141,7 @@ export function dedupeTaggedClaims(claims: TaggedClaim[]): TaggedClaim[] {
   });
 }
 
-type TaggedClaimsPage = {
-  claims: TaggedClaim[];
-  hasNextPage: boolean;
-  /** How many tagged claims exist, whatever this page holds. Null where the server omits it. */
-  totalCount: number | null;
-};
+type TaggedClaimsPage = { claims: TaggedClaim[]; hasNextPage: boolean };
 
 function decodeTaggedClaimsPage(data: TaggedClaimsQuery): TaggedClaimsPage {
   const claims: TaggedClaim[] = [];
@@ -174,21 +167,18 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery): TaggedClaimsPage {
     }
   }
 
-  return {
-    claims,
-    hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
-    totalCount: data.entitiesConnection?.totalCount ?? null,
-  };
+  return { claims, hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false };
 }
 
 /**
- * Every claim carrying `tagId`, ranked.
+ * Every claim carrying `tagId`, ranked. `truncated` is `hasNextPage` — one page, so more remaining
+ * means the ceiling cut it.
  *
- * `total` is the server's own count of the tagged set, so `truncated` is a comparison rather than a
- * guess: the guard stopping the loop and the corpus happening to end on the guard are the same
- * shape from the inside, and only the count can tell them apart.
+ * Deliberately no `totalCount`. It costs nothing against 353 tagged claims, but it is a COUNT over
+ * the filtered set on every fetch, and the set this exists to serve is the one expected to grow.
+ * The only thing it bought was a number in the log line below.
  */
-export type TaggedClaimsResult = { claims: TaggedClaim[]; truncated: boolean; total: number | null };
+export type TaggedClaimsResult = { claims: TaggedClaim[]; truncated: boolean };
 
 export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Promise<TaggedClaimsResult> {
   const page = await Effect.runPromise(
@@ -205,18 +195,19 @@ export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Pr
     })
   );
 
-  // `hasNextPage` is the whole truncation signal now: one ranked page, so more remaining means the
-  // cap cut it, and what it cut is the lowest-ranked. No count comparison — `totalCount` counts
-  // entities while these are one row per tag, and the decoder drops unrenderable rows besides.
+  // `hasNextPage` is the whole truncation signal: one ranked page, so more remaining means the cap
+  // cut it, and what it cut is the lowest-ranked. Not a count comparison — a count would have to be
+  // asked for, and it never matched anyway: it counts entities while these are one row per tag, and
+  // the decoder drops unrenderable rows besides.
   if (page.hasNextPage) {
     devLog(
-      `[tagged-claims] ${TAGGED_CLAIMS_LIMIT}-claim ceiling reached for ${tagId} (${page.totalCount ?? 'unknown'} exist); the lowest-ranked are not shown.`
+      `[tagged-claims] ${TAGGED_CLAIMS_LIMIT}-claim ceiling reached for ${tagId}; the lowest-ranked are not shown.`
     );
   }
 
   // Ranked by the server already; this pins the contract `compareTaggedClaims` documents — nulls
   // last, id as the tiebreak — so the order does not quietly become whatever the connection does.
-  return { claims: page.claims.sort(compareTaggedClaims), truncated: page.hasNextPage, total: page.totalCount };
+  return { claims: page.claims.sort(compareTaggedClaims), truncated: page.hasNextPage };
 }
 
 /**
