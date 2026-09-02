@@ -141,17 +141,22 @@ describe('buildMemberSpaceIds', () => {
     expect(browseSidebarMemberSpaceIds(data, PERSONAL).has(normId(EDITOR))).toBe(true);
   });
 
-  // Asked to join is not joined. Defaulting a filter to a request that has not been granted would
-  // show the viewer an empty list on the strength of it.
-  it('leaves out spaces the viewer has only asked to join', () => {
-    const mine = buildMemberSpaceIds({
+  // Where this parts company with the allowlist. A sign-up expresses interest in spaces and the
+  // approvals take a few minutes, so a new account's spaces are all pending at once — excluding
+  // them would fall back to "everything" for exactly the viewers the default is for, then start
+  // working on its own once the approvals landed.
+  it('counts spaces the viewer has asked to join, unlike the allowlist', () => {
+    const data = {
+      featured: [],
       editorOf: [],
       memberOf: [row(MEMBER), row(PENDING, { pendingLabel: 'Membership pending' })],
       personalSpaceId: null,
-    });
+    } as unknown as BrowseSidebarData;
 
-    expect(mine.has(normId(MEMBER))).toBe(true);
-    expect(mine.has(normId(PENDING))).toBe(false);
+    expect(browseSidebarMemberSpaceIds(data, null).has(normId(PENDING))).toBe(true);
+    // The allowlist still doesn't, because access is a different question from interest.
+    expect(browseSidebarClaimSpaceAllowlist(data, null).has(normId(PENDING))).toBe(false);
+    expect(browseSidebarMemberSpaceIds(data, null).has(normId(MEMBER))).toBe(true);
   });
 
   it('is empty for a viewer who belongs to nothing, which is the fallback case', () => {

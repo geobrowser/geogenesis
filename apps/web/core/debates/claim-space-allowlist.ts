@@ -53,9 +53,16 @@ export function buildClaimSpaceAllowlist({
  * difference: they are on offer to everyone, so they widen what can be browsed without saying
  * anything about who the viewer is. GEO-2789 defaults the space filter to this narrower set.
  *
- * Pending rows are excluded on the same reasoning as the allowlist: a space the viewer has asked
- * to join is not one they belong to, and defaulting a filter to it would answer a request that
- * has not been granted.
+ * Pending rows *are* included, which is the one place this parts company with the allowlist above.
+ * The allowlist answers a question about access, where a request that has not been granted plainly
+ * isn't one; this answers a question about interest, where it plainly is. A new account expresses
+ * that interest at sign-up and spends its first few minutes with every space pending — so excluding
+ * them would fall back to "everything" for precisely the viewers this default exists to help, and
+ * then quietly start working once the approvals landed.
+ *
+ * Nothing is granted by being here. The seeded selection is intersected with the spaces the surface
+ * already offers, so a pending space the allowlist keeps out stays out; this only decides whether
+ * a box starts ticked among the ones already on the menu.
  */
 export function buildMemberSpaceIds({
   editorOf,
@@ -69,10 +76,7 @@ export function buildMemberSpaceIds({
 }): Set<string> {
   const mine = new Set<string>();
 
-  for (const row of [...editorOf, ...memberOf]) {
-    if (row.pendingLabel) continue;
-    mine.add(normId(row.id));
-  }
+  for (const row of [...editorOf, ...memberOf]) mine.add(normId(row.id));
 
   if (personalSpaceId) mine.add(normId(personalSpaceId));
 
