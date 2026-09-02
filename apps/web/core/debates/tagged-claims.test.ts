@@ -40,7 +40,7 @@ function respondWithPages(pages: unknown[][]) {
     return Effect.succeed(
       decoder({
         entitiesConnection: {
-          pageInfo: { hasNextPage },
+          pageInfo: { hasNextPage, endCursor: `cursor-${index}` },
           nodes,
         },
       })
@@ -99,7 +99,7 @@ describe('fetchTaggedClaims', () => {
         decoder({
           entitiesConnection: {
             totalCount: TAGGED_CLAIMS_LIMIT,
-            pageInfo: { hasNextPage: false },
+            pageInfo: { hasNextPage: false, endCursor: null },
             nodes: Array.from({ length: TAGGED_CLAIMS_LIMIT }, (_, index) => node(`a${index}`, `Claim ${index}`, '1')),
           },
         })
@@ -130,40 +130,52 @@ describe('fetchTaggedClaims', () => {
     expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Fine']);
   });
 
-  // One request, not a paged loop — `RANKING_SCORE_DESC` cannot be paged (the score is nullable and
-  // the cursor cannot express a null keyset), and paging by id instead would make the ceiling an
-  // arbitrary slice that can omit the highest-ranked claims.
-  it('asks once, for the server’s own maximum', async () => {
-    respondWith([node('a1', 'Only', '10')]);
+  // Paged to exhaustion, then ranked. Ranking cannot be the paging order — `RANKING_SCORE_DESC`
+  // silently drops every unscored claim past the first page — so the connection pages by id and the
+  // sort happens here, over the complete set.
+  it('pages to exhaustion and ranks the whole set, not the first page', async () => {
+    respondWithPages([
+      [node('a1', 'Page one, low', '1')],
+      [node('a2', 'Page two, high', '10')],
+      [node('a3', 'Page three, middling', '5')],
+    ]);
+
+    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual([
+      'Page two, high',
+      'Page three, middling',
+      'Page one, low',
+    ]);
+  });
+
+  it('passes the previous page cursor along', async () => {
+    respondWithPages([[node('a1', 'One', '1')], [node('a2', 'Two', '2')]]);
 
     await fetchTaggedClaims(TAG);
 
-    expect(graphqlMock).toHaveBeenCalledTimes(1);
-    expect(graphqlMock.mock.calls[0][0].variables).toMatchObject({ first: TAGGED_CLAIMS_LIMIT });
-    expect(graphqlMock.mock.calls[0][0].variables.after).toBeUndefined();
+    expect(graphqlMock.mock.calls.map(call => call[0].variables.after)).toEqual([null, 'cursor-1']);
   });
 
-  // What makes the ceiling honest. Ordered by rank, the claims left out are the lowest-ranked;
-  // ordered by anything else — id, say, which is what pages correctly — the same ceiling takes an
-  // arbitrary slice and can drop the highest-ranked claims of all.
-  it('asks the server to rank, so the ceiling cuts from the bottom', async () => {
+  // Ordering by id is what makes the paging exact. Ranking by the server instead loses rows, so the
+  // query must not quietly acquire an `orderBy` that reads better and pages worse.
+  it('pages by id, leaving the ranking to the client', async () => {
     respondWith([node('a1', 'Only', '10')]);
 
     await fetchTaggedClaims(TAG);
 
     const source = graphqlMock.mock.calls[0][0].query?.loc?.source?.body ?? '';
-    expect(source).toContain('RANKING_SCORE_DESC');
+    expect(source).toContain('ID_DESC');
+    expect(source).not.toContain('RANKING_SCORE_DESC');
   });
 
-  // The ceiling cuts the lowest-ranked, which is the only honest thing for a ranked list to lose —
-  // and it says so, rather than presenting a slice as the whole tag.
-  it('reports a list the ceiling cut', async () => {
+  // A guard against a mis-tagging pointing the whole corpus at one tag, not a product limit — and
+  // it says so, because the slice it leaves is arbitrary rather than the lowest-ranked.
+  it('stops at the runaway guard rather than paging forever', async () => {
     graphqlMock.mockImplementation(({ decoder }) =>
       Effect.succeed(
         decoder({
           entitiesConnection: {
-            pageInfo: { hasNextPage: true },
-            nodes: [node('a1', 'Top ranked', '10')],
+            pageInfo: { hasNextPage: true, endCursor: 'cursor' },
+            nodes: Array.from({ length: 1_000 }, (_, index) => node(`a${index}`, `Claim ${index}`, '1')),
           },
         })
       )
@@ -171,8 +183,15 @@ describe('fetchTaggedClaims', () => {
 
     const result = await fetchTaggedClaims(TAG);
 
+    expect(result.claims.length).toBeGreaterThanOrEqual(TAGGED_CLAIMS_LIMIT);
+    expect(graphqlMock.mock.calls.length).toBeLessThanOrEqual(Math.ceil(TAGGED_CLAIMS_LIMIT / 1_000));
     expect(result.truncated).toBe(true);
-    expect(namesOf(result.claims)).toEqual(['Top ranked']);
+  });
+
+  it('calls an exhausted list complete, however large', async () => {
+    respondWithPages([[node('a1', 'One', '1')], [node('a2', 'Two', '2')]]);
+
+    expect((await fetchTaggedClaims(TAG)).truncated).toBe(false);
   });
 
   // A row the decoder drops is not a truncated list. `totalCount` counts entities and the decoder
@@ -182,7 +201,7 @@ describe('fetchTaggedClaims', () => {
       Effect.succeed(
         decoder({
           entitiesConnection: {
-            pageInfo: { hasNextPage: false },
+            pageInfo: { hasNextPage: false, endCursor: null },
             nodes: [
               node('a1', 'Fine', '10'),
               { id: 'a2', name: null, description: null, rankingScore: '9', relationsList: [{ spaceId: SPACE }] },
