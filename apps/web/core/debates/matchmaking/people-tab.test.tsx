@@ -23,16 +23,21 @@ const mocks = vi.hoisted(() => ({
   cancelPending: false,
   cancelError: null as Error | null,
   records: new Map<string, unknown>(),
+  /** Every prop set handed to a link this render, so a stray handler is visible. */
+  linkProps: [] as Record<string, unknown>[],
 }));
 
 // The real one reaches for the sync engine and the router; a plain anchor is what the assertions
 // below are about — a real href, and nothing intercepting the click.
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href, className }: { children: React.ReactNode; href: string; className?: string }) => (
-    <a href={href} className={className}>
-      {children}
-    </a>
-  ),
+  PrefetchLink: ({ children, ...props }: { children: React.ReactNode } & Record<string, unknown>) => {
+    mocks.linkProps.push(props);
+    return (
+      <a href={props.href as string} className={props.className as string | undefined}>
+        {children}
+      </a>
+    );
+  },
 }));
 
 vi.mock('../hooks', () => ({
@@ -124,6 +129,7 @@ beforeEach(() => {
   mocks.cancelPending = false;
   mocks.cancelError = null;
   mocks.records = new Map();
+  mocks.linkProps = [];
 });
 
 afterEach(cleanup);
@@ -374,16 +380,20 @@ describe('the person link', () => {
     );
   });
 
-  // A real anchor with nothing intercepting it. An onClick here would take cmd-click, middle click
-  // and "copy link address" out on this surface, which is what GEO-2701 restored.
-  it('leaves the navigation to the browser', () => {
+  // The guarantee is that *we* add no handler of our own. `next/link` underneath does intercept a
+  // plain left click — that is how client-side routing works, and it already honours cmd-click and
+  // middle click. A second handler layered on top is what would break them, which is what GEO-2701
+  // restored, so the absence of one is the thing worth pinning.
+  //
+  // Asserted on the props rather than by dispatching a click: the mock here is a bare anchor, so a
+  // `defaultPrevented` check would only describe the mock and would pass whether or not the real
+  // component ever received a handler.
+  it('adds no click handler of its own to the name', () => {
     render(<PeopleTab />);
-    const link = screen.getByRole('link', { name: 'Arturas' });
 
-    const event = createEvent.click(link);
-    fireEvent(link, event);
-
-    expect(event.defaultPrevented).toBe(false);
+    const nameLink = mocks.linkProps.find(props => props.href === NavUtils.toSpace(PROFILE_SPACE_IDS['user-them']));
+    expect(nameLink).toBeDefined();
+    expect(nameLink).not.toHaveProperty('onClick');
   });
 
   // An anchor to `/space/undefined` looks identical until it is clicked.

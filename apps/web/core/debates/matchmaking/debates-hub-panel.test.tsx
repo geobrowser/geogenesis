@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
+import { DEBATES_MODAL } from '../debates-panel-deep-link';
 import { DebatesHubPanel } from './debates-hub-panel';
 import { type DebatesHubTab, debatesHubAtom } from '~/atoms';
 
@@ -299,6 +300,31 @@ it.each([
   const store = renderOpen('claims');
 
   mocks.pathname = pathname;
+  store.rerender();
+
+  expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
+});
+
+// Desktop only. On mobile the hub is a full-screen `aria-modal` sheet over a backdrop, so staying
+// open would navigate the page behind an opaque overlay — the tap would appear to do nothing, and
+// the destination would be hidden from assistive tech until the sheet was dismissed by hand.
+it('closes on any navigation on mobile, where it covers the destination', () => {
+  mocks.isMobile = true;
+  const store = renderOpen('claims');
+
+  mocks.pathname = '/space/space-1/entity-1';
+  store.rerender();
+
+  expect(store.get(debatesHubAtom)).toBeNull();
+});
+
+// A link that explicitly asks for the hub still wins, on either layout.
+it('stays open on mobile when the destination itself asks for the hub', () => {
+  mocks.isMobile = true;
+  mocks.searchParams = new URLSearchParams(`modal=${DEBATES_MODAL}`);
+  const store = renderOpen('claims');
+
+  mocks.pathname = '/space/space-1/entity-1';
   store.rerender();
 
   expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
