@@ -87,6 +87,12 @@ export function RelationChipSection({
           <button
             type="button"
             aria-expanded={false}
+            // `+3` alone is the whole accessible name without this, so a screen reader listing the
+            // page's buttons announces a number and nothing about what it reveals. The visible text
+            // leads the label rather than being replaced by it: WCAG's Label in Name asks that what
+            // a control is called contains what it says, so "+3" still has to be in there for
+            // anyone driving the page by voice.
+            aria-label={`+${hidden}, show ${hidden} more ${label}`}
             onClick={() => {
               focusAfterExpandRef.current = true;
               setExpanded(true);

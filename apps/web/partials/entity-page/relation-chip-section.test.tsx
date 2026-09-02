@@ -18,6 +18,9 @@ function relation(id: string, name: string | null): Relation {
   return { id, toEntity: { id: `${id}-entity`, name } } as unknown as Relation;
 }
 
+/** What the expander is called once it says what it reveals — see the component. */
+const EXPANDER_NAME = '+3, show 3 more Topics';
+
 function relations(count: number): Relation[] {
   return Array.from({ length: count }, (_, index) => relation(`relation-${index}`, `Topic ${index}`));
 }
@@ -66,13 +69,29 @@ describe('RelationChipSection', () => {
       render(<RelationChipSection label="Topics" relations={relations(11)} spaceId="space-1" />);
 
       expect(screen.getAllByRole('link')).toHaveLength(8);
-      expect(screen.getByRole('button', { name: '+3' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: EXPANDER_NAME })).toBeInTheDocument();
     });
 
     it('marks itself as collapsed while it is hiding something', () => {
       render(<RelationChipSection label="Topics" relations={relations(11)} spaceId="space-1" />);
 
-      expect(screen.getByRole('button', { name: '+3' })).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByRole('button', { name: EXPANDER_NAME })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    // `+3` on its own is a number with no subject: a screen reader listing the page's buttons would
+    // announce it and nothing about what it opens. The visible text still leads the name, which is
+    // what keeps the control addressable by voice.
+    it('says what it reveals, and still answers to what it shows', () => {
+      render(<RelationChipSection label="Topics" relations={relations(11)} spaceId="space-1" />);
+
+      const expander = screen.getByRole('button', { name: '+3, show 3 more Topics' });
+      expect(expander).toHaveTextContent('+3');
+    });
+
+    it('names itself after the section it belongs to', () => {
+      render(<RelationChipSection label="Subtopics" relations={relations(11)} spaceId="space-1" />);
+
+      expect(screen.getByRole('button', { name: '+3, show 3 more Subtopics' })).toBeInTheDocument();
     });
 
     // The button reveals everything and so removes itself, which leaves focus on a detached
@@ -81,7 +100,7 @@ describe('RelationChipSection', () => {
     it('moves focus to the first revealed chip rather than losing it', () => {
       render(<RelationChipSection label="Topics" relations={relations(11)} spaceId="space-1" />);
 
-      fireEvent.click(screen.getByRole('button', { name: '+3' }));
+      fireEvent.click(screen.getByRole('button', { name: EXPANDER_NAME }));
 
       expect(screen.getByRole('link', { name: 'Topic 8' })).toHaveFocus();
     });
@@ -91,7 +110,7 @@ describe('RelationChipSection', () => {
     it('reveals the rest in place and then has nothing left to offer', () => {
       render(<RelationChipSection label="Topics" relations={relations(11)} spaceId="space-1" />);
 
-      fireEvent.click(screen.getByRole('button', { name: '+3' }));
+      fireEvent.click(screen.getByRole('button', { name: EXPANDER_NAME }));
 
       expect(screen.getAllByRole('link')).toHaveLength(11);
       expect(screen.queryByRole('button')).toBeNull();
