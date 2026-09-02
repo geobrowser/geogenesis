@@ -11,10 +11,12 @@ import { dismissedNoticesAtom } from '~/atoms';
 
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`). Once the
 // user dismisses the banner this id is appended to the list and it never renders again.
+// The id keeps its original `Curator` suffix even though the copy is now debate-focused —
+// changing it would re-show the banner to everyone who has already dismissed it.
 const WELCOME_BANNER_ID = 'exploreWelcomeCurator';
 
 /**
- * "Welcome to Geo - Become a curator!" banner shown above the explore feed. Dismissible
+ * "Welcome to Geo: Find your first debate!" banner shown above the explore feed. Dismissible
  * via the close button in the top-right; the dismissed state persists in localStorage.
  *
  * Gated behind `ClientOnly` so we never SSR a banner the user has already dismissed
@@ -57,11 +59,11 @@ function WelcomeBanner() {
           <span aria-hidden className="mr-1.5">
             👋
           </span>
-          Welcome to Geo - Become a curator!
+          Welcome to Geo: Find your first debate!
         </h2>
         <p className="mt-2 max-w-[338px] text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-white">
-          Help organize topics, questions, claims, and relevant sources to improve the quality of discourse. Join spaces
-          and start contributing there.
+          Take a position on claims you care about, then get matched with someone who wants to take the other side.
+          Record the debate and publish it.
         </p>
       </div>
 
