@@ -221,6 +221,7 @@ async function InitialGovernanceProposals({
       {node}
       {hasMore && (
         <GovernanceProposalsListInfiniteScroll
+          key={`${spaceId}:${category}:${status}`}
           spaceId={spaceId}
           page={0}
           initialHasMore={hasMore}

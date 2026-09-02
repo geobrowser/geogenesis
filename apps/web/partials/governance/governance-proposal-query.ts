@@ -131,7 +131,7 @@ export async function fetchProposalsForSpaceByGovernanceFilters({
     params.set('actionTypes', types.join(','));
   }
 
-  if (isValidUUID(memberSpaceId) && status === 'pending') {
+  if (isValidUUID(memberSpaceId)) {
     params.set('voterId', memberSpaceId);
   }
 
