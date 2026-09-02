@@ -50,7 +50,7 @@ describe('CuratorOnboardingSection', () => {
     const titles = screen.getAllByRole('listitem').map(item => item.textContent);
     expect(titles[0]).toContain('Join a space');
     expect(titles[1]).toContain('Take a position on a claim');
-    expect(titles[2]).toContain('Participate in a debate');
+    expect(titles[2]).toContain('Record a debate');
     expect(titles[3]).toContain('Choose the winner of a debate');
   });
 
