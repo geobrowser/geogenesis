@@ -7,6 +7,7 @@ import { Effect } from 'effect';
 import { COMMENT_TYPE_ID } from '~/core/comment-ids';
 import { VOTE_TYPE_ID } from '~/core/debates/ontology';
 import {
+  CURATOR_ONBOARDING_STEPS,
   type CuratorOnboardingStepId,
   VISIBLE_CURATOR_ONBOARDING_STEPS,
 } from '~/core/explore/curator-onboarding-steps';
@@ -18,20 +19,16 @@ import {
   getUserHasVoteOfKind,
 } from '~/core/io/queries';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
+import { responseKindToVoteKind } from '~/core/responses/entity-response';
 
 export type CuratorOnboardingCompletion = Record<CuratorOnboardingStepId, boolean>;
 
+/**
+ * Every step, unfinished. Derived from the list so a new step cannot be added to the checklist and
+ * forgotten here, where the omission would be a type error at best and a missing key at worst.
+ */
 function emptyCompletion(): CuratorOnboardingCompletion {
-  return {
-    'join-space': false,
-    'claim-position': false,
-    'participate-debate': false,
-    'debate-winner': false,
-    'rsvp-community-call': false,
-    'vote-entity': false,
-    'submit-ranking': false,
-    'comment-entity': false,
-  };
+  return Object.fromEntries(CURATOR_ONBOARDING_STEPS.map(step => [step.id, false])) as CuratorOnboardingCompletion;
 }
 
 /**
@@ -41,8 +38,8 @@ function emptyCompletion(): CuratorOnboardingCompletion {
  * query behind "Vote on an entity" used to pass no kind at all — so answering a claim silently
  * ticked the voting step too. With a claim step beside it that would credit one action as two.
  */
-const ENTITY_VOTE_KINDS = [0] as const;
-const CLAIM_POSITION_VOTE_KINDS = [1, 2] as const;
+const ENTITY_VOTE_KINDS = [responseKindToVoteKind('curation')] as const;
+const CLAIM_POSITION_VOTE_KINDS = [responseKindToVoteKind('stance'), responseKindToVoteKind('veracity')] as const;
 
 async function personalSpaceHasEntityType(
   personalSpaceId: string,
