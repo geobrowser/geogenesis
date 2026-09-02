@@ -83,8 +83,7 @@ const ONBOARDING_DESTINATION = NavUtils.toExplore();
 // How long the completion screen shows before we route the user onward. The
 // personal space keeps creating in the background regardless.
 const COMPLETION_ANIMATION_MS = 3000;
-const TERMS_AND_CONDITIONS_URL =
-  'https://docs.google.com/document/d/1clBax9yApV8uI1m36gX9pEf6jrpMEslsqxmqXW2w9I4/edit?tab=t.0';
+const TERMS_AND_CONDITIONS_URL = 'https://docs.google.com/document/d/106bM0qopWGJ8aAausnO7LYtkkDJz__xc/edit';
 
 const ONBOARDING_PERSONAL_SEARCH_TYPES = [SystemIds.SPACE_TYPE, SystemIds.PROJECT_TYPE, SystemIds.PERSON_TYPE];
 
@@ -529,7 +528,9 @@ function StepWelcome({ onProfileContinue }: StepOnboardingProps) {
       <div className="relative">
         <div className="absolute top-0 right-0 left-0 z-100 flex -translate-y-full justify-center pb-4">
           <Text as="p" variant="footnote" className="text-center text-grey-04">
-            All content is public. By signing up, you agree to our{' '}
+            All content is public and shared onchain.
+            <br />
+            By signing up, you agree to our{' '}
             <a
               href={TERMS_AND_CONDITIONS_URL}
               target="_blank"

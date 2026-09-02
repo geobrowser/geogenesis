@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   mediaRecorderStart: vi.fn(),
   mediaRecorderConstruct: vi.fn(),
   readyMutateAsync: vi.fn(),
+  capturingMutateAsync: vi.fn().mockResolvedValue(undefined),
   liveKitJoinMutateAsync: vi.fn(),
   markJoinedMutateAsync: vi.fn(),
   createLocalTracks: vi.fn(),
@@ -110,6 +111,7 @@ vi.mock('~/core/debates/hooks', () => ({
   useLiveKitJoin: () => ({ mutateAsync: mocks.liveKitJoinMutateAsync, isPending: false }),
   useMarkDebateJoined: () => ({ mutateAsync: mocks.markJoinedMutateAsync, isPending: false }),
   useMarkDebateReady: () => ({ mutateAsync: mocks.readyMutateAsync, isPending: false }),
+  useMarkDebateCapturing: () => ({ mutateAsync: mocks.capturingMutateAsync, isPending: false }),
 }));
 
 vi.mock('~/core/debates/recording-upload-queue', () => ({
