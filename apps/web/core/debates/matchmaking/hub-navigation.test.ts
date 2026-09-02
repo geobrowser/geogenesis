@@ -23,6 +23,10 @@ describe('hubClosesOnArrivalAt', () => {
     ['Explore', '/explore'],
     ['the root space', '/root'],
     ['a space community tab', `/space/${SPACE}/community`],
+    // A sibling of the room, not the room: an ordinary in-layout page showing a published
+    // recording, where the live room is a `fixed inset-0` takeover. A catch-all on "anything under
+    // a debate id" closed the hub here.
+    ['the public recording viewer', `/space/${SPACE}/debates/debate-1/recording`],
   ])('stays open on arriving at %s', (_label, pathname) => {
     expect(hubClosesOnArrivalAt(pathname)).toBe(false);
   });
@@ -31,6 +35,13 @@ describe('hubClosesOnArrivalAt', () => {
   // on a path that renders nothing.
   it('does not treat the bare rematches segment as a room', () => {
     expect(hubClosesOnArrivalAt(`/space/${SPACE}/debates/rematches`)).toBe(false);
+  });
+
+  // Both rooms match at an exact depth, so a sub-route added under either later is a sibling of the
+  // room and keeps the hub, rather than silently inheriting the room's behaviour.
+  it('matches each room at its own depth and no deeper', () => {
+    expect(hubClosesOnArrivalAt(`/space/${SPACE}/debates/debate-1/anything`)).toBe(false);
+    expect(hubClosesOnArrivalAt(`/space/${SPACE}/debates/rematches/session-1/anything`)).toBe(false);
   });
 
   it('ignores a trailing slash', () => {

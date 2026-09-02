@@ -11,9 +11,11 @@
  * them straight into one. A panel sitting over a live debate is the case the old blanket close
  * existed for, and it is the case this keeps.
  *
- * The debates feed at `/space/{id}/debates` is deliberately not in that set. It is a browsing
- * surface, it is where the hub is opened from most often, and closing there would reintroduce the
- * dead end one route down.
+ * The debates feed at `/space/{id}/debates` is deliberately not in that set, and neither is the
+ * public recording viewer at `/debates/{debateId}/recording`. Both are browsing surfaces — the feed
+ * is where the hub is opened from most often, and the recording page is an ordinary page in the
+ * space chrome rather than a takeover. Closing on either would reintroduce the dead end one route
+ * down.
  *
  * Dismissal is unaffected and is what makes a persistent panel reasonable: the navbar toggle,
  * Escape, a click outside on desktop, a drag down on mobile.
@@ -27,13 +29,16 @@ export function hubClosesOnArrivalAt(pathname: string): boolean {
 
   const withinDebates = segments.slice(3);
 
-  // `/space/{id}/debates` — the feed.
-  if (withinDebates.length === 0) return false;
+  // Exact shapes, not a catch-all on "anything under a debate id". `/debates/{debateId}/recording`
+  // is a sibling of the room, and it is a public recording viewer — an ordinary in-layout page like
+  // the feed, not the `fixed inset-0` takeover the room is. A catch-all closed the hub there, which
+  // is the opposite of the rule this function exists to state, and it would have swallowed every
+  // sub-route added under a room from here on.
+  //
+  // `/space/{id}/debates/rematches/{sessionId}` — a rematch room, and only at that exact depth.
+  // `/rematches` alone is not a route, and anything longer is a sibling rather than the room.
+  if (withinDebates[0] === 'rematches') return withinDebates.length === 2;
 
-  // `/space/{id}/debates/rematches/{sessionId}` is a room; `/rematches` alone is not a route, and
-  // treating the bare segment as one would close the hub on a path that renders nothing.
-  if (withinDebates[0] === 'rematches') return withinDebates.length > 1;
-
-  // `/space/{id}/debates/{debateId}` — the room itself.
-  return true;
+  // `/space/{id}/debates/{debateId}` — the room itself. Length zero is the feed.
+  return withinDebates.length === 1;
 }
