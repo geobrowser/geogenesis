@@ -2,7 +2,9 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { describe, expect, it } from 'vitest';
 
-import { resolveMediaUrlSide } from './diff';
+import type { Entity } from '~/core/types';
+
+import { resolveImageUrlFromEntity, resolveMediaUrlSide } from './diff';
 
 // The same ids `diff.ts` matches on, straight from the SDK.
 const IPFS_URL_PROPERTY = SystemIds.IMAGE_URL_PROPERTY;
@@ -61,5 +63,34 @@ describe('resolveMediaUrlSide', () => {
     const values = [value('some-other-property', null, 'ipfs://bafyloose')];
 
     expect(resolveMediaUrlSide(values, 'after')).toBe('ipfs://bafyloose');
+  });
+});
+
+describe('resolveImageUrlFromEntity', () => {
+  const WEB_URL = 'https://chat.example/debates/1/media/artifacts/preview_image/content';
+  const entity = (...values: Array<{ propertyId: string; value: string }>) =>
+    ({ values: values.map(v => ({ value: v.value, property: { id: v.propertyId } })) }) as unknown as Entity;
+
+  it('reads an http(s) URL from the Web URL property', () => {
+    expect(resolveImageUrlFromEntity(entity({ propertyId: WEB_URL_PROPERTY, value: WEB_URL }))).toBe(WEB_URL);
+  });
+
+  // The relation diff gates on the relation type (Avatar/Cover), not on the target's entity type,
+  // so a target that is an ordinary page with a canonical link must not have it shown as an avatar.
+  it('ignores http(s) values on any other property', () => {
+    const page = entity({ propertyId: 'some-source-property', value: 'https://example.com/article' });
+    expect(resolveImageUrlFromEntity(page)).toBeNull();
+  });
+
+  it('prefers an ipfs:// value from any property', () => {
+    const both = entity(
+      { propertyId: WEB_URL_PROPERTY, value: WEB_URL },
+      { propertyId: 'loose', value: 'ipfs://bafyold' }
+    );
+    expect(resolveImageUrlFromEntity(both)).toBe('ipfs://bafyold');
+  });
+
+  it('returns null for a missing entity', () => {
+    expect(resolveImageUrlFromEntity(undefined)).toBeNull();
   });
 });

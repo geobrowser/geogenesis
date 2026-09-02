@@ -1,4 +1,5 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { describe, expect, it } from 'vitest';
 
 import { RelationDtoLive, type RemoteRelationWithTarget } from './relations';
@@ -61,6 +62,18 @@ describe('RelationDtoLive media URL resolution', () => {
       })
     );
     expect(relation.toEntity.value).toBe(IPFS_URL);
+  });
+
+  // A blank IPFS URL value is "no IPFS URL", not a URL that beats the fallback.
+  it('falls through to the Web URL when the IPFS URL value is blank', () => {
+    const relation = RelationDtoLive(
+      remoteRelation({
+        types: [{ id: IMAGE_TYPE_HEX }],
+        valuesList: [value(IPFS_URL_PROPERTY_HEX, ''), value(WEB_URL_PROPERTY_HEX, WEB_URL)],
+      })
+    );
+    expect(relation.renderableType).toBe('IMAGE');
+    expect(relation.toEntity.value).toBe(WEB_URL);
   });
 
   // `Web URL` is the generic canonical-link property (sources, articles, …): its presence on an

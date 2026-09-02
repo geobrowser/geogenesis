@@ -284,18 +284,20 @@ export async function postProcessDiffs(
   for (const entityId of mediaPropertyEntityIds) {
     const entity = entityMap.get(entityId);
     if (!entity) continue;
+    // `blockTypeEntities` covers every block type, text and data blocks included. Only image/video
+    // typed entities carry media: a text block that happens to have a `Web URL` value is not one,
+    // and reading its link as an image URL would render it as a broken picture in the diff.
+    let mediaType: 'image' | 'video' | null = null;
+    for (const rel of entity.relations) {
+      if (rel.typeId !== TYPES_PROPERTY) continue;
+      const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
+      if (typeId === VIDEO_TYPE || typeId === VIDEO_BLOCK) mediaType = 'video';
+      else if ((typeId === IMAGE_TYPE || typeId === IMAGE_BLOCK) && mediaType === null) mediaType = 'image';
+    }
+    if (mediaType === null) continue;
     const before = resolveMediaUrlSide(entity.values, 'before');
     const after = resolveMediaUrlSide(entity.values, 'after');
     if (before || after) {
-      let mediaType: 'image' | 'video' = 'image';
-      for (const rel of entity.relations) {
-        if (rel.typeId === TYPES_PROPERTY) {
-          const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
-          if (typeId === VIDEO_TYPE || typeId === VIDEO_BLOCK) {
-            mediaType = 'video';
-          }
-        }
-      }
       mediaPropertyEntityUrls.set(entityId, { before, after, mediaType });
     }
   }
@@ -1062,13 +1064,18 @@ export function resolveMediaUrlSide(
   );
 }
 
-function resolveImageUrlFromEntity(entity: Entity | undefined): string | null {
+/**
+ * The media URL of a fetched Avatar/Cover target, for the relation diff. Any `ipfs://` value counts
+ * (legacy), but an http(s) URL only from `Web URL`: the caller gates on the *relation* type, not the
+ * target's entity type, so a target that is an ordinary page with a canonical link must not have
+ * that link rendered as its avatar.
+ */
+export function resolveImageUrlFromEntity(entity: Entity | undefined): string | null {
   if (!entity) return null;
-  const imageValue =
-    entity.values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://')) ??
-    entity.values.find(v => typeof v.value === 'string' && isDirectMediaUrl(v.value));
-
-  return typeof imageValue?.value === 'string' ? imageValue.value : null;
+  const ipfsValue = entity.values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+  if (typeof ipfsValue?.value === 'string') return ipfsValue.value;
+  const webUrlValue = entity.values.find(v => v.property.id === WEB_URL_PROPERTY && isDirectMediaUrl(v.value));
+  return typeof webUrlValue?.value === 'string' ? webUrlValue.value : null;
 }
 
 function computeRelationChanges(

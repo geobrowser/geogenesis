@@ -7,17 +7,30 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
+import { ID } from '~/core/id';
 import { getRelationsByFromEntityId } from '~/core/io/queries';
 import { useRelation, useValues } from '~/core/sync/use-store';
 import { isDirectMediaUrl } from '~/core/utils/media-url';
 
-// ipfs:// stays preferred over http(s) so pre-existing IPFS-pinned media resolves exactly as
-// before; http(s) covers media left in object storage and referenced via `Web URL`.
-function findMediaUrlValue(values: { value: unknown }[]): string | undefined {
+/**
+ * The media URL among an image/video entity's values.
+ *
+ * `ipfs://` is accepted from any value, and preferred: legacy media blocks keep the URI on an
+ * unlabelled value, and pre-existing pinned media must resolve exactly as before. An http(s) URL
+ * is accepted only from `Web URL` — media left in object storage is published there — because
+ * `Web URL` is also the general-purpose canonical-link property, and the callers of this helper
+ * gate on the *property* being image-typed, never on the target entity. Scanning every value
+ * would turn an article's source link into a broken image the moment someone pointed an Avatar
+ * relation at it.
+ */
+export function findMediaUrlValue(values: { value: unknown; property: { id: string } }[]): string | undefined {
   const ipfsValue = values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
   if (typeof ipfsValue?.value === 'string') return ipfsValue.value;
-  const directValue = values.find(v => typeof v.value === 'string' && isDirectMediaUrl(v.value));
-  return typeof directValue?.value === 'string' ? directValue.value : undefined;
+  const webUrlValue = values.find(
+    v =>
+      ID.equals(v.property.id, ContentIds.WEB_URL_PROPERTY) && typeof v.value === 'string' && isDirectMediaUrl(v.value)
+  );
+  return typeof webUrlValue?.value === 'string' ? webUrlValue.value : undefined;
 }
 
 export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId: string): string | undefined {

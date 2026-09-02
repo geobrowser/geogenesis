@@ -20,7 +20,8 @@ export function hasRelationTarget(relation: RemoteRelation): relation is RemoteR
 export function RelationDtoLive(relation: RemoteRelationWithTarget): Relation {
   const ipfsUrlPropertyHex = SystemIds.IMAGE_URL_PROPERTY.replace(/-/g, '');
   const webUrlPropertyHex = ContentIds.WEB_URL_PROPERTY.replace(/-/g, '');
-  const ipfsUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text ?? null;
+  // `|| null`, not `?? null`: a present-but-blank value must not shadow the fallback below.
+  const ipfsUrlValue = relation.toEntity.valuesList.find(v => v.propertyId === ipfsUrlPropertyHex)?.text || null;
   const baseRenderableType = v2_getRenderableEntityType(relation.toEntity.types);
 
   // `Web URL` is the generic canonical-link property (sources, articles, …), so unlike `IPFS URL`
@@ -29,7 +30,7 @@ export function RelationDtoLive(relation: RemoteRelationWithTarget): Relation {
   // present so pre-existing entities render byte-identically.
   const webUrlValue =
     baseRenderableType === 'IMAGE' || baseRenderableType === 'VIDEO'
-      ? (relation.toEntity.valuesList.find(v => v.propertyId === webUrlPropertyHex)?.text ?? null)
+      ? relation.toEntity.valuesList.find(v => v.propertyId === webUrlPropertyHex)?.text || null
       : null;
   const mediaEntityUrlValue = ipfsUrlValue ?? webUrlValue;
 
