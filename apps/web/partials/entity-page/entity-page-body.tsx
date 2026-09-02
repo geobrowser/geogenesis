@@ -21,6 +21,7 @@ import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { BacklinksClientContainer } from '~/partials/entity-page/backlinks-client-container';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageHeader } from '~/partials/entity-page/entity-page-header';
@@ -218,12 +219,10 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                   fallbackDescription={previewDescription}
                 />
               )}
-              <EntityPageMetadataHeader
-                id={entityId}
-                spaceId={spaceId}
-                isVoteable={!isRelationPage}
-                hideTypes={isRelationPage}
-              />
+              <div className="flex items-center gap-4 text-text">
+                {!isRelationPage && <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />}
+                <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={!isRelationPage} />
+              </div>
             </div>
             <Spacer height={40} />
             {tabsSection}
