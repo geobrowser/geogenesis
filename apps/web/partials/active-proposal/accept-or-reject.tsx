@@ -133,7 +133,9 @@ export function AcceptOrReject({
   const onVoteSuccess = () => {
     for (const delayMs of [800, 15_000]) {
       window.setTimeout(() => {
-        void revalidateGovernanceProposals(spaceId).then(() => router.refresh());
+        void revalidateGovernanceProposals(spaceId)
+          .catch(() => {})
+          .finally(() => router.refresh());
       }, delayMs);
     }
   };
