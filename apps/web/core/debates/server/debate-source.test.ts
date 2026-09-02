@@ -4,16 +4,8 @@ import { DebateNotPublishableError, listSweepCandidateDebateIds, loadDebatePubli
 
 const DEBATE_ID = '019f89dc2124799193daafd5bc4ffa0a';
 
-const OBJECT_STORE_HOST = 'https://r2.example';
-
-// Stands in for the IPFS upload. Each artifact's fake bytes are its kind, so the returned CID
-// records which artifact was actually pinned.
-const { uploadGeoImage, pinToFakeIpfs } = vi.hoisted(() => {
-  const pinToFakeIpfs = async ({ blob }: { blob: Blob }) => ({ cid: `ipfs://cid-for-${await blob.text()}` });
-  return { uploadGeoImage: vi.fn(pinToFakeIpfs), pinToFakeIpfs };
-});
-
-vi.mock('~/core/sdk/geo-client', () => ({ uploadGeoImage }));
+/** The browser-reachable geo-chat host the published media URLs must be built on. */
+const PUBLIC_GEO_CHAT_HOST = 'https://chat.example';
 
 function debateBody(overrides: Record<string, unknown> = {}) {
   return {
@@ -31,74 +23,146 @@ function debateBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Routes each geo-chat path the loader touches — plus the object store it redirects to — to a canned response. */
-function mockGeoChat(media: unknown, debate = debateBody(), artifactStatus = 200, claims: unknown = null) {
+/** Routes each geo-chat path the loader touches to a canned response; `contentStatus` answers the `/content` HEAD probe. */
+function mockGeoChat(media: unknown, debate = debateBody(), claims: unknown = null, contentStatus = 200) {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (input: string | URL, init?: RequestInit) => {
+    vi.fn(async (input: string | URL) => {
       const url = String(input);
-      if (url.startsWith(OBJECT_STORE_HOST)) {
-        return new Response(new URL(url).pathname.slice(1), { status: artifactStatus });
-      }
+      if (url.endsWith('/content')) return new Response(null, { status: contentStatus });
       const body = url.endsWith('/media')
         ? media
         : url.endsWith('/claims')
           ? claims
           : url.includes('/transcript')
             ? { segments: [] }
-            : url.includes('/media/artifacts/url')
-              ? { upload: { url: presignedUrlFor(String(init?.body)) } }
-              : debate;
+            : debate;
       return new Response(JSON.stringify(body), { status: 200 });
     })
   );
 }
 
-/** geo-chat presigns a distinct short-lived URL per artifact kind. */
-function presignedUrlFor(requestBody: string) {
-  const { kind } = JSON.parse(requestBody) as { kind: string };
-  return `${OBJECT_STORE_HOST}/${kind}?X-Amz-Expires=900`;
+/** Whether the loader got as far as rendering the share card. */
+function shareCardWasBuilt(): boolean {
+  return vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/media/artifacts/url'));
 }
 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  uploadGeoImage.mockReset();
-  uploadGeoImage.mockImplementation(pinToFakeIpfs);
+  vi.unstubAllEnvs();
 });
 
 describe('loadDebatePublishSource media gating', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-30T12:00:00.000Z'));
+    // Media URLs must be built on the public host even when the server-side one is internal.
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', PUBLIC_GEO_CHAT_HOST);
+    vi.stubEnv('GEO_CHAT_API_BASE_URL', 'http://geo-chat.internal:8080');
   });
 
-  // Publishing geo-chat's presigned URL puts a link on-chain that expires 15 minutes later.
-  it('pins the processed final_video and publishes its permanent ipfs:// URI', async () => {
+  it('publishes the durable content URL for the processed final_video', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
 
     const { input } = await loadDebatePublishSource(DEBATE_ID);
-    // Handed over as the artifact's bytes, never as the presigned URL: the SDK's URL path rejects a
-    // webm body. Asserted by reading the blob rather than `expect.any(Blob)`, which is an
-    // `instanceof` against the test realm's global and fails on the Blob `fetch` actually returns.
-    const [uploaded] = uploadGeoImage.mock.calls[0];
-    expect(uploaded).not.toHaveProperty('url');
-    expect(await uploaded.blob.text()).toBe('final_video');
-    expect(input.videoUrl).toBe('ipfs://cid-for-final_video');
+    expect(input.videoUrl).toBe(`${PUBLIC_GEO_CHAT_HOST}/debates/${DEBATE_ID}/media/artifacts/final_video/content`);
   });
 
-  it('pins the preview_image as the video keyframe', async () => {
+  it('publishes the preview_image content URL as the video keyframe', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }, { kind: 'preview_image' }] });
 
     const { input } = await loadDebatePublishSource(DEBATE_ID);
-    expect(input.keyframeUrl).toBe('ipfs://cid-for-preview_image');
+    expect(input.keyframeUrl).toBe(
+      `${PUBLIC_GEO_CHAT_HOST}/debates/${DEBATE_ID}/media/artifacts/preview_image/content`
+    );
+  });
+
+  it('prefers the dedicated media host over the geo-chat API host', async () => {
+    vi.stubEnv('NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL', 'https://media.example/');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    expect(input.videoUrl).toBe(`https://media.example/debates/${DEBATE_ID}/media/artifacts/final_video/content`);
+  });
+
+  // The `/geo-chat-proxy` dev setup from `next.config.ts`.
+  it('refuses to publish when the media host is not an absolute URL', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '/geo-chat-proxy');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/absolute http\(s\) URL/);
+    expect(shareCardWasBuilt()).toBe(false);
+  });
+
+  it('refuses to publish in production when no public media host is configured', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/no public media host is configured/);
+    expect(shareCardWasBuilt()).toBe(false);
+  });
+
+  it('refuses a media host that carries a query string or fragment', async () => {
+    vi.stubEnv('NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL', 'https://media.example?health=1');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/query string or fragment/);
+    expect(shareCardWasBuilt()).toBe(false);
+  });
+
+  it('refuses a plain http media host in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', 'http://chat.example');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/https in production/);
+    expect(shareCardWasBuilt()).toBe(false);
+  });
+
+  it('falls back to localhost outside production when no public media host is configured', async () => {
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '');
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    expect(input.videoUrl).toBe(`http://localhost:8080/debates/${DEBATE_ID}/media/artifacts/final_video/content`);
+  });
+
+  it('waits when the durable content URL does not resolve yet', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), null, 404);
+
+    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toMatchObject({ code: 'media_not_ready' });
+    expect(shareCardWasBuilt()).toBe(false);
+  });
+
+  it('accepts a redirect from the durable content URL as resolving', async () => {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), null, 302);
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    expect(input.videoUrl).toBe(`${PUBLIC_GEO_CHAT_HOST}/debates/${DEBATE_ID}/media/artifacts/final_video/content`);
+    const probes = vi.mocked(fetch).mock.calls.filter(([input]) => String(input).endsWith('/content'));
+    expect(probes.map(([, init]) => init?.method)).toEqual(['HEAD']);
+    expect(probes.map(([, init]) => init?.redirect)).toEqual(['manual']);
   });
 
   it('uses geo-chat canonical turns + pre-attributed claims when available', async () => {
-    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), 200, {
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), {
       turns: [
-        { turn_index: 0, participant_slot: 1, attributed_space_id: 'space-1', speaker_name: 'Specter', text: 'Nuclear program was advancing.' },
-        { turn_index: 1, participant_slot: 2, attributed_space_id: 'space-2', speaker_name: 'Antispecter', text: 'There was no congressional approval.' },
+        {
+          turn_index: 0,
+          participant_slot: 1,
+          attributed_space_id: 'space-1',
+          speaker_name: 'Specter',
+          text: 'Nuclear program was advancing.',
+        },
+        {
+          turn_index: 1,
+          participant_slot: 2,
+          attributed_space_id: 'space-2',
+          speaker_name: 'Antispecter',
+          text: 'There was no congressional approval.',
+        },
       ],
       claims: [
         { text: 'The nuclear program was advancing.', is_factual: true, turn_index: 0 },
@@ -130,27 +194,6 @@ describe('loadDebatePublishSource media gating', () => {
 
     const { input } = await loadDebatePublishSource(DEBATE_ID);
     expect(input.keyframeUrl).toBeNull();
-    expect(uploadGeoImage).toHaveBeenCalledTimes(1);
-  });
-
-  it('still publishes the video when pinning the keyframe fails', async () => {
-    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }, { kind: 'preview_image' }] });
-    uploadGeoImage.mockImplementation(async ({ blob }: { blob: Blob }) => {
-      if ((await blob.text()) === 'preview_image') throw new Error('ipfs upload failed');
-      return { cid: 'ipfs://cid-for-final_video' };
-    });
-
-    const { input } = await loadDebatePublishSource(DEBATE_ID);
-    expect(input.videoUrl).toBe('ipfs://cid-for-final_video');
-    expect(input.keyframeUrl).toBeNull();
-  });
-
-  // An expired or revoked presigned URL must fail the publish, not pin the object store's error page.
-  it('fails the publish when the artifact download is rejected', async () => {
-    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), 403);
-
-    await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/Downloading final_video/);
-    expect(uploadGeoImage).not.toHaveBeenCalled();
   });
 
   // Without this gate, a succeeded job missing final_video publishes a videoless Debate entity.
