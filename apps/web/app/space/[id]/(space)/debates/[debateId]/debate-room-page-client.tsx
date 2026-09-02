@@ -386,6 +386,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     !thankingRecordingCancelled &&
     (recordingStartedAtRef.current !== null || recordingPersistenceStartedRef.current === thankingDebateId)
   );
+  // Whether the thank-you card — and so the publish switch — is actually on screen. The countdown
+  // alone doesn't say: the card lives inside `DebateRecordingModal`, which the room drops the
+  // moment the connection goes idle, and an ownership conflict can do that mid-countdown. Read off
+  // the countdown alone, this claimed the card was carrying the control while it wasn't rendered,
+  // and the banner stood down for a debate nothing else was reporting — leaving no publish state
+  // and no way to opt out, over a recording still cancellable.
+  const showsPublishControl = locallyThanking && roomState !== 'idle';
+
   // The global coordinator is a sibling of this page. Publish its state in a layout effect so the
   // upload banner joins the rematch card in the same browser paint at the countdown boundary.
   React.useLayoutEffect(() => {
@@ -396,13 +404,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             hasPendingLocalRecording: thankingHasPendingLocalRecording,
             hasUploadedRecording: thankingHasUploadedRecording,
             recordingCancelled: thankingRecordingCancelled,
-            showsPublishControl: locallyThanking,
+            showsPublishControl,
           }
         : null
     );
   }, [
-    locallyThanking,
     setThankingDebate,
+    showsPublishControl,
     thankingDebateId,
     thankingHasPendingLocalRecording,
     thankingHasUploadedRecording,

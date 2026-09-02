@@ -3205,6 +3205,25 @@ describe('DebateRoomPageClient', () => {
     };
   }
 
+  // The card lives inside the recording modal, which the room drops when the connection goes idle.
+  // Telling the coordinator the card is carrying the control while it isn't rendered leaves the
+  // viewer with neither: no switch here, and a banner that has stood down for this debate.
+  it('does not claim to carry the publish control once the room has gone idle', async () => {
+    thankingDebateAtFinalTurn();
+    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
+    // An ownership conflict, which is what drops the room to idle mid-countdown.
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByText('This debate is already open in another tab.');
+    expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull();
+
+    // So the banner has to keep speaking for it.
+    const published = mocks.setThankingDebate.mock.calls.at(-1)?.[0];
+    expect(published?.showsPublishControl ?? false).toBe(false);
+  });
+
   it('offers the publish switch while the recording can still be pulled back', async () => {
     thankingDebateAtFinalTurn();
     mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
