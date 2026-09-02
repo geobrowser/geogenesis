@@ -125,16 +125,42 @@ export type PlayBothOutcome = 'playing' | 'playing-muted' | 'blocked';
  * caller has to record that audio is now off — otherwise the UI offers a "mute" control on a
  * silent video and the next autoplay fails identically.
  *
- * Both elements are checked for `paused` as well as the promise settling: a rejected `play()` and
- * a resolved-but-still-paused one are both blocks, and only one of them throws.
+ * Success is judged by whether both elements are actually running shortly afterwards, not by
+ * whether `play()` resolved. `play()` can resolve while the element is still transitioning out of
+ * `paused`, so checking `paused` on the very next microtask reports a block on a video that plays
+ * a moment later — which is why the feed showed "Could not play both videos" on essentially every
+ * scroll while the recordings played fine. A rejected `play()` needs no special case: a rejection
+ * leaves the element paused, so it fails the same check.
+ *
+ * The grace window is deliberately short. It only has to outlast the paused -> playing transition,
+ * and every millisecond of it delays the muted retry on a genuine block.
  */
+const PLAY_CONFIRM_POLLS = 4;
+const PLAY_CONFIRM_INTERVAL_MS = 75;
+
+const defaultWait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+async function bothRunning(
+  primary: PlayableVideo,
+  secondary: PlayableVideo,
+  wait: (ms: number) => Promise<void>
+): Promise<boolean> {
+  for (let poll = 0; poll < PLAY_CONFIRM_POLLS; poll++) {
+    if (!primary.paused && !secondary.paused) return true;
+    await wait(PLAY_CONFIRM_INTERVAL_MS);
+  }
+  return !primary.paused && !secondary.paused;
+}
+
 export async function playBothWithMutedFallback(
   primary: PlayableVideo,
-  secondary: PlayableVideo
+  secondary: PlayableVideo,
+  /** Injectable so tests do not wait on real timers. */
+  wait: (ms: number) => Promise<void> = defaultWait
 ): Promise<PlayBothOutcome> {
   const attempt = async () => {
-    const results = await Promise.allSettled([primary.play(), secondary.play()]);
-    return results.every(result => result.status === 'fulfilled') && !primary.paused && !secondary.paused;
+    await Promise.allSettled([primary.play(), secondary.play()]);
+    return bothRunning(primary, secondary, wait);
   };
 
   if (await attempt()) return 'playing';

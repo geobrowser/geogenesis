@@ -158,6 +158,55 @@ describe('playBothWithMutedFallback (GEO-2783)', () => {
     return video;
   }
 
+  /**
+   * A video whose `play()` resolves but leaves `paused` true for a moment, which is what a real
+   * element does while it transitions. This is the shape that produced the false "Could not play
+   * both videos" on every scroll: the old check read `paused` on the next microtask and called it
+   * a block.
+   */
+  function laggyVideo({ pollsUntilPlaying }: { pollsUntilPlaying: number }) {
+    const video = {
+      muted: true,
+      paused: true,
+      plays: 0,
+      polls: 0,
+      async play() {
+        this.plays += 1;
+      },
+      /** Flips to playing only after the helper has waited `pollsUntilPlaying` times. */
+      tick() {
+        this.polls += 1;
+        if (this.polls >= pollsUntilPlaying) this.paused = false;
+      },
+    };
+    return video;
+  }
+
+  it('does not report a block when the element is only slow to leave paused (GEO-2783 follow-up)', async () => {
+    const a = laggyVideo({ pollsUntilPlaying: 2 });
+    const b = laggyVideo({ pollsUntilPlaying: 2 });
+    const wait = async () => {
+      a.tick();
+      b.tick();
+    };
+
+    expect(await playBothWithMutedFallback(a, b, wait)).toBe('playing');
+    // The point of the fix: no muted retry, because it was never actually blocked.
+    expect([a.plays, b.plays]).toEqual([1, 1]);
+  });
+
+  it('still reports a block when the element never starts', async () => {
+    const a = laggyVideo({ pollsUntilPlaying: Number.POSITIVE_INFINITY });
+    const b = laggyVideo({ pollsUntilPlaying: Number.POSITIVE_INFINITY });
+    const wait = async () => {
+      a.tick();
+      b.tick();
+    };
+
+    // Both already muted, so there is no fallback to try — this must not be reported as playing.
+    expect(await playBothWithMutedFallback(a, b, wait)).toBe('blocked');
+  });
+
   it('plays straight away when the browser allows it', async () => {
     const a = fakeVideo({ muted: true });
     const b = fakeVideo({ muted: true });
