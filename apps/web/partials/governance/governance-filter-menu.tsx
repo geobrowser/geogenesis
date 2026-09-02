@@ -48,7 +48,7 @@ export function GovernanceFilterMenu({ label, items, showImages, maxHeightClass 
         'min-h-0 w-full min-w-0 overflow-y-auto overscroll-contain scroll-smooth bg-white [background-clip:padding-box]',
         maxHeightClass ?? 'max-h-[200px]'
       )}
-      trigger={<SmallButton icon={<ChevronDownSmall />}>{label}</SmallButton>}
+      trigger={<SmallButton icon={<ChevronDownSmall />}>{displayLabel}</SmallButton>}
     >
       <>
         {items.map(item => (
