@@ -15,11 +15,13 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
+import { ClampedText } from '~/design-system/clamped-text';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
+import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
 
 import { ClaimDebates } from './claim-debates';
 import { ClaimEndSlot } from './claim-end-slot';
@@ -95,10 +97,23 @@ export function ClaimPageView({ entityId, spaceId }: { entityId: string; spaceId
             {entity.name ?? entity.id}
           </h1>
 
+          {/* Clamped, like entity pages and the side panel (GEO-2772). What is shared is the line
+              budget, not the cut: wrapping differs with width, so the route, the side panel and a
+              phone — three widths of one layout, per the note above — break at different words.
+              They give up the same three lines of vertical space, which a character count could
+              not do; the same count spends a different number of lines at each width, which is the
+              measurement the reader actually feels.
+
+              `ClampedText` measures an unclamped clone, so the toggle appears only when something
+              is genuinely hidden, and it is unaffected by the naive-overflow bug GEO-2756 fixed in
+              the feed's own title. */}
           {entity.description && (
-            <Text as="p" variant="body" color="grey-04">
-              {entity.description}
-            </Text>
+            <ClampedText
+              text={entity.description}
+              maxLines={ENTITY_DESCRIPTION_MAX_LINES}
+              variant="body"
+              textClassName="wrap-break-word text-grey-04"
+            />
           )}
 
           {/* What this is on the left, what it's about on the right. The two answer different

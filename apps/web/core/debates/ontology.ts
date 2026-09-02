@@ -29,6 +29,8 @@ export const DEBATE_CLAIMS_PROPERTY_ID = 'e614cce1c4ce45868304fd1237119eb2';
 export const DEBATE_TRANSCRIPTS_PROPERTY_ID = 'c504c7d5c3374016a5f083e4b5a92911';
 
 /** Key frame (RELATION) → Image. The still the app shows as a video's poster. */
+/** The debate entity's social share card, generated once at publish time (GEO-2755). */
+export const OG_IMAGE_PROPERTY_ID = '7abfeb2d147a464e8e26efdd26441189';
 export const KEY_FRAME_IMAGE_PROPERTY_ID = KEY_FRAME_IMAGE_PROPERTY;
 
 /** Supported by (RELATION) → participant space entity arguing "yes". */
