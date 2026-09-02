@@ -7,8 +7,25 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
+import { ID } from '~/core/id';
 import { getRelationsByFromEntityId } from '~/core/io/queries';
 import { useRelation, useValues } from '~/core/sync/use-store';
+import { isDirectMediaUrl } from '~/core/utils/media-url';
+
+/**
+ * The media URL among an image/video entity's values. An `ipfs://` value on any property wins
+ * (legacy media blocks keep it unlabelled); an http(s) URL is read only from `Web URL`, since that
+ * property is also a general canonical link and the callers do not check the target's entity type.
+ */
+export function findMediaUrlValue(values: { value: unknown; property: { id: string } }[]): string | undefined {
+  const ipfsValue = values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+  if (typeof ipfsValue?.value === 'string') return ipfsValue.value;
+  const webUrlValue = values.find(
+    v =>
+      ID.equals(v.property.id, ContentIds.WEB_URL_PROPERTY) && typeof v.value === 'string' && isDirectMediaUrl(v.value)
+  );
+  return typeof webUrlValue?.value === 'string' ? webUrlValue.value : undefined;
+}
 
 export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId: string): string | undefined {
   const imageValues = useValues({
@@ -17,9 +34,7 @@ export function useImageUrlFromEntity(imageEntityId: string | undefined, spaceId
 
   if (!imageEntityId || imageValues.length === 0) return undefined;
 
-  const imageUrlValue = imageValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
-
-  return imageUrlValue?.value;
+  return findMediaUrlValue(imageValues);
 }
 
 export function useVideoUrlFromEntity(videoEntityId: string | undefined, spaceId: string): string | undefined {
@@ -29,9 +44,7 @@ export function useVideoUrlFromEntity(videoEntityId: string | undefined, spaceId
 
   if (!videoEntityId || videoValues.length === 0) return undefined;
 
-  const videoUrlValue = videoValues.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
-
-  return videoUrlValue?.value;
+  return findMediaUrlValue(videoValues);
 }
 
 export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string): string | undefined {
@@ -68,7 +81,7 @@ export function useEntityAvatarUrl(entityId: string | undefined, spaceId: string
         if (!avatarRelation) return;
 
         const imageUrl = avatarRelation.toEntity.value;
-        if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('ipfs://')) {
+        if (typeof imageUrl === 'string' && isDirectMediaUrl(imageUrl)) {
           setFetchedAvatarUrl(imageUrl);
         }
       } catch {
@@ -116,7 +129,7 @@ export function useEntityCoverUrl(entityId: string | undefined, spaceId: string)
         if (!coverRelation) return;
 
         const imageUrl = coverRelation.toEntity.value;
-        if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('ipfs://')) {
+        if (typeof imageUrl === 'string' && isDirectMediaUrl(imageUrl)) {
           setFetchedCoverUrl(imageUrl);
         }
       } catch {
@@ -254,5 +267,5 @@ export function useEntityMedia(
 }
 
 function asImageUrl(value: unknown): string | undefined {
-  return typeof value === 'string' && value.startsWith('ipfs://') ? value : undefined;
+  return typeof value === 'string' && isDirectMediaUrl(value) ? value : undefined;
 }

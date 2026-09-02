@@ -31,7 +31,12 @@ import {
   observeDebateRecordingUploads,
   scheduleDebateRecordingRetry,
 } from './recording-upload-queue';
-import { useThankingDebate } from './thanking-debate-store';
+import {
+  usePublishOptOutRequest,
+  useSetPublishOptOutOffer,
+  useSetPublishOptOutRequest,
+  useThankingDebate,
+} from './thanking-debate-store';
 
 const initialRetryDelayMs = 5_000;
 const maxRetryDelayMs = 5 * 60_000;
@@ -142,6 +147,26 @@ export function DebateRecordingUploadCoordinator() {
     () => uploads.filter(upload => !isUploadCancelled(upload)),
     [isUploadCancelled, uploads]
   );
+  // What the banner speaks for, which is not always the whole queue.
+  //
+  // While the thank-you card is up it reports its own debate, so the banner would be a second
+  // voice on the same upload — the bar at the bottom of the screen is exactly what GEO-2773
+  // replaces. Only for as long as the card is actually on screen: the server's thank-you window
+  // outlasts the countdown, and after it the banner is the only thing left to say anything.
+  // Uploads from other debates stay the banner's to report, and keep their own progress.
+  //
+  // Everything the banner renders comes off this — the count, the percentage, and the waiting and
+  // failure states below. Deriving those from the full queue instead would let the banner report
+  // one debate's count under another debate's error.
+  const cardOwnsPublishControl = Boolean(thankingDebate?.showsPublishControl);
+  const bannerUploads = React.useMemo(
+    () =>
+      cardOwnsPublishControl
+        ? publishableUploads.filter(upload => normalizeDebateId(upload.debateId) !== normalizedThankingDebateId)
+        : publishableUploads,
+    [cardOwnsPublishControl, normalizedThankingDebateId, publishableUploads]
+  );
+
   const activeUploadIdRef = React.useRef<string | null>(null);
   const lockRetryAtRef = React.useRef(0);
   const mountedRef = React.useRef(true);
@@ -323,8 +348,18 @@ export function DebateRecordingUploadCoordinator() {
       });
   }, [accountKey, activeUploadId, getPrivyIdentityToken, online, publishableUploads, queryClient, userId, wakeAt]);
 
-  const waiting = !online || (!activeUploadId && publishableUploads.every(upload => upload.nextAttemptAt > Date.now()));
-  const latestFailedUpload = publishableUploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
+  // Active *for the banner*, not for the queue. The upload in flight can be the thank-you debate's,
+  // which the banner has stopped speaking for.
+  const bannerUploadActive = activeUploadId !== null && bannerUploads.some(upload => upload.id === activeUploadId);
+  // Uploads run one at a time, so an upload in flight that isn't one of the banner's means every
+  // recording the banner does speak for is queued behind it — waiting, whatever their backoff says.
+  // The backoff check only decides the case where nothing is uploading at all: then a recording
+  // past its next attempt is about to start, and one still backing off is not.
+  const waiting =
+    !online ||
+    (!bannerUploadActive &&
+      (activeUploadId !== null || bannerUploads.every(upload => upload.nextAttemptAt > Date.now())));
+  const latestFailedUpload = bannerUploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
     if (!upload.lastError) return latest;
     return !latest || upload.updatedAt > latest.updatedAt ? upload : latest;
   }, null);
@@ -364,6 +399,49 @@ export function DebateRecordingUploadCoordinator() {
     thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null);
   const cancelPromptOpen = cancelTargetDebateId !== null;
 
+  const bannerThankingUploadFinished = !cardOwnsPublishControl && thankingUploadFinished;
+  const bannerThankingRecordingPending = !cardOwnsPublishControl && thankingRecordingPending;
+
+  // The thank-you card draws the opt-out now, so tell it what there is to offer. Published in a
+  // layout effect for the same reason the room publishes its side in one: the control and the
+  // banner have to agree within a single paint at the countdown boundary, or one of them shows a
+  // state the other has already left.
+  // `cancelled` is what this knows and the room does not yet: the server has accepted the opt-out,
+  // whether or not the room's debate query has caught up. Without it the card has no way to tell
+  // "withdrawn" from "never recorded" until that refetch lands, and drops the row in between.
+  const thankingOptedOut =
+    normalizedThankingDebateId !== null &&
+    (cancelledDebateIds.has(normalizedThankingDebateId) || thankingDebate?.recordingCancelled === true);
+  const setPublishOptOutOffer = useSetPublishOptOutOffer();
+  React.useLayoutEffect(() => {
+    setPublishOptOutOffer({ debateId: cancellableDebateId, busy: cancelBusy, cancelled: thankingOptedOut });
+  }, [cancelBusy, cancellableDebateId, setPublishOptOutOffer, thankingOptedOut]);
+  React.useEffect(
+    () => () => setPublishOptOutOffer({ debateId: null, busy: false, cancelled: false }),
+    [setPublishOptOutOffer]
+  );
+
+  // And take up what the card asks for. It opens the same confirmation the Cancel button did —
+  // the ticket calls for a new control, not a new behaviour, and a switch is easier to hit by
+  // accident than the button it replaces (GEO-2700 makes that expensive).
+  const publishOptOutRequest = usePublishOptOutRequest();
+  const setPublishOptOutRequest = useSetPublishOptOutRequest();
+  React.useEffect(() => {
+    if (!publishOptOutRequest) return;
+    // A request for some other debate is one whose moment has passed — the viewer has left that
+    // thank-you screen — so it is dropped rather than acted on.
+    if (normalizeDebateId(publishOptOutRequest) !== normalizedThankingDebateId) {
+      setPublishOptOutRequest(null);
+      return;
+    }
+    // Otherwise held until there is something to act on. The queue is read from IndexedDB, so
+    // `cancellableDebateId` can still be null on the render the request arrives in; consuming it
+    // there would swallow the flick and leave the switch off over a recording still uploading.
+    if (cancellableDebateId === null) return;
+    setPublishOptOutRequest(null);
+    setCancelTargetDebateId(cancellableDebateId);
+  }, [cancellableDebateId, normalizedThankingDebateId, publishOptOutRequest, setPublishOptOutRequest]);
+
   // Only poll debate activity while a banner might show, and hide it while the user is in a
   // live debate — the upload keeps running, it just shouldn't be on screen mid-debate.
   const { data: activity } = useDebateActivity(
@@ -377,8 +455,8 @@ export function DebateRecordingUploadCoordinator() {
   );
 
   // When the banner is showing upload progress, its percentage covers every queued recording.
-  const queuedBytes = publishableUploads.reduce((total, upload) => total + upload.byteSize, 0);
-  const transferredBytes = publishableUploads.reduce((transferred, upload) => {
+  const queuedBytes = bannerUploads.reduce((total, upload) => total + upload.byteSize, 0);
+  const transferredBytes = bannerUploads.reduce((transferred, upload) => {
     if (upload.stage === 'uploaded') return transferred + upload.byteSize;
     if (uploadProgress?.id === upload.id) return transferred + Math.min(uploadProgress.loaded, upload.byteSize);
     return transferred;
@@ -457,7 +535,7 @@ export function DebateRecordingUploadCoordinator() {
     }
   }, [cancelTargetDebateId, cancellableDebateId, uploadedDebateIds, uploads]);
 
-  const bannerVisible = publishableUploads.length > 0 || thankingUploadFinished || thankingRecordingPending;
+  const bannerVisible = bannerUploads.length > 0 || bannerThankingUploadFinished || bannerThankingRecordingPending;
   if ((!bannerVisible && !cancelPromptOpen) || inLiveDebate) {
     return null;
   }
@@ -466,13 +544,13 @@ export function DebateRecordingUploadCoordinator() {
     <>
       {bannerVisible && (
         <DebateRecordingUploadBanner
-          count={publishableUploads.length}
-          thankingRecordingPending={thankingRecordingPending}
-          thankingUploadFinished={thankingUploadFinished}
+          count={bannerUploads.length}
+          thankingRecordingPending={bannerThankingRecordingPending}
+          thankingUploadFinished={bannerThankingUploadFinished}
           percent={uploadPercent}
           waitingReason={waitingReason}
           errorMessage={latestFailedUpload?.lastError ?? null}
-          canCancel={cancellableDebateId !== null && !cancelPromptOpen}
+          canCancel={!cardOwnsPublishControl && cancellableDebateId !== null && !cancelPromptOpen}
           onCancel={() => setCancelTargetDebateId(cancellableDebateId)}
         />
       )}
