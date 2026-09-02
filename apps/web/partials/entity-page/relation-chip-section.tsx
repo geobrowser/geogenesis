@@ -109,7 +109,12 @@ export function RelationChipSection({
             // leads the label rather than being replaced by it: WCAG's Label in Name asks that what
             // a control is called contains what it says, so "+3" still has to be in there for
             // anyone driving the page by voice.
-            aria-label={`+${hidden}, show ${hidden} more ${label}`}
+            //
+            // "more in Topics" rather than "more Topics", which needs `label` to be a count noun it
+            // can pluralise — it is a section name and already plural, so a single hidden chip read
+            // as "show 1 more Topics". Naming the section as a place instead of a quantity is right
+            // at every count and needs no plural rule.
+            aria-label={`+${hidden}, show ${hidden} more in ${label}`}
             onClick={() => {
               focusAfterExpandRef.current = true;
               setExpanded(true);

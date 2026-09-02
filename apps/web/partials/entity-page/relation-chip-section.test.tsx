@@ -19,7 +19,7 @@ function relation(id: string, name: string | null): Relation {
 }
 
 /** What the expander is called once it says what it reveals — see the component. */
-const EXPANDER_NAME = '+3, show 3 more Topics';
+const EXPANDER_NAME = '+3, show 3 more in Topics';
 
 function relations(count: number): Relation[] {
   return Array.from({ length: count }, (_, index) => relation(`relation-${index}`, `Topic ${index}`));
@@ -84,14 +84,22 @@ describe('RelationChipSection', () => {
     it('says what it reveals, and still answers to what it shows', () => {
       render(<RelationChipSection label="Topics" relations={relations(11)} spaceId="space-1" />);
 
-      const expander = screen.getByRole('button', { name: '+3, show 3 more Topics' });
+      const expander = screen.getByRole('button', { name: '+3, show 3 more in Topics' });
       expect(expander).toHaveTextContent('+3');
+    });
+
+    // `label` is a section name and already plural, so counting with it ("1 more Topics") reads
+    // wrong at exactly one. Naming the section as a place works at every count.
+    it('reads correctly when it is hiding exactly one', () => {
+      render(<RelationChipSection label="Topics" relations={relations(9)} spaceId="space-1" />);
+
+      expect(screen.getByRole('button', { name: '+1, show 1 more in Topics' })).toBeInTheDocument();
     });
 
     it('names itself after the section it belongs to', () => {
       render(<RelationChipSection label="Subtopics" relations={relations(11)} spaceId="space-1" />);
 
-      expect(screen.getByRole('button', { name: '+3, show 3 more Subtopics' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '+3, show 3 more in Subtopics' })).toBeInTheDocument();
     });
 
     // The button reveals everything and so removes itself, which leaves focus on a detached
@@ -117,7 +125,7 @@ describe('RelationChipSection', () => {
       rerender(<RelationChipSection label="Topics" relations={next} spaceId="space-1" />);
 
       expect(screen.getAllByRole('link')).toHaveLength(8);
-      expect(screen.getByRole('button', { name: '+4, show 4 more Topics' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '+4, show 4 more in Topics' })).toBeInTheDocument();
     });
 
     // Re-rendering the same entity is not navigation; a parent re-render must not shut the section
