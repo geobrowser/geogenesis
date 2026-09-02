@@ -1006,7 +1006,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // seeding a space the menu has not reached yet would have it dropped on the next render and never
   // put back. Held until the browsed facets have landed, since until then the menu is only the
   // spaces whose rows happen to have arrived.
-  useMemberSpaceDefault({
+  const markSpacesChosen = useMemberSpaceDefault({
     memberSpaceIds,
     availableSpaceIds: facetSpaceIds,
     pending: allowlistPending || publishablePending || !browsedClaimsQuery.facetsSettled,
@@ -1321,8 +1321,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           <div className="flex flex-col gap-3">
             <SpaceTopicFilters
               spaceIds={spaceIds}
-              onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-              onSpacesClear={() => setSpaceIds([])}
+              onSpaceToggle={id => {
+                markSpacesChosen();
+                setSpaceIds(current => toggleId(current, id));
+              }}
+              onSpacesClear={() => {
+                markSpacesChosen();
+                setSpaceIds([]);
+              }}
               topicIds={topicIds}
               onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
               onTopicsClear={() => setTopicIds([])}
@@ -1401,6 +1407,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               ? {
                   label: 'Clear filters',
                   onClick: () => {
+                    markSpacesChosen();
                     setSearch('');
                     setSpaceIds([]);
                     setTopicIds([]);

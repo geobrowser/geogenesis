@@ -17,7 +17,7 @@ type Props = {
 function seed(initial: Props) {
   const onSeed = vi.fn();
   const view = renderHook((props: Props) => useMemberSpaceDefault({ ...props, onSeed }), { initialProps: initial });
-  return { ...view, onSeed };
+  return { ...view, onSeed, markChosen: () => view.result.current() };
 }
 
 describe('useMemberSpaceDefault', () => {
@@ -93,5 +93,38 @@ describe('useMemberSpaceDefault', () => {
     });
 
     expect(onSeed).toHaveBeenCalledExactlyOnceWith([A]);
+  });
+});
+
+// The menus are live before this settles — the picker's options accumulate from rows as they
+// arrive — so a viewer can act first. Seeding over that would make this a policy rather than a
+// default.
+describe('useMemberSpaceDefault once the viewer has acted', () => {
+  it('gives up the seed when the viewer picks a space first', () => {
+    const { rerender, onSeed, markChosen } = seed({
+      memberSpaceIds: null,
+      availableSpaceIds: [A, B],
+      pending: true,
+    });
+
+    markChosen();
+    rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).not.toHaveBeenCalled();
+  });
+
+  // Clearing counts. An empty selection the viewer asked for means the unfiltered list, and is not
+  // an invitation to fill it back in for them.
+  it('gives up the seed when the viewer clears the filter first', () => {
+    const { rerender, onSeed, markChosen } = seed({
+      memberSpaceIds: new Set([A]),
+      availableSpaceIds: [],
+      pending: true,
+    });
+
+    markChosen();
+    rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).not.toHaveBeenCalled();
   });
 });

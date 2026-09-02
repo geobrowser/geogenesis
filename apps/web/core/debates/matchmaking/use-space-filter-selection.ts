@@ -25,6 +25,14 @@ import { normId } from '~/core/utils/norm-id';
  * they meant otherwise. The seed fires once and never again, even if their memberships change under
  * it.
  *
+ * ## Losing the right to seed
+ *
+ * The menus are live before this settles — the picker's options accumulate from rows as they
+ * arrive — so a viewer can pick a space, or clear the filter, before the seed is ready. Seeding
+ * over that would make this a policy rather than a default, so callers report the interaction
+ * through the returned marker and the seed is forfeited. Clearing counts: an empty selection the
+ * viewer asked for means the unfiltered list, and is not an invitation to fill it in for them.
+ *
  * ## The fallback
  *
  * A viewer who belongs to none of the spaces on offer — including every signed-out one, who belongs
@@ -46,7 +54,7 @@ export function useMemberSpaceDefault({
   pending: boolean;
   /** Called at most once, and only with a non-empty selection. */
   onSeed: (spaceIds: string[]) => void;
-}): void {
+}): () => void {
   const seededRef = React.useRef(false);
   // Held in a ref so a caller passing an inline function doesn't re-arm the effect on every render.
   const onSeedRef = React.useRef(onSeed);
@@ -68,4 +76,11 @@ export function useMemberSpaceDefault({
     const seeded = availableSpaceIds.filter(id => mine.has(normId(id)));
     if (seeded.length > 0) onSeedRef.current(seeded);
   }, [availableSpaceIds, memberSpaceIds, pending]);
+
+  // Marks the seed as spent without applying it. A ref rather than state: this must take effect
+  // for the effect above on the very same tick the viewer acts, and re-rendering to record it
+  // would leave a window where their pick is already made and the seed still armed.
+  return React.useCallback(() => {
+    seededRef.current = true;
+  }, []);
 }

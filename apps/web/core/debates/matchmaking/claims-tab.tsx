@@ -409,7 +409,7 @@ export function ClaimsTab() {
   const offeredSpaceIds = React.useMemo(() => offeredSpaces.map(space => space.id), [offeredSpaces]);
 
   // Defaults to the spaces the viewer belongs to (GEO-2789), in the menu's own ids.
-  useMemberSpaceDefault({
+  const markSpacesChosen = useMemberSpaceDefault({
     memberSpaceIds,
     availableSpaceIds: offeredSpaceIds,
     pending: spacesPending,
@@ -538,8 +538,14 @@ export function ClaimsTab() {
 
         <SpaceTopicFilters
           spaceIds={spaceIds}
-          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-          onSpacesClear={() => setSpaceIds([])}
+          onSpaceToggle={id => {
+            markSpacesChosen();
+            setSpaceIds(current => toggleId(current, id));
+          }}
+          onSpacesClear={() => {
+            markSpacesChosen();
+            setSpaceIds([]);
+          }}
           topicIds={topicIds}
           onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
           onTopicsClear={() => setTopicIds([])}

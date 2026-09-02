@@ -1852,6 +1852,29 @@ describe('DebateRematchPageClient', () => {
     expect(rows[0]).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // This menu's options accumulate from rows as they arrive, so they are pickable before the seed
+  // is ready. A default that overwrote that choice would be a policy, not a default.
+  it('does not overwrite a space the viewer picked before the default was ready', async () => {
+    // Their memberships are not known yet, so the seed cannot have fired.
+    mocks.memberSpaceIds = null;
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // Governance is SPACE_2 — not one of theirs, which is the point.
+    fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Governance/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument());
+
+    // Now they land, and the seed becomes possible.
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // Still their pick, not the default.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Crypto/ })).toBeNull();
+  });
+
   it('opens on everything when the viewer belongs to none of the spaces on offer', async () => {
     mocks.memberSpaceIds = new Set();
     render(<DebateRematchPageClient sessionId="rematch-1" />);
