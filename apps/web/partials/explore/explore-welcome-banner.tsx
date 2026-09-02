@@ -16,7 +16,7 @@ import { dismissedNoticesAtom } from '~/atoms';
 const WELCOME_BANNER_ID = 'exploreWelcomeCurator';
 
 /**
- * "Welcome to Geo: Find your first debate!" banner shown above the explore feed. Dismissible
+ * "Welcome to Geo - Find your first debate!" banner shown above the explore feed. Dismissible
  * via the close button in the top-right; the dismissed state persists in localStorage.
  *
  * Gated behind `ClientOnly` so we never SSR a banner the user has already dismissed
@@ -59,11 +59,11 @@ function WelcomeBanner() {
           <span aria-hidden className="mr-1.5">
             👋
           </span>
-          Welcome to Geo: Find your first debate!
+          Welcome to Geo - Find your first debate!
         </h2>
         <p className="mt-2 max-w-[338px] text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-white">
           Take a position on claims you care about, then get matched with someone who wants to take the other side.
-          Record the debate and publish it.
+          Record the debate and publish it. Open the debate hub to get started!
         </p>
       </div>
 
