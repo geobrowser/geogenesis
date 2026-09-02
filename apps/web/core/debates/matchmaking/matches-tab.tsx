@@ -2,14 +2,11 @@
 
 import * as React from 'react';
 
-import { Text } from '~/design-system/text';
-
 import type { MatchmakingMatch } from '../api';
 import { useDebateActivity } from '../hooks';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
-import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from './hooks';
+import { useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubCardList } from './hub-motion';
-import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
@@ -81,19 +78,13 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
           emptyMessage={
             activity?.available_to_debate === false
               ? 'You’re marked unavailable, so nobody can be matched with you.'
-              : 'Matches appear once you’ve turned Debate on for a claim and someone holding the opposite position is online and ready too.'
+              : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
           }
           emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
         >
           <HubCardList>
             {filtered.map(match => (
-              <MatchCard
-                key={`${match.claim.space_id}:${match.claim.claim_entity_id}`}
-                match={match}
-                hasOutboundRequest={Boolean(outbound)}
-                // Only when the server actually says so — a missing field must not block requesting.
-                unavailable={activity?.available_to_debate === false}
-              />
+              <MatchCard key={`${match.claim.space_id}:${match.claim.claim_entity_id}`} match={match} />
             ))}
           </HubCardList>
         </HubQueryState>
@@ -102,67 +93,10 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
   );
 }
 
-function MatchCard({
-  match,
-  hasOutboundRequest,
-  unavailable,
-  ref,
-}: {
-  match: MatchmakingMatch;
-  hasOutboundRequest: boolean;
-  /** The viewer has marked themselves unavailable, so a request they sent couldn't be answered. */
-  unavailable: boolean;
-  ref?: React.Ref<HTMLElement>;
-}) {
-  const createRequest = useCreateDebateRequest();
-
-  const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
-  const blockedReason = unavailable
-    ? 'Switch yourself to available to send a request.'
-    : hasOutboundRequest
-      ? 'Withdraw your open request to send another.'
-      : undefined;
-
-  return (
-    <MatchmakingClaimCard
-      ref={ref}
-      claim={match.claim}
-      positions={match.positions}
-      readiness={match}
-      footer={
-        <div className="mt-3 flex flex-col gap-1">
-          <HubPillButton
-            onClick={() =>
-              createRequest.mutate({
-                space_id: match.claim.space_id,
-                claim_entity_id: match.claim.claim_entity_id,
-              })
-            }
-            disabled={Boolean(blockedReason)}
-            pending={createRequest.isPending}
-            pendingLabel="Requesting…"
-            className="w-full"
-          >
-            Request debate
-          </HubPillButton>
-          {/* Shown, not just a `title`: native tooltips never appear on touch and are unreliable on
-              a disabled button, which is exactly when the explanation matters. Mirrors
-              `ClaimReadinessToggle`. */}
-          {blockedReason ? (
-            <Text as="p" variant="footnote" color="grey-04">
-              {blockedReason}
-            </Text>
-          ) : null}
-          {requestError ? (
-            // role="alert" so a failed request is announced, not just drawn under the button.
-            <div role="alert">
-              <Text as="p" variant="footnote" color="red-01">
-                {requestError}
-              </Text>
-            </div>
-          ) : null}
-        </div>
-      }
-    />
-  );
+function MatchCard({ match, ref }: { match: MatchmakingMatch; ref?: React.Ref<HTMLElement> }) {
+  // No footer. The card's end slot offers the debate now — same match lookup, same
+  // `useCreateDebateRequest`, same blocked reasons — and this tab was drawing a second button for
+  // it a few pixels below the first. Every card here is a match by definition, so the slot is
+  // always filled and the tab loses nothing by not asking twice.
+  return <MatchmakingClaimCard ref={ref} claim={match.claim} positions={match.positions} readiness={match} />;
 }

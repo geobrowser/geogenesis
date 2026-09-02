@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { usePathname, useRouter } from 'next/navigation';
 
+import { useFeatureFlag } from '~/core/state/feature-flags';
+
 import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
 import { Spinner } from '~/design-system/spinner';
@@ -15,7 +17,7 @@ import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifi
 import { useDebateAttention, useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { clearEnteringDebate, useEnteringDebateId, useEnteringDebatePending } from './debate-entry-intent';
-import { useDebateGateway } from './debate-gateway';
+import { type DebateGatewayPauseReason, useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
 import { rememberDebateReturnDestination } from './debate-return-navigation';
 import {
@@ -38,9 +40,59 @@ import {
 import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 import { useScrollLock } from './use-scroll-lock';
 
+/**
+ * What to tell the viewer about a paused gateway, given why it paused.
+ *
+ * One sentence used to cover all six reasons, and it said "reconnecting" for every one of them.
+ * That is how GEO-2670 stayed open for two weeks: a client spending its command budget, a page
+ * holding more scopes than the server will follow, and an actual dropped socket all produced the
+ * same words, so every report had to be re-diagnosed from scratch and two of the causes were not
+ * reconnecting at all.
+ *
+ * `disconnected` and `session` keep the original wording because for those it is true. The rest say
+ * what is actually happening, without asking the reader to care that a gateway exists.
+ */
+function pausedBannerText(reason: DebateGatewayPauseReason | null | undefined) {
+  switch (reason) {
+    // Our own command budget. It does resume on its own, so the viewer needs to know it is
+    // temporary and nothing is broken on their end.
+    case 'rate_limited':
+      return 'Live debate updates are catching up.';
+    // A ceiling, not a fault: the rest of the page is live, and only the claims past the limit are
+    // not. Saying "reconnecting" here promised a recovery that was never coming.
+    case 'subscription_limit':
+      return 'Too many claims on this page to follow live. Some may be out of date.';
+    // Needs a deploy. Nothing the viewer or the client can do will change it.
+    case 'unsupported':
+      return 'Live debate updates are unavailable.';
+    case 'error':
+      return 'Live debate updates are paused while retrying.';
+    default:
+      return 'Live debate updates are paused while reconnecting.';
+  }
+}
+
+/**
+ * Console fallback for the banner, now that only `debateDebugging` sees it. Hiding it must not cost
+ * the diagnosis GEO-2670 put into it, so every viewer still gets the reason — once per transition,
+ * and a recovery is only remembered, not announced.
+ */
+function useDebateGatewayPauseLog(paused: boolean, reason: DebateGatewayPauseReason | null | undefined) {
+  // 'resumed', not null: a mount that was never paused has nothing to report.
+  const lastLoggedRef = React.useRef<string>('resumed');
+
+  React.useEffect(() => {
+    const state = paused ? (reason ?? 'unknown') : 'resumed';
+    if (lastLoggedRef.current === state) return;
+    lastLoggedRef.current = state;
+    if (paused) console.warn(`[debates] live updates paused (${state}): ${pausedBannerText(reason)}`);
+  }, [paused, reason]);
+}
+
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
+  const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
   const geoChatAuth = useGeoChatAuth();
   // Presence, not attention: being available to debate has to survive looking at another window.
   const debatePresence = useDebatePresence();
@@ -52,6 +104,7 @@ export function DebateCoordinator() {
     geoChatAuth.accountKey,
     debatePresence
   );
+  useDebateGatewayPauseLog(gateway.paused, gateway.pauseReason);
   useClaimResponseIndexedNotifier(
     geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
@@ -82,7 +135,8 @@ export function DebateCoordinator() {
   // known, so it cannot be matched against one.
   const enteringPending = useEnteringDebatePending();
   const atDebate =
-    enteringPending || Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
+    enteringPending ||
+    Boolean(debate && (pathname.includes(`/debates/${debate.id}`) || debate.id === enteringDebateId));
   // The rematch page walks the viewer into its own converted debate, and accepting fires a single
   // `debate.rematch_changed` that the gateway turns into *two* refetches — the account's activity
   // and the rematch session — either of which can land first. When activity wins, this coordinator
@@ -229,13 +283,16 @@ export function DebateCoordinator() {
 
   return (
     <>
-      {gateway.paused && (
+      {gateway.paused && debateDebuggingEnabled && (
         <div
           role="status"
           aria-live="polite"
+          // Exposed in the DOM so a report can name the cause without needing the console. Two
+          // weeks of GEO-2670 went into establishing which of six pauses a screenshot meant.
+          data-pause-reason={gateway.pauseReason ?? 'unknown'}
           className="pointer-events-none fixed top-3 left-1/2 z-[1400] w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 rounded-full bg-text px-4 py-2 text-center text-sm text-white shadow-card sm:w-auto"
         >
-          Live debate updates are paused while reconnecting.
+          {pausedBannerText(gateway.pauseReason)}
         </div>
       )}
       {promptedDebate && currentUserId && !activity?.rematch && (

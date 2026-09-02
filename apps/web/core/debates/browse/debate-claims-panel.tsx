@@ -2,20 +2,25 @@
 
 import * as React from 'react';
 
-import type { Debate } from '~/core/debates/api';
+import { ClaimSummary } from '~/core/claims/browse/claim-summary';
+import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
+import type { Debate, DebateClaim } from '~/core/debates/api';
 import { sortClaimsByBest, useClaimsBestOrder } from '~/core/debates/claims-best-order';
+import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
+import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
 import { type TranscriptClaim, claimsForParticipant, unmatchedClaims } from '~/core/debates/transcript-claims';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { useQueryEntities } from '~/core/sync/use-store';
+import type { Entity } from '~/core/types';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Close } from '~/design-system/icons/close';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
-
-import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { WinnerVoteButton } from './winner-vote-button';
 
@@ -44,6 +49,50 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
   );
   const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);
   const { rankByClaimId, isReady: rankingReady } = useClaimsBestOrder(claimIds, claimsSpaceId);
+
+  // One lookup for every row rather than one per row. It answers the vocabulary each claim is
+  // argued in — Verify/Dispute for a factual claim, Agree/Disagree otherwise — which is the whole
+  // reason these rows now carry labelled pills instead of two unlabelled chevrons.
+  // The graph's answer to the same question, for claims geo-chat has no row for — a space it does
+  // not index has none at all, and `useDebateClaims` is disabled outright when there are no ids.
+  // Without this a factual claim fell back to Agree/Disagree and published a *stance* response,
+  // which is the "count one vote kind while publishing another" failure the claim page's own note
+  // describes. One batch for the panel rather than a lookup per row.
+  const { entities: claimEntities } = useQueryEntities({
+    where: { id: { in: claimIds } },
+    first: claimIds.length || 1,
+    enabled: claimIds.length > 0,
+  });
+  const entitiesByClaimId = React.useMemo(() => {
+    const map = new Map<string, Entity>();
+    for (const entity of claimEntities) map.set(entity.id, entity);
+    return map;
+  }, [claimEntities]);
+
+  // Grouped by each claim's own space rather than sent to one.
+  //
+  // `claimsSpaceId` is the first non-null space in the transcript, which is fine for the ranking it
+  // was written for but wrong here: `TranscriptClaim.spaceId` is allowed to differ per claim, and a
+  // debate that quotes an external claim has at least two. Asking one space about all of them means
+  // every row outside it comes back empty — losing its vocabulary and its available participants,
+  // silently, on the rows most likely to be interesting.
+  const rowGroups = React.useMemo(() => {
+    const bySpace = new Map<string, string[]>();
+    for (const claim of claims.all) {
+      const spaceId = claim.spaceId ?? claimsSpaceId;
+      const ids = bySpace.get(spaceId);
+      if (ids) ids.push(claim.id);
+      else bySpace.set(spaceId, [claim.id]);
+    }
+    return [...bySpace].map(([spaceId, ids]) => ({ spaceId, claimIds: ids }));
+  }, [claims.all, claimsSpaceId]);
+
+  const rowsQuery = useDebateClaimsBySpaces(rowGroups);
+  const rowsByClaimId = React.useMemo(() => {
+    const map = new Map<string, DebateClaim>();
+    for (const row of rowsQuery.claims) map.set(row.claim_entity_id, row);
+    return map;
+  }, [rowsQuery.claims]);
 
   // Held back the way the debate feed holds its rows back while the same ranking loads: painting
   // transcript order first and reordering a moment later moves claims under someone already
@@ -108,6 +157,8 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
                   ? []
                   : sortClaimsByBest(claimsForParticipant(claims, participant.profile_space_id), rankByClaimId)
               }
+              rowsByClaimId={rowsByClaimId}
+              entitiesByClaimId={entitiesByClaimId}
               isLoading={isOrdering}
               error={error}
             />
@@ -120,7 +171,13 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
             <Text as="span" variant="smallTitle" color="text">
               Other claims
             </Text>
-            <ClaimList claims={orphaned} isLoading={false} error={null} />
+            <ClaimList
+              claims={orphaned}
+              rowsByClaimId={rowsByClaimId}
+              entitiesByClaimId={entitiesByClaimId}
+              isLoading={false}
+              error={null}
+            />
           </article>
         )}
       </div>
@@ -130,10 +187,14 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
 
 function ClaimList({
   claims,
+  rowsByClaimId,
+  entitiesByClaimId,
   isLoading,
   error,
 }: {
   claims: TranscriptClaim[];
+  rowsByClaimId: Map<string, DebateClaim>;
+  entitiesByClaimId: Map<string, Entity>;
   isLoading: boolean;
   error: Error | null;
 }) {
@@ -163,7 +224,11 @@ function ClaimList({
       <ul className="mt-4 space-y-3">
         {visible.map(claim => (
           <li key={claim.id}>
-            <ClaimRow claim={claim} />
+            <ClaimRow
+              claim={claim}
+              row={rowsByClaimId.get(claim.id) ?? null}
+              entity={entitiesByClaimId.get(claim.id) ?? null}
+            />
           </li>
         ))}
       </ul>
@@ -181,19 +246,20 @@ function ClaimList({
 }
 
 /**
- * One claim: its text linking to the claim entity, with the row's actions beneath it.
+ * One claim: its text linking to the claim entity, with the same controls every other claim
+ * surface uses beneath it.
  *
- * `EntityRowActions` is what a data block's bulleted-list row renders, and it is the whole set —
- * the response control *and* the Debate toggle. Reaching past it for the response control alone
- * (which this did) is what left the toggle off these rows. It also resolves the response kind from
- * the entity itself, so a factual claim gets Verify/Dispute here the same way it does everywhere
- * else, including while a change to that flag is still an unpublished edit.
+ * These used to be `EntityRowActions` — the chevron control a data block row renders, where a claim
+ * is one entity type among people and places and should look like its neighbours. Here every row
+ * *is* a claim, and the chevrons named neither side: Verify/Dispute and Agree/Disagree were
+ * indistinguishable in the one place a reader is watching people argue over exactly that
+ * distinction.
  *
  * A claim the graph reports no space for is rendered as plain text. Both the link target and the
- * actions are space-scoped, so there is nothing correct to point either one at — better a dead row
+ * controls are space-scoped, so there is nothing correct to point either one at — better a dead row
  * than one that navigates somewhere wrong or publishes a response into the wrong space.
  */
-function ClaimRow({ claim }: { claim: TranscriptClaim }) {
+function ClaimRow({ claim, row, entity }: { claim: TranscriptClaim; row: DebateClaim | null; entity: Entity | null }) {
   if (claim.spaceId === null) {
     return (
       <Text as="p" variant="metadata" color="text">
@@ -209,11 +275,92 @@ function ClaimRow({ claim }: { claim: TranscriptClaim }) {
           {claim.text}
         </Text>
       </Link>
-      {/* Beneath the claim rather than beside it, the way the list, gallery and bulleted-list
-          data block rows lay their actions out. */}
-      <div className="mt-1">
-        <EntityRowActions entityId={claim.id} spaceId={claim.spaceId} />
-      </div>
+      <PanelClaimControls claimId={claim.id} spaceId={claim.spaceId} row={row} entity={entity} />
     </>
+  );
+}
+
+/**
+ * The panel's compact rendition of the card's controls: the side pills and the summary, without the
+ * card chrome around them.
+ *
+ * No space chip — every claim here belongs to the debate's own space, so naming it on every row
+ * says nothing. No end slot either: the reader is already watching the debate this claim is being
+ * argued in, and offering to request another one is the wrong invitation at the wrong moment.
+ *
+ * What remains is the vocabulary, which is the part that has to match: the same pills, publishing
+ * through the same path, and the same shared summary as the hub, the topic page and the feed.
+ */
+function PanelClaimControls({
+  claimId,
+  spaceId,
+  row,
+  entity,
+}: {
+  claimId: string;
+  spaceId: string;
+  row: DebateClaim | null;
+  entity: Entity | null;
+}) {
+  // The claim's row title is drawn by `ClaimRow` above, so nothing is passed for it here.
+  const {
+    responseKind,
+    isResponseKindResolved,
+    isViewerResponseResolved,
+    responseBlockedReason,
+    summary,
+    claim,
+    positions,
+    readiness,
+  } = useClaimResponseState({
+    claimId,
+    spaceId,
+    row,
+    entity,
+  });
+
+  const promptSignIn = usePrivySignIn();
+  const control = useClaimPositionControl({
+    claim,
+    positions,
+    readiness,
+    answersReady: isResponseKindResolved && isViewerResponseResolved,
+    responseBlockedReason,
+    onRequireSignIn: promptSignIn,
+    // No offer here, so no faces borrowed from one. The panel deliberately has no end slot — the
+    // reader is already watching the debate this claim is being argued in — and the merge exists to
+    // stop a card offering a debate on a side showing nobody to debate. With nothing offered, all it
+    // could do is put an unrelated stranger from an account-level match inside a pill on a row about
+    // this debate's own participants.
+    offersDebate: false,
+  });
+
+  return (
+    <div className="mt-2">
+      <PositionRow
+        positions={control.optimisticPositions}
+        responseKind={responseKind}
+        viewerPosition={control.viewerPosition}
+        onRespond={control.respond}
+        disabled={!control.canRespond}
+        titleFor={control.actionTitle}
+      />
+      {control.responseError ? (
+        <div role="alert" className="mt-1.5">
+          <Text as="p" variant="footnote" color="red-01">
+            {control.responseError}
+          </Text>
+        </div>
+      ) : null}
+      {summary.isLoading ? null : (
+        <ClaimSummary
+          entityId={claimId}
+          spaceId={spaceId}
+          responseKind={responseKind}
+          summary={summary}
+          className="mt-2"
+        />
+      )}
+    </div>
   );
 }

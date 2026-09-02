@@ -9,6 +9,16 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 
+// Reached through the claims panel, which now carries the shared response controls. The module's
+// top-level `atomWithStorage` runs on import, and under Node's own webstorage — which shadows
+// jsdom's with an object that has no getItem — that import takes the suite down before a test runs.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: () => false,
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+}));
+
 const mocks = vi.hoisted(() => ({
   debateQuery: { data: undefined as Debate | undefined, isError: false },
   mediaQuery: { data: undefined as { artifacts: { kind: string }[] } | undefined, isError: false },
@@ -46,7 +56,11 @@ vi.mock('~/core/debates/browse/debate-feed-player', () => ({
 }));
 
 vi.mock('~/core/debates/browse/use-debate-share-action', () => ({
-  useDebateShareAction: () => ({ state: 'ready', method: 'share', tooltipMessage: undefined, onActivate: vi.fn() }),
+  useDebateShareAction: () => ({ open: false, onOpen: vi.fn(), onOpenChange: vi.fn() }),
+}));
+
+vi.mock('~/core/debates/browse/share-dialog', () => ({
+  DebateShareDialog: () => null,
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -220,7 +234,7 @@ describe('DebateExploreFeedCard', () => {
     mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
     renderCard();
 
-    expect(screen.getByRole('button', { name: 'Share debate video' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Share debate' })).toBeDefined();
 
     expect(screen.queryByTestId('claims-panel')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Claims' }));

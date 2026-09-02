@@ -218,7 +218,9 @@ export function fetchFeaturedSpacesShared(): Promise<FeaturedSpace[]> {
  */
 export async function fetchFeaturedSpaces(): Promise<FeaturedSpace[]> {
   const root = await runQuery<RootResult>(ROOT_QUERY);
-  const rootTopicId = root?.space?.topicId;
+  // `runQuery` returns null only on a failed request (aborts already rethrew).
+  if (root === null) throw new Error('Failed to load featured spaces');
+  const rootTopicId = root.space?.topicId;
   if (!rootTopicId) return [];
 
   // Seed the traversal with the Root topic's children so the Root topic (and

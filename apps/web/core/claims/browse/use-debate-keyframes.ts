@@ -2,10 +2,16 @@
 
 import * as React from 'react';
 
-import { DEBATE_VIDEOS_PROPERTY_ID, IMAGE_URL_PROPERTY_ID, KEY_FRAME_IMAGE_PROPERTY_ID } from '~/core/debates/ontology';
+import {
+  DEBATE_VIDEOS_PROPERTY_ID,
+  IMAGE_URL_PROPERTY_ID,
+  KEY_FRAME_IMAGE_PROPERTY_ID,
+  WEB_URL_PROPERTY_ID,
+} from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity, Relation } from '~/core/types';
+import { isDirectMediaUrl } from '~/core/utils/media-url';
 
 /**
  * The poster still for each debate, keyed by debate id.
@@ -55,11 +61,10 @@ export function useDebateKeyframes(debates: Entity[]): Map<string, string> {
   const urlByKeyframeId = React.useMemo(() => {
     const map = new Map<string, string>();
     for (const keyframe of keyframes) {
-      // `IPFS URL` is the property the media decoders read, and what the publish path writes for
-      // both stills and videos despite the name.
-      const url = keyframe.values?.find(
-        value => value.isDeleted !== true && ID.equals(value.property.id, IMAGE_URL_PROPERTY_ID)
-      )?.value;
+      // `IPFS URL` first for pinned stills; `Web URL` carries the geo-chat URL for stills left in
+      // object storage.
+      const webUrl = valueForProperty(keyframe, WEB_URL_PROPERTY_ID);
+      const url = valueForProperty(keyframe, IMAGE_URL_PROPERTY_ID) ?? (isDirectMediaUrl(webUrl) ? webUrl : null);
       if (url) map.set(keyframe.id, url);
     }
     return map;
@@ -79,6 +84,11 @@ export function useDebateKeyframes(debates: Entity[]): Map<string, string> {
     }
     return byDebateId;
   }, [keyframeIdByVideoId, urlByKeyframeId, videoIdsByDebateId]);
+}
+
+function valueForProperty(entity: Entity, propertyId: string): string | undefined {
+  const value = entity.values?.find(v => v.isDeleted !== true && ID.equals(v.property.id, propertyId))?.value;
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function relationTargets(relations: Relation[], propertyId: string): string[] {

@@ -5,12 +5,14 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { IntlMessageFormat } from 'intl-messageformat';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
+import { toSignIn as toSignInLink } from '~/core/auth/sign-in-deep-link';
 import {
   FILEBASE_GATEWAY_READ_PATH,
   LIGHTHOUSE_GATEWAY_READ_PATH,
   PINATA_GATEWAY_READ_PATH,
   ROOT_SPACE,
 } from '~/core/constants';
+import { toDebatesPanel as toDebatesPanelLink } from '~/core/debates/debates-panel-deep-link';
 import { EntityId, ProposalStatus } from '~/core/io/substream-schema';
 
 import { Proposal } from '../io/dto/proposals';
@@ -21,6 +23,16 @@ import { Entities } from './entity';
 export const NavUtils = {
   toRoot: () => '/root',
   toExplore: () => '/explore',
+  /**
+   * Explore, with the Privy sign-in modal opening on arrival. Built for the marketing site's
+   * "Sign in / Sign up" button — see `core/auth/sign-in-deep-link` for the param contract.
+   */
+  toSignIn: toSignInLink,
+  /**
+   * Any page, with the debates hub opening on arrival — optionally on a named tab. See
+   * `core/debates/debates-panel-deep-link` for the param contract.
+   */
+  toDebatesPanel: toDebatesPanelLink,
   toHome: () => `/home`,
   toAdmin: (spaceId: string) => `/space/${spaceId}/access-control`,
   toSpace: (spaceId: string) => (spaceId === ROOT_SPACE ? `/root` : `/space/${spaceId}`),
@@ -551,14 +563,34 @@ export const getImagePath = (value: string) => getImagePathAtLevel(value, 0);
 // Image values are free-text entity properties, so an author can type anything.
 // next/image throws on a src that is neither root-relative nor an absolute URL,
 // which kills the whole page that rendered it.
+//
+// The scheme is checked too, not just the syntax: `mailto:`, `javascript:`, `file:`
+// and `blob:` all parse as URLs and none of them is a picture.
+//
+// No `ipfs:` here, deliberately. This runs *after* `getImagePathAtLevel`, so a value
+// the resolver understood is already `https:` by now; the only `ipfs:` strings that
+// can reach this point are the ones it declined to rewrite — `ipfs:QmAbc` without
+// the slashes, `IPFS://` with the wrong case — and admitting those would hand
+// next/image a src it cannot load.
+//
+// Server-side card rendering asks a stricter question again: see `toSatoriImageSrc`,
+// which additionally rejects the relative forms a browser resolves happily.
+const RENDERABLE_IMAGE_PROTOCOLS = new Set(['http:', 'https:']);
+
 export const isRenderableImageSrc = (src: string) => {
   if (src.startsWith('/')) return true;
+
+  let parsed: URL;
   try {
-    new URL(src);
-    return true;
+    parsed = new URL(src);
   } catch {
     return false;
   }
+
+  // Only an image data URL is a picture; `data:text/html,...` parses just as happily.
+  if (parsed.protocol === 'data:') return src.startsWith('data:image/');
+
+  return RENDERABLE_IMAGE_PROTOCOLS.has(parsed.protocol);
 };
 
 export const getVideoHash = getImageHash;

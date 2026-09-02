@@ -9,11 +9,14 @@ import { useSetAtom } from 'jotai';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import type { Debate } from '~/core/debates/api';
-import { useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { useGeoChatAuth } from '~/core/debates/hooks';
+import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useComments } from '~/core/hooks/use-comments';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
 import { useQueryEntities } from '~/core/sync/use-store';
@@ -26,14 +29,12 @@ import { Text } from '~/design-system/text';
 
 import { EntityCommentsPanel } from '~/partials/comments/entity-comments-panel';
 
-import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
-import { useGeoChatAuth } from '~/core/debates/hooks';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-
 import { DebateClaimsPanel } from './debate-claims-panel';
 import { DebateFeedPlayer } from './debate-feed-player';
 import { DebateInteractionBar } from './debate-interaction-bar';
 import { DebateScrollHint, scrollHintBounceProps, useDebateScrollHint } from './debate-scroll-hint';
+import { exceedsLineClamp } from './line-clamp-overflow';
+import { DebateShareDialog } from './share-dialog';
 import { useDebateShareAction } from './use-debate-share-action';
 import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -58,12 +59,36 @@ export function DebatesBrowseFeed({
   const debatesQuery = useSpaceDebates(spaceId, true);
   const { space } = useSpace(spaceId);
 
+  const listedDebates = React.useMemo(() => debatesQuery.data?.debates ?? [], [debatesQuery.data?.debates]);
+
+  // GEO-2764. The space listing is capped — `list_space_debates` is `LIMIT 50` with no pagination
+  // and no way to ask for one specific debate — so a perfectly watchable debate can simply be past
+  // the window and absent from it. Resolving the anchor from that listing therefore fails for
+  // reasons that have nothing to do with the debate: the AI space sits at exactly 50 today, and a
+  // viewer who participated in any incomplete debate there pushes their own count over and loses
+  // the oldest few. The next completed debate in that space tips it for everyone at once.
+  //
+  // So fetch the anchor by id instead of requiring it to appear. Gated on the listing having
+  // settled without it, which keeps the common case at one request — this only fires where the
+  // feed would otherwise have silently rendered the wrong page.
+  const anchorListed = initialDebateId != null && listedDebates.some(debate => ID.equals(debate.id, initialDebateId));
+  const anchorQuery = useDebate(
+    initialDebateId ?? '',
+    initialDebateId != null && !debatesQuery.isLoading && !anchorListed
+  );
+
   // Two-stage gate (GEO-2412). `isWatchableDebate` only proves both raw recordings exist; a debate
   // whose media job failed or never ran still passes it, so readiness decides what renders.
-  const candidates = React.useMemo(
-    () => (debatesQuery.data?.debates ?? []).filter(isWatchableDebate),
-    [debatesQuery.data?.debates]
-  );
+  //
+  // The directly-fetched anchor goes through the same gate as everything else — being navigated to
+  // is not a reason to play a debate that has no video.
+  const candidates = React.useMemo(() => {
+    const watchable = listedDebates.filter(isWatchableDebate);
+    const anchor = anchorQuery.data;
+    if (!anchor || !isWatchableDebate(anchor)) return watchable;
+    if (watchable.some(debate => ID.equals(debate.id, anchor.id))) return watchable;
+    return [...watchable, anchor];
+  }, [listedDebates, anchorQuery.data]);
   const candidateIds = React.useMemo(() => candidates.map(debate => debate.id), [candidates]);
   const {
     processedIds,
@@ -151,7 +176,9 @@ export function DebatesBrowseFeed({
   // flashes "no debates" and strands a valid anchor.
   // Waiting on the ranking too, so the feed doesn't paint in recency order and then resequence
   // itself underneath someone who has already started scrolling.
-  const isLoading = debatesQuery.isLoading || mediaLoading || bestOrderLoading;
+  // `anchorQuery` is part of the load: without it the feed reaches `anchorMissing` while the
+  // direct fetch is still in flight and falls back anyway, which is the bug.
+  const isLoading = debatesQuery.isLoading || anchorQuery.isLoading || mediaLoading || bestOrderLoading;
 
   const anchorPresent = React.useMemo(
     () => initialDebateId == null || debates.some(debate => ID.equals(debate.id, initialDebateId)),
@@ -163,7 +190,8 @@ export function DebatesBrowseFeed({
   // An anchor absent after a failed lookup is *unknown*, not missing: falling
   // back would misread a transient readiness/query error as "this debate has no
   // video", so the feed stays up and shows its own error state instead.
-  const anchorErrored = anchorUnresolved && !isLoading && (mediaError || debatesQuery.error != null);
+  const anchorErrored =
+    anchorUnresolved && !isLoading && (mediaError || debatesQuery.error != null || anchorQuery.error != null);
 
   // Hold an anchored feed until the anchor itself is ready: the per-debate
   // readiness lookups resolve one at a time, so painting the partial list would
@@ -340,7 +368,7 @@ function DebateFeedItem({
 }) {
   const itemRef = React.useRef<HTMLElement | null>(null);
   const winnerVotes = useDebateVotes(debate);
-  const shareAction = useDebateShareAction(debate, active);
+  const share = useDebateShareAction();
   // Comments live on the Debate entity — same query key as the panel, so posting
   // there updates this count without a refetch of our own.
   // Same arguments as the Comments panel's own useComments, so the two share a
@@ -372,7 +400,8 @@ function DebateFeedItem({
     claimsCount: claims.totalCount,
     onComment: onOpenComments,
     onClaims: onOpenClaims,
-    shareAction,
+    onShare: share.onOpen,
+    shareOpen: share.open,
   };
 
   return (
@@ -425,9 +454,25 @@ function DebateFeedItem({
           <DebateInteractionBar orientation="vertical" {...interactionProps} />
         </div>
       </div>
+      <DebateShareDialog
+        open={share.open}
+        onOpenChange={share.onOpenChange}
+        debate={debate}
+        spaceId={spaceId}
+        openerRef={share.openerRef}
+      />
     </section>
   );
 }
+
+/**
+ * Lines the claim title shows before it offers to expand.
+ *
+ * Must agree with the `line-clamp-2` literal on the heading below — Tailwind only emits classes it
+ * can read as literals, so the class cannot be built from this and the two are kept together
+ * instead. If one changes, change both.
+ */
+const CLAIM_CLAMP_LINES = 2;
 
 function DebateTitleHeader({
   claim,
@@ -456,7 +501,17 @@ function DebateTitleHeader({
     const element = claimRef.current;
     if (!element || isClaimExpanded) return;
 
-    const measureOverflow = () => setIsClaimOverflowing(element.scrollHeight > element.clientHeight + 1);
+    const measureOverflow = () =>
+      setIsClaimOverflowing(
+        exceedsLineClamp({
+          contentHeight: element.scrollHeight,
+          clampedHeight: element.clientHeight,
+          // Read on every measure rather than once: the breakpoint swaps the whole type scale, so a
+          // rotation or a resize past 767px changes the line height this is counting in.
+          lineHeight: parseFloat(getComputedStyle(element).lineHeight),
+          maxLines: CLAIM_CLAMP_LINES,
+        })
+      );
     measureOverflow();
 
     if (typeof ResizeObserver === 'undefined') return;

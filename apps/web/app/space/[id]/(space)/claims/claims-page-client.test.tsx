@@ -12,6 +12,16 @@ import type { Entity, Relation } from '~/core/types';
 
 import { ClaimsPageClient } from './claims-page-client';
 
+// The rows render the shared claim card now, whose response controls reach this module. Its
+// top-level `atomWithStorage` runs on import, and under Node's own webstorage — which shadows
+// jsdom's with an object that has no getItem — that import takes the suite down before a test runs.
+vi.mock('~/core/state/pending-personal-space', () => ({
+  usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
+  pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,
+  isPendingPersonalSpaceId: () => false,
+  PENDING_PERSONAL_SPACE_PREFIX: 'pending:',
+}));
+
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   nameSet: vi.fn(),
@@ -37,8 +47,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace, push: vi.fn() }),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-}));
+vi.mock('~/core/state/feature-flags', () => ({}));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingState: () => 'idle',
@@ -78,15 +87,56 @@ vi.mock('~/core/responses/use-claim-response-summaries', () => ({
   },
 }));
 
-vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
-  EntityVoteButtons: ({ responseKind }: { responseKind: string }) =>
-    !responseBatchReady ? (
-      <div data-testid="entity-response-skeleton">Response skeleton</div>
-    ) : (
-      <div data-testid="entity-response-buttons" data-response-kind={responseKind}>
-        Entity response buttons
-      </div>
-    ),
+// The row derives its position summaries from this; the hook reaches the personal-space lookup and
+// through it Wagmi, which this suite has no provider for. The page's own batching is what these
+// tests are about, and that is stubbed separately below.
+vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/claim-response-summary')>()),
+  useClaimResponseSummary: () => ({
+    positive: 0,
+    negative: 0,
+    total: 0,
+    percent: null,
+    meetsFloor: false,
+    isControversial: false,
+    // Follows the batch, as the real hook does: under a boundary the individual reads stand down,
+    // so the batch's own readiness is what says whether there is anything to draw yet. Stubbing
+    // this `false` unconditionally is what let the card look answerable with the batch still out.
+    isLoading: !responseBatchReady,
+    // Same swap the real hook makes under a batch: the viewer's own side is primed by the batch
+    // too, so the batch's readiness is the only thing either flag waits on.
+    isViewerResponseLoading: !responseBatchReady,
+    // The batch is what answers under a boundary, so it is what makes the counts an answer.
+    hasCounts: responseBatchReady,
+    viewerDirection: null,
+    viewerSpaceId: null,
+  }),
+}));
+
+// Mirrors the real card's contract rather than inventing one. An earlier version rendered a
+// "response skeleton" whenever the batch was unready — a thing `MatchmakingClaimCard` has never
+// drawn, so the assertions that looked for it were reading the mock back to itself. What the card
+// really does with an unready batch is refuse to answer: `answersReady` is false, because the
+// viewer's own side is unknown until the batch lands and pressing the side they already hold would
+// republish it rather than clear it.
+vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
+  MatchmakingClaimCard: ({
+    claim,
+    readiness,
+    answersReady = true,
+  }: {
+    claim: { claim: string };
+    readiness: { response_kind: string };
+    answersReady?: boolean;
+  }) => (
+    <div
+      data-testid="entity-response-buttons"
+      data-response-kind={readiness.response_kind}
+      data-answers-ready={String(answersReady)}
+    >
+      {claim.claim}
+    </div>
+  ),
 }));
 
 vi.mock('~/core/state/diff-store', () => ({
@@ -194,27 +244,6 @@ describe('ClaimsPageClient', () => {
     expect(mocks.setIsReviewOpen).toHaveBeenCalledWith(true);
   });
 
-  it('enables the readiness switch after a refetch exposes the viewer response', () => {
-    claims = [publishedClaim()];
-    debateClaimsResponse = {
-      claims: [debateClaim({ viewer_response: null })],
-    };
-
-    const { rerender } = renderClaims();
-
-    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
-
-    debateClaimsResponse = {
-      claims: [debateClaim({ viewer_response: { position: true, position_label: 'Agree' } })],
-    };
-    rerender(<ClaimsPageClient spaceId="space-1" />);
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
-
-    expect(mocks.joinMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
-  });
-
   it('batches the active response kind for all visible claims and defers their individual requests', () => {
     claims = Array.from({ length: 50 }, (_, index) => publishedClaim(`claim-${index}`, `Claim ${index}`));
     debateClaimsResponse = {
@@ -239,9 +268,30 @@ describe('ClaimsPageClient', () => {
       ]),
     });
     expect((mocks.responseBatchCalls[0] as { targets: unknown[] }).targets).toHaveLength(50);
-    expect(screen.getAllByTestId('entity-response-skeleton')).toHaveLength(50);
-    expect(screen.queryByTestId('entity-response-buttons')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('switch', { name: 'Debate' })).toHaveLength(50);
+
+    // Answerable even with the batch still out, because every claim here has a geo-chat row and a
+    // row carries the viewer's own side. The batch supplies the counts; it is not the only thing
+    // that can say which side the viewer holds.
+    const cards = screen.getAllByTestId('entity-response-buttons');
+    expect(cards).toHaveLength(50);
+    expect(cards.every(card => card.getAttribute('data-answers-ready') === 'true')).toBe(true);
+  });
+
+  it('will not let anyone answer a rowless claim while the batch is still out', () => {
+    // Without a row, the viewer's side comes from the batch alone. Drawn from an unready batch it
+    // reads as "no response", so a viewer who already answered sees their own side unselected — and
+    // pressing it republishes the response they hold instead of clearing it.
+    claims = [publishedClaim()];
+    debateClaimsResponse = { claims: [] };
+    responseBatchReady = false;
+
+    renderClaims();
+    expect(screen.getByTestId('entity-response-buttons').getAttribute('data-answers-ready')).toBe('false');
+
+    cleanup();
+    responseBatchReady = true;
+    renderClaims();
+    expect(screen.getByTestId('entity-response-buttons').getAttribute('data-answers-ready')).toBe('true');
   });
 
   it('keeps every published claim responsive when geo-chat has not hydrated its readiness snapshot yet', () => {
@@ -270,8 +320,6 @@ describe('ClaimsPageClient', () => {
     });
     expect(screen.getAllByTestId('entity-response-buttons')).toHaveLength(2);
     expect(screen.getAllByTestId('entity-response-buttons')[1]).toHaveAttribute('data-response-kind', 'veracity');
-    expect(screen.getAllByRole('switch', { name: 'Debate' })).toHaveLength(2);
-    expect(screen.getAllByRole('switch', { name: 'Debate' })[1]).toBeDisabled();
   });
 
   it('retries only the page response batch after its retries are exhausted', () => {
@@ -282,46 +330,19 @@ describe('ClaimsPageClient', () => {
 
     renderClaims();
 
-    expect(screen.getByTestId('entity-response-skeleton')).toBeInTheDocument();
+    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(mocks.refetchResponseBatch).toHaveBeenCalledOnce();
   });
 
-  it('renders backend response labels and one leave-readiness toggle', () => {
-    claims = [publishedClaim()];
-    debateClaimsResponse = {
-      claims: [
-        debateClaim({
-          viewer_response: { position: true, position_label: 'Verify' },
-          viewer_debate_ready: true,
-          response_kind: 'veracity',
-          online_choices: [],
-        }),
-      ],
-    };
-
-    renderClaims();
-
-    expect(screen.queryByText('Ready to debate')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Debate' }));
-    expect(mocks.leaveMutate).toHaveBeenCalledWith({ claimId: 'claim-1' });
-  });
-
-  it('keeps readiness clickable while joining but unavailable for unpublished or debating claims', () => {
+  it('tells the viewer to publish before an unpublished claim offers a debate', () => {
     const published = publishedClaim();
     claims = [published];
     debateClaimsResponse = {
       claims: [debateClaim()],
     };
-    joinPending = true;
-
     const { rerender } = renderClaims();
 
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeEnabled();
-    expect(screen.getByRole('switch', { name: 'Debate' })).toHaveAttribute('aria-busy', 'true');
-
-    joinPending = false;
     claims = [
       {
         ...published,
@@ -337,7 +358,8 @@ describe('ClaimsPageClient', () => {
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
     expect(screen.getByText('Publish this claim before starting a debate.')).toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: 'Debate' })).not.toBeInTheDocument();
+    // A draft has no on-chain identity to respond to, so it gets the notice instead of the card.
+    expect(screen.queryByTestId('entity-response-buttons')).not.toBeInTheDocument();
 
     claims = [published];
     debateClaimsResponse = {
@@ -345,8 +367,11 @@ describe('ClaimsPageClient', () => {
     };
     rerender(<ClaimsPageClient spaceId="space-1" />);
 
-    expect(screen.getByText('Debate in progress')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Debate' })).toBeDisabled();
+    // "Debate in progress" is gone. The card's end slot turns the same `active_debate` into a
+    // "Watch live" link, so the page no longer prints a sentence describing it — one fact, one
+    // rendering, and the rendering you can press.
+    expect(screen.queryByText('Debate in progress')).not.toBeInTheDocument();
+    expect(screen.getByTestId('entity-response-buttons')).toBeInTheDocument();
   });
 });
 

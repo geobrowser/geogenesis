@@ -75,6 +75,11 @@ const PostAuthRedirect = dynamic(
   { ssr: false }
 );
 
+const DeepLinkHandler = dynamic(
+  () => import('~/partials/deep-links/deep-link-handler').then(m => ({ default: m.DeepLinkHandler })),
+  { ssr: false }
+);
+
 const ReviewChanges = dynamic(
   () => import('~/partials/review/review-changes').then(m => ({ default: m.ReviewChanges })),
   { ssr: false }
@@ -143,6 +148,9 @@ export function App({ children }: { children: React.ReactNode }) {
           <PendingCreatedSpaceStatus />
           <SignInPrompt />
           <PostAuthRedirect />
+          <React.Suspense fallback={null}>
+            <DeepLinkHandler />
+          </React.Suspense>
           <Toast />
           <GovernanceReopenEditLoadingBar />
           <FlowBar />
@@ -151,7 +159,11 @@ export function App({ children }: { children: React.ReactNode }) {
           <ChatWidget />
           <FeatureFlagsDialog />
           <DebateCoordinator />
-          <DebatesHubPanel />
+          {/* Suspense: the panel reads `useSearchParams` to tell a debates deep link apart from
+              an ordinary navigation. */}
+          <React.Suspense fallback={null}>
+            <DebatesHubPanel />
+          </React.Suspense>
           <DebateRecordingUploadCoordinator />
           <Persistence />
         </ClientOnly>

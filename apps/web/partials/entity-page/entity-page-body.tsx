@@ -4,10 +4,12 @@ import * as React from 'react';
 
 import { ClaimPageView } from '~/core/claims/browse/claim-page-view';
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { TOPIC_TYPE_ID } from '~/core/constants';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
+import { TopicPageView } from '~/core/topics/browse/topic-page-view';
 import type { Relation, TabEntity } from '~/core/types';
 import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entity-media';
 
@@ -128,27 +130,34 @@ function EditorFooter({
 }
 
 /**
- * Whether this entity should render the custom Claim read view.
+ * Which custom read view this entity gets, if any.
  *
- * Editing always falls through to the generic page: the custom view is a read surface with no
- * property editor behind it, so an editor who lost the value sheet would have no way to change the
- * claim.
+ * Editing always falls through to the generic page: these are read surfaces with no property editor
+ * behind them, so an editor who lost the value sheet would have no way to change the entity.
  *
- * Unscoped, matching how `EntityVoteButtons` and `ClaimDebateButton` read the same flag. `types` is
- * derived across every space either way, so this is about consistency with the controls the page
- * renders rather than about reaching a type a scoped read would miss.
+ * Unscoped, matching how `EntityVoteButtons` reads the same flag. `types` is
+ * derived across every space either way, so this is about consistency with the controls the pages
+ * render rather than about reaching a type a scoped read would miss.
  */
-function useShowsClaimView(entityId: string, spaceId: string) {
+function useCustomBrowseView(entityId: string, spaceId: string): 'claim' | 'topic' | 'generic' | 'pending' {
   const isEditing = useUserIsEditing(spaceId);
-  const { entity } = useQueryEntity({ id: entityId });
-  const isClaim = entity?.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID)) ?? false;
+  const { entity, isLoading } = useQueryEntity({ id: entityId });
 
-  return isClaim && !isEditing;
+  if (isEditing) return 'generic';
+  // The types decide which page this is, so until they are known there is no page to draw. Falling
+  // through to the generic one meanwhile rendered the value sheet for a claim or a topic and then
+  // replaced it a moment later, which read as the page loading twice.
+  if (!entity) return isLoading ? 'pending' : 'generic';
+  if (entity.types.some(type => ID.equals(type.id, CLAIM_TYPE_ID))) return 'claim';
+  // After Claim, so an entity typed as both reads as the narrower of the two — a claim is a thing
+  // to take a side on, which is more specific than a subject heading.
+  if (entity.types.some(type => ID.equals(type.id, TOPIC_TYPE_ID))) return 'topic';
+  return 'generic';
 }
 
 export function EntityPageBody(props: EntityPageBodyProps) {
   const { entityId, spaceId, initialTabRelations, tabEntities } = props;
-  const showsClaimView = useShowsClaimView(entityId, spaceId);
+  const customView = useCustomBrowseView(entityId, spaceId);
 
   const previewImageUrl = props.variant === 'sidePanel' ? props.previewImageUrl : undefined;
   const entityMediaUrl = useEntityMediaUrl(entityId, spaceId);
@@ -168,8 +177,16 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   //
   // Placed here rather than in the entity route's template strategy so the side panel is covered
   // too: both surfaces render through this component, and the strategy only sees the route.
-  if (showsClaimView) {
+  // Nothing rather than the wrong page. A blank moment is shorter and quieter than drawing the
+  // generic value sheet and swapping it out from under the reader.
+  if (customView === 'pending') return null;
+
+  if (customView === 'claim') {
     return <ClaimPageView entityId={entityId} spaceId={spaceId} />;
+  }
+
+  if (customView === 'topic') {
+    return <TopicPageView entityId={entityId} spaceId={spaceId} />;
   }
 
   const tabsSection = (
@@ -198,7 +215,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
                 <EntityPageInlineDescription
                   entityId={entityId}
                   spaceId={spaceId}
-                  truncate={false}
                   fallbackDescription={previewDescription}
                 />
               )}

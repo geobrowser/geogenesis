@@ -5,7 +5,7 @@ import * as React from 'react';
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
-import { getShareAriaLabel } from '~/core/debates/browse/debate-interaction-bar';
+import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
@@ -17,11 +17,11 @@ import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
-import { Tooltip } from '~/design-system/tooltip';
 
 import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
+import { ExploreCardEntityLink } from './explore-card-entity-link';
 import { ExploreClaimsIcon } from './explore-claims-icon';
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
 import { ExploreShareIcon } from './explore-share-icon';
@@ -33,6 +33,8 @@ type DebateExploreFeedCardProps = {
   hideSpaceLink?: boolean;
   /** Hide the Join-space chip in the meta row (same semantics as ExploreFeedCard). */
   hideJoinButton?: boolean;
+  /** Whether the claim title opens the side panel rather than navigating (same semantics as ExploreFeedCard). */
+  titleOpensSidePanel?: boolean;
   /**
    * Rendered instead of the debate card when the debate can't be shown as a video — feature flag
    * off, the geo-chat record is missing or unwatchable, or its final video isn't processed yet.
@@ -50,6 +52,7 @@ export function DebateExploreFeedCard({
   item,
   hideSpaceLink = false,
   hideJoinButton = false,
+  titleOpensSidePanel = false,
   fallback,
 }: DebateExploreFeedCardProps) {
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
@@ -148,11 +151,11 @@ export function DebateExploreFeedCard({
         </Link>
       </div>
 
-      <Link href={NavUtils.toEntity(item.spaceId, item.entityId)}>
+      <ExploreCardEntityLink item={item} opensSidePanel={titleOpensSidePanel}>
         <h2 className="mt-0! text-[19px]! leading-[23px]! font-semibold! tracking-[-0.02em] text-text hover:underline">
           {item.title}
         </h2>
-      </Link>
+      </ExploreCardEntityLink>
 
       {/* Cap the media at the width the designs (and the full-screen feed) use — feed columns,
           especially data blocks, can be much wider and full-bleed videos dwarf the card. */}
@@ -162,7 +165,7 @@ export function DebateExploreFeedCard({
 
       <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
         <EntityCommentsButton entityId={item.entityId} spaceId={item.spaceId} count={item.commentCount} />
-        {readyDebate ? <DebateCardExtras debate={readyDebate} active={active} /> : null}
+        {readyDebate ? <DebateCardExtras debate={readyDebate} spaceId={item.spaceId} /> : null}
       </EntityRowActions>
     </article>
   );
@@ -171,28 +174,12 @@ export function DebateExploreFeedCard({
 /**
  * The Claims and Share actions from the full-screen feed's interaction bar, restyled to sit in the
  * explore card's footer. Claims opens the same DebateClaimsPanel (as a right-hand overlay, since
- * the explore feed has no side rail); Share drives the same prepared-social-video state machine.
+ * the explore feed has no side rail); Share opens the same DebateShareDialog.
  */
-function DebateCardExtras({ debate, active }: { debate: Debate; active: boolean }) {
+function DebateCardExtras({ debate, spaceId }: { debate: Debate; spaceId: string }) {
   const [claimsOpen, setClaimsOpen] = React.useState(false);
   const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id);
-  const shareAction = useDebateShareAction(debate, active);
-  const shareUnavailable = shareAction.state === 'preparing' || shareAction.state === 'sharing';
-
-  const shareButton = (
-    <button
-      type="button"
-      aria-label={getShareAriaLabel(shareAction)}
-      aria-disabled={shareUnavailable}
-      onClick={() => {
-        if (!shareUnavailable) shareAction.onActivate();
-      }}
-      className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text aria-disabled:cursor-not-allowed aria-disabled:opacity-50"
-    >
-      <ExploreShareIcon />
-      <span className="text-[14px] font-normal">Share</span>
-    </button>
-  );
+  const share = useDebateShareAction();
 
   return (
     <>
@@ -205,11 +192,24 @@ function DebateCardExtras({ debate, active }: { debate: Debate; active: boolean 
         <ExploreClaimsIcon />
         <span className="text-[14px] font-normal tabular-nums">{claims.totalCount}</span>
       </button>
-      {shareAction.tooltipMessage ? (
-        <Tooltip trigger={shareButton} label={shareAction.tooltipMessage} position="top" />
-      ) : (
-        shareButton
-      )}
+      <button
+        type="button"
+        aria-label="Share debate"
+        aria-haspopup="dialog"
+        aria-expanded={share.open}
+        onClick={share.onOpen}
+        className="inline-flex items-center gap-1.5 text-grey-04 transition-colors hover:text-text"
+      >
+        <ExploreShareIcon />
+        <span className="text-[14px] font-normal">Share</span>
+      </button>
+      <DebateShareDialog
+        open={share.open}
+        onOpenChange={share.onOpenChange}
+        debate={debate}
+        spaceId={spaceId}
+        openerRef={share.openerRef}
+      />
       {claimsOpen ? (
         <div className="fixed inset-y-0 right-0 z-100 flex bg-white shadow-card">
           <DebateClaimsPanel debate={debate} onClose={() => setClaimsOpen(false)} />

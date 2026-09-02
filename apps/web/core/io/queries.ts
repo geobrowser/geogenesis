@@ -87,6 +87,7 @@ import {
 import { restFetch } from './rest';
 import { capSearchQuery } from './search-query';
 import { type SortOrder } from './sort-order';
+import { collapseOrFilter } from './filter-or-collapse';
 import { extractSingleSpaceIdFromFilter, extractSpaceIdsFromFilter, removeSpaceIdsFromFilter } from './space-filter';
 import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsFromFilter } from './type-filter';
 
@@ -240,7 +241,9 @@ export function getAllEntities(
     const topLevelTypeId = typeId ?? extractedTypeId;
     const topLevelTypeIds = topLevelTypeId ? undefined : (typeIds ?? extractedTypeIds);
 
-    let normalizedFilter = filter;
+    // Collapse OR-ed branches before anything else looks at the filter: the OR forms make
+    // Postgres scan, in one case until the 30s statement timeout. See filter-or-collapse.ts.
+    let normalizedFilter = collapseOrFilter(filter);
     if (topLevelSpaceId || topLevelSpaceIds) {
       normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
     }
@@ -370,7 +373,8 @@ export function getEntitiesOrderedByPropertyConnection(
   const topLevelTypeIds =
     nonEmptyIds(typeIds) ?? idsFromUuidFilter(extractedTypeIds) ?? (extractedTypeId ? [extractedTypeId] : undefined);
 
-  let normalizedFilter = filter;
+  // See filter-or-collapse.ts — the same shapes reach this path too.
+  let normalizedFilter = collapseOrFilter(filter);
   if (topLevelSpaceId || topLevelSpaceIds) {
     normalizedFilter = removeSpaceIdsFromFilter(normalizedFilter);
   }

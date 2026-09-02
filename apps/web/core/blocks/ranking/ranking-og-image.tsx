@@ -11,7 +11,7 @@ import {
   PLACEHOLDER_SPACE_IMAGE,
 } from '~/core/constants';
 import { ogImageToJpeg } from '~/core/og-jpeg';
-import { getImagePath } from '~/core/utils/utils';
+import { toSatoriImageSrc } from '~/core/og-share-image';
 
 import type { RankingOgCardData, RankingOgEntryData } from './ranking-og-data';
 import { RANKING_OG_VARIANT_SIZES, type RankingOgVariant } from './ranking-og-storage';
@@ -90,23 +90,15 @@ const ALLOWED_IMAGE_HOSTS = new Set(
     .filter((host): host is string => Boolean(host))
 );
 
-// next/og (Satori) can only fetch http(s) or data: images.
+// next/og (Satori) can only fetch http(s) or data: images. Shared with the entity share-image chain
+// (GEO-2782), which needed the same rule and had grown a second, weaker copy of it. The host set is
+// what stays local: this card composes many third-party images and would rather fetch none than an
+// arbitrary host, while an entity card renders the single image its author chose.
 function toRenderableImageSrc(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const resolved = getImagePath(value);
-  if (resolved.startsWith('data:')) return resolved;
-  try {
-    const url = new URL(resolved);
-    if ((url.protocol === 'https:' || url.protocol === 'http:') && ALLOWED_IMAGE_HOSTS.has(url.host)) {
-      return resolved;
-    }
-  } catch {
-    // Not an absolute URL — not renderable by Satori.
-  }
-  return null;
+  return toSatoriImageSrc(value, ALLOWED_IMAGE_HOSTS);
 }
 
-function initials(name: string): string {
+export function initials(name: string): string {
   const parts = name
     .split(/\s+/)
     .map(part => part.trim())
@@ -114,7 +106,7 @@ function initials(name: string): string {
   return (parts[0]?.[0] ?? 'G') + (parts[1]?.[0] ?? '');
 }
 
-function seedHue(seed: string): number {
+export function seedHue(seed: string): number {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = (hash * 31 + seed.charCodeAt(i)) % 360;
@@ -143,7 +135,7 @@ function characterWidthRatio(character: string): number {
   return 0.54;
 }
 
-function measureTextWidth(text: string, fontSize: number): number {
+export function measureTextWidth(text: string, fontSize: number): number {
   const nominalWidth =
     Array.from(text).reduce((width, character) => width + characterWidthRatio(character), 0) * fontSize;
   return Math.ceil(nominalWidth * 1.1);
@@ -162,7 +154,7 @@ type SingleLineTextFit = {
   text: string;
 };
 
-type WrappedTextFit = {
+export type WrappedTextFit = {
   fontSize: number;
   lines: string[];
 };
@@ -200,7 +192,7 @@ function fitSingleLineText(
   };
 }
 
-function wrapTextToLines(text: string, fontSize: number, maxWidth: number): string[] {
+export function wrapTextToLines(text: string, fontSize: number, maxWidth: number): string[] {
   const words = normalizeDisplayText(text, '').split(' ').filter(Boolean);
   const lines: string[] = [];
   let currentLine = '';
@@ -219,7 +211,7 @@ function wrapTextToLines(text: string, fontSize: number, maxWidth: number): stri
   return lines.length > 0 ? lines : [''];
 }
 
-function fitWrappedText(
+export function fitWrappedText(
   text: string,
   targetFontSize: number,
   minFontSize: number,
@@ -285,21 +277,25 @@ function Avatar({
   return <div style={style}>{initials(data.author.name).toUpperCase()}</div>;
 }
 
-function GeoLogoIcon({ size }: { size: number }) {
+/**
+ * The Geo mark. `color` so it can sit on a dark ground as well as a light one — the debate share
+ * card's footer is `#111111` (GEO-2755). Defaults to black, which is every existing caller.
+ */
+export function GeoLogoIcon({ size, color = 'black' }: { size: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path
         fillRule="evenodd"
         clipRule="evenodd"
         d="M14.3558 14.5685C14.5064 14.824 14.4369 15.1543 14.1838 15.3089C12.9706 16.0499 11.5349 16.4784 9.99619 16.4784C8.46312 16.4784 7.0323 16.053 5.82196 15.3171C5.56819 15.1628 5.49827 14.832 5.64911 14.5761L9.51384 8.02041C9.73427 7.6465 10.2751 7.6465 10.4955 8.02041L14.3558 14.5685ZM4.94964 16.9532C4.66671 16.787 4.29709 16.8695 4.13047 17.1522L2.95809 19.1408C2.73416 19.5207 3.00801 20 3.44895 20H16.5604C17.0014 20 17.2752 19.5207 17.0513 19.1408L15.8745 17.1447C15.7077 16.8618 15.3376 16.7795 15.0546 16.9462C13.5791 17.8155 11.8478 18.3159 9.99619 18.3159C8.14957 18.3159 6.4226 17.8182 4.94964 16.9532Z"
-        fill="black"
+        fill={color}
       />
       <circle
         cx="9.99613"
         cy="8.49619"
         r="7.4278"
         transform="rotate(-180 9.99613 8.49619)"
-        stroke="black"
+        stroke={color}
         strokeWidth="2.13675"
       />
     </svg>

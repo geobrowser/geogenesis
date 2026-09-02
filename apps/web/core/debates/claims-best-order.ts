@@ -40,7 +40,9 @@ const claimsBestOrderDocument = parse(CLAIMS_BEST_ORDER_SOURCE) as TypedDocument
 export async function fetchClaimsBestOrder(
   claimIds: string[],
   spaceId: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** The type being ranked. Defaults to Claim; topic pages rank topics through the same path. */
+  typeId: string = CLAIM_TYPE_ID
 ): Promise<string[]> {
   if (claimIds.length === 0) return [];
 
@@ -53,7 +55,7 @@ export async function fetchClaimsBestOrder(
       variables: {
         first: claimIds.length,
         spaceIds: [spaceId],
-        typeIds: [CLAIM_TYPE_ID],
+        typeIds: [typeId],
         filter: { id: { in: claimIds } },
       },
       signal,
@@ -85,15 +87,19 @@ export type ClaimsBestOrder = {
  * case is close to "as spoken". That is a property of what `entities_ranked_for_feed` contains, not
  * of this lookup; as coverage grows the ordering here follows it with no change.
  */
-export function useClaimsBestOrder(claimIds: string[], spaceId: string | null): ClaimsBestOrder {
+export function useClaimsBestOrder(
+  claimIds: string[],
+  spaceId: string | null,
+  typeId: string = CLAIM_TYPE_ID
+): ClaimsBestOrder {
   // Sorted so the key is stable across renders that hand the same ids in a different order.
   const normalizedIds = React.useMemo(() => [...claimIds].map(ID.uuidToHex).sort(), [claimIds]);
 
   const enabled = Boolean(spaceId) && normalizedIds.length > 0;
 
   const { data, isFetched } = useQuery({
-    queryKey: ['claims', 'best-order', spaceId, normalizedIds],
-    queryFn: ({ signal }) => fetchClaimsBestOrder(normalizedIds, spaceId!, signal),
+    queryKey: ['claims', 'best-order', spaceId, typeId, normalizedIds],
+    queryFn: ({ signal }) => fetchClaimsBestOrder(normalizedIds, spaceId!, signal, typeId),
     enabled,
     // A snapshot for as long as the panel is open. A refetch would resequence a list someone is
     // already reading, and reshuffle which claims sit above the "Show more" fold.

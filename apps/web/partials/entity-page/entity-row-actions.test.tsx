@@ -6,7 +6,6 @@ import { EntityRowActions } from './entity-row-actions';
 
 const mocks = vi.hoisted(() => ({
   voteProps: null as null | Record<string, unknown>,
-  debateProps: null as null | Record<string, unknown>,
 }));
 
 vi.mock('./entity-vote-buttons', () => ({
@@ -16,15 +15,8 @@ vi.mock('./entity-vote-buttons', () => ({
   },
 }));
 
-vi.mock('~/core/debates/claim-debate-button', () => ({
-  ClaimDebateButton: (props: Record<string, unknown>) => {
-    mocks.debateProps = props;
-    return <div data-action="debate" />;
-  },
-}));
-
 describe('EntityRowActions', () => {
-  it('renders votes, supporting actions, and Debate in the claim design order', () => {
+  it('renders votes then supporting actions', () => {
     const { container } = render(
       <EntityRowActions entityId="claim-1" spaceId="space-1">
         <div data-action="comments" />
@@ -34,13 +26,22 @@ describe('EntityRowActions', () => {
     expect([...container.querySelectorAll('[data-action]')].map(node => node.getAttribute('data-action'))).toEqual([
       'votes',
       'comments',
-      'debate',
     ]);
     expect(mocks.voteProps).toMatchObject({
       entityId: 'claim-1',
       spaceId: 'space-1',
       claimResponderAvatarsPosition: 'trailing',
     });
-    expect(mocks.debateProps).toEqual({ entityId: 'claim-1', spaceId: 'space-1' });
+  });
+
+  it('no longer renders a Debate control', () => {
+    // The row used to end in `ClaimDebateButton`, whose only job was the per-claim Debate toggle
+    // (GEO-2740). Worth an assertion rather than an absence: dropping it also dropped a geo-chat
+    // `useDebateClaims` query per row, which is the cost GEO-2724 is about, so a reintroduction
+    // here is expensive as well as wrong.
+    const { container } = render(<EntityRowActions entityId="claim-1" spaceId="space-1" />);
+
+    expect(container.querySelector('[data-action="debate"]')).toBeNull();
+    expect(container.querySelector('[role="switch"]')).toBeNull();
   });
 });

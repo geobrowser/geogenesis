@@ -9,17 +9,24 @@ import { useValue } from '~/core/sync/use-store';
 import { ClampedText } from '~/design-system/clamped-text';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 
-const MAX_LINES = 3;
+/**
+ * How many lines a description shows before it collapses behind More.
+ *
+ * Exported because the custom claim page clamps its own description with the same primitive
+ * rather than through this component (GEO-2772) — it has the entity in hand, renders no edit
+ * field, and carries its own colour and spacing. Sharing the number is what keeps the two
+ * surfaces spending the same amount of the page on a description before hiding the rest. Where
+ * each one breaks still depends on its own width, since that is where the wrapping happens.
+ */
+export const ENTITY_DESCRIPTION_MAX_LINES = 3;
 
 export function EntityPageInlineDescription({
   entityId,
   spaceId,
-  truncate = true,
   fallbackDescription,
 }: {
   entityId: string;
   spaceId: string;
-  truncate?: boolean;
   fallbackDescription?: string | null;
 }) {
   const isEditing = useUserIsEditing(spaceId);
@@ -77,17 +84,14 @@ export function EntityPageInlineDescription({
     return null;
   }
 
-  if (!truncate) {
-    return (
-      <div className="-mt-3 mb-5">
-        <p className="text-body wrap-break-word text-text">{description}</p>
-      </div>
-    );
-  }
-
   return (
     <div className="-mt-3 mb-5">
-      <ClampedText text={description} maxLines={MAX_LINES} variant="body" textClassName="wrap-break-word text-text" />
+      <ClampedText
+        text={description}
+        maxLines={ENTITY_DESCRIPTION_MAX_LINES}
+        variant="body"
+        textClassName="wrap-break-word text-text"
+      />
     </div>
   );
 }
