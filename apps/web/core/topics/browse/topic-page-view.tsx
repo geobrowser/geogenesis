@@ -17,6 +17,7 @@ import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
 import { ENTITY_DESCRIPTION_MAX_LINES } from '~/partials/entity-page/entity-page-inline-description';
+import { META_CHIP_CLASS, RelationChipSection } from '~/partials/entity-page/relation-chip-section';
 
 import { UNNAMED_SUBTOPIC_PROPERTY_ID } from '../ontology';
 import { TopicClaims } from './topic-claims';
@@ -24,11 +25,6 @@ import { TopicComposition } from './topic-composition';
 import { TopicCoverage } from './topic-coverage';
 import { TopicDebates } from './topic-debates';
 import { useTopicAncestors } from './use-topic-ancestors';
-
-/** Subtopic chips shown before the rest collapse into a count. */
-const SUBTOPIC_CHIP_CAP = 8;
-
-const META_CHIP_CLASS = 'flex h-6 max-w-full items-center rounded border border-grey-02 bg-white px-1.5 text-metadata';
 
 /**
  * The browse-mode read view for a Topic.
@@ -162,7 +158,7 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
 
         <TopicComposition topicId={entityId} spaceId={spaceId} />
 
-        <TopicSubtopics subtopics={subtopics} spaceId={spaceId} />
+        <RelationChipSection label="Subtopics" relations={subtopics} spaceId={spaceId} />
 
         <TopicDebates topicId={entityId} spaceId={spaceId} />
 
@@ -173,49 +169,5 @@ export function TopicPageView({ entityId, spaceId }: { entityId: string; spaceId
         <CommentSection entityId={entityId} spaceId={spaceId} />
       </div>
     </div>
-  );
-}
-
-/**
- * Where to go next, high on the page.
- *
- * Chips rather than cards: a topic with fourteen subtopics should cost a line or two, not a screen.
- * Placed directly under the header because on a broad topic the most useful thing a reader can do is
- * narrow — and on a thin one, this is the section that still has something to offer.
- */
-function TopicSubtopics({ subtopics, spaceId }: { subtopics: Relation[]; spaceId: string }) {
-  const [expanded, setExpanded] = React.useState(false);
-
-  if (subtopics.length === 0) return null;
-
-  const visible = expanded ? subtopics : subtopics.slice(0, SUBTOPIC_CHIP_CAP);
-  const hidden = subtopics.length - visible.length;
-
-  return (
-    <section aria-label="Subtopics">
-      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
-        Subtopics
-      </Text>
-      <div className="flex flex-wrap gap-1.5">
-        {visible.map(relation => (
-          <Link
-            key={relation.id}
-            href={NavUtils.toEntity(spaceId, relation.toEntity.id)}
-            className={`${META_CHIP_CLASS} text-text transition-colors hover:border-text`}
-          >
-            <span className="truncate">{relation.toEntity.name ?? relation.toEntity.id}</span>
-          </Link>
-        ))}
-        {hidden > 0 && (
-          <button
-            type="button"
-            onClick={() => setExpanded(true)}
-            className={`${META_CHIP_CLASS} text-grey-04 tabular-nums transition-colors hover:border-text hover:text-text`}
-          >
-            +{hidden}
-          </button>
-        )}
-      </div>
-    </section>
   );
 }
