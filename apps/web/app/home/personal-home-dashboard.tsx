@@ -231,13 +231,17 @@ function GovernanceFilterMenu({
     }
   }, [label]);
 
+  React.useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
   const displayLabel = pendingLabel ?? label;
 
   return (
     <Menu
       open={open}
       onOpenChange={next => {
-        if (disabled) return;
+        if (disabled && next) return;
         setOpen(next);
       }}
       asChild
@@ -253,6 +257,7 @@ function GovernanceFilterMenu({
             key={item.href}
             href={item.href}
             onClick={e => {
+              if (disabled) return;
               if (onNavigate) e.preventDefault();
               if (item.label !== displayLabel) setPendingLabel(item.label);
               setOpen(false);
