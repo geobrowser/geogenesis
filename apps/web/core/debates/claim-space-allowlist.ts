@@ -33,12 +33,16 @@ export function buildClaimSpaceAllowlist({
 
   for (const row of featured) allowed.add(normId(row.id));
 
-  // A pending row is a space the viewer has *asked* to join, not one they belong to — the same
-  // distinction `useGlobalSearchSpaceIds` draws off these lists.
-  for (const row of [...editorOf, ...memberOf]) {
-    if (row.pendingLabel) continue;
-    allowed.add(normId(row.id));
-  }
+  // Pending rows count. A viewer who has asked to join a space is telling us it is one of theirs,
+  // and sign-up collects exactly that before any approval exists — so a new account spends its
+  // first minutes with every space pending, and excluding them left it looking at a panel with
+  // none of the spaces it had just chosen. Approval follows within minutes and changes nothing
+  // here, which is the point: the panel should not lurch when it lands.
+  //
+  // Note this is a wider rule than `useGlobalSearchSpaceIds` draws off the same lists. Deliberately
+  // so — that one is picking where to search, this one is deciding whether a space is the viewer's
+  // at all.
+  for (const row of [...editorOf, ...memberOf]) allowed.add(normId(row.id));
 
   if (personalSpaceId) allowed.add(normId(personalSpaceId));
 
@@ -53,16 +57,8 @@ export function buildClaimSpaceAllowlist({
  * difference: they are on offer to everyone, so they widen what can be browsed without saying
  * anything about who the viewer is. GEO-2789 defaults the space filter to this narrower set.
  *
- * Pending rows *are* included, which is the one place this parts company with the allowlist above.
- * The allowlist answers a question about access, where a request that has not been granted plainly
- * isn't one; this answers a question about interest, where it plainly is. A new account expresses
- * that interest at sign-up and spends its first few minutes with every space pending — so excluding
- * them would fall back to "everything" for precisely the viewers this default exists to help, and
- * then quietly start working once the approvals landed.
- *
- * Nothing is granted by being here. The seeded selection is intersected with the spaces the surface
- * already offers, so a pending space the allowlist keeps out stays out; this only decides whether
- * a box starts ticked among the ones already on the menu.
+ * Pending rows count here for the same reason they count in the allowlist: a space the viewer has
+ * asked to join is one of theirs, and at sign-up that is the only kind they have.
  */
 export function buildMemberSpaceIds({
   editorOf,

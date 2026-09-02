@@ -39,7 +39,11 @@ describe('buildClaimSpaceAllowlist', () => {
 
   // A pending row is a space the viewer asked to join, not one they belong to — the same line
   // `useGlobalSearchSpaceIds` draws off these lists.
-  it('leaves out spaces whose membership or editorship is only requested', () => {
+  // Requested counts as theirs. Sign-up collects the viewer's spaces before any approval exists,
+  // so a new account has nothing else for its first few minutes — and excluding these left it
+  // looking at a panel with none of the spaces it had just chosen, which then filled in on its own
+  // once the approvals landed.
+  it('covers spaces whose membership or editorship is only requested', () => {
     const allowlist = buildClaimSpaceAllowlist({
       featured: [],
       editorOf: [row(PENDING, { pendingLabel: 'Editorship pending' })],
@@ -47,8 +51,8 @@ describe('buildClaimSpaceAllowlist', () => {
       personalSpaceId: null,
     });
 
-    expect(isClaimSpaceAllowed(PENDING, allowlist)).toBe(false);
-    expect(isClaimSpaceAllowed(MEMBER, allowlist)).toBe(false);
+    expect(isClaimSpaceAllowed(PENDING, allowlist)).toBe(true);
+    expect(isClaimSpaceAllowed(MEMBER, allowlist)).toBe(true);
   });
 
   // Featured ids arrive UUID-formatted and claim rows carry canonical hex, so a raw comparison
@@ -141,22 +145,18 @@ describe('buildMemberSpaceIds', () => {
     expect(browseSidebarMemberSpaceIds(data, PERSONAL).has(normId(EDITOR))).toBe(true);
   });
 
-  // Where this parts company with the allowlist. A sign-up expresses interest in spaces and the
-  // approvals take a few minutes, so a new account's spaces are all pending at once — excluding
-  // them would fall back to "everything" for exactly the viewers the default is for, then start
-  // working on its own once the approvals landed.
-  it('counts spaces the viewer has asked to join, unlike the allowlist', () => {
-    const data = {
-      featured: [],
+  // The default has to reach them for the same reason the allowlist does: a new account's spaces
+  // are all pending at once, and a default that skipped them would open on everything for exactly
+  // the viewers it exists for.
+  it('counts spaces the viewer has asked to join', () => {
+    const mine = buildMemberSpaceIds({
       editorOf: [],
       memberOf: [row(MEMBER), row(PENDING, { pendingLabel: 'Membership pending' })],
       personalSpaceId: null,
-    } as unknown as BrowseSidebarData;
+    });
 
-    expect(browseSidebarMemberSpaceIds(data, null).has(normId(PENDING))).toBe(true);
-    // The allowlist still doesn't, because access is a different question from interest.
-    expect(browseSidebarClaimSpaceAllowlist(data, null).has(normId(PENDING))).toBe(false);
-    expect(browseSidebarMemberSpaceIds(data, null).has(normId(MEMBER))).toBe(true);
+    expect(mine.has(normId(PENDING))).toBe(true);
+    expect(mine.has(normId(MEMBER))).toBe(true);
   });
 
   it('is empty for a viewer who belongs to nothing, which is the fallback case', () => {
