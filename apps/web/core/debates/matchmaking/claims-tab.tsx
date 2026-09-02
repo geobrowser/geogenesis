@@ -588,6 +588,9 @@ export function ClaimsTab() {
               ? {
                   label: 'Clear filters',
                   onClick: () => {
+                    // Counts as choosing, like the menu's own clear row: this is the viewer asking
+                    // for the unfiltered list, and the default must not put its spaces back.
+                    markSpacesChosen();
                     setSearch('');
                     if (!featured) setFilter('all');
                     setSpaceIds([]);

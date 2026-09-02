@@ -1004,12 +1004,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Defaults to the spaces the viewer belongs to (GEO-2789). Seeded from `facetSpaceIds` rather
   // than the eligible set, because that is what this menu offers and what the effect above polices:
   // seeding a space the menu has not reached yet would have it dropped on the next render and never
-  // put back. Held until the browsed facets have landed, since until then the menu is only the
-  // spaces whose rows happen to have arrived.
+  // put back.
+  //
+  // Held until every source that feeds that menu has settled, not just the browsed facet. This
+  // menu is an accumulation — the browsed facet *plus* the spaces of the opponent, curated,
+  // featured and saved rows, some of which the server facet deliberately never names. The seed
+  // fires once, so taking it as soon as the browsed half arrived would spend it on a partial menu
+  // and leave a member space that came in with a graph-backed row unselected for the whole visit.
   const markSpacesChosen = useMemberSpaceDefault({
     memberSpaceIds,
     availableSpaceIds: facetSpaceIds,
-    pending: allowlistPending || publishablePending || !browsedClaimsQuery.facetsSettled,
+    pending:
+      allowlistPending ||
+      publishablePending ||
+      !browsedClaimsQuery.facetsSettled ||
+      opponentClaimsSettling ||
+      curatedClaimsSettling ||
+      featuredClaimsSettling ||
+      recommendedLoading,
     onSeed: setSpaceIds,
   });
 

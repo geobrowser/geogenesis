@@ -37,9 +37,8 @@ describe('buildClaimSpaceAllowlist', () => {
     expect(isClaimSpaceAllowed(STRANGER, allowlist)).toBe(false);
   });
 
-  // A pending row is a space the viewer asked to join, not one they belong to — the same line
-  // `useGlobalSearchSpaceIds` draws off these lists.
-  // Requested counts as theirs. Sign-up collects the viewer's spaces before any approval exists,
+  // Requested counts as theirs, which is a wider line than `useGlobalSearchSpaceIds` draws off the
+  // same lists. Sign-up collects the viewer's spaces before any approval exists,
   // so a new account has nothing else for its first few minutes — and excluding these left it
   // looking at a panel with none of the spaces it had just chosen, which then filled in on its own
   // once the approvals landed.

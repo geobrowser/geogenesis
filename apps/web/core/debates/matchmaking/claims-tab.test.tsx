@@ -1033,6 +1033,30 @@ describe('topic menu', () => {
     expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
   });
 
+  // The empty state's own "Clear filters" is a second way to ask for the unfiltered list, and it
+  // is reachable while the seed is still armed. Putting the default's spaces back afterwards would
+  // answer the request with its opposite.
+  it('does not reapply the default after the empty state clears the filters', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    // Unknown, so the seed cannot have fired yet.
+    mocks.memberSpaceIds = null;
+    mocks.claims = [];
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nothing matches this' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+
+    // Now their memberships land, and the seed becomes possible.
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    mocks.claims = [claim('claim-1', 'Chips are better than fries', false, false, SPACE_ID)];
+    view.rerender(<ClaimsTab />);
+
+    // Still unfiltered, which is what they asked for.
+    await waitFor(() => expect(screen.getByText('Chips are better than fries')).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+  });
+
   // A default, not a policy: once it has applied, the viewer's own choice stands — including the
   // choice to widen it back to everything.
   it('lets the viewer clear the default back to every space', async () => {
