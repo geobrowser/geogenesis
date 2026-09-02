@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+
 import * as React from 'react';
 
 import { Provider, createStore, useSetAtom } from 'jotai';
@@ -274,9 +275,10 @@ describe('DebatesHubPanel', () => {
   });
 });
 
-// Accepting a request from the Requests tab now walks the viewer into the debate room; the panel
-// would otherwise stay mounted on top of it, covering the pre-screen.
-it('closes itself once a navigation lands', () => {
+// Accepting a request from the Requests tab walks the viewer into the debate room; the panel would
+// otherwise stay mounted on top of it, covering the pre-screen. This is the one navigation that
+// still closes it, and the reason the effect exists at all.
+it('closes itself on the way into a debate room', () => {
   const store = renderOpen('requests');
   expect(screen.getByRole('button', { name: /^Requests/ })).toBeInTheDocument();
 
@@ -284,6 +286,22 @@ it('closes itself once a navigation lands', () => {
   store.rerender();
 
   expect(store.get(debatesHubAtom)).toBeNull();
+});
+
+// GEO-2788. Following a claim out of the Claims tab, or a person out of the People tab, used to
+// shut the list the viewer was working through — so coming back meant reopening the hub, finding
+// the tab and finding their place again. The hub follows them instead.
+it.each([
+  ['a claim or entity page', '/space/space-1/entity-1'],
+  ["a person's space", '/space/person-space-1'],
+  ['the debates feed', '/space/space-1/debates'],
+])('stays open when the viewer navigates to %s', (_label, pathname) => {
+  const store = renderOpen('claims');
+
+  mocks.pathname = pathname;
+  store.rerender();
+
+  expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
 });
 
 // `?modal=debates` reached by client-side navigation opens the hub from the same commit that

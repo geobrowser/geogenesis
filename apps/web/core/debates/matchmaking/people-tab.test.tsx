@@ -1,7 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen, within } from '@testing-library/react';
+
+import type React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { NavUtils } from '~/core/utils/utils';
 
 import type { DebateChallenge, DebatePerson } from '../api';
 
@@ -19,6 +23,16 @@ const mocks = vi.hoisted(() => ({
   cancelPending: false,
   cancelError: null as Error | null,
   records: new Map<string, unknown>(),
+}));
+
+// The real one reaches for the sync engine and the router; a plain anchor is what the assertions
+// below are about — a real href, and nothing intercepting the click.
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ children, href, className }: { children: React.ReactNode; href: string; className?: string }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
 }));
 
 vi.mock('../hooks', () => ({
@@ -58,10 +72,16 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 
 const { PeopleTab } = await import('./people-tab');
 
+/** A real space id shape. `profile-user-them` is not one, and the profile link is gated on it. */
+const PROFILE_SPACE_IDS: Record<string, string> = {
+  'user-them': '019fedae-72b6-7ab2-927a-df044d57c566',
+  'user-other': '019fedae-72b6-7ab2-927a-df044d57c599',
+};
+
 function person(userId: string, name: string): DebatePerson {
   return {
     user_id: userId,
-    profile_space_id: `profile-${userId}`,
+    profile_space_id: PROFILE_SPACE_IDS[userId] ?? `profile-${userId}`,
     display_name: name,
     avatar_cid: null,
     online: true,
@@ -304,7 +324,7 @@ describe('PeopleTab', () => {
     mocks.authenticated = false;
     mocks.records = new Map([
       [
-        'profile-user-them',
+        PROFILE_SPACE_IDS['user-them'],
         {
           positions: 119,
           debatesArgued: 11,
@@ -339,5 +359,39 @@ describe('PeopleTab', () => {
     render(<PeopleTab />);
 
     expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
+  });
+});
+
+// GEO-2788 / GEO-2611. The name goes to the person's personal space, and the hub stays open on the
+// way — which is why this needs no click handler and so keeps cmd-click and middle click working.
+describe('the person link', () => {
+  it("points the name at the person's space", () => {
+    render(<PeopleTab />);
+
+    expect(screen.getByRole('link', { name: 'Arturas' })).toHaveAttribute(
+      'href',
+      NavUtils.toSpace(PROFILE_SPACE_IDS['user-them'])
+    );
+  });
+
+  // A real anchor with nothing intercepting it. An onClick here would take cmd-click, middle click
+  // and "copy link address" out on this surface, which is what GEO-2701 restored.
+  it('leaves the navigation to the browser', () => {
+    render(<PeopleTab />);
+    const link = screen.getByRole('link', { name: 'Arturas' });
+
+    const event = createEvent.click(link);
+    fireEvent(link, event);
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  // An anchor to `/space/undefined` looks identical until it is clicked.
+  it('leaves the name unlinked when there is no space to point at', () => {
+    mocks.people = [person('user-nospace', 'Nameless')];
+    render(<PeopleTab />);
+
+    expect(screen.getByText('Nameless')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Nameless' })).toBeNull();
   });
 });
