@@ -53,14 +53,15 @@ export const CURATOR_ONBOARDING_STEPS: CuratorOnboardingStep[] = [
     description: 'Watch a debate and choose a winner',
   },
   {
-    id: 'vote-entity',
-    title: 'Vote on an entity',
-    description: 'Express your view on an entity using an upvote or downvote',
-  },
-  {
     id: 'comment-entity',
     title: 'Comment on an entity',
     description: 'Join the conversation by leaving a comment on an entity of interest',
+  },
+  {
+    id: 'vote-entity',
+    title: 'Vote on an entity',
+    description: 'Express your view on an entity using an upvote or downvote',
+    hidden: true,
   },
   {
     id: 'rsvp-community-call',

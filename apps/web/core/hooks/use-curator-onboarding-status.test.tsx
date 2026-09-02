@@ -61,10 +61,8 @@ afterEach(() => vi.unstubAllGlobals());
 /** Every step the card shows, and nothing hidden — which has to be enough to reach 100%. */
 function completeEveryVisibleStep() {
   mocks.memberSpaces = [{ type: 'DAO' }];
-  mocks.hasVoteOfKind = new Map([
-    [0, true],
-    [1, true],
-  ]);
+  // Kind 1 only: a claim position is visible, an entity upvote is not.
+  mocks.hasVoteOfKind = new Map([[1, true]]);
   mocks.hasDebateParticipation = true;
   mocks.entitiesByType = new Map([
     [VOTE_TYPE_ID, true],
@@ -122,9 +120,10 @@ describe('useCuratorOnboardingStatus', () => {
 
       await waitFor(() => expect(result.current.progressPercent).toBe(100));
       expect(result.current.totalCount).toBe(VISIBLE_CURATOR_ONBOARDING_STEPS.length);
-      // The point of the exercise: neither hidden step was completed, and 100% arrived anyway.
+      // The point of the exercise: no hidden step was completed, and 100% arrived anyway.
       expect(result.current.completion['rsvp-community-call']).toBe(false);
       expect(result.current.completion['submit-ranking']).toBe(false);
+      expect(result.current.completion['vote-entity']).toBe(false);
     });
 
     it('still records a hidden step someone has already finished', async () => {
@@ -133,22 +132,24 @@ describe('useCuratorOnboardingStatus', () => {
       completeEveryVisibleStep();
       mocks.hasRsvp = true;
       mocks.entitiesByType.set(RANK_TYPE_ID, true);
+      mocks.hasVoteOfKind.set(0, true);
 
       const { result } = renderHook(() => useCuratorOnboardingStatus(), { wrapper });
 
       await waitFor(() => expect(result.current.completion['rsvp-community-call']).toBe(true));
       expect(result.current.completion['submit-ranking']).toBe(true);
+      expect(result.current.completion['vote-entity']).toBe(true);
       // And they still do not inflate the count past the steps on screen.
       expect(result.current.completedCount).toBe(VISIBLE_CURATOR_ONBOARDING_STEPS.length);
     });
 
     it('keeps hidden steps in the list so their tracking survives', () => {
-      expect(CURATOR_ONBOARDING_STEPS.map(step => step.id)).toEqual(
-        expect.arrayContaining(['rsvp-community-call', 'submit-ranking'])
-      );
-      expect(VISIBLE_CURATOR_ONBOARDING_STEPS.map(step => step.id)).not.toEqual(
-        expect.arrayContaining(['rsvp-community-call', 'submit-ranking'])
-      );
+      const hidden = ['rsvp-community-call', 'submit-ranking', 'vote-entity'];
+
+      expect(CURATOR_ONBOARDING_STEPS.map(step => step.id)).toEqual(expect.arrayContaining(hidden));
+      for (const id of hidden) {
+        expect(VISIBLE_CURATOR_ONBOARDING_STEPS.map(step => step.id)).not.toContain(id);
+      }
     });
   });
 
