@@ -4,15 +4,24 @@ import { isRenderableImageSrc } from './utils';
 
 describe('isRenderableImageSrc', () => {
   it('accepts the forms an image value legitimately takes', () => {
-    // `ipfs:` is checked before `getImagePath` resolves it to a gateway, so it has to pass raw.
     for (const src of [
-      'ipfs://QmAbc',
       'https://cdn.example.com/a.png',
       'http://cdn.example.com/a.png',
       '/static/a.png',
       'data:image/png;base64,AAAA',
     ]) {
       expect(isRenderableImageSrc(src), src).toBe(true);
+    }
+  });
+
+  it('rejects ipfs URIs, which are already resolved by the time this runs', () => {
+    // Copilot caught this on PR #2333. The only caller is `FallbackImage`, which validates the
+    // output of `getImagePathAtLevel` — so a value the resolver understood is `https:` by now, and
+    // an `ipfs:` string arriving here is one it declined to rewrite. Admitting them would hand
+    // next/image a src it cannot load; the earlier draft of this PR allowed `ipfs:` because the
+    // share-image chain then checked raw values, which it no longer does.
+    for (const src of ['ipfs://QmAbc', 'ipfs:QmAbc', 'IPFS://QmAbc']) {
+      expect(isRenderableImageSrc(src), src).toBe(false);
     }
   });
 

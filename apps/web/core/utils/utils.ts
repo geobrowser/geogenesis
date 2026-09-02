@@ -565,10 +565,17 @@ export const getImagePath = (value: string) => getImagePathAtLevel(value, 0);
 // which kills the whole page that rendered it.
 //
 // The scheme is checked too, not just the syntax: `mailto:`, `javascript:`, `file:`
-// and `blob:` all parse as URLs and none of them is a picture. Server-side card
-// rendering needs a stricter rule again — see `toSatoriImageSrc`, which cannot
-// accept the relative forms a browser resolves happily.
-const RENDERABLE_IMAGE_PROTOCOLS = new Set(['http:', 'https:', 'ipfs:']);
+// and `blob:` all parse as URLs and none of them is a picture.
+//
+// No `ipfs:` here, deliberately. This runs *after* `getImagePathAtLevel`, so a value
+// the resolver understood is already `https:` by now; the only `ipfs:` strings that
+// can reach this point are the ones it declined to rewrite — `ipfs:QmAbc` without
+// the slashes, `IPFS://` with the wrong case — and admitting those would hand
+// next/image a src it cannot load.
+//
+// Server-side card rendering asks a stricter question again: see `toSatoriImageSrc`,
+// which additionally rejects the relative forms a browser resolves happily.
+const RENDERABLE_IMAGE_PROTOCOLS = new Set(['http:', 'https:']);
 
 export const isRenderableImageSrc = (src: string) => {
   if (src.startsWith('/')) return true;
