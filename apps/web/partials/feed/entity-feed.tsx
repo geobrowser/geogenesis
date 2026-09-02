@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
+import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
 import {
   EXPLORE_TYPE_FILTER_STORAGE_KEY,
   parseStoredExploreTypeIds,
@@ -139,7 +139,10 @@ export function EntityFeed({
   const [sortMenuOpen, setSortMenuOpen] = React.useState(false);
   const [timeMenuOpen, setTimeMenuOpen] = React.useState(false);
   const [spaceMenuOpen, setSpaceMenuOpen] = React.useState(false);
-  const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...EXPLORE_ENTITY_TYPE_IDS]);
+  // Seeded with the default rather than every type, so the first paint is what the effect below
+  // will settle on for a reader with nothing stored — the common case. Starting from all twelve
+  // showed a wider feed for a frame and then narrowed it.
+  const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...DEFAULT_EXPLORE_TYPE_IDS]);
   const [typeSelectionLoaded, setTypeSelectionLoaded] = React.useState(!showTypeFilter);
   const shouldPersistTypeSelectionRef = React.useRef(false);
   const spaceId = lockedSpaceId ?? selectedSpaceId;

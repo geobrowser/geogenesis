@@ -19,6 +19,7 @@ import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubSwap } from './hub-motion';
+import { hubClosesOnArrivalAt } from './hub-navigation';
 import { HubMessage } from './hub-states';
 import { MatchesTab } from './matches-tab';
 import { PeopleTab } from './people-tab';
@@ -94,9 +95,13 @@ export function DebatesHubPanel() {
   // effect, so by the time effects run the answer would depend on which of the two ran first.
   const requestedByLink = requestsModal(useSearchParams(), DEBATES_MODAL);
 
-  // Anything that navigates has taken the viewer somewhere they asked to go — accepting a request
-  // walks them into the debate room — and the panel would otherwise sit on top of it. Only on a
-  // change: closing on mount would shut the panel the moment it opened.
+  // The hub follows the viewer while they browse and stops at the door of a debate (GEO-2788),
+  // on the layout where it can — see the mobile branch below.
+  //
+  // It used to close on every navigation. That made the Claims tab a dead end — following a claim
+  // shut the list you were working through — so `hubClosesOnArrivalAt` names the two rooms it must
+  // not sit on top of instead, and everywhere else keeps it. Only on a change: closing on mount
+  // would shut the panel the moment it opened.
   React.useEffect(() => {
     if (lastPathnameRef.current === pathname) return;
     lastPathnameRef.current = pathname;
@@ -105,9 +110,20 @@ export function DebatesHubPanel() {
     // link just did. Decided from the render's params rather than from effect order, so the link
     // wins whether this effect runs before or after `DeepLinkHandler`'s — and whether or not the
     // hub was already open when the viewer followed it.
+    //
+    // Kept ahead of the route test rather than folded into it: a link that explicitly asks for the
+    // hub should win even where the route would otherwise close it, which is what makes
+    // `?modal=debates` a way to open the hub anywhere rather than a way to open it in most places.
     if (requestedByLink) return;
+    // Desktop only. The hub is a companion column there, so the destination is visible beside it —
+    // which is the whole premise of keeping it open. On mobile it is a full-screen `aria-modal`
+    // sheet over a backdrop, so persisting would navigate the page *behind* an opaque overlay:
+    // the viewer taps a claim, nothing appears to happen, and the page they landed on is hidden
+    // from assistive tech until they dismiss the sheet by hand. Closing is what makes the tap
+    // arrive somewhere.
+    if (!isMobile && !hubClosesOnArrivalAt(pathname)) return;
     close();
-  }, [close, pathname, requestedByLink]);
+  }, [close, isMobile, pathname, requestedByLink]);
 
   React.useEffect(() => {
     if (!isOpen) return;

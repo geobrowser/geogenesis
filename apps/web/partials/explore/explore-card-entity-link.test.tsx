@@ -6,6 +6,8 @@ import type React from 'react';
 import { Provider, useAtomValue } from 'jotai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { NavUtils } from '~/core/utils/utils';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
@@ -27,17 +29,18 @@ vi.mock('~/design-system/prefetch-link', () => ({
   } & React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...rest}>{children}</a>,
 }));
 
-const item = { entityId: 'entity-1', spaceId: 'space-1' };
+const item = { entityId: 'entity-1', spaceId: 'space-1', types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }] };
+const debateItem = { entityId: 'debate-1', spaceId: 'space-1', types: [{ id: DEBATE_TYPE_ID, name: 'Debate' }] };
 
 function PanelProbe() {
   const target = useAtomValue(entitySidePanelAtom);
   return <div data-testid="panel">{target ? `${target.entityId} in ${target.spaceId}` : 'closed'}</div>;
 }
 
-function renderLink(opensSidePanel: boolean) {
+function renderLink(opensSidePanel: boolean, linkItem = item) {
   return render(
     <Provider>
-      <ExploreCardEntityLink item={item} opensSidePanel={opensSidePanel}>
+      <ExploreCardEntityLink item={linkItem} opensSidePanel={opensSidePanel}>
         <h2>A claim</h2>
       </ExploreCardEntityLink>
       <PanelProbe />
@@ -114,5 +117,46 @@ describe('ExploreCardEntityLink', () => {
 
     expect(screen.getByTestId('panel')).toHaveTextContent('closed');
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  // GEO-2794, amending GEO-2757. A debate is a full-screen video experience; the panel would be a
+  // worse version of the thing the reader is trying to reach, so its title navigates even here.
+  describe('debates', () => {
+    it('navigates to the debate instead of opening the panel', () => {
+      renderLink(true, debateItem);
+
+      const event = clickName();
+
+      expect(screen.getByTestId('panel')).toHaveTextContent('closed');
+      expect(event.defaultPrevented).toBe(false);
+    });
+
+    it('does not claim to be an opener, since it does not open anything', () => {
+      // The attribute exempts a link from the panel's outside-pointerdown close. A debate title
+      // that kept it would suppress that close while navigating away, leaving the panel behind.
+      renderLink(true, debateItem);
+
+      expect(screen.getByRole('link')).not.toHaveAttribute('data-entity-side-panel-opener');
+    });
+
+    it('still carries the href every other title carries', () => {
+      renderLink(true, debateItem);
+
+      expect(screen.getByRole('link')).toHaveAttribute('href', NavUtils.toEntity('space-1', 'debate-1'));
+    });
+
+    it('applies to an entity typed both debate and something else', () => {
+      // Multi-typed entities are ordinary here, and the rule is "is a debate", not "is only a
+      // debate" — the full-screen experience is what it has, whatever else it also is.
+      renderLink(true, {
+        ...debateItem,
+        types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }, ...debateItem.types],
+      });
+
+      const event = clickName();
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(screen.getByTestId('panel')).toHaveTextContent('closed');
+    });
   });
 });
