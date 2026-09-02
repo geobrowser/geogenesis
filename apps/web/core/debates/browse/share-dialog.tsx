@@ -8,6 +8,7 @@ import { capture } from '~/core/analytics';
 import type { Debate } from '~/core/debates/api';
 import { useDebateMedia } from '~/core/debates/hooks';
 import { useToast } from '~/core/hooks/use-toast';
+import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
@@ -56,7 +57,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   const download = useDebateVideoDownload(debate.id, everOpened && socialVideoReady);
   const [, setToast] = useToast();
 
-  const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, debate.id)}`;
+  const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))}`;
 
   const shareMessage = (maxLength: number) => {
     const suffix = `. ${SHARE_TAGLINE}`;
