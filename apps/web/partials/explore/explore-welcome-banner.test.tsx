@@ -45,6 +45,17 @@ describe('ExploreWelcomeBanner', () => {
     expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
   });
 
+  // The desktop panel is a non-modal aside that takes no focus, so this attribute is the only
+  // signal a screen-reader user gets that pressing the link did anything.
+  it("reports the hub's expanded state to assistive tech", async () => {
+    renderBanner();
+    expect(hubLink()).toHaveAttribute('aria-expanded', 'false');
+
+    await userEvent.click(hubLink());
+
+    expect(hubLink()).toHaveAttribute('aria-expanded', 'true');
+  });
+
   // The link and the dismiss button sit in the same card, and the panel overlays the page the
   // banner is on. Opening the hub shouldn't cost the user the banner underneath it.
   it('keeps the banner visible after opening the hub', async () => {

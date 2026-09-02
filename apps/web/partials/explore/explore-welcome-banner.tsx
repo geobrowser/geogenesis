@@ -34,7 +34,7 @@ export function ExploreWelcomeBanner() {
 
 function WelcomeBanner() {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
-  const { open: openDebatesHub } = useDebatesHub();
+  const { isOpen: isDebatesHubOpen, open: openDebatesHub } = useDebatesHub();
 
   // Functional setter form so concurrent dismissals can't drop each other via a stale
   // closure, and the guard keeps the id from being appended twice on a repeat click.
@@ -77,9 +77,19 @@ function WelcomeBanner() {
 
               Styled as the inline prose link in the onboarding dialog, in white for the dark ground.
               `button` inherits font and letter-spacing from the base layer, so it reads as part of
-              the sentence rather than a control dropped into it. */}
+              the sentence rather than a control dropped into it.
+
+              `aria-expanded` because the desktop panel is a non-modal aside portaled to the end of
+              document.body: it takes no focus and sits nowhere near this sentence in reading order,
+              so without it activating this button announces nothing at all. (The mobile sheet traps
+              focus, so it announces itself either way.) Reports state rather than promising a
+              toggle — this button only ever opens, and the panel carries its own close affordances.
+              No `aria-controls` to go with it: the panel unmounts when closed, so the id it would
+              point at is absent exactly when the attribute would be read. Same call the navbar
+              opener makes. */}
           <button
             type="button"
+            aria-expanded={isDebatesHubOpen}
             onClick={() => openDebatesHub('claims')}
             className="text-white underline decoration-white underline-offset-2"
           >
