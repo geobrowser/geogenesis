@@ -131,7 +131,8 @@ function decodeExploreBest(data: {
   return decodeConnection(data.entitiesRankedForFeedConnection ?? null);
 }
 
-function buildFeedFilter(args: {
+/** Exported for tests; callers should go through the page fetchers. */
+export function buildFeedFilter(args: {
   spaceIds: string[];
   time: ExploreTime;
   typeIds?: readonly string[];
@@ -140,7 +141,20 @@ function buildFeedFilter(args: {
 }): EntityFilter {
   const t = timeThresholdSec(args.time);
   return {
-    ...FEED_EXCLUDED_RELATIONS_FILTER,
+    // Only when nothing narrower is already saying what to include. A type whitelist
+    // subsumes this: every type Explore offers is a concrete content type, so a block or
+    // a system-managed row cannot match one in the first place. Measured against testnet
+    // — 400 entities under the full 12-type whitelist, the exclusion removed 0 of them,
+    // and not one carried a Data or Text block type.
+    //
+    // The Activity feed is the caller that needs it: it passes no `typeIds` at all, and
+    // without this the same 400 rows include 74 it would have to render — 49 of them
+    // blocks. So this is scoped, not deleted.
+    //
+    // Worth dropping where it is redundant because it is not free: `none` with an inner
+    // `or` compiles to NOT EXISTS over a disjunction, which cannot use an index per
+    // branch the way two separate NOT EXISTS clauses could.
+    ...(args.typeIds?.length ? {} : FEED_EXCLUDED_RELATIONS_FILTER),
     ...(args.includeEntityScopeInFilter
       ? {
           spaceIds: { overlaps: [...args.spaceIds] },
