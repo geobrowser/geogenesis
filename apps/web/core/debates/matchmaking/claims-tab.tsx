@@ -361,11 +361,18 @@ export function ClaimsTab() {
   // "Is factual" value implies.
   const taggedEntries = React.useMemo<MatchmakingClaim[]>(() => {
     if (!graphSourced) return [];
-    const rowsByClaimId = new Map(taggedRows.claims.map(row => [row.claim_entity_id, row]));
+    // Keyed by space *and* claim. The row lookup asks geo-chat per space, so a claim tagged in two
+    // of them comes back twice — once per space, each with that space's sides, readiness and live
+    // debate. Keyed on the claim alone the map keeps whichever arrived last (groups are emitted in
+    // space order) while the card below is built against the tag row that survived deduplication,
+    // so it would draw one space's answers onto another space's card and publish into the second.
+    const rowsBySpaceAndClaim = new Map(
+      taggedRows.claims.map(row => [`${ID.uuidToHex(row.space_id)}:${ID.uuidToHex(row.claim_entity_id)}`, row])
+    );
     const entitiesById = new Map(taggedEntities.map(entity => [entity.id, entity]));
 
     return taggedMatching.map(claim => {
-      const row = rowsByClaimId.get(claim.claimEntityId);
+      const row = rowsBySpaceAndClaim.get(`${ID.uuidToHex(claim.spaceId)}:${ID.uuidToHex(claim.claimEntityId)}`);
       const entity = entitiesById.get(claim.claimEntityId);
       const responseKind = row?.response_kind ?? (entity ? claimResponseKind(entity, claim.spaceId) : 'stance');
 

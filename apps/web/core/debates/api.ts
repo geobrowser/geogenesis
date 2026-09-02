@@ -500,15 +500,13 @@ export type MatchmakingClaimsQuery = {
    *
    * The session id rather than the ids themselves — that set is geo-chat's own, and the client
    * would be handing back a value it isn't the authority on.
-   */
-  /**
-   * No sender since GEO-2771. The rematch picker's All source is the graph's Debate tag now, so it
-   * makes no index query to attach this to, and `excludedClaimIds` removes the same claims
-   * client-side across all four of its sources.
    *
-   * Kept because it describes a parameter `/matchmaking/claims` still accepts, and this module is
-   * the client's model of that endpoint rather than a list of what happens to be called today.
-   * It should go when geo-chat drops it — the two halves belong in one change.
+   * No sender since GEO-2771: the rematch picker's All source is the graph's Debate tag now, so it
+   * makes no index query to attach this to, and `excludedClaimIds` removes the same claims
+   * client-side across all four of its sources. Kept because it still describes a parameter
+   * `/matchmaking/claims` accepts, and this module is the client's model of that endpoint rather
+   * than a list of what happens to be called today. It should go when geo-chat drops it — the two
+   * halves belong in one change.
    */
   rematchSessionId?: string | null;
   filter?: MatchmakingClaimsFilter;

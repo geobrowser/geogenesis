@@ -36,6 +36,8 @@ const mocks = vi.hoisted(() => ({
   }>,
   featuredLoading: false,
   debateClaimGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
+  /** geo-chat's per-space claim rows, keyed by the space that answered for them. */
+  debateClaimRows: [] as Array<Record<string, unknown> & { claim_entity_id: string; space_id: string }>,
   claimEntityLookups: [] as string[][],
   claimEntities: [] as Array<{
     id: string;
@@ -246,7 +248,17 @@ vi.mock('../hooks', () => ({
   // for so the suites can assert the tab only asks about spaces it may show.
   useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
     mocks.debateClaimGroups.push(groups);
-    return { claims: [], isLoading: false, isError: false };
+    // Answers per space, as the real hook does: it asks geo-chat once per group and flattens the
+    // results, so a claim tagged in two spaces comes back twice with each space's own row.
+    const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
+    const claims = mocks.debateClaimRows.filter(row =>
+      groups.some(
+        group =>
+          norm(group.spaceId) === norm(row.space_id) &&
+          group.claimIds.some(id => norm(id) === norm(row.claim_entity_id))
+      )
+    );
+    return { claims, isLoading: false, isError: false };
   },
 }));
 
@@ -407,6 +419,7 @@ beforeEach(() => {
   mocks.taggedClaims = {};
   mocks.featuredLoading = false;
   mocks.debateClaimGroups = [];
+  mocks.debateClaimRows = [];
   mocks.claimEntityLookups = [];
   mocks.claimEntities = [];
   mocks.pageSize = null;
@@ -900,6 +913,37 @@ describe('All claims reads the Debate tag', () => {
     await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
 
     expect(mocks.claimEntityLookups.at(-1)).toEqual(askedBefore);
+  });
+
+  // A claim tagged in two spaces is asked about once per space, so geo-chat answers twice — each row
+  // carrying that space's own sides and readiness. The card is built against the tag row that
+  // survived deduplication, so the answers have to be looked up by the same space, or it draws one
+  // space's positions onto the other's card and publishes into the wrong one.
+  it('takes each claim’s answers from the space its card is for', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', SPACE_ID),
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', OTHER_SPACE_ID),
+    ];
+    // Only the *other* space has a position on it. The card is drawn for SPACE_ID, which has none.
+    mocks.debateClaimRows = [
+      {
+        id: 'row-other',
+        claim_entity_id: FEATURED_A,
+        space_id: OTHER_SPACE_ID,
+        response_kind: 'stance',
+        viewer_response: { position: true, position_label: 'Agree' },
+        viewer_debate_ready: true,
+        readiness_disabled_reason: null,
+        online_choices: [],
+        active_debate: null,
+      },
+    ];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    // Drawn from SPACE_ID's absent row, so no side is held — not the other space's Agree.
+    const agree = await screen.findByRole('button', { name: /^Agree/ });
+    expect(agree).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('stops paging the index, which is no longer answering this list', async () => {

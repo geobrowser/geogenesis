@@ -640,6 +640,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     taggedEntitiesQuery.isLoading ||
     taggedClaimsQuery.isLoading ||
     (source === 'all' && savedEntitiesQuery.isLoading);
+  // Indexed once rather than scanned per row: the tagged list is the largest of the four and a
+  // `.find` inside the map is quadratic in it. The hub builds the same map for the same job.
+  const taggedEntitiesById = React.useMemo(
+    () => new Map(taggedEntitiesQuery.entities.map(entity => [entity.id, entity])),
+    [taggedEntitiesQuery.entities]
+  );
+
   const taggedClaimsNow = React.useMemo(
     () =>
       taggedClaimsSettling
@@ -649,7 +656,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           dedupeRowsByClaim(
             taggedSelection.flatMap(featured => {
               if (excludedClaimIds.has(featured.claimEntityId)) return [];
-              const entity = taggedEntitiesQuery.entities.find(candidate => candidate.id === featured.claimEntityId);
+              const entity = taggedEntitiesById.get(featured.claimEntityId);
               const row = entity ? rowFromEntity(entity, featured.spaceId) : null;
               // Both gates, against the space the row actually carries. `rowFromEntity` takes
               // geo-chat's session row whole where it has one, and that row names its own space — so
@@ -663,7 +670,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       canPublishDebateIn,
       excludedClaimIds,
       taggedClaimsSettling,
-      taggedEntitiesQuery.entities,
+      taggedEntitiesById,
       taggedSelection,
       rowFromEntity,
       spaceAllowlist,
