@@ -5,12 +5,16 @@ import type React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { SUBTOPIC_RELATION_TYPE_ID } from '~/core/constants';
+
 import { TopicPageView } from './topic-page-view';
 
 const mocks = vi.hoisted(() => ({
   entity: null as Record<string, unknown> | null,
   /** Props the description's clamp received, or null if it rendered no clamp at all. */
   clamp: null as Record<string, unknown> | null,
+  /** Props the chip section received, or null if the page rendered none. */
+  chipSection: null as Record<string, unknown> | null,
   /**
    * Deliberately not 3.
    *
@@ -33,6 +37,16 @@ vi.mock('~/design-system/clamped-text', () => ({
   ClampedText: (props: Record<string, unknown>) => {
     mocks.clamp = props;
     return <p data-testid="clamped-description">{props.text as string}</p>;
+  },
+}));
+
+// The section moved out of this file in GEO-2781 and is shared with the claim view. Its own suite
+// covers the chips and the expander; this only checks that subtopics still reach it unchanged.
+vi.mock('~/partials/entity-page/relation-chip-section', () => ({
+  META_CHIP_CLASS: 'meta-chip',
+  RelationChipSection: (props: Record<string, unknown>) => {
+    mocks.chipSection = props;
+    return <div data-testid="chip-section" data-label={props.label as string} />;
   },
 }));
 
@@ -63,6 +77,7 @@ function topicEntity(description: string | null) {
 beforeEach(() => {
   mocks.entity = topicEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
+  mocks.chipSection = null;
 });
 
 afterEach(cleanup);
@@ -93,5 +108,25 @@ describe('TopicPageView description', () => {
     render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
 
     expect(screen.queryByTestId('clamped-description')).toBeNull();
+  });
+});
+
+// GEO-2781 lifted this section out of this file so the claim view could draw its Topics with it.
+// Extracting a component is where a caller quietly loses an argument, so the subtopics side is
+// pinned too rather than only the new one.
+describe('TopicPageView subtopics', () => {
+  const subtopicRelation = {
+    id: 'relation-1',
+    type: { id: SUBTOPIC_RELATION_TYPE_ID },
+    toEntity: { id: 'subtopic-1', name: 'Alignment' },
+  };
+
+  it('still draws them with the shared chip section, under the label Subtopics', () => {
+    mocks.entity = { ...topicEntity('Anything'), relations: [subtopicRelation] };
+    render(<TopicPageView entityId="topic-1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('chip-section')).toHaveAttribute('data-label', 'Subtopics');
+    expect(mocks.chipSection?.relations).toEqual([subtopicRelation]);
+    expect(mocks.chipSection?.spaceId).toBe('space-1');
   });
 });
