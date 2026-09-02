@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DebateNotPublishableError } from '~/core/debates/server/debate-source';
 
@@ -29,7 +29,9 @@ vi.mock('~/core/debates/server/publish-debate', () => ({
 
 async function sweep() {
   const { GET } = await import('./route');
-  const response = await GET(new Request('https://geo.test/api/debates/publish-sweep', { headers: { authorization: 'Bearer test-secret' } }));
+  const response = await GET(
+    new Request('https://geo.test/api/debates/publish-sweep', { headers: { authorization: 'Bearer test-secret' } })
+  );
   return response.json();
 }
 
@@ -39,6 +41,13 @@ beforeEach(() => {
   mocks.candidates = {};
   mocks.publish.mockReset();
 });
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
+
+const publishedResult = { status: 'published', debateEntityId: 'e', spaceId: 'space-1', userOpHash: '0x1' };
 
 describe('publish sweep', () => {
   it('refuses a request without the cron secret', async () => {
@@ -50,7 +59,12 @@ describe('publish sweep', () => {
 
   it('publishes an eligible debate', async () => {
     mocks.candidates = { 'space-1': ['debate-1'] };
-    mocks.publish.mockResolvedValue({ status: 'published', debateEntityId: 'e1', spaceId: 'space-1', userOpHash: '0x1' });
+    mocks.publish.mockResolvedValue({
+      status: 'published',
+      debateEntityId: 'e1',
+      spaceId: 'space-1',
+      userOpHash: '0x1',
+    });
 
     await expect(sweep()).resolves.toMatchObject({ ok: true, published: ['debate-1'] });
   });
@@ -90,5 +104,44 @@ describe('publish sweep', () => {
     mocks.candidates = { 'space-1': [] };
 
     await expect(sweep()).resolves.toMatchObject({ mediaFailed: [], pending: 0 });
+  });
+
+  it('does not spend the attempt budget on debates the acceptor cannot edit', async () => {
+    const parked = Array.from({ length: 8 }, (_, i) => `parked-${i}`);
+    mocks.candidates = { 'space-1': [...parked, 'publishable'] };
+    mocks.publish.mockImplementation(async (debateId: string) =>
+      debateId === 'publishable' ? publishedResult : { status: 'not_editor', debateEntityId: 'e', spaceId: 'space-1' }
+    );
+
+    await expect(sweep()).resolves.toMatchObject({ notEditor: 8, published: ['publishable'] });
+  });
+
+  it('stops starting publishes once the time budget is spent', async () => {
+    vi.useFakeTimers();
+    mocks.editorSpaceIds = ['space-1', 'space-2'];
+    mocks.candidates = { 'space-1': ['first', 'second'], 'space-2': ['third'] };
+    mocks.publish.mockImplementation(async () => {
+      vi.setSystemTime(Date.now() + 181_000);
+      return publishedResult;
+    });
+
+    await expect(sweep()).resolves.toMatchObject({ published: ['first'] });
+    expect(mocks.publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses the whole run when the media host is misconfigured', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL', '');
+    mocks.candidates = { 'space-1': ['debate-1'] };
+
+    const { GET } = await import('./route');
+    const response = await GET(
+      new Request('https://geo.test/api/debates/publish-sweep', { headers: { authorization: 'Bearer test-secret' } })
+    );
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({ ok: false, error: expect.stringMatching(/media host/) });
+    expect(mocks.publish).not.toHaveBeenCalled();
   });
 });
