@@ -29,22 +29,12 @@ export function buildClaimSpaceAllowlist({
   /** The viewer's own space, which the sidebar's `memberOf` deliberately leaves out. */
   personalSpaceId: string | null | undefined;
 }): Set<string> {
-  const allowed = new Set<string>();
+  // The viewer's own spaces plus what is on offer to everyone — said that way round, so the two
+  // sets cannot drift. `buildMemberSpaceIds` is the same list the space filter defaults to, and a
+  // space that counts as theirs there has to be one they may see here.
+  const allowed = buildMemberSpaceIds({ editorOf, memberOf, personalSpaceId });
 
   for (const row of featured) allowed.add(normId(row.id));
-
-  // Pending rows count. A viewer who has asked to join a space is telling us it is one of theirs,
-  // and sign-up collects exactly that before any approval exists — so a new account spends its
-  // first minutes with every space pending, and excluding them left it looking at a panel with
-  // none of the spaces it had just chosen. Approval follows within minutes and changes nothing
-  // here, which is the point: the panel should not lurch when it lands.
-  //
-  // Note this is a wider rule than `useGlobalSearchSpaceIds` draws off the same lists. Deliberately
-  // so — that one is picking where to search, this one is deciding whether a space is the viewer's
-  // at all.
-  for (const row of [...editorOf, ...memberOf]) allowed.add(normId(row.id));
-
-  if (personalSpaceId) allowed.add(normId(personalSpaceId));
 
   return allowed;
 }
@@ -57,8 +47,14 @@ export function buildClaimSpaceAllowlist({
  * difference: they are on offer to everyone, so they widen what can be browsed without saying
  * anything about who the viewer is. GEO-2789 defaults the space filter to this narrower set.
  *
- * Pending rows count here for the same reason they count in the allowlist: a space the viewer has
- * asked to join is one of theirs, and at sign-up that is the only kind they have.
+ * Pending rows count. A viewer who has asked to join a space is telling us it is one of theirs,
+ * and sign-up collects exactly that before any approval exists — so a new account spends its first
+ * minutes with every space pending. Excluding them left that account looking at a panel with none
+ * of the spaces it had just chosen, which then filled in on its own once the approvals landed.
+ * Approval changes nothing here, which is the point: nothing should lurch when it arrives.
+ *
+ * Wider than the same distinction `useGlobalSearchSpaceIds` draws off these lists, deliberately —
+ * that one is picking where to search, this one is deciding whether a space is the viewer's at all.
  */
 export function buildMemberSpaceIds({
   editorOf,

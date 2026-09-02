@@ -1843,6 +1843,13 @@ describe('DebateRematchPageClient', () => {
     // The trigger takes the name of the one selected space rather than reading "Any space".
     await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+
+    // Ticked in the menu, and listed once: a seed in any shape but the menu's own would be added
+    // back as a second row rather than ticking the one already there.
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    const rows = screen.getAllByRole('button', { name: /Crypto/ }).filter(el => el.hasAttribute('aria-pressed'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('opens on everything when the viewer belongs to none of the spaces on offer', async () => {

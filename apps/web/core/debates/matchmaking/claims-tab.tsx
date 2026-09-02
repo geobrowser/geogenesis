@@ -178,17 +178,6 @@ export function ClaimsTab() {
     [candidateSpaceIds, spaceShowsClaims]
   );
 
-  // Defaults to the spaces the viewer belongs to (GEO-2789), drawn from what this tab is actually
-  // offering rather than from every space they belong to.
-  useMemberSpaceDefault({
-    memberSpaceIds,
-    // Null while the gates are still resolving, which the hook reads as nothing on offer yet and
-    // waits out rather than spending its one seed on.
-    availableSpaceIds: eligibleSpaceIds ?? [],
-    pending: spacesPending,
-    onSeed: setSpaceIds,
-  });
-
   const featured = filter === 'featured';
 
   // Featured draws its own list, so the index isn't asked for one. The query keeps saying `all`
@@ -401,16 +390,36 @@ export function ClaimsTab() {
   // present at zero. Featured has no server facet — its spaces are wherever the tagged claims live,
   // counted from those claims, and read before its own space selection is applied, or picking one
   // would leave that one option in the menu.
-  const facetSpaces = React.useMemo(() => {
-    const source = featured
-      ? countBy(
-          featuredSearched
-            .filter(claim => carriesPickedTopic(claim.claimEntityId))
-            .map(claim => ({ id: claim.spaceId, name: null }))
-        )
-      : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id));
-    return orderFacetOptions(keepSelectedVisible(source, spaceIds), spaceIds);
-  }, [carriesPickedTopic, facets?.space_facets, featured, featuredSearched, spaceIds, spaceShowsClaims]);
+  // What the menu offers before the viewer's own selection is folded back into it. Split out
+  // because the default is seeded from exactly this list: a seeded id in any other shape is not
+  // recognised as one of these options, and `keepSelectedVisible` then adds it as a *second* row
+  // — the space listed twice, the ticked one counting zero.
+  const offeredSpaces = React.useMemo(
+    () =>
+      featured
+        ? countBy(
+            featuredSearched
+              .filter(claim => carriesPickedTopic(claim.claimEntityId))
+              .map(claim => ({ id: claim.spaceId, name: null }))
+          )
+        : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id)),
+    [carriesPickedTopic, facets?.space_facets, featured, featuredSearched, spaceShowsClaims]
+  );
+
+  const offeredSpaceIds = React.useMemo(() => offeredSpaces.map(space => space.id), [offeredSpaces]);
+
+  // Defaults to the spaces the viewer belongs to (GEO-2789), in the menu's own ids.
+  useMemberSpaceDefault({
+    memberSpaceIds,
+    availableSpaceIds: offeredSpaceIds,
+    pending: spacesPending,
+    onSeed: setSpaceIds,
+  });
+
+  const facetSpaces = React.useMemo(
+    () => orderFacetOptions(keepSelectedVisible(offeredSpaces, spaceIds), spaceIds),
+    [offeredSpaces, spaceIds]
+  );
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.

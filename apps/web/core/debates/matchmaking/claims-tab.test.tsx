@@ -994,8 +994,31 @@ describe('topic menu', () => {
     render(<ClaimsTab />);
     await showAllClaims();
 
-    // The eligible set's own ids, which is what the seed is drawn from — geo-chat normalizes.
-    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] }));
+    // The menu's own ids, which is what a click would have produced too.
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
+  });
+
+  // The ticket's actual requirement is which boxes are *ticked*, not just which spaces the query
+  // narrows to. The seed is drawn from the eligible set and the menu's options are the server
+  // facet's own ids, so the two have to agree on id shape or the filter applies with nothing
+  // showing as chosen.
+  it('shows the default as ticked in the menu, not merely applied to the query', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    // The trigger is named after the selected space too, so pick out the row, which is the one
+    // carrying the pressed state.
+    fireEvent.click(await screen.findByRole('button', { name: /Crypto/ }));
+    const row = screen.getAllByRole('button', { name: /Crypto/ }).find(el => el.hasAttribute('aria-pressed'));
+
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    // And exactly one row for it: a seed whose id shape differed from the facet's would be added
+    // back as a second option rather than ticking the one already there.
+    expect(
+      screen.getAllByRole('button', { name: /Crypto/ }).filter(el => el.hasAttribute('aria-pressed'))
+    ).toHaveLength(1);
   });
 
   // The fallback, and the signed-out case with it: nobody is left on an empty list filtered by a
@@ -1017,7 +1040,7 @@ describe('topic menu', () => {
     mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
     render(<ClaimsTab />);
     await showAllClaims();
-    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] }));
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
 
     // The trigger is named after the one selected space, which is the default that just applied.
     fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
