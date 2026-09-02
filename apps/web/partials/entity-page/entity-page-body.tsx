@@ -20,6 +20,7 @@ import { CommentSection } from '~/partials/comments/comments-section';
 import { Editor } from '~/partials/editor/editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import { BacklinksClientContainer } from '~/partials/entity-page/backlinks-client-container';
+import { useCustomViewTabs } from '~/partials/entity-page/custom-view-tabs';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
@@ -130,6 +131,30 @@ function EditorFooter({
 }
 
 /**
+ * A custom view with the entity's other tabs.
+ *
+ * Its own component so `useCustomViewTabs` runs only on the pages that render it. Called from
+ * `EntityPageBody` it would have to sit above that component's early returns, and would then scan
+ * the relation and value stores on every generic entity page and side panel for a result nothing
+ * reads — twice over, since `EntityTabs` does the same scan below.
+ */
+function CustomBrowseView({
+  view,
+  entityId,
+  spaceId,
+  initialTabRelations,
+  tabEntities,
+}: Pick<SharedProps, 'entityId' | 'spaceId' | 'initialTabRelations' | 'tabEntities'> & { view: 'claim' | 'topic' }) {
+  const tabs = useCustomViewTabs({ entityId, spaceId, initialTabRelations, tabEntities });
+
+  return view === 'claim' ? (
+    <ClaimPageView entityId={entityId} spaceId={spaceId} tabs={tabs} />
+  ) : (
+    <TopicPageView entityId={entityId} spaceId={spaceId} tabs={tabs} />
+  );
+}
+
+/**
  * Which custom read view this entity gets, if any.
  *
  * Editing always falls through to the generic page: these are read surfaces with no property editor
@@ -181,12 +206,20 @@ export function EntityPageBody(props: EntityPageBodyProps) {
   // generic value sheet and swapping it out from under the reader.
   if (customView === 'pending') return null;
 
-  if (customView === 'claim') {
-    return <ClaimPageView entityId={entityId} spaceId={spaceId} />;
-  }
-
-  if (customView === 'topic') {
-    return <TopicPageView entityId={entityId} spaceId={spaceId} />;
+  // The custom views replace the generic page rather than sitting inside it, so the entity's other
+  // tabs were unreachable from them until now. The custom view is the Overview tab, and each view
+  // places the bar at its own seam — everything it renders above that is shared across every tab
+  // (GEO-2779). With no other tabs the slot is empty and the views render exactly as before.
+  if (customView === 'claim' || customView === 'topic') {
+    return (
+      <CustomBrowseView
+        view={customView}
+        entityId={entityId}
+        spaceId={spaceId}
+        initialTabRelations={initialTabRelations}
+        tabEntities={tabEntities}
+      />
+    );
   }
 
   const tabsSection = (

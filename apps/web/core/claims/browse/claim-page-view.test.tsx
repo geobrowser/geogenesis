@@ -78,12 +78,12 @@ vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
   useBackfillReadinessForHeldPosition: () => {},
 }));
 vi.mock('./claim-verdict', () => ({ ClaimVerdict: () => null }));
-vi.mock('./claim-debates', () => ({ ClaimDebates: () => null }));
-vi.mock('./claim-provenance', () => ({ ClaimProvenance: () => null }));
+vi.mock('./claim-debates', () => ({ ClaimDebates: () => <div data-testid="claim-debates" /> }));
+vi.mock('./claim-provenance', () => ({ ClaimProvenance: () => <div data-testid="claim-provenance" /> }));
 vi.mock('./claim-related-claims', () => ({ ClaimRelatedClaims: () => null }));
 vi.mock('./claim-end-slot', () => ({ ClaimEndSlot: () => null }));
 vi.mock('./claim-summary', () => ({ ControversialTag: () => null }));
-vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => null }));
+vi.mock('~/partials/comments/comments-section', () => ({ CommentSection: () => <div data-testid="claim-comments" /> }));
 
 function claimEntity(description: string | null) {
   return {
@@ -127,5 +127,44 @@ describe('ClaimPageView description', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
     expect(screen.queryByTestId('clamped-description')).toBeNull();
+  });
+});
+
+/**
+ * The bar sits under My position, not above the page: what is above it says which claim this is and
+ * lets you take a side, and that holds whichever tab is open (GEO-2779).
+ */
+describe('ClaimPageView tabs', () => {
+  const slot = (body: React.ReactNode | null) => ({ bar: <div data-testid="tab-bar" />, body });
+
+  const isBefore = (a: HTMLElement, b: HTMLElement) =>
+    Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('renders exactly as before when the entity has no other tabs', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" tabs={{ bar: null, body: null }} />);
+
+    expect(screen.queryByTestId('tab-bar')).not.toBeInTheDocument();
+    expect(screen.getByTestId('claim-debates')).toBeInTheDocument();
+    expect(screen.getByTestId('claim-comments')).toBeInTheDocument();
+  });
+
+  it('places the bar below My position and above the Overview content', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" tabs={slot(null)} />);
+
+    const bar = screen.getByTestId('tab-bar');
+    // The hero and taking a side both describe the claim, so they sit above the seam.
+    expect(isBefore(screen.getByTestId('clamped-description'), bar)).toBe(true);
+    expect(isBefore(screen.getByRole('region', { name: 'Your position' }), bar)).toBe(true);
+    expect(isBefore(bar, screen.getByTestId('claim-debates'))).toBe(true);
+  });
+
+  it("swaps the Overview content for the selected tab's blocks, keeping what is above the bar", () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" tabs={slot(<div data-testid="tab-blocks" />)} />);
+
+    expect(screen.getByTestId('tab-blocks')).toBeInTheDocument();
+    expect(screen.getByTestId('clamped-description')).toBeInTheDocument();
+    for (const belowTheSeam of ['claim-debates', 'claim-provenance', 'claim-comments']) {
+      expect(screen.queryByTestId(belowTheSeam)).not.toBeInTheDocument();
+    }
   });
 });
