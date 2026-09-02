@@ -34,8 +34,6 @@ export function ExploreWelcomeBanner() {
 
 function WelcomeBanner() {
   const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
-  // `open()` with no argument lands on the hub's Claims tab, which is where the sentence above
-  // sends the reader: taking a position on a claim is the first step, not requests or matches.
   const { open: openDebatesHub } = useDebatesHub();
 
   // Functional setter form so concurrent dismissals can't drop each other via a stale
@@ -70,11 +68,20 @@ function WelcomeBanner() {
           Take a position on claims you care about, then match with someone on the other side. Record the debate and
           publish it. Open the{' '}
           {/* The hub is a panel rather than a route, so this is a button and not a link — there is no
-              href to give it. Underlined so it still reads as the one actionable phrase in the sentence. */}
+              href to give it. `NavUtils.toDebatesPanel` is for links arriving from elsewhere; from a
+              page the hub is already mounted on, opening it directly beats navigating to do it.
+
+              Claims named explicitly rather than leaning on the hook's default, matching "Join a
+              debate" in the debate feed: this is where the copy above sends the reader, and it
+              shouldn't follow the default if that default is ever retuned for the navbar badge.
+
+              Styled as the inline prose link in the onboarding dialog, in white for the dark ground.
+              `button` inherits font and letter-spacing from the base layer, so it reads as part of
+              the sentence rather than a control dropped into it. */}
           <button
             type="button"
-            onClick={() => openDebatesHub()}
-            className="underline decoration-white/50 underline-offset-2 transition-colors duration-200 hover:decoration-white"
+            onClick={() => openDebatesHub('claims')}
+            className="text-white underline decoration-white underline-offset-2"
           >
             debate hub
           </button>{' '}
