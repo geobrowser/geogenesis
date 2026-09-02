@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+
 import * as React from 'react';
 
 import { Provider, createStore, useSetAtom } from 'jotai';
@@ -7,6 +8,7 @@ import { usePathname } from 'next/navigation';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
+import { DEBATES_MODAL } from '../debates-panel-deep-link';
 import { DebatesHubPanel } from './debates-hub-panel';
 import { type DebatesHubTab, debatesHubAtom } from '~/atoms';
 
@@ -274,9 +276,10 @@ describe('DebatesHubPanel', () => {
   });
 });
 
-// Accepting a request from the Requests tab now walks the viewer into the debate room; the panel
-// would otherwise stay mounted on top of it, covering the pre-screen.
-it('closes itself once a navigation lands', () => {
+// Accepting a request from the Requests tab walks the viewer into the debate room; the panel would
+// otherwise stay mounted on top of it, covering the pre-screen. This is the one navigation that
+// still closes it, and the reason the effect exists at all.
+it('closes itself on the way into a debate room', () => {
   const store = renderOpen('requests');
   expect(screen.getByRole('button', { name: /^Requests/ })).toBeInTheDocument();
 
@@ -284,6 +287,47 @@ it('closes itself once a navigation lands', () => {
   store.rerender();
 
   expect(store.get(debatesHubAtom)).toBeNull();
+});
+
+// GEO-2788. Following a claim out of the Claims tab, or a person out of the People tab, used to
+// shut the list the viewer was working through — so coming back meant reopening the hub, finding
+// the tab and finding their place again. The hub follows them instead.
+it.each([
+  ['a claim or entity page', '/space/space-1/entity-1'],
+  ["a person's space", '/space/person-space-1'],
+  ['the debates feed', '/space/space-1/debates'],
+])('stays open when the viewer navigates to %s', (_label, pathname) => {
+  const store = renderOpen('claims');
+
+  mocks.pathname = pathname;
+  store.rerender();
+
+  expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
+});
+
+// Desktop only. On mobile the hub is a full-screen `aria-modal` sheet over a backdrop, so staying
+// open would navigate the page behind an opaque overlay — the tap would appear to do nothing, and
+// the destination would be hidden from assistive tech until the sheet was dismissed by hand.
+it('closes on any navigation on mobile, where it covers the destination', () => {
+  mocks.isMobile = true;
+  const store = renderOpen('claims');
+
+  mocks.pathname = '/space/space-1/entity-1';
+  store.rerender();
+
+  expect(store.get(debatesHubAtom)).toBeNull();
+});
+
+// A link that explicitly asks for the hub still wins, on either layout.
+it('stays open on mobile when the destination itself asks for the hub', () => {
+  mocks.isMobile = true;
+  mocks.searchParams = new URLSearchParams(`modal=${DEBATES_MODAL}`);
+  const store = renderOpen('claims');
+
+  mocks.pathname = '/space/space-1/entity-1';
+  store.rerender();
+
+  expect(store.get(debatesHubAtom)).toEqual({ tab: 'claims' });
 });
 
 // `?modal=debates` reached by client-side navigation opens the hub from the same commit that

@@ -3,9 +3,11 @@
 import * as React from 'react';
 
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Input } from '~/design-system/input';
+import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
 import { activeDebate } from '../activity-state';
@@ -166,6 +168,7 @@ function PersonRow({
   onRequireSignIn?: () => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
+  const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
 
   return (
     // Three columns rather than a flex run, so the button sits in its own track instead of sharing a
@@ -177,9 +180,24 @@ function PersonRow({
         <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
-        <Text as="p" variant="metadataMedium" className="truncate">
-          {speakerLabel(person)}
-        </Text>
+        {/* The name goes to their personal space, which is the profile page GEO-2611 settled on.
+            A plain anchor, with no click handler at all: the hub survives the navigation on its
+            own now (GEO-2788), so there is nothing to intercept — which is also what keeps
+            cmd-click, middle click and "copy link address" working here (GEO-2701).
+
+            Unlinked when the id is not a space id. Rendering an anchor to `/space/undefined`
+            would look identical until it was clicked. */}
+        {profileHref ? (
+          <Link href={profileHref} className="min-w-0">
+            <Text as="span" variant="metadataMedium" className="block truncate hover:underline">
+              {speakerLabel(person)}
+            </Text>
+          </Link>
+        ) : (
+          <Text as="p" variant="metadataMedium" className="truncate">
+            {speakerLabel(person)}
+          </Text>
+        )}
         {record && <PersonRecordLine record={record} />}
       </div>
       <HubPillButton
