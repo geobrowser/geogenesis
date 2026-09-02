@@ -106,8 +106,6 @@ describe('publish sweep', () => {
     await expect(sweep()).resolves.toMatchObject({ mediaFailed: [], pending: 0 });
   });
 
-  // A debate parked in a space the acceptor will never edit is terminal and costs nothing to
-  // detect, so a row of them must not eat the per-tick budget ahead of a publishable one.
   it('does not spend the attempt budget on debates the acceptor cannot edit', async () => {
     const parked = Array.from({ length: 8 }, (_, i) => `parked-${i}`);
     mocks.candidates = { 'space-1': [...parked, 'publishable'] };
@@ -118,9 +116,6 @@ describe('publish sweep', () => {
     await expect(sweep()).resolves.toMatchObject({ notEditor: 8, published: ['publishable'] });
   });
 
-  // The function must stop *between* publishes, never be killed inside one: a publish cut off
-  // after its proposal lands has no Debate entity for the idempotency check to find, and the next
-  // tick would mint a second set of media and transcript entities for the same debate.
   it('stops starting publishes once the time budget is spent', async () => {
     vi.useFakeTimers();
     mocks.editorSpaceIds = ['space-1', 'space-2'];
@@ -134,8 +129,6 @@ describe('publish sweep', () => {
     expect(mocks.publish).toHaveBeenCalledTimes(1);
   });
 
-  // One refusal for the run, before any debate is touched — not one failed attempt (and one
-  // orphaned share-card pin) per candidate per tick.
   it('refuses the whole run when the media host is misconfigured', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '');

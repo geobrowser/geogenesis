@@ -66,14 +66,10 @@ describe('findMediaUrlValue', () => {
     expect(findMediaUrlValue([value('width', '1080'), value(ContentIds.WEB_URL_PROPERTY, WEB_URL)])).toBe(WEB_URL);
   });
 
-  // The callers gate on the property being image-typed, never on the target entity. `Web URL` is
-  // also the canonical link on articles and sources, so any other http(s) value must be ignored or
-  // an Avatar relation pointed at an article would render its page URL as a broken image.
   it('ignores http(s) values on any other property', () => {
     expect(findMediaUrlValue([value('some-source-property', 'https://example.com/article')])).toBeUndefined();
   });
 
-  // Legacy media blocks keep the URI on an unlabelled value, and pinned media must keep winning.
   it('prefers an ipfs:// value from any property', () => {
     const values = [value(ContentIds.WEB_URL_PROPERTY, WEB_URL), value('unlabelled', 'ipfs://bafylegacy')];
     expect(findMediaUrlValue(values)).toBe('ipfs://bafylegacy');

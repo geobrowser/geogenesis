@@ -75,9 +75,8 @@ export type DebatePublishInput = {
   claimText: string;
   participants: DebatePublishParticipant[];
   /**
-   * Durable https URL for the rendered final video, or null to skip the Video entity. Goes
-   * on-chain, so it must outlive geo-chat's presigned object-store URLs — the geo-chat
-   * `…/media/artifacts/{kind}/content` redirect URL is the intended shape.
+   * Durable https URL for the rendered final video (the geo-chat `…/media/artifacts/{kind}/content`
+   * redirect), or null to skip the Video entity.
    */
   videoUrl: string | null;
   /** Durable https URL for the video's poster still, or null to publish the Video without one. */
@@ -239,9 +238,8 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     const videoName = `${debateName} video`;
     const videoRef = { id: videoId, name: videoName };
     setText(videoId, videoName, NAME_PROPERTY_ID, videoName);
-    // Both carry the same https URL: `Video URL` is what the debates ontology spec names,
-    // `Web URL` is what the relation decoder reads for media entities (instead of `IPFS URL`,
-    // which would require pinning — Web URL keeps the media deletable).
+    // Both carry the same URL: `Video URL` is what the debates ontology spec names, `Web URL` is
+    // what the relation decoder reads for media entities.
     setText(videoId, videoName, VIDEO_URL_PROPERTY_ID, input.videoUrl);
     setText(videoId, videoName, WEB_URL_PROPERTY_ID, input.videoUrl);
     relate({

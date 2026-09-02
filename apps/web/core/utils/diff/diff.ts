@@ -284,9 +284,7 @@ export async function postProcessDiffs(
   for (const entityId of mediaPropertyEntityIds) {
     const entity = entityMap.get(entityId);
     if (!entity) continue;
-    // `blockTypeEntities` covers every block type, text and data blocks included. Only image/video
-    // typed entities carry media: a text block that happens to have a `Web URL` value is not one,
-    // and reading its link as an image URL would render it as a broken picture in the diff.
+    // `blockTypeEntities` includes text and data blocks; only image/video-typed entities carry media.
     let mediaType: 'image' | 'video' | null = null;
     for (const rel of entity.relations) {
       if (rel.typeId !== TYPES_PROPERTY) continue;
@@ -1040,15 +1038,9 @@ function isMediaRelationType(typeId: string): boolean {
 }
 
 /**
- * The media URL on one side of a diff, IPFS URL first and Web URL second.
- *
- * Each side is resolved independently, and that is the whole point. Picking one value entry and
- * reading both its sides breaks the proposal that moves an entity off IPFS: the IPFS value matches
- * first (it has a `before`), its `after` is null, and the diff renders the media as deleted even
- * though the same proposal added a Web URL. Resolving per side shows the real replacement.
- *
- * `IMAGE_URL_PROPERTY` stays preferred so image entities, which also carry width/height values,
- * don't resolve to one of those.
+ * The media URL on one side of a diff: IPFS URL, then Web URL, then any loose `ipfs://` value.
+ * Sides are resolved independently so a proposal that replaces IPFS URL with Web URL shows the
+ * new URL rather than a removal.
  */
 export function resolveMediaUrlSide(
   values: Array<{ propertyId: string; before: string | null; after: string | null }>,
@@ -1065,10 +1057,8 @@ export function resolveMediaUrlSide(
 }
 
 /**
- * The media URL of a fetched Avatar/Cover target, for the relation diff. Any `ipfs://` value counts
- * (legacy), but an http(s) URL only from `Web URL`: the caller gates on the *relation* type, not the
- * target's entity type, so a target that is an ordinary page with a canonical link must not have
- * that link rendered as its avatar.
+ * The media URL of a fetched Avatar/Cover target. Any `ipfs://` value counts; an http(s) URL is
+ * read only from `Web URL`, since the caller checks the relation type, not the target's type.
  */
 export function resolveImageUrlFromEntity(entity: Entity | undefined): string | null {
   if (!entity) return null;

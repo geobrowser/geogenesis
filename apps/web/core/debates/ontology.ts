@@ -71,19 +71,13 @@ export const VIDEO_URL_PROPERTY_ID = SystemIds.VIDEO_URL_PROPERTY; // 33da2ef5�
 export const IMAGE_TYPE_ID = SystemIds.IMAGE_TYPE; // ba4e4146…
 /**
  * The unified IPFS URL property. Despite the name it carries the `ipfs://` URI for Video entities
- * as well as Images. Everything that resolves media reads this property first, so entities
- * published before debate media moved off IPFS keep rendering byte-identically.
+ * as well as Images. Media resolution reads this property first.
  */
 export const IMAGE_URL_PROPERTY_ID = SystemIds.IMAGE_URL_PROPERTY; // 8a743832…
 /**
- * The canonical URL-typed link property ("Web URL"). Debate media entities carry their durable
- * geo-chat content URL here instead of pinning to IPFS (`IMAGE_URL_PROPERTY`, the "IPFS URL"),
- * which is what lets published media be permanently deleted. `RelationDtoLive` falls back to this
- * property for Image/Video-typed entities, so media referenced by it renders identically.
- *
- * It is a general-purpose canonical link, so it must only ever be read as a *fallback* on an
- * entity already known to be media. Never promote a renderable type or scan values blankly on it:
- * an ordinary entity's `Web URL` source link would turn into a broken image.
+ * The canonical link property ("Web URL"). Debate media entities carry their durable geo-chat
+ * content URL here instead of an IPFS pin. It is also a general-purpose link, so it is only read
+ * as a media URL on entities already typed Image/Video, and never promotes a renderable type.
  */
 export const WEB_URL_PROPERTY_ID = ContentIds.WEB_URL_PROPERTY; // 412ff593…
 export const BLOCKS_PROPERTY_ID = SystemIds.BLOCKS; // beaba5cb…

@@ -31,25 +31,14 @@ function geoChatBaseUrl() {
 }
 
 /**
- * The host published media URLs are built from. These URLs go on-chain and are opened by browsers,
- * so this must be a public host, and it can never change for already-published debates.
- *
- * Only `NEXT_PUBLIC_` variables are read, deliberately. `GEO_CHAT_API_BASE_URL` is the server-side
- * host and is allowed to be cluster-internal; the publish sweep is a cron that runs server-side, so
- * reading it here would let a deploy with only the server-side variable set publish perfectly
- * healthy-looking URLs that no browser can reach — permanently, since they are on-chain. A
- * `NEXT_PUBLIC_` value is browser-reachable by definition.
- *
- * `NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL` exists so media can be served from a dedicated hostname that
- * is independent of geo-chat's API host. It is unset today (there is only the one geo-chat host);
- * setting it later, to a CDN or an object-store custom domain, costs a DNS change instead of a
- * migration of every published entity.
+ * The public host published media URLs are built from. Published URLs are written on-chain and
+ * opened by browsers, so only `NEXT_PUBLIC_` variables are read; `GEO_CHAT_API_BASE_URL` may be a
+ * cluster-internal host. `NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL` allows media to move to its own
+ * hostname later without touching published entities.
  */
 function debateMediaBaseUrl() {
   const configured = process.env.NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL || process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL;
-  // The localhost fallback is a development convenience. In production it is never right: a sweep
-  // deployed with only the server-side `GEO_CHAT_API_BASE_URL` would load every debate fine and
-  // then write `http://localhost:8080/...` on-chain for each of them, permanently.
+  // The localhost fallback is for development only.
   if (!configured && process.env.NODE_ENV === 'production') {
     throw new Error(
       'Refusing to publish debate media URLs: no public media host is configured. Set ' +
@@ -58,11 +47,8 @@ function debateMediaBaseUrl() {
     );
   }
   const base = (configured || 'http://localhost:8080').replace(/\/+$/, '');
-  // A relative base is a real configuration, not a hypothetical: `next.config.ts` documents
-  // pointing NEXT_PUBLIC_GEO_CHAT_API_BASE_URL at `/geo-chat-proxy` to dodge CORS in development.
-  // It works for the browser's own API calls and is meaningless on-chain — a published
-  // `/geo-chat-proxy/...` value resolves against whatever origin later renders it, if at all.
-  // Refuse rather than write one, since a published URL cannot be corrected afterwards.
+  // The `/geo-chat-proxy` dev setup in `next.config.ts` makes this a relative path, which cannot
+  // be used as a published URL.
   if (!/^https?:\/\//i.test(base)) {
     throw new Error(
       `Refusing to publish debate media URLs built on ${base}: the media host must be an absolute ` +
@@ -73,35 +59,23 @@ function debateMediaBaseUrl() {
   return base;
 }
 
-/**
- * Fail fast on a media host that can never produce a valid published URL. The sweep calls this
- * once before touching any debate, so a configuration error is one line in one response rather
- * than one failed attempt (and one orphaned share-card pin) per candidate debate per tick.
- */
+/** Throws if the media host cannot produce a valid published URL. The sweep calls this once up front. */
 export function assertDebateMediaHostConfigured(): void {
   debateMediaBaseUrl();
 }
 
 /**
- * The durable URL for a debate media artifact: geo-chat 302-redirects it to a fresh presigned
- * object-store GET on every request, and resolves it by (debate, kind), so it stays live across
- * media reprocessing and 404s once the artifact is deleted. This is what lets published media
- * stay off IPFS while remaining permanently deletable.
+ * The durable URL for a debate media artifact. geo-chat resolves it by (debate, kind) and
+ * 302-redirects to a fresh presigned GET, so it survives reprocessing and 404s once deleted.
  */
 function durableArtifactUrl(debateId: string, kind: DebateMediaArtifactKind): string {
   return `${debateMediaBaseUrl()}/debates/${debateId}/media/artifacts/${kind}/content`;
 }
 
 /**
- * Prove a durable URL resolves before it is written on-chain, where it can never be corrected.
- *
- * The URL is built by string concatenation, so nothing else on this path checks that geo-chat
- * actually serves it — the old IPFS pin did that implicitly by downloading the bytes. A dead URL
- * here is a wait, not a permanent failure: the usual cause is geo-chat not yet running a build
- * with the content route, and the next tick after it deploys publishes normally.
- *
- * `redirect: 'manual'` because the healthy answer is the 302 itself; following it would download
- * the artifact from object storage for nothing.
+ * Checks that geo-chat serves the durable URL before it is written on-chain. A non-2xx/3xx answer
+ * is treated as not ready (typically geo-chat has not deployed the content route yet). The 302 is
+ * the expected answer, so redirects are not followed.
  */
 async function assertDurableArtifactUrlResolves(debateId: string, url: string): Promise<void> {
   const response = await fetch(url, { method: 'HEAD', redirect: 'manual', cache: 'no-store' });
@@ -183,10 +157,8 @@ export async function listSweepCandidateDebateIds(spaceId: string): Promise<stri
 }
 
 /**
- * The space a debate publishes into: the one its claim lives in. One small read, so the acceptor
- * can check its editor rights there *before* {@link loadDebatePublishSource} renders and pins the
- * share card — a debate in a space the acceptor will never edit is terminal, and should not leave
- * a fresh orphan on IPFS every tick.
+ * The space a debate publishes into (its claim's space). Lets the acceptor check editor rights
+ * before {@link loadDebatePublishSource} renders and pins the share card.
  */
 export async function loadDebateClaimSpaceId(debateId: string): Promise<string> {
   const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
@@ -237,10 +209,8 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
     );
   }
 
-  // The durable URLs come first, and are checked, before the share card is rendered and pinned.
-  // Everything above this line is a read; the share card is the one write on this path (an IPFS
-  // pin that nothing ever unpins), so anything that can still refuse the publish must run before
-  // it or every refused attempt leaves an orphan behind.
+  // Build and check the durable URLs before the share card is pinned, so a refused publish does not
+  // leave an orphaned IPFS pin.
   const videoUrl = durableArtifactUrl(debateId, 'final_video');
   const keyframeUrl = media.artifacts.some(artifact => artifact.kind === 'preview_image')
     ? durableArtifactUrl(debateId, 'preview_image')
@@ -322,8 +292,7 @@ async function artifactUrl(debateId: string, kind: DebateMediaArtifactKind): Pro
  *
  * Null on any failure, deliberately. This sits in the path that writes the Debate and Video
  * entities on-chain, and a debate that fails to publish is a far worse outcome than one published
- * without a share card. (The video and keyframe URLs need no such rule: they are built, not
- * fetched, and cannot fail here.)
+ * without a share card.
  *
  * **Both speaker stills are required.** The card is generated once at publish time and never
  * revisited, so falling back to the placeholder panels would bake them in permanently. A debate

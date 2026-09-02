@@ -45,8 +45,7 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
 
   // Only auto-publish into spaces the acceptor actually edits. Publishing needs editor rights (a
   // member can propose but not vote+execute), and attempting it elsewhere just reverts on-chain
-  // (CanNotExecute). Checked before loading the publish source, which renders and pins the share
-  // card: a not-editor debate is terminal and would otherwise leave a new orphan on IPFS per tick.
+  // (CanNotExecute). Checked before loading the publish source, which pins the share card to IPFS.
   const spaceId = await loadDebateClaimSpaceId(debateId);
   const space = await Effect.runPromise(getSpace(spaceId));
   if (!space) {

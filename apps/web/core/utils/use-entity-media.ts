@@ -13,15 +13,9 @@ import { useRelation, useValues } from '~/core/sync/use-store';
 import { isDirectMediaUrl } from '~/core/utils/media-url';
 
 /**
- * The media URL among an image/video entity's values.
- *
- * `ipfs://` is accepted from any value, and preferred: legacy media blocks keep the URI on an
- * unlabelled value, and pre-existing pinned media must resolve exactly as before. An http(s) URL
- * is accepted only from `Web URL` — media left in object storage is published there — because
- * `Web URL` is also the general-purpose canonical-link property, and the callers of this helper
- * gate on the *property* being image-typed, never on the target entity. Scanning every value
- * would turn an article's source link into a broken image the moment someone pointed an Avatar
- * relation at it.
+ * The media URL among an image/video entity's values. An `ipfs://` value on any property wins
+ * (legacy media blocks keep it unlabelled); an http(s) URL is read only from `Web URL`, since that
+ * property is also a general canonical link and the callers do not check the target's entity type.
  */
 export function findMediaUrlValue(values: { value: unknown; property: { id: string } }[]): string | undefined {
   const ipfsValue = values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));

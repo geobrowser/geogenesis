@@ -13,18 +13,14 @@ import { publishDebateAsAcceptor } from '~/core/debates/server/publish-debate';
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
-// Bound the work per invocation. Anything left over is picked up on the next tick, where the
-// idempotency check makes re-scanning already-published debates cheap. The video and keyframe no
-// longer get downloaded and pinned to IPFS, so what remains per publish is the share-card pin and
-// two or three confirmed on-chain user operations. Counts attempts rather than successes: a failed
-// on-chain publish has already spent the time.
+// Bound the work per invocation; anything left over is picked up on the next tick. A publish is
+// the share-card pin plus two or three confirmed on-chain user operations. Counts attempts rather
+// than successes, since a failed publish has already spent the time.
 const MAX_PUBLISH_ATTEMPTS_PER_SWEEP = 8;
 
-// No publish *starts* after this point in the run, whatever the attempt count. What matters is
-// that the function is never killed at `maxDuration` in the middle of one: a publish cut off
-// after its proposal lands but before the vote leaves no Debate entity for the idempotency check
-// to find, so the next tick mints a second set of Video, keyframe, Transcript and Claim entities
-// (all random ids) for the same debate. The remaining headroom is for the publish in flight.
+// No publish starts after this point in the run. A publish interrupted by `maxDuration` after its
+// proposal lands leaves no Debate entity for the idempotency check, so the next tick would create
+// duplicate media and transcript entities. The remaining time is headroom for the publish in flight.
 const PUBLISH_START_DEADLINE_MS = 180_000;
 
 /**
@@ -48,8 +44,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: true, skipped: 'acceptor_not_configured' });
   }
 
-  // A media host that can never yield a valid on-chain URL fails the whole run here, once, rather
-  // than as one failed attempt per candidate debate on every tick.
+  // Fail the run once on a misconfigured media host rather than once per candidate debate.
   try {
     assertDebateMediaHostConfigured();
   } catch (error) {
@@ -93,8 +88,7 @@ export async function GET(request: Request) {
           continue;
         }
         if (result.status === 'not_editor') {
-          // Terminal and cheap (the editor check runs before any source is loaded), so it does not
-          // spend a slot: a handful of debates parked in personal spaces must not stall the queue.
+          // Terminal and cheap (checked before any source is loaded), so it does not spend a slot.
           notEditor += 1;
           continue;
         }

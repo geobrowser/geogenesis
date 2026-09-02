@@ -23,10 +23,7 @@ function debateBody(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/**
- * Routes each geo-chat path the loader touches to a canned response. `contentStatus` is what the
- * durable `/content` route answers to the pre-publish HEAD probe.
- */
+/** Routes each geo-chat path the loader touches to a canned response; `contentStatus` answers the `/content` HEAD probe. */
 function mockGeoChat(media: unknown, debate = debateBody(), claims: unknown = null, contentStatus = 200) {
   vi.stubGlobal(
     'fetch',
@@ -45,7 +42,7 @@ function mockGeoChat(media: unknown, debate = debateBody(), claims: unknown = nu
   );
 }
 
-/** Whether the loader got as far as rendering the share card (the one IPFS pin left on this path). */
+/** Whether the loader got as far as rendering the share card. */
 function shareCardWasBuilt(): boolean {
   return vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/media/artifacts/url'));
 }
@@ -60,14 +57,11 @@ describe('loadDebatePublishSource media gating', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-30T12:00:00.000Z'));
-    // The media URLs go on-chain, so they must be built on the public host even when the
-    // server-side base URL points at a cluster-internal one.
+    // Media URLs must be built on the public host even when the server-side one is internal.
     vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', PUBLIC_GEO_CHAT_HOST);
     vi.stubEnv('GEO_CHAT_API_BASE_URL', 'http://geo-chat.internal:8080');
   });
 
-  // geo-chat's presigned URLs expire after 15 minutes; the durable content route 302-redirects to
-  // a fresh one per request, so it is the only URL shape safe to put on-chain.
   it('publishes the durable content URL for the processed final_video', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
 
@@ -84,8 +78,6 @@ describe('loadDebatePublishSource media gating', () => {
     );
   });
 
-  // The media host is on-chain forever, so it is configured separately from the API host — that is
-  // what lets media move behind a CDN or object-store domain later without touching published data.
   it('prefers the dedicated media host over the geo-chat API host', async () => {
     vi.stubEnv('NEXT_PUBLIC_DEBATE_MEDIA_BASE_URL', 'https://media.example/');
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
@@ -94,21 +86,15 @@ describe('loadDebatePublishSource media gating', () => {
     expect(input.videoUrl).toBe(`https://media.example/debates/${DEBATE_ID}/media/artifacts/final_video/content`);
   });
 
-  // `next.config.ts` documents pointing NEXT_PUBLIC_GEO_CHAT_API_BASE_URL at `/geo-chat-proxy` to
-  // dodge CORS in development. That works for the browser's own API calls and is meaningless
-  // on-chain, so publishing must fail rather than bake a relative URL into a published entity.
+  // The `/geo-chat-proxy` dev setup from `next.config.ts`.
   it('refuses to publish when the media host is not an absolute URL', async () => {
     vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '/geo-chat-proxy');
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
 
     await expect(loadDebatePublishSource(DEBATE_ID)).rejects.toThrow(/absolute http\(s\) URL/);
-    // Refused before the share card is pinned, or every refused tick leaves an orphan on IPFS.
     expect(shareCardWasBuilt()).toBe(false);
   });
 
-  // The localhost fallback exists for development only. A production deploy carrying just the
-  // server-side GEO_CHAT_API_BASE_URL reads every debate fine and would otherwise write
-  // `http://localhost:8080/...` on-chain for each of them.
   it('refuses to publish in production when no public media host is configured', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_GEO_CHAT_API_BASE_URL', '');
@@ -126,8 +112,6 @@ describe('loadDebatePublishSource media gating', () => {
     expect(input.videoUrl).toBe(`http://localhost:8080/debates/${DEBATE_ID}/media/artifacts/final_video/content`);
   });
 
-  // The URL is string-built, so this probe is the only thing standing between "geo-chat has not
-  // deployed the content route yet" and a permanently dead URL on-chain. A wait, not a failure.
   it('waits when the durable content URL does not resolve yet', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), null, 404);
 
@@ -135,7 +119,6 @@ describe('loadDebatePublishSource media gating', () => {
     expect(shareCardWasBuilt()).toBe(false);
   });
 
-  // The healthy answer from the content route is the redirect itself, not what it points at.
   it('accepts a redirect from the durable content URL as resolving', async () => {
     mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), null, 302);
 

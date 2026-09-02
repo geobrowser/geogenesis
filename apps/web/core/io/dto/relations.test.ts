@@ -53,7 +53,6 @@ describe('RelationDtoLive media URL resolution', () => {
     expect(relation.toEntity.value).toBe(WEB_URL);
   });
 
-  // Pre-existing IPFS-pinned entities must keep resolving exactly as before the Web URL fallback.
   it('prefers the IPFS URL when both properties are present', () => {
     const relation = RelationDtoLive(
       remoteRelation({
@@ -64,7 +63,6 @@ describe('RelationDtoLive media URL resolution', () => {
     expect(relation.toEntity.value).toBe(IPFS_URL);
   });
 
-  // A blank IPFS URL value is "no IPFS URL", not a URL that beats the fallback.
   it('falls through to the Web URL when the IPFS URL value is blank', () => {
     const relation = RelationDtoLive(
       remoteRelation({
@@ -76,15 +74,13 @@ describe('RelationDtoLive media URL resolution', () => {
     expect(relation.toEntity.value).toBe(WEB_URL);
   });
 
-  // `Web URL` is the generic canonical-link property (sources, articles, …): its presence on an
-  // untyped target must not turn an ordinary relation into a broken image render.
+  // `Web URL` is also a general canonical-link property.
   it('does not promote an untyped target to IMAGE on a Web URL value', () => {
     const relation = RelationDtoLive(remoteRelation({ valuesList: [value(WEB_URL_PROPERTY_HEX, WEB_URL)] }));
     expect(relation.renderableType).toBe('RELATION');
     expect(relation.toEntity.value).toBe('cccccccccccccccccccccccccccccccc');
   });
 
-  // The legacy behavior: an IPFS URL alone promotes an untyped target to IMAGE.
   it('still promotes an untyped target to IMAGE on an IPFS URL value', () => {
     const relation = RelationDtoLive(remoteRelation({ valuesList: [value(IPFS_URL_PROPERTY_HEX, IPFS_URL)] }));
     expect(relation.renderableType).toBe('IMAGE');

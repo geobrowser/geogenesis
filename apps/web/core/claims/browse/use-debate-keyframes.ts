@@ -60,10 +60,8 @@ export function useDebateKeyframes(debates: Entity[]): Map<string, string> {
   const urlByKeyframeId = React.useMemo(() => {
     const map = new Map<string, string>();
     for (const keyframe of keyframes) {
-      // `IPFS URL` first: it is what the media decoders read and what pinned stills carry, so
-      // already-published keyframes resolve exactly as before. Debate stills that stayed in object
-      // storage instead of being pinned carry a durable geo-chat URL on `Web URL` — read only as a
-      // fallback, and only here, where the entity is already known to be a keyframe image.
+      // `IPFS URL` first for pinned stills; `Web URL` carries the geo-chat URL for stills left in
+      // object storage.
       const url = valueForProperty(keyframe, IMAGE_URL_PROPERTY_ID) ?? valueForProperty(keyframe, WEB_URL_PROPERTY_ID);
       if (url) map.set(keyframe.id, url);
     }

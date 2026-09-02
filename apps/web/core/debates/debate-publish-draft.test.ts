@@ -145,8 +145,7 @@ describe('buildDebatePublishDraft', () => {
     expect(draft.relations.some(r => r.toEntity.id === VIDEO_TYPE_ID)).toBe(false);
   });
 
-  // A Video that sets nothing but `Video URL` renders as an empty relation: the relation decoder
-  // reads media URLs from `Web URL` (or the legacy `IPFS URL`), never from `Video URL`.
+  // The relation decoder reads media URLs from `Web URL` (or `IPFS URL`), not `Video URL`.
   it('writes the video URL to both the Web URL property and Video URL, and never to IPFS URL', () => {
     const input = baseInput();
     const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
@@ -154,7 +153,6 @@ describe('buildDebatePublishDraft', () => {
     const videoValues = draft.values.filter(v => v.entity.id === videoId);
     expect(videoValues.find(v => v.property.id === WEB_URL_PROPERTY_ID)?.value).toBe(input.videoUrl);
     expect(videoValues.find(v => v.property.id === VIDEO_URL_PROPERTY_ID)?.value).toBe(input.videoUrl);
-    // Publishing to IPFS URL would imply pinning; the media must stay deletable in object storage.
     expect(draft.values.some(v => v.property.id === SystemIds.IMAGE_URL_PROPERTY)).toBe(false);
   });
 

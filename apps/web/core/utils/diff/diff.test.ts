@@ -17,9 +17,7 @@ const value = (propertyId: string, before: string | null, after: string | null) 
 });
 
 describe('resolveMediaUrlSide', () => {
-  // The reason each side is resolved on its own. A proposal that moves media off IPFS carries the
-  // removal and the addition together; reading both sides off whichever value matched first would
-  // take `after: null` from the IPFS entry and render the media as deleted.
+  // A proposal moving media off IPFS removes IPFS URL and adds Web URL in the same diff.
   it('shows the replacement when a proposal swaps IPFS URL for Web URL', () => {
     const values = [
       value(IPFS_URL_PROPERTY, 'ipfs://bafyold', null),
@@ -50,7 +48,7 @@ describe('resolveMediaUrlSide', () => {
     expect(resolveMediaUrlSide(values, 'after')).toBe('https://chat.example/after');
   });
 
-  // Image entities also carry width/height, which must never be mistaken for the media URL.
+  // Image entities also carry width/height values.
   it('ignores unrelated properties and reports no URL when none is present', () => {
     const values = [value('width', '1080', '1080'), value('height', '1640', '1640')];
 
@@ -75,8 +73,6 @@ describe('resolveImageUrlFromEntity', () => {
     expect(resolveImageUrlFromEntity(entity({ propertyId: WEB_URL_PROPERTY, value: WEB_URL }))).toBe(WEB_URL);
   });
 
-  // The relation diff gates on the relation type (Avatar/Cover), not on the target's entity type,
-  // so a target that is an ordinary page with a canonical link must not have it shown as an avatar.
   it('ignores http(s) values on any other property', () => {
     const page = entity({ propertyId: 'some-source-property', value: 'https://example.com/article' });
     expect(resolveImageUrlFromEntity(page)).toBeNull();
