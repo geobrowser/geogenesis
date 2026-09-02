@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { isRenderableImageSrc } from './image-src';
+import { isRenderableImageSrc } from './utils';
 
 describe('isRenderableImageSrc', () => {
   it('accepts the forms an image value legitimately takes', () => {

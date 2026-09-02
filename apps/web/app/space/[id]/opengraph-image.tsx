@@ -1,5 +1,5 @@
+import { ogShareImageSrc } from '~/core/og-share-image';
 import { OG_IMAGE_CONTENT_TYPE, OG_IMAGE_SIZE, generateOgImage } from '~/core/opengraph';
-import { Entities } from '~/core/utils/entity';
 
 import { cachedFetchSpace } from './cached-fetch-space';
 
@@ -14,6 +14,5 @@ export default async function Image({ params }: Props) {
   const { id } = await params;
   const space = await cachedFetchSpace(id);
   const entity = space?.entity;
-  const imageUrl = Entities.shareImage(entity?.relations);
-  return generateOgImage(imageUrl ?? undefined);
+  return generateOgImage(ogShareImageSrc(entity?.relations));
 }

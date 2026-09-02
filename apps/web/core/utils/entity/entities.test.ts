@@ -14,7 +14,6 @@ import {
   name,
   nameValue,
   ogImage,
-  shareImage,
   spaces,
 } from './entities';
 
@@ -158,7 +157,7 @@ const OG = imageRelation(OG_IMAGE_PROPERTY, 'ipfs://og');
 const COVER = imageRelation(SystemIds.COVER_PROPERTY, 'ipfs://cover');
 const AVATAR = imageRelation(ContentIds.AVATAR_PROPERTY, 'ipfs://avatar');
 
-describe('Entity share-image helpers', () => {
+describe('Entity ogImage helper', () => {
   it('reads the OG Image relation the same way cover and avatar are read', () => {
     expect(ogImage([OG])).toBe('ipfs://og');
     expect(cover([COVER])).toBe('ipfs://cover');
@@ -171,37 +170,17 @@ describe('Entity share-image helpers', () => {
     expect(ogImage(undefined)).toBeNull();
   });
 
-  it('puts OG Image in front of a cover and an avatar', () => {
-    // Order in the relation list must not matter — the chain decides, not the graph.
-    expect(shareImage([COVER, AVATAR, OG])).toBe('ipfs://og');
-    expect(shareImage([OG, COVER, AVATAR])).toBe('ipfs://og');
-  });
-
-  it('leaves the existing order untouched below the new first position', () => {
-    // The point of the ticket is that this is purely additive: an entity that has never heard of
-    // the property shares exactly what it shared before.
-    expect(shareImage([COVER, AVATAR])).toBe('ipfs://cover');
-    expect(shareImage([AVATAR])).toBe('ipfs://avatar');
-    expect(shareImage([])).toBeNull();
-    expect(shareImage(undefined)).toBeNull();
-  });
-
   it('reads the share card a published debate writes', () => {
-    // Not a coincidence worth leaving undocumented: publishing a debate already mints a share card
-    // and relates it through this same property (GEO-2755), so putting OG Image at the front of the
-    // chain means a published debate now serves that generated card instead of the default one.
-    // `debate-publish-draft` builds exactly this shape — an Image entity carrying the URL, related
-    // from the debate — so the two features meet here, and this asserts they still use one property.
+    // Publishing a debate mints a share card and relates it through this same property (GEO-2755),
+    // so the two features meet here. This asserts they still name one property.
     expect(OG_IMAGE_PROPERTY_ID).toBe(OG_IMAGE_PROPERTY);
 
-    const publishedDebateCard = imageRelation(OG_IMAGE_PROPERTY_ID, 'ipfs://QmDebateShareCard');
-
-    expect(shareImage([publishedDebateCard])).toBe('ipfs://QmDebateShareCard');
+    expect(ogImage([imageRelation(OG_IMAGE_PROPERTY_ID, 'ipfs://QmDebateShareCard')])).toBe('ipfs://QmDebateShareCard');
   });
 
-  it('falls through an OG Image pointed at something that is not an image', () => {
+  it('reports nothing for an OG Image pointed at something that is not an image', () => {
     // `RelationDtoLive` puts the target's entity id in `value` when the target is not an Image, so
-    // without the renderable-type check the card would be handed a bare id as though it were a URL.
+    // without the renderable-type check this would report a bare id as though it were a URL.
     const notAnImage: Relation = {
       ...OG,
       renderableType: 'RELATION',
@@ -209,37 +188,12 @@ describe('Entity share-image helpers', () => {
     };
 
     expect(ogImage([notAnImage])).toBeNull();
-    expect(shareImage([notAnImage, COVER])).toBe('ipfs://cover');
   });
 
-  it('falls through an OG Image whose URL is not a URL', () => {
-    // Copilot caught this on PR #2333. The value is free text an author types, and `getImagePath`
-    // passes anything that is not `ipfs://` straight through to the `<img>`, so "non-empty" is not
-    // the same as "usable" — and at the front of the chain a typo would shadow a cover that works.
-    for (const junk of ['hello', 'not a url', 'www.example.com/x.png', '   ']) {
-      const bad: Relation = { ...OG, toEntity: { ...OG.toEntity, value: junk } };
-
-      expect(ogImage([bad])).toBeNull();
-      expect(shareImage([bad, COVER])).toBe('ipfs://cover');
-    }
-  });
-
-  it('accepts the URL shapes an image value legitimately takes', () => {
-    // ipfs:// parses as absolute and is resolved to a gateway later; http(s) and root-relative are
-    // handed to the card as-is. None of these may be rejected by the guard above.
-    for (const good of ['ipfs://QmAbc', 'https://cdn.example.com/a.png', '/static/a.png']) {
-      const ok: Relation = { ...OG, toEntity: { ...OG.toEntity, value: good } };
-
-      expect(ogImage([ok])).toBe(good);
-    }
-  });
-
-  it('falls through an OG Image relation that carries no URL', () => {
-    // A relation pointing at an Image entity with an empty value is not a share image, and must not
-    // shadow the cover underneath it — otherwise setting the property badly loses the old card.
-    const emptyOg: Relation = { ...OG, toEntity: { ...OG.toEntity, value: '' } };
-
-    expect(ogImage([emptyOg])).toBeNull();
-    expect(shareImage([emptyOg, COVER])).toBe('ipfs://cover');
+  it('reports nothing for an OG Image relation that carries no URL', () => {
+    // `RelationDtoLive` writes `''` when the target resolves as an Image but has no IPFS URL yet,
+    // which is what an upload mid-flight looks like.
+    expect(ogImage([{ ...OG, toEntity: { ...OG.toEntity, value: '' } }])).toBeNull();
+    expect(ogImage([{ ...OG, toEntity: { ...OG.toEntity, value: '   ' } }])).toBeNull();
   });
 });

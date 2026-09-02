@@ -3,7 +3,6 @@ import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY } from '~/core/constants';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
-import { isRenderableImageSrc } from '~/core/utils/image-src';
 import { getSpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 /**
@@ -73,13 +72,11 @@ export function cover(relations?: Relation[]): string | null {
 }
 
 /**
- * The image to put on a share card, in the order an entity would want it chosen.
+ * The image an entity nominates for a share card, ahead of its cover and its avatar.
  *
- * OG Image first, because it is the only one of the three actually chosen for this job — a cover is
- * framed to sit behind a page and an avatar to read at 20px, and a 600x315 card in someone else's
- * feed is neither. Cover and then avatar behind it, unchanged, so an entity that has never heard of
- * the new property shares exactly as it did before; `generateOgImage` still supplies the default
- * card when all three are absent.
+ * Only reads the property — whether the value can actually be fetched by the card renderer is a
+ * different question with a different answer on the server, and lives in `core/og-share-image.ts`
+ * with the chain that asks it.
  *
  * Read like `cover` because it is shaped like `cover`: relation-typed, pointing at an Image entity
  * that carries the URL.
@@ -90,40 +87,13 @@ export function ogImage(relations?: Relation[]): string | null {
   if (!ogImageRelation) return null;
   // `RelationDtoLive` fills `toEntity.value` from the *target*: the IPFS URL when the target is an
   // Image, and the target's own entity id when it is not. Checking `renderableType` is what tells
-  // those two apart — without it, an OG Image pointed at some ordinary entity would hand a bare id
-  // to the card as though it were a URL.
+  // those two apart — without it, an OG Image pointed at some ordinary entity would report a bare
+  // id as though it were a URL.
   if (ogImageRelation.renderableType !== 'IMAGE') return null;
-  return usableImageUrl(ogImageRelation.toEntity.value);
-}
-
-/**
- * Guards the ways a relation can name no usable image.
- *
- * Empty is not hypothetical: `RelationDtoLive` writes `''` whenever the target resolves as an Image
- * but carries no `IMAGE_URL_PROPERTY` yet, which is what an upload mid-flight looks like. And `??`
- * falls through on null but *not* on `''`, so an OG Image in that state at the front of the chain
- * would shadow a cover that works and put a broken card on every share of the entity — setting the
- * property badly would be worse than never having set it.
- *
- * Nor is "non-empty" the same as "usable". The URL is free text an author types, so it can be
- * `hello`, and `getImagePath` passes anything that is not `ipfs://` straight through to the `<img>`.
- * `isRenderableImageSrc` is the check the codebase already keeps for exactly this — the comment on
- * it names the same hazard — so the chain reuses it rather than growing its own idea of a URL.
- * Anything it rejects falls through to the next candidate, which is the whole point of a chain.
- */
-function usableImageUrl(value: string | null | undefined): string | null {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  return isRenderableImageSrc(trimmed) ? trimmed : null;
-}
-
-/**
- * The whole share-image chain in one call, so the routes that need it cannot disagree about the
- * order. Returns null when the entity offers nothing and the caller should fall back to the default
- * card.
- */
-export function shareImage(relations?: Relation[]): string | null {
-  return ogImage(relations) ?? usableImageUrl(cover(relations)) ?? usableImageUrl(avatar(relations));
+  const trimmed = ogImageRelation.toEntity.value?.trim();
+  // `RelationDtoLive` writes `''` when the target resolves as an Image but carries no
+  // `IMAGE_URL_PROPERTY` yet, which is what an upload mid-flight looks like.
+  return trimmed ? trimmed : null;
 }
 
 export function spaces(values?: Value[], relations?: Relation[]): string[] {

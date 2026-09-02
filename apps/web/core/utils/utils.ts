@@ -560,9 +560,31 @@ export const getImagePathAtLevel = (value: string, level: number) => {
 // Primary gateway (Filebase). For single-shot callers with no runtime fallback.
 export const getImagePath = (value: string) => getImagePathAtLevel(value, 0);
 
-// Re-exported from its own leaf module so the share-image chain can use it without closing an
-// import cycle through this file's `Entities` import. Existing callers are unaffected.
-export { isRenderableImageSrc } from './image-src';
+// Image values are free-text entity properties, so an author can type anything.
+// next/image throws on a src that is neither root-relative nor an absolute URL,
+// which kills the whole page that rendered it.
+//
+// The scheme is checked too, not just the syntax: `mailto:`, `javascript:`, `file:`
+// and `blob:` all parse as URLs and none of them is a picture. Server-side card
+// rendering needs a stricter rule again — see `toSatoriImageSrc`, which cannot
+// accept the relative forms a browser resolves happily.
+const RENDERABLE_IMAGE_PROTOCOLS = new Set(['http:', 'https:', 'ipfs:']);
+
+export const isRenderableImageSrc = (src: string) => {
+  if (src.startsWith('/')) return true;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(src);
+  } catch {
+    return false;
+  }
+
+  // Only an image data URL is a picture; `data:text/html,...` parses just as happily.
+  if (parsed.protocol === 'data:') return src.startsWith('data:image/');
+
+  return RENDERABLE_IMAGE_PROTOCOLS.has(parsed.protocol);
+};
 
 export const getVideoHash = getImageHash;
 export const getVideoPathAtLevel = getImagePathAtLevel;
