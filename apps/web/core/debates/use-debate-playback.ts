@@ -11,6 +11,7 @@ import {
   clampSeconds,
   normalizeTurnDurationsMs,
   participantForSlot,
+  playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
   timelineSecondsFor,
   turnStateForTime,
@@ -212,19 +213,22 @@ export function useDebatePlayback(debate: Debate, enabled: boolean) {
     // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
     // policy) leaves the video paused rather than throwing — check both the
     // settled results and the paused state, and surface the error inline.
-    const results = await Promise.allSettled([primaryVideo.play(), secondaryVideo.play()]);
-    const ok = results.every(result => result.status === 'fulfilled') && !primaryVideo.paused && !secondaryVideo.paused;
-    if (ok) {
-      setPlaying(true);
-      setUserPaused(false);
-    } else {
+    const outcome = await playBothWithMutedFallback(primaryVideo, secondaryVideo);
+    if (outcome === 'blocked') {
       primaryVideo.pause();
       secondaryVideo.pause();
       setPlaying(false);
       setTurnState(null);
       setError('Could not play both videos. Try Play again.');
+      return;
     }
-  }, [offsets.slot1, seekVideosTo, timelineSeconds]);
+    // The browser only allowed it muted (GEO-2783) — record that so the unmute control is honest
+    // and later autoplays stop being blocked the same way. The viewer's next tap is a gesture and
+    // will be allowed.
+    if (outcome === 'playing-muted') setMutedByUser(true);
+    setPlaying(true);
+    setUserPaused(false);
+  }, [offsets.slot1, seekVideosTo, setMutedByUser, timelineSeconds]);
 
   const playFromStart = React.useCallback(async () => {
     const primaryVideo = slot1VideoRef.current;
