@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { KEY_FRAME_IMAGE_PROPERTY, OG_IMAGE_PROPERTY } from '~/core/constants';
 
@@ -78,10 +78,15 @@ export const VIDEO_URL_PROPERTY_ID = SystemIds.VIDEO_URL_PROPERTY; // 33da2ef5�
 export const IMAGE_TYPE_ID = SystemIds.IMAGE_TYPE; // ba4e4146…
 /**
  * The unified IPFS URL property. Despite the name it carries the `ipfs://` URI for Video entities
- * as well as Images. `RelationDtoLive` and the media hooks read a media entity's URL from here and
- * nowhere else, so a Video that only sets `Video URL` renders as an empty relation.
+ * as well as Images. Media resolution reads this property first.
  */
 export const IMAGE_URL_PROPERTY_ID = SystemIds.IMAGE_URL_PROPERTY; // 8a743832…
+/**
+ * The canonical link property ("Web URL"). Debate media entities carry their durable geo-chat
+ * content URL here instead of an IPFS pin. It is also a general-purpose link, so it is only read
+ * as a media URL on entities already typed Image/Video, and never promotes a renderable type.
+ */
+export const WEB_URL_PROPERTY_ID = ContentIds.WEB_URL_PROPERTY; // 412ff593…
 export const BLOCKS_PROPERTY_ID = SystemIds.BLOCKS; // beaba5cb…
 export const TEXT_BLOCK_TYPE_ID = SystemIds.TEXT_BLOCK; // 76474f2f…
 export const MARKDOWN_CONTENT_PROPERTY_ID = SystemIds.MARKDOWN_CONTENT; // e3e363d1… (matches spec)
