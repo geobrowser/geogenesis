@@ -12,7 +12,7 @@ import { graphql } from '~/core/io/graphql-client';
 import { decodeActiveResponseDirection, responseKindToVoteKind } from '~/core/responses/entity-response';
 
 import type { DebateRematchParticipant, DebateResponseKind } from './api';
-import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
+import { claimResponseIndexedEvent, pendingClaimResponse } from './claim-response-indexed-notifier';
 import { useDebateAttention } from './debate-attention';
 
 /**
@@ -188,7 +188,104 @@ function sameId(left: string, right: string) {
   return left.replace(/-/g, '').toLowerCase() === right.replace(/-/g, '').toLowerCase();
 }
 
-export function useParticipantPositions(participants: DebateRematchParticipant[]) {
+/**
+ * The viewer's own in-flight responses, as positions (GEO-2784).
+ *
+ * Reads the `entity-response-indexing` entries this browser has in flight and turns each one into
+ * the position it is about to become. Without this the viewer waits on their own write before the
+ * UI reacts — p50 9.9s, p95 48.6s (`web.write.entity_response`) — which is what makes the
+ * "request debate" button feel broken after clicking a position.
+ *
+ * Subscribed rather than read once: the pending set changes as writes start and settle, and none
+ * of those transitions re-render this hook on their own.
+ */
+function useOwnPendingPositions(localProfileSpaceId: string | null | undefined): ParticipantPosition[] {
+  const queryClient = useQueryClient();
+  const [pending, setPending] = React.useState<ParticipantPosition[]>([]);
+
+  React.useEffect(() => {
+    if (!localProfileSpaceId) {
+      setPending(current => (current.length === 0 ? current : []));
+      return;
+    }
+    const cache = queryClient.getQueryCache();
+
+    const read = () => {
+      const rows: ParticipantPosition[] = [];
+      for (const query of cache.getAll()) {
+        const parsed = pendingClaimResponse(query.queryKey, query.state.data);
+        if (!parsed) continue;
+        rows.push({
+          profileSpaceId: localProfileSpaceId,
+          claimId: parsed.entityId,
+          spaceId: parsed.spaceId,
+          responseKind: parsed.responseKind,
+          // `null` means the viewer is *removing* the position. Carried through as a tombstone and
+          // resolved in the merge below, because dropping it here would let the stale fetched row
+          // keep the position visible until the next refetch.
+          position: parsed.position as boolean,
+        });
+      }
+      // Referential stability matters: this feeds a `useMemo` that regroups every position.
+      setPending(current => (samePositions(current, rows) ? current : rows));
+    };
+
+    read();
+    return cache.subscribe(event => {
+      if (event.type !== 'updated') return;
+      if (event.query.queryKey[0] !== 'entity-response-indexing') return;
+      read();
+    });
+  }, [localProfileSpaceId, queryClient]);
+
+  return pending;
+}
+
+function samePositions(a: ParticipantPosition[], b: ParticipantPosition[]) {
+  if (a.length !== b.length) return false;
+  return a.every((row, i) => {
+    const other = b[i];
+    return (
+      row.claimId === other.claimId &&
+      row.spaceId === other.spaceId &&
+      row.responseKind === other.responseKind &&
+      row.position === other.position &&
+      row.profileSpaceId === other.profileSpaceId
+    );
+  });
+}
+
+/** Key a position by who took it, on what, in which kind — the identity the graph enforces. */
+function positionKey(row: Pick<ParticipantPosition, 'profileSpaceId' | 'claimId' | 'responseKind'>) {
+  return `${row.profileSpaceId.replace(/-/g, '').toLowerCase()}|${row.claimId.replace(/-/g, '').toLowerCase()}|${row.responseKind}`;
+}
+
+/**
+ * Fetched rows, with the viewer's in-flight writes applied on top.
+ *
+ * A pending write is by definition newer than anything the query returned, so it wins — and a
+ * pending *removal* (`position === null`) deletes the row rather than adding one. Once the write
+ * lands and the refetch arrives the two agree, so the overlay stops being visible without needing
+ * to be torn down.
+ */
+export function applyPendingPositions(
+  fetched: ParticipantPosition[],
+  pending: ParticipantPosition[]
+): ParticipantPosition[] {
+  if (pending.length === 0) return fetched;
+  const merged = new Map(fetched.map(row => [positionKey(row), row]));
+  for (const row of pending) {
+    if (row.position === null) merged.delete(positionKey(row));
+    else merged.set(positionKey(row), row);
+  }
+  return [...merged.values()];
+}
+
+export function useParticipantPositions(
+  participants: DebateRematchParticipant[],
+  /** The viewer's own personal space id, so their in-flight writes can be shown immediately. */
+  localProfileSpaceId?: string | null
+) {
   const queryClient = useQueryClient();
   const foreground = useDebateAttention();
   const profileSpaceIds = React.useMemo(
@@ -240,7 +337,11 @@ export function useParticipantPositions(participants: DebateRematchParticipant[]
     placeholderData: keepPreviousData,
   });
 
-  const byClaim = React.useMemo(() => groupParticipantPositions(query.data ?? []), [query.data]);
+  const ownPending = useOwnPendingPositions(localProfileSpaceId);
+  const byClaim = React.useMemo(
+    () => groupParticipantPositions(applyPendingPositions(query.data ?? [], ownPending)),
+    [query.data, ownPending]
+  );
 
   return { byClaim, isLoading: query.isLoading, error: query.error };
 }

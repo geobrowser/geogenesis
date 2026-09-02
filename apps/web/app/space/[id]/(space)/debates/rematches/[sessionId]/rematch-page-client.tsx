@@ -173,7 +173,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Both participants' sides on every claim, straight from the knowledge graph. A position is an
   // on-chain claim response; geo-chat only mirrors them, a hundred claim ids per request. This is
   // one query for both people, and it is what the opponent's tab is a list of.
-  const positions = useParticipantPositions(participants);
+  // The viewer's own personal space id, so `useParticipantPositions` can show their in-flight
+  // writes without waiting on the indexer (GEO-2784). Derived before the hook because the overlay
+  // has to be attributed to somebody — an unattributed optimistic row would be filtered straight
+  // back out by `participantSidesOn`, which matches on the current participants' space ids.
+  const localParticipant =
+    currentUserId === null ? null : (participants.find(participant => participant.user_id === currentUserId) ?? null);
+  const positions = useParticipantPositions(participants, localParticipant?.profile_space_id ?? null);
 
   const remoteParticipant =
     currentUserId === null ? null : (participants.find(participant => participant.user_id !== currentUserId) ?? null);
