@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import {
   CURATOR_ONBOARDING_PROGRESS_COLOR,
+  CURATOR_ONBOARDING_TITLE,
   VISIBLE_CURATOR_ONBOARDING_STEPS,
 } from '~/core/explore/curator-onboarding-steps';
 import { useChecklistExpansion } from '~/core/hooks/use-checklist-expansion';
@@ -46,11 +47,13 @@ export function CuratorOnboardingSection() {
   return (
     <section className="flex flex-col rounded-lg border border-grey-02 bg-white p-5 shadow-panel">
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-[24px] leading-[28px] font-semibold tracking-[-0.02em] text-text">Debates Onboarding</h2>
+        <h2 className="text-[24px] leading-[28px] font-semibold tracking-[-0.02em] text-text">
+          {CURATOR_ONBOARDING_TITLE}
+        </h2>
         <button
           type="button"
           aria-expanded={expanded}
-          aria-label={expanded ? 'Collapse curator onboarding' : 'Expand curator onboarding'}
+          aria-label={`${expanded ? 'Collapse' : 'Expand'} ${CURATOR_ONBOARDING_TITLE}`}
           onClick={onToggle}
           className="mt-1.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-grey-04 transition-colors hover:text-text"
         >

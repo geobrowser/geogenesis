@@ -85,4 +85,14 @@ export const CURATOR_ONBOARDING_STEPS: CuratorOnboardingStep[] = [
  */
 export const VISIBLE_CURATOR_ONBOARDING_STEPS = CURATOR_ONBOARDING_STEPS.filter(step => !step.hidden);
 
+/**
+ * What the card is called, in one place.
+ *
+ * The heading and the collapse control both read it. They were separate strings until GEO-2800
+ * retitled the card and moved only the visible one, which left the toggle announcing "Expand
+ * curator onboarding" over a card headed "Debates Onboarding" — a mismatch nothing on screen could
+ * show, since only assistive technology ever reads that name aloud.
+ */
+export const CURATOR_ONBOARDING_TITLE = 'Debates Onboarding';
+
 export const CURATOR_ONBOARDING_PROGRESS_COLOR = '#6833FF';
