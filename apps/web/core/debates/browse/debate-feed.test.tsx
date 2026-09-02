@@ -271,8 +271,7 @@ describe('DebatesBrowseFeed video sharing', () => {
     expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
     const feedItem = heading.closest('section');
     assert(feedItem, 'Expected the debate heading to be rendered inside a feed item');
-    // `pt-5` is the design's 20px gap under the navbar; `md:py-3` overrides it on mobile.
-    expect(feedItem).toHaveClass('items-start', 'pt-5', 'md:h-auto', 'md:min-h-full', 'md:py-3');
+    expect(feedItem).toHaveClass('items-start', 'pt-5', 'md:h-auto', 'md:min-h-svh', 'md:py-3');
     // One class per assertion: `not.toHaveClass(a, b)` only fails when *every* class is present,
     // so grouping them lets a regression on any single class slip through.
     expect(feedItem).not.toHaveClass('items-center');
@@ -1156,28 +1155,56 @@ describe('DebatesBrowseFeed ordering', () => {
   });
 });
 
-describe('DebatesBrowseFeed mobile viewport insets', () => {
+/**
+ * GEO-2812. On Chrome for iOS the feed rendered about 108px too high, with the meta row and the
+ * first line of the claim behind the URL bar; a refresh fixed it and Safari never showed it.
+ *
+ * Two halves. `position: fixed` on iOS resolves against the layout viewport, which runs underneath
+ * the browser UI — and Chrome puts its bar at the top where Safari puts it at the bottom. And a
+ * nested scroll container means the document never scrolls, so Chrome never collapses that bar and
+ * the page stays in the state where a fixed element is misplaced.
+ *
+ * So on mobile the document scrolls instead: nothing is positioned against the layout viewport, and
+ * the bar collapses the way it does on any ordinary page.
+ */
+describe('DebatesBrowseFeed mobile document scrolling', () => {
   function feedContainers() {
     const { container } = render(<DebatesBrowseFeed spaceId="space-1" />);
     const scroller = container.querySelector('.snap-y');
-    assert(scroller, 'Expected the feed to render a snapping scroll container');
+    assert(scroller, 'Expected the feed to render its desktop scroll container');
     const takeover = scroller.parentElement?.parentElement;
-    assert(takeover, 'Expected the scroll container to sit inside the full-screen takeover');
+    assert(takeover, 'Expected the scroll container to sit inside the takeover');
     return { scroller, takeover };
   }
 
-  it('pads the full-screen takeover by the top safe-area inset', () => {
+  it('does not position the takeover against the layout viewport on mobile', () => {
     const { takeover } = feedContainers();
 
-    expect(takeover).toHaveClass('md:fixed', 'md:inset-0', 'md:pt-[env(safe-area-inset-top)]');
+    // One class per assertion: `not.toHaveClass(a, b)` only fails when *every* class is present,
+    // so grouping them lets a regression on any single class slip through.
+    expect(takeover).not.toHaveClass('md:fixed');
+    expect(takeover).not.toHaveClass('md:inset-0');
+    expect(takeover).not.toHaveClass('md:h-dvh');
+    expect(takeover).toHaveClass('md:h-auto');
   });
 
-  it('sizes the scroll container against its padded parent rather than the viewport again', () => {
+  it('stops being a scroll container on mobile so the document scrolls instead', () => {
     const { scroller } = feedContainers();
 
-    // A second `h-dvh` here would measure the whole viewport inside a parent that has already given
-    // the inset away, overshooting that box by exactly the inset the padding just added back.
-    expect(scroller).toHaveClass('md:h-full');
-    expect(scroller).not.toHaveClass('md:h-dvh');
+    // Desktop keeps the nested scroller; only the `md:` half changes.
+    expect(scroller).toHaveClass('overflow-y-auto', 'snap-y');
+    expect(scroller).toHaveClass('md:overflow-visible', 'md:snap-none', 'md:h-auto');
+  });
+
+  it('sizes each debate to the small viewport while the navbar is hidden', () => {
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+
+    const item = screen.getByRole('heading', { name: 'Debates are useful' }).closest('section');
+    assert(item, 'Expected the debate heading to be rendered inside a feed item');
+    // `svh` is the viewport with the URL bar shown. The mobile navbar is hidden for this feed, so
+    // there is no sticky chrome to clear with scroll-margin.
+    expect(item).toHaveClass('md:min-h-svh');
+    expect(item).not.toHaveClass('md:min-h-full');
+    expect(item).not.toHaveClass('md:scroll-mt-11');
   });
 });

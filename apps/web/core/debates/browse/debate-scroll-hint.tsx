@@ -39,11 +39,12 @@ type Phase = 'pending' | 'bouncing' | 'leaving' | 'done';
  * lookups land.
  *
  * Shown once per browser, persisted alongside the other product hints. The flag is only
- * written once the bounces have actually played: the feed is `snap-mandatory`, so the
- * browser's own snap adjustment fires `scroll` on the container while the videos load.
- * An earlier version dismissed on that event and spent the hint before it ever painted,
- * which is why there's no "viewer scrolled away" shortcut here — no scroll event can be
- * trusted this early in layout, and the hint is brief enough to just let it finish.
+ * written once the bounces have actually played: the feed uses `snap-mandatory` (on the nested
+ * scroller on desktop, on the document on mobile), so the browser's own snap adjustment fires
+ * `scroll` while the videos load. An earlier version dismissed on that event and spent the hint
+ * before it ever painted, which is why there's no "viewer scrolled away" shortcut here — no
+ * scroll event can be trusted this early in layout, and the hint is brief enough to just let it
+ * finish.
  */
 export function useDebateScrollHint(enabled: boolean) {
   const hydrated = useHydrated();
@@ -84,10 +85,9 @@ export function useDebateScrollHint(enabled: boolean) {
  * reserve (`--debate-feed-column-width`), so anything added below it in flow is pushed off
  * the bottom of the screen.
  *
- * Anchored to the debate and not to the feed container: `100dvh` can overshoot the height
- * actually on screen once browser chrome is accounted for, which drops the container's own
- * bottom edge below the fold and takes anything pinned to it along. The debate's bottom is
- * always visible, so measuring from there is the offset that holds.
+ * Anchored to the debate and not to a feed scrollport: on mobile the document scrolls (and on
+ * desktop the nested scroller can still disagree with `100dvh` once browser chrome moves). The
+ * debate's bottom stays on screen, so measuring from there is the offset that holds.
  *
  * Carries no animation of its own; it sits inside the card, so it inherits the lift.
  */

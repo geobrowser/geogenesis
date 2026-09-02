@@ -16,6 +16,7 @@ import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import { useDebateVotes } from '~/core/debates/use-debate-votes';
 import { useComments } from '~/core/hooks/use-comments';
+import { useIsMdLayout } from '~/core/hooks/use-is-mobile-layout';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpace } from '~/core/hooks/use-space';
 import { ID } from '~/core/id';
@@ -39,6 +40,8 @@ import { useDebatesBestOrder } from './use-debates-best-order';
 import { debateFullscreenActiveAtom } from '~/atoms';
 
 const PAGE_SIZE = 5;
+const DEBATE_FEED_MOBILE_ATTR = 'data-debate-feed-mobile';
+
 const DEBATE_COLUMN_STYLE = {
   // Grow or shrink the media with the viewport while reserving the navbar,
   // claim title, media gap, and vertical breathing room.
@@ -149,6 +152,8 @@ export function DebatesBrowseFeed({
   // observe against it as their IntersectionObserver root — a plain ref would
   // leave them with the initial null (i.e. the viewport).
   const [scrollEl, setScrollEl] = React.useState<HTMLDivElement | null>(null);
+  const isMdLayout = useIsMdLayout();
+  const observerRoot = isMdLayout ? null : scrollEl;
   const [visibleCount, setVisibleCount] = React.useState(PAGE_SIZE);
   // An anchored feed starts active on the anchor so the linked debate is the one
   // that autoplays, before any IntersectionObserver has fired.
@@ -230,6 +235,25 @@ export function DebatesBrowseFeed({
     return () => setDebateFullscreenActive(false);
   }, [rendersFeed, setDebateFullscreenActive]);
 
+  // Mobile-only: document scroll — snap on root, hide navbar via data attribute, scroll to top.
+  React.useLayoutEffect(() => {
+    if (!rendersFeed || !isMdLayout) return;
+    const root = document.documentElement;
+    const body = document.body;
+    root.setAttribute(DEBATE_FEED_MOBILE_ATTR, '');
+    body.setAttribute(DEBATE_FEED_MOBILE_ATTR, '');
+    const previousSnapType = root.style.scrollSnapType;
+    root.style.scrollSnapType = 'y mandatory';
+    window.scrollTo(0, 0);
+    const rafId = requestAnimationFrame(() => window.scrollTo(0, 0));
+    return () => {
+      cancelAnimationFrame(rafId);
+      root.style.scrollSnapType = previousSnapType;
+      root.removeAttribute(DEBATE_FEED_MOBILE_ATTR);
+      body.removeAttribute(DEBATE_FEED_MOBILE_ATTR);
+    };
+  }, [rendersFeed, isMdLayout]);
+
   const visibleDebates = anchorPending ? [] : debates.slice(0, visibleCount);
 
   // Gated on what's actually on screen rather than on `debates`: that inherits the anchor
@@ -257,10 +281,9 @@ export function DebatesBrowseFeed({
   const feed = (
     <div
       ref={setScrollEl}
-      // `md:h-full` rather than a second `h-dvh`: the fixed parent is already the viewport, minus
-      // the top safe-area inset it pads by, and measuring the viewport again here would overshoot
-      // that box by exactly the inset — which is the offset this fixes.
-      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-full"
+      // Desktop keeps the nested snap scroller. On mobile (`md:`) the document scrolls instead —
+      // nested overflow + fixed overlay is what Chrome for iOS displaces under the URL bar.
+      className="no-scrollbar [container-type:inline-size] h-[calc(100dvh-2.75rem)] snap-y snap-mandatory overflow-y-auto overscroll-contain scroll-smooth md:h-auto md:snap-none md:overflow-visible md:overscroll-auto"
     >
       {visibleDebates.length === 0 && <FeedMessage>{emptyMessage}</FeedMessage>}
       {visibleDebates.map((debate, index) => (
@@ -272,7 +295,7 @@ export function DebatesBrowseFeed({
           spaceImage={space?.entity.image}
           topics={topicsByClaimId.get(debate.claim.claim_entity_id) ?? []}
           active={activeId === debate.id}
-          root={scrollEl}
+          root={observerRoot}
           // Only the debate the viewer is looking at carries the nudge and lifts with it.
           scrollHint={index === 0 ? scrollHint : null}
           onActivate={() => setActiveId(debate.id)}
@@ -314,7 +337,7 @@ export function DebatesBrowseFeed({
         />
       ))}
       {!anchorPending && visibleCount < debates.length && (
-        <LoadMoreSentinel root={scrollEl} onLoadMore={() => setVisibleCount(count => count + PAGE_SIZE)} />
+        <LoadMoreSentinel root={observerRoot} onLoadMore={() => setVisibleCount(count => count + PAGE_SIZE)} />
       )}
     </div>
   );
@@ -333,8 +356,10 @@ export function DebatesBrowseFeed({
 
   // Keep the feed in the same tree position whether or not a side panel is open, so
   // toggling the claims/join panel doesn't remount the players and restart playback.
+  // Mobile drops the fixed overlay: the document scrolls so Chrome's toolbar offset becomes a
+  // real, correctable scroll position instead of an invisible displacement of the fixed layer.
   return (
-    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:fixed md:inset-0 md:z-[70] md:h-dvh md:bg-white md:pt-[env(safe-area-inset-top)]">
+    <div className="flex h-[calc(100dvh-2.75rem)] items-stretch md:h-auto md:min-h-svh md:items-start md:bg-white">
       <div className="min-w-0 flex-1">{feed}</div>
       {sidePanel}
     </div>
@@ -408,10 +433,10 @@ function DebateFeedItem({
   return (
     <section
       ref={itemRef}
-      // 20px below the navbar, per the design — the media sizing has slack to absorb it, so
-      // the claim header doesn't need to sit flush against the chrome. `md:py-3` still wins on
-      // mobile: Tailwind emits variant utilities after unprefixed ones, so no `md:pt-3` needed.
-      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-full md:px-2 md:py-3"
+      // Desktop: fill the nested scroller. Mobile: one small-viewport tall page each — `svh` is
+      // the viewport with the URL bar shown, and the navbar is hidden for this takeover so there
+      // is no 2.75rem chrome to subtract. `md:py-3` still wins on mobile over `pt-5`.
+      className="flex h-full snap-start items-start justify-center px-4 pt-5 md:h-auto md:min-h-svh md:px-2 md:py-3"
     >
       {/* The whole debate lifts with the nudge — title, media and controls together — so the
           gesture reads as the feed scrolling rather than as one element twitching. Shared
@@ -609,7 +634,9 @@ function LoadMoreSentinel({ root, onLoadMore }: { root: HTMLElement | null; onLo
 
 function FeedMessage({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-full items-center justify-center px-4">
+    // Desktop: `min-h-full` fills the nested scroller. Mobile: the scroller is `md:h-auto`, so
+    // `min-h-full` has no height to resolve against — use the small viewport instead (navbar hidden).
+    <div className="flex min-h-full items-center justify-center px-4 md:min-h-svh">
       <Text color="grey-04">{children}</Text>
     </div>
   );
