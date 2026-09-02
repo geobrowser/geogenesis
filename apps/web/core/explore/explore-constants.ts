@@ -1,4 +1,5 @@
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 export const NEWS_STORY_TYPE_ID = 'e550fe517e904b2c8fffdf13408f5634';
 export const EPISODE_TYPE_ID = '972d201ad78045689e01543f67b26bee';
@@ -17,11 +18,27 @@ export const EXPLORE_ENTITY_TYPES = [
   { id: '484a18c5030a499cb0f2ef588ff16d50', label: 'Project' },
   { id: '150db6defe2344f0805afa57502e2c32', label: 'Ranking block' },
   { id: '0419ca20118b4cdb84dfdb9ed73b50c2', label: 'Community call event' },
-  { id: 'fd51f93520634617be397b672b23364c', label: 'Debate' },
+  { id: DEBATE_TYPE_ID, label: 'Debate' },
   { id: CLAIM_TYPE_ID, label: 'Claim' },
 ] as const;
 
 export const EXPLORE_ENTITY_TYPE_IDS = EXPLORE_ENTITY_TYPES.map(type => type.id);
+
+/**
+ * What the types filter arrives checked with (GEO-2790).
+ *
+ * A narrower opening view, not a narrower feed: every option above stays in the dropdown and a
+ * reader can tick any of them. This is only what is selected before anyone touches it.
+ *
+ * Derived from `EXPLORE_ENTITY_TYPES` rather than written out, so the order always matches the
+ * canonical list — `sanitizeExploreTypeIds` sorts selections into that order, and a default in a
+ * different one would compare unequal to the same set chosen by hand.
+ */
+const DEFAULT_SELECTED_TYPE_IDS: ReadonlySet<string> = new Set([NEWS_STORY_TYPE_ID, DEBATE_TYPE_ID, CLAIM_TYPE_ID]);
+
+export const DEFAULT_EXPLORE_TYPE_IDS = EXPLORE_ENTITY_TYPES.filter(type => DEFAULT_SELECTED_TYPE_IDS.has(type.id)).map(
+  type => type.id
+);
 
 export const EXPLORE_ENTITY_NAME_PROPERTY_ID = 'a126ca530c8e48d5b88882c734c38935';
 export const EXPLORE_ENTITY_DESCRIPTION_PROPERTY_ID = '9b1f76ff9711404c861e59dc3fa7d037';
