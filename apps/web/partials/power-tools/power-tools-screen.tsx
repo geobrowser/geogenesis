@@ -55,6 +55,7 @@ import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-e
 import { TableBlockFilterGroupPill, groupFilters } from '~/partials/blocks/table/table-block-filter-pill';
 import { Editor } from '~/partials/editor/editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageMetadataHeader } from '~/partials/entity-page/entity-page-metadata-header';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
@@ -178,7 +179,10 @@ function PowerToolsEntityPanel({
               <EntityPageCover avatarUrl={null} coverUrl={null} />
               <div className="px-4">
                 <EditableHeading spaceId={spaceId} entityId={entityId} />
-                <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />
+                <div className="flex items-center gap-4 text-text">
+                  <EntityPageMetadataHeader id={entityId} spaceId={spaceId} />
+                  <EntityPageActions entityId={entityId} spaceId={spaceId} />
+                </div>
                 <Spacer height={16} />
                 <Editor spaceId={spaceId} shouldHandleOwnSpacing />
                 <ToggleEntityPage id={entityId} spaceId={spaceId} />

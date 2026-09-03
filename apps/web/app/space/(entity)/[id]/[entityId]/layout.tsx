@@ -20,6 +20,7 @@ import { sortRelations } from '~/core/utils/utils';
 import { Spacer } from '~/design-system/spacer';
 
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
@@ -99,7 +100,10 @@ export default async function ProfileLayout(props: Props) {
           <div className="space-y-2">
             <EditableHeading spaceId={spaceId} entityId={entityId} />
             <EntityPageInlineDescription entityId={entityId} spaceId={spaceId} />
-            <EntityPageMetadataHeader id={profile.id} spaceId={spaceId} isVoteable />
+            <div className="flex items-center gap-4 text-text">
+              <EntityPageMetadataHeader id={profile.id} spaceId={spaceId} />
+              <EntityPageActions entityId={profile.id} spaceId={spaceId} isVoteable />
+            </div>
           </div>
 
           <Spacer height={40} />
