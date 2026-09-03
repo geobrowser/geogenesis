@@ -859,8 +859,14 @@ export const userHasVoteOfKindQuery = graphql(/* GraphQL */ `
  * Publishing a debate relates it to each participant's personal space entity through Supported by
  * or Opposed by, so a relation of either type pointing at the space is the participation — and the
  * relation only exists once the debate is published, which is the other half of what the checklist
- * asks. GEO-2732 will add a Participants relation that says this more directly; until it lands,
- * these two are what there is.
+ * asks.
+ *
+ * GEO-2732 has since landed, so a debate published today *also* carries a side-agnostic Participants
+ * relation that says this more directly. Reading that one instead would be a regression rather than
+ * a simplification: on testnet, 43 of the 55 debates carrying a side relation predate it and have no
+ * Participants relation at all, so the checklist would stop crediting participation in most of the
+ * debates that exist. These two cover both eras, and every participant gets one of them — the
+ * publish flow writes a side for each — so nothing is missed by not reading the third.
  */
 export const userDebateParticipationQuery = graphql(/* GraphQL */ `
   query UserDebateParticipation($personalSpaceId: UUID!, $sidePropertyIds: [UUID!]) {
