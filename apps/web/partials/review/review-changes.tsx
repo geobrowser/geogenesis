@@ -15,18 +15,27 @@ import { BOUNTIES_RELATION_TYPE, BOUNTY_TYPE_ID, PLACEHOLDER_SPACE_IMAGE, PROPOS
 import { useAutofocus } from '~/core/hooks/use-autofocus';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { useIsFastPathRestricted } from '~/core/hooks/use-fast-path-restricted';
 import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { type ProposalVotingMode, usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { useIsFastPathRestricted } from '~/core/hooks/use-fast-path-restricted';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
+import {
+  buildIsNewEntity,
+  buildOwnershipIndex,
+  collectCandidateEntityIds,
+  countEntityChanges,
+  findDanglingDependencies,
+  getDeselectionBlockers,
+  selectOpsForPublish,
+} from '~/core/review/publish-selection';
 import { useDiff } from '~/core/state/diff-store';
 import { isPendingPersonalSpaceId, usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
@@ -428,8 +437,6 @@ export const ReviewChanges = () => {
 
   const bountyIdSet = React.useMemo(() => new Set(bounties.map(bounty => bounty.id)), [bounties]);
 
-  const isReadyToPublish = proposalName.length > 0;
-
   // While the optimistic personal space is still being created on-chain there's
   // no real space to publish into (and edits buffered under the `pending:`
   // sentinel can't be proposed). Gate Publish until setup finishes.
@@ -449,13 +456,104 @@ export const ReviewChanges = () => {
   const hasRemainingSpaces = dedupedSpacesWithActions.length > 0;
   const activeSpaceMetadata = spaces.find(s => s.id === activeSpace);
 
+  // Excluded ids (not included) so new rows mid-review stay selected by default.
+  const [excludedEntityIds, setExcludedEntityIds] = React.useState<ReadonlySet<string>>(new Set());
+
+  React.useEffect(() => {
+    setExcludedEntityIds(new Set());
+  }, [activeSpace]);
+
+  const ownershipIndex = React.useMemo(
+    () => buildOwnershipIndex(visibleEntities, relationsFromSpace),
+    [visibleEntities, relationsFromSpace]
+  );
+
+  const selectedEntityIds = React.useMemo(
+    () => new Set([...ownershipIndex.displayIds].filter(id => !excludedEntityIds.has(id))),
+    [ownershipIndex, excludedEntityIds]
+  );
+
+  // Full store read for touched ids — not pending-only, or everything looks new.
+  const candidateEntityIds = React.useMemo(() => collectCandidateEntityIds(ownershipIndex), [ownershipIndex]);
+  const candidateValues = useValues({
+    selector: v => candidateEntityIds.has(v.entity.id),
+    includeDeleted: true,
+  });
+  const candidateRelations = useRelations({
+    selector: r => candidateEntityIds.has(r.fromEntity.id) || candidateEntityIds.has(r.entityId),
+    includeDeleted: true,
+  });
+
+  const isNewEntity = React.useMemo(
+    () => buildIsNewEntity(candidateValues, candidateRelations),
+    [candidateValues, candidateRelations]
+  );
+
+  const deselectionBlockers = React.useMemo(
+    () => getDeselectionBlockers(ownershipIndex, selectedEntityIds, relationsFromSpace, isNewEntity),
+    [ownershipIndex, selectedEntityIds, relationsFromSpace, isNewEntity]
+  );
+
+  const changeCountByEntity = React.useMemo(
+    () => new Map(visibleEntities.map(entity => [entity.entityId, countEntityChanges(entity)])),
+    [visibleEntities]
+  );
+
+  const selectedChangeCount = React.useMemo(
+    () =>
+      visibleEntities
+        .filter(entity => selectedEntityIds.has(entity.entityId))
+        .reduce((total, entity) => total + (changeCountByEntity.get(entity.entityId) ?? 0), 0),
+    [visibleEntities, selectedEntityIds, changeCountByEntity]
+  );
+
+  const toggleEntitySelection = React.useCallback(
+    (entityId: string) => {
+      setExcludedEntityIds(prev => {
+        const next = new Set(prev);
+        if (next.has(entityId)) {
+          next.delete(entityId);
+        } else {
+          if ((deselectionBlockers.get(entityId)?.length ?? 0) > 0) return prev;
+          next.add(entityId);
+        }
+        return next;
+      });
+    },
+    [deselectionBlockers]
+  );
+
+  const selectAllEntities = React.useCallback(() => setExcludedEntityIds(new Set()), []);
+
+  const publishSelection = React.useMemo(
+    () => selectOpsForPublish(ownershipIndex, selectedEntityIds, valuesFromSpace, relationsFromSpace),
+    [ownershipIndex, selectedEntityIds, valuesFromSpace, relationsFromSpace]
+  );
+
+  const selectedEntityCount = selectedEntityIds.size;
+  const totalEntityCount = ownershipIndex.displayIds.size;
+  const isPartialPublish = selectedEntityCount < totalEntityCount;
+
+  const publishEditLabel = isPartialPublish
+    ? `Publish ${selectedEntityCount} ${selectedEntityCount === 1 ? 'edit' : 'edits'}`
+    : 'Publish edit';
+  const publishProposalLabel = isPartialPublish
+    ? `Publish ${selectedEntityCount} ${selectedEntityCount === 1 ? 'edit' : 'edits'}`
+    : 'Publish proposal';
+
+  const hasSelectedEntities = selectedEntityIds.size > 0;
+  const isReadyToPublish = proposalName.length > 0 && hasSelectedEntities;
+
+  const publishBlockedReason = !hasSelectedEntities
+    ? 'Select at least one edit to publish.'
+    : proposalName.length === 0
+      ? 'Name your proposal to publish.'
+      : null;
+
   // Fast/slow path selection (design 62501-94092). Every DAO-space submitter gets the
   // choice — members as well as editors. Personal spaces don't vote at all.
   const canChoosePath = activeSpaceMetadata?.type === 'DAO';
-  const { votingSettings: activeSpaceVotingSettings } = useVotingSettings(
-    activeSpaceMetadata?.address,
-    canChoosePath
-  );
+  const { votingSettings: activeSpaceVotingSettings } = useVotingSettings(activeSpaceMetadata?.address, canChoosePath);
   // A space with disableFastPathAccessForNewMembers grants incoming members the
   // FAST_PATH_RESTRICTED role; a fast-path proposal from one reverts during simulation.
   const { isFastPathRestricted } = useIsFastPathRestricted(
@@ -532,7 +630,7 @@ export const ReviewChanges = () => {
 
   React.useEffect(() => {
     rowVirtualizer.measure();
-  }, [entities, visibleEntities.length]);
+  }, [entities, visibleEntities.length, excludedEntityIds]);
 
   const handleOpenReviewEntity = React.useCallback(
     (entityId: string) => {
@@ -557,6 +655,16 @@ export const ReviewChanges = () => {
   const handleSubmit = React.useCallback(async () => {
     if (!activeSpace) return;
     if (!isReadyToPublish) return;
+
+    const dangling = findDanglingDependencies(ownershipIndex, selectedEntityIds, relationsFromSpace, isNewEntity);
+    if (dangling.length > 0) {
+      dispatchStatusBar({
+        type: 'ERROR',
+        payload: `Cannot publish: ${dangling.length === 1 ? 'an edit still links' : 'edits still link'} to something excluded from this publish. Include it, or remove the link.`,
+      });
+      return;
+    }
+
     setIsPublishing(true);
     const proposalEntityId = ID.createEntityId();
 
@@ -566,8 +674,8 @@ export const ReviewChanges = () => {
       publish_flow: 'review_changes',
       publish_kind: activeSpaceMetadata?.type === 'PERSONAL' ? 'edit' : 'proposal',
       space_id: activeSpace,
-      value_count: valuesFromSpace.length,
-      relation_count: relationsFromSpace.length,
+      value_count: publishSelection.values.length,
+      relation_count: publishSelection.relations.length,
     });
 
     let resolved = false;
@@ -580,8 +688,8 @@ export const ReviewChanges = () => {
       };
 
       makeProposal({
-        values: valuesFromSpace,
-        relations: relationsFromSpace,
+        values: publishSelection.values,
+        relations: publishSelection.relations,
         spaceId: activeSpace,
         name: proposalName,
         proposalId: proposalEntityId,
@@ -737,6 +845,10 @@ export const ReviewChanges = () => {
     makeProposal,
     valuesFromSpace,
     relationsFromSpace,
+    publishSelection,
+    ownershipIndex,
+    selectedEntityIds,
+    isNewEntity,
     proposalName,
     activeSpaceMetadata?.type,
     canChoosePath,
@@ -874,13 +986,18 @@ export const ReviewChanges = () => {
                     isFastPathRestricted={isFastPathRestricted}
                   />
                 )}
+                {publishBlockedReason && !isPublishGatedByPendingSetup && (
+                  <Text variant="footnote" color="grey-04">
+                    {publishBlockedReason}
+                  </Text>
+                )}
                 <Button
                   variant="primary"
                   onClick={handleSubmit}
                   disabled={!isReadyToPublish || isPublishing || isPublishGatedByPendingSetup}
                 >
                   <Pending isPending={isPublishing}>
-                    {activeSpaceMetadata?.type === 'PERSONAL' ? 'Publish edit' : 'Publish proposal'}
+                    {activeSpaceMetadata?.type === 'PERSONAL' ? publishEditLabel : publishProposalLabel}
                   </Pending>
                 </Button>
               </div>
@@ -890,7 +1007,10 @@ export const ReviewChanges = () => {
             {hasRemainingSpaces ? (
               <div className="flex min-w-0 flex-1 flex-col gap-2 overflow-hidden">
                 <div className="px-2">
-                  <div ref={proposalNameSectionRef} className="rounded-lg border border-grey-02 bg-white px-6 py-10">
+                  <div
+                    ref={proposalNameSectionRef}
+                    className="rounded-lg border border-grey-02 bg-white px-6 pt-10 pb-0"
+                  >
                     <div className="relative mx-auto w-full max-w-[1350px] shrink-0">
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1">
@@ -905,9 +1025,18 @@ export const ReviewChanges = () => {
                           />
                         </div>
                         <div className="flex items-center gap-2 pt-2">
-                          <SmallButton onClick={handleDeleteAll}>Delete all</SmallButton>
+                          <SmallButton onClick={handleDeleteAll}>Discard all edits</SmallButton>
                         </div>
                       </div>
+                      {hasVisibleEntities && (
+                        <div className="mt-8 flex items-center justify-between gap-4 border-t border-grey-02 py-4">
+                          <Text variant="metadata" color="grey-04">
+                            {selectedEntityCount} of {totalEntityCount} {totalEntityCount === 1 ? 'entity' : 'entities'}{' '}
+                            selected · {selectedChangeCount} {selectedChangeCount === 1 ? 'change' : 'changes'}
+                          </Text>
+                          {isPartialPublish && <SmallButton onClick={selectAllEntities}>Select all</SmallButton>}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -970,6 +1099,13 @@ export const ReviewChanges = () => {
                                     entity={entity}
                                     spaceId={activeSpace}
                                     onOpenEntity={handleOpenReviewEntity}
+                                    selection={{
+                                      isSelected: selectedEntityIds.has(entity.entityId),
+                                      onToggle: () => toggleEntitySelection(entity.entityId),
+                                      blockedBy: deselectionBlockers.get(entity.entityId) ?? [],
+                                      changeCount: changeCountByEntity.get(entity.entityId) ?? 0,
+                                      isNew: isNewEntity(entity.entityId),
+                                    }}
                                   />
                                 </div>
                               </div>
