@@ -1582,6 +1582,21 @@ function RematchClaimCard({
   busy: boolean;
 }) {
   const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
+  /**
+   * The viewer's side as the *indexer* has it — `claim.participants` are the graph-derived sides.
+   *
+   * This is what the request is gated on, and it is deliberately the slow source. Gating on
+   * geo-chat's own row instead, which is what GEO-2808 proposed, opens the button before geo-chat
+   * will honour it: tested in the browser, the control turned from "Publishing your position…" to
+   * "Request debate" and the request came straight back with `claim_response_required`. geo-chat
+   * reporting a position on its rematch rows is evidently not the same fact as geo-chat accepting a
+   * request against it.
+   *
+   * geo-chat's copy still drives everything the viewer *sees* — which side is lit, whether the
+   * footer is mounted — because those were the things the graph's lag was breaking. Only the
+   * request itself waits for the indexed response, because only the request is rejected without it.
+   */
+  const indexedPosition = claim.participants.find(side => side.user_id === currentUserId)?.position ?? null;
 
   // A claim whose stored kind didn't parse still has to render; 'stance' is the fallback
   // `responsePositionLabel` already applies, so the labels agree either way.
@@ -1663,7 +1678,7 @@ function RematchClaimCard({
    * the publish has landed and the wait is the index. That changes the label, never the gate.
    */
   const requestGate = debateRequestGate({
-    chatPosition,
+    chatPosition: indexedPosition,
     localPosition,
     opponentReady: opposing,
     indexingDelayed: responseIndexing.status === 'delayed',

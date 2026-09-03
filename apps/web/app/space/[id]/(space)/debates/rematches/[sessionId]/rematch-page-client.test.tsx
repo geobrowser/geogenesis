@@ -51,8 +51,8 @@ const mocks = vi.hoisted(() => ({
   rejectMutate: vi.fn(),
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
-  /** Overrides the snapshot status, so the window where it is `indexed` is reachable. */
-  responseIndexingStatus: null as 'reconciling' | 'delayed' | 'indexed' | null,
+  /** Overrides the snapshot status, so the `indexed` and settled windows are both reachable. */
+  responseIndexingStatus: null as 'idle' | 'reconciling' | 'delayed' | 'indexed' | null,
   /** Drives the indexing machine's own "taking longer than it should" signal. */
   responseIndexingDelayed: false,
   setReadiness: vi.fn(),
@@ -315,8 +315,9 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
 });
 
 function responseIndexingStatusFor(entityId: string): 'idle' | 'reconciling' | 'delayed' | 'indexed' {
+  if (mocks.responseIndexingStatus !== null) return mocks.responseIndexingStatus;
   if (mocks.optimisticResponses.get(entityId) === undefined) return 'idle';
-  return mocks.responseIndexingStatus ?? (mocks.responseIndexingDelayed ? 'delayed' : 'reconciling');
+  return mocks.responseIndexingDelayed ? 'delayed' : 'reconciling';
 }
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -2772,14 +2773,18 @@ describe('DebateRematchPageClient', () => {
   });
 
   /**
-   * GEO-2808, and the point of the change. geo-chat is the only thing that can reject an early
-   * request, and since #2348 it learns the position while the write is still in flight — so once it
-   * agrees there is nothing left to wait for, however far behind the indexer is.
+   * GEO-2808 proposed gating on geo-chat's rematch row, on the reasoning that geo-chat is what
+   * rejects an early request and learns the position while the write is in flight.
    *
-   * The graph is deliberately given *nothing* here: under the old gate this rendered
-   * "Publishing your position…" and stayed there for `web.write.entity_response` (p50 9.9s).
+   * Tested in the browser, that opens the button before geo-chat will honour it: the control turned
+   * from "Publishing your position…" to "Request debate" and the request came straight back with
+   * `claim_response_required`. Reporting a position on the rematch rows is evidently not the same
+   * fact as accepting a request against it, so the request waits for the indexed position.
+   *
+   * The hub has no equivalent hole: its opponent half is geo-chat's own matchmaking decision, which
+   * cannot exist before geo-chat has the response.
    */
-  it('opens the request as soon as geo-chat agrees, without waiting for the graph', async () => {
+  it('holds the request until the indexed position agrees, even once geo-chat has the side', async () => {
     mocks.claims = [
       {
         ...sharedClaim(),
@@ -2789,17 +2794,14 @@ describe('DebateRematchPageClient', () => {
         ],
       },
     ];
-    // The indexer has not seen the viewer's side at all.
+    // geo-chat has it; the indexer does not.
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    const request = screen.getByRole('button', { name: 'Request debate' });
-    expect(request).toBeEnabled();
-    expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
-    fireEvent.click(request);
-    expect(mocks.mutate).toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
   });
 
   /**
@@ -2873,14 +2875,12 @@ describe('DebateRematchPageClient', () => {
   });
 
   /**
-   * The optimistic answer clears when the mutation settles, and the graph is still ten seconds
-   * behind it. A gate that fell back to the graph there shut again and re-announced a publish that
-   * had already landed — the control flickered ready → publishing → ready.
-   *
-   * Asserted across the transition rather than on a settled render: both ends were already green,
-   * and it is the middle that was wrong.
+   * The optimistic answer clears when the mutation settles, and the indexer is still behind it. The
+   * request cannot open yet — that is what `claim_response_required` taught us — but the control
+   * must not vanish either. It used to: `opposing` read a position that fell back to the graph, so
+   * the whole footer unmounted rather than the button merely renaming itself.
    */
-  it('stays pressable when the optimistic answer clears before the graph catches up', async () => {
+  it('keeps the request control mounted and named when the optimistic answer clears', async () => {
     mocks.claims = [
       {
         ...sharedClaim(),
@@ -2895,14 +2895,13 @@ describe('DebateRematchPageClient', () => {
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeInTheDocument();
 
     // The mutation settles. geo-chat still holds the side; the indexer still does not.
-    mocks.optimisticResponses.delete(CLAIM_SHARED);
+    mocks.responseIndexingStatus = 'idle';
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeInTheDocument();
   });
 
   // Switching sides leaves geo-chat holding the side you just moved off, which is no more valid to
