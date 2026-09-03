@@ -50,12 +50,12 @@ import {
   carriesEveryTopic,
   countBy,
   keepSelectableTopics,
-  keepSelectedVisible,
   orderFacetOptions,
   toggleId,
 } from '~/core/debates/matchmaking/topic-facets';
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
+import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
@@ -75,7 +75,7 @@ import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
-import { uuidToHex } from '~/core/id/normalize';
+import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
@@ -88,10 +88,6 @@ import { Text } from '~/design-system/text';
 import { RematchVoicePill } from './rematch-voice';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
-
-function sameId(left: string, right: string) {
-  return uuidToHex(left) === uuidToHex(right);
-}
 
 /**
  * `value` once it has settled, and the last settled value while it is settling again. Before the
@@ -197,7 +193,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     if (!remoteParticipant) return [];
     const ids: string[] = [];
     for (const [claimId, rows] of positions.byClaim) {
-      if (rows.some(row => sameId(row.profileSpaceId, remoteParticipant.profile_space_id))) ids.push(claimId);
+      if (rows.some(row => idEquals(row.profileSpaceId, remoteParticipant.profile_space_id))) ids.push(claimId);
     }
     return ids;
   }, [positions.byClaim, remoteParticipant]);
@@ -235,7 +231,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // whether the source is worth showing. Applying it there emptied both tabs in the ordinary case:
   // a debater's claims live in their personal space, which nobody else is a member of, so the
   // opponent's positions and a curator's page were dropped wholesale on the other side.
-  const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+  const { allowlist: spaceAllowlist, memberSpaceIds, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
 
   // While it is still resolving there is no telling an allowed space from one the viewer has
   // nothing to do with. Every list waits for it rather than showing the unfiltered set and
@@ -249,7 +245,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // differently, and when this list is unknown — no acceptor configured, a failed lookup — the
   // type test still rules out the case that actually bit us, claims living in a personal space.
   //
-  const { publishableSpaceIds } = useDebatePublishableSpaces();
+  // `isLoading` is read, not discarded. This lookup answers `null` for *unknown* — a load in
+  // flight and a failed one alike — and `isSpaceDebatePublishable` reads null as "don't filter", so
+  // during the load the menu offers spaces it will go on to reject. Only the seed cares about the
+  // difference: everything else is happy to fail open, but a default taken from a provisional menu
+  // is spent on a space the reconciliation then removes, leaving the viewer with no default at all.
+  // After an error `isLoading` is false and the ids stay null, so fail-open is preserved.
+  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
 
   // GEO-2683. Fetched only when Featured is the source on screen — it is one option in a menu, and
   // the other two answer for themselves.
@@ -440,7 +442,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const chatPositionFor = React.useCallback(
     (claimEntityId: string, spaceId: string): boolean | null | undefined => {
       const recorded = chatPositionByClaimId.get(claimEntityId);
-      if (!recorded || !sameId(recorded.spaceId, spaceId)) return undefined;
+      if (!recorded || !idEquals(recorded.spaceId, spaceId)) return undefined;
       return recorded.position;
     },
     [chatPositionByClaimId]
@@ -454,6 +456,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Every space a claim is named in is looked up, not just the one that currently wins the ranking,
   // because which one wins is the next decision and it needs the types to make it.
+  //
+  // Plus every space the tagged facet offers, which is not the same set and stopped being a subset
+  // when GEO-2798 paged the tag. The rows are one page; the facet counts the whole tag — so a space
+  // whose only tagged claim is on a later page reaches the *menu* without ever reaching this
+  // lookup, and an unresolved type reads as publishable. The menu would then offer a personal
+  // space, which is the one thing this gate exists to exclude, and the one-shot default would be
+  // spent on it and pruned once its page finally arrived. Asking about the ids the menu is built
+  // from is what makes "settled" mean settled; the tag spans a handful of spaces, so it is cheap.
   const candidateSpaceIds = React.useMemo(() => {
     const ids = new Set<string>();
     for (const entity of [
@@ -463,10 +473,28 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     ]) {
       for (const spaceId of claimCandidateSpaceIds(entity)) ids.add(spaceId);
     }
+    for (const space of taggedSpaceFacet.spaces) ids.add(space.id);
     return [...ids];
-  }, [opponentEntitiesQuery.entities, recommendedEntities, taggedCatalog]);
-  const { spacesById: candidateSpaces } = useSpacesByIds(candidateSpaceIds);
+  }, [opponentEntitiesQuery.entities, recommendedEntities, taggedCatalog, taggedSpaceFacet.spaces]);
+  const {
+    spacesById: candidateSpaces,
+    isLoading: candidateSpacesPending,
+    isPlaceholderData: candidateSpacesHeldOver,
+  } = useSpacesByIds(candidateSpaceIds);
   const spaceTypePublishable = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
+  /**
+   * Whether {@link canPublishDebateIn} can be trusted yet.
+   *
+   * An unresolved type reads as publishable — deliberately, so a slow lookup doesn't empty the
+   * picker — so while this is true the predicate admits spaces it will go on to reject, a personal
+   * space among them. Held-over counts: `useSpacesByIds` answers from the previous id set rather
+   * than blanking, and it knows nothing about an id it was never asked for.
+   *
+   * Named here rather than at the reader, because this is the lookup that decides it. The picker
+   * has a second `useSpacesByIds` for the allowlist, whose pending state `scope.pending` carries;
+   * they are different questions about different ids and neither covers the other.
+   */
+  const publishabilityPending = candidateSpacesPending || candidateSpacesHeldOver;
   const canPublishDebateIn = React.useCallback(
     (spaceId: string | null | undefined) =>
       isSpaceDebatePublishable(spaceId, publishableSpaceIds) && spaceTypePublishable(spaceId),
@@ -501,7 +529,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       // no preference and are unchanged: there the row's space is the authoritative one.
       const recordedRow = sessionRowsByClaimId.get(entity.id);
       const sessionRow =
-        preferred && recordedRow && !sameId(recordedRow.claim.space_id, preferred) ? undefined : recordedRow;
+        preferred && recordedRow && !idEquals(recordedRow.claim.space_id, preferred) ? undefined : recordedRow;
       const responseKind = sessionRow?.response_kind ?? claimResponseKind(entity, homeSpaceId);
       return {
         claim: sessionRow?.claim ?? {
@@ -830,16 +858,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // they are deliberately *not* narrowed by the viewer's allowlist — a debater's own claims live in
   // their personal space, which nobody else has joined. Their spaces have to be in the menu with
   // them or the rows are visible and unfilterable, so those two count from the rows on screen.
-  const facetSpaces = React.useMemo(() => {
-    const offered = graphFiltered
-      ? taggedSpaceFacet.spaces
-          .filter(space => canPublishDebateIn(space.id) && isClaimSpaceAllowed(space.id, spaceAllowlist))
-          .map(space => ({ id: space.id, name: null, count: space.count }))
-      : countBy(claims.map(claim => ({ id: claim.claim.space_id, name: null })));
-    // An absent *selection* comes back at zero, or its checkbox disappears while the trigger goes on
-    // counting it, and it cannot be unticked without clearing every space.
-    return orderFacetOptions(keepSelectedVisible(offered, spaceIds), spaceIds);
-  }, [canPublishDebateIn, claims, graphFiltered, spaceAllowlist, spaceIds, taggedSpaceFacet.spaces]);
+  // What the menu offers before the viewer's own selection is folded back in. Split out because the
+  // default is seeded from exactly this list rather than from the eligible set, which is the wider
+  // and more obvious source.
+  //
+  // Not for the id shapes: those agreed once GEO-2798 normalized the facet's keys, and `normId` and
+  // `uuidToHex` are the same function. It is that this list is the spaces that actually *have*
+  // claims. Seeding from the eligible set would tick a space the viewer belongs to and the tag has
+  // nothing in, landing them on an empty list behind a filter they never set. The cost is a second
+  // request — the list loads unfiltered, then again narrowed — which is the price of not defaulting
+  // to nothing.
+  const offeredSpaces = React.useMemo(
+    () =>
+      graphFiltered
+        ? taggedSpaceFacet.spaces
+            .filter(space => canPublishDebateIn(space.id) && isClaimSpaceAllowed(space.id, spaceAllowlist))
+            .map(space => ({ id: space.id, name: null, count: space.count }))
+        : countBy(claims.map(claim => ({ id: claim.claim.space_id, name: null }))),
+    [canPublishDebateIn, claims, graphFiltered, spaceAllowlist, taggedSpaceFacet.spaces]
+  );
 
   // A space picked while the gates were still passing everything has to be let go once they reject
   // it, or it keeps narrowing every request while every row it returns is dropped.
@@ -901,6 +938,32 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ? positions.isLoading || opponentEntitiesQuery.isLoading || opponentClaimsQuery.isLoading
       : sourceUndecided ||
         (source === 'recommended' ? recommendedLoading || curatedClaimsQuery.isLoading : taggedClaimsSettling));
+
+  // The menu, and the handlers that drive it. Defaults to the spaces the viewer belongs to
+  // (GEO-2789).
+  //
+  // Gated on `tabIsLoading` rather than a hand-listed set of queries. GEO-2798 made this menu a
+  // server facet instead of an accumulation over every row source, so the tab's own composite —
+  // which already waits from the top of each chain, where a disabled lookup reports nothing — is
+  // now the whole answer. `publishabilityPending` is the exception it cannot know about: an
+  // unresolved space type reads as publishable, so the menu can still be offering a space this
+  // page will go on to reject.
+  const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
+    offeredSpaces,
+    spaceIds,
+    setSpaceIds,
+    memberSpaceIds,
+    // Every gate that decides `offeredSpaces`, because the seed is spent on whatever it sees. A
+    // space offered provisionally and rejected a moment later takes the default with it.
+    // `sourceDebateQuery` for the same reason from the other end: the source debate's own claim is
+    // one of the exclusions, so until it lands a row-derived menu can still be counting its space.
+    pending:
+      tabIsLoading ||
+      publishabilityPending ||
+      publishableSpacesLoading ||
+      sourceDebateQuery.isLoading ||
+      (graphFiltered && !taggedSpaceFacet.settled),
+  });
 
   const tabError =
     sessionQuery.error ??
@@ -1119,8 +1182,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           <div className="flex flex-col gap-3">
             <SpaceTopicFilters
               spaceIds={spaceIds}
-              onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-              onSpacesClear={() => setSpaceIds([])}
+              onSpaceToggle={onSpaceToggle}
+              onSpacesClear={onSpacesClear}
               topicIds={topicIds}
               onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
               onTopicsClear={() => setTopicIds([])}
@@ -1208,7 +1271,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                   label: 'Clear filters',
                   onClick: () => {
                     setSearch('');
-                    setSpaceIds([]);
+                    // The menu's own clear row, so this counts as choosing the unfiltered list and
+                    // the default cannot put its spaces back.
+                    onSpacesClear();
                     setTopicIds([]);
                   },
                 }

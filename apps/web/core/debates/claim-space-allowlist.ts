@@ -29,20 +29,61 @@ export function buildClaimSpaceAllowlist({
   /** The viewer's own space, which the sidebar's `memberOf` deliberately leaves out. */
   personalSpaceId: string | null | undefined;
 }): Set<string> {
-  const allowed = new Set<string>();
+  // The viewer's own spaces plus what is on offer to everyone — said that way round, so the two
+  // sets cannot drift. `buildMemberSpaceIds` is the same list the space filter defaults to, and a
+  // space that counts as theirs there has to be one they may see here.
+  const allowed = buildMemberSpaceIds({ editorOf, memberOf, personalSpaceId });
 
   for (const row of featured) allowed.add(normId(row.id));
 
-  // A pending row is a space the viewer has *asked* to join, not one they belong to — the same
-  // distinction `useGlobalSearchSpaceIds` draws off these lists.
-  for (const row of [...editorOf, ...memberOf]) {
-    if (row.pendingLabel) continue;
-    allowed.add(normId(row.id));
-  }
-
-  if (personalSpaceId) allowed.add(normId(personalSpaceId));
-
   return allowed;
+}
+
+/**
+ * The subset of the allowlist the viewer actually belongs to — the spaces they are a member or an
+ * editor of, plus their own.
+ *
+ * The allowlist above is what a viewer may *see*; this is what is theirs. Featured spaces are the
+ * difference: they are on offer to everyone, so they widen what can be browsed without saying
+ * anything about who the viewer is. GEO-2789 defaults the space filter to this narrower set.
+ *
+ * Pending rows count. A viewer who has asked to join a space is telling us it is one of theirs,
+ * and sign-up collects exactly that before any approval exists — so a new account spends its first
+ * minutes with every space pending. Excluding them left that account looking at a panel with none
+ * of the spaces it had just chosen, which then filled in on its own once the approvals landed.
+ * Approval changes nothing here, which is the point: nothing should lurch when it arrives.
+ *
+ * Wider than the same distinction `useGlobalSearchSpaceIds` draws off these lists, deliberately —
+ * that one is picking where to search, this one is deciding whether a space is the viewer's at all.
+ */
+export function buildMemberSpaceIds({
+  editorOf,
+  memberOf,
+  personalSpaceId,
+}: {
+  editorOf: BrowseSpaceRow[];
+  memberOf: BrowseSpaceRow[];
+  /** The viewer's own space, which the sidebar's `memberOf` deliberately leaves out. */
+  personalSpaceId: string | null | undefined;
+}): Set<string> {
+  const mine = new Set<string>();
+
+  for (const row of [...editorOf, ...memberOf]) mine.add(normId(row.id));
+
+  if (personalSpaceId) mine.add(normId(personalSpaceId));
+
+  return mine;
+}
+
+export function browseSidebarMemberSpaceIds(
+  data: BrowseSidebarData,
+  personalSpaceId: string | null | undefined
+): Set<string> {
+  return buildMemberSpaceIds({
+    editorOf: data.editorOf,
+    memberOf: data.memberOf,
+    personalSpaceId: personalSpaceId ?? data.personalSpaceId,
+  });
 }
 
 export function browseSidebarClaimSpaceAllowlist(

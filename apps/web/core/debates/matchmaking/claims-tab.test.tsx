@@ -68,6 +68,7 @@ const mocks = vi.hoisted(() => ({
   pageSize: null as number | null,
   lastEnabledData: undefined as unknown,
   spaceAllowlist: null as Set<string> | null,
+  memberSpaceIds: null as Set<string> | null,
   allowlistLoading: false,
   publishableSpaceIds: null as Set<string> | null,
   publishableLoading: false,
@@ -98,7 +99,13 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 }));
 
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
-  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
+  useClaimSpaceAllowlist: () => ({
+    allowlist: mocks.spaceAllowlist,
+    // Null rather than empty by default: unknown, so the space filter is left alone. The cases
+    // about the member default set it explicitly.
+    memberSpaceIds: mocks.memberSpaceIds,
+    isLoading: mocks.allowlistLoading,
+  }),
 }));
 
 vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => ({
@@ -621,6 +628,7 @@ beforeEach(() => {
   // Null + settled is "the allowlist lookup came back with nothing", which falls through to an
   // unfiltered list — what every pre-existing case here runs under.
   mocks.spaceAllowlist = null;
+  mocks.memberSpaceIds = null;
   mocks.allowlistLoading = false;
   // Same shape, same reason: settled-with-no-answer does not filter, which is what every
   // pre-existing case here runs under.
@@ -1826,6 +1834,97 @@ describe('topic menu', () => {
     await waitFor(() => expect(screen.queryByText('Models are getting cheaper')).toBeNull());
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
     expect(screen.queryByRole('button', { name: /^AI/ })).toBeNull();
+  });
+
+  // GEO-2789. The filter opens on the spaces the viewer belongs to rather than on everything they
+  // are allowed to see, which are different sets: the allowlist also carries featured spaces.
+  it('opens on the spaces the viewer belongs to', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+    await showIndexedClaims();
+
+    // The menu's own ids, which is what a click would have produced too.
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
+  });
+
+  // The ticket's actual requirement is which boxes are *ticked*, not just which spaces the query
+  // narrows to. The seed is drawn from the eligible set and the menu's options are the server
+  // facet's own ids, so the two have to agree on id shape or the filter applies with nothing
+  // showing as chosen.
+  it('shows the default as ticked in the menu, not merely applied to the query', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+    await showIndexedClaims();
+
+    // The trigger is named after the selected space too, so pick out the row, which is the one
+    // carrying the pressed state.
+    fireEvent.click(await screen.findByRole('button', { name: /Crypto/ }));
+    const row = screen.getAllByRole('button', { name: /Crypto/ }).find(el => el.hasAttribute('aria-pressed'));
+
+    expect(row).toHaveAttribute('aria-pressed', 'true');
+    // And exactly one row for it: a seed whose id shape differed from the facet's would be added
+    // back as a second option rather than ticking the one already there.
+    expect(
+      screen.getAllByRole('button', { name: /Crypto/ }).filter(el => el.hasAttribute('aria-pressed'))
+    ).toHaveLength(1);
+  });
+
+  // The fallback, and the signed-out case with it: nobody is left on an empty list filtered by a
+  // membership they do not have. An empty selection is what this filter reads as "any space".
+  it('opens on everything when the viewer belongs to none of the spaces on offer', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set();
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    await waitFor(() => expect(mocks.lastQuery).toBeTruthy());
+    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
+  });
+
+  // Featured's menu builds up as its own lookup resolves, so `spacesPending` alone says nothing
+  // about whether the options have finished arriving. Seeding against a half-built list spends the
+  // one seed badly and leaves a member space that turned up a moment later unselected.
+  it('waits for the featured menu to finish arriving before seeding', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([OTHER_SPACE_ID.replace(/-/g, '')]);
+    // Still loading, so the menu is only whatever has landed so far.
+    mocks.featuredLoading = true;
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy', SPACE_ID)];
+    const view = render(<ClaimsTab />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+
+    // The viewer's own space arrives with the rest of the list.
+    mocks.featuredLoading = false;
+    mocks.featuredClaims = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy', SPACE_ID),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown', OTHER_SPACE_ID),
+    ];
+    view.rerender(<ClaimsTab />);
+
+    // Seeded with theirs, which a seed taken against the partial list would have missed.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull());
+  });
+
+  // A default, not a policy: once it has applied, the viewer's own choice stands — including the
+  // choice to widen it back to everything.
+  it('lets the viewer clear the default back to every space', async () => {
+    mocks.spaceAllowlist = new Set([SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')));
+    mocks.memberSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
+    render(<ClaimsTab />);
+    await showIndexedClaims();
+    await waitFor(() => expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID] }));
+
+    // The trigger is named after the one selected space, which is the default that just applied.
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Any space' }));
+
+    // Back to the whole eligible scope, which is what an empty selection means here.
+    await waitFor(() =>
+      expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID, OTHER_SPACE_ID].map(id => id.replace(/-/g, '')) })
+    );
   });
 
   it('sends the picked space alone, never alongside the eligible list', async () => {

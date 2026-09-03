@@ -95,6 +95,11 @@ const mocks = vi.hoisted(() => ({
   // this the mock could only ever offer topics already on screen — and a menu wrongly derived from
   // the loaded rows would look correct.
   facetOnlyTopics: [] as Array<{ id: string; name: string; count: number }>,
+  // Spaces the aggregate counts from claims on pages this list has not loaded. The facet covers the
+  // whole tag while the page is one page of it (GEO-2798), so without this the mock could only ever
+  // offer spaces already on screen — and it is exactly the ones that are not that reach the menu
+  // without reaching the space-type lookup.
+  facetOnlySpaces: [] as Array<{ id: string; count: number }>,
   /** Fails the entity lookup whose id list contains this claim, leaving the others answering. */
   entityHydrationErrorFor: null as string | null,
   /** The session's saved-claims request — the parent of the saved rows, their ids and the exclusions. */
@@ -137,9 +142,11 @@ const mocks = vi.hoisted(() => ({
   browsedLookupLoading: false,
   currentUserId: 'user-local' as string | null,
   spaceAllowlist: null as Set<string> | null,
+  memberSpaceIds: null as Set<string> | null,
   allowlistLoading: false,
   spaceTypes: {} as Record<string, 'DAO' | 'PERSONAL'>,
   publishableSpaceIds: null as Set<string> | null,
+  publishableSpacesLoading: false,
   observerTriggers: [] as (() => void)[],
   /** Scrolls everything observed into view — the sentinel among it. */
   scrollSentinelIntoView: () => mocks.observerTriggers.forEach(fire => fire()),
@@ -417,7 +424,7 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
       }
     }
     return {
-      spaces: [...counts.values()],
+      spaces: [...counts.values(), ...(enabled ? mocks.facetOnlySpaces : [])],
       isLoading: false,
       settled: enabled && !mocks.featuredCatalogError,
       error: null,
@@ -622,13 +629,22 @@ vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => 
   const actual = await importOriginal<typeof import('~/core/debates/use-debate-publishable-spaces')>();
   return {
     ...actual,
-    useDebatePublishableSpaces: () => ({ publishableSpaceIds: mocks.publishableSpaceIds, isLoading: false }),
+    useDebatePublishableSpaces: () => ({
+      publishableSpaceIds: mocks.publishableSpaceIds,
+      isLoading: mocks.publishableSpacesLoading,
+    }),
   };
 });
 
 // Null is "the allowlist hasn't resolved", which every case that isn't about it runs under.
 vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
-  useClaimSpaceAllowlist: () => ({ allowlist: mocks.spaceAllowlist, isLoading: mocks.allowlistLoading }),
+  useClaimSpaceAllowlist: () => ({
+    allowlist: mocks.spaceAllowlist,
+    // Null rather than empty by default: unknown, so the space filter is left alone. The cases
+    // about the member default set it explicitly.
+    memberSpaceIds: mocks.memberSpaceIds,
+    isLoading: mocks.allowlistLoading,
+  }),
 }));
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
@@ -702,6 +718,7 @@ beforeEach(() => {
   mocks.featuredCatalogError = null;
   mocks.topicFacetSettled = true;
   mocks.facetOnlyTopics = [];
+  mocks.facetOnlySpaces = [];
   mocks.taggedFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
   mocks.fetchNextTaggedPage = vi.fn();
@@ -744,9 +761,11 @@ beforeEach(() => {
   mocks.currentUserId = 'user-local';
   mocks.responseIndexingStatus = null;
   mocks.spaceAllowlist = null;
+  mocks.memberSpaceIds = null;
   mocks.allowlistLoading = false;
   mocks.spaceTypes = {};
   mocks.publishableSpaceIds = null;
+  mocks.publishableSpacesLoading = false;
   // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
   // every callback so a test can say the sentinel scrolled into view.
   //
@@ -1979,6 +1998,126 @@ describe('DebateRematchPageClient', () => {
   // menu was filtered by the viewer's allowlist but not by whether this pairing can publish a
   // debate there — and `browsedRows` drops every claim in a space it cannot. The server's topic
   // facet knows nothing about that, so it offered all of the space's topics over an empty list.
+  // GEO-2789, the debate-again half. Seeded from the menu rather than the eligible set, because
+  // the effect above polices the selection against exactly what the menu offers.
+  it('opens on the spaces the viewer belongs to', async () => {
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // The trigger takes the name of the one selected space rather than reading "Any space".
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+
+    // Ticked in the menu, and listed once: a seed in any shape but the menu's own would be added
+    // back as a second row rather than ticking the one already there.
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    const rows = screen.getAllByRole('button', { name: /Crypto/ }).filter(el => el.hasAttribute('aria-pressed'));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // The picker does not open on All. `source` falls back to Recommended whenever there is anything
+  // to recommend, and that is a curator's page — its spaces say nothing about who is looking. The
+  // seed used to be spent there, on a menu it could not match, so by the time the viewer reached
+  // the list the default was written for it was already gone. This is the ordinary path, not an
+  // edge: any viewer with recommendations took it.
+  it('still opens All on the viewer’s spaces after starting on Recommended', async () => {
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    // A curated page in a space that is nobody's membership, so its menu cannot answer the seed.
+    mocks.recommendedSections = [{ id: 'section-1', name: 'Curated', claimIds: [CLAIM_FRESH] }];
+    mocks.recommendedEntities = [publishedEntity(CLAIM_FRESH, 'A curated claim')];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+  });
+
+  // The rows are one page; the facet counts the whole tag. So a space whose only tagged claim is on
+  // a later page reaches the *menu* without ever reaching the space-type lookup — which is keyed on
+  // the loaded entities — and an unresolved type reads as publishable. That is how a personal space,
+  // the one thing that gate exists to exclude, could be offered and take the one-shot default with
+  // it before its page arrived and pruned it away.
+  it('knows the type of a space the facet offers but no loaded claim names', async () => {
+    const PERSONAL_SPACE = '019fedae-72b6-7ab2-927a-df044d57c5aa';
+    mocks.memberSpaceIds = new Set([PERSONAL_SPACE.replace(/-/g, ''), SPACE_1.replace(/-/g, '')]);
+    // Theirs, and a personal space — so it is both seedable and unpublishable.
+    mocks.spaceTypes = { [PERSONAL_SPACE]: 'PERSONAL' };
+    mocks.facetOnlySpaces = [{ id: PERSONAL_SPACE, count: 4 }];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // The default lands on the space that survives the gate, not the one whose type was unknown.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+
+    // And the personal space is not on the menu at all.
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    expect(screen.queryByRole('button', { name: /Space 019fedae/ })).toBeNull();
+  });
+
+  // The seed is spent on whatever the menu is offering, so every gate that decides what it offers
+  // has to have answered. `useDebatePublishableSpaces` answers `null` for *unknown*, which
+  // `isSpaceDebatePublishable` reads as "don't filter" — so mid-load the menu offers spaces the
+  // page will go on to reject. Seeded from one of those, the default is spent and the pruning
+  // effect then takes it straight back off, leaving the viewer with no default at all.
+  it('waits for the publishable lookup before taking its one default', async () => {
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, ''), SPACE_2.replace(/-/g, '')]);
+    // Still in flight: every space passes the gate for now, Governance among them.
+    mocks.publishableSpaceIds = null;
+    mocks.publishableSpacesLoading = true;
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // Nothing seeded yet, because nothing is known yet.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+
+    // It lands, and Governance turns out not to be publishable after all.
+    mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    mocks.publishableSpacesLoading = false;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // The default is still there to spend, and spends it on the space that survived.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+  });
+
+  // This menu's options accumulate from rows as they arrive, so they are pickable before the seed
+  // is ready. A default that overwrote that choice would be a policy, not a default.
+  it('does not overwrite a space the viewer picked before the default was ready', async () => {
+    // Their memberships are not known yet, so the seed cannot have fired.
+    mocks.memberSpaceIds = null;
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // Governance is SPACE_2 — not one of theirs, which is the point.
+    fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Governance/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument());
+
+    // Now they land, and the seed becomes possible.
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // Still their pick, not the default.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Crypto/ })).toBeNull();
+  });
+
+  it('opens on everything when the viewer belongs to none of the spaces on offer', async () => {
+    mocks.memberSpaceIds = new Set();
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+  });
+
   it('does not offer a space no debate can be published into', async () => {
     mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
     render(<DebateRematchPageClient sessionId="rematch-1" />);
