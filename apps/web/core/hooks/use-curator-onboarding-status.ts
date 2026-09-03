@@ -5,22 +5,41 @@ import { useQuery } from '@tanstack/react-query';
 import { Effect } from 'effect';
 
 import { COMMENT_TYPE_ID } from '~/core/comment-ids';
-import { CURATOR_ONBOARDING_STEPS, type CuratorOnboardingStepId } from '~/core/explore/curator-onboarding-steps';
+import { VOTE_TYPE_ID } from '~/core/debates/ontology';
+import {
+  CURATOR_ONBOARDING_STEPS,
+  type CuratorOnboardingStepId,
+  VISIBLE_CURATOR_ONBOARDING_STEPS,
+} from '~/core/explore/curator-onboarding-steps';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { getAllEntities, getSpacesWhereMember, getUserHasEntityVote } from '~/core/io/queries';
+import {
+  getAllEntities,
+  getSpacesWhereMember,
+  getUserHasDebateParticipation,
+  getUserHasVoteOfKind,
+} from '~/core/io/queries';
 import { RANK_TYPE_ID } from '~/core/ranking-block-ids';
+import { responseKindToVoteKind } from '~/core/responses/entity-response';
 
 export type CuratorOnboardingCompletion = Record<CuratorOnboardingStepId, boolean>;
 
+/**
+ * Every step, unfinished. Derived from the list so a new step cannot be added to the checklist and
+ * forgotten here, where the omission would be a type error at best and a missing key at worst.
+ */
 function emptyCompletion(): CuratorOnboardingCompletion {
-  return {
-    'join-space': false,
-    'rsvp-community-call': false,
-    'vote-entity': false,
-    'submit-ranking': false,
-    'comment-entity': false,
-  };
+  return Object.fromEntries(CURATOR_ONBOARDING_STEPS.map(step => [step.id, false])) as CuratorOnboardingCompletion;
 }
+
+/**
+ * Curation is an entity upvote; stance and veracity are a position on a claim.
+ *
+ * Split because the checklist asks for them separately. They share one `user_votes` table, and the
+ * query behind "Vote on an entity" used to pass no kind at all — so answering a claim silently
+ * ticked the voting step too. With a claim step beside it that would credit one action as two.
+ */
+const ENTITY_VOTE_KINDS = [responseKindToVoteKind('curation')] as const;
+const CLAIM_POSITION_VOTE_KINDS = [responseKindToVoteKind('stance'), responseKindToVoteKind('veracity')] as const;
 
 async function personalSpaceHasEntityType(
   personalSpaceId: string,
@@ -63,16 +82,25 @@ export function useCuratorOnboardingStatus() {
     queryFn: async ({ signal }): Promise<CuratorOnboardingCompletion> => {
       if (!personalSpaceId) return emptyCompletion();
 
-      const [memberSpaces, hasRsvp, hasVote, hasRanking, hasComment] = await Promise.all([
-        Effect.runPromise(getSpacesWhereMember(personalSpaceId, signal)),
-        fetchHasCallRsvp(signal),
-        Effect.runPromise(getUserHasEntityVote(personalSpaceId, signal)),
-        personalSpaceHasEntityType(personalSpaceId, RANK_TYPE_ID, signal),
-        personalSpaceHasEntityType(personalSpaceId, COMMENT_TYPE_ID, signal),
-      ]);
+      const [memberSpaces, hasRsvp, hasVote, hasClaimPosition, hasDebate, hasDebateWinnerVote, hasRanking, hasComment] =
+        await Promise.all([
+          Effect.runPromise(getSpacesWhereMember(personalSpaceId, signal)),
+          fetchHasCallRsvp(signal),
+          Effect.runPromise(getUserHasVoteOfKind(personalSpaceId, ENTITY_VOTE_KINDS, signal)),
+          Effect.runPromise(getUserHasVoteOfKind(personalSpaceId, CLAIM_POSITION_VOTE_KINDS, signal)),
+          Effect.runPromise(getUserHasDebateParticipation(personalSpaceId, signal)),
+          // A debate winner vote mints a Vote entity in the voter's own space, and nothing else
+          // creates that type — so its presence is the vote.
+          personalSpaceHasEntityType(personalSpaceId, VOTE_TYPE_ID, signal),
+          personalSpaceHasEntityType(personalSpaceId, RANK_TYPE_ID, signal),
+          personalSpaceHasEntityType(personalSpaceId, COMMENT_TYPE_ID, signal),
+        ]);
 
       return {
         'join-space': memberSpaces.some(space => space.type === 'DAO'),
+        'claim-position': hasClaimPosition,
+        'participate-debate': hasDebate,
+        'debate-winner': hasDebateWinnerVote,
         'rsvp-community-call': hasRsvp,
         'vote-entity': hasVote,
         'submit-ranking': hasRanking,
@@ -81,8 +109,10 @@ export function useCuratorOnboardingStatus() {
     },
   });
 
-  const completedCount = CURATOR_ONBOARDING_STEPS.filter(step => completion[step.id]).length;
-  const totalCount = CURATOR_ONBOARDING_STEPS.length;
+  // Visible steps only. A hidden step still has its completion tracked above, but counting one in
+  // the total would put 100% out of reach with nothing on screen to explain the shortfall.
+  const completedCount = VISIBLE_CURATOR_ONBOARDING_STEPS.filter(step => completion[step.id]).length;
+  const totalCount = VISIBLE_CURATOR_ONBOARDING_STEPS.length;
   const progressPercent = Math.round((completedCount / totalCount) * 100);
   // Drives the collapse in `CuratorOnboardingSection`: a finished checklist folds down to its
   // heading rather than staying open on a column of ticks.

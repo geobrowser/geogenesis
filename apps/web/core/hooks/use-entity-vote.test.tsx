@@ -294,9 +294,12 @@ describe('useEntityResponse indexing reconciliation', () => {
     });
 
     expect(mocks.loadResponseSummaryCaches).not.toHaveBeenCalled();
-    // The three reconcile invalidations, plus one per voted list once indexing confirmed.
+    // The three reconcile invalidations, plus one per voted list once indexing confirmed, plus the
+    // onboarding checklist — which reads a step out of this same table and caches for a minute, so
+    // it has to be told rather than left to notice (GEO-2800).
     expectVotedListsRefreshed(invalidateQueries);
-    expect(invalidateQueries).toHaveBeenCalledTimes(5);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['curator-onboarding-status'] });
+    expect(invalidateQueries).toHaveBeenCalledTimes(6);
   });
 
   it('shows a claim response in its tab optimistically, before indexing confirms it', async () => {
