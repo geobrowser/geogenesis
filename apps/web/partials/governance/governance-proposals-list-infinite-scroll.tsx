@@ -4,21 +4,23 @@ import * as React from 'react';
 
 import { SmallButton } from '~/design-system/button';
 
-import type { GovernanceProposalType } from './governance-proposal-type-filter';
+import type { GovernanceProposalCategory, GovernanceProposalStatusFilter } from './governance-proposal-query';
 import { loadMoreProposalsAction } from './load-more-proposals-action';
 
 interface Props {
   page: number;
   spaceId: string;
   initialHasMore?: boolean;
-  proposalType?: GovernanceProposalType;
+  category?: GovernanceProposalCategory;
+  status?: GovernanceProposalStatusFilter;
 }
 
 export function GovernanceProposalsListInfiniteScroll({
   spaceId,
   page = 0,
   initialHasMore = true,
-  proposalType,
+  category = 'all',
+  status = 'pending',
 }: Props) {
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const [loadMoreNodes, setLoadMoreNodes] = React.useState<React.ReactNode[]>([]);
@@ -39,7 +41,7 @@ export function GovernanceProposalsListInfiniteScroll({
       setIsLoading(true);
 
       try {
-        const [node, next, more] = await loadMoreProposalsAction(spaceId, currentPageRef.current, proposalType);
+        const [node, next, more] = await loadMoreProposalsAction(spaceId, currentPageRef.current, category, status);
         if (abortController?.signal.aborted) return;
         setLoadMoreNodes(prev => [...prev, node]);
         currentPageRef.current = next;
@@ -53,7 +55,7 @@ export function GovernanceProposalsListInfiniteScroll({
       }
     },
     // @TODO this was a hacky workaround to avoid infinite rerenders
-    [spaceId, proposalType]
+    [spaceId, category, status]
   );
 
   React.useEffect(() => {
