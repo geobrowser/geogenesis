@@ -33,18 +33,11 @@
  */
 export type DebateRequestGateInput = {
   /**
-   * The copy of the viewer's position that the request will actually be validated against.
+   * geo-chat's own copy of the viewer's position on this claim.
    *
-   * `undefined` when that source has not answered for this claim yet, which is not the same as
-   * `null` — "no position" is an answer, "no row" is not. Both block the request; only the
-   * distinction keeps a missing row from reading as a deliberate absence.
-   *
-   * Which source that is belongs to the caller, and the two surfaces answer differently. The hub
-   * passes geo-chat's `viewer_response`, and its opponent half is geo-chat's own matchmaking
-   * decision, which cannot exist before geo-chat has the response — so the pairing cannot open
-   * early. The picker's opponent half is computed client-side, so it has no such guarantee and
-   * passes the indexed position instead: gating it on geo-chat's rematch row opened the button
-   * before geo-chat would honour it, and the request came back `claim_response_required`.
+   * `undefined` when geo-chat has not answered for this claim yet, which is not the same as `null`
+   * — "no position" is an answer, "no row" is not. Both block the request; only the distinction
+   * keeps a missing row from reading as a deliberate absence.
    */
   chatPosition: boolean | null | undefined;
   /** The side the viewer believes they hold, optimistic where the surface has one. */
