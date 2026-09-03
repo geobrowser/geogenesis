@@ -19,6 +19,10 @@ export const DEBATE_TYPE_ID = 'fd51f93520634617be397b672b23364c';
  * Curation rather than a property on the claim, which is what lets the debates surfaces ask the
  * graph for their whole corpus in one query: a few hundred tagged claims out of three hundred
  * thousand, so the tag is what gets asked for and the claims come back with it.
+ *
+ * It also narrows the debate-again picker's Related claims source, which offers a claim as
+ * something to debate next. The claim page's Related claims gallery is deliberately *not* narrowed
+ * by it — that gallery is a way out of the page rather than an invitation to a debate (GEO-2758).
  */
 export const DEBATE_TAG_ID = '55c95b2626f8482cb9739ea99dfde438';
 

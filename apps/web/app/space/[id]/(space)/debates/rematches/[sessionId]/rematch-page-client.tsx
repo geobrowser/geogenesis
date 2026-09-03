@@ -8,6 +8,7 @@ import cx from 'classnames';
 import { useRouter } from 'next/navigation';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { relatedClaimsWhere } from '~/core/claims/related-claims';
 import { claimResponseKind } from '~/core/claims/response-kind';
 import { FEATURED_TAG_ID } from '~/core/constants';
 import {
@@ -71,12 +72,14 @@ import {
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
+import { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
 
@@ -121,16 +124,34 @@ type PickerTab = 'claims' | 'opponent';
  * GEO-2683. Where the Claims tab draws its list from. Recommended, Featured and the whole corpus
  * are three answers to one question — "which claims?" — so they belong in a menu rather than in
  * three tabs the viewer has to notice appearing and disappearing.
+ *
+ * GEO-2758 adds Related: the claims sharing a topic with the one this pair just finished debating.
+ * Like Recommended it is conditional — there is no such claim unless the session came out of a
+ * debate — and where it exists it is the best thing to open on, so it leads the menu.
  */
-type ClaimsSource = 'recommended' | 'featured' | 'all';
+type ClaimsSource = 'related' | 'recommended' | 'featured' | 'all';
 
 const CLAIMS_SOURCE_LABELS: Record<ClaimsSource, string> = {
+  related: 'Related claims',
   recommended: 'Recommended',
   featured: 'Featured',
   all: 'All claims',
 };
 
+/**
+ * How much of the related topic the picker offers.
+ *
+ * The claim page pages through its gallery four at a time; this is a menu source in a list that
+ * already scrolls, so it takes one bite instead. Deliberately bounded rather than paged: a busy
+ * topic can carry hundreds of claims, and the point of the source is the handful most worth
+ * debating next, not a directory of the topic.
+ */
+export const RELATED_CLAIMS_LIMIT = 25;
+
 /** Stable identity so the hydration below doesn't restart whenever Featured isn't the source. */
+
+/** Stable identity, for the same reason — and so the id lookups don't restart on every render. */
+const NO_RELATED_IDS: string[] = [];
 
 /**
  * The tab is narrow, so it carries the opponent's first name only: "Jenna Ruiz" -> "Jenna’s".
@@ -158,7 +179,27 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Left unset until the viewer picks one: Recommended is the best default when a curator has put
   // something together for this pairing, and it doesn't exist otherwise. Deciding in state would
   // fix the default before that lookup settles.
-  const [chosenSource, setChosenSource] = React.useState<ClaimsSource | null>(null);
+  /**
+   * Held with the session it was made in.
+   *
+   * This component is reused across `sessionId` changes — the reason the lists below are held on a
+   * reset key rather than remounting — so a bare `chosenSource` outlives the picker it belongs to.
+   * Picking All claims in one rematch then opened the *next* one on All, even when that session
+   * came out of a debate and should have opened on Related. The default is a property of the
+   * picker being opened, not of the last one the viewer touched.
+   *
+   * The availability check below is still needed and does something different: this scopes a
+   * choice to its session, that one drops a choice whose option has gone away *within* a session.
+   */
+  const [chosenSourceForSession, setChosenSourceForSession] = React.useState<{
+    sessionId: string;
+    value: ClaimsSource;
+  } | null>(null);
+  const chosenSource = chosenSourceForSession?.sessionId === sessionId ? chosenSourceForSession.value : null;
+  const setChosenSource = React.useCallback(
+    (value: ClaimsSource) => setChosenSourceForSession({ sessionId, value }),
+    [sessionId]
+  );
 
   // Claims is where the picker opens, whatever its source turns out to be. The strip no longer
   // shifts under the viewer as lookups land: which claims Claims shows is the menu's business now,
@@ -258,16 +299,282 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // this build trusts by id; Featured is a tag anyone's space can carry, so it fans out across the
   // corpus the way All claims does and is bounded the same way.
   const hasRecommended = recommendedSections.length > 0;
+
+  /* -----------------------------------------------------------------------------------------------
+   * GEO-2758. Related claims: the source the picker opens on straight out of a debate.
+   *
+   * The claim just debated is `session.source_debate_id`'s, already fetched above to exclude it
+   * from every list. A session opened from a profile challenge has no source debate, and that
+   * absence *is* the "didn't just finish a debate" case the option is conditional on — so the
+   * condition needs no new plumbing, and no notion of "recently" that could drift out of step with
+   * what the flow actually did.
+   *
+   * Resolved here, above the default, because the default depends on it. Everything downstream —
+   * the picker projection, geo-chat's session rows, the rows themselves — hangs off these ids and
+   * stays with the other sources further down.
+   * ---------------------------------------------------------------------------------------------*/
+  const sourceClaim = sourceDebateQuery.data?.claim ?? null;
+
+  /**
+   * Normalized once, here, because this is where the two id conventions meet.
+   *
+   * geo-chat hands out dashed uuids and the graph stores bare hex (see the note in
+   * `use-debates-best-order`, and `sameId` below). Everything downstream of this claim is a graph
+   * question — the entity lookup, the topic clause, the space it is scoped to — so the geo-chat
+   * spelling is converted at the boundary rather than compared against at each use, where one
+   * missed call is a silent empty result rather than an error.
+   */
+  const sourceClaimId = sourceClaim ? uuidToHex(sourceClaim.claim_entity_id) : null;
+  const sourceClaimSpaceId = sourceClaim ? uuidToHex(sourceClaim.space_id) : null;
+
+  /**
+   * Topics live on the graph entity rather than on geo-chat's claim summary, and they are assigned
+   * *per space* — so the claim is hydrated with the debate's space, the same way the claim page
+   * hydrates it for the same purpose.
+   *
+   * `useClaimEntitiesByIds` was the obvious hook here and is the wrong one: its projection selects
+   * `relationsList` with no space filter, so a topic assigned to this claim only in some other
+   * space would come back and pull in neighbours the claim's own Related gallery does not show.
+   * That is precisely the disagreement sharing `relatedClaimsWhere` exists to prevent.
+   *
+   * It reports no `error`, unlike the batch hook, and that costs nothing: a failed hydration leaves
+   * no topics, `relatedEnabled` goes false, and Related is not offered — which is the right answer
+   * when the claim's topics could not be read.
+   */
+  const sourceClaimQuery = useQueryEntity({
+    id: sourceClaimId ?? '',
+    spaceId: sourceClaimSpaceId ?? undefined,
+    enabled: sourceClaimId !== null,
+  });
+
+  const sourceClaimTopicIds = React.useMemo(() => {
+    const entity = sourceClaimQuery.entity;
+    if (!entity) return NO_RELATED_IDS;
+    // The same two conditions the claim page applies when it reads topics off this entity: skip
+    // deleted relations, and compare the property id canonically.
+    return entity.relations
+      .filter(relation => relation.isDeleted !== true && sameId(relation.type.id, TOPICS_PROPERTY_ID))
+      .map(relation => relation.toEntity.id);
+  }, [sourceClaimQuery.entity]);
+
+  // The same clause the claim page's Related claims gallery runs, so the two surfaces cannot
+  // disagree about which claims are related to this one. A claim with no topics has nothing to be
+  // related by, and the query is skipped rather than asked with an empty `in` list — which matches
+  // no relation and would quietly return the space's entire claim list.
+  const relatedEnabled = sourceClaimId !== null && sourceClaimTopicIds.length > 0;
+  const relatedEntitiesQuery = useQueryEntities({
+    where: relatedClaimsWhere({
+      spaceId: sourceClaimSpaceId ?? '',
+      topicIds: sourceClaimTopicIds,
+      // Only claims a curator has marked for debating. This source asks "what should this pair
+      // argue next", which is a narrower question than the claim page's gallery asks of the same
+      // relation.
+      requireTagId: DEBATE_TAG_ID,
+    }),
+    // One more than the limit, because the row dropped below is not one of the neighbours the
+    // limit counts. The debated claim carries the topics this clause matches on, so it is in its
+    // own related list — and, having just been debated, it sorts near the front of it. Asking for
+    // exactly the limit therefore yields one neighbour fewer than the limit advertises.
+    first: RELATED_CLAIMS_LIMIT + 1,
+    // Without this, `useQueryEntities` falls through to a local `EntityQuery` before the first
+    // fetch resolves. Those ids then drive the two row batches below, which are re-fired the moment
+    // the real answer lands — invisible behind `relatedPending`, but two wasted round trips.
+    deferUntilFetched: true,
+    // Bounded on purpose: this asks for one page and offers no way to reach a second, so warming
+    // the next cursor doubles the discovery payload on a busy topic for rows nothing reads.
+    prefetchNextPage: false,
+    orderBy: [EntitiesOrderBy.UpdatedAtDesc],
+    enabled: relatedEnabled,
+  });
+
+  /**
+   * The source claim matches its own topics, so the graph returns it in its own related list —
+   * always, and as the only row when the claim has no neighbours.
+   *
+   * Dropped here rather than left to `excludedClaimIds` below, even though that would also remove
+   * it from the rows. `hasRelated` counts these ids, so leaving it in makes a claim with no
+   * neighbours look like a claim with one: the option appears, becomes the default, and the
+   * downstream exclusion then empties the list it opened on — exactly the empty case that is
+   * supposed to keep the option out of the menu entirely.
+   *
+   * This is the one exclusion that has to happen before the count rather than with the others.
+   * It is also the only one that can: it follows from the query itself, where the rest depend on
+   * what this session has ruled out and are not known until geo-chat answers.
+   */
+  const relatedClaimIds = React.useMemo(
+    () =>
+      relatedEnabled && sourceClaimId
+        ? relatedEntitiesQuery.entities
+            // Unnamed entities are dropped by `rowFromEntity`, and the claim page's gallery filters
+            // them out of the same clause for the same reason. Counting one makes Related lead the
+            // menu and then render its empty state — and unlike a session exclusion, a missing name
+            // is knowable from the very query this count comes from.
+            .filter(entity => Boolean(entity.name))
+            .map(entity => entity.id)
+            .filter(id => !sameId(id, sourceClaimId))
+            // Capped after the filter, so the limit counts claims the picker can offer rather than
+            // rows the query happened to return.
+            .slice(0, RELATED_CLAIMS_LIMIT)
+        : NO_RELATED_IDS,
+    [relatedEnabled, relatedEntitiesQuery.entities, sourceClaimId]
+  );
+
+  /**
+   * The two lookups that turn those ids into rows: the claim projection every source here is built
+   * from, and geo-chat's session rows for readiness and this session's exclusions.
+   *
+   * Declared here, above the default, rather than beside their siblings further down. The decision
+   * below depends on whether they failed, because a failure anywhere in this pipeline has to reach
+   * the same fallback — not just a failure in the part that decides the option exists.
+   */
+  const relatedPickerEntitiesQuery = useClaimEntitiesByIds(relatedClaimIds);
+  const relatedClaimsQuery = useDebateRematchClaimsForIds(sessionId, relatedClaimIds);
+
+  /**
+   * Whether the option exists at all — the empty case, answered before the menu renders.
+   *
+   * Read off the ids rather than off the finished rows, and the two can differ: a related claim
+   * this session has already ruled out is dropped downstream. Deliberately, because the menu and
+   * the default have to be decided from the same value. Deciding the option late and the default
+   * early is how a picker ends up defaulting to a source its own menu doesn't list, leaving a
+   * trigger showing a value that cannot be selected — the failure `filter` is derived to avoid in
+   * the Claims tab.
+   *
+   * The same trade Recommended already makes: `hasRecommended` counts the curator's sections, not
+   * the rows that survive this session's exclusions.
+   */
+  /**
+   * A failed discovery is not the same as a discovery that found nothing.
+   *
+   * `useQueryEntities` answers from the local store when the remote fetch fails, so rows and an
+   * error arrive together. Counting those rows made a failure look like a positive answer: the
+   * picker opened on Related and drew its error screen, which is the opposite of the fallback
+   * promised below.
+   */
+  /**
+   * The Related pipeline, declared once.
+   *
+   * Five lookups stand between arriving and a list of neighbours, and four separate decisions have
+   * to know whether any of them is still running or has failed: whether the option exists, whether
+   * the default has settled, what the tab's error is, and whether readiness is known. Each of those
+   * enumerated the lookups by hand, and each ended up missing a different subset — a failure gate
+   * covering all five sat beside a pending gate covering three, so the default rendered from an
+   * answer a request still in flight was allowed to take away.
+   *
+   * Derived from one list instead, so a lookup added to the pipeline cannot be left out of a gate.
+   * Safe to include every entry unconditionally: all five report `isLoading: false` when idle —
+   * the batching hooks fold `some(isLoading)` over an empty batch list, and the other two are
+   * `enabled`-gated queries.
+   */
+  type RelatedLookup = { isLoading: boolean; error?: unknown };
+
+  /**
+   * Split by the question each lookup answers, because two different decisions read them.
+   *
+   * **Discovery** answers whether Related exists at all: the session, the debate it came from,
+   * that claim's topics, and its neighbours. **Rows** only draw what discovery found.
+   *
+   * Folding a row failure into the first question is what made the source vanish from its own
+   * menu: a refetch that fails sticks (`retry: false`), so the viewer was moved to Featured with
+   * no error shown and moved back on the next success. A row failure now keeps Related and lets
+   * `tabError` say we could not draw it — which is the position `chosenSourceIsAvailable` already
+   * takes for a source the viewer picked, so the default now behaves the same way.
+   *
+   * It also keeps the row lookups out of the *pending* gate, so Featured is no longer held behind
+   * two batches that cannot change which source wins.
+   */
+  const relatedDiscoveryLookups: ReadonlyArray<RelatedLookup> = [
+    sourceDebateQuery,
+    sourceClaimQuery,
+    relatedEntitiesQuery,
+  ];
+  const relatedRowLookups: ReadonlyArray<RelatedLookup> = [relatedPickerEntitiesQuery, relatedClaimsQuery];
+
+  const relatedDiscoveryError = relatedDiscoveryLookups.find(lookup => lookup.error)?.error ?? null;
+  const relatedDiscoveryPending = relatedDiscoveryLookups.some(lookup => lookup.isLoading);
+  // Whole-pipeline views, for the list's own settling state and for the tab's error.
+  const relatedError = relatedDiscoveryError ?? relatedRowLookups.find(lookup => lookup.error)?.error ?? null;
+  const relatedPending = relatedDiscoveryPending || relatedRowLookups.some(lookup => lookup.isLoading);
+  const relatedFailed = relatedError !== null;
+  const hasRelated = relatedDiscoveryError === null && relatedClaimIds.length > 0;
+
+  /**
+   * A failed discovery reads as "no related claims" and the picker falls back to Featured, rather
+   * than surfacing an error while the default is still being chosen.
+   *
+   * Deliberate, and the same thing Recommended already does: a curated lookup that fails leaves
+   * `hasRecommended` false and the picker opens on Featured. Related is an enhancement on top of a
+   * picker that works without it, so a lookup nobody asked for should not be able to put an error
+   * in front of someone who came here to choose a claim. It cannot hang either — `isLoading` goes
+   * false on failure, so `relatedUndecided` releases and the fallback is reached.
+   *
+   * Once the viewer is *on* Related, failures do surface: `tabError` covers all five of its
+   * lookups below. The difference is that by then it is the list they asked for.
+   */
+
   // Until the curated lookup settles there is no telling "no curator page" from "not yet", and the
   // default turns on exactly that. The list waits rather than showing Featured and swapping it for
   // Recommended a moment later.
-  const sourceUndecided = chosenSource === null && recommendedLoading;
-  const source: ClaimsSource = chosenSource ?? (hasRecommended ? 'recommended' : 'featured');
+  //
+  // Related is on the same footing and waits the same way: the source debate, that claim's topics,
+  // and the topic query are three round trips, and until they land "no related claims" and "not yet"
+  // are indistinguishable. Only when there is a source debate to wait for — without one the option
+  // can never appear, so there is nothing to hold the list for.
+  //
+  // The session lookup is the round trip before those three, and it counts too: `session` is null
+  // while it runs, which reads exactly like a rematch that never came from a debate. Without it
+  // the trigger names Featured and then swaps once the session says otherwise.
+  const relatedUndecided = sessionQuery.isLoading || (Boolean(session?.source_debate_id) && relatedDiscoveryPending);
+  /**
+   * Only the lookups that can still change the answer.
+   *
+   * Related leads the fallback chain, so once it has settled *with* neighbours the default is
+   * decided and `hasRecommended` cannot move it. Waiting on the curator lookup from there held the
+   * trigger on a skeleton, and the list on its loading state, while a multi-stage query that could
+   * not affect the outcome finished.
+   *
+   * `hasRelated` is only trustworthy once `relatedUndecided` is false — that is what says all five
+   * of its lookups have settled — which is why the Recommended wait hangs off it rather than
+   * standing beside it.
+   */
+  const sourceUndecided = chosenSource === null && (relatedUndecided || (!hasRelated && recommendedLoading));
+
+  /**
+   * A chosen source is honoured only while the menu still offers it.
+   *
+   * Related and Recommended both come and go, and `chosenSource` outlives them: this component is
+   * reused across `sessionId` changes — which is why the lists are held on a reset key rather than
+   * remounting — so a source picked in one rematch survives into the next. Choosing Related and
+   * then entering a profile challenge left the trigger naming a source its own menu no longer
+   * listed, which cannot be selected and cannot be cleared.
+   *
+   * Derived rather than reset through an effect, the way the Claims tab derives its filter for the
+   * same reason: the menu label, the query and the empty state all read this value on the very
+   * first render after the option goes away, and an effect would leave them disagreeing for a
+   * frame.
+   */
+  const chosenSourceIsAvailable =
+    chosenSource === null ||
+    (chosenSource === 'related'
+      ? // A discovery failure suppresses the *default*, not a choice already made. Reading it as
+        // "no related claims" here would move a viewer who deliberately picked Related onto
+        // Featured, so the error they should be seeing never renders and the list they asked for
+        // is silently replaced by one they didn't.
+        hasRelated || relatedFailed
+      : chosenSource === 'recommended'
+        ? hasRecommended
+        : true);
+  const source: ClaimsSource =
+    (chosenSourceIsAvailable ? chosenSource : null) ??
+    (hasRelated ? 'related' : hasRecommended ? 'recommended' : 'featured');
+
   // Both graph-sourced options, one pipeline (GEO-2771).
   //
   // Featured and All are the same question asked of two tags — which claims carry it — so All joins
   // the machinery Featured already had rather than paging geo-chat's whole corpus for a list of 312.
-  // Recommended is the exception: it is the curator's own page, not a tag.
+  // Recommended is the exception: it is the curator's own page, not a tag. Related is a second
+  // exception, and a different one: it asks the graph directly, because it needs claims sharing
+  // *any* of one claim's topics, where `useTaggedClaims` narrows by every picked topic at once.
   //
   // Gated on the tab too: a remembered source shouldn't keep a graph query alive behind the
   // opponent's positions, which draw from somewhere else entirely.
@@ -348,20 +655,33 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [participants, positions.byClaim]
   );
 
+  /**
+   * Canonical ids throughout, because this set is geo-chat's answer and it is tested against the
+   * graph's ids. geo-chat dashes what the graph stores bare (see `sourceClaimId` above), so a
+   * strict membership test never matches and a claim this session has ruled out is offered anyway.
+   * Silent either way: nothing errors, the row simply appears.
+   *
+   * Normalized where it is built rather than at each `has`, so a lookup added later cannot miss
+   * it. `uuidToHex` is idempotent, so an id already bare passes through untouched.
+   */
   const excludedClaimIds = React.useMemo(() => {
-    const excluded = new Set([
-      ...(savedClaimsQuery.data?.excluded_claim_ids ?? []),
-      ...(opponentClaimsQuery.data?.excluded_claim_ids ?? []),
-      ...(curatedClaimsQuery.data?.excluded_claim_ids ?? []),
-      ...(taggedClaimsQuery.data?.excluded_claim_ids ?? []),
-    ]);
-    const sourceClaimId = sourceDebateQuery.data?.claim.claim_entity_id;
-    if (sourceClaimId) excluded.add(sourceClaimId);
+    const excluded = new Set(
+      [
+        ...(savedClaimsQuery.data?.excluded_claim_ids ?? []),
+        ...(opponentClaimsQuery.data?.excluded_claim_ids ?? []),
+        ...(curatedClaimsQuery.data?.excluded_claim_ids ?? []),
+        ...(taggedClaimsQuery.data?.excluded_claim_ids ?? []),
+        ...(relatedClaimsQuery.data?.excluded_claim_ids ?? []),
+      ].map(uuidToHex)
+    );
+    const excludedSourceClaimId = sourceDebateQuery.data?.claim.claim_entity_id;
+    if (excludedSourceClaimId) excluded.add(uuidToHex(excludedSourceClaimId));
     return excluded;
   }, [
     curatedClaimsQuery.data,
     taggedClaimsQuery.data,
     opponentClaimsQuery.data,
+    relatedClaimsQuery.data,
     savedClaimsQuery.data,
     session?.recently_rejected_claim_ids,
     sourceDebateQuery.data,
@@ -370,7 +690,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // A claim either side recently rejected stays listed with its request disabled, as geo-chat's
   // own rows flag it; the hub's index knows nothing of this session, so its rows read the list.
   const recentlyRejectedClaimIds = React.useMemo(
-    () => new Set(session?.recently_rejected_claim_ids ?? []),
+    () => new Set((session?.recently_rejected_claim_ids ?? []).map(uuidToHex)),
     [session?.recently_rejected_claim_ids]
   );
 
@@ -383,9 +703,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ...(opponentClaimsQuery.data?.claims ?? []),
       ...(curatedClaimsQuery.data?.claims ?? []),
       ...(taggedClaimsQuery.data?.claims ?? []),
+      ...(relatedClaimsQuery.data?.claims ?? []),
     ];
     return rows.length === 0 || rows[0]!.viewer_debate_ready !== undefined;
-  }, [curatedClaimsQuery.data, taggedClaimsQuery.data, opponentClaimsQuery.data, savedClaimsQuery.data]);
+  }, [
+    curatedClaimsQuery.data,
+    taggedClaimsQuery.data,
+    opponentClaimsQuery.data,
+    relatedClaimsQuery.data,
+    savedClaimsQuery.data,
+  ]);
 
   // geo-chat's row for a claim, where it has one. It carries the session flags and readiness; the
   // sides on it are replaced by the graph's below, which is what the card draws.
@@ -403,9 +730,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           ...(opponentClaimsQuery.data?.claims ?? []),
           ...(curatedClaimsQuery.data?.claims ?? []),
           ...(taggedClaimsQuery.data?.claims ?? []),
-        ].map(claim => [claim.claim.claim_entity_id, claim])
+          ...(relatedClaimsQuery.data?.claims ?? []),
+        ].map(claim => [uuidToHex(claim.claim.claim_entity_id), claim])
       ),
-    [curatedClaimsQuery.data, taggedClaimsQuery.data, opponentClaimsQuery.data, savedClaimsQuery.data]
+    [
+      curatedClaimsQuery.data,
+      taggedClaimsQuery.data,
+      opponentClaimsQuery.data,
+      relatedClaimsQuery.data,
+      savedClaimsQuery.data,
+    ]
   );
 
   /**
@@ -460,11 +794,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ...opponentEntitiesQuery.entities,
       ...recommendedEntities,
       ...taggedCatalog.map(claim => claim.entity),
+      ...relatedPickerEntitiesQuery.entities,
     ]) {
       for (const spaceId of claimCandidateSpaceIds(entity)) ids.add(spaceId);
     }
     return [...ids];
-  }, [opponentEntitiesQuery.entities, recommendedEntities, taggedCatalog]);
+  }, [opponentEntitiesQuery.entities, recommendedEntities, relatedPickerEntitiesQuery.entities, taggedCatalog]);
   const { spacesById: candidateSpaces } = useSpacesByIds(candidateSpaceIds);
   const spaceTypePublishable = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
   const canPublishDebateIn = React.useCallback(
@@ -499,7 +834,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       // A row for a different space describes a different card, so it is treated as no row at all —
       // the same path a claim geo-chat has never seen already takes. The other three sources pass
       // no preference and are unchanged: there the row's space is the authoritative one.
-      const recordedRow = sessionRowsByClaimId.get(entity.id);
+      const recordedRow = sessionRowsByClaimId.get(uuidToHex(entity.id));
       const sessionRow =
         preferred && recordedRow && !sameId(recordedRow.claim.space_id, preferred) ? undefined : recordedRow;
       const responseKind = sessionRow?.response_kind ?? claimResponseKind(entity, homeSpaceId);
@@ -514,7 +849,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         response_kind: responseKind,
         participants: sidesOf(entity.id, sessionRow?.claim.space_id ?? homeSpaceId, responseKind),
         shared_preference: sessionRow?.shared_preference ?? false,
-        recently_rejected: sessionRow?.recently_rejected ?? recentlyRejectedClaimIds.has(entity.id),
+        recently_rejected: sessionRow?.recently_rejected ?? recentlyRejectedClaimIds.has(uuidToHex(entity.id)),
         previously_debated: sessionRow?.previously_debated ?? false,
         // These rows only list once their geo-chat batch has settled (see `sessionCarriesReadiness`).
         viewer_debate_ready: sessionRow ? sessionRow.viewer_debate_ready : sessionCarriesReadiness ? false : undefined,
@@ -522,6 +857,39 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       };
     },
     [canPublishDebateIn, recentlyRejectedClaimIds, sessionCarriesReadiness, sessionRowsByClaimId, sidesOf]
+  );
+
+  /**
+   * The three id-driven sources build their rows identically: drop what this session has ruled out,
+   * find the claim's graph entity, assemble the row, and gate it on the space.
+   *
+   * Written once because the differences between the copies were never intentional. Each gate was
+   * repeated per source, and every divergence turned out to be a bug rather than a decision — an
+   * id compared raw in one copy and normalized in another, and the viewer's browsing allowlist
+   * applied to a source that is bounded by an explicit claim. Sharing the body makes a gate a
+   * property of the pipeline instead of something each source has to remember.
+   *
+   * `requireAllowedSpace` is the one difference that *is* deliberate: the tag-backed sources fan out
+   * across the corpus the way browsing does, so only they are narrowed by the viewer's own scope.
+   */
+  const buildClaimRows = React.useCallback(
+    (
+      candidates: ReadonlyArray<{ claimId: string; preferredSpaceId?: string }>,
+      entities: readonly ClaimPickerEntity[],
+      options: { requireAllowedSpace?: boolean } = {}
+    ): DebateRematchClaim[] =>
+      candidates.flatMap(({ claimId, preferredSpaceId }) => {
+        if (excludedClaimIds.has(uuidToHex(claimId))) return [];
+        const entity = entities.find(candidate => sameId(candidate.id, claimId));
+        const row = entity ? rowFromEntity(entity, preferredSpaceId) : null;
+        // Against the space the row actually carries, not the one asked for. `rowFromEntity` takes
+        // geo-chat's session row whole where it has one, and that row names its own space — so
+        // checking the requested space alone would let a claim through in a different one.
+        if (!row || !canPublishDebateIn(row.claim.space_id)) return [];
+        if (options.requireAllowedSpace && !isClaimSpaceAllowed(row.claim.space_id, spaceAllowlist)) return [];
+        return [row];
+      }),
+    [canPublishDebateIn, excludedClaimIds, rowFromEntity, spaceAllowlist]
   );
 
   // Topics live on the KG claim entity, so resolve them here to label each card and drive the
@@ -538,17 +906,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ...opponentEntitiesQuery.entities,
       ...recommendedEntities,
       ...taggedCatalog.map(claim => claim.entity),
+      ...relatedPickerEntitiesQuery.entities,
     ]) {
       const topics = entity.relations
         .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
         .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
-      if (topics.length > 0) map.set(entity.id, topics);
+      // Keyed canonically, like every other id-keyed structure here: an assembled row keeps
+      // geo-chat's spelling of the claim wherever geo-chat had a row for it, and reads this map
+      // with it. A miss reports the claim as having no topics — no facet, and filtered out of its
+      // own source the moment a topic is picked.
+      if (topics.length > 0) map.set(uuidToHex(entity.id), topics);
     }
     return map;
     // Graph entities only, and now every row's. geo-chat sends its rows back with `topics: []`, so
     // folding those in never added anything — the topics have to come from the entity or not at all,
     // which is why the saved claims are hydrated above rather than trusted to carry their own.
-  }, [opponentEntitiesQuery.entities, recommendedEntities, taggedCatalog]);
+  }, [opponentEntitiesQuery.entities, recommendedEntities, relatedPickerEntitiesQuery.entities, taggedCatalog]);
 
   /**
    * Whether a claim survives the topic filter.
@@ -564,7 +937,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * there is nothing to defer to and nothing to gate.
    */
   const carriesPickedTopics = React.useCallback(
-    (claimEntityId: string) => carriesEveryTopic(topicsByClaimId.get(claimEntityId), topicIds),
+    (claimEntityId: string) => carriesEveryTopic(topicsByClaimId.get(uuidToHex(claimEntityId)), topicIds),
     [topicIds, topicsByClaimId]
   );
 
@@ -577,7 +950,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     const entitiesById = new Map(opponentEntitiesQuery.entities.map(entity => [entity.id, entity]));
     const rows: DebateRematchClaim[] = [];
     for (const claimId of opponentClaimIds) {
-      if (excludedClaimIds.has(claimId)) continue;
+      if (excludedClaimIds.has(uuidToHex(claimId))) continue;
       const entity = entitiesById.get(claimId);
       const row = entity ? rowFromEntity(entity) : null;
       if (row && row.participants.some(side => side.user_id !== currentUserId && side.position !== null))
@@ -622,20 +995,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () =>
       curatedClaimsSettling
         ? []
-        : recommendedClaimIds.flatMap(claimId => {
-            if (excludedClaimIds.has(claimId)) return [];
-            const entity = recommendedEntities.find(candidate => candidate.id === claimId);
-            const row = entity ? rowFromEntity(entity) : null;
-            return row && canPublishDebateIn(row.claim.space_id) ? [row] : [];
-          }),
-    [
-      canPublishDebateIn,
-      curatedClaimsSettling,
-      excludedClaimIds,
-      recommendedClaimIds,
-      recommendedEntities,
-      rowFromEntity,
-    ]
+        : buildClaimRows(
+            recommendedClaimIds.map(claimId => ({ claimId })),
+            recommendedEntities
+          ),
+    [buildClaimRows, curatedClaimsSettling, recommendedClaimIds, recommendedEntities]
   );
   const curatedClaims = useLastSettled(curatedClaimsNow, curatedClaimsSettling, sessionId);
 
@@ -723,6 +1087,47 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     `${sessionId}:${claimsTagId}:${debouncedSearch}:${spaceIds.join(',')}:${topicIds.join(',')}`
   );
 
+  // Related, in the topic query's own order. Built exactly as the curated list is, and held the same way
+  // while its lookups settle.
+  //
+  // What is shared with the claim page's gallery is the relation — `relatedClaimsWhere`, so the two
+  // never disagree about which claims are related — and not the ordering. That gallery re-ranks its
+  // candidates with `useClaimsBestOrder`, where the picker keeps the query's own `updatedAt` order,
+  // as its other sources keep theirs: curated in the curator's order, the tag-backed ones in theirs.
+  // Re-ranking here would put this source out of step with the rest of the picker to bring it into
+  // step with a different surface.
+  //
+  // Outside the viewer's space allowlist, for the reason the opponent and curated lists are: it is
+  // bounded by an explicit source — the claim this pair just debated — so it cannot fan out the way
+  // browsing can, and the viewer's own membership says nothing about whether that source is worth
+  // showing.
+  //
+  // An earlier version applied it, on the reasoning that having just debated the claim meant its
+  // space must already be in the allowlist. That is wrong: the allowlist is featured spaces plus
+  // the ones the viewer is a member or editor of, and debating a claim adds nothing to it. So the
+  // list emptied for whichever participant did not happen to belong to the claim's space — the same
+  // failure the note above records for the other two sources, where a debater's claims live in a
+  // personal space nobody else is a member of.
+  const relatedClaimsSettling = relatedEnabled && relatedPending;
+  const relatedClaimsNow = React.useMemo(
+    () =>
+      !relatedEnabled || relatedClaimsSettling
+        ? []
+        : buildClaimRows(
+            relatedClaimIds.map(claimId => ({ claimId, preferredSpaceId: sourceClaimSpaceId ?? undefined })),
+            relatedPickerEntitiesQuery.entities
+          ),
+    [
+      buildClaimRows,
+      relatedClaimIds,
+      relatedClaimsSettling,
+      relatedEnabled,
+      relatedPickerEntitiesQuery.entities,
+      sourceClaimSpaceId,
+    ]
+  );
+  const relatedClaims = useLastSettled(relatedClaimsNow, relatedClaimsSettling, sessionId);
+
   // The opponent is whichever participant isn't the local user; with no local user there is none.
   const opponentPositionOf = React.useCallback(
     (claim: DebateRematchClaim) =>
@@ -795,26 +1200,38 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const opponentCountPending =
     opponentClaims.length === 0 && (sessionQuery.isLoading || positions.isLoading || opponentClaimsSettling);
 
-  // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
-  // a source that appears doesn't reshuffle the ones already in the menu.
+  // Recommended is offered only when a curator has a page for this pairing, and Related only
+  // straight out of a debate whose claim has neighbours; the order is fixed, so a source that
+  // appears doesn't reshuffle the ones already in the menu.
+  //
+  // Related leads. It is the most specific answer to "which claims?" the picker can give — the
+  // topic the pair was just arguing about — and an option the menu opens on should be the one at
+  // the top of it.
   const sourceOptions = React.useMemo<HubFilterOption<ClaimsSource>[]>(
     () =>
-      (hasRecommended ? (['recommended', 'featured', 'all'] as const) : (['featured', 'all'] as const)).map(value => ({
+      [
+        ...(hasRelated || source === 'related' ? (['related'] as const) : []),
+        ...(hasRecommended ? (['recommended'] as const) : []),
+        'featured' as const,
+        'all' as const,
+      ].map(value => ({
         value,
         label: CLAIMS_SOURCE_LABELS[value],
       })),
-    [hasRecommended]
+    [hasRecommended, hasRelated, source]
   );
 
   const claims =
     tab === 'opponent'
       ? opponentClaims
-      : source === 'recommended'
-        ? curatedClaims
-        : // Featured and All are the same list asked of two tags. Nothing is merged into either
-          // any more (GEO-2798): the Claims tab is the graph's answer, and the session's own rows
-          // live on the opponent's tab and under Recommended, where they always also were.
-          taggedClaims;
+      : source === 'related'
+        ? relatedClaims
+        : source === 'recommended'
+          ? curatedClaims
+          : // Featured and All are the same list asked of two tags. Nothing is merged into either
+            // any more (GEO-2798): the Claims tab is the graph's answer, and the session's own rows
+            // live on the opponent's tab and under Recommended, where they always also were.
+            taggedClaims;
 
   // Whether the list on screen was narrowed by its own query. Only the tagged sources are.
   const graphFiltered = tab === 'claims' && (source === 'featured' || source === 'all');
@@ -866,7 +1283,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       claims
         .filter(claim => carriesPickedTopics(claim.claim.claim_entity_id))
         .flatMap(claim =>
-          (topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).map(topic => ({ id: topic.id, name: topic.name }))
+          // Canonical, like the map's keys: an assembled row carries geo-chat's spelling of the
+          // claim wherever geo-chat had a row for it, and a miss reports the claim as untopiced.
+          (topicsByClaimId.get(uuidToHex(claim.claim.claim_entity_id)) ?? []).map(topic => ({
+            id: topic.id,
+            name: topic.name,
+          }))
         )
     );
     return orderFacetOptions(source, topicIds);
@@ -900,19 +1322,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     (tab === 'opponent'
       ? positions.isLoading || opponentEntitiesQuery.isLoading || opponentClaimsQuery.isLoading
       : sourceUndecided ||
-        (source === 'recommended' ? recommendedLoading || curatedClaimsQuery.isLoading : taggedClaimsSettling));
+        (source === 'related'
+          ? relatedClaimsSettling
+          : source === 'recommended'
+            ? recommendedLoading || curatedClaimsQuery.isLoading
+            : taggedClaimsSettling));
 
   const tabError =
     sessionQuery.error ??
     (tab === 'opponent'
       ? (positions.error ?? opponentEntitiesQuery.error)
-      : source === 'featured' || source === 'all'
-        ? // The page is the list, and it carries everything a row is built from — so its failure is
-          // the only one that leaves nothing to show. geo-chat's row lookup is metadata beside it:
-          // losing it costs the faces and the readiness, not the claims, and blanking the tab for
-          // that trades a short list for no list.
-          taggedCatalogError
-        : curatedClaimsQuery.error);
+      : source === 'related'
+        ? relatedError
+        : source === 'featured' || source === 'all'
+          ? // The page is the list, and it carries everything a row is built from — so its failure is
+            // the only one that leaves nothing to show. geo-chat's row lookup is metadata beside it:
+            // losing it costs the faces and the readiness, not the claims, and blanking the tab for
+            // that trades a short list for no list.
+            taggedCatalogError
+          : curatedClaimsQuery.error);
 
   // A topic the menu no longer offers is unpickable as well as empty — the chip filtering the
   // list would not be in the menu to clear. Unlike the Claims tab, the topics here arrive with
@@ -950,13 +1378,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const showsSections = tab === 'claims' && source === 'recommended';
   const visibleSections = React.useMemo(() => {
     if (!showsSections) return [];
-    const visibleById = new Map(visibleClaims.map(claim => [claim.claim.claim_entity_id, claim]));
+    // Canonical on both sides, like every other id-keyed structure here. An assembled row carries
+    // geo-chat's spelling of the claim wherever geo-chat had a row for it, while the curator's page
+    // names its claims with the graph's — so a claim with a session row drops out of its own
+    // section, and a section whose claims all have one empties completely.
+    const visibleById = new Map(visibleClaims.map(claim => [uuidToHex(claim.claim.claim_entity_id), claim]));
 
     return recommendedSections
       .map(section => ({
         ...section,
         claims: section.claimIds
-          .map(claimId => visibleById.get(claimId))
+          .map(claimId => visibleById.get(uuidToHex(claimId)))
           .filter((claim): claim is DebateRematchClaim => claim !== undefined),
       }))
       .filter(section => section.claims.length > 0);
@@ -975,10 +1407,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const { authenticated: geoChatAuthenticated } = useGeoChatAuth();
   const scopedSpaceIds = React.useMemo(() => {
     const ids = new Set<string>();
-    for (const claim of [...opponentClaims, ...curatedClaims, ...taggedClaims]) ids.add(claim.claim.space_id);
+    for (const claim of [...opponentClaims, ...curatedClaims, ...taggedClaims, ...relatedClaims])
+      ids.add(claim.claim.space_id);
     for (const participant of participants) ids.add(participant.profile_space_id);
     return [...ids].sort((a, b) => a.localeCompare(b));
-  }, [curatedClaims, taggedClaims, opponentClaims, participants]);
+  }, [curatedClaims, taggedClaims, opponentClaims, participants, relatedClaims]);
   useDebateGatewaySpaceScopes(scopedSpaceIds, geoChatAuthenticated && scopedSpaceIds.length > 0);
 
   // Readiness is reported by the card. geo-chat now carries it on the rematch claims
@@ -989,9 +1422,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     unresolved:
       tab === 'opponent'
         ? opponentClaimsQuery.isLoading || Boolean(opponentClaimsQuery.error)
-        : source === 'featured' || source === 'all'
-          ? taggedClaimsQuery.isLoading || Boolean(taggedClaimsQuery.error)
-          : curatedClaimsQuery.isLoading || Boolean(curatedClaimsQuery.error),
+        : source === 'related'
+          ? relatedPending || relatedFailed
+          : source === 'featured' || source === 'all'
+            ? taggedClaimsQuery.isLoading || Boolean(taggedClaimsQuery.error)
+            : curatedClaimsQuery.isLoading || Boolean(curatedClaimsQuery.error),
   });
 
   React.useEffect(() => {
@@ -1152,6 +1587,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     options={sourceOptions}
                     value={source}
                     onChange={setChosenSource}
+                    // The trigger names whichever source is current, so holding only the list
+                    // still shows the fallback and then swaps it once the lookups land -- the
+                    // swap `sourceUndecided` exists to prevent, one control over. An explicit
+                    // pick clears `sourceUndecided`, so this can never sit on a viewer's choice.
+                    labelPending={sourceUndecided}
+                    labelPendingAnnouncement="Choosing which claims to show"
                   />
                 ) : null
               }
@@ -1196,11 +1637,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               ? 'No claims match these filters.'
               : tab === 'opponent'
                 ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
-                : source === 'recommended'
-                  ? `Nothing recommended for you and ${remoteName} yet.`
-                  : source === 'featured'
-                    ? 'No featured claims are available to debate yet.'
-                    : 'No other eligible claims are available yet.'
+                : source === 'related'
+                  ? // Reachable even though the option only appears when related claims exist:
+                    // every one of them can still be ruled out by this session — already debated,
+                    // recently rejected, or in a space that cannot carry a published debate.
+                    'No related claims are left to debate.'
+                  : source === 'recommended'
+                    ? `Nothing recommended for you and ${remoteName} yet.`
+                    : source === 'featured'
+                      ? 'No featured claims are available to debate yet.'
+                      : 'No other eligible claims are available yet.'
           }
           emptyAction={
             hasFilters

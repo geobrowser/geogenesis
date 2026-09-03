@@ -6,12 +6,14 @@ import { type ReactElement, StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 
-import { DebateRematchPageClient } from './rematch-page-client';
+import { DebateRematchPageClient, RELATED_CLAIMS_LIMIT } from './rematch-page-client';
 
 const {
   SPACE_1,
@@ -37,6 +39,14 @@ const {
   // claim, which the picker excludes.
   CLAIM_FRESH: '019fedb4-3f74-7c61-8d44-5fa08b1e7722',
 }));
+
+/** What the source trigger announces while the default is still being decided. */
+const SOURCE_PENDING = 'Choosing which claims to show';
+
+/** Ids are compared canonically here for the same reason the app does: two spellings, one id. */
+function sameSpelling(left: string, right: string) {
+  return left.replace(/-/g, '').toLowerCase() === right.replace(/-/g, '').toLowerCase();
+}
 
 const mocks = vi.hoisted(() => ({
   session: null as DebateRematchSession | null,
@@ -155,6 +165,40 @@ const mocks = vi.hoisted(() => ({
     viewer_debate_ready: boolean;
     readiness_disabled_reason: string | null;
   }>,
+  /**
+   * GEO-2758. The debate this session came out of, which is what makes Related claims available at
+   * all. `null` is the profile-challenge case: no source debate, so no claim to be related to.
+   */
+  sourceDebate: null as { claim: { claim_entity_id: string; space_id: string } } | null,
+  sourceDebateLoading: false,
+  /** Graph claims sharing a topic with the source claim -- what the Related source lists. */
+  relatedEntities: [] as Array<Record<string, unknown>>,
+  relatedEntitiesLoading: false,
+  /**
+   * The remote discovery failed. `useQueryEntities` still answers from the local store in that
+   * case, so rows and an error arrive together — which is the state that decides whether a failed
+   * lookup falls back to Featured or takes over the picker.
+   */
+  relatedEntitiesError: null as Error | null,
+  /** Claim ids geo-chat says this session has ruled out, in geo-chat's own spelling. */
+  rematchExcludedIds: [] as string[],
+  /** Every `where` the related-claims query was built with, in render order. */
+  relatedWheres: [] as unknown[],
+  /** Every `first` it asked for, in render order. */
+  relatedFirsts: [] as Array<number | undefined>,
+  /** Whether each call deferred to the fetch rather than answering from the local store. */
+  relatedDefers: [] as Array<boolean | undefined>,
+  /** Whether each call asked to warm the next cursor page. */
+  relatedPrefetches: [] as Array<boolean | undefined>,
+  /** Every `{ id, spaceId }` the single-entity hydration was asked for, in render order. */
+  entityHydrations: [] as Array<{ id: string; spaceId?: string }>,
+  /**
+   * Fails the by-id claim lookup, but only for the batch containing this id. Scoped rather than
+   * global because the source claim and the neighbours go through the same hook: failing both
+   * would trip the discovery guard, and the fallback would happen for the wrong reason.
+   */
+  /** As {@link entityHydrationErrorFor}, for a batch still in flight rather than failed. */
+  entityLookupLoadingId: null as string | null,
 }));
 
 // `pending-personal-space` reads localStorage at module scope (`atomWithStorage` with
@@ -227,7 +271,10 @@ vi.mock('~/core/debates/hooks', () => ({
   // Two lookups run: one for the curated ids, one for the browsed ones. `curatedIds` lets a test
   // stall the browsed lookup on its own, which is the whole point of their being separate.
   useDebateRematchClaimsForIds: (_sessionId: string, claimIds: string[]) => rematchClaimsLookup(claimIds),
-  useDebate: () => ({ data: { claim: { claim_entity_id: CLAIM_SOURCE } } }),
+  useDebate: (debateId: string, enabled: boolean) => ({
+    data: enabled && debateId ? mocks.sourceDebate : undefined,
+    isLoading: enabled && debateId ? mocks.sourceDebateLoading : false,
+  }),
   useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
     mocks.perSpaceReadinessGroups.push(groups);
     return {
@@ -277,7 +324,7 @@ function rematchClaimsLookup(claimIds: string[]) {
     return { data: { claims: [], excluded_claim_ids: [] }, isLoading: true, error: null };
   }
   return {
-    data: { claims: mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+    data: { claims: mocks.claims, excluded_claim_ids: [CLAIM_SOURCE, ...mocks.rematchExcludedIds] },
     isLoading: false,
     error: null,
   };
@@ -428,17 +475,82 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
 const HYDRATION_ERROR = new Error('hydration exploded');
 
 // The opponent's claims are hydrated from the graph by id, through the picker's narrow projection.
+// GEO-2758. Related claims come from the graph through the sync store, which needs a
+// SyncEngineProvider this file deliberately doesn't mount -- every other data source here is
+// mocked the same way. `enabled: false` returns nothing, which is what the real hook does.
+vi.mock('~/core/sync/use-store', () => ({
+  // Topics are assigned per space, so the source claim is hydrated with the debate's space. This
+  // records what it was asked for; the scoping itself happens in `store.getEntity`, outside the
+  // component.
+  useQueryEntity: ({ id, spaceId, enabled }: { id: string; spaceId?: string; enabled?: boolean }) => {
+    if (enabled !== false && id) mocks.entityHydrations.push({ id, spaceId });
+    // Matched canonically, as the store is: a strict compare here would be stricter than the thing
+    // this stands in for and would fail a caller that correctly normalized before asking.
+    const wanted = id.replace(/-/g, '').toLowerCase();
+    const entity =
+      enabled === false
+        ? null
+        : (mocks.entities.find(candidate => (candidate.id as string).replace(/-/g, '').toLowerCase() === wanted) ??
+          null);
+    return { entity, isLoading: enabled !== false && Boolean(id) && mocks.entityHydrationLoading };
+  },
+  useQueryEntities: ({
+    where,
+    first,
+    enabled,
+    deferUntilFetched,
+    prefetchNextPage,
+  }: {
+    where: unknown;
+    first?: number;
+    enabled?: boolean;
+    deferUntilFetched?: boolean;
+    prefetchNextPage?: boolean;
+  }) => {
+    mocks.relatedWheres.push(where);
+    mocks.relatedFirsts.push(first);
+    mocks.relatedDefers.push(deferUntilFetched);
+    mocks.relatedPrefetches.push(prefetchNextPage);
+    // A first load has no rows yet -- returning them *and* `isLoading` is a state react-query
+    // never produces, and a test written against it passes whatever the picker does with the flag.
+    const loading = enabled !== false && mocks.relatedEntitiesLoading;
+    // `first` is a real cap, as it is on the query this stands in for. Ignoring it let a fixture
+    // hand back more rows than were asked for, which is how a caller that asks for too few still
+    // looks like it returned enough.
+    const page = first === undefined ? mocks.relatedEntities : mocks.relatedEntities.slice(0, first);
+    return {
+      entities: enabled === false || loading ? [] : page,
+      isLoading: loading,
+      isPlaceholderData: false,
+      endCursor: null,
+      hasNextPage: false,
+      error: enabled === false ? null : mocks.relatedEntitiesError,
+    };
+  },
+}));
+
 vi.mock('~/core/debates/claim-picker-page', () => ({
   useClaimEntitiesByIds: (ids: string[]) => {
     mocks.entityIdLookups.push(ids);
     // Answerless while loading, as react-query is on a cold key. Without that a "loading" lookup
     // still handed back its fixtures, so nothing downstream could tell the two apart — and the
     // states that exist to wait for hydration were untestable.
+    //
+    // Matched on the normalized id, as the graph does. Most fixtures here spell an id the same way
+    // on both sides, which production does not: geo-chat dashes what the graph stores bare. A
+    // strict compare here would make the mock stricter than the thing it stands in for, and fail a
+    // caller that correctly normalized before asking.
+    const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
+    const wanted = new Set(ids.map(norm));
+    const failed = mocks.entityHydrationErrorFor !== null && wanted.has(norm(mocks.entityHydrationErrorFor));
+    const pending =
+      mocks.entityHydrationLoading ||
+      (mocks.entityLookupLoadingId !== null && wanted.has(norm(mocks.entityLookupLoadingId)));
     return {
-      entities: mocks.entityHydrationLoading ? [] : mocks.entities.filter(entity => ids.includes(entity.id as string)),
-      isLoading: mocks.entityHydrationLoading,
+      entities: failed || pending ? [] : mocks.entities.filter(entity => wanted.has(norm(entity.id as string))),
+      isLoading: pending,
       // Stable identity: a fresh Error each render would be a new value for every memo below it.
-      error: mocks.entityHydrationErrorFor && ids.includes(mocks.entityHydrationErrorFor) ? HYDRATION_ERROR : null,
+      error: failed ? HYDRATION_ERROR : null,
     };
   },
 }));
@@ -725,6 +837,20 @@ beforeEach(() => {
   // the session's own rows are not folded into this list any more, so a claim the pair answered is
   // here because a curator tagged it, or it is on the opponent's tab.
   mocks.debateTagClaims = [debateTag(), debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_1, 2)];
+  // The session came out of a debate by default, the way the fixture session says it did. Related
+  // still stays out of the menu until `relatedEntities` gives it something to list.
+  mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+  mocks.sourceDebateLoading = false;
+  mocks.relatedEntities = [];
+  mocks.relatedEntitiesLoading = false;
+  mocks.relatedEntitiesError = null;
+  mocks.rematchExcludedIds = [];
+  mocks.relatedWheres.length = 0;
+  mocks.relatedFirsts.length = 0;
+  mocks.relatedDefers.length = 0;
+  mocks.relatedPrefetches.length = 0;
+  mocks.entityHydrations.length = 0;
+  mocks.entityLookupLoadingId = null;
   mocks.matchmakingClaims = [matchmakingClaim()];
   mocks.entityQueryPages = null;
   mocks.entityQueryFetchingNextPage = false;
@@ -1291,6 +1417,629 @@ describe('DebateRematchPageClient', () => {
 
       expect(screen.getByText('No featured claims are available to debate yet.')).toBeInTheDocument();
     });
+
+    /**
+     * GEO-2758. Related claims: what the picker opens on straight out of a debate.
+     *
+     * The condition is the session having a source debate, which is also what the picker already
+     * uses to keep the just-debated claim out of every list. A session opened from a profile
+     * challenge has none, and that is the "didn't just finish a debate" case.
+     */
+    describe('Related claims', () => {
+      const RELATED = '019fedb9-7db8-7a05-9b88-9de4cf60bb75';
+
+      /** A claim in the source claim's space carrying one of its topics. */
+      function relatedEntity(id = RELATED, name = 'A claim on the same topic') {
+        return {
+          id,
+          name,
+          description: null,
+          spaces: [SPACE_1],
+          values: [{ property: { id: NAME_PROPERTY }, spaceId: SPACE_1, value: name }],
+          relations: [
+            { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+          ],
+        };
+      }
+
+      /** The claim the pair just debated, carrying the topic its neighbours are found by. */
+      function sourceClaimEntity() {
+        return {
+          id: CLAIM_SOURCE,
+          name: 'The claim just debated',
+          description: null,
+          spaces: [SPACE_1],
+          values: [{ property: { id: NAME_PROPERTY }, spaceId: SPACE_1, value: 'The claim just debated' }],
+          relations: [
+            { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+          ],
+        };
+      }
+
+      /**
+       * A session out of a debate whose claim has one neighbour on the same topic.
+       *
+       * `relatedEntities` carries the source claim as well, because the graph does: it holds the
+       * topics the clause matches on, so it is always in its own related list. A fixture without
+       * it describes a result the query cannot return.
+       */
+      function debateWithRelated() {
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity()];
+        mocks.relatedEntities = [sourceClaimEntity(), relatedEntity()];
+      }
+
+      /**
+       * geo-chat hands out dashed uuids where the graph stores bare hex — the convention
+       * `use-debates-best-order` spells out, and the reason `sameId` exists in this file. The
+       * source claim crosses that boundary: it arrives from geo-chat and is matched against, and
+       * queried for, graph entities.
+       *
+       * Every other fixture here uses one dashed id on both sides, which is a shape production
+       * never has, and it hid a strict comparison that would have left `sourceClaimTopicIds` empty
+       * and Related permanently absent.
+       */
+      describe('across the geo-chat / graph id boundary', () => {
+        const hex = (uuid: string) => uuid.replace(/-/g, '').toLowerCase();
+
+        it('finds the debated claim when geo-chat dashes the id the graph stores bare', async () => {
+          // The graph's copies, keyed the way the graph keys them.
+          const sourceOnGraph = { ...sourceClaimEntity(), id: hex(CLAIM_SOURCE), spaces: [hex(SPACE_1)] };
+          const relatedOnGraph = { ...relatedEntity(), id: hex(RELATED), spaces: [hex(SPACE_1)] };
+          mocks.entities = [sharedEntity(), sourceOnGraph, relatedOnGraph];
+          mocks.relatedEntities = [sourceOnGraph, relatedOnGraph];
+          // geo-chat's copy, dashed.
+          mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+
+          render(<DebateRematchPageClient sessionId="rematch-1" />);
+          await settleTabSwap();
+
+          expect(screen.getByRole('button', { name: 'Related claims' })).toBeInTheDocument();
+          expect(screen.getByText('A claim on the same topic')).toBeInTheDocument();
+        });
+
+        // The clause goes to the graph, so it has to carry the graph's spelling of the space.
+        /**
+         * The session's answers cross the boundary in the other direction: geo-chat names the
+         * claims it has ruled out in its own dashed spelling, and those names are checked against
+         * ids the graph handed over as bare hex. A strict membership test never matches, so a
+         * claim this session has already excluded is offered anyway.
+         */
+        it('still excludes a neighbour geo-chat ruled out under its own spelling', async () => {
+          const sourceOnGraph = { ...sourceClaimEntity(), id: hex(CLAIM_SOURCE), spaces: [hex(SPACE_1)] };
+          const relatedOnGraph = { ...relatedEntity(), id: hex(RELATED), spaces: [hex(SPACE_1)] };
+          mocks.entities = [sharedEntity(), sourceOnGraph, relatedOnGraph];
+          mocks.relatedEntities = [sourceOnGraph, relatedOnGraph];
+          mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+          mocks.rematchExcludedIds = [RELATED];
+
+          render(<DebateRematchPageClient sessionId="rematch-1" />);
+          await settleTabSwap();
+
+          expect(screen.queryByText('A claim on the same topic')).toBeNull();
+        });
+
+        /**
+         * And the row's session metadata. geo-chat's flags are keyed by its own spelling while the
+         * row is built from the graph's entity, so a miss is silent: every flag quietly reads
+         * false, and a recently rejected claim loses both its badge and the disabled request that
+         * should come with it.
+         */
+        it('carries geo-chat session flags onto a row the graph supplied', async () => {
+          const sourceOnGraph = { ...sourceClaimEntity(), id: hex(CLAIM_SOURCE), spaces: [hex(SPACE_1)] };
+          const relatedOnGraph = { ...relatedEntity(), id: hex(RELATED), spaces: [hex(SPACE_1)] };
+          mocks.entities = [sharedEntity(), sourceOnGraph, relatedOnGraph];
+          mocks.relatedEntities = [sourceOnGraph, relatedOnGraph];
+          mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+          mocks.session = session({ recently_rejected_claim_ids: [RELATED] });
+          // The badge lives on the request control, which only renders once the pair are on
+          // opposing sides -- so the row has to be one they could actually debate.
+          mocks.positions = [
+            position('profile-local', hex(RELATED), hex(SPACE_1), true),
+            position('profile-remote', hex(RELATED), hex(SPACE_1), false),
+          ];
+
+          render(<DebateRematchPageClient sessionId="rematch-1" />);
+          await settleTabSwap();
+
+          expect(screen.getByText('A claim on the same topic')).toBeInTheDocument();
+          expect(screen.getByText('Recently rejected')).toBeInTheDocument();
+        });
+
+        /**
+         * The same boundary through the row map rather than the session's reject list. geo-chat's
+         * row for a claim carries the session flags and is keyed by geo-chat's spelling, while the
+         * row it decorates is built from the graph's entity — so a miss silently downgrades every
+         * flag to false. Nothing here comes from `recently_rejected_claim_ids`, so the badge can
+         * only be arriving through the row map.
+         */
+        it('reads a session row keyed the way geo-chat keys it', async () => {
+          const sourceOnGraph = { ...sourceClaimEntity(), id: hex(CLAIM_SOURCE), spaces: [hex(SPACE_1)] };
+          const relatedOnGraph = { ...relatedEntity(), id: hex(RELATED), spaces: [hex(SPACE_1)] };
+          mocks.entities = [sharedEntity(), sourceOnGraph, relatedOnGraph];
+          mocks.relatedEntities = [sourceOnGraph, relatedOnGraph];
+          mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+          // geo-chat's row, dashed, flagging the rejection on the row itself.
+          mocks.claims = [
+            {
+              ...sharedClaim(),
+              claim: { ...claimSummary(RELATED, 'A claim on the same topic'), space_id: hex(SPACE_1) },
+              recently_rejected: true,
+            },
+          ];
+          mocks.positions = [
+            position('profile-local', hex(RELATED), hex(SPACE_1), true),
+            position('profile-remote', hex(RELATED), hex(SPACE_1), false),
+          ];
+
+          render(<DebateRematchPageClient sessionId="rematch-1" />);
+          await settleTabSwap();
+
+          expect(screen.getByText('Recently rejected')).toBeInTheDocument();
+        });
+
+        /**
+         * Topics are indexed by the graph's entity id, but an assembled row keeps geo-chat's
+         * `claim_entity_id` wherever geo-chat had a row for it — so the row and the topic index
+         * disagree about the claim's name. The row then reports no topics at all: the Related
+         * source offers no topic facets, and an existing topic selection filters every related row
+         * away.
+         *
+         * The neighbour here has a session row, which is what puts geo-chat's spelling on it.
+         */
+        it('offers the topics of a related row geo-chat also has a row for', async () => {
+          const sourceOnGraph = { ...sourceClaimEntity(), id: hex(CLAIM_SOURCE), spaces: [hex(SPACE_1)] };
+          const relatedOnGraph = { ...relatedEntity(), id: hex(RELATED), spaces: [hex(SPACE_1)] };
+          mocks.entities = [sharedEntity(), sourceOnGraph, relatedOnGraph];
+          mocks.relatedEntities = [sourceOnGraph, relatedOnGraph];
+          mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+          mocks.claims = [
+            {
+              ...sharedClaim(),
+              claim: { ...claimSummary(RELATED, 'A claim on the same topic'), space_id: hex(SPACE_1) },
+            },
+          ];
+
+          render(<DebateRematchPageClient sessionId="rematch-1" />);
+          await settleTabSwap();
+          expect(screen.getByText('A claim on the same topic')).toBeInTheDocument();
+
+          fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+          expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument();
+        });
+
+        it('scopes the query with the id the graph stores', async () => {
+          const sourceOnGraph = { ...sourceClaimEntity(), id: hex(CLAIM_SOURCE), spaces: [hex(SPACE_1)] };
+          mocks.entities = [sharedEntity(), sourceOnGraph];
+          mocks.relatedEntities = [sourceOnGraph];
+          mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+
+          render(<DebateRematchPageClient sessionId="rematch-1" />);
+          await settleTabSwap();
+
+          const where = mocks.relatedWheres.at(-1) as { spaces: Array<{ equals: string }> };
+          expect(where.spaces).toEqual([{ equals: hex(SPACE_1) }]);
+        });
+      });
+
+      it('opens on Related claims when the pair just finished a debate', async () => {
+        debateWithRelated();
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        await settleTabSwap();
+
+        expect(screen.getByRole('button', { name: 'Related claims' })).toBeInTheDocument();
+        expect(screen.getByText('A claim on the same topic')).toBeInTheDocument();
+      });
+
+      // It is the most specific answer the picker can give, so it leads -- and an option the menu
+      // opens on should be the one at the top of it.
+      it('leads the menu, above the sources that are always there', async () => {
+        debateWithRelated();
+        curatedPage();
+        mocks.featuredClaims = [featuredTag()];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        openSourceMenu();
+
+        const labels = ['Related claims', 'Recommended', 'Featured', 'All claims'];
+        const rendered = labels.map(label => screen.getAllByRole('button', { name: label }).at(-1)!);
+        for (let index = 1; index < rendered.length; index++) {
+          expect(rendered[index - 1]!.compareDocumentPosition(rendered[index]!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+        }
+      });
+
+      // The empty case, and it has to be answered before the menu renders: an option that appears
+      // and then shows nothing is worse than one that was never offered.
+      it('stays out of the menu when the debated claim has no neighbours', async () => {
+        mocks.featuredClaims = [featuredTag()];
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), featuredEntity()];
+        // What the real query returns for a claim with no neighbours: the claim itself, which
+        // carries the very topics the clause matches on. Returning `[]` here described a result
+        // the graph cannot produce, and hid that `hasRelated` counted the source claim.
+        mocks.relatedEntities = [sourceClaimEntity()];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        await settleTabSwap();
+
+        expect(screen.queryByRole('button', { name: 'Related claims' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Featured' })).toBeInTheDocument();
+      });
+
+      // Arriving any other way -- a challenge from a profile -- means there is no claim to be
+      // related to, however many neighbours the graph could offer.
+      it('stays out of the menu when the session did not come from a debate', async () => {
+        debateWithRelated();
+        mocks.session = session({ source_debate_id: null });
+        mocks.sourceDebate = null;
+        mocks.featuredClaims = [featuredTag()];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        await settleTabSwap();
+
+        expect(screen.queryByRole('button', { name: 'Related claims' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Featured' })).toBeInTheDocument();
+      });
+
+      /**
+       * The whole point of sharing `relatedClaimsWhere` with the claim page: a viewer who sees a
+       * claim in one surface and not the other has no way to tell which is lying. Asserting the
+       * clause rather than the rows is what catches a reimplementation that happens to agree on
+       * this fixture.
+       */
+      it('asks the same question the claim page asks, scoped to the debated claim', async () => {
+        debateWithRelated();
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        const where = mocks.relatedWheres.at(-1) as {
+          types: Array<{ id: { equals: string } }>;
+          spaces: Array<{ equals: string }>;
+          relations: Array<{ typeOf: { id: { equals: string } }; toEntity: { id: { in: string[] } } }>;
+        };
+
+        // All three conditions, not just the two that make a claim "related". Without the type
+        // clause the same topics pull in every non-claim entity carrying one, and a test naming
+        // only the space and the relation stays green while they arrive.
+        expect(where.types).toEqual([{ id: { equals: CLAIM_TYPE_ID } }]);
+        // Normalized: the clause goes to the graph, and geo-chat's dashed spelling would not match
+        // what the graph stores. `SPACE_1` is dashed in these fixtures, so this is a real check.
+        expect(where.spaces).toEqual([{ equals: SPACE_1.replace(/-/g, '') }]);
+        expect(where.relations[0]!.typeOf.id.equals).toBe(TOPICS_PROPERTY_ID);
+        expect(where.relations[0]!.toEntity.id.in).toEqual(['topic-gov']);
+        // A configuration assertion rather than a behavioural one: this mock cannot model the
+        // store fall-through, and without deferring, the ids it produces fire both row batches a
+        // moment before the real answer replaces them.
+        expect(mocks.relatedDefers.at(-1)).toBe(true);
+        // Bounded on purpose: no pagination UI, so warming the next cursor fetches a page nothing
+        // reads. Configuration again — the prefetch lives inside the hook.
+        expect(mocks.relatedPrefetches.at(-1)).toBe(false);
+
+        // Topics are per-space, so the source claim must be hydrated with the debate's space. The
+        // batch projection this used to go through selects relations with no space filter, which
+        // let a topic assigned in some *other* space pull in neighbours the claim page's own
+        // gallery would not list — the disagreement the shared clause exists to prevent.
+        const hydration = mocks.entityHydrations.find(call => sameSpelling(call.id, CLAIM_SOURCE));
+        expect(hydration).toBeDefined();
+        expect(hydration!.spaceId).toBeDefined();
+        expect(sameSpelling(hydration!.spaceId!, SPACE_1)).toBe(true);
+
+        // The picker narrows further than the claim page does: only claims tagged for debate. Also
+        // a configuration assertion — the mock returns whatever `relatedEntities` holds regardless
+        // of the clause — but the clause is what the graph and the local matcher both act on, and
+        // they agree that two relation conditions are ANDed with each satisfied by some relation.
+        expect(where.relations).toHaveLength(2);
+        expect(where.relations[1]!.typeOf.id.equals).toBe(TAG_PROPERTY_ID);
+        expect(where.relations[1]!.toEntity.id.in).toEqual([DEBATE_TAG_ID]);
+      });
+
+      /**
+       * Its own topics match it, so the debated claim comes back in its own related list. Offering
+       * the pair the claim they just finished arguing is the one thing this source must not do.
+       *
+       * What this pins is the related list running through `excludedClaimIds` like every other
+       * source, not the source-debate exclusion itself: geo-chat's session rows exclude that claim
+       * too, so removing one and leaving the other keeps this green either way.
+       */
+      it('does not offer the claim that was just debated', async () => {
+        debateWithRelated();
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        await settleTabSwap();
+
+        expect(screen.getByText('A claim on the same topic')).toBeInTheDocument();
+        expect(screen.queryByText('The claim just debated')).toBeNull();
+      });
+
+      /**
+       * The session lookup is the round trip *before* the three below, and until it lands nobody
+       * knows whether this rematch came out of a debate at all. `session` is null while it runs,
+       * which reads exactly like a profile challenge — so without it in the gate the trigger names
+       * Featured and then swaps once the session says otherwise.
+       */
+      it('holds the trigger while the session lookup is still running', async () => {
+        debateWithRelated();
+        mocks.featuredClaims = [featuredTag()];
+        mocks.session = null;
+        mocks.sessionLoading = true;
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        await settleTabSwap();
+
+        expect(screen.queryByRole('button', { name: 'Featured' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Related claims' })).toBeNull();
+      });
+
+      /**
+       * The route reuses this component across `sessionId` changes -- which is why the lists are
+       * held on a reset key rather than remounting. A source picked in one rematch therefore
+       * survives into the next, and Related is the one that can vanish: entering a profile
+       * challenge with it still chosen left the trigger naming a source its own menu no longer
+       * offered, unselectable and unclearable.
+       */
+      it('does not carry a chosen Related source into a session that has none', async () => {
+        debateWithRelated();
+        mocks.featuredClaims = [featuredTag()];
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(), featuredEntity()];
+        const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+        await chooseSource('Related claims');
+
+        // A challenge from a profile: same component, new session, no source debate.
+        mocks.session = session({ id: 'rematch-2', source_debate_id: null });
+        mocks.sourceDebate = null;
+        mocks.relatedEntities = [];
+        rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+        await settleTabSwap();
+
+        expect(screen.queryByRole('button', { name: 'Related claims' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Featured' })).toBeInTheDocument();
+      });
+
+      /**
+       * The availability check only rejects a choice that vanishes. Featured and All never do, so
+       * they outlive the session they were picked in — and the next rematch, one that *did* come
+       * out of a debate, would then open on All instead of Related. The ticket's default is a
+       * property of the picker being opened, not of the last one the viewer touched.
+       */
+      it('starts a new session on Related rather than the source picked in the last one', async () => {
+        debateWithRelated();
+        mocks.featuredClaims = [featuredTag()];
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(), featuredEntity()];
+        mocks.matchmakingClaims = [];
+        const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+        await chooseSource('All claims');
+        expect(screen.getByRole('button', { name: 'All claims' })).toBeInTheDocument();
+
+        // A different rematch, also out of a debate, in the same reused component.
+        mocks.session = session({ id: 'rematch-2' });
+        rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+        await settleTabSwap();
+
+        expect(screen.getByRole('button', { name: 'Related claims' })).toBeInTheDocument();
+      });
+
+      /**
+       * A failed discovery must degrade to Featured, and "failed" is not the same as "returned
+       * nothing": `useQueryEntities` falls back to the local store when the remote fetch fails, so
+       * rows and an error arrive together. Counting those rows made a failure look like a positive
+       * answer, and the picker then opened on Related and rendered its error screen -- the exact
+       * fallback the comment beside `hasRelated` promises not to skip.
+       */
+      it('falls back to Featured when discovery fails but the local store still matches', async () => {
+        debateWithRelated();
+        mocks.featuredClaims = [featuredTag()];
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(), featuredEntity()];
+        mocks.relatedEntitiesError = new Error('discovery failed');
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        await settleTabSwap();
+
+        expect(screen.queryByRole('button', { name: 'Related claims' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Featured' })).toBeInTheDocument();
+        expect(screen.getByText('A featured claim')).toBeInTheDocument();
+      });
+
+      /**
+       * Suppressing a discovery failure is right while the default is being chosen and wrong once
+       * the viewer has chosen. Treating the failure as "no related claims" makes the option
+       * unavailable, which moves a viewer who deliberately picked Related onto Featured — so the
+       * error they should be seeing never renders, and the list they asked for is replaced by one
+       * they didn't.
+       */
+      it('keeps a viewer who chose Related there when a later refetch fails', async () => {
+        debateWithRelated();
+        mocks.featuredClaims = [featuredTag()];
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(), featuredEntity()];
+        const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+        await chooseSource('Related claims');
+
+        mocks.relatedEntitiesError = new Error('refetch failed');
+        rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        expect(screen.getByRole('button', { name: 'Related claims' })).toBeInTheDocument();
+        expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+        expect(screen.queryByText('A featured claim')).toBeNull();
+      });
+
+      /**
+       * The source claim is in its own related list and is dropped afterwards, so a page sized to
+       * the advertised limit yields one fewer neighbour than the limit says. The cap belongs to
+       * the claims the picker offers, not to the rows the query happened to return.
+       */
+      it('offers a full page of neighbours despite dropping the debated claim', async () => {
+        const neighbours = Array.from({ length: 40 }, (_, index) => ({
+          ...relatedEntity(`019fedc0-0000-7000-8000-${String(index).padStart(12, '0')}`, `Neighbour ${index}`),
+        }));
+        // The debated claim sorts first, as it would: the debate just touched it.
+        mocks.relatedEntities = [sourceClaimEntity(), ...neighbours];
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), ...neighbours];
+
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        expect(screen.getAllByText(/^Neighbour /)).toHaveLength(RELATED_CLAIMS_LIMIT);
+      });
+
+      /**
+       * And the other way round. Asking for one extra covers the page that contains the debated
+       * claim; a page that does not contain it comes back one over the limit instead, so the cap
+       * has to be applied to the neighbours rather than left to the query's `first`. Reachable
+       * whenever more than `RELATED_CLAIMS_LIMIT` neighbours were touched more recently than the
+       * claim itself.
+       */
+      it('offers no more than the limit when the debated claim is not on the page', async () => {
+        const neighbours = Array.from({ length: 40 }, (_, index) => ({
+          ...relatedEntity(`019fedc0-0000-7000-8000-${String(index).padStart(12, '0')}`, `Neighbour ${index}`),
+        }));
+        // Every row a neighbour: the debated claim sorts below this page.
+        mocks.relatedEntities = neighbours;
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), ...neighbours];
+
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        expect(screen.getAllByText(/^Neighbour /)).toHaveLength(RELATED_CLAIMS_LIMIT);
+      });
+
+      /**
+       * Discovery answers whether the source exists; the row lookups only draw it. Folding a row
+       * failure into the first question makes the source vanish from its own menu — and because a
+       * refetch failure sticks (`retry: false`), the viewer is moved to Featured with no error
+       * shown, then moved back when the next refetch succeeds. That is the swap under the viewer
+       * `sourceUndecided` exists to prevent, arriving by a different route.
+       *
+       * So a row failure keeps Related: the source genuinely exists, and the honest thing is to say
+       * we could not draw it. `chosenSourceIsAvailable` already takes this position for a source
+       * the viewer picked; this is the default behaving the same way.
+       */
+      it('keeps Related and surfaces the error when building its rows fails', async () => {
+        debateWithRelated();
+        mocks.featuredClaims = [featuredTag()];
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(), featuredEntity()];
+        // Only the neighbour's batch fails; discovery itself succeeded.
+        mocks.entityHydrationErrorFor = RELATED;
+
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        expect(screen.getByRole('button', { name: 'Related claims' })).toBeInTheDocument();
+        expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+        expect(screen.queryByText('A featured claim')).toBeNull();
+      });
+
+      /**
+       * Reviewer finding: a neighbour with no name is dropped by `rowFromEntity`, and the claim
+       * page's gallery — which shares this clause — filters on `entity.name` for the same reason.
+       * Counting it makes Related lead the menu, become the default, and then render its empty
+       * state. Unlike a session exclusion, which genuinely is not knowable until geo-chat answers,
+       * a missing name is knowable from the very query the count comes from.
+       */
+      it('does not offer Related when its only neighbour has no name', async () => {
+        mocks.featuredClaims = [featuredTag()];
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), featuredEntity()];
+        mocks.relatedEntities = [sourceClaimEntity(), { ...relatedEntity(), name: null }];
+
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        expect(screen.queryByRole('button', { name: 'Related claims' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Featured' })).toBeInTheDocument();
+      });
+
+      /**
+       * The default is discovery's answer, so it lands as soon as discovery settles — the row
+       * lookups only draw the list and cannot change which source won.
+       *
+       * This test asserted the opposite until review: the row lookups were in the gate, so the
+       * trigger stayed blank until they finished. That held Featured behind two batches that could
+       * not affect the outcome, and it was only necessary because `hasRelated` was folding a row
+       * failure into the discovery answer — which had its own, worse consequence (see
+       * `keeps Related and surfaces the error when building its rows fails`).
+       */
+      it('names Related as soon as discovery settles, without waiting for its rows', async () => {
+        debateWithRelated();
+        mocks.featuredClaims = [featuredTag()];
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(), featuredEntity()];
+        // Discovery has answered; the neighbour's batch has not.
+        mocks.entityLookupLoadingId = RELATED;
+
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        expect(screen.getByRole('button', { name: 'Related claims' })).toBeInTheDocument();
+        // The list is still drawing, so nothing from another source stands in for it.
+        expect(screen.queryByText('A featured claim')).toBeNull();
+      });
+
+      /**
+       * The allowlist is the viewer's own browsing scope — featured spaces plus the ones they are a
+       * member or editor of. Having debated a claim puts nothing into it, so for the participant
+       * who does not belong to the claim's space it filters out every neighbour and leaves the
+       * source empty on one side of the pair only.
+       *
+       * Related is bounded by an explicit source, like the opponent's positions and a curator's
+       * page — both of which this file already keeps outside the allowlist, for this exact reason.
+       */
+      it('lists neighbours from a space outside the viewer’s own browsing scope', async () => {
+        debateWithRelated();
+        // The viewer browses SPACE_2; the debate happened in SPACE_1.
+        mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
+
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        expect(screen.getByRole('button', { name: 'Related claims' })).toBeInTheDocument();
+        expect(screen.getByText('A claim on the same topic')).toBeInTheDocument();
+      });
+
+      /**
+       * Related leads the fallback chain, so once it has settled *with* neighbours the default is
+       * decided — `hasRecommended` cannot change the answer from there. Waiting on the curator
+       * lookup anyway leaves the trigger announcing an undecided source, and the list on its
+       * loading state, while a multi-stage query that cannot affect the outcome finishes.
+       *
+       * The wait is still right when Related settles with nothing: then Recommended is next in the
+       * chain and genuinely does decide it.
+       */
+      it('opens on Related without waiting for a curator lookup it has already outranked', async () => {
+        debateWithRelated();
+        mocks.recommendedLoading = true;
+
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleTabSwap();
+
+        expect(screen.getByRole('button', { name: 'Related claims' })).toBeInTheDocument();
+        expect(screen.getByText('A claim on the same topic')).toBeInTheDocument();
+      });
+
+      /**
+       * Three round trips stand between arriving and knowing whether Related exists: the source
+       * debate, that claim's topics, and the topic query. Until they land, "no related claims" and
+       * "not yet" are the same observation -- so the picker waits rather than opening on Featured
+       * and swapping the list out from under the viewer a moment later.
+       */
+      it('waits rather than opening on Featured while the lookup is still resolving', async () => {
+        debateWithRelated();
+        mocks.featuredClaims = [featuredTag()];
+        mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(), featuredEntity()];
+        mocks.relatedEntitiesLoading = true;
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+        await settleTabSwap();
+
+        expect(screen.queryByText('A featured claim')).toBeNull();
+        // The trigger too, not just the list. The menu renders whatever `source` currently is, so
+        // a gate that holds only the rows still shows "Featured" and then swaps it for "Related
+        // claims" a moment later -- the swap this is supposed to prevent, one control over.
+        expect(screen.queryByRole('button', { name: 'Featured' })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Related claims' })).toBeNull();
+      });
+    });
   });
 
   it('opens on Recommended when a curator has, grouping each block into its own section', async () => {
@@ -1309,6 +2058,32 @@ describe('DebateRematchPageClient', () => {
     // Each block lists its own claims.
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
+   * The curator's page names claims with the graph's bare hex ids; geo-chat spells the same claim
+   * dashed, and `rowFromEntity` takes its session row's `claim` whole where it has one — so the
+   * assembled row carries geo-chat's spelling while the section still asks for the graph's.
+   *
+   * Latent until `sessionRowsByClaimId` was keyed canonically: before that the session row was
+   * never found for a graph-backed claim, so the row kept the entity's id and the section matched
+   * it by accident. Fixing the map turned a quietly missing set of session flags into a claim that
+   * vanishes from its section, and a section that can empty out entirely.
+   */
+  it('keeps a recommended claim in its section when geo-chat also has a row for it', async () => {
+    const hex = (uuid: string) => uuid.replace(/-/g, '').toLowerCase();
+    // The curator's page, in the graph's spelling.
+    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [hex(CLAIM_SHARED)] }];
+    mocks.recommendedEntities = [{ ...sharedEntity(), id: hex(CLAIM_SHARED) }];
+    mocks.entities = [{ ...sharedEntity(), id: hex(CLAIM_SHARED) }];
+    // geo-chat's row for the same claim, dashed.
+    mocks.claims = [sharedClaim()];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.getByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 
   it('collapses a section without touching the others', async () => {
@@ -3167,18 +3942,30 @@ async function settleTabSwap() {
   });
 }
 
-/** Opens the source menu on whichever option it is currently showing. */
+/**
+ * Opens the source menu on whichever option it is currently showing.
+ *
+ * The pending name is one of the labels it answers to: while the default is still being decided
+ * the trigger draws a skeleton rather than a source it might not settle on, so it has no source
+ * label to be found by -- but it is still a button, and still opens.
+ */
 function openSourceMenu() {
-  const label = (['Recommended', 'Featured', 'All claims'] as const).find(
+  const label = (['Related claims', 'Recommended', 'Featured', 'All claims', SOURCE_PENDING] as const).find(
     name => screen.queryAllByRole('button', { name }).length > 0
   );
   fireEvent.click(screen.getAllByRole('button', { name: label! })[0]!);
 }
 
-/** Picks a source out of the Claims menu. */
+/**
+ * Picks a source out of the Claims menu.
+ *
+ * The last match, not the only one: with the menu open, the source already showing is named twice
+ * -- once on the trigger and once on its own option -- so re-picking the current source is
+ * ambiguous. Options render after the trigger, so the last match is always the menu item.
+ */
 async function chooseSource(next: string) {
   openSourceMenu();
-  fireEvent.click(screen.getByRole('button', { name: next }));
+  fireEvent.click(screen.getAllByRole('button', { name: next }).at(-1)!);
   await settleTabSwap();
 }
 
