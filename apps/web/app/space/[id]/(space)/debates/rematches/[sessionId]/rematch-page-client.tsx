@@ -272,13 +272,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // opponent's positions, which draw from somewhere else entirely.
   const claimsTagId = source === 'featured' ? FEATURED_TAG_ID : DEBATE_TAG_ID;
   const taggedEnabled = tab === 'claims' && (source === 'featured' || source === 'all') && !sourceUndecided;
-  // The viewer's allowlist goes to the server, so the page and both facet menus describe the same
-  // set of spaces. Publishability stays a client gate below: it is derived from the claims' own
-  // spaces, so asking the server to apply it would make the query depend on its own result.
-  const eligibleSpaceIds = React.useMemo(
-    () => (spaceAllowlist === null ? null : [...spaceAllowlist]),
-    [spaceAllowlist]
-  );
+  // What goes to the server, so the page and both facet menus describe the same set of spaces.
+  //
+  // Two of the three gates can be sent; one cannot. The viewer's allowlist and the acceptor's
+  // editor spaces are both resolved sets that answer independently of this query. The *space-type*
+  // test is the one that cannot go: `spaceTypePublishable` is built from `candidateSpaceIds`, which
+  // is derived from this query's own results, so sending it would make the query depend on its own
+  // answer. It stays a client gate below.
+  //
+  // Sending only the allowlist left the topic facet counting claims in spaces the acceptor cannot
+  // publish into — topics whose every claim `tagDisplaySpaceId` then drops, so picking one could
+  // only ever produce an empty list. That is GEO-2653 again, and the hub already sends the
+  // intersection for exactly this reason.
+  const eligibleSpaceIds = React.useMemo(() => {
+    // `null` from either is "unknown", which must not filter — see `useDebatePublishableSpaces`.
+    if (spaceAllowlist === null) return null;
+    if (publishableSpaceIds === null) return [...spaceAllowlist];
+    return [...spaceAllowlist].filter(spaceId => isSpaceDebatePublishable(spaceId, publishableSpaceIds));
+  }, [publishableSpaceIds, spaceAllowlist]);
 
   const { value: debouncedTopicIds, pending: topicsSettling } = useDebouncedSelection(topicIds);
 

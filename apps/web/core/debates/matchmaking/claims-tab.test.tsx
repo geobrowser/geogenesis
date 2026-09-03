@@ -354,9 +354,11 @@ vi.mock('../tagged-claims', async importOriginal => ({
     return {
       claims,
       isLoading: enabled && mocks.featuredLoading,
-      error: mocks.taggedCatalogError,
-      hasNextPage: mocks.taggedHasNextPage,
-      fetchNextPage: mocks.fetchNextTaggedPage,
+      // Disabled means no answer, not the last one — the hook masks all of these, so the mock has
+      // to as well or a test can exercise a state production cannot reach.
+      error: enabled ? mocks.taggedCatalogError : null,
+      hasNextPage: enabled && mocks.taggedHasNextPage,
+      fetchNextPage: enabled ? mocks.fetchNextTaggedPage : async () => undefined,
       isFetchingNextPage: false,
       refetch: vi.fn(),
     };
@@ -1057,6 +1059,35 @@ describe('All claims reads the Debate tag', () => {
   // GEO-2798 review. The sentinel now follows whichever list is on screen, and every case above it
   // drives the indexed one — so the tagged path, which is the list this PR added, had no test that
   // it pages at all.
+  // GEO-2798 review. Privy reports `authenticated` before the account key rehydrates, and the
+  // per-space lookup is deliberately held until both are known — so it runs nothing and reports
+  // neither loading nor error, which is indistinguishable from a settled "no side" unless the gate
+  // asks for the key too. The pills going live there is the bug we already shipped once: the side
+  // the viewer holds drawn unselected, and a press republishing it instead of clearing it.
+  it('holds the pills while the viewer is signed in but their account key has not arrived', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    mocks.authenticated = true;
+    mocks.accountKey = null;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText('A tagged claim')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Agree/ })).toBeDisabled();
+  });
+
+  it('lets a signed-out viewer press, because having no side is a real answer', async () => {
+    // The other half: signed out is settled, and the press is what opens the sign-in prompt. Read
+    // as "not ready" the whole list would be inert for everyone not signed in.
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    mocks.authenticated = false;
+    mocks.accountKey = null;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText('A tagged claim')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Agree/ })).toBeEnabled();
+  });
+
   it('pages the tagged list from the same sentinel the indexed one uses', async () => {
     mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
     mocks.taggedHasNextPage = true;

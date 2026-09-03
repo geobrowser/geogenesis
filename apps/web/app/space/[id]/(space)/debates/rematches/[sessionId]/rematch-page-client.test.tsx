@@ -357,16 +357,15 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     mocks.featuredEnabledWith.push(enabled);
     mocks.taggedClaimsAskedFor.push(tagId);
     mocks.taggedFiltersAskedFor.push(filters);
-    // Rows are returned whether or not the query is enabled, as react-query does: `enabled: false`
-    // stops the fetch, it does not clear the cache — and the hub shares this key, so a catalog it
-    // fetched arrives here already warm.
-    const claims = mocks.featuredCatalogError ? [] : applyServerFilters(taggedRowsFor(tagId), filters);
+    // Disabled means no answer, not the last one. react-query would hand back the warm cache the
+    // hub left under this key — which is exactly why the hook masks it, so the mock masks it too.
+    const claims = enabled && !mocks.featuredCatalogError ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
     return {
       claims,
       isLoading: enabled && mocks.featuredCatalogLoading,
       error: enabled ? mocks.featuredCatalogError : null,
-      hasNextPage: mocks.taggedHasNextPage,
-      fetchNextPage: mocks.fetchNextTaggedPage,
+      hasNextPage: enabled && mocks.taggedHasNextPage,
+      fetchNextPage: enabled ? mocks.fetchNextTaggedPage : async () => undefined,
       isFetchingNextPage: false,
       refetch: vi.fn(),
     };

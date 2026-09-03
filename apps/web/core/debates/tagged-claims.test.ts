@@ -283,6 +283,25 @@ describe('the filter it builds', () => {
     expect(graphqlMock.mock.calls.length).toBe(requestsWhileEnabled);
   });
 
+  // GEO-2798 review. `null` and `[]` are different answers: unresolved narrows nothing, while a
+  // viewer whose allowlist resolved to no space may see nothing. Collapsing them with `?? []` and
+  // then testing the length showed that viewer the entire tag.
+  it('narrows to nothing for a viewer whose eligible set resolved empty', async () => {
+    respondWithPages([[]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, eligibleSpaceIds: [] });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(tagClause(sentVariables().filter).spaceId).toEqual({ in: [] });
+  });
+
+  it('narrows by no space at all while the eligible set is still unresolved', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, eligibleSpaceIds: null });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(tagClause(sentVariables().filter).spaceId).toBeUndefined();
+  });
+
   it('intersects topics rather than uniting them', async () => {
     // AND since GEO-2696: a claim has to carry every picked topic, which is one clause each.
     respondWithPages([[node('a1', 'One')]]);

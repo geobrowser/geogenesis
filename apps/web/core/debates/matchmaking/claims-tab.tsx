@@ -413,7 +413,15 @@ export function ClaimsTab() {
   // A failed lookup is not an answered one: react-query drops `isLoading` on error, and the side
   // the viewer already holds would be drawn unselected — so a press would republish it rather than
   // clear it. The card's own contract asks for the side, not merely for the wait to be over.
-  const taggedAnswersReady = !graphSourced || (!taggedRows.isLoading && !taggedRows.isError);
+  //
+  // Signed in but without an account key yet is *not* an answer. Privy reports `authenticated`
+  // before the key rehydrates, and `taggedGroups` is held empty until both are known — so the
+  // lookup runs no queries at all and reports neither loading nor error, which read as "settled
+  // with no side". The pills would go live over a viewer whose existing side is still unknown, and
+  // a press on the side they already hold republishes it instead of clearing it. Signed *out* is a
+  // real answer: they have no side, and their press opens the sign-in prompt.
+  const taggedAnswersReady =
+    !graphSourced || (authenticated ? Boolean(accountKey) && !taggedRows.isLoading && !taggedRows.isError : true);
 
   // The space menu, from the server's own count over the tag — narrowed by the search and the
   // topics, never by the space selection, which is what lets a picked space be un-picked and what

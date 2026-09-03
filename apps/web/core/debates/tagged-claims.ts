@@ -258,7 +258,11 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
   // *not* apply to itself; the eligible one is what the viewer may see at all, and applies to
   // everything. Where both exist the picked set is already a subset, so the narrower wins.
   const picked = omit === 'spaces' ? [] : filters.spaceIds;
-  const spaceIds = picked.length > 0 ? picked : (filters.eligibleSpaceIds ?? []);
+  // `null` and `[]` are different answers and only one of them narrows nothing. Unresolved is
+  // `null` — the allowlist has not come back, and a list that is briefly too wide beats a panel
+  // that never fills. Resolved-and-empty is a viewer who may see no space at all, and collapsing
+  // the two showed them the entire tag. `spaceId: { in: [] }` returns nothing, which is the answer.
+  const spaceIds = picked.length > 0 ? picked : filters.eligibleSpaceIds;
 
   // The space goes on the *tag relation*, not on the entity.
   //
@@ -269,7 +273,7 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
   // the Debate tag, four claims across three spaces, two of them in spaces the facet counts as
   // holding none — so the menu and the list disagreed about the same space.
   const tagRelation: Record<string, unknown> = { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: tagId } };
-  if (spaceIds.length > 0) tagRelation.spaceId = { in: spaceIds };
+  if (spaceIds !== null) tagRelation.spaceId = { in: spaceIds };
 
   const and: Record<string, unknown>[] = [{ relations: { some: tagRelation } }];
 
