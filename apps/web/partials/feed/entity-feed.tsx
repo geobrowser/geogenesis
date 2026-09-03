@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { HubMultiFilterMenu } from '~/core/debates/matchmaking/hub-filter-menu';
+import { HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
 import {
@@ -276,25 +276,20 @@ export function EntityFeed({
     // The options are a server prop rather than a query, so they are never half-arrived here.
     pending: false,
   });
-
-  // The menu's own shape. `facetSpaces` is skipped deliberately: it exists to keep a *selected*
-  // option visible after a count drops it, and nothing here drops one — the options are a fixed
-  // list, so a ticked space is always still on it.
-  const spaceMenuOptions = React.useMemo(
-    () => initialSpaceOptions.map(option => ({ value: option.value, label: option.label })),
-    [initialSpaceOptions]
-  );
+  // The hook's `facetSpaces` is deliberately unused. It keeps a *selected* option visible after a
+  // count drops it and orders by that count — neither of which applies to a fixed server-rendered
+  // list, where ordering by a count these rows do not have would replace featured-first with
+  // alphabetical-by-id. `initialSpaceOptions` is already a `HubFilterOption`, so the menu takes it
+  // as it stands.
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
-  // The one name while a single space is ticked, a count past that — the debates panel's wording,
-  // so the two filters read the same way.
-  const spaceLabel =
-    spaceIds.length === 0
-      ? 'Any space'
-      : spaceIds.length === 1
-        ? (initialSpaceOptions.find(option => option.value === spaceIds[0])?.label ?? 'Any space')
-        : `${spaceIds.length} spaces`;
+  const spaceLabel = pickerLabel(
+    spaceIds.length,
+    'Any space',
+    () => initialSpaceOptions.find(option => option.value === spaceIds[0])?.label ?? 'Any space',
+    count => `${count} spaces`
+  );
 
   return (
     <div className="mx-auto w-full max-w-[880px]">
@@ -373,7 +368,7 @@ export function EntityFeed({
               {lockedSpaceId == null ? (
                 <HubMultiFilterMenu
                   label={spaceLabel}
-                  options={spaceMenuOptions}
+                  options={initialSpaceOptions}
                   values={spaceIds}
                   onToggle={onSpaceToggle}
                   onClear={onSpacesClear}
