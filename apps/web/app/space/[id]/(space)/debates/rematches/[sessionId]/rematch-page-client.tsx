@@ -627,13 +627,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [taggedEntitiesQuery.entities]
   );
 
-  const taggedClaimsNow = React.useMemo(
+  // One row per tag that clears the gates — still not collapsed. A claim tagged in several spaces
+  // gets a chance in each, and every space it survives in is a space the menu may offer it under.
+  const taggedRowsPerTag = React.useMemo(
     () =>
       taggedClaimsSettling
         ? []
-        : // Collapsed after the gates, not before: `taggedSelection` carries one row per tag, so a
-          // claim tagged in several spaces gets a chance in each and keeps the first that passes.
-          dedupeRowsByClaim(
+        : (
             taggedSelection.flatMap(featured => {
               if (excludedClaimIds.has(featured.claimEntityId)) return [];
               const entity = taggedEntitiesById.get(featured.claimEntityId);
@@ -655,6 +655,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       rowFromEntity,
       spaceAllowlist,
     ]
+  );
+
+  // Collapsed to one row per claim, preferring a space the viewer has actually picked.
+  //
+  // The hub cuts by the picked space and *then* collapses, so a claim tagged in two spaces is still
+  // there when you filter to either. Collapsing first — which this did — pins the claim to whichever
+  // tag came back first, and picking the other space hides a claim that is tagged in it. Same list,
+  // two surfaces, two answers.
+  //
+  // Done by preference rather than by moving the collapse below the cut: every row here is keyed on
+  // the claim, from `browsedRows`' merge to the readiness lookups, so one row per claim is the shape
+  // the page is built on. The preference reaches the same answer for the space filter — the case
+  // this is about — while leaving that shape alone.
+  const taggedClaimsNow = React.useMemo(
+    () => dedupeRowsByClaim(taggedRowsPerTag, spaceIds),
+    [taggedRowsPerTag, spaceIds]
   );
   // Keyed on the tag as well as the session.
   //
@@ -841,7 +857,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const facetSpaceIds = React.useMemo(() => {
     const { rowSpaceIds } = seenFacetsRef.current;
-    for (const claim of [...opponentClaims, ...curatedClaims, ...taggedClaims, ...browsedClaims])
+    // `taggedRowsPerTag`, not `taggedClaims`: the collapse keeps one space per claim, and a space
+    // missing from the menu cannot be picked — which would put the preference above out of reach.
+    for (const claim of [...opponentClaims, ...curatedClaims, ...taggedRowsPerTag, ...browsedClaims])
       rowSpaceIds.add(claim.claim.space_id);
 
     // Filtered on the way out, not on the way in. Both gates answer `true` while their lookup is
@@ -857,17 +875,32 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // are not narrowed by it.
     for (const id of rowSpaceIds) if (canPublishDebateIn(id)) menu.add(id);
     return [...menu];
-  }, [browsedClaims, canPublishDebateIn, curatedClaims, taggedClaims, opponentClaims]);
+  }, [browsedClaims, canPublishDebateIn, curatedClaims, taggedRowsPerTag, opponentClaims]);
 
   // The menu's ids with counts against them, counted from the rows — which is all there is to count
   // now that no source carries server facets (GEO-2771).
+  // What the space counts are taken over: one row per (claim, space), not per claim.
+  //
+  // `claims` has been collapsed to one row each, so a claim tagged in two spaces counts for
+  // whichever one won — leaving the other with nothing to count and therefore absent from the menu.
+  // A space that cannot be picked cannot be preferred either, so the collapse above would settle it
+  // for good. Counting the tag rows puts both spaces on the menu, each against the claims actually
+  // tagged there, which is the count the hub shows for the same catalog.
+  const facetRows = React.useMemo(() => {
+    if (source !== 'featured' && source !== 'all') return claims;
+    const byClaimAndSpace = new Map<string, DebateRematchClaim>();
+    for (const row of claims) byClaimAndSpace.set(`${row.claim.space_id}:${row.claim.claim_entity_id}`, row);
+    for (const row of taggedRowsPerTag) byClaimAndSpace.set(`${row.claim.space_id}:${row.claim.claim_entity_id}`, row);
+    return [...byClaimAndSpace.values()];
+  }, [claims, source, taggedRowsPerTag]);
+
   const facetSpaces = React.useMemo(() => {
     const offered = new Set(facetSpaceIds);
     // Narrowed by the topic and the search, never by the space selection — what the server does
     // for spaces, and why picking one can't empty the menu it was picked from. Spaces only: topics
     // are AND and their menu *is* narrowed by its own selection, which is co-occurrence.
     const fromRows = countBy(
-      claims
+      facetRows
         .filter(claim => {
           if (!offered.has(claim.claim.space_id)) return false;
           if (!carriesPickedTopics(claim.claim.claim_entity_id)) return false;
@@ -881,7 +914,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // empty list. An absent *selection* comes back at zero, or its checkbox disappears while the
     // trigger goes on counting it, and it can't be unticked without clearing every space.
     return orderFacetOptions(keepSelectedVisible(fromRows, spaceIds), spaceIds);
-  }, [carriesPickedTopics, claims, debouncedSearch, facetSpaceIds, spaceIds]);
+  }, [carriesPickedTopics, debouncedSearch, facetRows, facetSpaceIds, spaceIds]);
 
   // A space picked while the gates were still passing everything has to be let go once they
   // reject it, or it keeps going out as `space_id` on every request while its rows are dropped.
@@ -995,13 +1028,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     (tab === 'opponent'
       ? (positions.error ?? opponentEntitiesQuery.error)
       : source === 'featured' || source === 'all'
-        ? // `savedEntitiesQuery` only for All, and only because its rows are merged there: a failed
-          // hydration leaves them on screen with no topics, so picking any topic removes them
-          // silently. Better an error than a list that looks filtered.
+        ? // The three merged lookups only for All, and only because their rows are merged there: a
+          // failed hydration leaves those rows on screen with no topics, so picking any topic
+          // removes them silently. Better an error than a list that looks filtered. These are the
+          // same three `mergedHydrationSettling` waits on — waiting on a lookup whose failure goes
+          // unreported is how an outage reads as an answer.
           (taggedCatalogError ??
           taggedEntitiesQuery.error ??
           taggedClaimsQuery.error ??
-          (source === 'all' ? savedEntitiesQuery.error : null))
+          (source === 'all'
+            ? (savedEntitiesQuery.error ?? opponentEntitiesQuery.error ?? curatedClaimsQuery.error)
+            : null))
         : curatedClaimsQuery.error);
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
@@ -1555,13 +1592,30 @@ function RecommendedSection({ name, count, children }: { name: string; count: nu
  * which is the point, since only some of them may be publishable or shown to this viewer. Once the
  * gates have run, the list wants the claim once.
  */
-function dedupeRowsByClaim(rows: DebateRematchClaim[]): DebateRematchClaim[] {
-  const seen = new Set<string>();
-  return rows.filter(row => {
-    if (seen.has(row.claim.claim_entity_id)) return false;
-    seen.add(row.claim.claim_entity_id);
-    return true;
-  });
+/**
+ * One row per claim, in first-seen order.
+ *
+ * `preferredSpaceIds` decides which row wins when a claim arrives under more than one space: a row
+ * in a space the viewer has picked beats one that is not, so filtering to a space cannot hide a
+ * claim that is tagged in it. Position is the first row's — a later row replaces the value, not the
+ * slot — so the list does not reorder as the selection changes.
+ */
+function dedupeRowsByClaim(rows: DebateRematchClaim[], preferredSpaceIds: string[] = []): DebateRematchClaim[] {
+  const preferred = new Set(preferredSpaceIds);
+  const chosen = new Map<string, DebateRematchClaim>();
+
+  for (const row of rows) {
+    const existing = chosen.get(row.claim.claim_entity_id);
+    if (!existing) {
+      chosen.set(row.claim.claim_entity_id, row);
+      continue;
+    }
+    if (!preferred.has(existing.claim.space_id) && preferred.has(row.claim.space_id)) {
+      chosen.set(row.claim.claim_entity_id, row);
+    }
+  }
+
+  return [...chosen.values()];
 }
 
 /** Both sides of a rematch claim, in the shape the shared card draws avatars from. */

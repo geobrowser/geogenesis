@@ -110,6 +110,12 @@ function filterOptionsFor(authenticated: boolean) {
 const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
 
 /**
+ * Stands in for a failed `useDebateClaimsBySpaces`, which reports `isError` rather than an error.
+ * Module-level so the identity is stable across renders.
+ */
+const TAGGED_ROWS_ERROR = new Error('Could not load claim details.');
+
+/**
  * Cross-space claim discovery. Search, the space, topic and position filters, and the sort (people
  * available now → total positions → recency) all run server-side, and the response carries a facet
  * for each filter dimension describing the whole filtered corpus rather than the pages walked so
@@ -353,7 +359,11 @@ export function ClaimsTab() {
     () => [...new Set(taggedAllowed.map(claim => claim.claimEntityId).filter(validateEntityId))],
     [taggedAllowed]
   );
-  const { entities: taggedEntities, isLoading: taggedEntitiesLoading } = useClaimEntitiesByIds(taggedEntityIds);
+  const {
+    entities: taggedEntities,
+    isLoading: taggedEntitiesLoading,
+    error: taggedEntitiesError,
+  } = useClaimEntitiesByIds(taggedEntityIds);
 
   // Featured claims in the shape the rest of the tab already speaks. geo-chat has a row for a claim
   // only once someone has taken a side on it, so everything it would carry has a graph-derived
@@ -507,7 +517,14 @@ export function ClaimsTab() {
 
   // Featured's menu settles with its entity lookup, which is where its topics come from — the
   // server facets it would otherwise read never arrive, since the query is never made.
-  const facetsSettled = graphSourced ? !taggedLoading && !taggedEntitiesLoading : claimsQuery.facetsSettled;
+  //
+  // A failed lookup is not a settled one. `taggedTopicsByClaimId` is built from these entities, so
+  // an error leaves it empty while `isLoading` goes false — and the reconciliation below reads a
+  // settled, empty menu as "these topics no longer exist" and drops the viewer's selection. Held
+  // unsettled instead, so an outage costs the list rather than the selection.
+  const facetsSettled = graphSourced
+    ? !taggedLoading && !taggedEntitiesLoading && !taggedEntitiesError
+    : claimsQuery.facetsSettled;
 
   // The space is let go on the condition that actually means "not yours to pick" — the gates
   // stopped admitting it — rather than on its absence from the facet.
@@ -606,7 +623,15 @@ export function ClaimsTab() {
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
           isLoading={spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading)}
-          error={graphSourced ? taggedError : claimsQuery.error}
+          // Every source the graph-backed list depends on, not just the catalog. Entity hydration
+          // carries the topics; the per-space geo-chat rows carry the viewer's position, readiness
+          // and any live debate. A row rendered without either is not a claim with no metadata, it
+          // is a claim whose metadata failed to arrive.
+          error={
+            graphSourced
+              ? (taggedError ?? taggedEntitiesError ?? (taggedRows.isError ? TAGGED_ROWS_ERROR : null))
+              : claimsQuery.error
+          }
           onRetry={() => void (graphSourced ? refetchTagged() : claimsQuery.refetch())}
           isEmpty={visibleClaims.length === 0}
           signInAction={

@@ -39,6 +39,10 @@ const mocks = vi.hoisted(() => ({
   /** geo-chat's per-space claim rows, keyed by the space that answered for them. */
   debateClaimRows: [] as Array<Record<string, unknown> & { claim_entity_id: string; space_id: string }>,
   claimEntityLookups: [] as string[][],
+  /** A failed per-space geo-chat lookup — reported as a flag, as the real hook does. */
+  taggedRowsError: false,
+  /** A failed entity hydration, which is where the graph-backed list gets its topics. */
+  claimEntitiesError: null as Error | null,
   claimEntities: [] as Array<{
     id: string;
     name: string | null;
@@ -258,7 +262,7 @@ vi.mock('../hooks', () => ({
           group.claimIds.some(id => norm(id) === norm(row.claim_entity_id))
       )
     );
-    return { claims, isLoading: false, isError: false };
+    return { claims, isLoading: false, isError: mocks.taggedRowsError };
   },
 }));
 
@@ -287,7 +291,13 @@ vi.mock('../tagged-claims', async importOriginal => ({
 vi.mock('../claim-picker-page', () => ({
   useClaimEntitiesByIds: (ids: string[]) => {
     mocks.claimEntityLookups.push(ids);
-    return { entities: mocks.claimEntities.filter(entity => ids.includes(entity.id)), isLoading: false, error: null };
+    // Answerless when it failed, as react-query is: a query that errored has no data. Handing back
+    // fixtures alongside an error makes the states that exist to survive a failure untestable.
+    return {
+      entities: mocks.claimEntitiesError ? [] : mocks.claimEntities.filter(entity => ids.includes(entity.id)),
+      isLoading: false,
+      error: mocks.claimEntitiesError,
+    };
   },
 }));
 
@@ -412,6 +422,8 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
+  mocks.taggedRowsError = false;
+  mocks.claimEntitiesError = null;
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
   mocks.featuredClaims = [];
@@ -870,6 +882,60 @@ describe('All claims reads the Debate tag', () => {
 
     expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
     expect(mocks.tagsAskedFor).toContain(DEBATE_TAG);
+  });
+
+  // The catalog says which claims; two lookups behind it say everything about them. Reporting only
+  // the catalog's failure leaves the other two rendering an outage as content — a claim with no
+  // topics, or with no position and no readiness — which reads as a settled answer.
+  it('reports a failed entity hydration rather than claims with no topics', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    mocks.claimEntitiesError = new Error('hydration exploded');
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+    expect(screen.queryByText('Nuclear power is the cheapest clean energy')).toBeNull();
+  });
+
+  it('reports a failed claim-details lookup rather than rows with no position', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    mocks.taggedRowsError = true;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+  });
+
+  // The topics come from the entity lookup alone, so a failed one leaves the menu empty while it
+  // stops loading. Read as settled, that empty menu says the viewer's topic no longer exists and
+  // the reconciliation drops it — the selection lost to an outage, and not given back when the
+  // lookup recovers.
+  it('keeps a picked topic when the lookup behind the menu fails', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
+      },
+    ];
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull());
+
+    mocks.claimEntitiesError = new Error('hydration exploded');
+    view.rerender(<ClaimsTab />);
+
+    // Still picked: the menu it was picked from has not answered, so it has not stopped offering it.
+    expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
   });
 
   it('does not serve Featured’s catalog to it', async () => {
