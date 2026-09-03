@@ -114,11 +114,24 @@ export type TaggedClaimFilters = {
   search: string;
   /** AND, not OR: a claim has to carry every picked topic. */
   topicIds: string[];
-  /** OR: any of the picked spaces. */
+  /** OR: any of the picked spaces. Left out of the space facet, which must not narrow by itself. */
   spaceIds: string[];
+  /**
+   * Every space this viewer may be shown claims from at all — their allowlist, already cut to what
+   * a debate can be published into. Applied to *everything*, the space facet included: a space the
+   * viewer cannot see should not be offered, counted, or listed.
+   *
+   * `null` while the allowlist is unresolved, which deliberately narrows nothing.
+   */
+  eligibleSpaceIds: string[] | null;
 };
 
-export const NO_TAGGED_CLAIM_FILTERS: TaggedClaimFilters = { search: '', topicIds: [], spaceIds: [] };
+export const NO_TAGGED_CLAIM_FILTERS: TaggedClaimFilters = {
+  search: '',
+  topicIds: [],
+  spaceIds: [],
+  eligibleSpaceIds: null,
+};
 
 /** A claim a curator has tagged, and the spaces they tagged it in. */
 export type TaggedClaim = {
@@ -211,8 +224,14 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
 
   const filter: Record<string, unknown> = { and };
   if (filters.search) filter.name = { includesInsensitive: filters.search };
+
+  // Two space filters with different jobs. The picked one narrows and is what the space facet must
+  // *not* apply to itself; the eligible one is what the viewer may see at all, and applies to
+  // everything. Where both exist the picked set is already a subset, so the narrower wins.
+  const picked = omit === 'spaces' ? [] : filters.spaceIds;
+  const spaceIds = picked.length > 0 ? picked : (filters.eligibleSpaceIds ?? []);
   // `spaceIds` on the entity is a list, so it takes a list filter — `overlaps`, not `in`.
-  if (omit !== 'spaces' && filters.spaceIds.length > 0) filter.spaceIds = { overlaps: filters.spaceIds };
+  if (spaceIds.length > 0) filter.spaceIds = { overlaps: spaceIds };
 
   return filter;
 }
@@ -225,7 +244,15 @@ const taggedClaimsDocument = parse(TAGGED_CLAIMS_SOURCE) as TypedDocumentNode<Ta
  * knowledge graph rather than geo-chat, so a socket event says nothing about them.
  */
 export const taggedClaimsQueryKey = (tagId: string, filters: TaggedClaimFilters) =>
-  ['tagged-claims', 'claims', tagId, filters.search, filters.topicIds, filters.spaceIds] as const;
+  [
+    'tagged-claims',
+    'claims',
+    tagId,
+    filters.search,
+    filters.topicIds,
+    filters.spaceIds,
+    filters.eligibleSpaceIds,
+  ] as const;
 
 const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
 
@@ -361,7 +388,18 @@ export const taggedFacetQueryKey = (
   dimension: 'topics' | 'spaces',
   tagId: string,
   filters: TaggedClaimFilters
-) => ['tagged-claims', 'facet', dimension, tagId, filters.search, filters.topicIds, filters.spaceIds] as const;
+) =>
+  [
+    'tagged-claims',
+    'facet',
+    dimension,
+    tagId,
+    filters.search,
+    filters.topicIds,
+    // The space facet does not narrow by the picked spaces, so they are not part of its identity.
+    dimension === 'spaces' ? null : filters.spaceIds,
+    filters.eligibleSpaceIds,
+  ] as const;
 
 const NO_FACET_COUNTS: TaggedFacetCount[] = [];
 const NO_TOPIC_NAMES = new Map<string, string | null>();
