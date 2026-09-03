@@ -30,7 +30,9 @@ function parseTime(raw: string | null): ExploreTime {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const time = parseTime(searchParams.get('time'));
-  const spaceId = searchParams.get('spaceId');
+  // `spaceIds` since the feed's filter became a multi-select; `spaceId` still accepted because this
+  // route is pinned to exactly one space and that is the older, simpler thing to send.
+  const spaceId = searchParams.get('spaceIds')?.split(',')[0] || searchParams.get('spaceId');
   const cursor = searchParams.get('cursor');
 
   if (!spaceId) {
@@ -69,7 +71,7 @@ export async function GET(request: Request) {
       browse,
       sort: 'new',
       time,
-      spaceFilterId: spaceId,
+      spaceFilterIds: [spaceId],
       cursor,
       walletAddress: cookieWallet ?? null,
       memberOrEditorSpaceIds,

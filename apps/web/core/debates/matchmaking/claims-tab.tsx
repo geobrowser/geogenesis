@@ -38,7 +38,7 @@ import {
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useDebateRequests } from './hooks';
-import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
+import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -872,14 +872,4 @@ export function SpaceTopicFilters({
       ) : null}
     </div>
   );
-}
-
-/**
- * What the trigger pill says. One selection reads as its own name — the useful case, and the one
- * the viewer is most often in — while several collapse to a count, because two names rarely fit
- * and a truncated pair reads as one bad name.
- */
-function pickerLabel(count: number, empty: string, single: () => string, many: (count: number) => string) {
-  if (count === 0) return empty;
-  return count === 1 ? single() : many(count);
 }

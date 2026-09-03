@@ -277,3 +277,16 @@ function pendingLabelWidth(value: string) {
   for (let i = 0; i < value.length; i++) hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
   return `${60 + (hash % 5) * 15}px`;
 }
+
+/**
+ * What a filter's trigger pill says, given how many options are ticked.
+ *
+ * One selection reads as its own name — the useful case, and the one the viewer is most often in —
+ * while several collapse to a count, because two names rarely fit and a truncated pair reads as one
+ * bad name. Lives beside the menu rather than with any one caller: it is the rule for that
+ * component's `label`, and the debates panel and Explore both have to say it the same way.
+ */
+export function pickerLabel(count: number, empty: string, single: () => string, many: (count: number) => string) {
+  if (count === 0) return empty;
+  return count === 1 ? single() : many(count);
+}
