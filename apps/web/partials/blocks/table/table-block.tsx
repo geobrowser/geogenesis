@@ -22,6 +22,7 @@ import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-re
 import { Source } from '~/core/blocks/data/source';
 import { useBlockInfiniteScroll } from '~/core/blocks/data/use-block-infinite-scroll';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
+import { sourceSupportsDropdowns } from '~/core/blocks/data/use-dropdown-query-overlay';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import {
   isEntityVisibleInBlock,
@@ -83,6 +84,8 @@ import { DataBlockViewMenu } from './data-block-view-menu';
 import { type QuerySetupTypePick, QuerySetupTypesSelectEntityPopover } from './query-setup-types-select-entity-popover';
 import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import { TableBlockContextMenu } from './table-block-context-menu';
+import { TableBlockDropdowns } from './table-block-dropdowns';
+import { TableBlockDropdownsConfigChips, TableBlockDropdownsConfigTrigger } from './table-block-dropdowns-config';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import TableBlockExploreItemsDnd from './table-block-explore-items-dnd';
@@ -611,6 +614,7 @@ const ConfiguredTableBlock = ({
     hideAllShownPropertyColumns,
     orderedShownColumnRelations,
     reorderShownPropertyRelations,
+    browseDropdowns,
   } = useDataBlock({ canEdit });
 
   const { mainMedia, isFramePending } = useBlockMainMedia(shownColumnIds, propertiesSchema, {
@@ -742,13 +746,16 @@ const ConfiguredTableBlock = ({
   /** Visible table columns (e.g. Cover) may be missing from `filterableProperties` when graph vs schema IDs differ. */
   const mergedBlockProperties = React.useMemo(() => {
     const out = [...filterableProperties];
-    for (const p of properties) {
+    for (const p of [...properties, ...browseDropdowns.collectionMemberProperties]) {
       if (!out.some(x => ID.equals(x.id, p.id))) {
         out.push(p);
       }
     }
     return out;
-  }, [filterableProperties, properties]);
+  }, [filterableProperties, properties, browseDropdowns.collectionMemberProperties]);
+
+  /** Dropdowns cover query and collection populations; Relations blocks have none to filter. */
+  const supportsDropdowns = sourceSupportsDropdowns(source);
 
   // Infinite scroll is opt-in via the Infinite scroll BOOLEAN on the Blocks
   // relation entity (same entity that holds View and Properties).
@@ -1135,6 +1142,24 @@ const ConfiguredTableBlock = ({
 
         <BlockLinkIngestionPanel />
 
+        {!isEditing && supportsDropdowns && browseDropdowns.appliedColumnIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 py-2" onMouseDown={e => e.stopPropagation()}>
+            <TableBlockDropdowns
+              configs={browseDropdowns.configs}
+              appliedColumnIds={browseDropdowns.appliedColumnIds}
+              properties={mergedBlockProperties}
+              spaceId={spaceId}
+              baseFilterState={browseDropdowns.baseFilterState}
+              baseModesByColumn={browseDropdowns.baseModesByColumn}
+              selections={browseDropdowns.selections}
+              updateSelections={browseDropdowns.updateSelections}
+              hydrated={browseDropdowns.hydrated}
+              collectionItemIds={browseDropdowns.collectionItemIds}
+              populationReady={browseDropdowns.populationReady}
+            />
+          </div>
+        )}
+
         {isFilterOpen && (
           <AnimatePresence>
             <motion.div
@@ -1181,6 +1206,15 @@ const ConfiguredTableBlock = ({
                         filterSuggestionSpaceId={spaceId}
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}
+                        afterFilterTrigger={
+                          supportsDropdowns ? (
+                            <TableBlockDropdownsConfigTrigger
+                              configs={browseDropdowns.configs}
+                              properties={mergedBlockProperties}
+                              toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+                            />
+                          ) : null
+                        }
                       />
                     </>
                   )}
@@ -1207,36 +1241,45 @@ const ConfiguredTableBlock = ({
                     ))}
                 </div>
 
-                {isEditing && filterGroupsForToolbarPills.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {filterGroupsForToolbarPills.map(group => (
-                      <React.Fragment key={group.groupKey}>
-                        <TableBlockFilterGroupPill
-                          group={group}
-                          mode={activeModesByColumn[group.columnId] ?? 'AND'}
-                          onToggleMode={() => toggleActiveGroupMode(group.columnId)}
-                          onDeleteValue={originalIndex => {
-                            const newFilterState = produce(activeFilters, draft => {
-                              draft.splice(originalIndex, 1);
-                            });
-                            setActiveFilters(newFilterState);
-                          }}
-                          onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => filterGroupKey(f) !== group.groupKey));
-                          }}
-                          onAddSimilar={anchorEl => {
-                            requestAnimationFrame(() => {
-                              requestAnimationFrame(() => {
-                                filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
-                              });
-                            });
-                          }}
-                          isEditing={isEditing}
+                {isEditing &&
+                  (filterGroupsForToolbarPills.length > 0 ||
+                    (supportsDropdowns && browseDropdowns.configs.length > 0)) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {supportsDropdowns && (
+                        <TableBlockDropdownsConfigChips
+                          configs={browseDropdowns.configs}
+                          properties={mergedBlockProperties}
+                          toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                         />
-                      </React.Fragment>
-                    ))}
-                  </div>
-                )}
+                      )}
+                      {filterGroupsForToolbarPills.map(group => (
+                        <React.Fragment key={group.groupKey}>
+                          <TableBlockFilterGroupPill
+                            group={group}
+                            mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                            onToggleMode={() => toggleActiveGroupMode(group.columnId)}
+                            onDeleteValue={originalIndex => {
+                              const newFilterState = produce(activeFilters, draft => {
+                                draft.splice(originalIndex, 1);
+                              });
+                              setActiveFilters(newFilterState);
+                            }}
+                            onClearGroup={() => {
+                              setActiveFilters(activeFilters.filter(f => filterGroupKey(f) !== group.groupKey));
+                            }}
+                            onAddSimilar={anchorEl => {
+                              requestAnimationFrame(() => {
+                                requestAnimationFrame(() => {
+                                  filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
+                                });
+                              });
+                            }}
+                            isEditing={isEditing}
+                          />
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  )}
               </motion.div>
             </motion.div>
           </AnimatePresence>

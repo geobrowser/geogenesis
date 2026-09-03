@@ -12,10 +12,12 @@ import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
 import { filterGroupKey } from '~/core/blocks/data/filter-state-to-where';
 import { FilterMode } from '~/core/blocks/data/filters';
 import { useDataBlock } from '~/core/blocks/data/use-data-block';
+import { useDropdownQueryOverlay } from '~/core/blocks/data/use-dropdown-query-overlay';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import { useSource } from '~/core/blocks/data/use-source';
 import { columnPropertyIdFromRelation, useView } from '~/core/blocks/data/use-view';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
+import { useProperties } from '~/core/hooks/use-properties';
 import { useCanUserEdit, useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { EditorProvider } from '~/core/state/editor/editor-provider';
@@ -44,6 +46,11 @@ import { Text } from '~/design-system/text';
 
 import type { onChangeEntryFn, onLinkEntryFn } from '~/partials/blocks/table/change-entry';
 import { createPropertyRelation, writeValue } from '~/partials/blocks/table/change-entry';
+import { TableBlockDropdowns } from '~/partials/blocks/table/table-block-dropdowns';
+import {
+  TableBlockDropdownsConfigChips,
+  TableBlockDropdownsConfigTrigger,
+} from '~/partials/blocks/table/table-block-dropdowns-config';
 import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
 import { TableBlockFilterGroupPill, groupFilters } from '~/partials/blocks/table/table-block-filter-pill';
 import { Editor } from '~/partials/editor/editor';
@@ -204,6 +211,7 @@ export function PowerToolsScreen() {
     setGroupMode,
     temporaryModesByColumn,
     setTemporaryGroupMode,
+    filterableProperties,
   } = useFilters(canEdit);
   const { source } = useSource({ filterState, setFilterState });
 
@@ -229,15 +237,59 @@ export function PowerToolsScreen() {
     return { propertyId: sortState.columnId, direction: sortState.direction };
   }, [sortState]);
 
+  // Shown-column schema entries (e.g. Cover) can be missing from
+  // filterableProperties — the same graph-vs-schema gap useDataBlock
+  // compensates for. Feed them to the overlay so both surfaces compute the
+  // SAME appliedColumnIds for the same block.
+  const { orderedShownColumnRelations: shownRelationsForOverlay } = useView();
+  const shownColumnIdsForOverlay = React.useMemo(
+    () => shownRelationsForOverlay.map(columnPropertyIdFromRelation),
+    [shownRelationsForOverlay]
+  );
+  const overlaySchemaById = useProperties(shownColumnIdsForOverlay, spaceId);
+  const overlaySchemaProperties = React.useMemo(() => Object.values(overlaySchemaById), [overlaySchemaById]);
+
+  // Browse-mode personal dropdowns overlay the query (never the persisted
+  // filters). Power Tools runs its own filter state, so it applies the
+  // shared overlay hook to that state rather than reusing useDataBlock's.
+  const {
+    queryFilterState: overlaidFilterState,
+    queryModesByColumn: overlaidModesByColumn,
+    isActive: isDropdownOverlayActive,
+    browseDropdowns,
+  } = useDropdownQueryOverlay({
+    source,
+    isEditing,
+    baseFilterState: effectiveFilterState,
+    baseModesByColumn: activeModesByColumn,
+    filterableProperties,
+    extraPillProperties: overlaySchemaProperties,
+  });
+
   const data = usePowerToolsData({
-    filterStateOverride: canEdit ? undefined : temporaryFilters,
-    modesByColumnOverride: canEdit ? undefined : temporaryModesByColumn,
+    filterStateOverride: isDropdownOverlayActive ? overlaidFilterState : canEdit ? undefined : temporaryFilters,
+    modesByColumnOverride: isDropdownOverlayActive
+      ? overlaidModesByColumn
+      : canEdit
+        ? undefined
+        : temporaryModesByColumn,
     extraColumnIds,
     excludedColumnIds,
     sort: serverSort,
   });
 
   const { orderedShownColumnRelations, setShownColumnOrder } = useView();
+
+  // Property list for the dropdown config/browse UI: discovered properties
+  // plus the shown-column schema entries the overlay considers, so a column
+  // the overlay applies always resolves a name here.
+  const dropdownUiProperties = React.useMemo(() => {
+    const merged = [...data.properties];
+    for (const property of [...overlaySchemaProperties, ...browseDropdowns.collectionMemberProperties]) {
+      if (!merged.some(existing => ID.equals(existing.id, property.id))) merged.push(property);
+    }
+    return merged;
+  }, [data.properties, overlaySchemaProperties, browseDropdowns.collectionMemberProperties]);
 
   const propertyIds = React.useMemo(() => data.properties.map(p => p.id), [data.properties]);
   const [orderedPropertyIds, setOrderedPropertyIds] = React.useState<string[]>(() => propertyIds);
@@ -909,6 +961,10 @@ export function PowerToolsScreen() {
 
   const hasActiveFilters = effectiveFilterState.length > 0;
 
+  const supportsDropdowns = browseDropdowns.supportsDropdowns;
+  const showBrowseDropdownsRow = !isEditing && supportsDropdowns && browseDropdowns.appliedColumnIds.length > 0;
+  const showPillsRow = hasActiveFilters || (isEditing && supportsDropdowns && browseDropdowns.configs.length > 0);
+
   const filterGroups = React.useMemo(() => groupFilters(effectiveFilterState), [effectiveFilterState]);
 
   return (
@@ -917,7 +973,13 @@ export function PowerToolsScreen() {
       style={{
         top: '44px',
         display: 'grid',
-        gridTemplateRows: ['auto', !isEditing ? 'auto' : null, hasActiveFilters ? 'auto' : null, '1fr']
+        gridTemplateRows: [
+          'auto',
+          !isEditing ? 'auto' : null,
+          showBrowseDropdownsRow ? 'auto' : null,
+          showPillsRow ? 'auto' : null,
+          '1fr',
+        ]
           .filter(Boolean)
           .join(' '),
       }}
@@ -978,6 +1040,15 @@ export function PowerToolsScreen() {
             filterState={effectiveFilterState}
             setFilterState={effectiveSetFilterState}
             modesByColumn={activeModesByColumn}
+            afterFilterTrigger={
+              isEditing && supportsDropdowns ? (
+                <TableBlockDropdownsConfigTrigger
+                  configs={browseDropdowns.configs}
+                  properties={dropdownUiProperties}
+                  toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+                />
+              ) : null
+            }
           />
           <Menu
             open={isColumnMenuOpen}
@@ -1033,9 +1104,34 @@ export function PowerToolsScreen() {
         </div>
       )}
 
-      {hasActiveFilters && (
+      {showBrowseDropdownsRow && (
+        <div className="flex flex-wrap items-center gap-2 border-b border-grey-02 px-4 py-2">
+          <TableBlockDropdowns
+            configs={browseDropdowns.configs}
+            appliedColumnIds={browseDropdowns.appliedColumnIds}
+            properties={dropdownUiProperties}
+            spaceId={spaceId}
+            baseFilterState={effectiveFilterState}
+            baseModesByColumn={activeModesByColumn}
+            selections={browseDropdowns.selections}
+            updateSelections={browseDropdowns.updateSelections}
+            hydrated={browseDropdowns.hydrated}
+            collectionItemIds={browseDropdowns.collectionItemIds}
+            populationReady={browseDropdowns.populationReady}
+          />
+        </div>
+      )}
+
+      {showPillsRow && (
         <div className="flex items-center gap-2 border-b border-grey-02 px-4 py-2">
           <div className="flex flex-wrap items-center gap-1.5">
+            {isEditing && supportsDropdowns && (
+              <TableBlockDropdownsConfigChips
+                configs={browseDropdowns.configs}
+                properties={dropdownUiProperties}
+                toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+              />
+            )}
             {filterGroups.map(group => (
               <React.Fragment key={group.groupKey}>
                 <TableBlockFilterGroupPill

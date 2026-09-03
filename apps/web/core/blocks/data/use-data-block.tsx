@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { Effect } from 'effect';
 
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
@@ -18,6 +19,7 @@ import { Filter, ModesByColumn } from './filters';
 import { Source } from './source';
 import { useBlockPageSize } from './use-block-page-size';
 import { useCollection } from './use-collection';
+import { useDropdownQueryOverlay } from './use-dropdown-query-overlay';
 import { useFilters } from './use-filters';
 import { mappingToCell, mappingToRows } from './use-mapping';
 import { usePagination } from './use-pagination';
@@ -120,8 +122,32 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   const { sortState, setSortState } = useSort(options?.canEdit);
   const pageSize = useBlockPageSize();
 
-  const filterStateKey = React.useMemo(() => stableStringify(effectiveFilterState), [effectiveFilterState]);
-  const filterModesKey = React.useMemo(() => stableStringify(effectiveModesByColumn), [effectiveModesByColumn]);
+  // Browse-mode personal dropdowns overlay the effective filter state for
+  // the QUERY only: the block's filters, pills, and edit flows never see
+  // them. All gating lives in the shared hook.
+  const isEditing = useUserIsEditing(spaceId);
+  // Shown-column schema entries (e.g. Cover) can be missing from
+  // filterableProperties; the pills offer them, so the overlay must too.
+  const propertiesSchema = useProperties(shownColumnIds, spaceId);
+  const schemaProperties = React.useMemo(
+    () => (propertiesSchema ? Object.values(propertiesSchema) : []),
+    [propertiesSchema]
+  );
+  const {
+    queryFilterState,
+    queryModesByColumn,
+    browseDropdowns: overlayBrowseDropdowns,
+  } = useDropdownQueryOverlay({
+    source,
+    isEditing,
+    baseFilterState: effectiveFilterState,
+    baseModesByColumn: effectiveModesByColumn,
+    filterableProperties,
+    extraPillProperties: schemaProperties,
+  });
+
+  const filterStateKey = React.useMemo(() => stableStringify(queryFilterState), [queryFilterState]);
+  const filterModesKey = React.useMemo(() => stableStringify(queryModesByColumn), [queryModesByColumn]);
   const where = React.useMemo(() => {
     // Rehydrate from the content keys so equivalent arrays/maps retain the
     // same WhereCondition reference even when their input identities change.
@@ -137,10 +163,6 @@ export function useDataBlock(options?: UseDataBlockOptions) {
    * make a name resolving from `null` to a string look like a new query.
    */
   const whereKey = React.useMemo(() => stableStringify(where), [where]);
-
-  // Use the mapping to get the potential renderable properties.
-  const propertiesSchema = useProperties(shownColumnIds, spaceId);
-
   // Map sortState to server-side sort params — used by all source types.
   // dataType is required by the backend's entitiesOrderedByProperty SQL function
   // to resolve which value column to sort on.
@@ -535,6 +557,13 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     temporaryModesByColumn,
     setTemporaryFilters,
     setTemporaryGroupMode,
+
+    // Browse-mode personal dropdowns
+    browseDropdowns: {
+      ...overlayBrowseDropdowns,
+      baseFilterState: effectiveFilterState,
+      baseModesByColumn: effectiveModesByColumn,
+    },
 
     // From useSort
     sortState,
