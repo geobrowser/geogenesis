@@ -683,9 +683,13 @@ beforeEach(() => {
   mocks.entityHydrationLoading = false;
   mocks.fetchNextPage.mockReset();
   mocks.entities = [sharedEntity(), publishedEntity()];
-  // The All tab's corpus (GEO-2771). It used to be `matchmakingClaims` — geo-chat's paged rows —
-  // and is now the Debate tag paired with the entity above, which is what the list is built from.
-  mocks.debateTagClaims = [debateTag()];
+  // The All tab's corpus. It used to be `matchmakingClaims` — geo-chat's paged rows — and is now
+  // the Debate tag paired with the entities above, which is what the list is built from.
+  //
+  // Both claims are tagged, where the second used to arrive through the merge instead (GEO-2798):
+  // the session's own rows are not folded into this list any more, so a claim the pair answered is
+  // here because a curator tagged it, or it is on the opponent's tab.
+  mocks.debateTagClaims = [debateTag(), debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_1, 2)];
   mocks.matchmakingClaims = [matchmakingClaim()];
   mocks.entityQueryPages = null;
   mocks.entityQueryFetchingNextPage = false;
@@ -1183,19 +1187,22 @@ describe('DebateRematchPageClient', () => {
 
     // `enabled: false` leaves react-query's cached rows in place, and the hub shares this query key
     // -- so a catalog fetched there arrives pre-populated and would keep the hydration mounted.
-    it('hydrates nothing while Featured is off screen, even with a cached catalog', async () => {
+    it('asks for nothing while Featured is off screen, even with a cached catalog', async () => {
       curatedPage();
       mocks.featuredClaims = [featuredTag()];
       mocks.entities = [sharedEntity(), featuredEntity()];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-      // Recommended is the default here, so Featured's claim is never asked about.
-      expect(mocks.entityIdLookups.flat()).not.toContain(FEATURED);
+      // Recommended is the default here, so Featured's claim is never asked about. There is no
+      // entity lookup to hold off any more — the page carries what a row is built from — so what
+      // must stay quiet is the tag query itself and the geo-chat rows behind it.
+      expect(mocks.featuredEnabledWith.every(enabled => enabled === false)).toBe(true);
       expect(mocks.rematchClaimIds.flat()).not.toContain(FEATURED);
 
       await chooseSource('Featured');
 
-      expect(mocks.entityIdLookups.flat()).toContain(FEATURED);
+      expect(mocks.featuredEnabledWith.at(-1)).toBe(true);
+      await waitFor(() => expect(mocks.rematchClaimIds.flat()).toContain(FEATURED));
     });
 
     // A remembered Featured source shouldn't keep a graph query alive behind the opponent's tab,
@@ -1215,27 +1222,6 @@ describe('DebateRematchPageClient', () => {
 
 
 
-    // What *is* fatal here, and the difference from the hub: every row on this page is built by
-    // `rowFromEntity`, which has nothing to return without an entity. So the tagged hydration
-    // failing leaves genuinely nothing to show, and saying so beats an empty list that looks like
-    // an answer.
-    it('reports a failed hydration of the tagged claims themselves', async () => {
-      mocks.debateTagClaims = [
-        {
-          claimEntityId: CLAIM_MORE,
-          spaceId: SPACE_2,
-          name: 'A newly published claim',
-          description: null,
-          rankingScore: 2,
-        },
-      ];
-      mocks.entityHydrationErrorFor = CLAIM_MORE;
-
-      render(<DebateRematchPageClient sessionId="rematch-1" />);
-      await showAllClaims();
-
-      expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
-    });
 
     it('reports a failed tag lookup as an error rather than an empty list', async () => {
       mocks.featuredCatalogError = new Error('tag lookup exploded');
@@ -1262,8 +1248,10 @@ describe('DebateRematchPageClient', () => {
     });
 
     it('says nothing is featured rather than nothing is debatable', async () => {
-      mocks.featuredClaims = [featuredTag()];
-      // Tagged, but the graph has no entity for it -- so the source has nothing to show.
+      // Nothing carries the tag, so the source has nothing to show. It used to be expressed as a
+      // tagged claim with no entity behind it; the page carries its own now, so an untagged corpus
+      // is the honest way to say it.
+      mocks.featuredClaims = [];
       mocks.entities = [sharedEntity()];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
 
@@ -1993,30 +1981,6 @@ describe('DebateRematchPageClient', () => {
   });
 
 
-  // The mirror of the allowlist exception: a space can be in the menu without being in the
-  // allowlist, but `browsedRows` still drops the browsed rows from it. Merging the server's facet
-  // for such a space would offer topics carried only by rows that never render.
-  it('does not offer server topics for a selected space outside the allowlist', async () => {
-    mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
-    mocks.matchmakingClaims = [
-      {
-        ...matchmakingClaim(CLAIM_SOURCE, 'A browsed claim in Crypto'),
-        claim: { ...matchmakingClaim().claim, id: CLAIM_SOURCE, claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 },
-        topics: [{ id: 'topic-server', name: 'Server only' }],
-      },
-    ];
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    // Crypto is in the menu because the opponent's claim lives there, allowlist or not.
-    selectFilter('Any space', 'Crypto');
-    await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-
-    // Its rows are dropped as disallowed, so its topics are not the menu's to offer.
-    expect(screen.queryByRole('button', { name: /Server only/ })).toBeNull();
-  });
 
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -2537,7 +2501,25 @@ describe('DebateRematchPageClient', () => {
   // one fanned out graph batches behind the opponent's tab and Recommended, which never list them.
   it('does not hydrate the saved claims on tabs that do not show them', async () => {
     mocks.positions = [];
-    mocks.debateTagClaims = [];
+    // The All tab is the Debate tag and nothing else now (GEO-2798). What the merge used to put
+  // there — the session's own claims — has to be tagged to be there, which is what the default
+  // corpus says: the claim both debaters answered, and a published one they have not.
+  mocks.debateTagClaims = [
+    {
+      claimEntityId: CLAIM_SHARED,
+      spaceId: SPACE_1,
+      name: 'A claim both participants chose',
+      description: null,
+      rankingScore: 2,
+    },
+    {
+      claimEntityId: CLAIM_MORE,
+      spaceId: SPACE_2,
+      name: 'A newly published claim',
+      description: null,
+      rankingScore: 1,
+    },
+  ];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 

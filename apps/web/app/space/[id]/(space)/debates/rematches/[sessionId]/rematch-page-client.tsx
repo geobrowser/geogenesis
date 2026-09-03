@@ -48,6 +48,7 @@ import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import {
   carriesEveryTopic,
+  countBy,
   keepSelectableTopics,
   keepSelectedVisible,
   orderFacetOptions,
@@ -753,44 +754,65 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           // live on the opponent's tab and under Recommended, where they always also were.
           taggedClaims;
 
+  // Whether the list on screen was narrowed by its own query. Only the tagged sources are.
+  const graphFiltered = tab === 'claims' && (source === 'featured' || source === 'all');
+
   // Both menus come from the server's own count over the tag, each narrowed by every dimension but
   // its own (GEO-2796). Counting from the rows could only ever describe the page in hand, which is
   // the thing paging makes wrong.
   //
   // Filtered by publishability on the way out: the server was sent the viewer's allowlist, but not
   // which spaces can carry a published debate — that is derived from the claims themselves.
+  //
+  // Only for the tagged sources. The opponent's tab and Recommended are lists fetched by id, and
+  // they are deliberately *not* narrowed by the viewer's allowlist — a debater's own claims live in
+  // their personal space, which nobody else has joined. Their spaces have to be in the menu with
+  // them or the rows are visible and unfilterable, so those two count from the rows on screen.
   const facetSpaces = React.useMemo(() => {
-    const offered = taggedSpaceFacet.spaces
-      .filter(space => canPublishDebateIn(space.id) && isClaimSpaceAllowed(space.id, spaceAllowlist))
-      .map(space => ({ id: space.id, name: null, count: space.count }));
+    const offered = graphFiltered
+      ? taggedSpaceFacet.spaces
+          .filter(space => canPublishDebateIn(space.id) && isClaimSpaceAllowed(space.id, spaceAllowlist))
+          .map(space => ({ id: space.id, name: null, count: space.count }))
+      : countBy(claims.map(claim => ({ id: claim.claim.space_id, name: null })));
     // An absent *selection* comes back at zero, or its checkbox disappears while the trigger goes on
     // counting it, and it cannot be unticked without clearing every space.
     return orderFacetOptions(keepSelectedVisible(offered, spaceIds), spaceIds);
-  }, [canPublishDebateIn, spaceAllowlist, spaceIds, taggedSpaceFacet.spaces]);
-
-  const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
+  }, [canPublishDebateIn, claims, graphFiltered, spaceAllowlist, spaceIds, taggedSpaceFacet.spaces]);
 
   // A space picked while the gates were still passing everything has to be let go once they reject
-  // it. Only once the menu is a real answer, though: while the facet is still out an empty list of
-  // options means "not yet", and clearing on it would discard a selection about to be valid.
+  // it, or it keeps narrowing every request while every row it returns is dropped.
+  //
+  // Let go on the *gates*, not on the menu. `keepSelectedVisible` puts a picked space back on the
+  // menu at zero — deliberately, so it can be un-picked rather than vanishing under the cursor —
+  // so a rule that pruned to what the menu offers could never drop the one thing it is for. Held
+  // while the gates are still resolving: until they land they pass everything, so a space cleared
+  // against them would be cleared on nothing.
   React.useEffect(() => {
-    if (allowlistPending || !taggedSpaceFacet.settled) return;
+    if (allowlistPending) return;
     setSpaceIds(current => {
-      const offered = new Set(facetSpaceIds);
-      const kept = current.filter(id => offered.has(id));
+      const kept = current.filter(id => canPublishDebateIn(id) && isClaimSpaceAllowed(id, spaceAllowlist));
       return kept.length === current.length ? current : kept;
     });
-  }, [allowlistPending, facetSpaceIds, taggedSpaceFacet.settled]);
+  }, [allowlistPending, canPublishDebateIn, spaceAllowlist]);
 
-  const facetTopics = React.useMemo(
-    () => orderFacetOptions(taggedTopicFacet.topics, topicIds),
-    [taggedTopicFacet.topics, topicIds]
-  );
+  // Same split: the tag's menu is the server's count, and the other two are counted from their own
+  // rows — co-occurrence over the claims that already carry every picked topic, so the menu offers
+  // what appears alongside the selection and nothing on it can lead to an empty list.
+  const facetTopics = React.useMemo(() => {
+    if (graphFiltered) return orderFacetOptions(taggedTopicFacet.topics, topicIds);
+    const source = countBy(
+      claims
+        .filter(claim => carriesPickedTopics(claim.claim.claim_entity_id))
+        .flatMap(claim =>
+          (topicsByClaimId.get(claim.claim.claim_entity_id) ?? []).map(topic => ({ id: topic.id, name: topic.name }))
+        )
+    );
+    return orderFacetOptions(source, topicIds);
+  }, [carriesPickedTopics, claims, graphFiltered, taggedTopicFacet.topics, topicIds, topicsByClaimId]);
 
   // Only the tagged sources are narrowed by their query. The opponent's tab and Recommended are
   // both lists fetched by id — the opponent's positions, a curator's page — so nothing narrowed
   // them on the way in and the filters still run here.
-  const graphFiltered = tab === 'claims' && (source === 'featured' || source === 'all');
   const visibleClaims = React.useMemo(() => {
     if (graphFiltered) return claims;
     return claims.filter(claim => {
