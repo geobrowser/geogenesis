@@ -382,7 +382,7 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     return {
       topics: [...counts.values()],
       isLoading: false,
-      countsSettled: enabled && !mocks.featuredCatalogError,
+      settled: enabled && !mocks.featuredCatalogError,
       error: null,
     };
   },
@@ -2525,12 +2525,28 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.entityIdLookups.flat()).not.toContain(CLAIM_SHARED);
   });
 
-  it('places no scroll sentinel and no paging skeleton, since nothing pages', async () => {
+  // GEO-2798 review. This asserted GEO-2771's "nothing pages" behaviour, which stopped being true
+  // when the All source moved onto the paged tagged query — and it asked for `claims-scroll-sentinel`
+  // where this page renders `rematch-claims-scroll-sentinel`, so it passed whatever the picker did.
+  // Both halves now, since either alone reads as correct: a page to fetch, and a last page.
+  it('pages the tagged list when the sentinel comes into view', async () => {
+    mocks.taggedHasNextPage = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
-    expect(screen.queryByTestId('claims-next-page-skeleton')).toBeNull();
+    expect(screen.getByTestId('rematch-claims-scroll-sentinel')).toBeInTheDocument();
+
+    act(() => mocks.observerTriggers.forEach(trigger => trigger()));
+
+    expect(mocks.fetchNextTaggedPage).toHaveBeenCalled();
+  });
+
+  it('places no sentinel once the tagged list has no page left', async () => {
+    mocks.taggedHasNextPage = false;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(screen.queryByTestId('rematch-claims-scroll-sentinel')).toBeNull();
   });
 
   // GEO-2647. A shared preference used to be pinned to the top of the All tab, which put it ahead

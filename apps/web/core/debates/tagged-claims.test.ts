@@ -190,6 +190,12 @@ describe('what a row carries', () => {
   });
 });
 
+/** The `Tags` clause the filter is built around — where the space narrowing lives. */
+function tagClause(variables: any) {
+  return variables.and.find((clause: any) => clause.relations?.some?.typeId?.is === '257090341ba5406f94e4d4af90042fba')
+    ?.relations.some;
+}
+
 describe('the filter it builds', () => {
   it('always asks for the tag', async () => {
     respondWithPages([[node('a1', 'One')]]);
@@ -242,6 +248,41 @@ describe('the filter it builds', () => {
     expect(sentVariables().filter.and.some((clause: any) => clause.name !== undefined)).toBe(false);
   });
 
+  // GEO-2798 review. `enabled: false` only stops react-query *fetching*; it keeps serving whatever
+  // is cached under the key. Every consumer of this hook then reads a list that is no longer on
+  // screen: the picker started a geo-chat batch about those ids from another tab, and a sentinel
+  // reading a cached `hasNextPage` would page a query whose scope has not resolved — through
+  // `fetchNextPage`, which is a manual call and ignores `enabled` entirely.
+  it('hands back nothing once disabled, however warm the cache is', async () => {
+    respondWithPages([[node('a1', 'One')], [node('a2', 'Two')]]);
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useTaggedClaims(TAG, NO_TAGGED_CLAIM_FILTERS, enabled),
+      { wrapper, initialProps: { enabled: true } }
+    );
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    expect(result.current.hasNextPage).toBe(true);
+
+    rerender({ enabled: false });
+
+    expect(result.current.claims).toEqual([]);
+    expect(result.current.hasNextPage).toBe(false);
+  });
+
+  it('will not page while disabled, which is the call `enabled` cannot stop by itself', async () => {
+    respondWithPages([[node('a1', 'One')], [node('a2', 'Two')]]);
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useTaggedClaims(TAG, NO_TAGGED_CLAIM_FILTERS, enabled),
+      { wrapper, initialProps: { enabled: true } }
+    );
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    const requestsWhileEnabled = graphqlMock.mock.calls.length;
+
+    rerender({ enabled: false });
+    await result.current.fetchNextPage();
+
+    expect(graphqlMock.mock.calls.length).toBe(requestsWhileEnabled);
+  });
+
   it('intersects topics rather than uniting them', async () => {
     // AND since GEO-2696: a claim has to carry every picked topic, which is one clause each.
     respondWithPages([[node('a1', 'One')]]);
@@ -262,14 +303,17 @@ describe('the filter it builds', () => {
     );
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    // `spaceIds` on the entity is a list, so it takes a list filter — `overlaps`, not `in`.
-    expect(sentVariables().filter.spaceIds).toEqual({ overlaps: [SPACE, OTHER_SPACE] });
+    // On the tag relation, not the entity: an entity's `spaceIds` is every space it appears in,
+    // which is a wider question than where a curator tagged it — and it is the tag relation's space
+    // that `tagSpaceIds`, the space facet's grouping and the card's own space all speak.
+    expect(tagClause(sentVariables().filter).spaceId).toEqual({ in: [SPACE, OTHER_SPACE] });
+    expect(sentVariables().filter.spaceIds).toBeUndefined();
 
     rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, spaceIds: [SPACE], eligibleSpaceIds: [SPACE, OTHER_SPACE] } });
     await waitFor(() => expect(graphqlMock.mock.calls.length).toBeGreaterThan(1));
 
     // The picked set is already inside the eligible one, so the narrower wins.
-    expect(sentVariables(graphqlMock.mock.calls.length - 1).filter.spaceIds).toEqual({ overlaps: [SPACE] });
+    expect(tagClause(sentVariables(graphqlMock.mock.calls.length - 1).filter).spaceId).toEqual({ in: [SPACE] });
   });
 
   it('narrows nothing by space while the allowlist is unresolved', async () => {
@@ -327,6 +371,28 @@ describe('the facet menus', () => {
     });
   });
 
+  // GEO-2798 review. `keepPreviousData` keeps the previous filter's counts on screen so the menu
+  // does not blink, and the cost is that `isLoading` is already false while they are showing. A
+  // caller reconciling its selection against them would prune the viewer's pick against a menu they
+  // have moved on from — which is why `use-scoped-claims` excludes placeholder data from the
+  // indexed path's settled flag, and why these two have to agree.
+  it('is not settled while it is still showing the previous filter’s counts', async () => {
+    respondWithGroups([{ id: '5d050707-bc58-4011-9b1e-81ad3adb6244', count: 12 }]);
+    const { result, rerender } = renderHook(
+      ({ filters }: { filters: TaggedClaimFilters }) => useTaggedTopicFacet(TAG, filters, true),
+      { wrapper, initialProps: { filters: NO_TAGGED_CLAIM_FILTERS } }
+    );
+    await waitFor(() => expect(result.current.settled).toBe(true));
+
+    // The next filter's counts never arrive, so the hook stays on the previous ones.
+    graphqlMock.mockImplementation(() => Effect.never);
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' } });
+
+    await waitFor(() => expect(result.current.settled).toBe(false));
+    // Still drawn, which is the whole point of holding them — just not called an answer.
+    expect(result.current.topics).toHaveLength(1);
+  });
+
   it('counts topics over the topic selection, not around it', async () => {
     // The two menus are not symmetric, and that is the product's own rule. Spaces are OR, so the
     // space menu must not narrow by itself or every unpicked space would read zero. Topics are AND
@@ -362,7 +428,7 @@ describe('the facet menus', () => {
 
     // The picked space is dropped so the menu can still offer the others; the eligible set is not,
     // because a space the viewer cannot see should not be offered, counted or listed.
-    expect(sentVariables().fromEntity.spaceIds).toEqual({ overlaps: [SPACE, OTHER_SPACE] });
+    expect(tagClause(sentVariables().fromEntity).spaceId).toEqual({ in: [SPACE, OTHER_SPACE] });
     expect(result.current.spaces[0]).toEqual({ id: SPACE, count: 5 });
   });
 

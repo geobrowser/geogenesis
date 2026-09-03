@@ -376,7 +376,7 @@ vi.mock('../tagged-claims', async importOriginal => ({
     return {
       topics: [...counts.values()],
       isLoading: enabled && mocks.featuredLoading,
-      countsSettled: enabled && !mocks.featuredLoading && !mocks.taggedCatalogError,
+      settled: enabled && !mocks.featuredLoading && !mocks.taggedCatalogError,
       error: mocks.taggedCatalogError,
     };
   },
@@ -1053,6 +1053,34 @@ it('asks the server for the filter the viewer picked', async () => {
 describe('All claims reads the Debate tag', () => {
   const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
   const FEATURED_TAG = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
+
+  // GEO-2798 review. The sentinel now follows whichever list is on screen, and every case above it
+  // drives the indexed one — so the tagged path, which is the list this PR added, had no test that
+  // it pages at all.
+  it('pages the tagged list from the same sentinel the indexed one uses', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    mocks.taggedHasNextPage = true;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+
+    act(() => mocks.trigger());
+
+    expect(mocks.fetchNextTaggedPage).toHaveBeenCalled();
+    // And not the index's, which this list does not read.
+    expect(mocks.fetchNextPage).not.toHaveBeenCalled();
+  });
+
+  it('places no sentinel on the tagged list once the last page has landed', async () => {
+    // The terminal half. Without it the case above passes on a sentinel that is simply always there.
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    mocks.taggedHasNextPage = false;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+  });
 
   it('asks the graph for the Debate tag rather than the index', async () => {
     mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];

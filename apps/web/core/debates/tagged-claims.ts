@@ -254,9 +254,24 @@ export function searchTerms(search: string): string[] {
  * count, which is what lets it be un-picked.
  */
 function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: 'spaces') {
-  const and: Record<string, unknown>[] = [
-    { relations: { some: { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: tagId } } } },
-  ];
+  // Two space filters with different jobs. The picked one narrows and is what the space facet must
+  // *not* apply to itself; the eligible one is what the viewer may see at all, and applies to
+  // everything. Where both exist the picked set is already a subset, so the narrower wins.
+  const picked = omit === 'spaces' ? [] : filters.spaceIds;
+  const spaceIds = picked.length > 0 ? picked : (filters.eligibleSpaceIds ?? []);
+
+  // The space goes on the *tag relation*, not on the entity.
+  //
+  // `spaceIds` on an entity is every space it appears in, which is a wider and different question
+  // from where a curator tagged it — and `tagSpaceIds`, the space facet's grouping, and the space
+  // the card is finally built against all speak the tag relation's. Filtering on the entity's set
+  // let a claim tagged in one space be returned for a space it merely also exists in: measured on
+  // the Debate tag, four claims across three spaces, two of them in spaces the facet counts as
+  // holding none — so the menu and the list disagreed about the same space.
+  const tagRelation: Record<string, unknown> = { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: tagId } };
+  if (spaceIds.length > 0) tagRelation.spaceId = { in: spaceIds };
+
+  const and: Record<string, unknown>[] = [{ relations: { some: tagRelation } }];
 
   // AND, not OR (GEO-2696): one clause per topic, so a claim has to carry all of them.
   for (const topicId of filters.topicIds) {
@@ -271,17 +286,7 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
     and.push({ name: { includesInsensitive: word } });
   }
 
-  const filter: Record<string, unknown> = { and };
-
-  // Two space filters with different jobs. The picked one narrows and is what the space facet must
-  // *not* apply to itself; the eligible one is what the viewer may see at all, and applies to
-  // everything. Where both exist the picked set is already a subset, so the narrower wins.
-  const picked = omit === 'spaces' ? [] : filters.spaceIds;
-  const spaceIds = picked.length > 0 ? picked : (filters.eligibleSpaceIds ?? []);
-  // `spaceIds` on the entity is a list, so it takes a list filter — `overlaps`, not `in`.
-  if (spaceIds.length > 0) filter.spaceIds = { overlaps: spaceIds };
-
-  return filter;
+  return { and };
 }
 
 /**
@@ -329,6 +334,9 @@ export const taggedClaimsQueryKey = (tagId: string, filters: TaggedClaimFilters)
 
 const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
 
+/** What a disabled list hands back in place of `fetchNextPage`, which ignores `enabled` on its own. */
+const noFetch = async () => undefined;
+
 /**
  * One ranked, filtered page of tagged claims at a time.
  *
@@ -374,14 +382,22 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
   );
 
   return {
-    claims,
+    // Disabled means no answer, not the last one.
+    //
+    // `enabled: false` only stops react-query *fetching*; it keeps handing back whatever is cached
+    // under this key, which is the same trap `useClaimMatchup` documents. Here the cache outlives
+    // the reason it was filled: a picker tab that is no longer showing the tag still had its ids,
+    // and started a geo-chat batch about claims that are not on screen. `hasNextPage` is worse than
+    // wasteful — `fetchNextPage` is a manual call and ignores `enabled`, so a sentinel reading a
+    // cached `true` pages a query whose scope has not been resolved yet, from an old cursor.
+    claims: enabled ? claims : NO_TAGGED_CLAIMS,
     // `enabled: false` leaves react-query pending, and a caller waiting on this would read that as
     // "still looking" and never show its empty state.
     isLoading: enabled && query.isLoading,
-    error: query.error,
-    hasNextPage: query.hasNextPage,
-    fetchNextPage: query.fetchNextPage,
-    isFetchingNextPage: query.isFetchingNextPage,
+    error: enabled ? query.error : null,
+    hasNextPage: enabled && query.hasNextPage,
+    fetchNextPage: enabled ? query.fetchNextPage : noFetch,
+    isFetchingNextPage: enabled && query.isFetchingNextPage,
     refetch: query.refetch,
   };
 }
@@ -564,7 +580,11 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
     // which is what the caller reconciles a selection against — hence `settled` tracking the counts
     // rather than the names, and named the same as the space facet's so the two read alike.
     isLoading: enabled && (counts.isLoading || names.isLoading),
-    settled: enabled ? !counts.isLoading && !counts.error : false,
+    // Placeholder data is the *previous* filter's counts (`keepPreviousData` above), so a caller
+    // reconciling its selection against them would prune against a menu the viewer has moved on
+    // from. `use-scoped-claims` excludes it from the indexed path's settled flag for the same
+    // reason, and these two flags meet in one condition.
+    settled: enabled ? !counts.isLoading && !counts.isPlaceholderData && !counts.error : false,
     error: counts.error,
   };
 }
@@ -600,7 +620,8 @@ export function useTaggedSpaceFacet(tagId: string, filters: TaggedClaimFilters, 
   return {
     spaces: query.data ?? NO_FACET_COUNTS,
     isLoading: enabled && query.isLoading,
-    settled: enabled ? !query.isLoading && !query.error : false,
+    // Placeholder data is the previous filter's counts; see the topic facet's note.
+    settled: enabled ? !query.isLoading && !query.isPlaceholderData && !query.error : false,
     error: query.error,
   };
 }
