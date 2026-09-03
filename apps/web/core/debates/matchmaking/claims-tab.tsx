@@ -1,11 +1,14 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import cx from 'classnames';
 
-import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { claimResponseKind } from '~/core/claims/response-kind';
+import { FEATURED_TAG_ID } from '~/core/constants';
+import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -21,17 +24,17 @@ import type {
   MatchmakingClaim,
   MatchmakingClaimsFilter,
   MatchmakingClaimsQuery,
-  MatchmakingTopic,
 } from '../api';
-import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
-import {
-  type FeaturedClaim,
-  dedupeFeaturedClaims,
-  featuredClaimIdsBySpace,
-  useFeaturedClaims,
-} from '../featured-claims';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
+import {
+  type TaggedClaim,
+  type TaggedClaimFilters,
+  tagDisplaySpaceId,
+  useTaggedClaims,
+  useTaggedSpaceFacet,
+  useTaggedTopicFacet,
+} from '../tagged-claims';
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useDebateRequests } from './hooks';
@@ -40,14 +43,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import {
-  carriesEveryTopic,
-  countBy,
-  keepSelectableTopics,
-  keepSelectedVisible,
-  orderFacetOptions,
-  toggleId,
-} from './topic-facets';
+import { keepSelectableTopics, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
@@ -55,8 +51,12 @@ import { useMemberSpaceDefault } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 
 /**
- * GEO-2683. `featured` is the tab's own, not one of geo-chat's: the index has no notion of the tag,
- * so picking it swaps the list's source for the knowledge graph rather than changing a query param.
+ * `featured` and `all` are the tab's own, not geo-chat's: the index has no notion of either tag, so
+ * picking one swaps the list's *source* for the knowledge graph rather than changing a query param.
+ * GEO-2683 did that for `featured`; GEO-2771 did it for `all`.
+ *
+ * `mine` and `debate_now` stay geo-chat's. Both are viewer-relative and scored on who is available
+ * and who this viewer is already pair-blocked with, which is not in the graph at any price.
  */
 type ClaimsTabFilter = MatchmakingClaimsFilter | 'featured';
 
@@ -81,14 +81,42 @@ const FILTER_OPTIONS: HubFilterOption<ClaimsTabFilter>[] = [
  */
 const SIGNED_OUT_HIDDEN_FILTERS: ClaimsTabFilter[] = ['mine', 'debate_now'];
 
+/**
+ * The two filters the graph answers, and the tag each one asks for.
+ *
+ * Absent from this map means geo-chat's index answers instead — which is the whole of the branching
+ * in this file, so it is stated once here rather than tested per call site.
+ */
+const TAG_FOR_FILTER: Partial<Record<ClaimsTabFilter, string>> = {
+  featured: FEATURED_TAG_ID,
+  all: DEBATE_TAG_ID,
+};
+
+/** What an empty list means, which differs by where the list came from. */
+const NOTHING_HERE: Record<ClaimsTabFilter, string> = {
+  featured: 'No claims have been featured yet.',
+  all: 'No claims have been tagged for debate yet.',
+  mine: 'You haven’t taken a position on any claims yet.',
+  debate_now: 'Nobody is ready to debate you on a claim right now.',
+};
+
 function filterOptionsFor(authenticated: boolean) {
   return authenticated
     ? FILTER_OPTIONS
     : FILTER_OPTIONS.filter(option => !SIGNED_OUT_HIDDEN_FILTERS.includes(option.value));
 }
 
-/** Stable identity so the geo-chat lookups don't restart on every render of a non-featured list. */
-const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
+/** Stable identity so the geo-chat lookups don't restart on every render of a geo-chat list. */
+
+/**
+ * Key prefixes for the two lookups behind the graph-sourced list, so "Try again" can reach them.
+ *
+ * Written out rather than derived, because both are keyed per batch — by id chunk and by space —
+ * and the retry has to cover every batch rather than the one that happened to fail. Kept in step
+ * with `claimPickerEntitiesQueryKey` and `debateQueryKeys.claims`.
+ */
+const CLAIM_ENTITIES_QUERY_PREFIX = ['claim-picker', 'entities'] as const;
+const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
 
 /**
  * Cross-space claim discovery. Search, the space, topic and position filters, and the sort (people
@@ -103,7 +131,8 @@ const NO_FEATURED_CLAIMS: FeaturedClaim[] = [];
  * seen it.
  */
 export function ClaimsTab() {
-  const { authenticated } = useGeoChatAuth();
+  const queryClient = useQueryClient();
+  const { authenticated, accountKey } = useGeoChatAuth();
   // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
   // the claim page and the entity vote arrows use it. Passed as `undefined` when signed in so the
   // card keeps publishing directly.
@@ -178,11 +207,17 @@ export function ClaimsTab() {
     [candidateSpaceIds, spaceShowsClaims]
   );
 
-  const featured = filter === 'featured';
+  // Which tag this filter reads, and whether it reads one at all.
+  //
+  // `claimsTagId` is always a real tag so the graph query has a stable key per filter — switching
+  // Featured to All and back lands on each one's own cached catalog rather than refetching. Whether
+  // that catalog is *used* is `graphSourced`, which is also what holds the index query off.
+  const claimsTagId = TAG_FOR_FILTER[filter] ?? DEBATE_TAG_ID;
+  const graphSourced = TAG_FOR_FILTER[filter] !== undefined;
 
-  // Featured draws its own list, so the index isn't asked for one. The query keeps saying `all`
-  // rather than going undefined: switching to Featured and back then lands on the pages already
-  // cached instead of paging the corpus again from the top.
+  // A graph-sourced filter draws its own list, so the index isn't asked for one. The query keeps
+  // saying `all` rather than going undefined: switching to one of those and back then lands on the
+  // pages already cached instead of paging the corpus again from the top.
   // Debounced like the search box, and for the same reason: the menu stays open across ticks, so
   // picking three topics in a row fires three requests and throws two away. The menu still
   // reflects each tick instantly; only the request waits.
@@ -190,8 +225,14 @@ export function ClaimsTab() {
   const { value: debouncedSpaceIds, pending: spacesSettling } = useDebouncedSelection(spaceIds);
 
   const query = React.useMemo<Omit<MatchmakingClaimsQuery, 'spaceIds' | 'spaceId'>>(
-    () => ({ search: debouncedSearch || null, topicIds: debouncedTopicIds, filter: featured ? 'all' : filter }),
-    [debouncedSearch, debouncedTopicIds, featured, filter]
+    () => ({
+      search: debouncedSearch || null,
+      topicIds: debouncedTopicIds,
+      // Narrowed to what geo-chat understands: `featured` and `all` are this tab's own sources, and
+      // the query is disabled for both anyway.
+      filter: graphSourced ? 'all' : (filter as MatchmakingClaimsFilter),
+    }),
+    [debouncedSearch, debouncedTopicIds, graphSourced, filter]
   );
 
   const scope = React.useMemo(
@@ -203,7 +244,7 @@ export function ClaimsTab() {
   // once, for both pickers — see `useScopedMatchmakingClaims`. Featured passes `unusable`: it draws
   // its own list, so there is nothing worth asking the index for, and the masking that comes with
   // it also keeps the paging sentinel off a list that has no next page.
-  const claimsQuery = useScopedMatchmakingClaims(query, scope, debouncedSpaceIds, featured);
+  const claimsQuery = useScopedMatchmakingClaims(query, scope, debouncedSpaceIds, graphSourced);
   const { pages, facets } = claimsQuery;
 
   // The debounce is part of the staleness, not separate from it. For those milliseconds no request
@@ -219,113 +260,132 @@ export function ClaimsTab() {
   // skeletons over numbers that were already correct.
   //
   // Search is the exception, because Featured filters by `debouncedSearch` like every other source
-  // does — see `featuredSearched`. Its counts really do describe the pre-typing query for as long
+  // does — see `taggedSearched`. Its counts really do describe the pre-typing query for as long
   // as the box is unsettled, so that window has to cover the counts wherever they came from.
-  const countsPending =
-    searchSettling || (!featured && (claimsQuery.countsPending || topicsSettling || spacesSettling));
+  //
+  // The graph path is folded in below, once its facets exist to be asked — see `countsPending`.
+  const indexedCountsPending = !graphSourced && (claimsQuery.countsPending || topicsSettling || spacesSettling);
 
   const serverClaims = React.useMemo(
     () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
     [pages, spaceShowsClaims]
   );
 
-  // GEO-2683. Featured is a curator's tag in the knowledge graph, and geo-chat doesn't index it —
-  // so unlike the position filter this can't be a query param, and unlike the old client-side topic
-  // cut it can't run over the loaded pages either: tagged claims are a few hundred out of a corpus
-  // of hundreds of thousands, so a page-local filter would page for a very long time before it
-  // found one. The list comes from the graph, narrowed by the same two space gates as the paged one.
+  // Both graph-sourced lists, from one hook and one tag apiece.
+  //
+  // A curation tag lives in the knowledge graph and geo-chat indexes neither of them — so unlike the
+  // position filter this can't be a query param, and unlike the old client-side topic cut it can't
+  // run over the loaded pages either: tagged claims are a few hundred out of a corpus of hundreds of
+  // thousands, so a page-local filter would page for a very long time before it found one.
+  //
+  // GEO-2771 moved `all` here from the index for the same reason it was always true of `featured`,
+  // and for one more: the graph already knows which claims are meant for debating, so replicating
+  // that into geo-chat only to filter on it is a trip with nothing at the end of it. What geo-chat
+  // still answers is everything *about* these claims — see the row lookup below.
+  //
+  // The list comes from the graph: one ranked, filtered page at a time (GEO-2798). Search, topics
+  // and spaces are all applied by the server, so what arrives is what the viewer asked for and the
+  // page is the whole of it.
+  //
+  // `eligibleSpaceIds` above goes out with it, so the rows *and* both facet menus describe the same
+  // set. Without that a topic living only in a space the viewer cannot see is still offered, and
+  // picking it returns rows the client then removes — an option that can only produce an empty list
+  // (GEO-2653). It is the same list geo-chat's own query is scoped by, for the same reason.
+  const taggedFilters = React.useMemo<TaggedClaimFilters>(
+    () => ({
+      search: debouncedSearch,
+      topicIds: debouncedTopicIds,
+      spaceIds,
+      eligibleSpaceIds,
+    }),
+    [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, spaceIds]
+  );
+
+  // Held while the space gates are still resolving: they pass everything until they land, so asking
+  // now would fetch and cache a page scoped to every space and then narrow it under the viewer.
+  const taggedEnabled = graphSourced && !spacesPending;
   const {
-    claims: featuredCatalog,
-    isLoading: featuredLoading,
-    error: featuredError,
-    refetch: refetchFeatured,
-  } = useFeaturedClaims(featured);
+    claims: taggedClaims,
+    isLoading: taggedLoading,
+    error: taggedError,
+    hasNextPage: taggedHasNextPage,
+    fetchNextPage: fetchNextTaggedPage,
+    isFetchingNextPage: taggedFetchingNextPage,
+    refetch: refetchTagged,
+  } = useTaggedClaims(claimsTagId, taggedFilters, taggedEnabled);
 
-  // Collapsed to one row per claim *after* the space gates, not before. A claim can be tagged in
-  // several spaces, and deduplicating first would let a space the viewer can't be shown stand for a
-  // claim that is featured in one they can — dropping it from the list entirely.
-  const featuredAllowed = React.useMemo(
-    () =>
-      !featured || spacesPending
-        ? NO_FEATURED_CLAIMS
-        : dedupeFeaturedClaims(featuredCatalog.filter(claim => spaceShowsClaims(claim.spaceId))),
-    [featured, featuredCatalog, spaceShowsClaims, spacesPending]
+  const topicFacet = useTaggedTopicFacet(claimsTagId, taggedFilters, taggedEnabled);
+  const spaceFacet = useTaggedSpaceFacet(claimsTagId, taggedFilters, taggedEnabled);
+
+  const displaySpaceFor = React.useCallback(
+    (claim: TaggedClaim) => tagDisplaySpaceId(claim, spaceIds, spaceShowsClaims),
+    [spaceIds, spaceShowsClaims]
   );
 
-  // Search and the space menu run over the loaded list. The server-side versions belong to
-  // geo-chat's index, which knows nothing about this list.
-  // Search only, deliberately. The space facet counts claims *outside* the picked spaces — no facet
-  // is narrowed by its own dimension — and to narrow it by topic instead, those claims' topics have
-  // to be resolvable. So the entity lookup below runs over this set rather than the space-filtered
-  // one, and picking a space no longer decides which topics the client can see.
-  const featuredSearched = React.useMemo(() => {
-    const needle = debouncedSearch.toLowerCase();
-    return needle === '' ? featuredAllowed : featuredAllowed.filter(claim => claim.name.toLowerCase().includes(needle));
-  }, [debouncedSearch, featuredAllowed]);
+  // The page, paired with the space each row is drawn for. A claim whose every tagged space is one
+  // the viewer cannot be shown drops out here — the server filter already narrows to the eligible
+  // set, so this only catches the publishability gate, which it does not model.
+  const taggedPage = React.useMemo(() => {
+    if (!graphSourced) return [];
+    return taggedClaims.flatMap(claim => {
+      const spaceId = displaySpaceFor(claim);
+      return spaceId ? [{ claim, spaceId }] : [];
+    });
+  }, [displaySpaceFor, graphSourced, taggedClaims]);
 
-  const inPickedSpace = React.useCallback(
-    (spaceId: string) => spaceIds.length === 0 || spaceIds.some(id => ID.equals(spaceId, id)),
-    [spaceIds]
-  );
-
-  const featuredMatching = React.useMemo(
-    () => featuredSearched.filter(claim => inPickedSpace(claim.spaceId)),
-    [featuredSearched, inPickedSpace]
-  );
-
-  // The sides and readiness the cards draw are geo-chat's, and its only lookup for claims it hasn't
-  // ranked is the per-space one — so the tagged claims are asked for by id, grouped by the space
-  // they were tagged in.
+  // geo-chat, for the rows on screen rather than the whole tag.
   //
-  // Deliberately the whole allowed set rather than what search currently matches: typing then
-  // filters a list that is already loaded instead of restarting a fan-out of per-space requests on
-  // every keystroke, and the gateway scopes those lookups hold stay put while it happens.
+  // What it still answers is what only it knows: who is standing ready to argue each side, whether
+  // this viewer is, and whether a debate is already running. The sides themselves come from the
+  // graph. Scoped to the loaded page, so this is a handful of requests bounded by the spaces those
+  // rows live in rather than a fan-out over every space the tag reaches — which is what made the
+  // list flicker as batches landed one by one, and what let a stale answer sit under a key the
+  // signed-in fetch would read.
   //
-  // Nothing is asked for signed out, and deliberately not just because the lookup would be
-  // disabled: `debateQueryKeys.claims` is keyed on space and ids but not on the account, and a
-  // disabled react-query observer still hands back whatever that key already holds. Left to it,
-  // the first signed-out render after a sign-out would draw the previous viewer's `viewer_response`
-  // and `viewer_debate_ready` onto these cards. Empty groups mean no key to read, and every field
-  // it would have carried already has the graph-derived fallback below.
-  const featuredGroups = React.useMemo(
-    () => (authenticated ? featuredClaimIdsBySpace(featuredAllowed) : []),
-    [authenticated, featuredAllowed]
-  );
-  const featuredRows = useDebateClaimsBySpaces(featuredGroups);
+  // Nothing is asked for until the viewer is known — signed out, *or* signed in with the account
+  // not yet resolved. `fetchDebateClaims` sends `auth: 'optional'` when it has no account, so a
+  // request in that window succeeds and comes back with every viewer field null; the rows still
+  // carry the public ones, so the card drew its avatars while reporting no response from the viewer.
+  const taggedGroups = React.useMemo(() => {
+    if (!authenticated || !accountKey) return [];
+    const bySpace = new Map<string, string[]>();
+    for (const { claim, spaceId } of taggedPage) {
+      if (!validateEntityId(claim.entity.id)) continue;
+      const existing = bySpace.get(spaceId);
+      if (existing) existing.push(claim.entity.id);
+      else bySpace.set(spaceId, [claim.entity.id]);
+    }
+    return [...bySpace.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([spaceId, claimIds]) => ({ spaceId, claimIds }));
+  }, [accountKey, authenticated, taggedPage]);
+  const taggedRows = useDebateClaimsBySpaces(taggedGroups);
 
-  // Only real entity ids can be looked up in the KG; the graph 400s the whole batch on a single
-  // malformed id, so drop any that aren't valid.
-  //
-  // The picker's narrow projection rather than `useQueryEntities`: that one defaults to nine rows
-  // and slices to them. It asks in batches of a hundred and pulls six fields instead of every value
-  // and relation on the entity.
-  const featuredEntityIds = React.useMemo(
-    () => [...new Set(featuredSearched.map(claim => claim.claimEntityId).filter(validateEntityId))],
-    [featuredSearched]
-  );
-  const { entities: featuredEntities, isLoading: featuredEntitiesLoading } = useClaimEntitiesByIds(featuredEntityIds);
-
-  // Featured claims in the shape the rest of the tab already speaks. geo-chat has a row for a claim
-  // only once someone has taken a side on it, so everything it would carry has a graph-derived
-  // fallback: a claim nobody has answered still lists, with no sides and the response kind its own
+  // The page in the shape the rest of the tab already speaks. geo-chat has a row for a claim only
+  // once someone has taken a side on it, so everything it would carry has a graph-derived fallback:
+  // a claim nobody has answered still lists, with no sides and the response kind its own
   // "Is factual" value implies.
-  const featuredEntries = React.useMemo<MatchmakingClaim[]>(() => {
-    if (!featured) return [];
-    const rowsByClaimId = new Map(featuredRows.claims.map(row => [row.claim_entity_id, row]));
-    const entitiesById = new Map(featuredEntities.map(entity => [entity.id, entity]));
+  const taggedEntries = React.useMemo<MatchmakingClaim[]>(() => {
+    if (!graphSourced) return [];
+    // Keyed by space *and* claim. The row lookup asks geo-chat per space, so a claim tagged in two
+    // of them comes back twice — once per space, each with that space's sides, readiness and live
+    // debate. Keyed on the claim alone the map keeps whichever arrived last, and would draw one
+    // space's answers onto another space's card and publish into the second.
+    const rowsBySpaceAndClaim = new Map(
+      taggedRows.claims.map(row => [`${ID.uuidToHex(row.space_id)}:${ID.uuidToHex(row.claim_entity_id)}`, row])
+    );
 
-    return featuredMatching.map(claim => {
-      const row = rowsByClaimId.get(claim.claimEntityId);
-      const entity = entitiesById.get(claim.claimEntityId);
-      const responseKind = row?.response_kind ?? (entity ? claimResponseKind(entity, claim.spaceId) : 'stance');
+    return taggedPage.map(({ claim, spaceId }) => {
+      const row = rowsBySpaceAndClaim.get(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claim.entity.id)}`);
+      const responseKind = row?.response_kind ?? claimResponseKind(claim.entity, spaceId);
 
       return {
         claim: {
-          id: row?.id ?? claim.claimEntityId,
-          space_id: claim.spaceId,
-          claim_entity_id: claim.claimEntityId,
-          claim: claim.name,
-          description: claim.description,
+          id: row?.id ?? claim.entity.id,
+          space_id: spaceId,
+          claim_entity_id: claim.entity.id,
+          claim: claim.entity.name ?? '',
+          description: claim.entity.description,
         },
         topics: [],
         response_kind: responseKind,
@@ -333,93 +393,77 @@ export function ClaimsTab() {
         viewer_position: row?.viewer_response?.position ?? null,
         viewer_debate_ready: row?.viewer_debate_ready ?? false,
         readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-        positions: featuredPositionSummaries(row, responseKind),
-        // The index's ranking score, which this list has no equivalent of and doesn't sort by.
+        positions: taggedPositionSummaries(row, responseKind),
+        // The index's ranking score, which this list is ordered by on the server and doesn't re-sort.
         score: 0,
         active_debate: Boolean(row?.active_debate),
       };
     });
-  }, [featured, featuredEntities, featuredMatching, featuredRows.claims]);
+  }, [graphSourced, taggedPage, taggedRows.claims]);
 
-  // Which featured claims have a vocabulary rather than the `stance` fallback.
+  // Whether a card may be answered at all.
   //
-  // The featured list comes from the search index, which arrives before either source of the kind
-  // does — geo-chat's row, or the entity's own "Is factual" value — and `featuredEntitiesLoading`
-  // is deliberately not part of the list's own loading state, because the claims are listable
-  // without it. So the cards render first, and this is the view the hub opens on.
+  // Two things have to have landed before a press means what it looks like it means, and the card
+  // says so itself: the vocabulary, or the pills publish a stance response against a claim that
+  // wants Verify/Dispute; and the viewer's own side, or the side they already hold is drawn
+  // unselected and pressing it republishes instead of clearing.
   //
-  // The kind selects `voteKind` on the write, so a press in that window does not just label a
-  // factual claim Agree/Disagree: it publishes a stance response against it. Held until one of the
-  // two sources has actually answered — not merely stopped loading, since a failed lookup also
-  // stops loading and would fall through to the same fallback.
-  const featuredKindResolved = React.useMemo(() => {
-    if (!featured) return new Set<string>();
-    const resolved = new Set(featuredRows.claims.map(row => row.claim_entity_id));
-    for (const entity of featuredEntities) resolved.add(entity.id);
-    return resolved;
-  }, [featured, featuredEntities, featuredRows.claims]);
+  // The vocabulary now arrives *with the claim* — the page carries its "Is factual" value — so only
+  // the side is outstanding, and that rides on this space's geo-chat row. Settled rather than
+  // answered: a claim with no row genuinely has no side recorded, and a signed-out viewer never
+  // runs the query at all, so it settles immediately and correctly reports the side they lack.
+  // A failed lookup is not an answered one: react-query drops `isLoading` on error, and the side
+  // the viewer already holds would be drawn unselected — so a press would republish it rather than
+  // clear it. The card's own contract asks for the side, not merely for the wait to be over.
+  //
+  // Signed in but without an account key yet is *not* an answer. Privy reports `authenticated`
+  // before the key rehydrates, and `taggedGroups` is held empty until both are known — so the
+  // lookup runs no queries at all and reports neither loading nor error, which read as "settled
+  // with no side". The pills would go live over a viewer whose existing side is still unknown, and
+  // a press on the side they already hold republishes it instead of clearing it. Signed *out* is a
+  // real answer: they have no side, and their press opens the sign-in prompt.
+  const taggedAnswersReady =
+    !graphSourced || (authenticated ? Boolean(accountKey) && !taggedRows.isLoading && !taggedRows.isError : true);
 
-  // Featured claims are not in geo-chat's index, so the server's topic facet says nothing about
-  // them and its `topic_id` can't narrow them. Their topics come off the entities already fetched
-  // for the response kind — which is what the whole tab did before GEO-2653 moved the paged list's
-  // topics server-side.
-  const featuredTopicsByClaimId = React.useMemo(() => {
-    const map = new Map<string, MatchmakingTopic[]>();
-    if (!featured) return map;
-    for (const entity of featuredEntities) {
-      const topics = entity.relations
-        .filter(relation => relation.type.id === TOPICS_PROPERTY_ID && relation.isDeleted !== true)
-        .map(relation => ({ id: relation.toEntity.id, name: relation.toEntity.name ?? null }));
-      if (topics.length > 0) map.set(entity.id, topics);
-    }
-    return map;
-  }, [featured, featuredEntities]);
-
-  // Whether a claim survives the topic filter, by the same rule the rows use. Defined here because
-  // the space facet needs it over claims the rows have already dropped.
-  const carriesPickedTopic = React.useCallback(
-    (claimEntityId: string) => carriesEveryTopic(featuredTopicsByClaimId.get(claimEntityId), topicIds),
-    [featuredTopicsByClaimId, topicIds]
-  );
-
-  // The space menu offers only what the list can actually show, so picking an option never lands
-  // the viewer on an empty list they can't explain.
-  // Ordered by count with the picked ones held at the top, so ticking one doesn't re-sort the list
-  // under the cursor. Zero-count options need no decision on the indexed tabs: both facets are a
-  // `GROUP BY` over the candidate set, so an option with nothing behind it is absent rather than
-  // present at zero. Featured has no server facet — its spaces are wherever the tagged claims live,
-  // counted from those claims, and read before its own space selection is applied, or picking one
-  // would leave that one option in the menu.
-  // What the menu offers before the viewer's own selection is folded back into it. Split out
-  // because the default is seeded from exactly this list: a seeded id in any other shape is not
-  // recognised as one of these options, and `keepSelectedVisible` then adds it as a *second* row
-  // — the space listed twice, the ticked one counting zero.
+  // The space menu, from the server's own count over the tag — narrowed by the search and the
+  // topics, never by the space selection, which is what lets a picked space be un-picked and what
+  // makes a count answer "how many of what I have chosen so far are in here".
+  //
+  // Filtered by the publishability gate on the way out: the server knows the viewer's allowlist,
+  // because it was sent, but not which spaces can carry a published debate.
+  //
+  // Split from `facetSpaces` below because the default is seeded from exactly this list, before
+  // the viewer's own selection is folded back in. A seeded id in any other shape is not recognised
+  // as one of these options, and `keepSelectedVisible` then adds it as a *second* row — the space
+  // listed twice, the ticked one counting zero.
   const offeredSpaces = React.useMemo(
     () =>
-      featured
-        ? countBy(
-            featuredSearched
-              .filter(claim => carriesPickedTopic(claim.claimEntityId))
-              .map(claim => ({ id: claim.spaceId, name: null }))
-          )
+      graphSourced
+        ? spaceFacet.spaces.filter(space => spaceShowsClaims(space.id)).map(space => ({ ...space, name: null }))
         : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id)),
-    [carriesPickedTopic, facets?.space_facets, featured, featuredSearched, spaceShowsClaims]
+    [facets?.space_facets, graphSourced, spaceFacet.spaces, spaceShowsClaims]
   );
 
   const offeredSpaceIds = React.useMemo(() => offeredSpaces.map(space => space.id), [offeredSpaces]);
 
-  // Defaults to the spaces the viewer belongs to (GEO-2789), in the menu's own ids.
-  // Featured's menu settles with its entity lookup, which is where its topics come from — the
-  // server facets it would otherwise read never arrive, since the query is never made.
-  const facetsSettled = featured ? !featuredLoading && !featuredEntitiesLoading : claimsQuery.facetsSettled;
+  // Settled when the *counts* have answered, which is what a selection is reconciled against — the
+  // names arrive separately and a topic does not stop existing while its label is in flight.
+  //
+  // A failed lookup is not a settled one: an error leaves the menu empty while `isLoading` goes
+  // false, and the reconciliation below reads a settled, empty menu as "these topics no longer
+  // exist" and drops the viewer's selection. Held unsettled instead, so an outage costs the list
+  // rather than the selection. `spacesPending` for the same reason at the other end: the query is
+  // not made at all while the gates resolve.
+  const facetsSettled = graphSourced
+    ? !spacesPending && topicFacet.settled && spaceFacet.settled
+    : claimsQuery.facetsSettled;
 
+  // Defaults to the spaces the viewer belongs to (GEO-2789), in the menu's own ids. Held until the
+  // menu has finished arriving as well as the gates: the seed fires once, so taking it against a
+  // half-built list leaves a member space that turned up a moment later unselected for the visit.
   const markSpacesChosen = useMemberSpaceDefault({
     memberSpaceIds,
     availableSpaceIds: offeredSpaceIds,
-    // The gates *and* the options. `spacesPending` alone says nothing about whether this menu has
-    // finished arriving — Featured's builds up as its entity lookup resolves — and the seed fires
-    // once, so taking it against a half-built list would leave a member space that turned up a
-    // moment later unselected for the visit.
     pending: spacesPending || !facetsSettled,
     onSeed: setSpaceIds,
   });
@@ -432,49 +476,36 @@ export function ClaimsTab() {
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
   const claims = useStableListOrder(
-    featured ? featuredEntries : serverClaims,
+    graphSourced ? taggedEntries : serverClaims,
     entry => `${entry.claim.space_id}:${entry.claim.claim_entity_id}`,
     `${debouncedSearch}|${spaceIds.join(',')}|${topicIds.join(',')}|${filter}`
   );
 
-  // The paged list is narrowed by the server, which has no opinion about the featured one.
-  const visibleClaims = React.useMemo(
-    () =>
-      featured && topicIds.length > 0
-        ? claims.filter(entry => carriesEveryTopic(featuredTopicsByClaimId.get(entry.claim.claim_entity_id), topicIds))
-        : claims,
-    [claims, featured, featuredTopicsByClaimId, topicIds]
-  );
+  // Nothing left to filter here: both lists are narrowed by their server now.
+  const visibleClaims = claims;
 
-  // The topic menu, straight from the server. It describes every claim the current filters
-  // allow, not the pages loaded so far — which is what the client-side version could never do:
-  // it read topics off the loaded claims, so the menu grew as the viewer scrolled and a space
-  // whose first page happened to carry none looked like a space with no topics (GEO-2653).
+  // The topic menu, from the server's count over the tag. It describes every claim the current
+  // filters allow rather than the pages loaded so far — which is what a client-side version could
+  // never do: it read topics off the loaded claims, so the menu grew as the viewer scrolled and a
+  // space whose first page happened to carry none looked like a space with no topics (GEO-2653).
   //
-  // Already narrowed by the space filter, and already ordered by count descending.
-  //
-  // Both sources are co-occurrence now that topics intersect (GEO-2696). The server's facet is
-  // narrowed by the selected topics on its side; Featured is narrowed here, over the claims that
-  // already carry every picked one — so the menu answers "what else do these claims carry", and
-  // the picked topics come back with the current result count, which is what lets them be
-  // un-picked. Nothing here can lead to an empty list: every option came off a surviving claim.
+  // Co-occurrence, since topics intersect (GEO-2696): counted over the claims that already carry
+  // every picked topic, so the menu answers "what else do these claims carry" and the picked ones
+  // come back with the current result count, which is what lets them be un-picked.
   const facetTopics = React.useMemo(() => {
-    // Counting the featured claims per topic rather than deduping them: a count is the point of
-    // the menu now, and the claims in hand are the whole featured list.
-    const source = featured
-      ? countBy(
-          featuredMatching
-            .filter(claim => carriesPickedTopic(claim.claimEntityId))
-            .flatMap(claim =>
-              (featuredTopicsByClaimId.get(claim.claimEntityId) ?? []).map(topic => ({
-                id: topic.id,
-                name: topic.name,
-              }))
-            )
-        )
-      : (facets?.topic_facets ?? []);
+    const source = graphSourced ? topicFacet.topics : (facets?.topic_facets ?? []);
     return orderFacetOptions(source, topicIds);
-  }, [carriesPickedTopic, facets?.topic_facets, featured, featuredMatching, featuredTopicsByClaimId, topicIds]);
+  }, [facets?.topic_facets, graphSourced, topicFacet.topics, topicIds]);
+
+  // What the menus are showing is a filter the viewer has moved on from, wherever the counts came
+  // from. The paragraph above used to except the graph path on the grounds that its menus were
+  // built from claims already in hand and so were right on the same render as the tick. GEO-2798
+  // ended that: both facets are their own server requests, and `keepPreviousData` deliberately
+  // keeps the previous filter's numbers on screen rather than blinking — which is exactly the
+  // window this flag exists to mark, or the old counts read as current for a debounce plus a
+  // request. `facetsSettled` is the same question these menus already answer with.
+  const countsPending =
+    searchSettling || indexedCountsPending || (graphSourced && (topicsSettling || spacesSettling || !facetsSettled));
 
   // The space is let go on the condition that actually means "not yours to pick" — the gates
   // stopped admitting it — rather than on its absence from the facet.
@@ -514,12 +545,23 @@ export function ClaimsTab() {
   // Featured is not counted: it chooses which list is on screen rather than narrowing one, so an
   // empty Featured tab should say nothing is featured — not that filters are hiding things — and
   // "Clear filters" should leave the viewer on the tab they picked.
-  const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length || (!featured && filter !== 'all'));
+  // Two questions, and they had one answer.
+  //
+  // What the viewer has *narrowed* by decides what an empty list means: with nothing narrowing it,
+  // the list is empty because there is nothing there, and saying "no claims match these filters" of
+  // an untouched My positions blames filters the viewer never set.
+  //
+  // What "Clear filters" should undo is wider, and does include the position filter — resetting to
+  // All claims is exactly what a viewer stuck on an empty My positions wants.
+  const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
+  const hasFilters = hasNarrowingFilters || (!graphSourced && filter !== 'all');
 
+  // Both lists page now, so the sentinel follows whichever one is on screen (GEO-2798). The tagged
+  // lists used to arrive whole, which is why this was the index's alone.
   const sentinelRef = useInfiniteScrollSentinel({
-    hasNextPage: claimsQuery.hasNextPage,
-    isFetchingNextPage: claimsQuery.isFetchingNextPage,
-    fetchNextPage: claimsQuery.fetchNextPage,
+    hasNextPage: graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage,
+    isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
+    fetchNextPage: graphSourced ? fetchNextTaggedPage : claimsQuery.fetchNextPage,
   });
 
   return (
@@ -569,23 +611,53 @@ export function ClaimsTab() {
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
-          isLoading={spacesPending || (featured ? featuredLoading : claimsQuery.isLoading)}
-          error={featured ? featuredError : claimsQuery.error}
-          onRetry={() => void (featured ? refetchFeatured() : claimsQuery.refetch())}
+          isLoading={spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading)}
+          // The catalog only. It is the list — without it there is nothing to show, and an error is
+          // the honest answer.
+          //
+          // The two lookups behind it are metadata, and their failure is deliberately *not* fatal.
+          // `taggedRows` fans out one request per space in batches of fifty, so across a few hundred
+          // tagged claims a single failing batch would blank a list that renders perfectly well
+          // without it — which is exactly what it did the first time this was tried, in a browser.
+          // The rows come from the catalog; the entity is optional in `taggedEntries`.
+          //
+          // Their consequences are handled where they land instead, and both are pinned by tests:
+          // `facetsSettled` refuses to reconcile against a menu those lookups never filled, so the
+          // viewer's topic selection is not spent, and `taggedKindResolvedFor` keeps a card
+          // unpressable until its vocabulary and the viewer's own side have actually arrived. A
+          // short list beats a blank one; a wrong publish beats neither, and is what those guard.
+          error={graphSourced ? taggedError : claimsQuery.error}
+          // Retries whatever failed, not just the catalog. The error above can come from either of
+          // the two lookups behind the list, and neither is keyed on the catalog — so refetching
+          // only that left the failed dependency untouched and the error state exactly where it
+          // was. Invalidated by key rather than through a `refetch` handed back by those hooks:
+          // both combine their results, and a fresh closure in a `combine` would be a new identity
+          // on every render, which is the one thing those hooks document that they must not be.
+          onRetry={() =>
+            void (graphSourced
+              ? Promise.all([
+                  refetchTagged(),
+                  queryClient.invalidateQueries({ queryKey: CLAIM_ENTITIES_QUERY_PREFIX }),
+                  queryClient.invalidateQueries({ queryKey: DEBATE_CLAIMS_QUERY_PREFIX }),
+                ])
+              : claimsQuery.refetch())
+          }
           isEmpty={visibleClaims.length === 0}
           signInAction={
             onRequireSignIn
               ? { label: 'Sign in', message: 'Sign in to browse claims to debate.', onClick: onRequireSignIn }
               : undefined
           }
+          // What an empty list means depends on where it came from, and the two graph-sourced
+          // filters mean different things by it: Featured says a curator has tagged nothing, All
+          // says nothing carries the Debate tag. Both are statements about curation, not about the
+          // viewer's filters, so they only show when no filter is narrowing anything.
           emptyMessage={
-            featured
-              ? hasFilters
+            hasNarrowingFilters
+              ? filter === 'featured'
                 ? 'No featured claims match these filters.'
-                : 'No claims have been featured yet.'
-              : hasFilters
-                ? 'No claims match these filters.'
-                : 'No debatable claims yet.'
+                : 'No claims match these filters.'
+              : NOTHING_HERE[filter]
           }
           emptyAction={
             hasFilters
@@ -596,7 +668,7 @@ export function ClaimsTab() {
                     // for the unfiltered list, and the default must not put its spaces back.
                     markSpacesChosen();
                     setSearch('');
-                    if (!featured) setFilter('all');
+                    if (!graphSourced) setFilter('all');
                     setSpaceIds([]);
                     setTopicIds([]);
                   },
@@ -616,8 +688,8 @@ export function ClaimsTab() {
                 readiness={entry}
                 activeDebate={entry.active_debate}
                 // The paged list is geo-chat's own, so every row carries its kind already; only the
-                // featured list has to wait for one.
-                answersReady={!featured || featuredKindResolved.has(entry.claim.claim_entity_id)}
+                // tagged list has to wait for one.
+                answersReady={taggedAnswersReady}
                 onRequireSignIn={onRequireSignIn}
               />
             ))}
@@ -634,7 +706,7 @@ export function ClaimsTab() {
           Not while the allowlist is pending, though: the tab is showing a four-row skeleton then,
           so the sentinel sits in view under it and pages the corpus on the strength of a loading
           state being visible — reading "the viewer reached the end" off a list that isn't there. */}
-        {claimsQuery.hasNextPage ? (
+        {(graphSourced ? taggedHasNextPage : claimsQuery.hasNextPage) ? (
           <div ref={sentinelRef} data-testid="claims-scroll-sentinel" className="h-px" />
         ) : null}
       </div>
@@ -657,14 +729,14 @@ export function HubStickyControls({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * The two sides of a featured claim, from geo-chat's per-space row.
+ * The two sides of a tagged claim, from geo-chat's per-space row.
  *
  * That row reports the sides as `online_choices` — who is online and available on each — where the
  * hub's index reports a total alongside them. The card draws the avatars and their overflow count
  * off `total_count`, so the online count stands in for it: it is the only count this endpoint
  * gives, and undercounting a side is better than claiming a total it never told us.
  */
-function featuredPositionSummaries(
+function taggedPositionSummaries(
   row: DebateClaim | undefined,
   responseKind: 'stance' | 'veracity'
 ): DebateClaimPositionSummary[] {
@@ -735,6 +807,7 @@ export function SpaceTopicFilters({
   topicAtEnd,
 }: SpaceTopicFiltersProps) {
   const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
+
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(facetSpaceIds);
 
   const spaceOptions = React.useMemo<HubFilterOption<string>[]>(

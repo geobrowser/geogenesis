@@ -9,7 +9,7 @@ import { useCookies } from 'react-cookie';
 
 import { Cookie, WALLET_ADDRESS } from '../cookie';
 import { GEO_NETWORK } from '../sdk/geo-network';
-import { MAX_QUEUE_WAIT_MS, enqueueFor, withNonceRetry } from './smart-account-send-queue';
+import { MAX_QUEUE_WAIT_MS, enqueueFor, withSubmissionRetry } from './smart-account-send-queue';
 
 export function smartAccountQueryKey(
   walletAddress: string | null | undefined,
@@ -83,8 +83,11 @@ export function useSmartAccount() {
       //    view by even one block, the very next send after a confirmed one can
       //    read a stale nonce and get rejected as InvalidAccountNonceError. This
       //    rejection happens at eth_sendUserOperation, before any hash exists, so
-      //    by the ERC-4337 spec nothing was submitted — a short retry (see
-      //    withNonceRetry) is safe and re-reads the nonce fresh.
+      //    by the ERC-4337 spec nothing was submitted — a retry (see
+      //    withSubmissionRetry) is safe and re-reads the nonce fresh. The same is
+      //    true of an EntryPoint simulateValidation refusal, which is why that is
+      //    retried too; both went unretried and reached users as raw dialogs until
+      //    GEO-2810.
       //
       // 2. Duplicate submissions on retry: callers wrap sends in Effect.retry
       //    (~10s windows). Once the bundler has accepted a UserOp, a failure
@@ -158,7 +161,7 @@ export function useSmartAccount() {
         // useSmartAccountTransaction's timeout, and the bound is what guarantees a
         // timed-out call never submits later (see QueuedSendTimeoutError).
         sendTransaction: (...args: Parameters<typeof zeroDevAccount.sendTransaction>) =>
-          enqueueFor(eoaAddress, () => withNonceRetry(() => zeroDevAccount.sendTransaction(...args)), {
+          enqueueFor(eoaAddress, () => withSubmissionRetry(() => zeroDevAccount.sendTransaction(...args)), {
             maxQueueWaitMs: MAX_QUEUE_WAIT_MS,
           }),
         // Deliberately NOT queue-wait bounded: publish/comment/deploy callers have no
@@ -167,13 +170,14 @@ export function useSmartAccount() {
         sendUserOperation: (args: {
           calls: ReadonlyArray<{ to: `0x${string}`; data: `0x${string}`; value?: bigint }>;
         }) =>
-          enqueueFor(eoaAddress, () =>
-            withNonceRetry(async () => {
-              const hash = await zeroDevAccount.sendUserOperation(args);
-              await confirmInclusion(hash);
-              return hash;
-            })
-          ),
+          // The retry wraps the SUBMISSION ONLY. confirmInclusion must stay outside it:
+          // once a hash exists the op may be landing, and re-running the send from a
+          // confirm-phase failure is the duplicate-publish hazard described in (2) above.
+          enqueueFor(eoaAddress, async () => {
+            const hash = await withSubmissionRetry(() => zeroDevAccount.sendUserOperation(args));
+            await confirmInclusion(hash);
+            return hash;
+          }),
       };
 
       if (!cookies.walletAddress || cookies.walletAddress !== wrapped.account.address) {

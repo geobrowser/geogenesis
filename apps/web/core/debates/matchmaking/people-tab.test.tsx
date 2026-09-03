@@ -1,7 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
+import type React from 'react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { NavUtils } from '~/core/utils/utils';
 
 import type { DebateChallenge, DebatePerson } from '../api';
 
@@ -19,6 +23,21 @@ const mocks = vi.hoisted(() => ({
   cancelPending: false,
   cancelError: null as Error | null,
   records: new Map<string, unknown>(),
+  /** Every prop set handed to a link this render, so a stray handler is visible. */
+  linkProps: [] as Record<string, unknown>[],
+}));
+
+// The real one reaches for the sync engine and the router; a plain anchor is what the assertions
+// below are about — a real href, and nothing intercepting the click.
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ children, ...props }: { children: React.ReactNode } & Record<string, unknown>) => {
+    mocks.linkProps.push(props);
+    return (
+      <a href={props.href as string} className={props.className as string | undefined}>
+        {children}
+      </a>
+    );
+  },
 }));
 
 vi.mock('../hooks', () => ({
@@ -58,10 +77,16 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 
 const { PeopleTab } = await import('./people-tab');
 
+/** A real space id shape. `profile-user-them` is not one, and the profile link is gated on it. */
+const PROFILE_SPACE_IDS: Record<string, string> = {
+  'user-them': '019fedae-72b6-7ab2-927a-df044d57c566',
+  'user-other': '019fedae-72b6-7ab2-927a-df044d57c599',
+};
+
 function person(userId: string, name: string): DebatePerson {
   return {
     user_id: userId,
-    profile_space_id: `profile-${userId}`,
+    profile_space_id: PROFILE_SPACE_IDS[userId] ?? `profile-${userId}`,
     display_name: name,
     avatar_cid: null,
     online: true,
@@ -104,6 +129,7 @@ beforeEach(() => {
   mocks.cancelPending = false;
   mocks.cancelError = null;
   mocks.records = new Map();
+  mocks.linkProps = [];
 });
 
 afterEach(cleanup);
@@ -304,7 +330,7 @@ describe('PeopleTab', () => {
     mocks.authenticated = false;
     mocks.records = new Map([
       [
-        'profile-user-them',
+        PROFILE_SPACE_IDS['user-them'],
         {
           positions: 119,
           debatesArgued: 11,
@@ -339,5 +365,43 @@ describe('PeopleTab', () => {
     render(<PeopleTab />);
 
     expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
+  });
+});
+
+// GEO-2788 / GEO-2611. The name goes to the person's personal space, and the hub stays open on the
+// way — which is why this needs no click handler and so keeps cmd-click and middle click working.
+describe('the person link', () => {
+  it("points the name at the person's space", () => {
+    render(<PeopleTab />);
+
+    expect(screen.getByRole('link', { name: 'Arturas' })).toHaveAttribute(
+      'href',
+      NavUtils.toSpace(PROFILE_SPACE_IDS['user-them'])
+    );
+  });
+
+  // The guarantee is that *we* add no handler of our own. `next/link` underneath does intercept a
+  // plain left click — that is how client-side routing works, and it already honours cmd-click and
+  // middle click. A second handler layered on top is what would break them, which is what GEO-2701
+  // restored, so the absence of one is the thing worth pinning.
+  //
+  // Asserted on the props rather than by dispatching a click: the mock here is a bare anchor, so a
+  // `defaultPrevented` check would only describe the mock and would pass whether or not the real
+  // component ever received a handler.
+  it('adds no click handler of its own to the name', () => {
+    render(<PeopleTab />);
+
+    const nameLink = mocks.linkProps.find(props => props.href === NavUtils.toSpace(PROFILE_SPACE_IDS['user-them']));
+    expect(nameLink).toBeDefined();
+    expect(nameLink).not.toHaveProperty('onClick');
+  });
+
+  // An anchor to `/space/undefined` looks identical until it is clicked.
+  it('leaves the name unlinked when there is no space to point at', () => {
+    mocks.people = [person('user-nospace', 'Nameless')];
+    render(<PeopleTab />);
+
+    expect(screen.getByText('Nameless')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Nameless' })).toBeNull();
   });
 });

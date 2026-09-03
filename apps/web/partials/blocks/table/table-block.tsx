@@ -11,7 +11,8 @@ import { produce } from 'immer';
 
 import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
-import { Filter, FilterMode } from '~/core/blocks/data/filters';
+import { filterGroupKey } from '~/core/blocks/data/filter-state-to-where';
+import { Filter, FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
 import {
   buildAccumulationResetKey,
   resolveInfiniteScrollDisplay,
@@ -21,6 +22,7 @@ import { columnPropertyIdFromRelation } from '~/core/blocks/data/shown-column-re
 import { Source } from '~/core/blocks/data/source';
 import { useBlockInfiniteScroll } from '~/core/blocks/data/use-block-infinite-scroll';
 import { useDataBlock, useDataBlockInstance } from '~/core/blocks/data/use-data-block';
+import { sourceSupportsDropdowns } from '~/core/blocks/data/use-dropdown-query-overlay';
 import { useFilters } from '~/core/blocks/data/use-filters';
 import {
   isEntityVisibleInBlock,
@@ -82,6 +84,8 @@ import { DataBlockViewMenu } from './data-block-view-menu';
 import { type QuerySetupTypePick, QuerySetupTypesSelectEntityPopover } from './query-setup-types-select-entity-popover';
 import TableBlockBulletedListItemsDnd from './table-block-bulleted-list-items-dnd';
 import { TableBlockContextMenu } from './table-block-context-menu';
+import { TableBlockDropdowns } from './table-block-dropdowns';
+import { TableBlockDropdownsConfigChips, TableBlockDropdownsConfigTrigger } from './table-block-dropdowns-config';
 import { TableBlockEditableFilters } from './table-block-editable-filters';
 import { TableBlockEditableTitle } from './table-block-editable-title';
 import TableBlockExploreItemsDnd from './table-block-explore-items-dnd';
@@ -598,11 +602,11 @@ const ConfiguredTableBlock = ({
     source,
     setSource,
     filterState: activeFilters,
-    filterMode: activeFilterMode,
+    modesByColumn: activeModesByColumn,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
     sortState,
     setSortState,
     filterableProperties,
@@ -610,6 +614,7 @@ const ConfiguredTableBlock = ({
     hideAllShownPropertyColumns,
     orderedShownColumnRelations,
     reorderShownPropertyRelations,
+    browseDropdowns,
   } = useDataBlock({ canEdit });
 
   const { mainMedia, isFramePending } = useBlockMainMedia(shownColumnIds, propertiesSchema, {
@@ -626,12 +631,20 @@ const ConfiguredTableBlock = ({
     onConsumedInitialFiltersOpen?.();
   }, [initialFiltersOpen, onConsumedInitialFiltersOpen]);
 
-  const setActiveFilterMode = React.useCallback(
-    (mode: FilterMode) => {
-      if (canEdit) setFilterMode(mode);
-      else setTemporaryFilterMode(mode);
+  const setActiveGroupMode = React.useCallback(
+    (columnId: string, mode: FilterMode) => {
+      if (canEdit) setGroupMode(columnId, mode);
+      else setTemporaryGroupMode(columnId, mode);
     },
-    [canEdit, setFilterMode, setTemporaryFilterMode]
+    [canEdit, setGroupMode, setTemporaryGroupMode]
+  );
+
+  const toggleActiveGroupMode = React.useCallback(
+    (columnId: string) => {
+      const mode = activeModesByColumn[columnId] ?? 'AND';
+      setActiveGroupMode(columnId, mode === 'AND' ? 'OR' : 'AND');
+    },
+    [activeModesByColumn, setActiveGroupMode]
   );
 
   const filterSpaceIds = React.useMemo(
@@ -643,14 +656,17 @@ const ConfiguredTableBlock = ({
   // Setter that handles both editors and non-editors correctly
   // Also resets to page 1 when filters change
   const setActiveFilters = React.useCallback(
-    (filters: Filter[]) => {
-      if (equal(comparableFilterList(filters), comparableFilterList(activeFilters))) {
+    (filters: Filter[], modeOverrides?: ModesByColumn) => {
+      if (
+        equal(comparableFilterList(filters), comparableFilterList(activeFilters)) &&
+        (!modeOverrides || Object.keys(modeOverrides).length === 0)
+      ) {
         return;
       }
       if (canEdit) {
-        setFilterState(filters);
+        setFilterState(filters, modeOverrides);
       } else {
-        setTemporaryFilters(filters);
+        setTemporaryFilters(filters, modeOverrides);
       }
       // Reset to first page when filters change
       setPage(0);
@@ -730,13 +746,16 @@ const ConfiguredTableBlock = ({
   /** Visible table columns (e.g. Cover) may be missing from `filterableProperties` when graph vs schema IDs differ. */
   const mergedBlockProperties = React.useMemo(() => {
     const out = [...filterableProperties];
-    for (const p of properties) {
+    for (const p of [...properties, ...browseDropdowns.collectionMemberProperties]) {
       if (!out.some(x => ID.equals(x.id, p.id))) {
         out.push(p);
       }
     }
     return out;
-  }, [filterableProperties, properties]);
+  }, [filterableProperties, properties, browseDropdowns.collectionMemberProperties]);
+
+  /** Dropdowns cover query and collection populations; Relations blocks have none to filter. */
+  const supportsDropdowns = sourceSupportsDropdowns(source);
 
   // Infinite scroll is opt-in via the Infinite scroll BOOLEAN on the Blocks
   // relation entity (same entity that holds View and Properties).
@@ -1123,6 +1142,24 @@ const ConfiguredTableBlock = ({
 
         <BlockLinkIngestionPanel />
 
+        {!isEditing && supportsDropdowns && browseDropdowns.appliedColumnIds.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 py-2" onMouseDown={e => e.stopPropagation()}>
+            <TableBlockDropdowns
+              configs={browseDropdowns.configs}
+              appliedColumnIds={browseDropdowns.appliedColumnIds}
+              properties={mergedBlockProperties}
+              spaceId={spaceId}
+              baseFilterState={browseDropdowns.baseFilterState}
+              baseModesByColumn={browseDropdowns.baseModesByColumn}
+              selections={browseDropdowns.selections}
+              updateSelections={browseDropdowns.updateSelections}
+              hydrated={browseDropdowns.hydrated}
+              collectionItemIds={browseDropdowns.collectionItemIds}
+              populationReady={browseDropdowns.populationReady}
+            />
+          </div>
+        )}
+
         {isFilterOpen && (
           <AnimatePresence>
             <motion.div
@@ -1165,20 +1202,30 @@ const ConfiguredTableBlock = ({
                         ref={filterPromptRef}
                         filterState={activeFilters}
                         setFilterState={setActiveFilters}
+                        modesByColumn={activeModesByColumn}
                         filterSuggestionSpaceId={spaceId}
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}
+                        afterFilterTrigger={
+                          supportsDropdowns ? (
+                            <TableBlockDropdownsConfigTrigger
+                              configs={browseDropdowns.configs}
+                              properties={mergedBlockProperties}
+                              toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
+                            />
+                          ) : null
+                        }
                       />
                     </>
                   )}
                   {!isEditing &&
                     filterGroupsForToolbarPills.length > 0 &&
                     filterGroupsForToolbarPills.map(group => (
-                      <React.Fragment key={group.columnId}>
+                      <React.Fragment key={group.groupKey}>
                         <TableBlockFilterGroupPill
                           group={group}
-                          mode={activeFilterMode}
-                          onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                          mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                          onToggleMode={() => toggleActiveGroupMode(group.columnId)}
                           onDeleteValue={originalIndex => {
                             const newFilterState = produce(activeFilters, draft => {
                               draft.splice(originalIndex, 1);
@@ -1186,7 +1233,7 @@ const ConfiguredTableBlock = ({
                             setActiveFilters(newFilterState);
                           }}
                           onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                            setActiveFilters(activeFilters.filter(f => filterGroupKey(f) !== group.groupKey));
                           }}
                           isEditing={isEditing}
                         />
@@ -1194,36 +1241,45 @@ const ConfiguredTableBlock = ({
                     ))}
                 </div>
 
-                {isEditing && filterGroupsForToolbarPills.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {filterGroupsForToolbarPills.map(group => (
-                      <React.Fragment key={group.columnId}>
-                        <TableBlockFilterGroupPill
-                          group={group}
-                          mode={activeFilterMode}
-                          onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
-                          onDeleteValue={originalIndex => {
-                            const newFilterState = produce(activeFilters, draft => {
-                              draft.splice(originalIndex, 1);
-                            });
-                            setActiveFilters(newFilterState);
-                          }}
-                          onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
-                          }}
-                          onAddSimilar={anchorEl => {
-                            requestAnimationFrame(() => {
-                              requestAnimationFrame(() => {
-                                filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
-                              });
-                            });
-                          }}
-                          isEditing={isEditing}
+                {isEditing &&
+                  (filterGroupsForToolbarPills.length > 0 ||
+                    (supportsDropdowns && browseDropdowns.configs.length > 0)) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {supportsDropdowns && (
+                        <TableBlockDropdownsConfigChips
+                          configs={browseDropdowns.configs}
+                          properties={mergedBlockProperties}
+                          toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                         />
-                      </React.Fragment>
-                    ))}
-                  </div>
-                )}
+                      )}
+                      {filterGroupsForToolbarPills.map(group => (
+                        <React.Fragment key={group.groupKey}>
+                          <TableBlockFilterGroupPill
+                            group={group}
+                            mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                            onToggleMode={() => toggleActiveGroupMode(group.columnId)}
+                            onDeleteValue={originalIndex => {
+                              const newFilterState = produce(activeFilters, draft => {
+                                draft.splice(originalIndex, 1);
+                              });
+                              setActiveFilters(newFilterState);
+                            }}
+                            onClearGroup={() => {
+                              setActiveFilters(activeFilters.filter(f => filterGroupKey(f) !== group.groupKey));
+                            }}
+                            onAddSimilar={anchorEl => {
+                              requestAnimationFrame(() => {
+                                requestAnimationFrame(() => {
+                                  filterPromptRef.current?.openWithColumn(group.columnId, anchorEl);
+                                });
+                              });
+                            }}
+                            isEditing={isEditing}
+                          />
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  )}
               </motion.div>
             </motion.div>
           </AnimatePresence>

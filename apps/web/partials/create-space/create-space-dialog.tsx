@@ -496,8 +496,8 @@ function StepConfigureGovernance() {
     : DEFAULT_VOTING_SETTINGS_SNAPSHOT;
 
   const [state, setState] = React.useState<VotingSettingsFormState>(() => snapshotToFormState(initialSnapshot));
-  // Grace period and the new-member fast-path toggle aren't in the form; carry whatever
-  // the draft started with through unchanged. (Universal support is now an exposed field.)
+  // Grace period isn't in the form; carry whatever the draft started with through unchanged.
+  // (Universal support and the new-member fast-path switch are both exposed fields now.)
   const hidden = React.useMemo(() => snapshotToHidden(initialSnapshot), [initialSnapshot]);
 
   const parsed = parseVotingSettingsForm(state, hidden, NEW_SPACE_INITIAL_EDITOR_COUNT);

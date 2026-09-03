@@ -10,11 +10,15 @@ import { type DebateResponseKind, type GetPrivyIdentityToken, notifyClaimRespons
 import { refreshRematchClaimBatches, rematchClaimBatchesWithClaim } from './rematch-claims-query-key';
 
 const MAX_NOTIFIED_RUNS = 256;
-type IndexedClaimResponse = NonNullable<ReturnType<typeof claimResponseIndexedEvent>>;
+/** Fields shared by pending and indexed response notifications. */
+type NotifiableClaimResponse = Pick<
+  NonNullable<ReturnType<typeof pendingClaimResponse>>,
+  'entityId' | 'position' | 'responseKind' | 'spaceId'
+>;
 type InterruptedNotification = {
   accountKey: string;
   notificationKey: string;
-  response: IndexedClaimResponse;
+  response: NotifiableClaimResponse;
 };
 
 export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: unknown) {
@@ -38,6 +42,42 @@ export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: un
   };
 }
 
+/**
+ * The same parse as {@link claimResponseIndexedEvent}, but for a response that is still *in
+ * flight* rather than one the indexer has confirmed (GEO-2784).
+ *
+ * `claimResponseIndexedEvent` deliberately waits for `status === 'indexed'`, because its job is to
+ * tell geo-chat something true. This one exists for the opposite reason: the viewer's own button
+ * should not wait on the indexer. `web.write.entity_response` measures p50 9.9s / p95 48.6s, and
+ * `pending.expectedResponse` is known locally the instant the write starts — so the UI can show
+ * the position immediately and let the real row replace it when it lands.
+ *
+ * `expectedResponse === null` is a *removal*, and callers must honour it: clicking a position off
+ * should disappear as fast as clicking one on.
+ */
+export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown) {
+  const [scope, personalSpaceId, entityId, spaceId, responseKind] = queryKey;
+  const indexingState = data as EntityResponseIndexingState | undefined;
+  if (
+    scope !== 'entity-response-indexing' ||
+    !indexingState?.pending ||
+    (responseKind !== 'stance' && responseKind !== 'veracity')
+  ) {
+    return null;
+  }
+  return {
+    entityId: String(entityId),
+    position:
+      indexingState.pending.expectedResponse === null ? null : indexingState.pending.expectedResponse === 'positive',
+    responseKind: responseKind as DebateResponseKind,
+    spaceId: String(spaceId),
+    /** Whose write this is, so a reader can attribute the row without assuming the current viewer. */
+    personalSpaceId: String(personalSpaceId),
+    /** Used to distinguish confirmed responses from rolled-back responses. */
+    status: indexingState.status,
+  };
+}
+
 export function useClaimResponseIndexedNotifier(
   enabled: boolean,
   getPrivyIdentityToken: GetPrivyIdentityToken,
@@ -58,7 +98,7 @@ export function useClaimResponseIndexedNotifier(
       notifiedRunOrder.current = notifiedRunOrder.current.filter(key => key !== notificationKey);
     };
 
-    const startNotification = (notificationKey: string, response: IndexedClaimResponse) => {
+    const startNotification = (notificationKey: string, response: NotifiableClaimResponse) => {
       if (notifiedRuns.current.has(notificationKey)) return;
 
       notifiedRuns.current.add(notificationKey);
@@ -98,9 +138,29 @@ export function useClaimResponseIndexedNotifier(
 
     const unsubscribe = queryClient.getQueryCache().subscribe(event => {
       if (event.type !== 'updated' || event.action.type !== 'success') return;
-      const response = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
-      if (!response) return;
-      startNotification(`${event.query.queryHash}:${response.runId}`, response);
+      const queryHash = event.query.queryHash;
+
+      const indexed = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
+      if (indexed) {
+        // Still sent once the chain confirms, and it is not redundant: this is the reconciliation
+        // half. If the in-flight notification below reported a position the write never landed,
+        // this one carries the truth and geo-chat converges on it.
+        startNotification(`${queryHash}:${indexed.runId}`, indexed);
+        return;
+      }
+
+      // GEO-2784. Tell geo-chat the moment the write starts rather than when it finishes.
+      // `web.write.entity_response` is p50 9.9s / p95 48.6s, and geo-chat used to refuse an
+      // unindexed position outright (409 `claim_response_not_indexed`), so nobody could be offered
+      // a debate against a position for ~10s after the click. geo-chat is now the authority on
+      // readiness and takes the report immediately.
+      //
+      // Keyed separately from the indexed notification so both fire: this one makes the opposite
+      // side's Request debate appear at once, that one reconciles it. Keyed on the position too,
+      // so toggling a side off and on again is reported rather than swallowed as a duplicate.
+      const pending = pendingClaimResponse(event.query.queryKey, event.query.state.data);
+      if (!pending) return;
+      startNotification(`${queryHash}:pending:${String(pending.position)}`, pending);
     });
 
     for (const [notificationKey, interrupted] of interruptedNotifications.current) {
