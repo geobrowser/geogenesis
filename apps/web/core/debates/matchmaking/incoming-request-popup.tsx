@@ -8,6 +8,7 @@ import { speakerLabel } from '../playback-utils';
 import { useAcceptDebateRequest, useBlockDebateUser, useDismissDebateRequest } from './hooks';
 import { SpaceChip } from './matchmaking-claim-card';
 import { RequestOverflowMenu } from './request-overflow-menu';
+import { useAnswerOnce } from './use-answer-once';
 
 /**
  * GEO-2430. The popup a recipient sees the moment a request arrives:
@@ -42,19 +43,7 @@ export function IncomingRequestPopup({
   const error = [acceptRequest.error, dismissRequest.error, blockUser.error].find(
     (candidate): candidate is Error => candidate instanceof Error
   );
-  // `isPending` only disables the buttons on the *next* render, so a double tap gets two answers in
-  // before it takes effect — and the second one 409s over a request the first already took.
-  const answered = React.useRef(false);
-  const answerOnce = (answer: () => void) => {
-    if (answered.current) return;
-    answered.current = true;
-    answer();
-  };
-  // A failed answer has to give the guard back, or the request is unanswerable from this popup for
-  // the rest of its life: the controls re-enable, but every press after that is swallowed. Pass it
-  // to each mutation rather than watching an error flag, so it fires on the attempt that actually
-  // failed however many follow it.
-  const releaseAnswer = { onError: () => void (answered.current = false) };
+  const { answerOnce, releaseAnswer } = useAnswerOnce();
 
   return (
     <DebateRequestDialog

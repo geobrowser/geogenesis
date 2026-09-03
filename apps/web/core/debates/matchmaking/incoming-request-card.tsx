@@ -15,6 +15,7 @@ import { HubPillButton } from './hub-pill-button';
 import { SpaceChip } from './matchmaking-claim-card';
 import { RequestOverflowMenu } from './request-overflow-menu';
 import { RequestParties } from './request-parties';
+import { useAnswerOnce } from './use-answer-once';
 import { useRequestCountdown } from './use-request-countdown';
 
 /**
@@ -33,14 +34,7 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
 
   const busy = acceptRequest.isPending || dismissRequest.isPending || blockUser.isPending;
   const unavailable = request.requester.in_debate;
-  // `isPending` only disables the button on the *next* render, so a double tap gets two accepts in
-  // before it takes effect — and the second one 409s over a request the first already took.
-  const answered = React.useRef(false);
-  const answerOnce = (answer: () => void) => {
-    if (answered.current) return;
-    answered.current = true;
-    answer();
-  };
+  const { answerOnce } = useAnswerOnce();
 
   return (
     // Expiry is owned by the list (`useUnexpiredRequests`) rather than this card, so the card can
