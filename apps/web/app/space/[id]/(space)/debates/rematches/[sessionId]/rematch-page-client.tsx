@@ -1581,7 +1581,6 @@ function RematchClaimCard({
   onRequest: () => void;
   busy: boolean;
 }) {
-  const serverLocalPosition = claim.participants.find(side => side.user_id === currentUserId)?.position ?? null;
   const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
 
   // A claim whose stored kind didn't parse still has to render; 'stance' is the fallback
@@ -1641,10 +1640,10 @@ function RematchClaimCard({
   /**
    * The shared gate, so this reads the same fact the hub reads and wears the same label.
    *
-   * `chatPosition` rather than `serverLocalPosition`, which is the whole fix: the latter is the
-   * graph's view, arriving via `participantSidesOn`, and comparing it against `localPosition` —
-   * which falls back to it whenever there is no optimistic answer — went trivially true and opened
-   * a button geo-chat would still reject.
+   * `chatPosition` rather than the graph's view of the viewer's side, which is the whole fix: the
+   * latter arrives via `participantSidesOn`, and comparing it against a `localPosition` that fell
+   * back to it whenever there was no optimistic answer went trivially true and opened a button
+   * geo-chat would still reject.
    *
    * `delayed` is only reachable from the response mutation's `onSuccess`, so by the time it is set
    * the publish has landed and the wait is the index. That changes the label, never the gate.
@@ -1669,18 +1668,25 @@ function RematchClaimCard({
     [claim, responseKind, session]
   );
 
-  // geo-chat's copy, deliberately — not `localPosition`. The card reads the viewer's own in-flight
-  // response off the indexing snapshot for display, and uses this field for the two questions only
-  // the server can answer: whether it is safe to send readiness yet, and whether the position
-  // summaries already count the viewer. Handing it the optimistic answer claimed the server agreed
-  // the instant the viewer clicked, which sent readiness before there was an indexed response to
-  // hang it on and suppressed the optimistic avatar the card would otherwise add.
+  // geo-chat's copy, deliberately — not the optimistic one. The card reads the viewer's own
+  // in-flight response off the indexing snapshot for display, and uses this field for the two
+  // questions only the server can answer: whether it is safe to send readiness yet, and whether the
+  // position summaries already count the viewer. Handing it the optimistic answer claimed the
+  // server agreed the instant the viewer clicked, which sent readiness before there was an indexed
+  // response to hang it on and suppressed the optimistic avatar the card would otherwise add.
+  //
+  // `chatPosition`, not `claim.participants`. This used to read the latter, on the same reasoning —
+  // except the assembly upstream overwrites those sides with the graph's, so "the server's copy"
+  // had quietly become the indexer's. The card falls back to this field the moment the indexing
+  // snapshot clears, so a graph that had not caught up yet took the viewer's own side off the card
+  // and left it off for as long as `web.write.entity_response` took (p50 9.9s, p95 48.6s). It came
+  // back only when the indexer landed, or when the viewer answered a second time (GEO-2808).
   const readiness: MatchmakingReadiness = {
     response_kind: responseKind,
     viewer_response:
-      serverLocalPosition === null
+      chatPosition === null || chatPosition === undefined
         ? null
-        : { position: serverLocalPosition, position_label: responsePositionLabel(responseKind, serverLocalPosition) },
+        : { position: chatPosition, position_label: responsePositionLabel(responseKind, chatPosition) },
     viewer_debate_ready: claimReadiness?.viewer_debate_ready ?? false,
     readiness_disabled_reason: claimReadiness?.readiness_disabled_reason ?? null,
   };
@@ -1697,7 +1703,7 @@ function RematchClaimCard({
       // the viewer is already in. With the slot off, `activeDebate` has no reader.
       hideEndSlot
       // `positions` locates the viewer by geo-chat user id, which is null until the token exchange
-      // lands. Until then `serverLocalPosition` reads as "no position" for someone the summaries
+      // lands. Until then `chatPosition` reads as "no position" for someone the summaries
       // may already count, and the card would draw them onto a second side.
       viewerIdentityPending={currentUserId === null}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the

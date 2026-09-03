@@ -2792,6 +2792,42 @@ describe('DebateRematchPageClient', () => {
   });
 
   /**
+   * Reported from the browser: take a position, it says publishing, then the position itself
+   * disappears and does not come back — until you answer a second time, which sticks.
+   *
+   * The card falls back to `readiness.viewer_response` the moment the indexing snapshot clears, and
+   * that field was built from `claim.participants` — sides the assembly upstream had already
+   * overwritten with the graph's. So the fallback was an indexer that had not caught up, and the
+   * viewer's own side vanished for as long as it took (p95 48.6s). The second answer worked because
+   * by then the first had landed.
+   */
+  it('keeps the viewer side on the card when the optimistic answer clears before the graph', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    // The indexer has nothing for the viewer, which is the state that used to blank the pill.
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const card = () => screen.getByText('A claim both participants chose').closest('article')!;
+    expect(within(card()).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+
+    // The mutation settles and the optimistic answer goes away. geo-chat still holds the side.
+    mocks.optimisticResponses.delete(CLAIM_SHARED);
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(within(card()).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  /**
    * The optimistic answer clears when the mutation settles, and the graph is still ten seconds
    * behind it. A gate that fell back to the graph there shut again and re-announced a publish that
    * had already landed — the control flickered ready → publishing → ready.
