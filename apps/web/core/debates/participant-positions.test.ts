@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -207,6 +207,111 @@ describe('useParticipantPositions holding its list', () => {
     rerender({ participants: [LOCAL] });
 
     expect(result.current.byClaim.size).toBe(1);
+  });
+});
+
+/** Confirmed position overlays remain active until participant positions are refetched. */
+describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
+  const CLAIM = 'claim-1';
+  const SPACE = '019fedae72b67ab2927adf044d57c560';
+  const INDEXING_KEY = ['entity-response-indexing', LOCAL.profile_space_id, CLAIM, SPACE, 'stance'] as const;
+
+  const snapshot = (status: 'reconciling' | 'indexed', expectedResponse: 'positive' | 'negative' | null) => ({
+    status,
+    pending: {
+      entityId: CLAIM,
+      expectedResponse,
+      personalSpaceId: LOCAL.profile_space_id,
+      responseKind: 'stance',
+      spaceId: SPACE,
+    },
+    runId: 'run-1',
+  });
+
+  const sideOf = (result: { current: { byClaim: Map<string, unknown> } }) =>
+    participantSidesOn(result.current.byClaim as ReturnType<typeof groupParticipantPositions>, CLAIM, SPACE, [
+      LOCAL,
+      REMOTE,
+    ])[0]!.position;
+
+  const renderPositions = (client: QueryClient) =>
+    renderHook(() => useParticipantPositions([LOCAL, REMOTE], LOCAL.profile_space_id), {
+      wrapper: ({ children }) => React.createElement(QueryClientProvider, { client }, children),
+    });
+
+  it('keeps the position on screen between the write confirming and the refetch landing', async () => {
+    mocks.attention = true;
+    // The graph has not returned the new position yet.
+    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('reconciling', 'positive')));
+    expect(sideOf(result)).toBe(true);
+
+    // Retire the indexing snapshot before the participant refetch completes.
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', 'positive')));
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+
+    expect(sideOf(result)).toBe(true);
+  });
+
+  it('hands back to the fetched list once a refetch has landed', async () => {
+    mocks.attention = true;
+    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', 'positive')));
+    expect(sideOf(result)).toBe(true);
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+
+    // Ensure the refetch timestamp is later than the overlay retirement timestamp.
+    await new Promise(resolve => setTimeout(resolve, 5));
+    mocks.graphql.mockImplementation(() =>
+      Effect.succeed([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }])
+    );
+    await client.invalidateQueries({
+      queryKey: participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]),
+    });
+
+    // The fetched row replaces the overlay without changing the displayed position.
+    await waitFor(() => expect(sideOf(result)).toBe(true));
+    expect(result.current.byClaim.get(CLAIM)).toHaveLength(1);
+  });
+
+  // Keep a removal tombstone until the fetched data reflects the removal.
+  it('keeps a removal hidden until the refetch confirms it', async () => {
+    mocks.attention = true;
+    mocks.graphql.mockImplementation(() =>
+      Effect.succeed([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }])
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(sideOf(result)).toBe(true));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', null)));
+    expect(sideOf(result)).toBe(null);
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+    expect(sideOf(result)).toBe(null);
+  });
+
+  // A response that returns to idle without reaching indexed was rolled back.
+  it('drops a rolled-back write immediately', async () => {
+    mocks.attention = true;
+    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('reconciling', 'positive')));
+    expect(sideOf(result)).toBe(true);
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+    expect(sideOf(result)).toBe(null);
   });
 });
 

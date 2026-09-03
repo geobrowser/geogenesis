@@ -10,12 +10,11 @@ import { type DebateResponseKind, type GetPrivyIdentityToken, notifyClaimRespons
 import { refreshRematchClaimBatches, rematchClaimBatchesWithClaim } from './rematch-claims-query-key';
 
 const MAX_NOTIFIED_RUNS = 256;
-/**
- * What sending a notification actually needs. The indexed variant additionally carries `runId`,
- * but that is only used to build the dedupe key at the call site — never inside the send — so both
- * the in-flight and the confirmed response satisfy this (GEO-2784).
- */
-type NotifiableClaimResponse = NonNullable<ReturnType<typeof pendingClaimResponse>>;
+/** Fields shared by pending and indexed response notifications. */
+type NotifiableClaimResponse = Pick<
+  NonNullable<ReturnType<typeof pendingClaimResponse>>,
+  'entityId' | 'position' | 'responseKind' | 'spaceId'
+>;
 type InterruptedNotification = {
   accountKey: string;
   notificationKey: string;
@@ -72,6 +71,8 @@ export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown
       indexingState.pending.expectedResponse === null ? null : indexingState.pending.expectedResponse === 'positive',
     responseKind: responseKind as DebateResponseKind,
     spaceId: String(spaceId),
+    /** Used to distinguish confirmed responses from rolled-back responses. */
+    status: indexingState.status,
   };
 }
 

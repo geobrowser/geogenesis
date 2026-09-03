@@ -188,6 +188,9 @@ function sameId(left: string, right: string) {
   return left.replace(/-/g, '').toLowerCase() === right.replace(/-/g, '').toLowerCase();
 }
 
+/** A confirmed position retained until participant positions are refetched. */
+type SettlingPosition = { row: ParticipantPosition; retiredAt: number };
+
 /**
  * The viewer's own in-flight responses, as positions (GEO-2784).
  *
@@ -198,13 +201,25 @@ function sameId(left: string, right: string) {
  *
  * Subscribed rather than read once: the pending set changes as writes start and settle, and none
  * of those transitions re-render this hook on their own.
+ *
+ * Confirmed positions remain overlaid after their indexing snapshots are retired. The overlay is
+ * released when the participant positions query receives newer data. Responses that return to
+ * idle without reaching `indexed` are treated as rollbacks and are not retained.
  */
-function useOwnPendingPositions(localProfileSpaceId: string | null | undefined): ParticipantPosition[] {
+function useOwnPendingPositions(
+  localProfileSpaceId: string | null | undefined,
+  /** Timestamp of the latest participant positions result. */
+  dataUpdatedAt: number
+): ParticipantPosition[] {
   const queryClient = useQueryClient();
   const [pending, setPending] = React.useState<ParticipantPosition[]>([]);
+  const [settling, setSettling] = React.useState<SettlingPosition[]>([]);
+  // Track the previous cache state to identify confirmed snapshots that were retired.
+  const lastRead = React.useRef(new Map<string, { row: ParticipantPosition; indexed: boolean }>());
 
   React.useEffect(() => {
     if (!localProfileSpaceId) {
+      lastRead.current = new Map();
       setPending(current => (current.length === 0 ? current : []));
       return;
     }
@@ -212,10 +227,11 @@ function useOwnPendingPositions(localProfileSpaceId: string | null | undefined):
 
     const read = () => {
       const rows: ParticipantPosition[] = [];
+      const seen = new Map<string, { row: ParticipantPosition; indexed: boolean }>();
       for (const query of cache.getAll()) {
         const parsed = pendingClaimResponse(query.queryKey, query.state.data);
         if (!parsed) continue;
-        rows.push({
+        const row = {
           profileSpaceId: localProfileSpaceId,
           claimId: parsed.entityId,
           spaceId: parsed.spaceId,
@@ -224,7 +240,20 @@ function useOwnPendingPositions(localProfileSpaceId: string | null | undefined):
           // resolved in the merge below, because dropping it here would let the stale fetched row
           // keep the position visible until the next refetch.
           position: parsed.position as boolean,
-        });
+        };
+        rows.push(row);
+        seen.set(positionKey(row), { row, indexed: parsed.status === 'indexed' });
+      }
+
+      const retiredAt = Date.now();
+      const retired = [...lastRead.current]
+        .filter(([key, previous]) => !seen.has(key) && previous.indexed)
+        .map(([, previous]) => ({ row: previous.row, retiredAt }));
+      lastRead.current = seen;
+
+      if (retired.length > 0) {
+        const held = new Set(retired.map(entry => positionKey(entry.row)));
+        setSettling(current => [...current.filter(entry => !held.has(positionKey(entry.row))), ...retired]);
       }
       // Referential stability matters: this feeds a `useMemo` that regroups every position.
       setPending(current => (samePositions(current, rows) ? current : rows));
@@ -238,7 +267,19 @@ function useOwnPendingPositions(localProfileSpaceId: string | null | undefined):
     });
   }, [localProfileSpaceId, queryClient]);
 
-  return pending;
+  // Release retained rows after a newer participant positions result arrives.
+  React.useEffect(() => {
+    setSettling(current => {
+      const held = current.filter(entry => entry.retiredAt >= dataUpdatedAt);
+      return held.length === current.length ? current : held;
+    });
+  }, [dataUpdatedAt]);
+
+  // Apply active responses after retained responses so newer input takes precedence.
+  return React.useMemo(
+    () => (settling.length === 0 ? pending : [...settling.map(entry => entry.row), ...pending]),
+    [pending, settling]
+  );
 }
 
 function samePositions(a: ParticipantPosition[], b: ParticipantPosition[]) {
@@ -337,7 +378,7 @@ export function useParticipantPositions(
     placeholderData: keepPreviousData,
   });
 
-  const ownPending = useOwnPendingPositions(localProfileSpaceId);
+  const ownPending = useOwnPendingPositions(localProfileSpaceId, query.dataUpdatedAt);
   const byClaim = React.useMemo(
     () => groupParticipantPositions(applyPendingPositions(query.data ?? [], ownPending)),
     [query.data, ownPending]

@@ -591,7 +591,17 @@ export function withViewerPosition({
   viewerName: string | null;
   viewerAvatarUrl: string | null;
 }): DebateClaimPositionSummary[] {
-  if (!viewerSpaceId || viewerPosition === serverPosition) return positions;
+  if (!viewerSpaceId) return positions;
+
+  // Profile space IDs may use dashed or bare-hex forms.
+  const heldByViewer = (participant: DebateParticipantSummary) =>
+    ID.equals(participant.profile_space_id, viewerSpaceId);
+
+  // Participant lists may lag behind `serverPosition`, so also check for a stale viewer entry.
+  const listedOnAnotherSide = positions.some(
+    side => side.position !== viewerPosition && side.participants.some(heldByViewer)
+  );
+  if (viewerPosition === serverPosition && !listedOnAnotherSide) return positions;
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const viewer = {
@@ -602,13 +612,6 @@ export function withViewerPosition({
     display_name: viewerName,
     avatar_cid: viewerAvatarUrl,
   };
-
-  // `ID.equals` rather than `===`: `viewerSpaceId` is a graph id, which is always bare hex, while
-  // geo-chat ids are treated as possibly dashed throughout this directory. A raw comparison against
-  // a dashed `profile_space_id` silently fails to match, which would leave the viewer drawn on both
-  // sides at once — the count decrements either way.
-  const heldByViewer = (participant: DebateParticipantSummary) =>
-    ID.equals(participant.profile_space_id, viewerSpaceId);
 
   // Counts follow `serverPosition`, but the participant lists are rebuilt from scratch on every
   // side. Removing the viewer only from the side the server reports assumed those two agree about

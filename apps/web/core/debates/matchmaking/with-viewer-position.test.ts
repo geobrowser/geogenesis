@@ -122,6 +122,49 @@ describe('withViewerPosition', () => {
     expect(agree.participants.map(p => p.profile_space_id)).toEqual([OTHER_SPACE]);
   });
 
+  // Participant lists can retain the viewer after the reported position has been removed.
+  it('takes the viewer off a side the list still shows them on, even once the server agrees', () => {
+    const sides = place(
+      [
+        side(true, { total_count: 1, present_count: 1, participants: [participant(VIEWER_SPACE)] }),
+        side(false, { total_count: 0, present_count: 0 }),
+      ],
+      null,
+      null
+    );
+
+    const agree = on(sides, true);
+    expect(agree.participants).toHaveLength(0);
+    expect(agree.present_count).toBe(0);
+  });
+
+  // A stale participant list must not duplicate the viewer after a side change.
+  it('moves the viewer off the old side when the server has already caught up with the new one', () => {
+    const sides = place(
+      [
+        side(true, { total_count: 1, present_count: 1, participants: [participant(VIEWER_SPACE)] }),
+        side(false, { total_count: 1, present_count: 1 }),
+      ],
+      false,
+      false
+    );
+
+    expect(on(sides, true).participants).toHaveLength(0);
+    expect(on(sides, false).participants.map(p => p.profile_space_id)).toEqual([VIEWER_SPACE]);
+    // The server count already includes the viewer on the new side.
+    expect(presentCount(on(sides, false))).toBe(1);
+  });
+
+  // Preserve referential equality when no correction is required.
+  it('returns the same array when both sources already agree', () => {
+    const positions = [
+      side(true, { total_count: 1, present_count: 1, participants: [participant(VIEWER_SPACE)] }),
+      side(false),
+    ];
+
+    expect(place(positions, true, true)).toBe(positions);
+  });
+
   it('leaves present_count undefined where the server sent none, so the faces still answer', () => {
     const sides = place([side(true), side(false)], null, false);
 

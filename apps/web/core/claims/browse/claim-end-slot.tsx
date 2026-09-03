@@ -105,6 +105,8 @@ export function ClaimEndSlot({
       : 'inline-flex h-5 shrink-0 px-2.5 text-[14px] leading-none'
   );
 
+  // A match is derived from the same readiness rows validated by `create_debate_request_as`, so no
+  // additional position check is required on this surface.
   if (match) {
     return (
       <span className={cx('flex flex-col gap-1', variant === 'block' ? 'w-full' : 'shrink-0 items-end', className)}>

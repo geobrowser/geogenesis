@@ -59,8 +59,8 @@ import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
-import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import {
   type TaggedClaimFilters,
   tagDisplaySpaceId,
@@ -1028,6 +1028,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         })
       }
       busy={createRequest.isPending || session?.status === 'request_pending'}
+      // Associate the shared mutation error with the claim that initiated it.
+      requestError={
+        createRequest.error instanceof Error && createRequest.variables?.claim_id === claim.claim.claim_entity_id
+          ? createRequest.error.message
+          : null
+      }
     />
   );
 
@@ -1156,13 +1162,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           </div>
         </div>
 
-        {(createRequest.error instanceof Error || leaveSession.error instanceof Error) && (
+        {/* Request errors are rendered on their claim cards. */}
+        {leaveSession.error instanceof Error && (
           <Text color="red-01" className="mb-4">
-            {createRequest.error instanceof Error
-              ? createRequest.error.message
-              : leaveSession.error instanceof Error
-                ? leaveSession.error.message
-                : null}
+            {leaveSession.error.message}
           </Text>
         )}
         {session?.request?.status === 'expired' && session.request.cancellation_reason && (
@@ -1324,6 +1327,7 @@ function RematchClaimCard({
   readiness: claimReadiness,
   onRequest,
   busy,
+  requestError,
 }: {
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
@@ -1334,6 +1338,8 @@ function RematchClaimCard({
   /** True while any readiness lookup is still running or has failed. */
   onRequest: () => void;
   busy: boolean;
+  /** The last request error for this claim. */
+  requestError?: string | null;
 }) {
   const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
 
@@ -1379,7 +1385,8 @@ function RematchClaimCard({
    *
    * Matching the card's threshold is what keeps a card and its own footer describing one moment.
    */
-  const inFlightResponse = optimisticResponse !== undefined ? optimisticResponse : responseIndexing.pending?.expectedResponse;
+  const inFlightResponse =
+    optimisticResponse !== undefined ? optimisticResponse : responseIndexing.pending?.expectedResponse;
 
   const localPosition =
     inFlightResponse === undefined
@@ -1481,7 +1488,7 @@ function RematchClaimCard({
         // `recently_rejected` too: the note lives in this footer, and it is a standing fact about
         // the claim rather than a state of the offer. Without it a rejected claim the viewer has no
         // position on lost the explanation along with the button.
-        awaitingResponse || canRequest || requesting || claim.recently_rejected ? (
+        awaitingResponse || canRequest || requesting || claim.recently_rejected || requestError ? (
           <div className="mt-3">
             {/* GEO-2697. The wait lives on the control it is blocking. This used to be a separate
                 spinner line rendered *instead* of the button, which left the viewer watching a
@@ -1509,6 +1516,14 @@ function RematchClaimCard({
               <Text as="p" variant="footnote" color="grey-04" className="mt-1">
                 Recently rejected
               </Text>
+            ) : null}
+            {/* Keep request feedback with the claim that initiated the mutation. */}
+            {requestError ? (
+              <div role="alert" className="mt-1">
+                <Text as="p" variant="footnote" color="red-01">
+                  {requestError}
+                </Text>
+              </div>
             ) : null}
           </div>
         ) : null
