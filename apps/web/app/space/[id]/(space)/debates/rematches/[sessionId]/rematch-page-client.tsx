@@ -61,6 +61,7 @@ import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-
 import { useScopedMatchmakingClaims } from '~/core/debates/matchmaking/use-scoped-claims';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
+import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
@@ -477,7 +478,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }, [curatedClaimsQuery.data, featuredClaimsQuery.data, opponentClaimsQuery.data, savedClaimsQuery.data]);
 
   // geo-chat's row for a claim, where it has one. It carries the session flags and readiness; the
-  // sides on it are replaced by the graph's below, which are fresher by a notification round trip.
+  // sides on it are replaced by the graph's below, which is what the card draws.
+  //
+  // That replacement used to be justified as the graph being "fresher by a notification round
+  // trip". It is not, and has not been since #2348: geo-chat learns a position the moment the write
+  // starts, while the graph waits on `web.write.entity_response` (p50 9.9s). The sides are still
+  // drawn from the graph — that is the shape the page draws, and both agree in the end — but the
+  // *gate* is measured against geo-chat below, because geo-chat is what rejects an early request.
   const sessionRowsByClaimId = React.useMemo(
     () =>
       new Map(
@@ -490,6 +497,36 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ),
     [curatedClaimsQuery.data, featuredClaimsQuery.data, opponentClaimsQuery.data, savedClaimsQuery.data]
   );
+
+  /**
+   * geo-chat's own copy of the viewer's position, per claim, kept out of the assembly below so it
+   * survives being overwritten by the graph's sides (GEO-2808).
+   *
+   * Present-but-no-entry is recorded as `null`: geo-chat has a row and holds no position for this
+   * viewer, which is an answer. A claim missing from the map entirely is `undefined` — no row yet,
+   * which is not. `debateRequestGate` blocks on both and only distinguishes them so a missing row
+   * cannot read as a deliberate absence.
+   */
+  const chatPositionByClaimId = React.useMemo(() => {
+    const byClaim = new Map<string, boolean | null>();
+    // Two row shapes, one fact. The hub's index reports the viewer's own side as `viewer_response`
+    // — the same field the hub gates on — while a rematch row lists every session participant's,
+    // so the viewer's is picked out of `participants`.
+    for (const page of browsedPages) {
+      for (const entry of page.claims) {
+        byClaim.set(entry.claim.claim_entity_id, entry.viewer_response?.position ?? null);
+      }
+    }
+    // Session rows last, so they win where both carry the claim — the same precedence the assembly
+    // below uses.
+    for (const row of sessionRowsByClaimId.values()) {
+      byClaim.set(
+        row.claim.claim_entity_id,
+        row.participants.find(side => side.user_id === currentUserId)?.position ?? null
+      );
+    }
+    return byClaim;
+  }, [browsedPages, currentUserId, sessionRowsByClaimId]);
 
   // A debate is published into the claim's home space by the acceptor, and a personal space grants
   // editor rights to its owner alone — so a claim living in one can never carry a published debate
@@ -1224,6 +1261,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       claim={claim}
       session={session}
       currentUserId={currentUserId}
+      chatPosition={chatPositionByClaimId.get(claim.claim.claim_entity_id)}
       readiness={readinessByClaimId.get(claim.claim.claim_entity_id) ?? null}
       onRequest={() =>
         createRequest.mutate({
@@ -1528,6 +1566,7 @@ function RematchClaimCard({
   claim,
   session,
   currentUserId,
+  chatPosition,
   readiness: claimReadiness,
   onRequest,
   busy,
@@ -1535,6 +1574,8 @@ function RematchClaimCard({
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
   currentUserId: string | null;
+  /** geo-chat's own copy of this viewer's position; `undefined` when it has no row yet. */
+  chatPosition: boolean | null | undefined;
   readiness: ClaimReadinessState | null;
   /** True while any readiness lookup is still running or has failed. */
   onRequest: () => void;
@@ -1563,12 +1604,6 @@ function RematchClaimCard({
         : optimisticResponse === 'positive';
 
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
-  // geo-chat validates against its own copy of your position, which trails the optimistic one by a
-  // publish, an index, and a notification. Acting before it agrees earns "respond to this claim
-  // before requesting a rematch". Comparing rather than null-checking also covers switching sides,
-  // where geo-chat still holds the side you just moved off — equally invalid to act on.
-  const responseSettled = serverLocalPosition === localPosition;
-  const canRequest = opposing && responseSettled;
   /**
    * GEO-2652. The side you picked highlights immediately off the optimistic answer, but the request
    * has to wait for geo-chat's copy, which trails by a publish, an index and a notification. That
@@ -1590,14 +1625,26 @@ function RematchClaimCard({
     spaceId: claim.claim.space_id,
     responseKind,
   });
-  const awaitingResponse = opposing && !responseSettled;
-  // Two phases, named for what is actually happening in each. `delayed` is only reachable from the
-  // response mutation's `onSuccess` — `reconcileResponseIndexing` runs after `run.status =
-  // 'success'` and sets it when the indexer hasn't confirmed in time — so by then the publish has
-  // landed and the wait is the index. Saying "still publishing" there would point the viewer at a
-  // transaction that already succeeded.
-  const awaitingLabel =
-    responseIndexing.status === 'delayed' ? 'Still confirming your position…' : 'Publishing your position…';
+  /**
+   * The shared gate, so this reads the same fact the hub reads and wears the same label.
+   *
+   * `chatPosition` rather than `serverLocalPosition`, which is the whole fix: the latter is the
+   * graph's view, arriving via `participantSidesOn`, and comparing it against `localPosition` —
+   * which falls back to it whenever there is no optimistic answer — went trivially true and opened
+   * a button geo-chat would still reject.
+   *
+   * `delayed` is only reachable from the response mutation's `onSuccess`, so by the time it is set
+   * the publish has landed and the wait is the index. That changes the label, never the gate.
+   */
+  const requestGate = debateRequestGate({
+    chatPosition,
+    localPosition,
+    opponentReady: opposing,
+    indexingDelayed: responseIndexing.status === 'delayed',
+  });
+  const canRequest = requestGate.canRequest;
+  const awaitingResponse = requestGate.pending;
+  const awaitingLabel = requestGate.pendingLabel ?? REQUEST_PENDING_LABEL;
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
 

@@ -1507,7 +1507,13 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.getByText('Recently rejected')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
+    // Nothing pressable, whatever the control is currently called. With `mocks.claims` empty this
+    // claim lists off the session's rejected ids alone, so geo-chat has no row for it and the gate
+    // is shut on the position as well as the rejection (GEO-2808) — asserting the enabled state
+    // rather than one label keeps this test about the rejection it is named for.
+    for (const button of screen.getAllByRole('button', { name: /Request debate|your position/ })) {
+      expect(button).toBeDisabled();
+    }
   });
 
   // The hub's query takes a space, so the space filter runs server-side on the All tab; topics are
@@ -2609,7 +2615,16 @@ describe('DebateRematchPageClient', () => {
   // requesting a rematch" — so the request waits for geo-chat's copy, not the optimistic one.
   // GEO-2697: it waits as a pending button rather than by hiding, so the wait sits on the control
   // it is blocking instead of beside a button that isn't on screen.
-  it('holds the request unpressable until the graph has the position it will be validated against', async () => {
+  it('holds the request unpressable until geo-chat has the position it will be validated against', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -2629,6 +2644,15 @@ describe('DebateRematchPageClient', () => {
   // than left as an inert control. A disabled button nobody is focused on announces nothing, so the
   // wait is still a `status` for screen readers even though it is no longer drawn as one.
   it('announces what it is waiting for while the position is being confirmed', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -2641,6 +2665,15 @@ describe('DebateRematchPageClient', () => {
   // reached after the publish succeeded, so the label stops claiming to be publishing. It matters
   // more now that it is the button's own text — under GEO-2687 it can sit there for half a minute.
   it('says the wait is running long on the button itself', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     mocks.responseIndexingDelayed = true;
@@ -2655,6 +2688,15 @@ describe('DebateRematchPageClient', () => {
   // a settled render — the same DOM node has to go from pending to pressable, which is what
   // distinguishes this from a spinner disappearing and a button appearing somewhere else.
   it('turns the same button pressable once the position settles', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -2663,7 +2705,8 @@ describe('DebateRematchPageClient', () => {
     const pending = screen.getByRole('button', { name: 'Publishing your position…' });
     expect(pending).toBeDisabled();
 
-    // geo-chat catches up with the side already on screen.
+    // geo-chat catches up with the side already on screen. The graph is deliberately left
+    // behind: that is the whole point of the gate moving off it (GEO-2808).
     mocks.optimisticResponses.delete(CLAIM_SHARED);
     mocks.positions = [
       position('profile-local', CLAIM_SHARED, SPACE_1, true),
@@ -2717,9 +2760,50 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.mutate).toHaveBeenCalled();
   });
 
+  /**
+   * GEO-2808, and the point of the change. geo-chat is the only thing that can reject an early
+   * request, and since #2348 it learns the position while the write is still in flight — so once it
+   * agrees there is nothing left to wait for, however far behind the indexer is.
+   *
+   * The graph is deliberately given *nothing* here: under the old gate this rendered
+   * "Publishing your position…" and stayed there for `web.write.entity_response` (p50 9.9s).
+   */
+  it('opens the request as soon as geo-chat agrees, without waiting for the graph', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    // The indexer has not seen the viewer's side at all.
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const request = screen.getByRole('button', { name: 'Request debate' });
+    expect(request).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
+    fireEvent.click(request);
+    expect(mocks.mutate).toHaveBeenCalled();
+  });
+
   // Switching sides leaves geo-chat holding the side you just moved off, which is no more valid to
   // request against than holding none.
   it('withholds the request while a side switch is still publishing', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          // geo-chat still holds the side the viewer just moved off.
+          { user_id: 'user-local', position: false, position_label: 'Disagree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
     mocks.positions = [
       position('profile-local', CLAIM_SHARED, SPACE_1, false),
       position('profile-remote', CLAIM_SHARED, SPACE_1, false),

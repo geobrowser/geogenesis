@@ -12,6 +12,7 @@ import Link from 'next/link';
 import type { Debate } from '~/core/debates/api';
 import { debatePath } from '~/core/debates/debate-routes';
 
+import { debateRequestGate } from '~/core/debates/request-gate';
 import { useClaimMatchup } from './use-claim-matchup';
 
 /**
@@ -43,6 +44,7 @@ export function ClaimEndSlot({
   activeDebate,
   enabled = true,
   variant = 'inline',
+  position,
   className,
 }: {
   claimId: string;
@@ -79,6 +81,24 @@ export function ClaimEndSlot({
    * the continuation of that row rather than a control that wandered in.
    */
   variant?: 'inline' | 'block';
+  /**
+   * The viewer's position on this claim, from both clocks, so the offer can wait for geo-chat to
+   * agree before it is pressable (GEO-2808).
+   *
+   * Optional because not every host can answer it. The hub card holds both — geo-chat's copy as
+   * `viewer_response` and the optimistic one it draws the highlighted side from — while the claim
+   * page and the topic and related-claim cards hold neither. Omitting it keeps this slot's previous
+   * contract for those hosts: offer as soon as there is a match, and let geo-chat reject an early
+   * request. That is a deliberate difference, not an oversight — the alternative is asking three
+   * more surfaces to fetch a position they do not otherwise need.
+   */
+  position?: {
+    /** geo-chat's copy; `undefined` when it has no row for this claim yet. */
+    chat: boolean | null | undefined;
+    /** What the viewer believes they hold, optimistic while a response is in flight. */
+    local: boolean | null;
+    indexingDelayed?: boolean;
+  };
   className?: string;
 }) {
   const { match, blockedReason, isRequesting, requestError, request } = useClaimMatchup({
@@ -86,6 +106,19 @@ export function ClaimEndSlot({
     spaceId,
     enabled,
   });
+
+  // The same gate the picker reads, so both surfaces wait for the same fact and name it the same
+  // way. `match` is this surface's own opponent half: somebody standing ready on the other side,
+  // where the picker asks whether its one fixed opponent holds it.
+  const gate = position
+    ? debateRequestGate({
+        chatPosition: position.chat,
+        localPosition: position.local,
+        opponentReady: match !== null,
+        indexingDelayed: position.indexingDelayed,
+      })
+    : null;
+  const awaitingPosition = gate?.pending === true;
 
   // Sized to the row it sits in rather than to itself.
   //
@@ -111,7 +144,7 @@ export function ClaimEndSlot({
         <button
           type="button"
           onClick={request}
-          disabled={Boolean(blockedReason) || isRequesting}
+          disabled={Boolean(blockedReason) || isRequesting || awaitingPosition}
           // Shown rather than left to a `title`: native tooltips never appear on touch and are
           // unreliable on a disabled button, which is exactly when the explanation matters.
           title={blockedReason}
@@ -132,9 +165,18 @@ export function ClaimEndSlot({
             <span className="invisible col-start-1 row-start-1" aria-hidden>
               Request debate
             </span>
-            <span className="col-start-1 row-start-1">{isRequesting ? 'Requesting…' : 'Request debate'}</span>
+            <span className="col-start-1 row-start-1">
+              {isRequesting ? 'Requesting…' : awaitingPosition ? gate?.pendingLabel : 'Request debate'}
+            </span>
           </span>
         </button>
+        {/* A disabled control nobody is focused on announces nothing, so the wait is a `status` as
+            well as a label — the same pairing the picker uses. */}
+        {awaitingPosition && !isRequesting ? (
+          <span role="status" aria-live="polite" className="sr-only">
+            {gate?.pendingLabel}
+          </span>
+        ) : null}
         {/* A blocked reason is a standing condition the reader can see for themselves, so it is
             ordinary text. A failed request is an event that happens after they press, with nothing
             on screen to mark it — `role="alert"` is what makes it reach anyone not watching this

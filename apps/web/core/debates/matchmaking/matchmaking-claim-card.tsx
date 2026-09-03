@@ -446,6 +446,8 @@ export function useClaimPositionControl({
     respond,
     actionTitle,
     responseError,
+    /** Exposed so the request offer can name a late index differently from a publish in flight. */
+    responseIndexing,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
@@ -484,11 +486,18 @@ function RespondableControls({
   onRequireSignIn?: () => void;
   hideEndSlot?: boolean;
 }) {
-  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
-    useClaimPositionControl({
-      claim,
-      positions,
-      readiness,
+  const {
+    viewerPosition,
+    optimisticPositions,
+    respond,
+    actionTitle,
+    responseError,
+    canRespond,
+    responseIndexing,
+  } = useClaimPositionControl({
+    claim,
+    positions,
+    readiness,
       answersReady,
       responseBlockedReason,
       viewerIdentityPending,
@@ -526,7 +535,19 @@ function RespondableControls({
         isControversial={summary.isControversial}
         endSlot={
           hideEndSlot ? null : (
-            <ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />
+            <ClaimEndSlot
+              claimId={claim.claim_entity_id}
+              spaceId={claim.space_id}
+              activeDebate={activeDebate}
+              // This card holds both clocks — geo-chat's copy on the readiness row, and the
+              // optimistic side it already draws — so the offer can wait for them to agree instead
+              // of opening a button geo-chat will reject (GEO-2808).
+              position={{
+                chat: readiness.viewer_response?.position ?? null,
+                local: viewerPosition,
+                indexingDelayed: responseIndexing.status === 'delayed',
+              }}
+            />
           )
         }
       />
@@ -687,7 +708,15 @@ function UnresolvableControls({
              footer button that used to offer it is gone. Masking an action the server would accept
              is not the safe direction to be wrong in. */
           hideEndSlot ? null : (
-            <ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />
+            <ClaimEndSlot
+              claimId={claim.claim_entity_id}
+              spaceId={claim.space_id}
+              activeDebate={activeDebate}
+              // No `position` here on purpose. This card is the unresolvable case — it draws no
+              // response control, so it has no optimistic side of its own and its only reading of
+              // the viewer's position *is* geo-chat's. Passing both would compare that value with
+              // itself, which is the trivially-true check GEO-2808 removed from the picker.
+            />
           )
         }
       />

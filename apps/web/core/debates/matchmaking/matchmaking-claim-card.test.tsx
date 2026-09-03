@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   },
   spaceName: 'Crypto',
   match: null as { id: string; positions?: DebateClaimPositionSummary[] } | null,
+  optimisticResponse: undefined as 'positive' | 'negative' | null | undefined,
   blockedReason: undefined as string | undefined,
   request: vi.fn(),
   summaryPositive: 0,
@@ -99,7 +100,7 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponse: () => ({
     submitResponse: mocks.submitResponse,
-    optimisticResponse: undefined,
+    optimisticResponse: mocks.optimisticResponse,
     isProcessingResponse: false,
     isResponseIndexingDelayed: false,
     isConnected: true,
@@ -210,6 +211,7 @@ beforeEach(() => {
   mocks.leaveMutateAsync.mockResolvedValue({ claim: null, match: null });
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
+  mocks.optimisticResponse = undefined;
   mocks.spaceName = 'Crypto';
   // Nothing on offer and nobody having answered is the state most claims are actually in, so it is
   // the state every test starts from.
@@ -252,6 +254,50 @@ describe('position avatar stack', () => {
     // No faces and no count: two offline holders are not "+2" people you could debate.
     expect(within(disagree).queryByText('+2')).toBeNull();
     expect(within(disagree).queryByText(/^\+/)).toBeNull();
+  });
+
+  /**
+   * GEO-2808. The hub used to offer the debate the instant a match existed, with no regard for
+   * whether geo-chat had the viewer's position yet — so the request was pressable and geo-chat
+   * rejected it. It now waits on the same fact the picker waits on, and wears the same label.
+   */
+  describe('the request waits for geo-chat to hold the viewer position', () => {
+    it('names the wait while geo-chat has not caught up', () => {
+      mocks.match = { id: 'match-1' };
+      mocks.optimisticResponse = 'positive';
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={withCounts([
+            { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('a')] },
+            { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('b')] },
+          ])}
+          // geo-chat holds no position for the viewer yet.
+          readiness={{ ...readiness(), viewer_response: null }}
+        />
+      );
+
+      const button = screen.getByRole('button', { name: 'Publishing your position…' });
+      expect(button).toBeDisabled();
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
+
+    it('offers the debate once geo-chat holds the side on screen', () => {
+      mocks.match = { id: 'match-1' };
+      mocks.optimisticResponse = 'positive';
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={withCounts([
+            { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('a')] },
+            { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('b')] },
+          ])}
+          readiness={readiness()}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    });
   });
 
   // The regression that caused the revert. Drawing the stack from `available_now_count` looked
