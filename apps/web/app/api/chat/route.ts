@@ -22,6 +22,7 @@ import { EDIT_TOOL_NAMES } from '~/core/chat/edit-types';
 import { CONTEXT_USAGE_DATA_TYPE, type ContextUsageData, ENTITY_ID_REGEX, MAX_PATH_CHARS } from '~/core/chat/limits';
 import { WALLET_ADDRESS } from '~/core/cookie';
 
+import { attachmentInLastUserMessage, renderAttachmentNote } from './attachment-note';
 import {
   CLOSER_SYSTEM_PROMPT,
   type ChatClientContext,
@@ -38,10 +39,9 @@ import { buildFollowUpCapabilityNote } from './follow-up-capabilities';
 import { CLOSER_MODEL, FOLLOW_UPS_MODEL, MAIN_MODEL, OPENER_MODEL } from './models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
 import { requestedItemCount } from './requested-item-count';
-import { attachmentInLastUserMessage, renderAttachmentNote } from './attachment-note';
-import { appendNoteToLastUserMessage, previousSpaceInConversation, renderSpaceSwitchNote } from './space-switch-note';
 import { sanitizeModelMessages } from './sanitize-model-messages';
 import { scopeToolTrafficToCurrentTurn } from './scope-tool-traffic';
+import { appendNoteToLastUserMessage, previousSpaceInConversation, renderSpaceSwitchNote } from './space-switch-note';
 import { buildNavTools } from './tools/nav';
 import { memberReadTools, readTools } from './tools/read';
 import { buildWriteContext, writeTools } from './tools/write';
@@ -811,6 +811,26 @@ export async function POST(req: Request) {
         );
         execMessages = (await retryResult.response).messages;
         await recordCost('executor', MAIN_MODEL, retryResult);
+      }
+
+      // Twice in a row with nothing to show means the executor never ran — an
+      // API error swallowed by `onError`, not a turn with a quiet answer. The
+      // closer would be handed an empty transcript and write *about* that
+      // ("I don't have tool results from this turn to write a reply from"),
+      // which is an internal condition, not something to say to a user. Say
+      // what actually happened instead, and stop.
+      if (execMessages.length === 0) {
+        console.error('[chat:srv] executor produced nothing twice — ending turn with a failure notice');
+        const noticeId = 'executor-empty';
+        writer.write({ type: 'text-start', id: noticeId });
+        writer.write({
+          type: 'text-delta',
+          id: noticeId,
+          delta: "Something went wrong on my side and I couldn't work on that. Please try again.",
+        });
+        writer.write({ type: 'text-end', id: noticeId });
+        logChainCost();
+        return;
       }
 
       // Surface context occupancy so the widget can compact when we near the

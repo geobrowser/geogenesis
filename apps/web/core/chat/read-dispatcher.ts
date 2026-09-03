@@ -644,18 +644,44 @@ export async function executeListSpaces(input: ListSpacesInput, ctx: ReadCtx): P
     const seen = new Set<string>();
     const merged: ListSpaceEntry[] = [];
 
+    // A Space-typed entity in the store is a space's *topic* entity, so its id
+    // is not the container's — the same distinction the remote branch above
+    // makes when it resolves search hits through `getSpaces({ topicIds })`.
+    // Emitting the topic id as `id` handed callers a space that doesn't exist:
+    // `navigate` and `joinSpace` both failed with space_not_found, and a data
+    // block filtered on it matched nothing.
+    const localTopicIds = [
+      ...new Set(localCandidates.slice(0, MAX_RESULT_ENTRIES).map(candidate => normalizeEntityId(candidate.id))),
+    ];
+    const localSpaceIdByTopicId = new Map<string, string>();
+    if (localTopicIds.length > 0) {
+      const localSpaces = await ctx.cache
+        .fetchQuery({
+          queryKey: ['chat', 'listSpaces', 'localByTopic', localTopicIds],
+          queryFn: ({ signal }) =>
+            Effect.runPromise(getSpaces({ topicIds: localTopicIds, limit: localTopicIds.length }, signal)),
+        })
+        .catch(() => []);
+      for (const space of localSpaces) {
+        const topicId = normalizeEntityId(space.topicId ?? '');
+        if (topicId) localSpaceIdByTopicId.set(topicId, normalizeEntityId(space.id));
+      }
+    }
+
     for (const candidate of localCandidates) {
-      const id = normalizeEntityId(candidate.id);
+      const homeEntityId = normalizeEntityId(candidate.id);
+      const id = localSpaceIdByTopicId.get(homeEntityId);
+      // No container indexed yet. Dropping it is the honest answer: there is no
+      // id the caller could navigate to, join, or filter by, and the remote
+      // branch backfills the slot.
+      if (!id) continue;
       if (seen.has(id)) continue;
       seen.add(id);
       merged.push({
         id,
         name: candidate.name,
         description: candidate.description ? truncateText(candidate.description) : null,
-        // Local space matches are the topic entity itself, so the id IS the
-        // home entity id — best-effort, mirroring how the existing code
-        // already treats `candidate.id` as the space id.
-        homeEntityId: id,
+        homeEntityId,
       });
       if (merged.length >= effectiveLimit) break;
     }
