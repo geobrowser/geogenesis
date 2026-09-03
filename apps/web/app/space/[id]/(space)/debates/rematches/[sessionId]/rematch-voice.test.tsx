@@ -753,6 +753,50 @@ describe('RematchVoicePill', () => {
     expect(mocks.unwatchNoiseFilterContext).not.toHaveBeenCalled();
   });
 
+  // Krisp's worklet runs on the room's audio context, which is the same one autoplay policy
+  // blocks. Attaching before playback starts would publish the silence of a suspended context —
+  // whereas the raw microphone is on air regardless, so waiting costs only the filtering.
+  it('does not attach the noise filter while playback is blocked', async () => {
+    mocks.canPlayAudio = false;
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    const track = { mediaStreamTrack: { kind: 'audio' }, setProcessor: vi.fn(), stop: vi.fn() };
+    mocks.microphoneTrack = { track };
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+
+    // The microphone is published and live; only Krisp is waiting.
+    expect(mocks.attachNoiseFilter).not.toHaveBeenCalled();
+
+    // "Enable audio" lands, and Krisp goes on from there.
+    mocks.canPlayAudio = true;
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    await waitFor(() => expect(mocks.attachNoiseFilter).toHaveBeenCalledTimes(1));
+  });
+
+  // Playback dipping is not a reason to swap the published track twice more; the context resuming
+  // is enough on its own.
+  it('does not re-attach the noise filter when playback stops and starts again', async () => {
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    const track = { mediaStreamTrack: { kind: 'audio' }, setProcessor: vi.fn(), stop: vi.fn() };
+    mocks.microphoneTrack = { track };
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    await waitFor(() => expect(mocks.attachNoiseFilter).toHaveBeenCalledTimes(1));
+
+    mocks.canPlayAudio = false;
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+    mocks.canPlayAudio = true;
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+
+    expect(mocks.attachNoiseFilter).toHaveBeenCalledTimes(1);
+    // And the watch it set up is still the original one.
+    expect(mocks.unwatchNoiseFilterContext).not.toHaveBeenCalled();
+  });
+
   // A microphone published again after a reconnect is a new track, and the old attach must not
   // finish against it.
   it('re-attaches the noise filter to a republished microphone and abandons the old attach', async () => {
