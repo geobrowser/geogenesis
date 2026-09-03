@@ -1,7 +1,12 @@
 import type { ModelMessage, UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { appendNoteToLastUserMessage, previousSpaceInConversation, renderSpaceSwitchNote } from './space-switch-note';
+import {
+  appendNoteToLastUserMessage,
+  previousSpaceInConversation,
+  renderCurrentSpaceNote,
+  renderSpaceSwitchNote,
+} from './space-switch-note';
 
 const CRYPTO = 'c9f267dcb0d270718c2a3c45a64afd32';
 const AI = '41e851610e13a19441c4d980f2f2ce6b';
@@ -133,7 +138,10 @@ describe('appendNoteToLastUserMessage', () => {
     const messages: ModelMessage[] = [
       { role: 'user', content: 'what is in this space' },
       { role: 'assistant', content: [{ type: 'tool-call', toolCallId: 't1', toolName: 'geoQuery', input: {} }] },
-      { role: 'tool', content: [{ type: 'tool-result', toolCallId: 't1', toolName: 'geoQuery', output: { type: 'json', value: {} } }] },
+      {
+        role: 'tool',
+        content: [{ type: 'tool-result', toolCallId: 't1', toolName: 'geoQuery', output: { type: 'json', value: {} } }],
+      },
     ];
 
     const result = appendNoteToLastUserMessage(messages, 'NOTE');
@@ -146,5 +154,32 @@ describe('appendNoteToLastUserMessage', () => {
     const messages: ModelMessage[] = [{ role: 'assistant', content: 'hi' }];
 
     expect(appendNoteToLastUserMessage(messages, 'NOTE')).toEqual(messages);
+  });
+});
+
+describe('renderCurrentSpaceNote', () => {
+  const SPACE = '959838ee0bbc429a8aeb2136dd1cafd7';
+
+  it('names the current space as the target for "this space" and for writes', () => {
+    const note = renderCurrentSpaceNote(SPACE);
+
+    expect(note).toContain(`\`${SPACE}\``);
+    expect(note).toMatch(/"this space".*mean/s);
+    expect(note).toMatch(/every write this turn targets/);
+  });
+
+  // The switch note argues about "earlier messages"; this one has to retire the
+  // assistant's own "you're now viewing it", which is what actually anchored the
+  // model to the space it had navigated to.
+  it('retracts an earlier navigation claim rather than only stating the current space', () => {
+    const note = renderCurrentSpaceNote(SPACE);
+
+    expect(note).toMatch(/navigated them somewhere else/);
+    expect(note).toMatch(/no longer there/);
+    expect(note).toMatch(/disregard any earlier statement/);
+  });
+
+  it('leaves room for a space the user names in the message itself', () => {
+    expect(renderCurrentSpaceNote(SPACE)).toMatch(/unless the user names a different space/);
   });
 });

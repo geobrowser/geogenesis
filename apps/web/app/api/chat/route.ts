@@ -41,7 +41,12 @@ import { anonLimit, ipCeilingLimit, loggedInLimit } from './rate-limit';
 import { requestedItemCount } from './requested-item-count';
 import { sanitizeModelMessages } from './sanitize-model-messages';
 import { scopeToolTrafficToCurrentTurn } from './scope-tool-traffic';
-import { appendNoteToLastUserMessage, previousSpaceInConversation, renderSpaceSwitchNote } from './space-switch-note';
+import {
+  appendNoteToLastUserMessage,
+  previousSpaceInConversation,
+  renderCurrentSpaceNote,
+  renderSpaceSwitchNote,
+} from './space-switch-note';
 import { buildNavTools } from './tools/nav';
 import { memberReadTools, readTools } from './tools/read';
 import { buildWriteContext, writeTools } from './tools/write';
@@ -510,14 +515,19 @@ export async function POST(req: Request) {
   const rawConverted = await convertToModelMessages(uiMessages);
   const { messages: sanitized, droppedToolCallIds } = sanitizeModelMessages(rawConverted);
 
-  // Added after sanitizing so the note can't be mistaken for orphaned tool
-  // traffic, and only when the conversation actually holds another space —
-  // an unmoved conversation is byte-identical to before.
+  // Added after sanitizing so the notes can't be mistaken for orphaned tool
+  // traffic. Two of them, answering different questions: where the user is
+  // standing now (every turn — see `renderCurrentSpaceNote` for why it has no
+  // trigger), and, when they moved, which space the numbers above describe.
   const previousSpaceId = previousSpaceInConversation(uiMessages, clientContext?.currentSpaceId ?? null);
-  const withSpaceNote =
+  const spaceNotes = [
+    clientContext?.currentSpaceId ? renderCurrentSpaceNote(clientContext.currentSpaceId) : null,
     previousSpaceId && clientContext?.currentSpaceId
-      ? appendNoteToLastUserMessage(sanitized, renderSpaceSwitchNote(clientContext.currentSpaceId, previousSpaceId))
-      : sanitized;
+      ? renderSpaceSwitchNote(clientContext.currentSpaceId, previousSpaceId)
+      : null,
+  ].filter((note): note is string => note !== null);
+  const withSpaceNote =
+    spaceNotes.length > 0 ? appendNoteToLastUserMessage(sanitized, spaceNotes.join('\n\n')) : sanitized;
 
   // Same mechanism, same reason: metadata is dropped by
   // `convertToModelMessages`, so a file the user attached is announced here.

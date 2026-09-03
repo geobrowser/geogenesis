@@ -55,6 +55,38 @@ export function previousSpaceInConversation(
   return null;
 }
 
+/**
+ * Where the user is standing, restated beside the question on every turn.
+ *
+ * `renderSpaceSwitchNote` covers the case where the *user* moved. It cannot
+ * cover the case where *we* moved them: `navigate` and `joinSpace` put another
+ * space's id all over the transcript, and the assistant's own reply — "I've
+ * navigated you to the Health space. You're now viewing it." — is a first-person
+ * claim about the present that outlives the navigation. The user walking back to
+ * their own space leaves no trace at all, because every message they typed was
+ * stamped with the same space the whole time, so the switch note stays silent.
+ *
+ * Measured, not assumed: replaying the reported session, the executor put the
+ * navigated-to space id in `createBlock` on 2 of 2 runs, and still did on 2 of 2
+ * runs with the switch note injected — the note argues about "earlier messages"
+ * while the model is reading its own statement about now. Naming the current
+ * space and explicitly retiring that statement held on 5 of 5. A shorter form
+ * that named the space without retracting the claim held on only 2 of 3.
+ *
+ * Always-on deliberately: the failure came from a trigger condition that didn't
+ * fire, and a note with no trigger cannot have a gap. It does not stop the model
+ * acting on another space the user names — "what types does the Crypto space
+ * have?" and "move Acme Corp to the Crypto space" both still target Crypto.
+ */
+export function renderCurrentSpaceNote(currentSpaceId: string): string {
+  return (
+    `[Context] The user is on the page for space \`${currentSpaceId}\` right now. If you navigated them somewhere ` +
+    `else earlier in this conversation, they are no longer there — disregard any earlier statement of yours about ` +
+    `which space they are viewing. "this space", "here" and "this page" mean \`${currentSpaceId}\`, and every write ` +
+    `this turn targets \`${currentSpaceId}\` unless the user names a different space in the message above.`
+  );
+}
+
 export function renderSpaceSwitchNote(currentSpaceId: string, previousSpaceId: string): string {
   return (
     `[Space context] The user is now in space \`${currentSpaceId}\`. Earlier messages in this conversation were ` +
