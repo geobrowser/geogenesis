@@ -419,16 +419,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const chatPositionByClaimId = React.useMemo(() => {
     const byClaim = new Map<string, boolean | null>();
-    // Two row shapes, one fact. The hub's index reports the viewer's own side as `viewer_response`
-    // — the same field the hub gates on — while a rematch row lists every session participant's,
-    // so the viewer's is picked out of `participants`.
-    for (const page of browsedPages) {
-      for (const entry of page.claims) {
-        byClaim.set(entry.claim.claim_entity_id, entry.viewer_response?.position ?? null);
-      }
-    }
-    // Session rows last, so they win where both carry the claim — the same precedence the assembly
-    // below uses.
+    // Every source is a rematch row since #2351 moved paging server-side, and a rematch row lists
+    // each session participant's side — so the viewer's is picked out of `participants`. This used
+    // to also read `viewer_response` off the hub's paged index, which that change removed.
     for (const row of sessionRowsByClaimId.values()) {
       byClaim.set(
         row.claim.claim_entity_id,
@@ -436,7 +429,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       );
     }
     return byClaim;
-  }, [browsedPages, currentUserId, sessionRowsByClaimId]);
+  }, [currentUserId, sessionRowsByClaimId]);
 
   // A debate is published into the claim's home space by the acceptor, and a personal space grants
   // editor rights to its owner alone — so a claim living in one can never carry a published debate
