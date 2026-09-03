@@ -68,29 +68,6 @@ export function nameValue(values: Value[]): Value | undefined {
 }
 
 /**
- * Name and description as a reader inside `spaceId` should see them (GEO-2778).
- *
- * A space's version of an entity should read as that space wrote it — the words belong to the
- * people whose space it is. `name`/`description` above resolve across every space and pick the
- * highest-ranked, which is right when nobody named a space and wrong the moment somebody did.
- *
- * The cross-space fallback is deliberate: a space that never named the entity should read as the
- * graph does rather than render untitled. An empty string counts as absent, matching the judgement
- * `nameValue` already makes when choosing between spaces.
- *
- * Deliberately narrower than it looks: this is for *content*, which is space-specific. Aggregate
- * signals go the other way on purpose — GEO-2660 reads votes from the top-ranked space, because a
- * vote count re-counted per space would mean nothing.
- *
- * Takes the unscoped values and does its own filtering, so the fallback has something to fall back
- * to and both callers cannot disagree about what scoping means.
- *
- * Deliberately not `scopeBySpacePrecedence`, which looks like the same shape and is not: its
- * fallback is Root *only*, because it scopes schema and Root holds the canonical version. Content
- * has no canonical space — an entity named in Crypto and nowhere else would render untitled to
- * every other space under that rule. This falls back to the ranked resolution across all spaces.
- */
-/**
  * True when a pending local deletion masks this property.
  *
  * Every aggregate fallback in the read paths has to consult this. `syncedEntities` and
@@ -108,6 +85,30 @@ function writtenIn(values: Value[], spaceId: string): Value[] {
   return values.filter(value => value.spaceId === spaceId);
 }
 
+/**
+ * The name a reader inside `spaceId` should see (GEO-2778).
+ *
+ * A space's version of an entity should read as that space wrote it — the words belong to the
+ * people whose space it is. `name` above resolves across every space and picks the highest-ranked,
+ * which is right when nobody named a space and wrong the moment somebody did.
+ *
+ * The cross-space fallback is deliberate: a space that never named the entity should read as the
+ * graph does rather than render untitled. An empty string counts as absent, the judgement
+ * `pickBySpaceRank` already makes when choosing between spaces. `descriptionInSpace` deliberately
+ * does *not* fall back — see there for why the two differ.
+ *
+ * Deliberately narrower than it looks: this is for *content*, which is space-specific. Aggregate
+ * signals go the other way on purpose — GEO-2660 reads votes from the top-ranked space, because a
+ * vote count re-counted per space would mean nothing.
+ *
+ * Takes the unscoped values and does its own filtering, so the fallback has something to fall back
+ * to and callers cannot disagree about what scoping means.
+ *
+ * Deliberately not `scopeBySpacePrecedence`, which looks like the same shape and is not: its
+ * fallback is Root *only*, because it scopes schema and Root holds the canonical version. Content
+ * has no canonical space — an entity named in Crypto and nowhere else would render untitled to
+ * every other space under that rule. This falls back to the ranked resolution across all spaces.
+ */
 export function nameInSpace(values: Value[], spaceId?: string): string | null {
   // `|| null` on every branch, including the cross-space one. An empty name is nothing written, and
   // a non-nullish `''` returned from here is worse than useless downstream: it satisfies the `??` in
