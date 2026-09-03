@@ -54,6 +54,65 @@ describe('useClaimResponseIndexedNotifier', () => {
     expect(mocks.notify).toHaveBeenCalledOnce();
   });
 
+  // GEO-2784. The whole point of the change: geo-chat is told while the write is in flight, so the
+  // opposite side's "Request debate" appears at once instead of ~10s later (p50 9.9s for
+  // web.write.entity_response). Before this, the notification waited for `status: 'indexed'` and
+  // geo-chat 409'd anything unconfirmed.
+  it('notifies geo-chat while the write is still in flight, before it is indexed', async () => {
+    const { queryClient, wrapper } = createHarness();
+    const getPrivyIdentityToken = vi.fn();
+    renderHook(() => useClaimResponseIndexedNotifier(true, getPrivyIdentityToken, 'account-1'), { wrapper });
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+
+    act(() =>
+      queryClient.setQueryData(queryKey, {
+        status: 'pending',
+        pending: {
+          entityId: 'claim-1',
+          expectedResponse: 'positive',
+          personalSpaceId: 'profile-1',
+          responseKind: 'stance',
+          spaceId: 'space-1',
+        },
+        runId: 'run-1',
+      })
+    );
+
+    await waitFor(() =>
+      expect(mocks.notify).toHaveBeenCalledWith(
+        'space-1',
+        'claim-1',
+        'stance',
+        true,
+        getPrivyIdentityToken,
+        'account-1',
+        expect.any(AbortSignal)
+      )
+    );
+  });
+
+  // The in-flight report is not a replacement for the confirmed one — that second call is the
+  // reconciliation, and geo-chat converges on it if the write never landed. Keyed separately so
+  // the dedupe does not swallow it.
+  it('still notifies again once the same response is indexed', async () => {
+    const { queryClient, wrapper } = createHarness();
+    renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });
+    const queryKey = ['entity-response-indexing', 'profile-1', 'claim-1', 'space-1', 'stance'] as const;
+    const pending = {
+      entityId: 'claim-1',
+      expectedResponse: 'positive',
+      personalSpaceId: 'profile-1',
+      responseKind: 'stance',
+      spaceId: 'space-1',
+    } as const;
+
+    act(() => queryClient.setQueryData(queryKey, { status: 'pending', pending, runId: 'run-1' }));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledOnce());
+
+    act(() => queryClient.setQueryData(queryKey, { status: 'indexed', pending, runId: 'run-1' }));
+    await waitFor(() => expect(mocks.notify).toHaveBeenCalledTimes(2));
+  });
+
   it('reports cleared responses and ignores curation indexing', async () => {
     const { queryClient, wrapper } = createHarness();
     renderHook(() => useClaimResponseIndexedNotifier(true, vi.fn(), 'account-1'), { wrapper });

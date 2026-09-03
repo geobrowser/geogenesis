@@ -6,10 +6,11 @@ import { CursorPager, useCursorPages } from '~/core/claims/browse/use-cursor-pag
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 
 import { Skeleton } from '~/design-system/skeleton';
-import { Text } from '~/design-system/text';
 
-import { TopicClaimCard } from './topic-claim-card';
+import { SectionTitle } from '~/partials/entity-page/section-title';
+
 import { useTopicSpaceScope } from '../use-topic-space-scope';
+import { TopicClaimCard } from './topic-claim-card';
 import { useTopicLinkedEntities } from './use-topic-linked-entities';
 
 const CLAIMS_PAGE_SIZE = 4;
@@ -45,9 +46,7 @@ export function TopicClaims({ topicId, spaceId }: { topicId: string; spaceId: st
 
   return (
     <section aria-label="Claims on this topic">
-      <Text as="h2" variant="mediumTitle" color="text" className="mb-3 block">
-        Claims
-      </Text>
+      <SectionTitle>Claims</SectionTitle>
       <div className="grid grid-cols-1 gap-3 @[560px]:grid-cols-2">
         {claims.map(claim => (
           <TopicClaimCard key={claim.id} claim={claim} fallbackSpaceId={spaceId} />
