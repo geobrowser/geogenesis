@@ -2791,6 +2791,39 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.mutate).toHaveBeenCalled();
   });
 
+  /**
+   * The optimistic answer clears when the mutation settles, and the graph is still ten seconds
+   * behind it. A gate that fell back to the graph there shut again and re-announced a publish that
+   * had already landed — the control flickered ready → publishing → ready.
+   *
+   * Asserted across the transition rather than on a settled render: both ends were already green,
+   * and it is the middle that was wrong.
+   */
+  it('stays pressable when the optimistic answer clears before the graph catches up', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+
+    // The mutation settles. geo-chat still holds the side; the indexer still does not.
+    mocks.optimisticResponses.delete(CLAIM_SHARED);
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
+  });
+
   // Switching sides leaves geo-chat holding the side you just moved off, which is no more valid to
   // request against than holding none.
   it('withholds the request while a side switch is still publishing', async () => {

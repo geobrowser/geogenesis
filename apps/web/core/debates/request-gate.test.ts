@@ -50,6 +50,18 @@ describe('debateRequestGate', () => {
     });
   });
 
+  // The viewer has not answered, so nothing is publishing. Naming a wait here would describe work
+  // nobody started — which is what the hub did, whose opponent half does not require a position the
+  // way the picker's `opposing` does.
+  it('is not waiting when the viewer holds no position', () => {
+    expect(gate({ chatPosition: null, localPosition: null })).toEqual({
+      canRequest: false,
+      pending: false,
+      pendingLabel: null,
+    });
+    expect(gate({ chatPosition: undefined, localPosition: null })).toMatchObject({ pending: false });
+  });
+
   describe('naming the wait', () => {
     it('says the position is publishing', () => {
       expect(gate({ chatPosition: undefined }).pendingLabel).toBe(REQUEST_PENDING_LABEL);

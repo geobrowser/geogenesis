@@ -119,6 +119,9 @@ export function ClaimEndSlot({
       })
     : null;
   const awaitingPosition = gate?.pending === true;
+  // Disabled by the gate as a whole, not only while it is waiting: a viewer who has not answered
+  // the claim is not waiting for anything, and geo-chat would reject the request all the same.
+  const positionBlocked = gate !== null && !gate.canRequest;
 
   // Sized to the row it sits in rather than to itself.
   //
@@ -144,7 +147,7 @@ export function ClaimEndSlot({
         <button
           type="button"
           onClick={request}
-          disabled={Boolean(blockedReason) || isRequesting || awaitingPosition}
+          disabled={Boolean(blockedReason) || isRequesting || positionBlocked}
           // Shown rather than left to a `title`: native tooltips never appear on touch and are
           // unreliable on a disabled button, which is exactly when the explanation matters.
           title={blockedReason}

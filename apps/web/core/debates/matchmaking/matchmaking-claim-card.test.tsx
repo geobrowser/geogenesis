@@ -23,7 +23,6 @@ const mocks = vi.hoisted(() => ({
   },
   spaceName: 'Crypto',
   match: null as { id: string; positions?: DebateClaimPositionSummary[] } | null,
-  optimisticResponse: undefined as 'positive' | 'negative' | null | undefined,
   blockedReason: undefined as string | undefined,
   request: vi.fn(),
   summaryPositive: 0,
@@ -100,7 +99,7 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponse: () => ({
     submitResponse: mocks.submitResponse,
-    optimisticResponse: mocks.optimisticResponse,
+    optimisticResponse: undefined,
     isProcessingResponse: false,
     isResponseIndexingDelayed: false,
     isConnected: true,
@@ -211,7 +210,6 @@ beforeEach(() => {
   mocks.leaveMutateAsync.mockResolvedValue({ claim: null, match: null });
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
-  mocks.optimisticResponse = undefined;
   mocks.spaceName = 'Crypto';
   // Nothing on offer and nobody having answered is the state most claims are actually in, so it is
   // the state every test starts from.
@@ -264,7 +262,9 @@ describe('position avatar stack', () => {
   describe('the request waits for geo-chat to hold the viewer position', () => {
     it('names the wait while geo-chat has not caught up', () => {
       mocks.match = { id: 'match-1' };
-      mocks.optimisticResponse = 'positive';
+      // The card's optimistic side comes from the indexing snapshot, which is what a response still
+      // being reconciled looks like.
+      mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
       renderCard(
         <MatchmakingClaimCard
           claim={claim}
@@ -282,9 +282,28 @@ describe('position avatar stack', () => {
       expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
     });
 
+    // A claim the viewer has not answered is not publishing anything. The hub's opponent half is a
+    // match, which does not require a position the way the picker's `opposing` does — so without
+    // this the card announced a wait nobody had started.
+    it('does not name a wait on a claim the viewer has not answered', () => {
+      mocks.match = { id: 'match-1' };
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={withCounts([
+            { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('a')] },
+            { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('b')] },
+          ])}
+          readiness={{ ...readiness(), viewer_response: null }}
+        />
+      );
+
+      expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
+    });
+
     it('offers the debate once geo-chat holds the side on screen', () => {
       mocks.match = { id: 'match-1' };
-      mocks.optimisticResponse = 'positive';
       renderCard(
         <MatchmakingClaimCard
           claim={claim}

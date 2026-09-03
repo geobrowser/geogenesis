@@ -79,8 +79,13 @@ export function debateRequestGate({
 }: DebateRequestGateInput): DebateRequestGate {
   // `localPosition !== null` first: with no position at all there is nothing to agree about, and
   // `null === null` would otherwise read as settled and open the request.
-  const positionSettled = localPosition !== null && chatPosition === localPosition;
-  const pending = opponentReady && !positionSettled;
+  const held = localPosition !== null;
+  const positionSettled = held && chatPosition === localPosition;
+  // Waiting means something is actually in flight. A viewer who has not answered at all is not
+  // waiting for anything, and saying "Publishing your position…" at them names work nobody
+  // started — which is what this did on the hub, where the opponent half does not already
+  // require a position the way the picker's `opposing` does.
+  const pending = opponentReady && held && !positionSettled;
 
   return {
     canRequest: opponentReady && positionSettled,

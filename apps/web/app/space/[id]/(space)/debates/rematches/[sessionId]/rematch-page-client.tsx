@@ -1596,9 +1596,22 @@ function RematchClaimCard({
     spaceId: claim.claim.space_id,
     responseKind,
   });
+  /**
+   * The side the viewer holds, as well as it can be known: their in-flight answer where there is
+   * one, and otherwise **geo-chat's** record.
+   *
+   * Deliberately not the graph, which this used to fall back to. That fallback caused two things.
+   * It made the old readiness check compare a value against itself (the request was pressable and
+   * geo-chat rejected it), and it made the control flicker: the optimistic answer clears when the
+   * mutation settles, the graph is still ten seconds behind, so `opposing` collapsed and took the
+   * whole footer with it — ready, then gone, then ready again.
+   *
+   * Falling back to `chatPosition` is not the same trap. There the fallback was a different source
+   * from the one that validates the request; here they are the same source, so agreement is real.
+   */
   const localPosition =
     optimisticResponse === undefined
-      ? serverLocalPosition
+      ? (chatPosition ?? null)
       : optimisticResponse === null
         ? null
         : optimisticResponse === 'positive';
@@ -1691,7 +1704,10 @@ function RematchClaimCard({
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
       footer={
-        awaitingResponse || canRequest || requesting ? (
+        // `recently_rejected` too: the note lives in this footer, and it is a standing fact about
+        // the claim rather than a state of the offer. Without it a rejected claim the viewer has no
+        // position on lost the explanation along with the button.
+        awaitingResponse || canRequest || requesting || claim.recently_rejected ? (
           <div className="mt-3">
             {/* GEO-2697. The wait lives on the control it is blocking. This used to be a separate
                 spinner line rendered *instead* of the button, which left the viewer watching a
