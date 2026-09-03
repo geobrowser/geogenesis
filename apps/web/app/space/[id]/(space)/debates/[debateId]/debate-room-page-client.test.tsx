@@ -2203,6 +2203,68 @@ describe('DebateRoomPageClient', () => {
     expect(processedTrack.enabled).toBe(true);
   });
 
+  // Attaching Krisp is asynchronous, and turn-based muting reaches the raw microphone through the
+  // source-track map. With no entry while the attach is in flight the raw track stays live, and the
+  // attach then copies that back onto the processed track — a microphone still on air after the
+  // turn passed, on the surface that records it.
+  it('keeps a mute that lands while Krisp is still attaching', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+    const audioTrack = createLocalAudioTrack();
+    const processedTrack = { kind: 'audio', enabled: true, id: 'krisp-processed-audio' };
+    mocks.krispNoiseFilter.mockReturnValue({
+      processedTrack,
+      setEnabled: mocks.krispSetEnabled,
+      isEnabled: mocks.krispIsEnabled,
+      destroy: mocks.krispDestroy,
+    });
+    mocks.createLocalTracks.mockResolvedValue([
+      audioTrack,
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+
+    // The window that matters is after the swap and before the attach finishes: the published
+    // track is Krisp's by then, so muting the raw one needs the map.
+    const enabling = deferred<void>();
+    mocks.krispSetEnabled.mockImplementation(async () => {
+      await enabling.promise;
+    });
+
+    // Turn 0 belongs to the local slot, so the microphone is live.
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      started_at: '2026-07-02T00:00:10.000Z',
+      first_participant_slot: 1,
+      current_turn_index: 0,
+      current_speaker_slot: 1,
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+    };
+    const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.krispSetEnabled).toHaveBeenCalled());
+    expect(audioTrack.sourceMediaStreamTrack.enabled).toBe(true);
+
+    // The turn passes to the opponent while the attach is still in flight. The countdown reads the
+    // turn from elapsed time, so the start moves back past the first turn's 30s.
+    mocks.debate = {
+      ...mocks.debate!,
+      started_at: '2026-07-01T23:59:45.000Z',
+      current_turn_index: 1,
+      current_speaker_slot: 2,
+      turn_started_at: '2026-07-02T00:00:15.000Z',
+      turn_ends_at: '2026-07-02T00:00:45.000Z',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(audioTrack.sourceMediaStreamTrack.enabled).toBe(false));
+
+    enabling.resolve();
+
+    // The attach must not put the microphone back on air behind the mute.
+    await waitFor(() => expect(processedTrack.enabled).toBe(false));
+    expect(audioTrack.sourceMediaStreamTrack.enabled).toBe(false);
+  });
+
   it('toggles Krisp from the debate debug controls without restarting the recorder', async () => {
     mocks.featureFlags.debateDebugging = true;
     installRecordingMocks();

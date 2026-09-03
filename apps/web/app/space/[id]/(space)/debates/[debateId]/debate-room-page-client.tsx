@@ -863,10 +863,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
 
+    // Recorded before the attach, never after. `setLocalTrackPreferences` mutes the raw track
+    // through this map, and the attach is asynchronous: a turn advancing or the user muting while
+    // it is in flight would find no entry, leave the raw track live, and then have the attach copy
+    // that stale `enabled` onto the processed track — a microphone that is live while muted.
+    sourceMediaStreamTracksRef.current.set(audioTrack, audioTrack.mediaStreamTrack);
+
     // The attach itself is shared with the claim-exploration voice dock; see `attachNoiseFilter`.
     const attachment = await attachNoiseFilter(audioTrack, { enabled: noiseFilterEnabledRef.current, isCurrent });
     if (!attachment) return;
-    sourceMediaStreamTracksRef.current.set(audioTrack, attachment.sourceMediaStreamTrack);
     if (isCurrent()) {
       noiseFilterProcessorRef.current = attachment.processor;
       setNoiseFilterStatus(attachment.status);
