@@ -26,10 +26,11 @@ type TrackDouble = LocalTrackLike & {
  * processor and only then awaits the sender swap.
  */
 function makeTrack({ enabled = true, swapFails = false, assignsBeforeFailing = false } = {}): TrackDouble {
-  const source = { kind: 'audio', enabled } as MediaStreamTrack;
+  const source = { kind: 'audio', enabled, readyState: 'live' } as MediaStreamTrack;
   let held: unknown = undefined;
   const track = {
     mediaStreamTrack: source,
+    sender: { replaceTrack: vi.fn(async () => undefined) },
     stop: vi.fn(),
     getProcessor: () => held,
     setProcessor: vi.fn(async (processor: unknown) => {
@@ -129,9 +130,48 @@ describe('attachNoiseFilter', () => {
     expect(attachment).toMatchObject({ status: 'failed', processor: null });
   });
 
-  it('survives a cleanup that rejects', async () => {
+  // LiveKit stops the processed track before it swaps the sender back, so a cleanup that rejects
+  // in between leaves the sender publishing a stopped track: silence, with the room still
+  // connected and the microphone reading unmuted. Putting the raw track back is the repair.
+  it('puts the raw microphone on the sender when cleanup fails', async () => {
     mocks.setEnabled.mockRejectedValue(new Error('no audio context'));
     const track = makeTrack();
+    const source = track.mediaStreamTrack;
+    track.stopProcessor.mockRejectedValue(new Error('destroy failed'));
+
+    const attachment = await attachNoiseFilter(track, { enabled: true, isCurrent: () => true });
+
+    // The track captured before the swap, never the getter — with the processor still attached
+    // that returns the stopped one.
+    expect(track.sender!.replaceTrack).toHaveBeenCalledWith(source);
+    expect(attachment).toMatchObject({ status: 'failed', processor: null });
+  });
+
+  it('leaves the sender alone when cleanup succeeds', async () => {
+    mocks.setEnabled.mockRejectedValue(new Error('no audio context'));
+    const track = makeTrack();
+    await attachNoiseFilter(track, { enabled: true, isCurrent: () => true });
+
+    expect(track.stopProcessor).toHaveBeenCalledTimes(1);
+    expect(track.sender!.replaceTrack).not.toHaveBeenCalled();
+  });
+
+  // Nothing to repair with: publishing an ended track would be silence either way.
+  it('does not put an ended microphone back on the sender', async () => {
+    mocks.setEnabled.mockRejectedValue(new Error('no audio context'));
+    const track = makeTrack();
+    (track.mediaStreamTrack as { readyState: string }).readyState = 'ended';
+    track.stopProcessor.mockRejectedValue(new Error('destroy failed'));
+
+    await attachNoiseFilter(track, { enabled: true, isCurrent: () => true });
+
+    expect(track.sender!.replaceTrack).not.toHaveBeenCalled();
+  });
+
+  it('survives a failed cleanup on a track that was never published', async () => {
+    mocks.setEnabled.mockRejectedValue(new Error('no audio context'));
+    const track = makeTrack();
+    delete (track as { sender?: unknown }).sender;
     track.stopProcessor.mockRejectedValue(new Error('destroy failed'));
 
     const attachment = await attachNoiseFilter(track, { enabled: true, isCurrent: () => true });

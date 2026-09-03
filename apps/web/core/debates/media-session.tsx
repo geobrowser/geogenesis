@@ -19,6 +19,8 @@ export type LocalTrackLike = {
   stopProcessor?: () => Promise<void>;
   /** The processor LiveKit currently holds, which is not always the one a caller attached. */
   getProcessor?: () => unknown;
+  /** The RTP sender carrying this track, once published. */
+  sender?: RTCRtpSender | null;
   stop: () => void;
   detach?: () => void;
 };
