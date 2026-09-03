@@ -179,6 +179,7 @@ const TOOL_LABELS: Record<string, string> = {
   'tool-applyImport': 'Importing your file',
   'tool-navigate': 'Navigating',
   'tool-openReviewPanel': 'Opening the review panel',
+  'tool-joinSpace': 'Requesting membership',
   'tool-createEntity': 'Creating an entity',
   'tool-deleteEntity': 'Deleting an entity',
   'tool-moveEntityToSpace': 'Moving an entity',

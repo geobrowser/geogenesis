@@ -23,6 +23,9 @@ export const CLIENT_EXECUTED_TOOL_TYPES = new Set<string>([
   // EDIT_TOOL_NAMES below.
   'tool-proposeImportMapping',
   'tool-applyImport',
+  // Dispatched by core/chat/join-space-dispatcher. Not an edit intent — it
+  // signs a membership proposal rather than staging a graph change.
+  'tool-joinSpace',
   ...EDIT_TOOL_NAMES.map(name => `tool-${name}`),
 ]);
 

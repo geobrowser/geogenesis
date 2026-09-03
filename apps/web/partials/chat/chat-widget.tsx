@@ -27,6 +27,7 @@ import { type PreloadedEntity, usePreloadedEntity } from '~/core/chat/preload';
 import { useGeoQueryDispatcher } from '~/core/chat/geo-query-dispatcher';
 import { useImportDispatcher } from '~/core/chat/import-dispatcher';
 import { useFileAttachment } from '~/core/chat/import/use-file-attachment';
+import { useJoinSpaceDispatcher } from '~/core/chat/join-space-dispatcher';
 import { useReadDispatcher } from '~/core/chat/read-dispatcher';
 import { useResearchDispatcher } from '~/core/chat/research-dispatcher';
 import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher';
@@ -551,6 +552,7 @@ export function ChatWidget() {
   } = useFileAttachment(currentSpaceId);
   useWebFetchDispatcher(messages, addToolResultRef);
   useSearchImagesDispatcher(messages, addToolResultRef);
+  useJoinSpaceDispatcher(messages, addToolResultRef);
 
   // Bridge the gap between status='ready' and the SDK's auto-resubmit firing —
   // otherwise the input flips back to "send" between successive tool calls.

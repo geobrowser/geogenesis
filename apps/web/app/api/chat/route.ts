@@ -6,6 +6,7 @@ import {
   type TextStreamPart,
   type ToolSet,
   type UIMessage,
+  type UIMessageChunk,
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
@@ -53,6 +54,23 @@ const MAX_OUTPUT_TOKENS = 8_000;
 // High because rate limits + context window are the real ceiling; this just
 // stops a runaway loop.
 const MAX_TOOL_STEPS = 100;
+
+const EXECUTOR_EMPTY_RETRY =
+  'You produced no tool call and no text, so this turn currently has nothing in it and the closer would have to invent a reply. Answer the request now: call the tools it needs, or — if it genuinely needs none — write the answer as text.';
+
+// A turn the executor answered in text rather than tools ends on an assistant
+// message, which Anthropic reads as a prefilled reply to continue — the closer
+// sees a finished answer and returns nothing. This turns that analysis back into
+// material to write from.
+const CLOSER_FROM_ANALYSIS =
+  'The analysis above is internal — the user has not seen it, and no tool ran this turn. Write the user-facing reply from it now, in your own voice, following your output rules.';
+
+function endsWithAssistantText(messages: ModelMessage[]): boolean {
+  const last = messages[messages.length - 1];
+  if (last?.role !== 'assistant') return false;
+  if (typeof last.content === 'string') return last.content.trim().length > 0;
+  return Array.isArray(last.content) && last.content.some(part => part.type === 'text' && part.text.trim().length > 0);
+}
 
 // Best-effort, dev-only aggregation of per-stage cost across a resubmit chain.
 // Module-local, so in serverless deploys chain requests can land on different
@@ -211,12 +229,16 @@ function failedLimiterReset(probes: LimitProbe[]): number {
   return max;
 }
 
-// Strip text deltas from the executor's stream. Its text is still present in
-// response.messages so the closer can read Sonnet's analysis, just not user-
-// facing — the opener and closer own all visible text.
-function suppressAllText<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
-  return () =>
-    new TransformStream<TextStreamPart<TOOLS>, TextStreamPart<TOOLS>>({
+// Hide the executor's text from the user without hiding it from the closer.
+// This runs on the UI stream, NOT as an `experimental_transform`: a transform
+// there also empties `response.messages`, and on a turn the executor answers in
+// text rather than tools that leaves the closer with no material at all — it
+// then invents an answer, which is how "there is no voting feature in Geo" and
+// "what is the space ID for Crypto?" reached users. The opener and closer still
+// own every visible word.
+function stripTextChunks(stream: ReadableStream<UIMessageChunk>): ReadableStream<UIMessageChunk> {
+  return stream.pipeThrough(
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
       transform(chunk, controller) {
         switch (chunk.type) {
           case 'text-start':
@@ -227,7 +249,8 @@ function suppressAllText<TOOLS extends ToolSet>(): StreamTextTransform<TOOLS> {
             controller.enqueue(chunk);
         }
       },
-    });
+    })
+  );
 }
 
 // The Haiku opener occasionally wraps its reasoning in <thinking>…</thinking>
@@ -313,6 +336,10 @@ const CLIENT_READ_TOOL_NAMES = new Set<string>([
   // ending the turn with the call unanswered.
   'proposeImportMapping',
   'applyImport',
+  // Signs an on-chain membership proposal with the user's smart account, so it
+  // runs in the browser too — and the turn must wait for its outcome, or the
+  // closer would report a request that hasn't landed.
+  'joinSpace',
 ]);
 
 // The closer's reply budget. A backstop, not a length control: the model is
@@ -719,58 +746,72 @@ export async function POST(req: Request) {
       // the last steps carry the full transcript + tool results, so the peak is
       // the closest read on how full the context window is this turn.
       let peakExecInputTokens = 0;
-      const execResult = streamText({
-        model: anthropic(MAIN_MODEL),
-        messages,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
-        abortSignal: req.signal,
-        tools: executorTools,
-        toolChoice: 'auto',
-        // Serial tool use matches the prompt's "searchGraph first, then
-        // research / writes" ordering and avoids client-tool resubmit races.
-        providerOptions: {
-          anthropic: { disableParallelToolUse: true },
-        },
-        stopWhen: stepCountIs(MAX_TOOL_STEPS),
-        experimental_transform: suppressAllText(),
-        onChunk: verbose
-          ? ({ chunk }) => {
-              const summary: Record<string, unknown> = { type: chunk.type };
-              if ('toolName' in chunk) summary.toolName = chunk.toolName;
-              if ('toolCallId' in chunk) summary.toolCallId = chunk.toolCallId;
-              if ('providerExecuted' in chunk) summary.providerExecuted = chunk.providerExecuted;
-              if ('dynamic' in chunk) summary.dynamic = chunk.dynamic;
-              debugLog('chunk', summary);
+      const runExecutor = (extraMessages: ModelMessage[] = []) =>
+        streamText({
+          model: anthropic(MAIN_MODEL),
+          messages: extraMessages.length > 0 ? [...messages, ...extraMessages] : messages,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          abortSignal: req.signal,
+          tools: executorTools,
+          toolChoice: 'auto',
+          // Serial tool use matches the prompt's "searchGraph first, then
+          // research / writes" ordering and avoids client-tool resubmit races.
+          providerOptions: {
+            anthropic: { disableParallelToolUse: true },
+          },
+          stopWhen: stepCountIs(MAX_TOOL_STEPS),
+          onChunk: verbose
+            ? ({ chunk }) => {
+                const summary: Record<string, unknown> = { type: chunk.type };
+                if ('toolName' in chunk) summary.toolName = chunk.toolName;
+                if ('toolCallId' in chunk) summary.toolCallId = chunk.toolCallId;
+                if ('providerExecuted' in chunk) summary.providerExecuted = chunk.providerExecuted;
+                if ('dynamic' in chunk) summary.dynamic = chunk.dynamic;
+                debugLog('chunk', summary);
+              }
+            : undefined,
+          onStepFinish: step => {
+            const stepInput = step.usage?.inputTokens ?? 0;
+            if (stepInput > peakExecInputTokens) peakExecInputTokens = stepInput;
+            if (debug) {
+              const tools =
+                step.toolCalls
+                  ?.map(tc => tc.toolName)
+                  .filter(Boolean)
+                  .join(', ') ?? '';
+              const text = (step.text?.length ?? 0) > 0 ? ' +text' : '';
+              console.log(`[chat] step ${tools || '(no-tool)'}${text} → ${step.finishReason}`);
             }
-          : undefined,
-        onStepFinish: step => {
-          const stepInput = step.usage?.inputTokens ?? 0;
-          if (stepInput > peakExecInputTokens) peakExecInputTokens = stepInput;
-          if (debug) {
-            const tools =
-              step.toolCalls
-                ?.map(tc => tc.toolName)
-                .filter(Boolean)
-                .join(', ') ?? '';
-            const text = (step.text?.length ?? 0) > 0 ? ' +text' : '';
-            console.log(`[chat] step ${tools || '(no-tool)'}${text} → ${step.finishReason}`);
-          }
-        },
-        onError: err => {
-          if (!isAbortError(err)) console.error('[chat:srv] executor stream error', err);
-        },
-      });
+          },
+          onError: err => {
+            if (!isAbortError(err)) console.error('[chat:srv] executor stream error', err);
+          },
+        });
+
+      const execResult = runExecutor();
       writer.merge(
-        execResult.toUIMessageStream({
-          sendReasoning: false,
-          // Opener already emitted message-start; don't duplicate it.
-          sendStart: !isFirstRequestOfTurn,
-          sendFinish: false,
-        })
+        stripTextChunks(
+          execResult.toUIMessageStream({
+            sendReasoning: false,
+            // Opener already emitted message-start; don't duplicate it.
+            sendStart: !isFirstRequestOfTurn,
+            sendFinish: false,
+          })
+        )
       );
 
-      const execMessages = (await execResult.response).messages;
+      let execMessages = (await execResult.response).messages;
       await recordCost('executor', MAIN_MODEL, execResult);
+
+      if (execMessages.length === 0) {
+        if (debug) console.log('[chat] executor returned nothing — retrying once');
+        const retryResult = runExecutor([{ role: 'user', content: EXECUTOR_EMPTY_RETRY }]);
+        writer.merge(
+          stripTextChunks(retryResult.toUIMessageStream({ sendReasoning: false, sendStart: false, sendFinish: false }))
+        );
+        execMessages = (await retryResult.response).messages;
+        await recordCost('executor', MAIN_MODEL, retryResult);
+      }
 
       // Surface context occupancy so the widget can compact when we near the
       // window. Transient: informs the client, never lands in message history.
@@ -814,6 +855,11 @@ export async function POST(req: Request) {
       // chose to navigate in response to something else ("complete my profile"
       // → navigate → silence). A one-sentence Haiku ack costs a fraction of a
       // cent and removes the possibility of a turn that answers nothing.
+      const scopedForCloser = scopeToolTrafficToCurrentTurn([...converted, ...execMessages]);
+      const closerInput: ModelMessage[] = endsWithAssistantText(scopedForCloser)
+        ? [...scopedForCloser, { role: 'user', content: CLOSER_FROM_ANALYSIS }]
+        : scopedForCloser;
+
       const closerResult = streamText({
         model: anthropic(CLOSER_MODEL),
         // Same Current context the executor gets. The closer writes the visible
@@ -835,7 +881,7 @@ export async function POST(req: Request) {
         ]
           .filter(Boolean)
           .join('\n\n'),
-        messages: scopeToolTrafficToCurrentTurn([...converted, ...execMessages]),
+        messages: closerInput,
         maxOutputTokens: closerMaxOutputTokens(listedCount),
         abortSignal: req.signal,
         onError: err => {
