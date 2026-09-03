@@ -50,13 +50,12 @@ import {
   carriesEveryTopic,
   countBy,
   keepSelectableTopics,
-  keepSelectedVisible,
   orderFacetOptions,
   toggleId,
 } from '~/core/debates/matchmaking/topic-facets';
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
-import { useMemberSpaceDefault } from '~/core/debates/matchmaking/use-space-filter-selection';
+import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
@@ -864,15 +863,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [canPublishDebateIn, claims, graphFiltered, spaceAllowlist, taggedSpaceFacet.spaces]
   );
 
-  const offeredSpaceIds = React.useMemo(() => offeredSpaces.map(space => space.id), [offeredSpaces]);
-
-  const facetSpaces = React.useMemo(
-    // An absent *selection* comes back at zero, or its checkbox disappears while the trigger goes on
-    // counting it, and it cannot be unticked without clearing every space.
-    () => orderFacetOptions(keepSelectedVisible(offeredSpaces, spaceIds), spaceIds),
-    [offeredSpaces, spaceIds]
-  );
-
   // A space picked while the gates were still passing everything has to be let go once they reject
   // it, or it keeps narrowing every request while every row it returns is dropped.
   //
@@ -934,7 +924,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       : sourceUndecided ||
         (source === 'recommended' ? recommendedLoading || curatedClaimsQuery.isLoading : taggedClaimsSettling));
 
-  // Defaults to the spaces the viewer belongs to (GEO-2789), in the menu's own ids.
+  // The menu, and the handlers that drive it. Defaults to the spaces the viewer belongs to
+  // (GEO-2789).
   //
   // Gated on `tabIsLoading` rather than a hand-listed set of queries. GEO-2798 made this menu a
   // server facet instead of an accumulation over every row source, so the tab's own composite —
@@ -942,11 +933,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // now the whole answer. `publishabilityPending` is the exception it cannot know about: an
   // unresolved space type reads as publishable, so the menu can still be offering a space this
   // page will go on to reject.
-  const markSpacesChosen = useMemberSpaceDefault({
+  const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
+    offeredSpaces,
+    spaceIds,
+    setSpaceIds,
     memberSpaceIds,
-    availableSpaceIds: offeredSpaceIds,
     pending: tabIsLoading || publishabilityPending || (graphFiltered && !taggedSpaceFacet.settled),
-    onSeed: setSpaceIds,
   });
 
   const tabError =
@@ -1166,14 +1158,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           <div className="flex flex-col gap-3">
             <SpaceTopicFilters
               spaceIds={spaceIds}
-              onSpaceToggle={id => {
-                markSpacesChosen();
-                setSpaceIds(current => toggleId(current, id));
-              }}
-              onSpacesClear={() => {
-                markSpacesChosen();
-                setSpaceIds([]);
-              }}
+              onSpaceToggle={onSpaceToggle}
+              onSpacesClear={onSpacesClear}
               topicIds={topicIds}
               onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
               onTopicsClear={() => setTopicIds([])}
@@ -1260,9 +1246,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               ? {
                   label: 'Clear filters',
                   onClick: () => {
-                    markSpacesChosen();
                     setSearch('');
-                    setSpaceIds([]);
+                    // The menu's own clear row, so this counts as choosing the unfiltered list and
+                    // the default cannot put its spaces back.
+                    onSpacesClear();
                     setTopicIds([]);
                   },
                 }

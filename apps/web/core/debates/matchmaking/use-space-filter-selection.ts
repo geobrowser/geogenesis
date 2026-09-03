@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import { normId } from '~/core/utils/norm-id';
 
+import { keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
+
 /**
  * Seeds the space filter with the spaces the viewer belongs to, once (GEO-2789).
  *
@@ -110,4 +112,84 @@ export function useMemberSpaceDefault({
   return React.useCallback(() => {
     seededRef.current = true;
   }, []);
+}
+
+/** One menu row, in the shape both surfaces already build and `SpaceTopicFilters` already reads. */
+type SpaceFacetOption = { id: string; name: string | null; count: number };
+
+/**
+ * The space filter menu: what it offers, and what pressing it does.
+ *
+ * {@link useMemberSpaceDefault} is the rule; this is the wiring around it, and it is here because
+ * the wiring was the part that duplicated. Both surfaces derived the same option ids, folded the
+ * selection back in the same way, and then had to remember to forfeit the default at *three* call
+ * sites each — two menu handlers and a "Clear filters" action. Forgetting one of the six is silent
+ * and turns the default into a policy: the viewer picks a space, the seed lands on top of them.
+ *
+ * So the handlers come from here already carrying it, and there is nothing left to remember.
+ *
+ * The selection itself stays with the caller. Both surfaces reconcile it against gates only they
+ * know about — a space that stops being publishable, one the allowlist drops — so ownership here
+ * would mean a second setter racing those effects for the same state.
+ *
+ * `offeredSpaces` is deliberately the caller's own list rather than something derived here: the hub
+ * counts a server facet and the picker falls back to counting the rows on screen, and both then
+ * apply gates that are theirs. What the two agree on is everything after that.
+ */
+export function useSpaceFilterMenu({
+  offeredSpaces,
+  spaceIds,
+  setSpaceIds,
+  memberSpaceIds,
+  pending,
+}: {
+  /** What this surface is offering, already gated. */
+  offeredSpaces: SpaceFacetOption[];
+  spaceIds: string[];
+  setSpaceIds: (spaceIds: string[]) => void;
+  memberSpaceIds: ReadonlySet<string> | null;
+  /** Whether those options are still resolving — see {@link useMemberSpaceDefault}. */
+  pending: boolean;
+}): {
+  /** Ordered, with the viewer's selection kept visible even where the count dropped it. */
+  facetSpaces: SpaceFacetOption[];
+  onSpaceToggle: (spaceId: string) => void;
+  onSpacesClear: () => void;
+} {
+  const offeredSpaceIds = React.useMemo(() => offeredSpaces.map(space => space.id), [offeredSpaces]);
+
+  const markChosen = useMemberSpaceDefault({
+    memberSpaceIds,
+    availableSpaceIds: offeredSpaceIds,
+    pending,
+    onSeed: setSpaceIds,
+  });
+
+  // An absent *selection* comes back at zero, or its checkbox disappears while the trigger goes on
+  // counting it, and it cannot be unticked without clearing every space.
+  const facetSpaces = React.useMemo(
+    () => orderFacetOptions(keepSelectedVisible(offeredSpaces, spaceIds), spaceIds),
+    [offeredSpaces, spaceIds]
+  );
+
+  // Read through a ref so the handlers below keep one identity for the life of the surface. They
+  // are passed to a memoized filter bar, and an identity that changed with the selection would
+  // re-render the menu on every tick.
+  const spaceIdsRef = React.useRef(spaceIds);
+  spaceIdsRef.current = spaceIds;
+
+  const onSpaceToggle = React.useCallback(
+    (spaceId: string) => {
+      markChosen();
+      setSpaceIds(toggleId(spaceIdsRef.current, spaceId));
+    },
+    [markChosen, setSpaceIds]
+  );
+
+  const onSpacesClear = React.useCallback(() => {
+    markChosen();
+    setSpaceIds([]);
+  }, [markChosen, setSpaceIds]);
+
+  return { facetSpaces, onSpaceToggle, onSpacesClear };
 }

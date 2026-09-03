@@ -43,11 +43,11 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { keepSelectableTopics, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
+import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
-import { useMemberSpaceDefault } from './use-space-filter-selection';
+import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 
 /**
@@ -450,8 +450,6 @@ export function ClaimsTab() {
     [facets?.space_facets, graphSourced, spaceFacet.spaces, spaceShowsClaims]
   );
 
-  const offeredSpaceIds = React.useMemo(() => offeredSpaces.map(space => space.id), [offeredSpaces]);
-
   // Settled when the *counts* have answered, which is what a selection is reconciled against — the
   // names arrive separately and a topic does not stop existing while its label is in flight.
   //
@@ -464,20 +462,17 @@ export function ClaimsTab() {
     ? !spacesPending && topicFacet.settled && spaceFacet.settled
     : claimsQuery.facetsSettled;
 
-  // Defaults to the spaces the viewer belongs to (GEO-2789), in the menu's own ids. Held until the
-  // menu has finished arriving as well as the gates: the seed fires once, so taking it against a
-  // half-built list leaves a member space that turned up a moment later unselected for the visit.
-  const markSpacesChosen = useMemberSpaceDefault({
+  // The menu, and the handlers that drive it. Defaults to the spaces the viewer belongs to
+  // (GEO-2789) and is held until the menu has finished arriving as well as the gates: the seed
+  // fires once, so taking it against a half-built list leaves a member space that turned up a
+  // moment later unselected for the visit.
+  const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
+    offeredSpaces,
+    spaceIds,
+    setSpaceIds,
     memberSpaceIds,
-    availableSpaceIds: offeredSpaceIds,
     pending: spacesPending || !facetsSettled,
-    onSeed: setSpaceIds,
   });
-
-  const facetSpaces = React.useMemo(
-    () => orderFacetOptions(keepSelectedVisible(offeredSpaces, spaceIds), spaceIds),
-    [offeredSpaces, spaceIds]
-  );
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
@@ -590,14 +585,8 @@ export function ClaimsTab() {
 
         <SpaceTopicFilters
           spaceIds={spaceIds}
-          onSpaceToggle={id => {
-            markSpacesChosen();
-            setSpaceIds(current => toggleId(current, id));
-          }}
-          onSpacesClear={() => {
-            markSpacesChosen();
-            setSpaceIds([]);
-          }}
+          onSpaceToggle={onSpaceToggle}
+          onSpacesClear={onSpacesClear}
           topicIds={topicIds}
           onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
           onTopicsClear={() => setTopicIds([])}
@@ -670,12 +659,11 @@ export function ClaimsTab() {
               ? {
                   label: 'Clear filters',
                   onClick: () => {
-                    // Counts as choosing, like the menu's own clear row: this is the viewer asking
-                    // for the unfiltered list, and the default must not put its spaces back.
-                    markSpacesChosen();
                     setSearch('');
                     if (!graphSourced) setFilter('all');
-                    setSpaceIds([]);
+                    // The menu's own clear row, so this counts as choosing the unfiltered list and
+                    // the default cannot put its spaces back.
+                    onSpacesClear();
                     setTopicIds([]);
                   },
                 }

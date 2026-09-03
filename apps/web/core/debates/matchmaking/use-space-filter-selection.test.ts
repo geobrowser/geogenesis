@@ -2,7 +2,7 @@ import { renderHook } from '@testing-library/react';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { useMemberSpaceDefault } from './use-space-filter-selection';
+import { useMemberSpaceDefault, useSpaceFilterMenu } from './use-space-filter-selection';
 
 const A = '019fedae-72b6-7ab2-927a-df044d57c566';
 const B = '019fedae-72b6-7ab2-927a-df044d57c567';
@@ -171,5 +171,77 @@ describe('useMemberSpaceDefault once the viewer has acted', () => {
     rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false });
 
     expect(onSeed).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The wiring around the rule above, which is where the duplication was: both surfaces derived the
+ * same options, folded the selection back the same way, and each had three call sites that had to
+ * remember to forfeit the default. These are the invariants that made it worth sharing.
+ */
+describe('useSpaceFilterMenu', () => {
+  const option = (id: string, count = 1) => ({ id, name: null, count });
+
+  function menu(initial: { offeredSpaces: ReturnType<typeof option>[]; spaceIds: string[]; pending?: boolean }) {
+    const setSpaceIds = vi.fn();
+    const view = renderHook(
+      (props: { offeredSpaces: ReturnType<typeof option>[]; spaceIds: string[]; pending?: boolean }) =>
+        useSpaceFilterMenu({
+          offeredSpaces: props.offeredSpaces,
+          spaceIds: props.spaceIds,
+          setSpaceIds,
+          memberSpaceIds: new Set([A]),
+          pending: props.pending ?? false,
+        }),
+      { initialProps: initial }
+    );
+    return { ...view, setSpaceIds };
+  }
+
+  it('seeds the viewer’s spaces from the options it was given', () => {
+    const { setSpaceIds } = menu({ offeredSpaces: [option(A), option(B)], spaceIds: [] });
+
+    expect(setSpaceIds).toHaveBeenCalledExactlyOnceWith([A]);
+  });
+
+  // The reason the handlers live here. Six call sites across two surfaces had to remember this, and
+  // forgetting one is silent: the viewer picks a space and the seed lands on top of them.
+  it('forfeits the default through the toggle, without the caller arranging it', () => {
+    const { result, rerender, setSpaceIds } = menu({ offeredSpaces: [], spaceIds: [] });
+    expect(setSpaceIds).not.toHaveBeenCalled();
+
+    result.current.onSpaceToggle(B);
+    expect(setSpaceIds).toHaveBeenCalledWith([B]);
+
+    // The options arrive after the viewer has already chosen; the seed must not overrule them.
+    rerender({ offeredSpaces: [option(A), option(B)], spaceIds: [B] });
+    expect(setSpaceIds).toHaveBeenCalledTimes(1);
+  });
+
+  it('forfeits the default through the clear, which is a choice too', () => {
+    const { result, rerender, setSpaceIds } = menu({ offeredSpaces: [], spaceIds: [] });
+
+    result.current.onSpacesClear();
+    expect(setSpaceIds).toHaveBeenCalledWith([]);
+
+    rerender({ offeredSpaces: [option(A)], spaceIds: [] });
+    expect(setSpaceIds).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a selected space on the menu after its count drops it', () => {
+    // Otherwise its checkbox disappears while the trigger goes on counting it, and it cannot be
+    // unticked without clearing every space.
+    const { result } = menu({ offeredSpaces: [option(B)], spaceIds: [A] });
+
+    expect(result.current.facetSpaces.map(space => space.id)).toContain(A);
+  });
+
+  it('holds one identity for its handlers, so the filter bar does not re-render on every tick', () => {
+    const { result, rerender } = menu({ offeredSpaces: [option(A), option(B)], spaceIds: [] });
+    const first = result.current.onSpaceToggle;
+
+    rerender({ offeredSpaces: [option(A), option(B)], spaceIds: [A] });
+
+    expect(result.current.onSpaceToggle).toBe(first);
   });
 });
