@@ -20,12 +20,17 @@ import { normId } from '~/core/utils/norm-id';
  * honestly — including whether their *options* have finished arriving, not only their gates —
  * because the seed is spent the moment it fires and a half-built menu spends it badly.
  *
- * A settled-empty menu does not spend it. That is deliberate rather than an oversight of the
- * "once per mount" rule: a surface opened before any claim exists has nothing to default *to*, and
- * consuming the seed there would deny the viewer the default for the whole visit on the strength
- * of a list that was empty for a moment. If options appear later the seed applies then, which is
- * the first point at which it could mean anything. Nothing can override a viewer who has acted —
- * that is what the returned marker is for — so late is the only risk, and never is the worse one.
+ * Spent on a match rather than on an attempt, which covers two cases that look different and are
+ * the same. A settled-empty menu has nothing to default *to*; a menu of spaces the viewer belongs
+ * to none of has nothing to default *with*. Neither is an answer about the viewer, and consuming
+ * the seed on either denies them the default for the whole visit on the strength of a list that
+ * was never about them. The second is the ordinary case rather than an edge: the picker opens on
+ * Recommended whenever there is anything to recommend, and that is a curator's page whose spaces
+ * say nothing about who is looking.
+ *
+ * If a menu that can answer appears later, the seed applies then, which is the first point at which
+ * it could mean anything. Nothing can override a viewer who has acted — that is what the returned
+ * marker is for — so late is the only risk, and never is the worse one.
  *
  * The selection is not persisted, which is what it already was: both surfaces started from an
  * empty selection on every mount and still do. So "first open" means this visit — a viewer who
@@ -77,15 +82,26 @@ export function useMemberSpaceDefault({
     // this holds the seed rather than spending it.
     if (availableSpaceIds.length === 0) return;
 
-    seededRef.current = true;
-
     // Both sides through `normId`, not just the ids being tested. The two sets arrive by different
     // routes and neither promises a shape, so normalizing only one leaves an implicit contract that
     // a mismatch would break silently — and a mismatch here looks exactly like a viewer who belongs
     // to nothing, which is the case that quietly falls back to showing everything.
     const mine = new Set([...memberSpaceIds].map(normId));
     const seeded = availableSpaceIds.filter(id => mine.has(normId(id)));
-    if (seeded.length > 0) onSeedRef.current(seeded);
+
+    // Spent on a match, not on an attempt. A menu with options the viewer belongs to none of is no
+    // more an answer about them than an empty one is, and the surfaces open on exactly such a menu
+    // in the ordinary case: the picker starts on Recommended whenever there is anything to
+    // recommend, and that is a curator's page, whose spaces say nothing about who is looking. Spent
+    // there, the seed was gone by the time the viewer reached the list it was written for.
+    //
+    // The cost of the other direction is a seed that stays armed all visit for a viewer who matches
+    // nothing — which costs nothing, since it can only ever fire on a match, and a viewer who acts
+    // forfeits it through the marker below either way.
+    if (seeded.length === 0) return;
+
+    seededRef.current = true;
+    onSeedRef.current(seeded);
   }, [availableSpaceIds, memberSpaceIds, pending]);
 
   // Marks the seed as spent without applying it. A ref rather than state: this must take effect

@@ -76,7 +76,7 @@ import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
-import { uuidToHex } from '~/core/id/normalize';
+import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { validateEntityId } from '~/core/utils/utils';
@@ -89,10 +89,6 @@ import { Text } from '~/design-system/text';
 import { RematchVoicePill } from './rematch-voice';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
-
-function sameId(left: string, right: string) {
-  return uuidToHex(left) === uuidToHex(right);
-}
 
 /**
  * `value` once it has settled, and the last settled value while it is settling again. Before the
@@ -198,7 +194,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     if (!remoteParticipant) return [];
     const ids: string[] = [];
     for (const [claimId, rows] of positions.byClaim) {
-      if (rows.some(row => sameId(row.profileSpaceId, remoteParticipant.profile_space_id))) ids.push(claimId);
+      if (rows.some(row => idEquals(row.profileSpaceId, remoteParticipant.profile_space_id))) ids.push(claimId);
     }
     return ids;
   }, [positions.byClaim, remoteParticipant]);
@@ -441,7 +437,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const chatPositionFor = React.useCallback(
     (claimEntityId: string, spaceId: string): boolean | null | undefined => {
       const recorded = chatPositionByClaimId.get(claimEntityId);
-      if (!recorded || !sameId(recorded.spaceId, spaceId)) return undefined;
+      if (!recorded || !idEquals(recorded.spaceId, spaceId)) return undefined;
       return recorded.position;
     },
     [chatPositionByClaimId]
@@ -519,7 +515,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       // no preference and are unchanged: there the row's space is the authoritative one.
       const recordedRow = sessionRowsByClaimId.get(entity.id);
       const sessionRow =
-        preferred && recordedRow && !sameId(recordedRow.claim.space_id, preferred) ? undefined : recordedRow;
+        preferred && recordedRow && !idEquals(recordedRow.claim.space_id, preferred) ? undefined : recordedRow;
       const responseKind = sessionRow?.response_kind ?? claimResponseKind(entity, homeSpaceId);
       return {
         claim: sessionRow?.claim ?? {
@@ -849,8 +845,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // their personal space, which nobody else has joined. Their spaces have to be in the menu with
   // them or the rows are visible and unfilterable, so those two count from the rows on screen.
   // What the menu offers before the viewer's own selection is folded back in. Split out because the
-  // default is seeded from exactly this list: a seeded id in any other shape is not recognised as
-  // one of these options, and `keepSelectedVisible` below would add it as a *second* row.
+  // default is seeded from exactly this list rather than from the eligible set, which is the wider
+  // and more obvious source.
+  //
+  // Not for the id shapes: those agreed once GEO-2798 normalized the facet's keys, and `normId` and
+  // `uuidToHex` are the same function. It is that this list is the spaces that actually *have*
+  // claims. Seeding from the eligible set would tick a space the viewer belongs to and the tag has
+  // nothing in, landing them on an empty list behind a filter they never set. The cost is a second
+  // request — the list loads unfiltered, then again narrowed — which is the price of not defaulting
+  // to nothing.
   const offeredSpaces = React.useMemo(
     () =>
       graphFiltered

@@ -2006,6 +2006,27 @@ describe('DebateRematchPageClient', () => {
     expect(rows[0]).toHaveAttribute('aria-pressed', 'true');
   });
 
+  // The picker does not open on All. `source` falls back to Recommended whenever there is anything
+  // to recommend, and that is a curator's page — its spaces say nothing about who is looking. The
+  // seed used to be spent there, on a menu it could not match, so by the time the viewer reached
+  // the list the default was written for it was already gone. This is the ordinary path, not an
+  // edge: any viewer with recommendations took it.
+  it('still opens All on the viewer’s spaces after starting on Recommended', async () => {
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    // A curated page in a space that is nobody's membership, so its menu cannot answer the seed.
+    mocks.recommendedSections = [{ id: 'section-1', name: 'Curated', claimIds: [CLAIM_FRESH] }];
+    mocks.recommendedEntities = [publishedEntity(CLAIM_FRESH, 'A curated claim')];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+  });
+
   // This menu's options accumulate from rows as they arrive, so they are pickable before the seed
   // is ready. A default that overwrote that choice would be a policy, not a default.
   it('does not overwrite a space the viewer picked before the default was ready', async () => {

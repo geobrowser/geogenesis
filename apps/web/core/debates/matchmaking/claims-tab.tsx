@@ -432,10 +432,16 @@ export function ClaimsTab() {
   // Filtered by the publishability gate on the way out: the server knows the viewer's allowlist,
   // because it was sent, but not which spaces can carry a published debate.
   //
-  // Split from `facetSpaces` below because the default is seeded from exactly this list, before
-  // the viewer's own selection is folded back in. A seeded id in any other shape is not recognised
-  // as one of these options, and `keepSelectedVisible` then adds it as a *second* row — the space
-  // listed twice, the ticked one counting zero.
+  // Split from `facetSpaces` below because the default is seeded from exactly this list, before the
+  // viewer's own selection is folded back in — and from this list rather than the eligible set,
+  // which is the wider and more obvious source.
+  //
+  // Not for the id shapes: those agreed once GEO-2798 normalized the facet's keys, and `normId` and
+  // `uuidToHex` are the same function. It is that this list is the spaces that actually *have*
+  // claims. Seeding from the eligible set would tick a space the viewer belongs to and the tag has
+  // nothing in, landing them on an empty list behind a filter they never set. The cost is a second
+  // request — the list loads unfiltered, then again narrowed — which is the price of not defaulting
+  // to nothing.
   const offeredSpaces = React.useMemo(
     () =>
       graphSourced

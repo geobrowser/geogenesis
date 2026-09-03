@@ -40,6 +40,38 @@ describe('useMemberSpaceDefault', () => {
     expect(onSeed).not.toHaveBeenCalled();
   });
 
+  // The case the two above are the halves of, and the one that matters in practice. Both surfaces
+  // open on a menu that need not be about the viewer at all — the picker starts on Recommended
+  // whenever there is anything to recommend, and that is a curator's page. Spending the seed there
+  // meant the viewer reached the list it was written for with the default already gone.
+  it('keeps the seed through a menu the viewer belongs to none of, not just an empty one', () => {
+    const { rerender, onSeed } = seed({
+      memberSpaceIds: new Set([A]),
+      availableSpaceIds: [STRANGER],
+      pending: false,
+    });
+    expect(onSeed).not.toHaveBeenCalled();
+
+    rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).toHaveBeenCalledExactlyOnceWith([A]);
+  });
+
+  it('still gives the seed up if the viewer acts before a menu it can answer arrives', () => {
+    // The guard on the case above: holding the seed longer must not let it overrule a choice the
+    // viewer has already made.
+    const { rerender, onSeed, markChosen } = seed({
+      memberSpaceIds: new Set([A]),
+      availableSpaceIds: [STRANGER],
+      pending: false,
+    });
+
+    markChosen();
+    rerender({ memberSpaceIds: new Set([A]), availableSpaceIds: [A, B], pending: false });
+
+    expect(onSeed).not.toHaveBeenCalled();
+  });
+
   it('leaves the selection alone when the viewer belongs to nothing at all, as signed out', () => {
     const { onSeed } = seed({ memberSpaceIds: new Set(), availableSpaceIds: [A, B], pending: false });
 
