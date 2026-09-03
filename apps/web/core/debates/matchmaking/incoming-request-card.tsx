@@ -65,10 +65,17 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
           <RequestOverflowMenu
             actions={[
               {
+                // Guarded like the buttons: this is the same dismiss endpoint they use, so an
+                // answer already taken would 409 here.
                 label: "I don't want to debate this claim",
-                onClick: () => dismissRequest.mutate({ requestId: request.id, removeIntent: true }),
+                onClick: () =>
+                  answerOnce(() => dismissRequest.mutate({ requestId: request.id, removeIntent: true }, releaseAnswer)),
               },
               {
+                // Deliberately outside the guard. Blocking writes the viewer's block list
+                // (`PUT /me/debate-blocks/{userId}`) rather than answering this request, so it
+                // cannot collide with one — and gating it would let an answer already taken
+                // swallow a safety action, which is the worse failure by far.
                 label: `Block ${speakerLabel(request.requester)}`,
                 destructive: true,
                 onClick: () => blockUser.mutate(request.requester.user_id),

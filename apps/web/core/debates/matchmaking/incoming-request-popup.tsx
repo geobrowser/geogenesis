@@ -73,6 +73,10 @@ export function IncomingRequestPopup({
         <RequestOverflowMenu
           actions={[
             {
+              // Deliberately outside the answer guard. Blocking writes the viewer's block list
+              // (`PUT /me/debate-blocks/{userId}`) rather than answering this request, so it
+              // cannot collide with one — and gating it would let an answer already taken swallow
+              // a safety action, which is the worse failure by far.
               label: `Block ${speakerLabel(request.requester)}`,
               destructive: true,
               onClick: () => blockUser.mutate(request.requester.user_id),
