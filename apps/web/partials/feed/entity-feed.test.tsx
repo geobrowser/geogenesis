@@ -15,6 +15,8 @@ import { EntityFeed } from './entity-feed';
 
 const mocks = vi.hoisted(() => ({
   queryOptions: null as Record<string, unknown> | null,
+  /** Every key the feed has subscribed under, so a test can see what it asked for *first*. */
+  queryKeys: [] as unknown[][],
   fetch: vi.fn(),
   /** Pages the mocked infinite query hands back, so a test can put a card on the page. */
   pages: null as { items: Record<string, unknown>[] }[] | null,
@@ -40,6 +42,7 @@ function createLocalStorage(): Storage {
 vi.mock('@tanstack/react-query', () => ({
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
+    mocks.queryKeys.push(options.queryKey as unknown[]);
     return {
       data: mocks.pages ? { pages: mocks.pages } : undefined,
       isLoading: false,
@@ -81,6 +84,7 @@ beforeEach(() => {
   mocks.queryOptions = null;
   mocks.pages = null;
   mocks.cardProps = null;
+  mocks.queryKeys = [];
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [], nextCursor: null }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -407,6 +411,17 @@ describe('the space filter', () => {
 
   // A membership the reader has asked for is one of theirs: they chose it at sign-up, and nothing
   // should lurch when the approval lands.
+  // The default is applied in the feed's own initial state rather than by the hook's effect, because
+  // both sides are server props here and the answer is already in hand. Starting empty would
+  // subscribe to the unfiltered query, fire that request, and only then narrow — two requests on
+  // every load, with the wide feed on screen in between.
+  it('never subscribes to the unfiltered feed on the way to the default', () => {
+    renderFeed(['space-mine']);
+
+    expect(mocks.queryKeys.length).toBeGreaterThan(0);
+    for (const key of mocks.queryKeys) expect(key).toContain('space-mine');
+  });
+
   it('counts a pending membership as one of theirs', async () => {
     renderFeed(['space-mine', 'space-pending']);
 

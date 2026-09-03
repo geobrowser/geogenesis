@@ -58,6 +58,28 @@ import { keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets
  * everything, which is what they saw before this existed, rather than an empty list filtered by a
  * membership they do not have.
  */
+/**
+ * Which of the offered spaces are the viewer's — the selection the default would apply.
+ *
+ * Both sides through `normId`, not just the ids being tested. The two sets arrive by different
+ * routes and neither promises a shape, so normalizing only one leaves an implicit contract that a
+ * mismatch would break silently — and a mismatch here looks exactly like a viewer who belongs to
+ * nothing, which is the case that quietly falls back to showing everything.
+ *
+ * Exported because a surface whose options are a server prop knows both sides on its very first
+ * render, and can seed its state directly rather than waiting for the effect below — which would
+ * otherwise fire one unfiltered request before the narrowed one and show the wide feed in between.
+ * The effect stays for the surfaces whose options arrive from a query.
+ */
+export function memberSpaceSelection(
+  availableSpaceIds: string[],
+  memberSpaceIds: ReadonlySet<string> | null
+): string[] {
+  if (memberSpaceIds === null) return [];
+  const mine = new Set([...memberSpaceIds].map(normId));
+  return availableSpaceIds.filter(id => mine.has(normId(id)));
+}
+
 export function useMemberSpaceDefault({
   memberSpaceIds,
   availableSpaceIds,
@@ -84,12 +106,7 @@ export function useMemberSpaceDefault({
     // this holds the seed rather than spending it.
     if (availableSpaceIds.length === 0) return;
 
-    // Both sides through `normId`, not just the ids being tested. The two sets arrive by different
-    // routes and neither promises a shape, so normalizing only one leaves an implicit contract that
-    // a mismatch would break silently — and a mismatch here looks exactly like a viewer who belongs
-    // to nothing, which is the case that quietly falls back to showing everything.
-    const mine = new Set([...memberSpaceIds].map(normId));
-    const seeded = availableSpaceIds.filter(id => mine.has(normId(id)));
+    const seeded = memberSpaceSelection(availableSpaceIds, memberSpaceIds);
 
     // Spent on a match, not on an attempt. A menu with options the viewer belongs to none of is no
     // more an answer about them than an empty one is, and the surfaces open on exactly such a menu
@@ -158,11 +175,24 @@ export function useSpaceFilterMenu({
 } {
   const offeredSpaceIds = React.useMemo(() => offeredSpaces.map(space => space.id), [offeredSpaces]);
 
+  // Read through a ref so the handlers below keep one identity for the life of the surface. They
+  // are passed to a memoized filter bar, and an identity that changed with the selection would
+  // re-render the menu on every tick.
+  const spaceIdsRef = React.useRef(spaceIds);
+  spaceIdsRef.current = spaceIds;
+
   const markChosen = useMemberSpaceDefault({
     memberSpaceIds,
     availableSpaceIds: offeredSpaceIds,
     pending,
-    onSeed: setSpaceIds,
+    // A seed the selection already holds is not worth a render. A surface whose options are a
+    // server prop applies the default in its own initial state — see `memberSpaceSelection` — and
+    // the effect then arrives at the same answer a beat later.
+    onSeed: next => {
+      const current = spaceIdsRef.current;
+      if (current.length === next.length && next.every((id, index) => current[index] === id)) return;
+      setSpaceIds(next);
+    },
   });
 
   // An absent *selection* comes back at zero, or its checkbox disappears while the trigger goes on
@@ -171,12 +201,6 @@ export function useSpaceFilterMenu({
     () => orderFacetOptions(keepSelectedVisible(offeredSpaces, spaceIds), spaceIds),
     [offeredSpaces, spaceIds]
   );
-
-  // Read through a ref so the handlers below keep one identity for the life of the surface. They
-  // are passed to a memoized filter bar, and an identity that changed with the selection would
-  // re-render the menu on every tick.
-  const spaceIdsRef = React.useRef(spaceIds);
-  spaceIdsRef.current = spaceIds;
 
   const onSpaceToggle = React.useCallback(
     (spaceId: string) => {

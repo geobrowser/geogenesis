@@ -7,7 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
-import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
+import { memberSpaceSelection, useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
 import {
   EXPLORE_TYPE_FILTER_STORAGE_KEY,
@@ -73,9 +73,9 @@ type EntityFeedProps = {
    * opens on whichever of them are on offer, and on nothing at all when there are none, which is
    * the unfiltered feed a reader with no memberships already saw (GEO-2789).
    *
-   * Undefined while unknown, which is not the same as empty: empty is a settled answer and takes
-   * the fallback, whereas unknown holds the default rather than spending it on a viewer whose
-   * memberships had not arrived.
+   * Undefined means the caller has no membership data to give — the activity feed, which pins its
+   * own space and draws no menu. There is nothing to wait for in that case, so it reads as the
+   * fallback rather than holding the feed: every space this reader may see.
    */
   memberSpaceIds?: string[];
   /** When set, the feed is pinned to this space. No space dropdown is rendered. */
@@ -151,7 +151,16 @@ export function EntityFeed({
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExploreSort>(initialSort);
-  const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
+  // Seeded on the first render rather than by the hook's effect. Both sides are server props on
+  // this surface, so the answer is already in hand — and starting empty would subscribe the feed to
+  // the unfiltered query, fire that request, and only then narrow, showing the wide feed in
+  // between. The hook's effect still runs and arrives at the same answer, which it then skips.
+  const [spaceIds, setSpaceIds] = React.useState<string[]>(() =>
+    memberSpaceSelection(
+      initialSpaceOptions.map(option => option.value),
+      memberSpaceIds === undefined ? null : new Set(memberSpaceIds)
+    )
+  );
   const [sortMenuOpen, setSortMenuOpen] = React.useState(false);
   const [timeMenuOpen, setTimeMenuOpen] = React.useState(false);
   // Seeded with the default rather than every type, so the first paint is what the effect below

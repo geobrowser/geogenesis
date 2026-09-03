@@ -4,6 +4,7 @@ import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data'
 import { fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { browseSidebarMemberSpaceIds } from '~/core/debates/claim-space-allowlist';
 import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
 import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 import { normId } from '~/core/utils/norm-id';
@@ -52,12 +53,17 @@ export default async function ExploreRoutePage() {
     initialSpaceOptions.push({ value: row.id, label: row.name });
   }
 
-  // Joined, or with a membership still pending — the spaces the filter opens on (GEO-2789). Asked
-  // for as one set because the reader does not experience the difference: they chose the space at
-  // sign-up and it is theirs from that moment, whether or not an approval has landed yet.
-  const memberSpaceIds = [
-    ...new Set([...sidePanel.memberOrEditorSpaceIds, ...sidePanel.pendingMembershipSpaceIds].map(normId)),
-  ];
+  // Joined, or with a membership still pending — the spaces the filter opens on (GEO-2789). One
+  // set because the reader does not experience the difference: they chose the space at sign-up and
+  // it is theirs from that moment, whether or not an approval has landed yet.
+  //
+  // Read off `browse`, the same rows that build the menu above, and through the same helper the
+  // debates surfaces use — so the two cannot disagree about what "yours" means, and a space cannot
+  // be offered as an option without being recognised as one of theirs. The side panel's
+  // `pendingMembershipSpaceIds` looks like the obvious source and is not: it only checks pending
+  // requests against *featured* spaces, so a pending membership anywhere else was listed on the
+  // menu and left unticked.
+  const memberSpaceIds = [...browseSidebarMemberSpaceIds(browse, browse.personalSpaceId)];
 
   return (
     <ExplorePage
