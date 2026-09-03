@@ -50,6 +50,7 @@ describe('snapshotToFormState', () => {
       durationSeconds: '15',
       fastPathVotes: '2',
       quorum: '3',
+      disableFastPathForNewMembers: true,
     });
   });
 });
@@ -64,6 +65,7 @@ describe('parseVotingSettingsForm', () => {
     durationSeconds: '0',
     fastPathVotes: '1',
     quorum: '1',
+    disableFastPathForNewMembers: true,
   };
 
   it('accepts a valid form, reads the universal threshold, and preserves hidden fields', () => {
@@ -77,7 +79,7 @@ describe('parseVotingSettingsForm', () => {
       quorum: 1,
       durationInSeconds: 86400,
       executionGracePeriodInDays: hidden.graceDays,
-      disableFastPathAccessForNewMembers: hidden.disableFastPathForNewMembers,
+      disableFastPathAccessForNewMembers: validForm.disableFastPathForNewMembers,
     });
   });
 
@@ -165,6 +167,7 @@ describe('votingSettingsWarnings', () => {
     durationSeconds: '0',
     fastPathVotes: '1',
     quorum: '1',
+    disableFastPathForNewMembers: true,
   };
 
   it('warns on a likely-decimal slow path threshold', () => {
@@ -179,5 +182,46 @@ describe('votingSettingsWarnings', () => {
 
   it('does not warn when the universal threshold is at or above the pass threshold', () => {
     expect(votingSettingsWarnings(baseForm)).toEqual([]);
+  });
+});
+
+// The field was carried through `HiddenVotingSettings` unchanged, so a space created with the
+// restriction on had no way to turn it off: the only surface that writes voting settings passed
+// back whatever it read.
+describe('fast path for new members', () => {
+  // Built from the defaults rather than borrowing another block's fixture, so this reads on its own.
+  const form = snapshotToFormState(DEFAULT_VOTING_SETTINGS_SNAPSHOT);
+  const carried = snapshotToHidden(DEFAULT_VOTING_SETTINGS_SNAPSHOT);
+
+  it('is written from the form rather than carried through unchanged', () => {
+    const result = parseVotingSettingsForm({ ...form, disableFastPathForNewMembers: false }, carried);
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.value.disableFastPathAccessForNewMembers).toBe(false);
+  });
+
+  it('still writes the restriction when the form leaves it on', () => {
+    const result = parseVotingSettingsForm({ ...form, disableFastPathForNewMembers: true }, carried);
+
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect(result.value.disableFastPathAccessForNewMembers).toBe(true);
+  });
+
+  it('prefills the form from what the space currently has', () => {
+    expect(
+      snapshotToFormState({ ...DEFAULT_VOTING_SETTINGS_SNAPSHOT, disableFastPathForNewMembers: false })
+    ).toMatchObject({
+      disableFastPathForNewMembers: false,
+    });
+  });
+
+  // Blank-field validation runs over the text inputs; a boolean has no blank state and must not be
+  // swept into it, or leaving the switch off would read as an empty field.
+  it('does not treat the switch as a required text field', () => {
+    const result = parseVotingSettingsForm({ ...form, disableFastPathForNewMembers: false }, carried);
+
+    expect(result.kind).toBe('ok');
   });
 });

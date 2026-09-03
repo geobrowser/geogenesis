@@ -4,7 +4,11 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
+import {
+  DEFAULT_EXPLORE_TYPE_IDS,
+  EXPLORE_ENTITY_TYPES,
+  EXPLORE_ENTITY_TYPE_IDS,
+} from '~/core/explore/explore-constants';
 import { EXPLORE_TYPE_FILTER_STORAGE_KEY, exploreTypeFilterLabel } from '~/core/explore/explore-type-filter';
 
 import { EntityFeed } from './entity-feed';
@@ -224,12 +228,35 @@ describe('EntityFeed time range visibility', () => {
 });
 
 describe('EntityFeed Explore type filter', () => {
-  it('omits the type parameter and does not persist before the user changes the default selection', async () => {
+  it('arrives on the default types, sends them, and persists nothing until the reader chooses', async () => {
+    // GEO-2790. The default is a real selection now rather than "everything", so it has to be sent:
+    // an omitted param means all types to the route, not the default. See the test below.
+    render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} showSortFilter showTypeFilter />);
+
+    await screen.findByText(exploreTypeFilterLabel(DEFAULT_EXPLORE_TYPE_IDS.length));
+    await waitFor(() => expect(mocks.queryOptions?.enabled).toBe(true));
+    // Still nothing written. A default is a guess about what someone wants before they say, and
+    // persisting it would make every arriving reader indistinguishable from one who chose it.
+    expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBeNull();
+
+    const queryFn = mocks.queryOptions?.queryFn as (args: { pageParam?: string }) => Promise<unknown>;
+    await queryFn({ pageParam: undefined });
+    const requestUrl = mocks.fetch.mock.calls[0]?.[0] as string;
+    // Read the param rather than substring the URL: `URLSearchParams` percent-encodes the commas.
+    const sentTypeIds = new URLSearchParams(requestUrl.split('?')[1]).get('typeIds');
+    expect(sentTypeIds).toBe(DEFAULT_EXPLORE_TYPE_IDS.join(','));
+  });
+
+  it('omits the type parameter only when every type is selected', async () => {
+    // The trap this change had to avoid, guarded end to end. The client drops `typeIds` precisely
+    // when all of them are ticked, and the route reads a missing param as "all types" — so if that
+    // fallback were ever changed to the default three, ticking every box would return three types.
+    window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify(EXPLORE_ENTITY_TYPE_IDS));
+
     render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} showSortFilter showTypeFilter />);
 
     await screen.findByText(exploreTypeFilterLabel(EXPLORE_ENTITY_TYPE_IDS.length));
     await waitFor(() => expect(mocks.queryOptions?.enabled).toBe(true));
-    expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBeNull();
 
     const queryFn = mocks.queryOptions?.queryFn as (args: { pageParam?: string }) => Promise<unknown>;
     await queryFn({ pageParam: undefined });
@@ -259,36 +286,44 @@ describe('EntityFeed Explore type filter', () => {
   });
 
   it('applies rapid toggles to the latest selection', async () => {
-    const [first, second, third] = EXPLORE_ENTITY_TYPE_IDS;
-    window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify([first]));
+    // Labels and ids both come from `EXPLORE_ENTITY_TYPES`, so the test clicks the same entries it
+    // asserts on. It used to take the first three ids positionally while clicking Episode and Post
+    // by name, which only agreed because those happened to be positions two and three — reordering
+    // the menu for GEO-2790 broke it. Which types these are does not matter to what is being
+    // tested; that they are the same ones does.
+    const [first, second, third] = EXPLORE_ENTITY_TYPES;
+    window.localStorage.setItem(EXPLORE_TYPE_FILTER_STORAGE_KEY, JSON.stringify([first.id]));
 
     render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} showSortFilter showTypeFilter />);
     await screen.findByText('1 type');
 
     act(() => {
-      screen.getByRole('button', { name: /Episode/ }).click();
-      screen.getByRole('button', { name: /Post/ }).click();
+      screen.getByRole('button', { name: new RegExp(second.label) }).click();
+      screen.getByRole('button', { name: new RegExp(third.label) }).click();
     });
 
     await screen.findByText('3 types');
     await waitFor(() =>
-      expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe(JSON.stringify([first, second, third]))
+      expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe(
+        JSON.stringify([first.id, second.id, third.id])
+      )
     );
   });
 
   it('selects and unselects all types from the menu action', async () => {
     render(<EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={[]} showSortFilter showTypeFilter />);
-    await screen.findByText(exploreTypeFilterLabel(EXPLORE_ENTITY_TYPE_IDS.length));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Unselect all' }));
-    await screen.findByText('0 types');
-    await waitFor(() => expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe('[]'));
+    // The default is a subset now, so the action on arrival is Select all rather than Unselect all.
+    await screen.findByText(exploreTypeFilterLabel(DEFAULT_EXPLORE_TYPE_IDS.length));
 
     fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
     await screen.findByText(exploreTypeFilterLabel(EXPLORE_ENTITY_TYPE_IDS.length));
     await waitFor(() =>
       expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe(JSON.stringify(EXPLORE_ENTITY_TYPE_IDS))
     );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unselect all' }));
+    await screen.findByText('0 types');
+    await waitFor(() => expect(window.localStorage.getItem(EXPLORE_TYPE_FILTER_STORAGE_KEY)).toBe('[]'));
   });
 
   it('preserves the historical query key for feeds without the Explore type filter', () => {

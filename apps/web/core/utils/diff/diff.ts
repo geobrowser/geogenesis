@@ -8,6 +8,7 @@ import { getBatchEntities, getEntityBacklinks } from '~/core/io/queries';
 import type { ApiEntityDiffShape } from '~/core/io/rest';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import type { Entity, Relation, Value } from '~/core/types';
+import { isDirectMediaUrl } from '~/core/utils/media-url';
 
 import type {
   BlockChange,
@@ -37,6 +38,10 @@ const {
   IMAGE_URL_PROPERTY,
   COVER_PROPERTY,
 } = SystemIds;
+
+// Media entities published to object storage (e.g. debate videos/keyframes) carry their URL on
+// the canonical `Web URL` property instead of `IPFS URL`.
+const WEB_URL_PROPERTY = ContentIds.WEB_URL_PROPERTY;
 
 type ApiValueDiff = ApiEntityDiffShape['values'][number];
 type ApiRelationDiff = ApiEntityDiffShape['relations'][number];
@@ -281,23 +286,19 @@ export async function postProcessDiffs(
   for (const entityId of mediaPropertyEntityIds) {
     const entity = entityMap.get(entityId);
     if (!entity) continue;
-    // Prefer IMAGE_URL_PROPERTY — image entities also carry width/height values.
-    const mediaValue =
-      entity.values.find(v => v.propertyId === IMAGE_URL_PROPERTY && (v.after || v.before)) ??
-      entity.values.find(
-        v => (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://'))
-      );
-    if (mediaValue) {
-      let mediaType: 'image' | 'video' = 'image';
-      for (const rel of entity.relations) {
-        if (rel.typeId === TYPES_PROPERTY) {
-          const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
-          if (typeId === VIDEO_TYPE || typeId === VIDEO_BLOCK) {
-            mediaType = 'video';
-          }
-        }
-      }
-      mediaPropertyEntityUrls.set(entityId, { before: mediaValue.before, after: mediaValue.after, mediaType });
+    // `blockTypeEntities` includes text and data blocks; only image/video-typed entities carry media.
+    let mediaType: 'image' | 'video' | null = null;
+    for (const rel of entity.relations) {
+      if (rel.typeId !== TYPES_PROPERTY) continue;
+      const typeId = rel.after?.toEntityId ?? rel.before?.toEntityId;
+      if (typeId === VIDEO_TYPE || typeId === VIDEO_BLOCK) mediaType = 'video';
+      else if ((typeId === IMAGE_TYPE || typeId === IMAGE_BLOCK) && mediaType === null) mediaType = 'image';
+    }
+    if (mediaType === null) continue;
+    const before = resolveMediaUrlSide(entity.values, 'before');
+    const after = resolveMediaUrlSide(entity.values, 'after');
+    if (before || after) {
+      mediaPropertyEntityUrls.set(entityId, { before, after, mediaType });
     }
   }
 
@@ -865,18 +866,17 @@ export async function fromLocal(
   const imageEntityUrls = new Map<string, MediaSides>();
   const videoEntityUrls = new Map<string, MediaSides>();
   for (const diff of diffs) {
-    const resolveMediaValue = () =>
-      diff.values.find(v => v.propertyId === IMAGE_URL_PROPERTY && (v.after || v.before)) ??
-      diff.values.find(v => (v.after && v.after.startsWith('ipfs://')) || (v.before && v.before.startsWith('ipfs://')));
+    const sides = () => ({
+      before: resolveMediaUrlSide(diff.values, 'before'),
+      after: resolveMediaUrlSide(diff.values, 'after'),
+    });
     if (imageEntityIds.has(diff.entityId)) {
-      const ipfsValue = resolveMediaValue();
-      if (ipfsValue)
-        imageEntityUrls.set(diff.entityId, { before: ipfsValue.before ?? null, after: ipfsValue.after ?? null });
+      const media = sides();
+      if (media.before || media.after) imageEntityUrls.set(diff.entityId, media);
     }
     if (videoEntityIds.has(diff.entityId)) {
-      const ipfsValue = resolveMediaValue();
-      if (ipfsValue)
-        videoEntityUrls.set(diff.entityId, { before: ipfsValue.before ?? null, after: ipfsValue.after ?? null });
+      const media = sides();
+      if (media.before || media.after) videoEntityUrls.set(diff.entityId, media);
     }
   }
   // Fall back to remote entity for media entities with no local changes.
@@ -1039,11 +1039,35 @@ function isMediaRelationType(typeId: string): boolean {
   return typeId === ContentIds.AVATAR_PROPERTY || typeId === COVER_PROPERTY;
 }
 
-function resolveImageUrlFromEntity(entity: Entity | undefined): string | null {
-  if (!entity) return null;
-  const imageValue = entity.values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+/**
+ * The media URL on one side of a diff: IPFS URL, then Web URL, then any loose `ipfs://` value.
+ * Sides are resolved independently so a proposal that replaces IPFS URL with Web URL shows the
+ * new URL rather than a removal.
+ */
+export function resolveMediaUrlSide(
+  values: Array<{ propertyId: string; before: string | null; after: string | null }>,
+  side: 'before' | 'after'
+): string | null {
+  const pick = (predicate: (value: (typeof values)[number]) => boolean) =>
+    values.find(value => value[side] && predicate(value))?.[side] ?? null;
 
-  return imageValue?.value ?? null;
+  return (
+    pick(value => value.propertyId === IMAGE_URL_PROPERTY) ??
+    pick(value => value.propertyId === WEB_URL_PROPERTY && isDirectMediaUrl(value[side])) ??
+    pick(value => Boolean(value[side]?.startsWith('ipfs://')))
+  );
+}
+
+/**
+ * The media URL of a fetched Avatar/Cover target. Any `ipfs://` value counts; an http(s) URL is
+ * read only from `Web URL`, since the caller checks the relation type, not the target's type.
+ */
+export function resolveImageUrlFromEntity(entity: Entity | undefined): string | null {
+  if (!entity) return null;
+  const ipfsValue = entity.values.find(v => typeof v.value === 'string' && v.value.startsWith('ipfs://'));
+  if (typeof ipfsValue?.value === 'string') return ipfsValue.value;
+  const webUrlValue = entity.values.find(v => v.property.id === WEB_URL_PROPERTY && isDirectMediaUrl(v.value));
+  return typeof webUrlValue?.value === 'string' ? webUrlValue.value : null;
 }
 
 function computeRelationChanges(

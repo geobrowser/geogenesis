@@ -1,6 +1,9 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
 import { Publish } from '~/core/utils/publish';
 
@@ -9,8 +12,6 @@ import {
   buildDebatePublishDraft,
   mergeTranscriptSegmentsIntoTurns,
 } from './debate-publish-draft';
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
-
 import {
   AUTHORS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
@@ -22,11 +23,13 @@ import {
   IMAGE_URL_PROPERTY_ID,
   KEY_FRAME_IMAGE_PROPERTY_ID,
   NAME_PROPERTY_ID,
+  OG_IMAGE_PROPERTY_ID,
   SOURCES_PROPERTY_ID,
   TRANSCRIPT_TYPE_ID,
   TYPES_PROPERTY_ID,
   VIDEO_TYPE_ID,
   VIDEO_URL_PROPERTY_ID,
+  WEB_URL_PROPERTY_ID,
 } from './ontology';
 
 const SPACE = '8b5c8625ff017732063d56e85d24dbed';
@@ -49,11 +52,20 @@ function baseInput(overrides: Partial<DebatePublishInput> = {}): DebatePublishIn
       { spaceEntityId: YES_SPACE, displayName: 'Arturas', position: true, participantSlot: 1 },
       { spaceEntityId: NO_SPACE, displayName: 'Preston', position: false, participantSlot: 2 },
     ],
-    videoUrl: 'ipfs://bafyfinalvideo',
-    keyframeUrl: 'ipfs://bafykeyframe',
+    videoUrl: 'https://chat.example/debates/11112222-3333-4444-5555-666677778888/media/artifacts/final_video/content',
+    // Default off: most cases here are about the debate, video and transcript entities. The share
+    // card gets its own block below, where its absence is also asserted.
+    ogImageUrl: null,
+    keyframeUrl:
+      'https://chat.example/debates/11112222-3333-4444-5555-666677778888/media/artifacts/preview_image/content',
     transcriptTurns: [
       { turnIndex: 0, speakerSpaceEntityId: YES_SPACE, speakerName: 'Arturas', text: 'Iran was building a nuke.' },
-      { turnIndex: 1, speakerSpaceEntityId: NO_SPACE, speakerName: 'Preston', text: 'There was no congressional approval.' },
+      {
+        turnIndex: 1,
+        speakerSpaceEntityId: NO_SPACE,
+        speakerName: 'Preston',
+        text: 'There was no congressional approval.',
+      },
     ],
     ...overrides,
   };
@@ -133,29 +145,70 @@ describe('buildDebatePublishDraft', () => {
     expect(draft.relations.some(r => r.toEntity.id === VIDEO_TYPE_ID)).toBe(false);
   });
 
-  // A Video that sets nothing but `Video URL` renders as an empty relation.
-  it('writes the video URL to both the unified IPFS URL property and Video URL', () => {
-    const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
+  // The relation decoder reads media URLs from `Web URL` (or `IPFS URL`), not `Video URL`.
+  it('writes the video URL to both the Web URL property and Video URL, and never to IPFS URL', () => {
+    const input = baseInput();
+    const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
     const videoId = draft.relations.find(r => r.toEntity.id === VIDEO_TYPE_ID)?.fromEntity.id;
     const videoValues = draft.values.filter(v => v.entity.id === videoId);
-    expect(videoValues.find(v => v.property.id === IMAGE_URL_PROPERTY_ID)?.value).toBe('ipfs://bafyfinalvideo');
-    expect(videoValues.find(v => v.property.id === VIDEO_URL_PROPERTY_ID)?.value).toBe('ipfs://bafyfinalvideo');
+    expect(videoValues.find(v => v.property.id === WEB_URL_PROPERTY_ID)?.value).toBe(input.videoUrl);
+    expect(videoValues.find(v => v.property.id === VIDEO_URL_PROPERTY_ID)?.value).toBe(input.videoUrl);
+    expect(draft.values.some(v => v.property.id === SystemIds.IMAGE_URL_PROPERTY)).toBe(false);
+  });
+
+  it('hangs the share card off the debate, not the video', () => {
+    const draft = buildDebatePublishDraft(baseInput({ ogImageUrl: 'ipfs://bafyogcard' }), {
+      createEntityId: idFactory(),
+      createPosition: () => 'a0',
+    });
+
+    const debateId = draft.relations.find(relation => relation.toEntity.id === DEBATE_TYPE_ID)?.fromEntity.id;
+    const card = draft.relations.find(relation => relation.type.id === OG_IMAGE_PROPERTY_ID);
+
+    // The card describes the debate, and is generated once at publish time — it does not belong to
+    // the Video the way the keyframe does.
+    expect(card?.fromEntity.id).toBe(debateId);
+    const cardValues = draft.values.filter(value => value.entity.id === card?.toEntity.id);
+    expect(cardValues.find(value => value.property.id === IMAGE_URL_PROPERTY_ID)?.value).toBe('ipfs://bafyogcard');
+    // Typed as an Image, like every other image property on the platform.
+    expect(
+      draft.relations.some(
+        relation =>
+          relation.fromEntity.id === card?.toEntity.id &&
+          relation.type.id === TYPES_PROPERTY_ID &&
+          relation.toEntity.id === IMAGE_TYPE_ID
+      )
+    ).toBe(true);
+  });
+
+  /// A debate rendered before geo-chat produced speaker stills has no card, and must still publish:
+  /// the alternative is baking placeholder panels in permanently, since it is generated once.
+  it('publishes the debate unchanged when there is no share card', () => {
+    const draft = buildDebatePublishDraft(baseInput({ ogImageUrl: null }), {
+      createEntityId: idFactory(),
+      createPosition: () => 'a0',
+    });
+
+    expect(draft.relations.some(relation => relation.type.id === OG_IMAGE_PROPERTY_ID)).toBe(false);
+    expect(draft.relations.some(relation => relation.toEntity.id === DEBATE_TYPE_ID)).toBe(true);
+    expect(draft.relations.some(relation => relation.toEntity.id === VIDEO_TYPE_ID)).toBe(true);
   });
 
   it('links a Key frame Image onto the Video', () => {
-    const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
+    const input = baseInput();
+    const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
     const videoId = draft.relations.find(r => r.toEntity.id === VIDEO_TYPE_ID)?.fromEntity.id;
     const keyframe = draft.relations.find(r => r.type.id === KEY_FRAME_IMAGE_PROPERTY_ID);
     expect(keyframe?.fromEntity.id).toBe(videoId);
     expect(
-      draft.values.find(v => v.entity.id === keyframe?.toEntity.id && v.property.id === IMAGE_URL_PROPERTY_ID)?.value
-    ).toBe('ipfs://bafykeyframe');
+      draft.values.find(v => v.entity.id === keyframe?.toEntity.id && v.property.id === WEB_URL_PROPERTY_ID)?.value
+    ).toBe(input.keyframeUrl);
     expect(
       draft.relations.some(r => r.fromEntity.id === keyframe?.toEntity.id && r.toEntity.id === IMAGE_TYPE_ID)
     ).toBe(true);
   });
 
-  it('publishes the Video without a Key frame when no keyframe was pinned', () => {
+  it('publishes the Video without a Key frame when no keyframe was composed', () => {
     const draft = buildDebatePublishDraft(baseInput({ keyframeUrl: null }), {
       createEntityId: idFactory(),
       createPosition: () => 'a0',
@@ -187,7 +240,9 @@ describe('buildDebatePublishDraft', () => {
     draft.values.find(v => v.property.id === NAME_PROPERTY_ID && v.value === name)?.entity.id;
 
   const blockAuthoringClaim = (draft: ReturnType<typeof buildDebatePublishDraft>, claimId: string | undefined) => {
-    const blockClaimRel = draft.relations.find(r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === claimId);
+    const blockClaimRel = draft.relations.find(
+      r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === claimId
+    );
     const blockId = blockClaimRel?.fromEntity.id;
     return draft.relations.find(r => r.type.id === AUTHORS_PROPERTY_ID && r.fromEntity.id === blockId)?.toEntity.id;
   };
@@ -204,18 +259,23 @@ describe('buildDebatePublishDraft', () => {
     );
 
     // One Claim entity (Types -> Claim) per extracted claim.
-    const claimTypeRels = draft.relations.filter(r => r.type.id === TYPES_PROPERTY_ID && r.toEntity.id === CLAIM_TYPE_ID);
+    const claimTypeRels = draft.relations.filter(
+      r => r.type.id === TYPES_PROPERTY_ID && r.toEntity.id === CLAIM_TYPE_ID
+    );
     expect(claimTypeRels).toHaveLength(2);
 
     // Fact claim: Is factual = true (BOOLEAN), attributed to the YES speaker's block, Sources -> Debate.
     const factClaimId = claimIdByName(draft, 'Iran was developing a nuclear weapon');
-    const factBool = draft.values.find(v => v.entity.id === factClaimId && v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID);
+    const factBool = draft.values.find(
+      v => v.entity.id === factClaimId && v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID
+    );
     expect(factBool?.value).toBe('true');
     expect(factBool?.property.dataType).toBe('BOOLEAN');
     expect(blockAuthoringClaim(draft, factClaimId)).toBe(YES_SPACE);
     expect(
       draft.relations.some(
-        r => r.type.id === SOURCES_PROPERTY_ID && r.fromEntity.id === factClaimId && r.toEntity.id === draft.debateEntityId
+        r =>
+          r.type.id === SOURCES_PROPERTY_ID && r.fromEntity.id === factClaimId && r.toEntity.id === draft.debateEntityId
       )
     ).toBe(true);
 
@@ -250,13 +310,18 @@ describe('buildDebatePublishDraft', () => {
   });
 
   it('omits the Is factual value when factuality is null', () => {
-    const draft = buildDebatePublishDraft(baseInput({ claims: [{ text: 'Unclassified claim', isFactual: null, turnIndex: 0 }] }), {
-      createEntityId: idFactory(),
-      createPosition: () => 'a0',
-    });
+    const draft = buildDebatePublishDraft(
+      baseInput({ claims: [{ text: 'Unclassified claim', isFactual: null, turnIndex: 0 }] }),
+      {
+        createEntityId: idFactory(),
+        createPosition: () => 'a0',
+      }
+    );
     const claimId = claimIdByName(draft, 'Unclassified claim');
     expect(claimId).toBeTruthy();
-    expect(draft.values.some(v => v.entity.id === claimId && v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID)).toBe(false);
+    expect(draft.values.some(v => v.entity.id === claimId && v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID)).toBe(
+      false
+    );
   });
 
   it('mints no Claim entities when no claims are provided (backwards compatible)', () => {
@@ -265,10 +330,13 @@ describe('buildDebatePublishDraft', () => {
   });
 
   it('drops a claim whose turnIndex has no matching turn', () => {
-    const draft = buildDebatePublishDraft(baseInput({ claims: [{ text: 'Ghost claim', isFactual: true, turnIndex: 5 }] }), {
-      createEntityId: idFactory(),
-      createPosition: () => 'a0',
-    });
+    const draft = buildDebatePublishDraft(
+      baseInput({ claims: [{ text: 'Ghost claim', isFactual: true, turnIndex: 5 }] }),
+      {
+        createEntityId: idFactory(),
+        createPosition: () => 'a0',
+      }
+    );
     expect(draft.values.some(v => v.value === 'Ghost claim')).toBe(false);
   });
 

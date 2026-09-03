@@ -9,10 +9,6 @@ import { graphql } from '~/core/io/graphql-client';
 import { fetchProfile } from '~/core/io/subgraph';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
 
-import {
-  EXPLORE_ENTITY_NAME_PROPERTY_ID,
-  EXPLORE_PAGE_SIZE,
-} from './explore-constants';
 import { exploreBestConnectionDocument } from './explore-best-document';
 import {
   type ExploreCardEntity,
@@ -21,14 +17,12 @@ import {
   buildExploreFeedRows,
   decodeExploreCardEntity,
 } from './explore-card-item';
-import {
-  EXPLORE_DIVERSITY_WINDOW_SIZE,
-  applyDiversityCap,
-  exploreItemTypeKey,
-} from './explore-diversity';
+import { EXPLORE_ENTITY_NAME_PROPERTY_ID, EXPLORE_PAGE_SIZE } from './explore-constants';
+import { EXPLORE_DIVERSITY_WINDOW_SIZE, applyDiversityCap, exploreItemTypeKey } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import { decodeExploreWindowCursor, nextExploreWindowCursor } from './explore-window-cursor';
 
 /**
@@ -232,12 +226,14 @@ async function fetchTopEntitiesPage(args: {
 // candidate, server-side, and cannot be opted back in. Nothing passes
 // `requireName: false` today, and for this feed it would be a request to serve rows that
 // render as a raw uuid.
+// No `typeIds` parameter, deliberately: this connection cannot filter by type at a usable speed
+// (GEO-2793), so accepting one and ignoring it would be worse than not offering it. The caller
+// applies the whitelist to the rows instead.
 async function fetchBestEntitiesPage(args: {
   spaceIds: string[];
   time: ExploreTime;
   limit: number;
   after: string | null;
-  typeIds?: readonly string[];
 }): Promise<ExploreEntitiesPageResponse> {
   const t = timeThresholdSec(args.time);
   return Effect.runPromise(
@@ -248,7 +244,17 @@ async function fetchBestEntitiesPage(args: {
         first: args.limit,
         after: args.after,
         spaceIds: args.spaceIds,
-        typeIds: args.typeIds?.length ? [...args.typeIds] : undefined,
+        // `typeIds` is deliberately NOT sent (GEO-2793). Supplying it makes
+        // `entities_ranked_for_feed` abandon its ranked index walk and sort all ~48.9M rows of
+        // `entity_ranking_scores`: 43ms without it, 5.8s with the twelve Explore types, and a
+        // statement timeout with one rare type — which rendered an *empty* feed, not a slow one.
+        // The whitelist is applied to the returned rows instead, in `fetchExploreFeed`. Rows come
+        // back in ranking order either way, so filtering here costs only yield, and the yield is
+        // 64 of 66 against the 22 a page serves.
+        //
+        // Only Best is changed. `entitiesConnection` and `entitiesOrderedByPropertyConnection`
+        // are 1.7x and 2.3x slower with the argument rather than 135x, and they have no
+        // equivalent cliff, so New and Top keep filtering server-side where it is exact.
         createdAfter: t != null ? String(t) : undefined,
         spaceIdsForLists: args.spaceIds,
       },
@@ -294,9 +300,7 @@ export async function fetchExploreFeed(args: {
   const pageSize = EXPLORE_PAGE_SIZE;
   const scanChunk = 30;
 
-  const attachMeta = async (
-    rows: ExploreFeedRow[]
-  ): Promise<ExploreFeedItem[]> => {
+  const attachMeta = async (rows: ExploreFeedRow[]): Promise<ExploreFeedItem[]> => {
     const out: ExploreFeedItem[] = rows.map(r => ({
       ...r,
       spaceName: spaceMeta.get(normId(r.spaceId))?.name ?? r.spaceId.slice(0, 8),
@@ -356,28 +360,38 @@ export async function fetchExploreFeed(args: {
           time: args.time,
           limit: windowSize,
           after,
-          typeIds: args.typeIds,
         })
       : args.sort === 'top'
-      ? await fetchTopEntitiesPage({
-          spaceIds: baseIds,
-          time: args.time,
-          limit: windowSize,
-          after,
-          typeIds: args.typeIds,
-          requireName: args.requireName,
-        })
-      : await fetchExploreEntitiesPage({
-          spaceIds: baseIds,
-          time: args.time,
-          limit: windowSize,
-          after,
-          orderBy: [EntitiesOrderBy.CreatedAtDesc],
-          typeIds: args.typeIds,
-          requireName: args.requireName,
-        });
+        ? await fetchTopEntitiesPage({
+            spaceIds: baseIds,
+            time: args.time,
+            limit: windowSize,
+            after,
+            typeIds: args.typeIds,
+            requireName: args.requireName,
+          })
+        : await fetchExploreEntitiesPage({
+            spaceIds: baseIds,
+            time: args.time,
+            limit: windowSize,
+            after,
+            orderBy: [EntitiesOrderBy.CreatedAtDesc],
+            typeIds: args.typeIds,
+            requireName: args.requireName,
+          });
 
-  const rows = buildExploreFeedRows(page.entities, allowed, memberOrEditorSet);
+  const allRows = buildExploreFeedRows(page.entities, allowed, memberOrEditorSet);
+
+  // Best filters by type here rather than in the query (see `fetchBestEntitiesPage`). The other
+  // sorts already came back filtered, so re-checking them would be redundant — and worse than
+  // redundant: a card's types are the TYPES relations *in its display space*, while the server's
+  // predicate is not space-scoped, so the two can disagree at the margin. Applying it only where
+  // the server no longer does keeps exactly one source of truth per sort.
+  const typeFiltered =
+    args.sort === 'best' && (args.typeIds?.length ?? 0) > 0
+      ? allRows.filter(row => entityMatchesExploreTypeIds(row, args.typeIds ?? []))
+      : allRows;
+  const rows = typeFiltered;
 
   // "Best" is the only sort that reorders (GEO-2690). "New" is reverse-chronological and
   // an activity log that shuffles is simply wrong; "Top" is an explicit "rank by score"
