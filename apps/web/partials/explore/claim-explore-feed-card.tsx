@@ -184,6 +184,11 @@ export function ClaimExploreFeedCard({
               activeDebate={row?.active_debate}
               enabled={nearViewport}
               className="ml-auto"
+              position={{
+                chat: readiness.viewer_response?.position ?? null,
+                local: control.viewerPosition,
+                indexingDelayed: control.responseIndexing.status === 'delayed',
+              }}
             />
           }
           className="col-start-1 row-start-1 mb-3 claim-card-narrow:mb-0"

@@ -93,6 +93,8 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
       actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
       responseError: null,
       canRespond: answersReady,
+    // Mirrors the hook: the request offer reads this to tell a late index from a publish in flight.
+    responseIndexing: { status: 'idle', pending: null, runId: null },
     };
   },
 }));
