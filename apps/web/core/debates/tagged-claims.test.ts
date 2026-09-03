@@ -6,12 +6,14 @@ import * as React from 'react';
 import * as Effect from 'effect/Effect';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useSearch } from '~/core/hooks/use-search';
 import { graphql } from '~/core/io/graphql-client';
 
 import {
   NO_TAGGED_CLAIM_FILTERS,
   TAGGED_CLAIMS_PAGE_SIZE,
   type TaggedClaimFilters,
+  useTaggedClaimSearch,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -24,6 +26,9 @@ const OTHER_SPACE = '019fedae72b67ab2927adf044d57c599';
 const TOPIC = '5d050707bc5840119b1e81ad3adb6244';
 
 vi.mock('~/core/io/graphql-client', () => ({ graphql: vi.fn() }));
+vi.mock('~/core/hooks/use-search', () => ({
+  useSearch: vi.fn(() => ({ results: [], isLoading: false, onQueryChange: () => {} })),
+}));
 const graphqlMock = graphql as unknown as Mock;
 
 beforeEach(() => {
@@ -378,5 +383,47 @@ describe('the facet menus', () => {
     // An error leaves the menu empty while it stops loading. Read as settled, that empty menu says
     // the viewer's picked space no longer exists, and the reconciliation spends their selection.
     expect(result.current.settled).toBe(false);
+  });
+});
+
+
+/**
+ * The search's own scoping, which is not this list's.
+ *
+ * `useSearch` defaults to the canonical graph plus the spaces the viewer belongs to. These lists
+ * are scoped by the claim allowlist, which is wider — featured spaces included — so a claim on
+ * screen from a space the viewer has not joined was findable by browsing and unfindable by typing
+ * its name. Found in a browser, on the account that was *not* a member of the space.
+ */
+describe('useTaggedClaimSearch', () => {
+  it('lifts the search’s own space restriction, leaving the narrowing to the query', async () => {
+    const { useSearch } = await import('~/core/hooks/use-search');
+    const searchMock = useSearch as unknown as Mock;
+    searchMock.mockReturnValue({ results: [], isLoading: false, onQueryChange: () => {} });
+
+    renderHook(() => useTaggedClaimSearch('allegations'), { wrapper });
+
+    expect(searchMock.mock.calls.at(-1)?.[0]).toMatchObject({ includeNonCanonical: true });
+  });
+
+  it('does not ask the search to filter by type', () => {
+    // `types: [{ id: { equals } }]` reaches the store as a raw comparison while the id spellings
+    // differ by hyphenation — a filter that matches nothing returns an empty search, which reads
+    // exactly like "no results". The type is implied by the tag the query applies downstream.
+    const searchMock = useSearch as unknown as Mock;
+
+    renderHook(() => useTaggedClaimSearch('allegations'), { wrapper });
+
+    expect(searchMock.mock.calls.at(-1)?.[0]).not.toHaveProperty('filterByTypes');
+  });
+
+  it('asks for nothing while the box is empty', () => {
+    const searchMock = useSearch as unknown as Mock;
+
+    const { result } = renderHook(() => useTaggedClaimSearch('   '), { wrapper });
+
+    expect(searchMock.mock.calls.at(-1)?.[0]).toMatchObject({ enabled: false });
+    // `null` narrows nothing; an empty array would narrow to nothing.
+    expect(result.current.searchResultIds).toBeNull();
   });
 });

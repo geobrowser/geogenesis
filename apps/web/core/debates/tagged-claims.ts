@@ -573,13 +573,30 @@ export function useTaggedSpaceFacet(tagId: string, filters: TaggedClaimFilters, 
  * It debounces internally, so callers hand it the live term and pass the ids to
  * {@link TaggedClaimFilters}. The tag filter still applies on top, which is why this returns ids
  * rather than rows: what the viewer gets is what the search matched *and* a curator tagged.
+ *
+ * Deliberately not narrowed by `filterByTypes: [CLAIM_TYPE_ID]`, which is the obvious thing to do
+ * and is a trap. That filter reaches the store as a raw id comparison — `types: [{ id: { equals }}]`
+ * — while the id spellings in play differ by hyphenation, and `searchResultMatchesAllowedTypes`
+ * exists in that same module precisely because the two have to be normalized before they match.
+ * A filter that silently matches nothing returns an empty search, which is indistinguishable from
+ * "no results". The type is implied anyway: only a tagged Claim survives the query these ids feed.
  */
 export function useTaggedClaimSearch(search: string) {
   const trimmed = search.trim();
   const { results, isLoading, onQueryChange } = useSearch({
-    filterByTypes: [CLAIM_TYPE_ID],
     pageSize: TAGGED_SEARCH_LIMIT,
     enabled: trimmed !== '',
+    // The search must not apply a *second* space scope on top of this list's own.
+    //
+    // Its default is the canonical graph plus the spaces the viewer belongs to. These lists are
+    // scoped by the claim allowlist instead, which is a different and wider set — featured spaces
+    // included — so a claim the list shows from a space the viewer has not joined was findable by
+    // browsing and unfindable by typing its name. Searching "Allegations" for a claim on screen
+    // returned nothing, for anyone not already a member of the space it lives in.
+    //
+    // Lifting it here is safe because the narrowing happens downstream: `eligibleSpaceIds` goes out
+    // with the query these ids are handed to, so the viewer still only sees what they may.
+    includeNonCanonical: true,
   });
 
   React.useEffect(() => {
