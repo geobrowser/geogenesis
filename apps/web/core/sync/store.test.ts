@@ -609,6 +609,27 @@ describe('GeoStore', () => {
         expect(entity!.description).toBeNull();
       });
 
+      // `E.merge` guards its aggregate fallbacks against tombstones; the direct store path is the
+      // other way a reader reaches this, and `getResolvedValues` hides the deletion by default
+      // while `syncedEntities` still holds the pre-deletion value.
+      it('does not resurrect a name the reader just deleted', () => {
+        syncedEntities.set('entity-1', { ...mockEntity1, name: 'Server name', description: 'Server description' });
+        reactiveValues.set([
+          { ...textValue('n-crypto', SystemIds.NAME_PROPERTY, CRYPTO, 'Crypto wording'), isDeleted: true } as never,
+        ]);
+
+        expect(store.getEntity('entity-1', { spaceId: CRYPTO })!.name).toBeNull();
+      });
+
+      it('does not resurrect a description the reader just deleted, unscoped', () => {
+        syncedEntities.set('entity-1', { ...mockEntity1, name: null, description: 'Server description' });
+        reactiveValues.set([
+          { ...textValue('d-root', SystemIds.DESCRIPTION_PROPERTY, ROOT, 'Root description'), isDeleted: true } as never,
+        ]);
+
+        expect(store.getEntity('entity-1')!.description).toBeNull();
+      });
+
       // An empty triple must not block the synced fallback on an unscoped read: a non-nullish `''`
       // satisfies the `??` and renders the entity description-less. Same shape as the name leak.
       it('does not let an empty description block the synced fallback when unscoped', () => {

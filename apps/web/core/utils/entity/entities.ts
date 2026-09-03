@@ -90,6 +90,20 @@ export function nameValue(values: Value[]): Value | undefined {
  * has no canonical space — an entity named in Crypto and nowhere else would render untitled to
  * every other space under that rule. This falls back to the ranked resolution across all spaces.
  */
+/**
+ * True when a pending local deletion masks this property.
+ *
+ * Every aggregate fallback in the read paths has to consult this. `syncedEntities` and
+ * `remoteEntity` both retain the server's pre-deletion value, so a fallback that fires on a
+ * tombstone hands the reader back the very thing they just deleted. The fallback is for triples
+ * that were never hydrated; a tombstone means this one was.
+ *
+ * Takes the values *including* tombstones — the live set has by definition dropped the evidence.
+ */
+export function hasDeletedValue(values: Value[], propertyId: string): boolean {
+  return values.some(value => value.isDeleted === true && value.property.id === propertyId);
+}
+
 function writtenIn(values: Value[], spaceId: string): Value[] {
   return values.filter(value => value.spaceId === spaceId);
 }

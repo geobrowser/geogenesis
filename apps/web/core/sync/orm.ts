@@ -257,8 +257,7 @@ export class E {
     // honoured that before this fallback existed — see the line above. The aggregate covers triples
     // that were never hydrated; a tombstone means this one was, and the reader deleted it, so
     // resurrecting the server's pre-deletion name would undo their edit in front of them.
-    const deletedLocally = (propertyId: string) =>
-      mergedValues.some(value => value.isDeleted === true && value.property.id === propertyId);
+    const deletedLocally = (propertyId: string) => Entities.hasDeletedValue(mergedValues, propertyId);
 
     const name =
       Entities.nameInSpace(liveValues, spaceId) ??

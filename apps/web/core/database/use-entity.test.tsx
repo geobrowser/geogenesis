@@ -37,12 +37,14 @@ describe('useEntity name and description', () => {
     mocks.entity = null;
   });
 
+  // The fixture is what a *scoped* `getEntity` can actually return: the name borrowed from the
+  // graph, the description withheld because this space never wrote one. Modelling a borrowed
+  // description here would assert the cross-space leak this PR exists to prevent.
   it('keeps the resolved name when this space contributed no name value', () => {
     mocks.entity = {
       id: 'entity-1',
-      // What `getEntity` resolved: this space had none, so it fell back to the graph.
       name: 'Root wording',
-      description: 'Root description',
+      description: null,
       // Filtered to the viewing space, which wrote neither field.
       values: [],
       relations: [],
@@ -53,7 +55,24 @@ describe('useEntity name and description', () => {
     const { result } = renderHook(() => useEntity({ id: 'entity-1', spaceId: 'space-1' }), { wrapper });
 
     expect(result.current.name).toBe('Root wording');
-    expect(result.current.description).toBe('Root description');
+    expect(result.current.description).toBeNull();
+  });
+
+  // The description half of pass-through: what the space *did* write has to survive the hook.
+  it('keeps the description this space wrote', () => {
+    mocks.entity = {
+      id: 'entity-1',
+      name: 'Crypto wording',
+      description: 'Crypto description',
+      values: [],
+      relations: [],
+      types: [],
+      spaces: ['space-1'],
+    } as unknown as Entity;
+
+    const { result } = renderHook(() => useEntity({ id: 'entity-1', spaceId: 'space-1' }), { wrapper });
+
+    expect(result.current.description).toBe('Crypto description');
   });
 
   it('reports nothing when the entity itself has neither', () => {
