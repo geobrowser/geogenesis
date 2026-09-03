@@ -432,11 +432,24 @@ export function ClaimsTab() {
   // factual claim Agree/Disagree: it publishes a stance response against it. Held until one of the
   // two sources has actually answered — not merely stopped loading, since a failed lookup also
   // stops loading and would fall through to the same fallback.
-  const taggedKindResolved = React.useMemo(() => {
-    if (!graphSourced) return new Set<string>();
-    const resolved = new Set(taggedRows.claims.map(row => row.claim_entity_id));
-    for (const entity of taggedEntities) resolved.add(entity.id);
-    return resolved;
+  //
+  // Answered *for the card in front of the viewer*, which is a claim in one particular space. The
+  // row lookup asks geo-chat per space, so a claim tagged in two comes back once per space — and a
+  // row for space B says nothing about the same claim's card in space A. `taggedEntries` below is
+  // keyed on both for exactly that reason and correctly declines to use B's row; keyed on the claim
+  // alone, this said the kind had arrived anyway, so A's card went actionable on the `stance`
+  // fallback and a press published a stance response against a possibly-factual claim.
+  //
+  // The entity is not per-space: the kind comes off the claim's own "Is factual" value, so one
+  // hydrated entity answers for every space that claim is tagged in.
+  const taggedKindResolvedFor = React.useMemo(() => {
+    if (!graphSourced) return () => true;
+    const bySpaceAndClaim = new Set(
+      taggedRows.claims.map(row => `${ID.uuidToHex(row.space_id)}:${ID.uuidToHex(row.claim_entity_id)}`)
+    );
+    const byClaim = new Set(taggedEntities.map(entity => entity.id));
+    return (claimEntityId: string, spaceId: string) =>
+      byClaim.has(claimEntityId) || bySpaceAndClaim.has(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claimEntityId)}`);
   }, [graphSourced, taggedEntities, taggedRows.claims]);
 
   // Featured claims are not in geo-chat's index, so the server's topic facet says nothing about
@@ -704,7 +717,7 @@ export function ClaimsTab() {
                 activeDebate={entry.active_debate}
                 // The paged list is geo-chat's own, so every row carries its kind already; only the
                 // tagged list has to wait for one.
-                answersReady={!graphSourced || taggedKindResolved.has(entry.claim.claim_entity_id)}
+                answersReady={taggedKindResolvedFor(entry.claim.claim_entity_id, entry.claim.space_id)}
                 onRequireSignIn={onRequireSignIn}
               />
             ))}

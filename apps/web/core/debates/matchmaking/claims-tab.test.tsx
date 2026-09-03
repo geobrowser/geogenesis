@@ -1043,6 +1043,68 @@ describe('All claims reads the Debate tag', () => {
     expect(agree).toHaveAttribute('aria-pressed', 'false');
   });
 
+  // The same shape one step earlier: not which side the card holds, but whether it may be pressed
+  // at all. The response *kind* is what a press publishes, and it comes from this space's row or
+  // from the entity. Neither has answered for SPACE_ID here — the only row belongs to the other
+  // space — so counting that row as an answer let the card go live on the `stance` fallback and
+  // publish a stance response against a claim that may well be factual.
+  it('does not let another space’s row vouch for the vocabulary of this one’s card', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', SPACE_ID),
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', OTHER_SPACE_ID),
+    ];
+    mocks.debateClaimRows = [
+      {
+        id: 'row-other',
+        claim_entity_id: FEATURED_A,
+        space_id: OTHER_SPACE_ID,
+        response_kind: 'stance',
+        viewer_response: null,
+        viewer_debate_ready: false,
+        readiness_disabled_reason: null,
+        online_choices: [],
+        active_debate: null,
+      },
+    ];
+    // The other source of the kind has not arrived either, which is the window this is about.
+    mocks.claimEntities = [];
+
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    const agree = await screen.findByRole('button', { name: /^Agree/ });
+    expect(agree).toBeDisabled();
+    expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+  });
+
+  // The guard for the case above: the card has to come alive once this space's own row lands, or a
+  // permanently dead pill would satisfy it just as well.
+  it('lets the card answer once its own space’s row arrives', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', SPACE_ID),
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', OTHER_SPACE_ID),
+    ];
+    mocks.debateClaimRows = [
+      {
+        id: 'row-this',
+        claim_entity_id: FEATURED_A,
+        space_id: SPACE_ID,
+        response_kind: 'stance',
+        viewer_response: null,
+        viewer_debate_ready: false,
+        readiness_disabled_reason: null,
+        online_choices: [],
+        active_debate: null,
+      },
+    ];
+    mocks.claimEntities = [];
+
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByRole('button', { name: /^Agree/ })).toBeEnabled();
+  });
+
   it('stops paging the index, which is no longer answering this list', async () => {
     // The sentinel is what walked geo-chat's cursor. A graph-sourced list has every row in hand, so
     // a sentinel here would page a corpus nothing is reading.
