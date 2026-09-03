@@ -275,6 +275,14 @@ type QueryEntitiesOptions = {
    * the reactive store while the remote query is still in flight.
    */
   deferUntilFetched?: boolean;
+  /**
+   * Warm the next cursor page once this one resolves. On by default, which is right for anything
+   * with a "Next" control behind it.
+   *
+   * Off for a caller that is deliberately bounded — one that asks for a fixed number of rows and
+   * exposes no way to page — where the prefetch doubles the payload for a page nothing ever reads.
+   */
+  prefetchNextPage?: boolean;
 
   /**
    * When true, prepends unpublished local entities that match `where` to the
@@ -308,6 +316,7 @@ export function useQueryEntities({
   enabled = true,
   placeholderData = undefined,
   deferUntilFetched = false,
+  prefetchNextPage = true,
   includeUnpublishedLocal = false,
   sort,
   orderBy,
@@ -361,7 +370,7 @@ export function useQueryEntities({
   // useQuery call inside the data block will deduplicate against this entry.
   // Skip while showing placeholder data — the endCursor is from the prior
   // page in that window and would seed the wrong anchor.
-  const prefetchEndCursor = !isPlaceholderData && data?.hasNextPage ? data.endCursor : null;
+  const prefetchEndCursor = prefetchNextPage && !isPlaceholderData && data?.hasNextPage ? data.endCursor : null;
   // Stringify ref-unstable inputs (callers like useCollection rebuild `where`
   // inline each render) so the effect only re-runs when the semantic key
   // changes, not on every render.
