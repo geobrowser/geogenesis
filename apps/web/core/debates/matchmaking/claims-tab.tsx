@@ -442,6 +442,18 @@ export function ClaimsTab() {
   //
   // The entity is not per-space: the kind comes off the claim's own "Is factual" value, so one
   // hydrated entity answers for every space that claim is tagged in.
+  //
+  // But an entity answers only half the question. The card's contract is both the vocabulary *and*
+  // the viewer's own side — `viewerPosition` is read from `viewer_response`, which only this space's
+  // geo-chat row carries, and a press with no side held publishes rather than clears. So an entity
+  // on its own cannot open the card: it would draw a side the viewer already holds as unselected,
+  // and pressing it would republish the side they were trying to take back.
+  //
+  // Hence the row lookup has to have *settled* before the entity may answer for the side. Settled
+  // rather than answered, because a claim with no row genuinely has no side recorded — and a signed
+  // out viewer never runs this query at all, so it settles immediately and correctly reports the
+  // side they do not have.
+  const taggedRowsSettled = !taggedRows.isLoading;
   const taggedKindResolvedFor = React.useMemo(() => {
     if (!graphSourced) return () => true;
     const bySpaceAndClaim = new Set(
@@ -449,8 +461,10 @@ export function ClaimsTab() {
     );
     const byClaim = new Set(taggedEntities.map(entity => entity.id));
     return (claimEntityId: string, spaceId: string) =>
-      byClaim.has(claimEntityId) || bySpaceAndClaim.has(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claimEntityId)}`);
-  }, [graphSourced, taggedEntities, taggedRows.claims]);
+      // This space's own row answers both halves at once.
+      bySpaceAndClaim.has(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claimEntityId)}`) ||
+      (taggedRowsSettled && byClaim.has(claimEntityId));
+  }, [graphSourced, taggedEntities, taggedRows.claims, taggedRowsSettled]);
 
   // Featured claims are not in geo-chat's index, so the server's topic facet says nothing about
   // them and its `topic_id` can't narrow them. Their topics come off the entities already fetched

@@ -41,6 +41,8 @@ const mocks = vi.hoisted(() => ({
   claimEntityLookups: [] as string[][],
   /** A failed per-space geo-chat lookup — reported as a flag, as the real hook does. */
   taggedRowsError: false,
+  /** The per-space lookup still in flight, which is where the viewer's own side comes from. */
+  taggedRowsLoading: false,
   /** A failed entity hydration, which is where the graph-backed list gets its topics. */
   claimEntitiesError: null as Error | null,
   claimEntities: [] as Array<{
@@ -262,7 +264,12 @@ vi.mock('../hooks', () => ({
           group.claimIds.some(id => norm(id) === norm(row.claim_entity_id))
       )
     );
-    return { claims, isLoading: false, isError: mocks.taggedRowsError };
+    // Answerless while loading, as react-query is on a cold key.
+    return {
+      claims: mocks.taggedRowsLoading ? [] : claims,
+      isLoading: mocks.taggedRowsLoading,
+      isError: mocks.taggedRowsError,
+    };
   },
 }));
 
@@ -424,6 +431,7 @@ beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
   mocks.taggedRowsError = false;
+  mocks.taggedRowsLoading = false;
   mocks.claimEntitiesError = null;
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
@@ -1075,6 +1083,57 @@ describe('All claims reads the Debate tag', () => {
     const agree = await screen.findByRole('button', { name: /^Agree/ });
     expect(agree).toBeDisabled();
     expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+  });
+
+  // The entity settles the vocabulary and nothing else. The side the viewer already holds rides on
+  // this space's geo-chat row, and `viewerPosition` is read from it alone — so opening the card on a
+  // hydrated entity while that row is still in flight draws a held side as unselected, and pressing
+  // it publishes that side again instead of clearing it. The card's own contract asks for both.
+  it('does not open the card on the vocabulary alone, before the viewer’s side has arrived', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Tagged in one space', SPACE_ID)];
+    // The vocabulary *is* resolved: the entity has landed and says this is a stance claim.
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Tagged in one space',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    // The half that has not: no row yet, so nothing knows which side the viewer is already on.
+    mocks.taggedRowsLoading = true;
+
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    const agree = await screen.findByRole('button', { name: /^Agree/ });
+    expect(agree).toBeDisabled();
+    expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+  });
+
+  // The guard for the case above: a claim with no row at all still has to become answerable once
+  // the lookup settles, or the entity path would be dead and every unanswered claim stuck loading.
+  it('opens the card once the row lookup settles, even with no row for the claim', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Tagged in one space', SPACE_ID)];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Tagged in one space',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    mocks.debateClaimRows = [];
+    mocks.taggedRowsLoading = false;
+
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByRole('button', { name: /^Agree/ })).toBeEnabled();
   });
 
   // The guard for the case above: the card has to come alive once this space's own row lands, or a
