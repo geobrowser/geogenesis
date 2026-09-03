@@ -85,6 +85,11 @@ const mocks = vi.hoisted(() => ({
   // Independent of the catalog on purpose: the facet is its own query, and the whole hazard is the
   // catalog answering first. A mock that derives one from the other cannot reach it.
   topicFacetSettled: true,
+  // Topics the server aggregate knows about from claims on pages this list has not loaded. The
+  // facet counts the whole tag while the page is one page of it (GEO-2798), so without a knob for
+  // this the mock could only ever offer topics already on screen — and a menu wrongly derived from
+  // the loaded rows would look correct.
+  facetOnlyTopics: [] as Array<{ id: string; name: string; count: number }>,
   /** Fails the entity lookup whose id list contains this claim, leaving the others answering. */
   entityHydrationErrorFor: null as string | null,
   /** The session's saved-claims request — the parent of the saved rows, their ids and the exclusions. */
@@ -385,7 +390,7 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
       // An unsettled facet has no counts to give — `keepPreviousData` holds the *previous* key's,
       // and on a first fetch of a new key there is no previous. That empty menu arriving beside an
       // answered catalog is the whole hazard, so the mock has to be able to produce it.
-      topics: mocks.topicFacetSettled ? [...counts.values()] : [],
+      topics: mocks.topicFacetSettled ? [...counts.values(), ...(enabled ? mocks.facetOnlyTopics : [])] : [],
       isLoading: false,
       settled: enabled && !mocks.featuredCatalogError && mocks.topicFacetSettled,
       error: null,
@@ -677,6 +682,7 @@ beforeEach(() => {
   mocks.featuredCatalogLoading = false;
   mocks.featuredCatalogError = null;
   mocks.topicFacetSettled = true;
+  mocks.facetOnlyTopics = [];
   mocks.taggedFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
   mocks.fetchNextTaggedPage = vi.fn();
@@ -1779,13 +1785,47 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: /Ethics/ })).toBeNull();
   });
 
+  // GEO-2798 review. `sessionRowsByClaimId` is keyed on the claim alone, because geo-chat answers
+  // per session rather than per space — so a claim tagged in two spaces comes back once, under
+  // whichever space it was recorded in. Taking that row whole drew an A-space card under a B-space
+  // filter, and a debate requested from it would have published into A.
+  it('draws the picked space’s card, not the one geo-chat happened to record', async () => {
+    // Tagged in both spaces; geo-chat's session row names Crypto.
+    mocks.debateTagClaims = [debateTag(CLAIM_MORE, 'A newly published claim', SPACE_1), debateTag()];
+    mocks.entities = [{ ...publishedEntity(), spaces: [SPACE_1, SPACE_2] }];
+    mocks.claims = [
+      { ...sharedClaim(), claim: { ...sharedClaim().claim, claim_entity_id: CLAIM_MORE, space_id: SPACE_1 } },
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    selectFilter('Any space', 'Governance space');
+
+    await waitFor(() => expect(screen.getByText('A newly published claim')).toBeInTheDocument());
+    // The filter chip says "Governance space" too, so the discriminator is the space the card is
+    // *not* drawn in: with the row taken whole, this card wore Crypto under a Governance filter.
+    expect(screen.queryByText('Crypto')).toBeNull();
+  });
+
   // The report that reopened GEO-2653: the menu was built from the claims paged in so far, so a
-  // space whose first page carried no topics looked like a space with none. The facet describes
-  // the whole filtered set, so a topic shows up without the viewer scrolling to reach its claim.
-  // The paged version of this covered a claim the index knew about through its facet but had not
-  // returned a row for. There is no such claim now: the tag hands the whole corpus over at once, so
-  // every topic in the menu comes off a row already in hand. What survives is the guarantee that
-  // made it worth having — a topic carried by any listed claim is offerable, not just by the first.
+  // space whose first page carried no topics looked like a space with none. The facet describes the
+  // whole filtered set, so a topic shows up without the viewer scrolling to reach its claim.
+  //
+  // GEO-2771 made this briefly untestable — the tag was handed over whole, so every topic in the
+  // menu came off a row already in hand — and GEO-2798 made it live again by paging the tag. Both
+  // halves are covered now: a topic on a listed claim, and a topic the aggregate knows only from a
+  // claim on a later page, which is the one that fails if the menu is ever rebuilt from the rows.
+  it('offers a topic the facet knows about before its claim has been paged in', async () => {
+    mocks.facetOnlyTopics = [{ id: 'topic-unpaged', name: 'Not yet paged', count: 3 }];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+
+    expect(await screen.findByRole('button', { name: /Not yet paged/ })).toBeInTheDocument();
+  });
+
   it('offers a topic carried by any claim on the list', async () => {
     const OTHER = '019fedc2-3333-7000-8000-000000000003';
     mocks.debateTagClaims = [debateTag(), debateTag(OTHER, 'A claim carrying a topic of its own')];

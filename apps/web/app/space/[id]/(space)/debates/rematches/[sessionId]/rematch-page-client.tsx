@@ -443,7 +443,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       const preferred = preferredSpaceId && canPublishDebateIn(preferredSpaceId) ? preferredSpaceId : null;
       const homeSpaceId = preferred ?? claimHomeSpaceId(entity, canPublishDebateIn);
       if (!entity.name || !homeSpaceId) return null;
-      const sessionRow = sessionRowsByClaimId.get(entity.id);
+
+      // A session row names its own space, and this map is keyed on the claim alone — geo-chat
+      // answers per session rather than per space, so a claim tagged in two spaces comes back once,
+      // under whichever space it was recorded in.
+      //
+      // Where the caller has already chosen a space, that is the answer: the tagged list is scoped
+      // to claims tagged *in* the picked space, so taking a row recorded in another one drew an
+      // A-space card under a B-space filter, and a debate requested from it would publish into A.
+      // A row for a different space describes a different card, so it is treated as no row at all —
+      // the same path a claim geo-chat has never seen already takes. The other three sources pass
+      // no preference and are unchanged: there the row's space is the authoritative one.
+      const recordedRow = sessionRowsByClaimId.get(entity.id);
+      const sessionRow =
+        preferred && recordedRow && !sameId(recordedRow.claim.space_id, preferred) ? undefined : recordedRow;
       const responseKind = sessionRow?.response_kind ?? claimResponseKind(entity, homeSpaceId);
       return {
         claim: sessionRow?.claim ?? {
