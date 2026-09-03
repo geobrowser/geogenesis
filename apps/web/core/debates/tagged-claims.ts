@@ -93,21 +93,32 @@ const TAGGED_CLAIMS_PAGE_SIZE = 1_000;
  * that curation grew.
  *
  * Ranking cannot be the paging order, which is why the sort is ours — and that is a workaround for
- * GEO-2795, not a design. `RANKING_SCORE_DESC` cannot be paged at all on this API: continuing past
- * the first page loses rows and duplicates others, and the connection then reports `hasNextPage:
- * false` while entities are still missing (measured: 297 of 353, one duplicated across the seam;
- * excluding null scores does not help, and an explicit tiebreak is ignored). `ID_DESC` pages exactly
- * — 353 of 353 at every page size — and since every page is fetched before `compareTaggedClaims`
- * runs, ordering by id costs nothing: the reader still sees Explore's "Best" order over the complete
- * set.
+ * GEO-2795, not a design. `RANKING_SCORE_DESC` could not be paged at all when this was written:
+ * continuing past the first page lost rows and duplicated others, and the connection then reported
+ * `hasNextPage: false` while entities were still missing (measured: 297 of 353, one duplicated
+ * across the seam; excluding null scores did not help, and an explicit tiebreak was ignored).
+ * `ID_DESC` pages exactly, so every page is fetched before `compareTaggedClaims` runs and ordering
+ * by id costs nothing: the reader still sees Explore's "Best" order over the complete set.
  *
  * That is also why the guard sits where a mis-tagging lives rather than where curation might reach.
  * If it ever does bite, the slice is arbitrary — the one thing this design cannot make honest.
  *
- * **Reverts with GEO-2795 and GEO-2796** (see GEO-2798). Once ranked cursors work and the API can
- * count facets, this whole module pages server-side: no exhaustion loop, no guard, and no
- * client-side sort. Do not preserve any of it out of respect for the reasoning above — the
- * reasoning is about an API limitation, and it expires with the limitation.
+ * ## GEO-2795 has since landed — this is now removable in two halves
+ *
+ * Ranked paging was fixed on the API and verified on 2026-09-03: `RANKING_SCORE_DESC` returns all
+ * 442 tagged claims with no losses and no duplicates at page sizes 100, 25 and 10, and the
+ * ascending case that used to return 34 of 353 is clean too. So the exhaustion loop, this guard and
+ * `compareTaggedClaims` can all go as soon as someone picks it up — that half needs nothing else.
+ *
+ * What still holds the rest here is the facet counts. Every caller builds its topic and space menus
+ * by hydrating the whole tagged set, so the corpus is fetched for the *menus* even once the list
+ * itself can be paged. That is GEO-2796, which is merged but was not yet exposed on
+ * `api-testnet` when this was written — `relationsConnection` had no `groupedAggregates`. Check the
+ * schema before building against it.
+ *
+ * **Reverts with both** (see GEO-2798): this whole module then pages server-side, with no
+ * exhaustion loop, no guard and no client-side sort. Do not preserve any of it out of respect for
+ * the reasoning above — the reasoning is about an API limitation, and it expires with it.
  */
 export const TAGGED_CLAIMS_LIMIT = 10_000;
 
