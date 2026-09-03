@@ -86,6 +86,17 @@ describe('attachNoiseFilter', () => {
     expect(attachment).toMatchObject({ status: 'unsupported', processor: null });
   });
 
+  // Taking the swap back off is what makes a failure safe, so a track that cannot do it is left
+  // on its raw microphone rather than handed a processor there is no way to remove.
+  it('leaves the raw microphone alone where the swap could not be undone', async () => {
+    const track = makeTrack();
+    delete (track as Partial<TrackDouble>).stopProcessor;
+    const attachment = await attachNoiseFilter(track, { enabled: true, isCurrent: () => true });
+
+    expect(track.setProcessor).not.toHaveBeenCalled();
+    expect(attachment).toMatchObject({ status: 'failed', processor: null });
+  });
+
   it('destroys a processor that never attached', async () => {
     const track = makeTrack({ swapFails: true });
     const attachment = await attachNoiseFilter(track, { enabled: true, isCurrent: () => true });

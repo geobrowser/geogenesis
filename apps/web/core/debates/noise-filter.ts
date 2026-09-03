@@ -37,8 +37,12 @@ export async function attachNoiseFilter(
   { enabled, isCurrent }: { enabled: boolean; isCurrent: () => boolean }
 ): Promise<NoiseFilterAttachment | null> {
   const sourceMediaStreamTrack = audioTrack.mediaStreamTrack;
-  if (!audioTrack.setProcessor) {
-    console.warn('[DebateNoiseFilter] Krisp could not attach because the local microphone track is unavailable.');
+  // Both, not just `setProcessor`: rolling the swap back is what keeps a failure from leaving
+  // Krisp's output published, so a track that cannot stop a processor does not get one.
+  if (!audioTrack.setProcessor || !audioTrack.stopProcessor) {
+    console.warn(
+      '[DebateNoiseFilter] Krisp could not attach because the local microphone track does not process audio.'
+    );
     return { status: 'failed', processor: null, sourceMediaStreamTrack, audioContext: null };
   }
 
