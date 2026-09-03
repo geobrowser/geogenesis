@@ -33,9 +33,10 @@ class FakeAudioContext extends EventTarget {
  * track, the way LiveKit's does.
  */
 function makeTrack({ enabled = true, swapFails = false, audioContext = new FakeAudioContext() } = {}): TrackDouble {
-  const source = { kind: 'audio', enabled } as MediaStreamTrack;
+  const source = { kind: 'audio', enabled, readyState: 'live' } as MediaStreamTrack;
   const track = {
     mediaStreamTrack: source,
+    sender: { replaceTrack: vi.fn(async () => undefined) },
     stop: vi.fn(),
     setProcessor: vi.fn(async (processor: { init?: (options: unknown) => Promise<void> }) => {
       if (swapFails) throw new Error('worklet failed');
@@ -118,6 +119,52 @@ describe('attachNoiseFilter', () => {
     expect(attachment).toMatchObject({ status: 'failed', processor: null });
   });
 
+  // LiveKit stops the processed track before it swaps the sender back, so a cleanup that rejects
+  // in between leaves the sender on a stopped track. Putting the raw one back is the repair.
+  it('puts the raw microphone on the sender when cleanup fails', async () => {
+    mocks.setEnabled.mockRejectedValue(new Error('no audio context'));
+    const track = makeTrack();
+    const source = track.mediaStreamTrack;
+    track.stopProcessor.mockRejectedValue(new Error('destroy failed'));
+
+    const attachment = await attachNoiseFilter(track, { enabled: true, isCurrent: () => true });
+
+    expect(track.sender!.replaceTrack).toHaveBeenCalledWith(source);
+    expect(attachment).toMatchObject({ status: 'failed' });
+  });
+
+  it('leaves the sender alone when cleanup succeeds', async () => {
+    mocks.setEnabled.mockRejectedValue(new Error('no audio context'));
+    const track = makeTrack();
+    await attachNoiseFilter(track, { enabled: true, isCurrent: () => true });
+
+    expect(track.stopProcessor).toHaveBeenCalledTimes(1);
+    expect(track.sender!.replaceTrack).not.toHaveBeenCalled();
+  });
+
+  // Nothing to repair with: publishing an ended track would be silence either way.
+  it('does not put an ended microphone back on the sender', async () => {
+    mocks.setEnabled.mockRejectedValue(new Error('no audio context'));
+    const track = makeTrack();
+    (track.mediaStreamTrack as { readyState: string }).readyState = 'ended';
+    track.stopProcessor.mockRejectedValue(new Error('destroy failed'));
+
+    await attachNoiseFilter(track, { enabled: true, isCurrent: () => true });
+
+    expect(track.sender!.replaceTrack).not.toHaveBeenCalled();
+  });
+
+  it('survives a failed cleanup on a track that was never published', async () => {
+    mocks.setEnabled.mockRejectedValue(new Error('no audio context'));
+    const track = makeTrack();
+    delete (track as { sender?: unknown }).sender;
+    track.stopProcessor.mockRejectedValue(new Error('destroy failed'));
+
+    const attachment = await attachNoiseFilter(track, { enabled: true, isCurrent: () => true });
+
+    expect(attachment).toMatchObject({ status: 'failed' });
+  });
+
   it('hands back the audio context LiveKit initialized Krisp with', async () => {
     const audioContext = new FakeAudioContext();
     const track = makeTrack({ audioContext });
@@ -161,6 +208,19 @@ describe('watchNoiseFilterContext', () => {
     expect(track.mediaStreamTrack).toBe(attachment.sourceMediaStreamTrack);
   });
 
+  // A dead context is itself a likely reason for Krisp's `destroy()` to reject, so this is the
+  // cleanup most likely to strand the sender on the stopped track.
+  it('puts the raw microphone on the sender when the fallback cleanup fails', async () => {
+    const audioContext = new FakeAudioContext();
+    const { track, attachment } = await attached(audioContext);
+    track.stopProcessor.mockRejectedValue(new Error('destroy failed'));
+    watchNoiseFilterContext(track, attachment);
+
+    audioContext.become('suspended');
+
+    await vi.waitFor(() => expect(track.sender!.replaceTrack).toHaveBeenCalledWith(attachment.sourceMediaStreamTrack));
+  });
+
   it('falls back once, whatever the context does afterwards', async () => {
     const audioContext = new FakeAudioContext();
     const { track, attachment } = await attached(audioContext);
@@ -190,6 +250,31 @@ describe('watchNoiseFilterContext', () => {
     expect(track.stopProcessor).toHaveBeenCalledTimes(1);
   });
 
+  // The attach is asynchronous, so a stop landing inside it fires its event before anything is
+  // listening. Reading the state at subscribe time would call that blocked autoplay and leave the
+  // microphone silent, since no further event arrives while the context stays stopped.
+  it('catches a context that stopped while Krisp was attaching', async () => {
+    const audioContext = new FakeAudioContext();
+    const { track, attachment } = await attached(audioContext);
+
+    // No event: this is the transition that happened before the watch existed.
+    audioContext.state = 'suspended';
+    watchNoiseFilterContext(track, attachment);
+
+    expect(track.stopProcessor).toHaveBeenCalledTimes(1);
+    expect(track.mediaStreamTrack).toBe(attachment.sourceMediaStreamTrack);
+  });
+
+  // The same missed-event shape, but the context never ran, so it is still blocked autoplay.
+  it('leaves a context that was never running alone on subscribe', async () => {
+    const audioContext = new FakeAudioContext();
+    audioContext.state = 'suspended';
+    const { track, attachment } = await attached(audioContext);
+    watchNoiseFilterContext(track, attachment);
+
+    expect(track.stopProcessor).not.toHaveBeenCalled();
+  });
+
   it('stops watching once unsubscribed', async () => {
     const audioContext = new FakeAudioContext();
     const { track, attachment } = await attached(audioContext);
@@ -208,6 +293,7 @@ describe('watchNoiseFilterContext', () => {
       processor: null,
       sourceMediaStreamTrack: track.mediaStreamTrack,
       audioContext: null,
+      audioContextRan: false,
     };
 
     expect(() => watchNoiseFilterContext(track, attachment)()).not.toThrow();
