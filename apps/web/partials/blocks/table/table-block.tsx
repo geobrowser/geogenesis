@@ -11,7 +11,8 @@ import { produce } from 'immer';
 
 import { type RowPage, flattenRowPages, upsertRowPage } from '~/core/blocks/data/accumulate-row-pages';
 import { upsertCollectionItemRelation } from '~/core/blocks/data/collection';
-import { Filter, FilterMode } from '~/core/blocks/data/filters';
+import { filterGroupKey } from '~/core/blocks/data/filter-state-to-where';
+import { Filter, FilterMode, ModesByColumn } from '~/core/blocks/data/filters';
 import {
   buildAccumulationResetKey,
   resolveInfiniteScrollDisplay,
@@ -598,11 +599,11 @@ const ConfiguredTableBlock = ({
     source,
     setSource,
     filterState: activeFilters,
-    filterMode: activeFilterMode,
+    modesByColumn: activeModesByColumn,
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
     sortState,
     setSortState,
     filterableProperties,
@@ -626,12 +627,20 @@ const ConfiguredTableBlock = ({
     onConsumedInitialFiltersOpen?.();
   }, [initialFiltersOpen, onConsumedInitialFiltersOpen]);
 
-  const setActiveFilterMode = React.useCallback(
-    (mode: FilterMode) => {
-      if (canEdit) setFilterMode(mode);
-      else setTemporaryFilterMode(mode);
+  const setActiveGroupMode = React.useCallback(
+    (columnId: string, mode: FilterMode) => {
+      if (canEdit) setGroupMode(columnId, mode);
+      else setTemporaryGroupMode(columnId, mode);
     },
-    [canEdit, setFilterMode, setTemporaryFilterMode]
+    [canEdit, setGroupMode, setTemporaryGroupMode]
+  );
+
+  const toggleActiveGroupMode = React.useCallback(
+    (columnId: string) => {
+      const mode = activeModesByColumn[columnId] ?? 'AND';
+      setActiveGroupMode(columnId, mode === 'AND' ? 'OR' : 'AND');
+    },
+    [activeModesByColumn, setActiveGroupMode]
   );
 
   const filterSpaceIds = React.useMemo(
@@ -643,14 +652,17 @@ const ConfiguredTableBlock = ({
   // Setter that handles both editors and non-editors correctly
   // Also resets to page 1 when filters change
   const setActiveFilters = React.useCallback(
-    (filters: Filter[]) => {
-      if (equal(comparableFilterList(filters), comparableFilterList(activeFilters))) {
+    (filters: Filter[], modeOverrides?: ModesByColumn) => {
+      if (
+        equal(comparableFilterList(filters), comparableFilterList(activeFilters)) &&
+        (!modeOverrides || Object.keys(modeOverrides).length === 0)
+      ) {
         return;
       }
       if (canEdit) {
-        setFilterState(filters);
+        setFilterState(filters, modeOverrides);
       } else {
-        setTemporaryFilters(filters);
+        setTemporaryFilters(filters, modeOverrides);
       }
       // Reset to first page when filters change
       setPage(0);
@@ -1165,6 +1177,7 @@ const ConfiguredTableBlock = ({
                         ref={filterPromptRef}
                         filterState={activeFilters}
                         setFilterState={setActiveFilters}
+                        modesByColumn={activeModesByColumn}
                         filterSuggestionSpaceId={spaceId}
                         orderedColumnIds={orderedFilterColumnIds}
                         isEditing={isEditing}
@@ -1174,11 +1187,11 @@ const ConfiguredTableBlock = ({
                   {!isEditing &&
                     filterGroupsForToolbarPills.length > 0 &&
                     filterGroupsForToolbarPills.map(group => (
-                      <React.Fragment key={group.columnId}>
+                      <React.Fragment key={group.groupKey}>
                         <TableBlockFilterGroupPill
                           group={group}
-                          mode={activeFilterMode}
-                          onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                          mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                          onToggleMode={() => toggleActiveGroupMode(group.columnId)}
                           onDeleteValue={originalIndex => {
                             const newFilterState = produce(activeFilters, draft => {
                               draft.splice(originalIndex, 1);
@@ -1186,7 +1199,7 @@ const ConfiguredTableBlock = ({
                             setActiveFilters(newFilterState);
                           }}
                           onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                            setActiveFilters(activeFilters.filter(f => filterGroupKey(f) !== group.groupKey));
                           }}
                           isEditing={isEditing}
                         />
@@ -1197,11 +1210,11 @@ const ConfiguredTableBlock = ({
                 {isEditing && filterGroupsForToolbarPills.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2">
                     {filterGroupsForToolbarPills.map(group => (
-                      <React.Fragment key={group.columnId}>
+                      <React.Fragment key={group.groupKey}>
                         <TableBlockFilterGroupPill
                           group={group}
-                          mode={activeFilterMode}
-                          onToggleMode={() => setActiveFilterMode(activeFilterMode === 'AND' ? 'OR' : 'AND')}
+                          mode={activeModesByColumn[group.columnId] ?? 'AND'}
+                          onToggleMode={() => toggleActiveGroupMode(group.columnId)}
                           onDeleteValue={originalIndex => {
                             const newFilterState = produce(activeFilters, draft => {
                               draft.splice(originalIndex, 1);
@@ -1209,7 +1222,7 @@ const ConfiguredTableBlock = ({
                             setActiveFilters(newFilterState);
                           }}
                           onClearGroup={() => {
-                            setActiveFilters(activeFilters.filter(f => f.columnId !== group.columnId));
+                            setActiveFilters(activeFilters.filter(f => filterGroupKey(f) !== group.groupKey));
                           }}
                           onAddSimilar={anchorEl => {
                             requestAnimationFrame(() => {
