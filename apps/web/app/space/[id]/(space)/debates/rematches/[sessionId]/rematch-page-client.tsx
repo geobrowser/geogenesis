@@ -245,7 +245,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // differently, and when this list is unknown — no acceptor configured, a failed lookup — the
   // type test still rules out the case that actually bit us, claims living in a personal space.
   //
-  const { publishableSpaceIds } = useDebatePublishableSpaces();
+  // `isLoading` is read, not discarded. This lookup answers `null` for *unknown* — a load in
+  // flight and a failed one alike — and `isSpaceDebatePublishable` reads null as "don't filter", so
+  // during the load the menu offers spaces it will go on to reject. Only the seed cares about the
+  // difference: everything else is happy to fail open, but a default taken from a provisional menu
+  // is spent on a space the reconciliation then removes, leaving the viewer with no default at all.
+  // After an error `isLoading` is false and the ids stay null, so fail-open is preserved.
+  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
 
   // GEO-2683. Fetched only when Featured is the source on screen — it is one option in a menu, and
   // the other two answer for themselves.
@@ -938,7 +944,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     spaceIds,
     setSpaceIds,
     memberSpaceIds,
-    pending: tabIsLoading || publishabilityPending || (graphFiltered && !taggedSpaceFacet.settled),
+    // Every gate that decides `offeredSpaces`, because the seed is spent on whatever it sees. A
+    // space offered provisionally and rejected a moment later takes the default with it.
+    // `sourceDebateQuery` for the same reason from the other end: the source debate's own claim is
+    // one of the exclusions, so until it lands a row-derived menu can still be counting its space.
+    pending:
+      tabIsLoading ||
+      publishabilityPending ||
+      publishableSpacesLoading ||
+      sourceDebateQuery.isLoading ||
+      (graphFiltered && !taggedSpaceFacet.settled),
   });
 
   const tabError =

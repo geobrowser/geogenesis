@@ -141,6 +141,7 @@ const mocks = vi.hoisted(() => ({
   allowlistLoading: false,
   spaceTypes: {} as Record<string, 'DAO' | 'PERSONAL'>,
   publishableSpaceIds: null as Set<string> | null,
+  publishableSpacesLoading: false,
   observerTriggers: [] as (() => void)[],
   /** Scrolls everything observed into view — the sentinel among it. */
   scrollSentinelIntoView: () => mocks.observerTriggers.forEach(fire => fire()),
@@ -623,7 +624,10 @@ vi.mock('~/core/debates/use-debate-publishable-spaces', async importOriginal => 
   const actual = await importOriginal<typeof import('~/core/debates/use-debate-publishable-spaces')>();
   return {
     ...actual,
-    useDebatePublishableSpaces: () => ({ publishableSpaceIds: mocks.publishableSpaceIds, isLoading: false }),
+    useDebatePublishableSpaces: () => ({
+      publishableSpaceIds: mocks.publishableSpaceIds,
+      isLoading: mocks.publishableSpacesLoading,
+    }),
   };
 });
 
@@ -755,6 +759,7 @@ beforeEach(() => {
   mocks.allowlistLoading = false;
   mocks.spaceTypes = {};
   mocks.publishableSpaceIds = null;
+  mocks.publishableSpacesLoading = false;
   // jsdom has no IntersectionObserver, which the infinite-scroll sentinel builds. This one records
   // every callback so a test can say the sentinel scrolled into view.
   //
@@ -2023,6 +2028,32 @@ describe('DebateRematchPageClient', () => {
 
     await showAllClaims();
 
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+  });
+
+  // The seed is spent on whatever the menu is offering, so every gate that decides what it offers
+  // has to have answered. `useDebatePublishableSpaces` answers `null` for *unknown*, which
+  // `isSpaceDebatePublishable` reads as "don't filter" — so mid-load the menu offers spaces the
+  // page will go on to reject. Seeded from one of those, the default is spent and the pruning
+  // effect then takes it straight back off, leaving the viewer with no default at all.
+  it('waits for the publishable lookup before taking its one default', async () => {
+    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, ''), SPACE_2.replace(/-/g, '')]);
+    // Still in flight: every space passes the gate for now, Governance among them.
+    mocks.publishableSpaceIds = null;
+    mocks.publishableSpacesLoading = true;
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // Nothing seeded yet, because nothing is known yet.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
+
+    // It lands, and Governance turns out not to be publishable after all.
+    mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
+    mocks.publishableSpacesLoading = false;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    // The default is still there to spend, and spends it on the space that survived.
     await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
   });
