@@ -413,23 +413,38 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * survives being overwritten by the graph's sides (GEO-2808).
    *
    * Present-but-no-entry is recorded as `null`: geo-chat has a row and holds no position for this
-   * viewer, which is an answer. A claim missing from the map entirely is `undefined` — no row yet,
-   * which is not. `debateRequestGate` blocks on both and only distinguishes them so a missing row
-   * cannot read as a deliberate absence.
+   * viewer, which is an answer. A claim with no row at all reads as `undefined` — not an answer.
+   * `debateRequestGate` blocks on both and only distinguishes them so a missing row cannot read as
+   * a deliberate absence.
+   *
+   * Carries the row's space, and the reader matches on it. Responses are space-scoped, and the
+   * assembly below already discards a row recorded in a space other than the one a card is being
+   * drawn under — so keying this on the claim alone fed that discarded row's position into the
+   * card's gate anyway, and could open a request geo-chat scopes elsewhere and rejects.
    */
   const chatPositionByClaimId = React.useMemo(() => {
-    const byClaim = new Map<string, boolean | null>();
+    const byClaim = new Map<string, { spaceId: string; position: boolean | null }>();
     // Every source is a rematch row since #2351 moved paging server-side, and a rematch row lists
     // each session participant's side — so the viewer's is picked out of `participants`. This used
     // to also read `viewer_response` off the hub's paged index, which that change removed.
     for (const row of sessionRowsByClaimId.values()) {
-      byClaim.set(
-        row.claim.claim_entity_id,
-        row.participants.find(side => side.user_id === currentUserId)?.position ?? null
-      );
+      byClaim.set(row.claim.claim_entity_id, {
+        spaceId: row.claim.space_id,
+        position: row.participants.find(side => side.user_id === currentUserId)?.position ?? null,
+      });
     }
     return byClaim;
   }, [currentUserId, sessionRowsByClaimId]);
+
+  /** geo-chat's position for this claim *in this space*, or `undefined` when it has no such row. */
+  const chatPositionFor = React.useCallback(
+    (claimEntityId: string, spaceId: string): boolean | null | undefined => {
+      const recorded = chatPositionByClaimId.get(claimEntityId);
+      if (!recorded || !sameId(recorded.spaceId, spaceId)) return undefined;
+      return recorded.position;
+    },
+    [chatPositionByClaimId]
+  );
 
   // A debate is published into the claim's home space by the acceptor, and a personal space grants
   // editor rights to its owner alone — so a claim living in one can never carry a published debate
@@ -1003,7 +1018,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       claim={claim}
       session={session}
       currentUserId={currentUserId}
-      chatPosition={chatPositionByClaimId.get(claim.claim.claim_entity_id)}
+      chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
       readiness={readinessByClaimId.get(claim.claim.claim_entity_id) ?? null}
       onRequest={() =>
         createRequest.mutate({

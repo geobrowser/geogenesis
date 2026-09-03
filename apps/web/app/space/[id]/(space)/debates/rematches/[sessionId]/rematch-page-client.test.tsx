@@ -870,8 +870,6 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
-    // Awaited: the offer is held for a beat after the gate opens, so geo-chat's row cannot be
-    // acted on before its request endpoint agrees.
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled());
   });
 
@@ -3060,12 +3058,9 @@ describe('DebateRematchPageClient', () => {
 
   /**
    * geo-chat's rematch row reports the position slightly before its request endpoint will honour a
-   * request against it. Reported from the browser: pressing the instant the control turned from
-   * "Publishing your position…" to "Request debate" returned `claim_response_required`.
-   *
-   * So the offer is held for a beat after the gate opens, and that beat is spent in the pending
-   * state already on screen rather than in a new one. A buffer, not a proof — if geo-chat takes
-   * longer than this the request still fails, which is why the failure stays visible.
+   * request against it, so a request sent the instant the gate opens can still come back
+   * `claim_response_required`. That race is unaddressed here and belongs on the backend — a client
+   * timer large enough to cover it is large enough for a reader to feel.
    */
   it('offers the debate once geo-chat agrees', async () => {
     mocks.claims = [
