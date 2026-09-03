@@ -323,10 +323,14 @@ function taggedRowsFor(tagId: string) {
 
 function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any, narrowBySpace = true) {
   const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
-  const spaces: string[] | null = narrowBySpace && filters.spaceIds.length > 0 ? filters.spaceIds : filters.eligibleSpaceIds;
+  const spaces: string[] | null =
+    narrowBySpace && filters.spaceIds.length > 0 ? filters.spaceIds : filters.eligibleSpaceIds;
   const kept = rows.filter(row => {
     const name = (row.entity.name ?? '') as string;
-    if (filters.search && !name.toLowerCase().includes(filters.search.toLowerCase())) return false;
+    // Word at a time, ANDed, which is what the server does — a phrase match here would let a test
+    // pass on a narrowing the real query never performs.
+    const words = filters.search.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+    if (!words.every((word: string) => name.toLowerCase().includes(word.toLowerCase()))) return false;
     if (
       !filters.topicIds.every((topicId: string) =>
         (row.entity.relations ?? []).some((relation: any) => relation.toEntity.id === topicId)
@@ -1386,12 +1390,45 @@ describe('All claims reads the Debate tag', () => {
 
     fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nuclear' } });
 
-    // The term reaches the app's own search, and its matched ids reach the query — which is the
-    // whole point of the change: fuzzy and ranked, rather than a substring filter of this list.
+    // The term goes out with the query rather than filtering rows already in hand.
     await waitFor(() => expect(mocks.taggedFiltersAskedFor.at(-1).search).toBe('nuclear'));
     await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
     // And no entity lookup rides along with it, because there is no longer one at all.
     expect(mocks.claimEntityLookups.flat()).toEqual([]);
+  });
+
+  // The limitation the previous shape had and this one does not. A phrase match asks the server for
+  // one contiguous string, so a claim that says every word the viewer typed — in another order, or
+  // with anything at all between them — came back as no match. The words go out as their own
+  // clauses now, and the claim stays.
+  it('finds a claim whose words the search gave out of order', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'energy nuclear' } });
+
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+    expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+  });
+
+  it('still requires every word, so a search is narrowed rather than widened', async () => {
+    // The guard on the case above: ANDing the words must not turn into ORing them, which would make
+    // a longer search return more rather than less.
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nuclear downtown' } });
+
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+    expect(screen.queryByText('Nuclear power is the cheapest clean energy')).toBeNull();
   });
 
   // A claim tagged in two spaces is asked about once per space, so geo-chat answers twice — each row
@@ -1876,9 +1913,7 @@ describe('ClaimsTab -- Featured', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
 
     // The topic reaches it — a space with nothing under the current topic should not be offered.
-    await waitFor(() =>
-      expect(mocks.spaceFacetFiltersAskedFor.at(-1).topicIds).toEqual(['topic-energy'])
-    );
+    await waitFor(() => expect(mocks.spaceFacetFiltersAskedFor.at(-1).topicIds).toEqual(['topic-energy']));
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     fireEvent.click(screen.getByRole('button', { name: /Space/ }));
@@ -1887,9 +1922,7 @@ describe('ClaimsTab -- Featured', () => {
     // The space does not, and must not: a menu narrowed by its own dimension would read zero
     // against every space the viewer had not already picked, with no way back to another.
     await waitFor(() => expect(mocks.taggedFiltersAskedFor.at(-1).spaceIds.length).toBeGreaterThan(0));
-    expect(mocks.spaceFacetFiltersAskedFor.at(-1).spaceIds).toEqual(
-      mocks.taggedFiltersAskedFor.at(-1).spaceIds
-    );
+    expect(mocks.spaceFacetFiltersAskedFor.at(-1).spaceIds).toEqual(mocks.taggedFiltersAskedFor.at(-1).spaceIds);
   });
 
   it('never covers its counts with skeletons, having nothing to wait for', async () => {

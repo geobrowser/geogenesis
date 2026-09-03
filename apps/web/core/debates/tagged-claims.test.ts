@@ -12,6 +12,7 @@ import {
   NO_TAGGED_CLAIM_FILTERS,
   TAGGED_CLAIMS_PAGE_SIZE,
   type TaggedClaimFilters,
+  searchTerms,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -169,11 +170,7 @@ describe('what a row carries', () => {
 
   it('drops a claim with no name, and one whose every tag has no space', async () => {
     respondWithPages([
-      [
-        node('a1', 'Fine'),
-        node('a2', null),
-        { ...node('a3', 'No space'), tagRelations: [{ spaceId: null }] },
-      ],
+      [node('a1', 'Fine'), node('a2', null), { ...node('a3', 'No space'), tagRelations: [{ spaceId: null }] }],
     ]);
     const { result } = renderClaims();
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
@@ -209,7 +206,40 @@ describe('the filter it builds', () => {
     const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' });
     await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(sentVariables().filter.name).toEqual({ includesInsensitive: 'nuclear' });
+    expect(sentVariables().filter.and).toContainEqual({ name: { includesInsensitive: 'nuclear' } });
+  });
+
+  it('matches a multi-word search a word at a time, so the words need not be adjacent', async () => {
+    // A phrase match is what this used to be, and it was the whole limitation: "Trump affair" found
+    // nothing, while two tagged claims say "an affair between President Donald Trump". One ANDed
+    // clause per word finds those and still cannot return anything a phrase match would have.
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: '  Trump   affair ' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const nameClauses = sentVariables().filter.and.filter((clause: any) => clause.name !== undefined);
+    expect(nameClauses).toEqual([
+      { name: { includesInsensitive: 'Trump' } },
+      { name: { includesInsensitive: 'affair' } },
+    ]);
+  });
+
+  it('stops at eight words, so one request cannot grow without bound', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const search = Array.from({ length: 12 }, (_, index) => `w${index}`).join(' ');
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(searchTerms(search)).toHaveLength(8);
+    expect(sentVariables().filter.and.filter((clause: any) => clause.name !== undefined)).toHaveLength(8);
+  });
+
+  it('asks for nothing at all when the search is only whitespace', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: '   ' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.and.some((clause: any) => clause.name !== undefined)).toBe(false);
   });
 
   it('intersects topics rather than uniting them', async () => {
@@ -305,18 +335,13 @@ describe('the facet menus', () => {
     // count, which is what lets it be un-picked.
     respondWithGroups([{ id: TOPIC, count: 12 }]);
     const { result } = renderHook(
-      () =>
-        useTaggedTopicFacet(
-          TAG,
-          { ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC], search: 'x' },
-          true
-        ),
+      () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC], search: 'x' }, true),
       { wrapper }
     );
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
 
     const fromEntity = sentVariables().fromEntity;
-    expect(fromEntity.name).toEqual({ includesInsensitive: 'x' });
+    expect(fromEntity.and).toContainEqual({ name: { includesInsensitive: 'x' } });
     expect(
       fromEntity.and.filter((clause: any) => clause.relations?.some?.typeId?.is === '806d52bc27e94c9193c057978b093351')
     ).toHaveLength(1);
@@ -361,5 +386,3 @@ describe('the facet menus', () => {
     expect(result.current.settled).toBe(false);
   });
 });
-
-

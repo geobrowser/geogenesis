@@ -331,7 +331,10 @@ function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any
     narrowBySpace && filters.spaceIds.length > 0 ? filters.spaceIds : filters.eligibleSpaceIds;
   const kept = rows.filter(row => {
     const name = (row.entity.name ?? '') as string;
-    if (filters.search && !name.toLowerCase().includes(filters.search.toLowerCase())) return false;
+    // Word at a time, ANDed, which is what the server does — a phrase match here would let a test
+    // pass on a narrowing the real query never performs.
+    const words = filters.search.trim().split(/\s+/).filter(Boolean).slice(0, 8);
+    if (!words.every((word: string) => name.toLowerCase().includes(word.toLowerCase()))) return false;
     if (
       !filters.topicIds.every((topicId: string) =>
         (row.entity.relations ?? []).some((relation: any) => relation.toEntity.id === topicId)
@@ -1220,10 +1223,6 @@ describe('DebateRematchPageClient', () => {
       expect(mocks.featuredEnabledWith.at(-1)).toBe(false);
     });
 
-
-
-
-
     it('reports a failed tag lookup as an error rather than an empty list', async () => {
       mocks.featuredCatalogError = new Error('tag lookup exploded');
       render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -1852,7 +1851,6 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: /Later/ })).toBeNull();
   });
 
-
   // The browsed query runs on every tab, so its answer must not vouch for rows another tab drew
   // from the graph — least of all under the previous topic selection. Here the opponent's claim
   // carries no topics and has to go the moment one is picked; it is also in the browsed pages,
@@ -1980,8 +1978,6 @@ describe('DebateRematchPageClient', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
   });
-
-
 
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -2322,8 +2318,8 @@ describe('DebateRematchPageClient', () => {
       target: { value: 'newly published' },
     });
 
-    // The Claims tab searches through the app's own search now, so the term narrows the list a
-    // round trip later rather than on the same frame.
+    // The Claims tab searches on the server now, so the term narrows the list a round trip later
+    // rather than on the same frame.
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
 
@@ -2500,36 +2496,34 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.queryByText('Only featured')).toBeNull());
   });
 
-
   // Every other entity lookup on this page is gated by the source that shows its rows. Ungated, this
   // one fanned out graph batches behind the opponent's tab and Recommended, which never list them.
   it('does not hydrate the saved claims on tabs that do not show them', async () => {
     mocks.positions = [];
     // The All tab is the Debate tag and nothing else now (GEO-2798). What the merge used to put
-  // there — the session's own claims — has to be tagged to be there, which is what the default
-  // corpus says: the claim both debaters answered, and a published one they have not.
-  mocks.debateTagClaims = [
-    {
-      claimEntityId: CLAIM_SHARED,
-      spaceId: SPACE_1,
-      name: 'A claim both participants chose',
-      description: null,
-      rankingScore: 2,
-    },
-    {
-      claimEntityId: CLAIM_MORE,
-      spaceId: SPACE_2,
-      name: 'A newly published claim',
-      description: null,
-      rankingScore: 1,
-    },
-  ];
+    // there — the session's own claims — has to be tagged to be there, which is what the default
+    // corpus says: the claim both debaters answered, and a published one they have not.
+    mocks.debateTagClaims = [
+      {
+        claimEntityId: CLAIM_SHARED,
+        spaceId: SPACE_1,
+        name: 'A claim both participants chose',
+        description: null,
+        rankingScore: 2,
+      },
+      {
+        claimEntityId: CLAIM_MORE,
+        spaceId: SPACE_2,
+        name: 'A newly published claim',
+        description: null,
+        rankingScore: 1,
+      },
+    ];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
     expect(mocks.entityIdLookups.flat()).not.toContain(CLAIM_SHARED);
   });
-
 
   it('places no scroll sentinel and no paging skeleton, since nothing pages', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);

@@ -114,10 +114,14 @@ export type TaggedClaimFilters = {
   /**
    * Free text over the claim's name, matched by the server. Debounced by the caller.
    *
-   * A substring match, with the limits of one: "nuclear power" will not find "Nuclear energy is
-   * cheap". Routing this through the app's own search — fuzzy, relevance-ranked, the same endpoint
-   * every other search box uses — was tried and reverted: it returned nothing for claims plainly on
-   * the list, twice, for reasons I could not pin down. See GEO-2806. This is what works.
+   * Matched a word at a time rather than as a phrase — see {@link searchTerms}. The app's own
+   * search endpoint would be the fuzzy, relevance-ranked alternative, and it cannot serve this
+   * list: it has no notion of the curation tag, and the tagged set is a few hundred claims inside a
+   * corpus of hundreds of thousands, so its ranked page is all corpus and no tagged claim. Measured
+   * on the Debate tag: of the top 100 hits for "Allegations" scoped to Claim, none were tagged, and
+   * a tagged claim *named* "Allegations of an affair…" came back 521st of 697. Scoping the request
+   * to the eight tagged spaces one at a time recovered one of the two the filter below already
+   * finds, for eight round trips a keystroke. GEO-2806.
    */
   search: string;
   /** AND, not OR: a claim has to carry every picked topic. */
@@ -140,7 +144,6 @@ export const NO_TAGGED_CLAIM_FILTERS: TaggedClaimFilters = {
   spaceIds: [],
   eligibleSpaceIds: null,
 };
-
 
 /** A claim a curator has tagged, and the spaces they tagged it in. */
 export type TaggedClaim = {
@@ -211,6 +214,22 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery) {
 }
 
 /**
+ * How many words of a search term reach the server. A clause each, so this is also the ceiling on
+ * how wide one request can get; nobody narrowing a list of a few hundred claims types more.
+ */
+const MAX_SEARCH_TERMS = 8;
+
+/**
+ * The words a search term is matched by — whitespace-separated, empties dropped.
+ *
+ * Exported for the test that pins the cap, and because "what does typing this actually ask for" is
+ * the question anyone reading a surprising result set will have.
+ */
+export function searchTerms(search: string): string[] {
+  return search.trim().split(/\s+/).filter(Boolean).slice(0, MAX_SEARCH_TERMS);
+}
+
+/**
  * The entity filter every one of these queries is built on: the tag, plus whatever the viewer has
  * narrowed to. Shared by the list and both facet queries so a count can never describe a different
  * set from the rows.
@@ -235,8 +254,15 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
     and.push({ relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: topicId } } } });
   }
 
+  // One clause per word, ANDed, so the words may appear in any order and with anything between
+  // them: as a single phrase, "Trump affair" missed "Allegations of an affair between President
+  // Donald Trump…" and "Israel Gaza" missed all six claims about both. A claim containing the whole
+  // phrase contains every word in it, so nothing a phrase match found is lost.
+  for (const word of searchTerms(filters.search)) {
+    and.push({ name: { includesInsensitive: word } });
+  }
+
   const filter: Record<string, unknown> = { and };
-  if (filters.search) filter.name = { includesInsensitive: filters.search };
 
   // Two space filters with different jobs. The picked one narrows and is what the space facet must
   // *not* apply to itself; the eligible one is what the viewer may see at all, and applies to
@@ -249,7 +275,10 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
   return filter;
 }
 
-const taggedClaimsDocument = parse(TAGGED_CLAIMS_SOURCE) as TypedDocumentNode<TaggedClaimsQuery, Record<string, unknown>>;
+const taggedClaimsDocument = parse(TAGGED_CLAIMS_SOURCE) as TypedDocumentNode<
+  TaggedClaimsQuery,
+  Record<string, unknown>
+>;
 
 /**
  * Deliberately not under `'debates'`, for the same reason as the claim picker's key: that root is
@@ -344,8 +373,15 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
  * a third of a second.
  */
 const TAGGED_FACET_SOURCE = /* GraphQL */ `
-  query TaggedClaimFacet($relationTypeId: UUID!, $toEntityId: UUID, $fromEntity: EntityFilter!, $groupBy: [RelationsGroupBy!]!) {
-    relationsConnection(filter: { typeId: { is: $relationTypeId }, toEntityId: { is: $toEntityId }, fromEntity: $fromEntity }) {
+  query TaggedClaimFacet(
+    $relationTypeId: UUID!
+    $toEntityId: UUID
+    $fromEntity: EntityFilter!
+    $groupBy: [RelationsGroupBy!]!
+  ) {
+    relationsConnection(
+      filter: { typeId: { is: $relationTypeId }, toEntityId: { is: $toEntityId }, fromEntity: $fromEntity }
+    ) {
       groupedAggregates(groupBy: $groupBy) {
         keys
         distinctCount {
@@ -358,7 +394,10 @@ const TAGGED_FACET_SOURCE = /* GraphQL */ `
 
 type TaggedFacetQuery = {
   relationsConnection: {
-    groupedAggregates: Array<{ keys: string[] | null; distinctCount: { fromEntityId: string | null } | null } | null> | null;
+    groupedAggregates: Array<{
+      keys: string[] | null;
+      distinctCount: { fromEntityId: string | null } | null;
+    } | null> | null;
   } | null;
 };
 
@@ -400,11 +439,7 @@ type TopicNamesQuery = {
 
 const topicNamesDocument = parse(TOPIC_NAMES_SOURCE) as TypedDocumentNode<TopicNamesQuery, { ids: string[] }>;
 
-export const taggedFacetQueryKey = (
-  dimension: 'topics' | 'spaces',
-  tagId: string,
-  filters: TaggedClaimFilters
-) =>
+export const taggedFacetQueryKey = (dimension: 'topics' | 'spaces', tagId: string, filters: TaggedClaimFilters) =>
   [
     'tagged-claims',
     'facet',
@@ -539,4 +574,3 @@ export function useTaggedSpaceFacet(tagId: string, filters: TaggedClaimFilters, 
     error: query.error,
   };
 }
-
