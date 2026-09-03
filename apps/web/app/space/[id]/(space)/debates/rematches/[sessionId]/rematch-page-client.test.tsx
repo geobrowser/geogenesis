@@ -51,6 +51,8 @@ const mocks = vi.hoisted(() => ({
   rejectMutate: vi.fn(),
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
+  /** Overrides the snapshot status, so the window where it is `indexed` is reachable. */
+  responseIndexingStatus: null as 'reconciling' | 'delayed' | 'indexed' | null,
   /** Drives the indexing machine's own "taking longer than it should" signal. */
   responseIndexingDelayed: false,
   setReadiness: vi.fn(),
@@ -312,23 +314,31 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
   };
 });
 
+function responseIndexingStatusFor(entityId: string): 'idle' | 'reconciling' | 'delayed' | 'indexed' {
+  if (mocks.optimisticResponses.get(entityId) === undefined) return 'idle';
+  return mocks.responseIndexingStatus ?? (mocks.responseIndexingDelayed ? 'delayed' : 'reconciling');
+}
+
 vi.mock('~/core/hooks/use-entity-vote', () => ({
+  // In production `optimisticResponse` is derived from this snapshot, so the two can't disagree
+  // about *what* the answer is. They do apply different thresholds to the same status, though:
+  // `optimisticResponse` goes undefined outside `reconciling`/`delayed`, while the card treats
+  // anything but `idle` as still in flight — so at `indexed` the pill is lit and the gate sees
+  // nothing. Mirrored here rather than mocked independently, so that window is reachable without
+  // letting a test assert an optimistic side the snapshot denies.
   useEntityResponse: ({ entityId }: { entityId: string }) => ({
     submitResponse: (direction: 'positive' | 'negative' | 'clear') => mocks.submitResponse(entityId, direction),
-    optimisticResponse: mocks.optimisticResponses.get(entityId),
+    optimisticResponse: ['reconciling', 'delayed'].includes(responseIndexingStatusFor(entityId))
+      ? mocks.optimisticResponses.get(entityId)
+      : undefined,
     isConnected: true,
     personalSpaceId: 'personal-space',
   }),
-  // In production `optimisticResponse` is derived from this snapshot, so the two can't disagree.
-  // Mocking them independently let a test assert an optimistic side the snapshot denied.
   useEntityResponseIndexingSnapshot: ({ entityId }: { entityId: string }) => {
     const expectedResponse = mocks.optimisticResponses.get(entityId);
-    if (expectedResponse === undefined) return { status: 'idle', pending: null, runId: null };
-    return {
-      status: mocks.responseIndexingDelayed ? 'delayed' : 'reconciling',
-      pending: { entityId, expectedResponse },
-      runId: `run-${entityId}`,
-    };
+    const status = responseIndexingStatusFor(entityId);
+    if (expectedResponse === undefined || status === 'idle') return { status: 'idle', pending: null, runId: null };
+    return { status, pending: { entityId, expectedResponse }, runId: `run-${entityId}` };
   },
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
@@ -569,6 +579,7 @@ beforeEach(() => {
   mocks.savedClaims = null;
   mocks.browsedLookupLoading = false;
   mocks.currentUserId = 'user-local';
+  mocks.responseIndexingStatus = null;
   mocks.spaceAllowlist = null;
   mocks.allowlistLoading = false;
   mocks.spaceTypes = {};
@@ -2789,6 +2800,40 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
     fireEvent.click(request);
     expect(mocks.mutate).toHaveBeenCalled();
+  });
+
+  /**
+   * Reported from the browser after the previous fix: the position stays, but the Request debate
+   * button does not.
+   *
+   * One snapshot, two thresholds. `optimisticResponse` goes undefined outside
+   * `reconciling`/`delayed`, while the card treats anything but `idle` as still in flight — so at
+   * `indexed` the pill stays lit and the gate sees nothing. With geo-chat not having echoed the
+   * write yet, `opposing` collapsed and unmounted the footer under a pill that was still on. The
+   * button did not change label; it left.
+   */
+  it('keeps the request control mounted while the snapshot sits at indexed', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          // geo-chat has not echoed the viewer's write back yet.
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    // The snapshot has reached `indexed`: the card still treats that as in flight, while
+    // `optimisticResponse` has already gone undefined.
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    mocks.responseIndexingStatus = 'indexed';
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const card = screen.getByText('A claim both participants chose').closest('article')!;
+    expect(within(card).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeDisabled();
   });
 
   /**

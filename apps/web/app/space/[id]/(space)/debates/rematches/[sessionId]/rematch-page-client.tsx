@@ -1595,6 +1595,11 @@ function RematchClaimCard({
     spaceId: claim.claim.space_id,
     responseKind,
   });
+  const responseIndexing = useEntityResponseIndexingSnapshot({
+    entityId: claim.claim.claim_entity_id,
+    spaceId: claim.claim.space_id,
+    responseKind,
+  });
   /**
    * The side the viewer holds, as well as it can be known: their in-flight answer where there is
    * one, and otherwise **geo-chat's** record.
@@ -1608,12 +1613,26 @@ function RematchClaimCard({
    * Falling back to `chatPosition` is not the same trap. There the fallback was a different source
    * from the one that validates the request; here they are the same source, so agreement is real.
    */
+  /**
+   * One snapshot, read at the card's threshold rather than the response hook's.
+   *
+   * `optimisticResponse` is derived from this same snapshot, so the two can never disagree about
+   * *what* the answer is — but they disagree about when it is over. It goes undefined outside
+   * `reconciling`/`delayed`, while the card counts anything but `idle` as still in flight. So at
+   * `indexed` the pill stays lit and this fell straight through to geo-chat, which had not echoed
+   * the write yet: `opposing` collapsed and unmounted the whole footer under a pill that was still
+   * on. The button did not change label; it left.
+   *
+   * Matching the card's threshold is what keeps a card and its own footer describing one moment.
+   */
+  const inFlightResponse = optimisticResponse !== undefined ? optimisticResponse : responseIndexing.pending?.expectedResponse;
+
   const localPosition =
-    optimisticResponse === undefined
+    inFlightResponse === undefined
       ? (chatPosition ?? null)
-      : optimisticResponse === null
+      : inFlightResponse === null
         ? null
-        : optimisticResponse === 'positive';
+        : inFlightResponse === 'positive';
 
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
   /**
@@ -1632,11 +1651,6 @@ function RematchClaimCard({
    * before the response is indexed is a backend decision about whether a debate may be created on a
    * position that does not exist on-chain yet.
    */
-  const responseIndexing = useEntityResponseIndexingSnapshot({
-    entityId: claim.claim.claim_entity_id,
-    spaceId: claim.claim.space_id,
-    responseKind,
-  });
   /**
    * The shared gate, so this reads the same fact the hub reads and wears the same label.
    *
