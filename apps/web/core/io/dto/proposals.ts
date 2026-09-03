@@ -34,8 +34,10 @@ export type SpaceTopicProposalDetails = {
 /**
  * Proposed new voting settings for an `UPDATE_VOTING_SETTINGS` proposal. Values are raw
  * from the API action: `slowThreshold`/`universalThreshold` are contract ratios (1e7 = 100%),
- * `duration` is in seconds, and `fastThreshold`/`quorum` are editor counts. (Grace period and
- * new-member fast-path aren't surfaced.)
+ * `duration` is in seconds, and `fastThreshold`/`quorum` are editor counts.
+ *
+ * `disableFastPathForNewMembers` is plumbed through but the API does not send it yet, so it is
+ * always undefined today and its row is skipped. Grace period is not surfaced at all.
  */
 export type VotingSettingsProposalDetails = {
   slowThreshold?: number;
@@ -43,6 +45,7 @@ export type VotingSettingsProposalDetails = {
   fastThreshold?: number;
   quorum?: number;
   durationSeconds?: number;
+  disableFastPathForNewMembers?: boolean;
 };
 
 export type Proposal = {

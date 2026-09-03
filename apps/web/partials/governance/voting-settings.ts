@@ -25,7 +25,7 @@ export type VotingSettingsSnapshot = {
   durationSeconds: number;
   /** Execution grace period in days — not shown in the form, preserved on edit. */
   graceDays: number;
-  /** Not shown in the form, preserved on edit. */
+  /** Whether members joining from now on are barred from the fast path. Editable — see the form. */
   disableFastPathForNewMembers: boolean;
 };
 

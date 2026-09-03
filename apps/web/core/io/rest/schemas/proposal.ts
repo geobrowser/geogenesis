@@ -81,6 +81,11 @@ export const ApiActionSchema = Schema.Struct({
   slowThreshold: Schema.optional(Schema.Number),
   universalPercentageSupportThreshold: Schema.optional(Schema.Number),
   duration: Schema.optional(Schema.Number),
+  /**
+   * Whether the proposal also flips new-member fast-path access. Optional like its siblings, and
+   * currently never sent — see {@link getVotingSettingsProposalDetails}.
+   */
+  disableFastPathAccessForNewMembers: Schema.optional(Schema.Boolean),
   targetSpaceId: Schema.optional(Schema.String),
   targetTopicId: Schema.optional(Schema.String),
 });
@@ -324,6 +329,12 @@ export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): Spa
  * carries the new values (`slowThreshold`, `universalPercentageSupportThreshold`,
  * `fastThreshold`, `quorum`, `duration`) directly on the action; returns null if there's no
  * such action or it carries none of them.
+ *
+ * `disableFastPathAccessForNewMembers` is read here and threaded through to the review page, but
+ * the API does not send it yet — `updateVotingSettings` takes seven fields and the action carries
+ * five. Until it does, a proposal that only flips that switch shows no changed row, which is worth
+ * fixing on the API side: it is an access-control change, and a voter should be able to see it
+ * before approving. The plumbing is in place so the row appears the moment the value arrives.
  */
 export function getVotingSettingsProposalDetails(actions: readonly ApiAction[]): VotingSettingsProposalDetails | null {
   const action = actions.find(a => a.actionType === 'UPDATE_VOTING_SETTINGS');
@@ -337,6 +348,7 @@ export function getVotingSettingsProposalDetails(actions: readonly ApiAction[]):
     fastThreshold: action.fastThreshold,
     quorum: action.quorum,
     durationSeconds: action.duration,
+    disableFastPathForNewMembers: action.disableFastPathAccessForNewMembers,
   };
 
   const hasAnyValue = Object.values(details).some(value => value !== undefined);
