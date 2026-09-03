@@ -30,6 +30,7 @@ import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../h
 import {
   type TaggedClaim,
   type TaggedClaimFilters,
+  tagDisplaySpaceId,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -42,12 +43,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import {
-  keepSelectableTopics,
-  keepSelectedVisible,
-  orderFacetOptions,
-  toggleId,
-} from './topic-facets';
+import { keepSelectableTopics, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
@@ -110,7 +106,6 @@ function filterOptionsFor(authenticated: boolean) {
 }
 
 /** Stable identity so the geo-chat lookups don't restart on every render of a geo-chat list. */
-
 
 /**
  * Key prefixes for the two lookups behind the graph-sourced list, so "Try again" can reach them.
@@ -320,17 +315,8 @@ export function ClaimsTab() {
   const topicFacet = useTaggedTopicFacet(claimsTagId, taggedFilters, taggedEnabled);
   const spaceFacet = useTaggedSpaceFacet(claimsTagId, taggedFilters, taggedEnabled);
 
-  // Which space a claim's card is for.
-  //
-  // A claim arrives once, carrying every space it is tagged in, and the card has to be built
-  // against one of them — the space a debate would be published into, and the space its sides are
-  // read from. A picked space wins where the claim is tagged in one, so filtering to a space never
-  // hides a claim that is tagged in it; otherwise the first the gates allow.
   const displaySpaceFor = React.useCallback(
-    (claim: TaggedClaim) => {
-      const allowed = claim.tagSpaceIds.filter(spaceShowsClaims);
-      return allowed.find(id => spaceIds.some(picked => ID.equals(picked, id))) ?? allowed[0] ?? null;
-    },
+    (claim: TaggedClaim) => tagDisplaySpaceId(claim, spaceIds, spaceShowsClaims),
     [spaceIds, spaceShowsClaims]
   );
 
@@ -475,7 +461,7 @@ export function ClaimsTab() {
   // rather than the selection. `spacesPending` for the same reason at the other end: the query is
   // not made at all while the gates resolve.
   const facetsSettled = graphSourced
-    ? !spacesPending && topicFacet.countsSettled && spaceFacet.settled
+    ? !spacesPending && topicFacet.settled && spaceFacet.settled
     : claimsQuery.facetsSettled;
 
   // The space is let go on the condition that actually means "not yours to pick" — the gates

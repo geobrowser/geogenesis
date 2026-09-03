@@ -10,7 +10,7 @@ import { parse } from 'graphql';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
-import { uuidToHex } from '~/core/id/normalize';
+import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
 /**
@@ -36,7 +36,6 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
     $topicsPropertyId: UUID!
     $propertyIds: [UUID!]!
     $filter: EntityFilter!
-    $spaceIds: UUIDFilter
     $first: Int!
     $after: Cursor
   ) {
@@ -45,7 +44,6 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
       after: $after
       orderBy: [RANKING_SCORE_DESC]
       typeIds: { in: [$claimTypeId] }
-      spaceIds: $spaceIds
       filter: $filter
     ) {
       pageInfo {
@@ -105,6 +103,17 @@ type TaggedClaimsQuery = {
     } | null> | null;
   } | null;
 };
+
+/**
+ * How long a tagged answer stays fresh — the page and both facet counts, which all describe the
+ * same curated set and so have no business disagreeing about when it has gone stale. Curation moves
+ * at human speed, so every caller asking for the same tag and filters shares one request for a good
+ * while.
+ */
+const TAGGED_STALE_TIME = 5 * 60_000;
+
+/** Topic names outlive any one filter click by a long way; they are not what goes stale here. */
+const TOPIC_NAMES_STALE_TIME = 30 * 60_000;
 
 /** Rows per request. Small enough that the first screen is not waiting on the rest of the page. */
 export const TAGGED_CLAIMS_PAGE_SIZE = 50;
@@ -275,6 +284,28 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
   return filter;
 }
 
+/**
+ * Which space a tagged claim's card is for.
+ *
+ * A claim arrives once, carrying every space it is tagged in, and a card has to be built against
+ * one of them — the space a debate would be published into, and the space its sides are read from.
+ * A picked space wins where the claim is tagged in one, so narrowing to a space never hides a claim
+ * that is tagged in it; otherwise the first the gate allows. `null` means no space this viewer may
+ * be shown, which is a claim that drops off the list rather than a card without a space.
+ *
+ * Shared because both surfaces have to answer it identically: the hub and the rematch picker each
+ * had their own copy of this, down to the comment, differing only in how they spelled the gate and
+ * which of the two id comparators they reached for.
+ */
+export function tagDisplaySpaceId(
+  claim: TaggedClaim,
+  pickedSpaceIds: string[],
+  isSpaceShown: (spaceId: string) => boolean
+): string | null {
+  const allowed = claim.tagSpaceIds.filter(isSpaceShown);
+  return allowed.find(spaceId => pickedSpaceIds.some(picked => idEquals(picked, spaceId))) ?? allowed[0] ?? null;
+}
+
 const taggedClaimsDocument = parse(TAGGED_CLAIMS_SOURCE) as TypedDocumentNode<
   TaggedClaimsQuery,
   Record<string, unknown>
@@ -323,7 +354,6 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
             topicsPropertyId: TOPICS_PROPERTY_ID,
             propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
             filter: taggedEntityFilter(tagId, filters),
-            spaceIds: null,
             first: TAGGED_CLAIMS_PAGE_SIZE,
             after: pageParam,
           },
@@ -334,7 +364,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // Narrowing a list should narrow it, not blank it and fill it in again. Every filter mints a
     // new key, so without this the rows vanish for a round trip on each pick.
     placeholderData: keepPreviousData,
-    staleTime: 5 * 60_000,
+    staleTime: TAGGED_STALE_TIME,
     enabled,
   });
 
@@ -485,7 +515,7 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
           signal,
         })
       ),
-    staleTime: 5 * 60_000,
+    staleTime: TAGGED_STALE_TIME,
     enabled,
   });
 
@@ -513,8 +543,7 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
           signal,
         })
       ),
-    // Names outlive any one filter click by a long way.
-    staleTime: 30 * 60_000,
+    staleTime: TOPIC_NAMES_STALE_TIME,
     enabled: enabled && ids.length > 0,
   });
 
@@ -532,9 +561,10 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
   return {
     topics,
     // The names are part of the answer: a menu of ids is not a menu. The counts alone settle first,
-    // which is what the caller reconciles a selection against.
+    // which is what the caller reconciles a selection against — hence `settled` tracking the counts
+    // rather than the names, and named the same as the space facet's so the two read alike.
     isLoading: enabled && (counts.isLoading || names.isLoading),
-    countsSettled: enabled ? !counts.isLoading && !counts.error : false,
+    settled: enabled ? !counts.isLoading && !counts.error : false,
     error: counts.error,
   };
 }
@@ -563,7 +593,7 @@ export function useTaggedSpaceFacet(tagId: string, filters: TaggedClaimFilters, 
           signal,
         })
       ),
-    staleTime: 5 * 60_000,
+    staleTime: TAGGED_STALE_TIME,
     enabled,
   });
 

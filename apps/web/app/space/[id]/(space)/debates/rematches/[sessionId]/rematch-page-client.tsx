@@ -62,6 +62,7 @@ import { participantSidesOn, useParticipantPositions } from '~/core/debates/part
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import {
   type TaggedClaimFilters,
+  tagDisplaySpaceId,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -70,8 +71,8 @@ import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
-import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
+import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
@@ -617,19 +618,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Which space each claim's card is drawn for — the space a debate would be published into, and
   // the space its sides are read from.
   //
-  // A claim arrives once carrying every space it is tagged in. A picked space wins where the claim
-  // is tagged in one, so filtering to a space never hides a claim that is tagged in it; otherwise
-  // the first that clears both gates. Nothing is collapsed, because nothing was ever duplicated.
+  // One row per claim, against the space `tagDisplaySpaceId` picks for it. Nothing is collapsed,
+  // because nothing was ever duplicated: a claim arrives once carrying every space it is tagged in.
   const taggedRowsNow = React.useMemo(
     () =>
       taggedClaimsSettling
         ? []
         : taggedCatalog.flatMap(claim => {
             if (excludedClaimIds.has(claim.entity.id)) return [];
-            const allowed = claim.tagSpaceIds.filter(
-              spaceId => canPublishDebateIn(spaceId) && isClaimSpaceAllowed(spaceId, spaceAllowlist)
+            const spaceId = tagDisplaySpaceId(
+              claim,
+              spaceIds,
+              candidate => canPublishDebateIn(candidate) && isClaimSpaceAllowed(candidate, spaceAllowlist)
             );
-            const spaceId = allowed.find(id => spaceIds.some(picked => sameId(picked, id))) ?? allowed[0];
             if (!spaceId) return [];
             const row = rowFromEntity(claim.entity, spaceId);
             // Both gates again, against the space the row actually carries: `rowFromEntity` takes
@@ -637,15 +638,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             if (!row || !canPublishDebateIn(row.claim.space_id)) return [];
             return isClaimSpaceAllowed(row.claim.space_id, spaceAllowlist) ? [row] : [];
           }),
-    [
-      canPublishDebateIn,
-      excludedClaimIds,
-      rowFromEntity,
-      spaceAllowlist,
-      spaceIds,
-      taggedCatalog,
-      taggedClaimsSettling,
-    ]
+    [canPublishDebateIn, excludedClaimIds, rowFromEntity, spaceAllowlist, spaceIds, taggedCatalog, taggedClaimsSettling]
   );
 
   // Keyed on the tag as well as the session.
@@ -877,7 +870,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     const resolved = !topicsSettling && !tabIsLoading && !tabError;
     setTopicIds(current => keepSelectableTopics(current, facetTopics, resolved));
   }, [facetTopics, tabError, tabIsLoading, topicsSettling]);
-
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
   const showsSections = tab === 'claims' && source === 'recommended';
