@@ -62,6 +62,7 @@ import { participantSidesOn, useParticipantPositions } from '~/core/debates/part
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import {
   type TaggedClaimFilters,
+  useTaggedClaimSearch,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -281,9 +282,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   const { value: debouncedTopicIds, pending: topicsSettling } = useDebouncedSelection(topicIds);
 
+  // The app's own search, as the hub uses: fuzzy and relevance-ranked rather than a substring
+  // match. It debounces internally, so it takes the live term.
+  const { searchResultIds, isSearching } = useTaggedClaimSearch(search);
+
   const taggedFilters = React.useMemo<TaggedClaimFilters>(
-    () => ({ search: debouncedSearch, topicIds: debouncedTopicIds, spaceIds, eligibleSpaceIds }),
-    [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, spaceIds]
+    () => ({ searchResultIds, topicIds: debouncedTopicIds, spaceIds, eligibleSpaceIds }),
+    [debouncedTopicIds, eligibleSpaceIds, searchResultIds, spaceIds]
   );
 
   // One ranked, filtered page of the tag at a time (GEO-2798), carrying its own topics and its
@@ -612,7 +617,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // The tag's own page, and the one geo-chat lookup that rides with it. No merge to wait on any
   // more: the Claims tab is the graph's list (GEO-2798), so what used to be three extra sources
   // waited on here now has nowhere to arrive from.
-  const taggedClaimsSettling = allowlistPending || taggedCatalogLoading || taggedClaimsQuery.isLoading;
+  const taggedClaimsSettling =
+    allowlistPending || isSearching || taggedCatalogLoading || taggedClaimsQuery.isLoading;
 
   // Which space each claim's card is drawn for — the space a debate would be published into, and
   // the space its sides are read from.

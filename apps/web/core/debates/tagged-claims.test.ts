@@ -204,12 +204,31 @@ describe('the filter it builds', () => {
     });
   });
 
-  it('sends the search term to the server rather than filtering here', async () => {
-    respondWithPages([[node('a1', 'One')]]);
-    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' });
-    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+  it('narrows to what the search matched, and asks for the whole match at once', async () => {
+    // Ids rather than a term: the app's own search is fuzzy and ranked, where
+    // `name: { includesInsensitive }` was a substring match that could not find "Nuclear energy is
+    // cheap" from "nuclear power". Asked for whole because relevance is the order — a page ranked
+    // by score could only ever be re-ranked within itself.
+    respondWithPages([[node('a1', 'One'), node('a2', 'Two')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, searchResultIds: ['a2', 'a1'] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
 
-    expect(sentVariables().filter.name).toEqual({ includesInsensitive: 'nuclear' });
+    expect(sentVariables().filter.id).toEqual({ in: ['a2', 'a1'] });
+    expect(sentVariables().filter.name).toBeUndefined();
+    expect(sentVariables().first).toBe(2);
+    // Ranked by the search, not by score: 'Two' matched better.
+    expect(result.current.claims.map(claim => claim.entity.name)).toEqual(['Two', 'One']);
+    expect(result.current.hasNextPage).toBe(false);
+  });
+
+  it('narrows to nothing when the search matched nothing', async () => {
+    // An empty array is an answer, not an absent filter.
+    respondWithPages([[]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, searchResultIds: [] });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(sentVariables().filter.id).toEqual({ in: [] });
+    expect(result.current.claims).toEqual([]);
   });
 
   it('intersects topics rather than uniting them', async () => {
@@ -256,9 +275,15 @@ describe('the facet menus', () => {
     graphqlMock.mockImplementation(({ decoder, variables }) => {
       // The names query answers separately; it is the only one taking `ids`.
       if ((variables as any).ids) {
+        // Answers dashless, as the connection does, whatever spelling it was asked with.
         return Effect.succeed(
           decoder({
-            entitiesConnection: { nodes: (variables as any).ids.map((id: string) => ({ id, name: `Topic ${id}` })) },
+            entitiesConnection: {
+              nodes: (variables as any).ids.map((id: string) => {
+                const dashless = id.replace(/-/g, '');
+                return { id: dashless, name: `Topic ${dashless}` };
+              }),
+            },
           })
         );
       }
@@ -276,12 +301,19 @@ describe('the facet menus', () => {
   }
 
   it('counts topics over the tag, and puts a name to each id', async () => {
-    respondWithGroups([{ id: TOPIC, count: 12 }]);
+    // Dashed, as `groupedAggregates` answers — while the names come back from `entitiesConnection`
+    // dashless. An unnormalized join matches nothing and every row reads "Topic", which is how this
+    // first shipped.
+    respondWithGroups([{ id: '5d050707-bc58-4011-9b1e-81ad3adb6244', count: 12 }]);
     const { result } = renderHook(() => useTaggedTopicFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper });
 
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
     // The aggregate answers in ids; a menu row needs a word, so a second request resolves them.
-    expect(result.current.topics[0]).toEqual({ id: TOPIC, name: `Topic ${TOPIC}`, count: 12 });
+    expect(result.current.topics[0]).toEqual({
+      id: '5d050707-bc58-4011-9b1e-81ad3adb6244',
+      name: `Topic ${TOPIC}`,
+      count: 12,
+    });
   });
 
   it('counts topics over the topic selection, not around it', async () => {
@@ -292,13 +324,18 @@ describe('the facet menus', () => {
     // count, which is what lets it be un-picked.
     respondWithGroups([{ id: TOPIC, count: 12 }]);
     const { result } = renderHook(
-      () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC], search: 'x' }, true),
+      () =>
+        useTaggedTopicFacet(
+          TAG,
+          { ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC], searchResultIds: ['a1'] },
+          true
+        ),
       { wrapper }
     );
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
 
     const fromEntity = sentVariables().fromEntity;
-    expect(fromEntity.name).toEqual({ includesInsensitive: 'x' });
+    expect(fromEntity.id).toEqual({ in: ['a1'] });
     expect(
       fromEntity.and.filter((clause: any) => clause.relations?.some?.typeId?.is === '806d52bc27e94c9193c057978b093351')
     ).toHaveLength(1);

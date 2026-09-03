@@ -48,6 +48,9 @@ const mocks = vi.hoisted(() => ({
   /** The same, for the space menu's own count — which must carry every filter but the space one. */
   spaceFacetFiltersAskedFor: [] as any[],
   taggedHasNextPage: false,
+  /** Overrides what the search matched, and in what order. */
+  searchResultIds: null as string[] | null,
+  searchIsLoading: false,
   fetchNextTaggedPage: vi.fn(),
   /** Privy can report authenticated before it has rehydrated the user, so this is separable. */
   accountKey: 'account-1' as string | null,
@@ -324,9 +327,8 @@ function taggedRowsFor(tagId: string) {
 function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any, narrowBySpace = true) {
   const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
   const spaces: string[] | null = narrowBySpace && filters.spaceIds.length > 0 ? filters.spaceIds : filters.eligibleSpaceIds;
-  return rows.filter(row => {
-    const name = (row.entity.name ?? '') as string;
-    if (filters.search && !name.toLowerCase().includes(filters.search.toLowerCase())) return false;
+  const kept = rows.filter(row => {
+    if (filters.searchResultIds && !filters.searchResultIds.includes(row.entity.id)) return false;
     if (
       !filters.topicIds.every((topicId: string) =>
         (row.entity.relations ?? []).some((relation: any) => relation.toEntity.id === topicId)
@@ -337,6 +339,13 @@ function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any
     if (spaces && !row.tagSpaceIds.some(spaceId => spaces.some(picked => norm(picked) === norm(spaceId)))) return false;
     return true;
   });
+  if (!filters.searchResultIds) return kept;
+  // Relevance decides the order while a search is on, as the module does — the mock stands in for
+  // it, so it has to keep that part of the contract too.
+  const rank = new Map<string, number>(filters.searchResultIds.map((id: string, index: number) => [id, index]));
+  return [...kept].sort(
+    (a, z) => (rank.get(a.entity.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(z.entity.id) ?? Number.MAX_SAFE_INTEGER)
+  );
 }
 
 vi.mock('../tagged-claims', async importOriginal => ({
@@ -355,6 +364,23 @@ vi.mock('../tagged-claims', async importOriginal => ({
       isFetchingNextPage: false,
       refetch: vi.fn(),
     };
+  },
+  /**
+   * The app's own search, which the real hook reaches through the sync engine — not stood up here.
+   *
+   * Matched by substring, which is weaker than the endpoint's fuzzy match but is enough to say
+   * *that* a search narrowed the list. The order it returns is the order the list must take, which
+   * is what the relevance cases below assert.
+   */
+  useTaggedClaimSearch: (search: string) => {
+    const trimmed = search.trim().toLowerCase();
+    if (trimmed === '') return { searchResultIds: null, isSearching: false };
+    if (mocks.searchIsLoading) return { searchResultIds: [], isSearching: true };
+    const ids = (mocks.searchResultIds ??
+      [...(mocks.featuredClaims ?? []), ...Object.values(mocks.taggedClaims ?? {}).flat()].filter(entry => entry.name.toLowerCase().includes(trimmed)).map(
+        entry => entry.claimEntityId
+      )) as string[];
+    return { searchResultIds: ids, isSearching: false };
   },
   useTaggedTopicFacet: (tagId: string, filters: any, enabled: boolean) => {
     // Co-occurrence: counted over the claims that already carry every picked topic, as the server
@@ -597,6 +623,8 @@ beforeEach(() => {
   mocks.taggedFiltersAskedFor = [];
   mocks.spaceFacetFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
+  mocks.searchResultIds = null;
+  mocks.searchIsLoading = false;
   mocks.fetchNextTaggedPage = vi.fn();
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
@@ -1122,6 +1150,31 @@ describe('All claims reads the Debate tag', () => {
     await waitFor(() => expect(mocks.debateClaimGroups.flat().length).toBeGreaterThan(0));
   });
 
+  // Relevance decides the order while a search is on, which is what the rest of the app does. The
+  // ranking score orders the list the viewer browses; a search is not browsing, and the best match
+  // belongs at the top of it even when something else outranks it.
+  it('orders a search by relevance rather than by ranking score', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    // The search ranks the second claim first; the catalog's own order is the other way round.
+    mocks.searchResultIds = [FEATURED_B, FEATURED_A];
+
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'a' } });
+
+    await waitFor(() => {
+      const rendered = document.body.textContent ?? '';
+      expect(rendered.indexOf('Cities should ban cars downtown')).toBeGreaterThan(-1);
+      expect(rendered.indexOf('Cities should ban cars downtown')).toBeLessThan(
+        rendered.indexOf('Nuclear power is the cheapest clean energy')
+      );
+    });
+  });
+
   // The tag rows are per space, so a claim tagged in two comes back twice and the collapse to one
   // row has to happen *after* the picked-space cut. Collapsing first pins the claim to whichever
   // row arrived first, and filtering to the other space it is tagged in hides it.
@@ -1385,7 +1438,9 @@ describe('All claims reads the Debate tag', () => {
 
     fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nuclear' } });
 
-    await waitFor(() => expect(mocks.taggedFiltersAskedFor.at(-1).search).toBe('nuclear'));
+    // The term reaches the app's own search, and its matched ids reach the query — which is the
+    // whole point of the change: fuzzy and ranked, rather than a substring filter of this list.
+    await waitFor(() => expect(mocks.taggedFiltersAskedFor.at(-1).searchResultIds).toEqual([FEATURED_A]));
     await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
     // And no entity lookup rides along with it, because there is no longer one at all.
     expect(mocks.claimEntityLookups.flat()).toEqual([]);

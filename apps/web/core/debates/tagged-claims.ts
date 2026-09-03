@@ -1,6 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -10,6 +10,8 @@ import { parse } from 'graphql';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
+import { useSearch } from '~/core/hooks/use-search';
+import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
 /**
@@ -110,8 +112,18 @@ export const TAGGED_CLAIMS_PAGE_SIZE = 50;
 
 /** What narrows the list. Every one of these reaches the server. */
 export type TaggedClaimFilters = {
-  /** Free text over the claim's name. Debounced by the caller. */
-  search: string;
+  /**
+   * The claims a search matched, in the order it ranked them — or `null` when nothing is being
+   * searched for.
+   *
+   * Ids rather than a term, because the search is the app's own (see {@link useTaggedClaimSearch}).
+   * `name: { includesInsensitive }` was a substring match: "nuclear power" did not find "Nuclear
+   * energy is cheap", and no amount of tuning fixes that shape. The search endpoint is fuzzy and
+   * ranked, and it is what every other search box in the app uses.
+   *
+   * An empty array is a real answer — a search that matched nothing — and narrows to nothing.
+   */
+  searchResultIds: string[] | null;
   /** AND, not OR: a claim has to carry every picked topic. */
   topicIds: string[];
   /** OR: any of the picked spaces. Left out of the space facet, which must not narrow by itself. */
@@ -127,11 +139,14 @@ export type TaggedClaimFilters = {
 };
 
 export const NO_TAGGED_CLAIM_FILTERS: TaggedClaimFilters = {
-  search: '',
+  searchResultIds: null,
   topicIds: [],
   spaceIds: [],
   eligibleSpaceIds: null,
 };
+
+/** How many search hits are carried into the list. The connection's own ceiling on `first` is 1,000. */
+export const TAGGED_SEARCH_LIMIT = 100;
 
 /** A claim a curator has tagged, and the spaces they tagged it in. */
 export type TaggedClaim = {
@@ -227,7 +242,9 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
   }
 
   const filter: Record<string, unknown> = { and };
-  if (filters.search) filter.name = { includesInsensitive: filters.search };
+  // The search narrows to what it matched, and the order it matched in is applied after decoding —
+  // the connection can rank by score or by id, not by an arbitrary list.
+  if (filters.searchResultIds !== null) filter.id = { in: filters.searchResultIds };
 
   // Two space filters with different jobs. The picked one narrows and is what the space facet must
   // *not* apply to itself; the eligible one is what the viewer may see at all, and applies to
@@ -252,7 +269,7 @@ export const taggedClaimsQueryKey = (tagId: string, filters: TaggedClaimFilters)
     'tagged-claims',
     'claims',
     tagId,
-    filters.search,
+    filters.searchResultIds,
     filters.topicIds,
     filters.spaceIds,
     filters.eligibleSpaceIds,
@@ -286,21 +303,33 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
             propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
             filter: taggedEntityFilter(tagId, filters),
             spaceIds: null,
-            first: TAGGED_CLAIMS_PAGE_SIZE,
+            // A search is asked for whole rather than paged: its own order is the answer, and a
+            // page ordered by rank could only be re-ranked within itself. The set is bounded by
+            // `TAGGED_SEARCH_LIMIT`, so "whole" is one request.
+            first: filters.searchResultIds ? Math.max(filters.searchResultIds.length, 1) : TAGGED_CLAIMS_PAGE_SIZE,
             after: pageParam,
           },
           signal,
         })
       ),
     getNextPageParam: page => (page.hasNextPage ? page.endCursor : undefined),
+    // Narrowing a list should narrow it, not blank it and fill it in again. Every filter mints a
+    // new key, so without this the rows vanish for a round trip on each pick.
+    placeholderData: keepPreviousData,
     staleTime: 5 * 60_000,
     enabled,
   });
 
-  const claims = React.useMemo(
-    () => query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS,
-    [query.data?.pages]
-  );
+  const claims = React.useMemo(() => {
+    const pages = query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS;
+    if (!filters.searchResultIds || pages.length === 0) return pages;
+    // Relevance decides the order while a search is on. The whole matched set is in hand, so this
+    // ranks the answer rather than reshuffling a page of it.
+    const rank = new Map(filters.searchResultIds.map((id, index) => [id, index]));
+    return [...pages].sort(
+      (a, z) => (rank.get(a.entity.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(z.entity.id) ?? Number.MAX_SAFE_INTEGER)
+    );
+  }, [filters.searchResultIds, query.data?.pages]);
 
   return {
     claims,
@@ -308,7 +337,8 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // "still looking" and never show its empty state.
     isLoading: enabled && query.isLoading,
     error: query.error,
-    hasNextPage: query.hasNextPage,
+    // A search is answered whole, so there is never a page below it.
+    hasNextPage: filters.searchResultIds ? false : query.hasNextPage,
     fetchNextPage: query.fetchNextPage,
     isFetchingNextPage: query.isFetchingNextPage,
     refetch: query.refetch,
@@ -398,7 +428,7 @@ export const taggedFacetQueryKey = (
     'facet',
     dimension,
     tagId,
-    filters.search,
+    filters.searchResultIds,
     filters.topicIds,
     // The space facet does not narrow by the picked spaces, so they are not part of its identity.
     dimension === 'spaces' ? null : filters.spaceIds,
@@ -420,6 +450,10 @@ const NO_TOPIC_NAMES = new Map<string, string | null>();
 export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, enabled: boolean) {
   const counts = useQuery({
     queryKey: taggedFacetQueryKey('topics', tagId, filters),
+    // The menu holds its options while the next count loads. Ticking a topic changes this query's
+    // key, and an empty menu between the two reads as the options being taken away — the menu the
+    // viewer is still pointing at disappearing under them.
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
@@ -442,13 +476,20 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
 
   const names = useQuery({
     queryKey: ['tagged-claims', 'topic-names', ids] as const,
+    // Names outlive a filter click, so the previous set stands while the new one is fetched rather
+    // than every row falling back to "Topic" for a moment.
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
           query: topicNamesDocument,
           decoder: (data: TopicNamesQuery) => {
             const map = new Map<string, string | null>();
-            for (const node of data.entitiesConnection?.nodes ?? []) if (node) map.set(node.id, node.name);
+            // Keyed on the normalized id. `groupedAggregates` answers in dashed UUIDs and
+            // `entitiesConnection` in dashless ones, so an unnormalized map never matches and every
+            // row falls back to the word "Topic" — which is exactly how this shipped and was caught
+            // in a browser.
+            for (const node of data.entitiesConnection?.nodes ?? []) if (node) map.set(uuidToHex(node.id), node.name);
             return map;
           },
           variables: { ids },
@@ -466,7 +507,7 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
       id: count.id,
       // A name still on its way is not the same as a topic with no name; both read as `null` here
       // and the menu decides how to draw them.
-      name: byId.get(count.id) ?? null,
+      name: byId.get(uuidToHex(count.id)) ?? null,
       count: count.count,
     }));
   }, [counts.data, names.data]);
@@ -490,6 +531,7 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
 export function useTaggedSpaceFacet(tagId: string, filters: TaggedClaimFilters, enabled: boolean) {
   const query = useQuery({
     queryKey: taggedFacetQueryKey('spaces', tagId, filters),
+    placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       Effect.runPromise(
         graphql({
@@ -513,5 +555,48 @@ export function useTaggedSpaceFacet(tagId: string, filters: TaggedClaimFilters, 
     isLoading: enabled && query.isLoading,
     settled: enabled ? !query.isLoading && !query.error : false,
     error: query.error,
+  };
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Search
+ * -----------------------------------------------------------------------------------------------*/
+
+/**
+ * The claims a search matched, ranked, from the app's own search.
+ *
+ * `useSearch` is what every other search box here uses — fuzzy, relevance-ordered, and served by
+ * the same endpoint — so a claim list searches the way the rest of the app does rather than the way
+ * one filter happened to be written. What it replaced was `name: { includesInsensitive }`, a
+ * substring match: "nuclear power" did not find "Nuclear energy is cheap".
+ *
+ * It debounces internally, so callers hand it the live term and pass the ids to
+ * {@link TaggedClaimFilters}. The tag filter still applies on top, which is why this returns ids
+ * rather than rows: what the viewer gets is what the search matched *and* a curator tagged.
+ */
+export function useTaggedClaimSearch(search: string) {
+  const trimmed = search.trim();
+  const { results, isLoading, onQueryChange } = useSearch({
+    filterByTypes: [CLAIM_TYPE_ID],
+    pageSize: TAGGED_SEARCH_LIMIT,
+    enabled: trimmed !== '',
+  });
+
+  React.useEffect(() => {
+    onQueryChange(search);
+  }, [onQueryChange, search]);
+
+  const ids = React.useMemo(() => results.map(result => result.id), [results]);
+
+  return {
+    /** `null` when nothing is being searched for, which narrows nothing. */
+    searchResultIds: trimmed === '' ? null : ids,
+    /**
+     * True while the term has changed and the match has not caught up.
+     *
+     * Callers wait on this the way they waited on their own debounce: the list is about to change,
+     * and reconciling a selection against a menu counted over the previous match would spend it.
+     */
+    isSearching: trimmed !== '' && isLoading,
   };
 }

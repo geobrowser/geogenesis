@@ -93,6 +93,9 @@ const mocks = vi.hoisted(() => ({
   /** What each render asked the server to narrow by. */
   taggedFiltersAskedFor: [] as any[],
   taggedHasNextPage: false,
+  /** Overrides what the search matched, and in what order. */
+  searchResultIds: null as string[] | null,
+  searchIsLoading: false,
   fetchNextTaggedPage: vi.fn(),
   entityQueryHasNextPage: false,
   /** The hub's claims query (the All tab) is still in flight. */
@@ -329,9 +332,8 @@ function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any
   const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
   const spaces: string[] | null =
     narrowBySpace && filters.spaceIds.length > 0 ? filters.spaceIds : filters.eligibleSpaceIds;
-  return rows.filter(row => {
-    const name = (row.entity.name ?? '') as string;
-    if (filters.search && !name.toLowerCase().includes(filters.search.toLowerCase())) return false;
+  const kept = rows.filter(row => {
+    if (filters.searchResultIds && !filters.searchResultIds.includes(row.entity.id)) return false;
     if (
       !filters.topicIds.every((topicId: string) =>
         (row.entity.relations ?? []).some((relation: any) => relation.toEntity.id === topicId)
@@ -342,6 +344,13 @@ function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any
     if (spaces && !row.tagSpaceIds.some(spaceId => spaces.some(picked => norm(picked) === norm(spaceId)))) return false;
     return true;
   });
+  if (!filters.searchResultIds) return kept;
+  // Relevance decides the order while a search is on, as the module does — the mock stands in for
+  // it, so it has to keep that part of the contract too.
+  const rank = new Map<string, number>(filters.searchResultIds.map((id: string, index: number) => [id, index]));
+  return [...kept].sort(
+    (a, z) => (rank.get(a.entity.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(z.entity.id) ?? Number.MAX_SAFE_INTEGER)
+  );
 }
 
 vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
@@ -363,6 +372,23 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
       isFetchingNextPage: false,
       refetch: vi.fn(),
     };
+  },
+  /**
+   * The app's own search, which the real hook reaches through the sync engine — not stood up here.
+   *
+   * Matched by substring, which is weaker than the endpoint's fuzzy match but is enough to say
+   * *that* a search narrowed the list. The order it returns is the order the list must take, which
+   * is what the relevance cases below assert.
+   */
+  useTaggedClaimSearch: (search: string) => {
+    const trimmed = search.trim().toLowerCase();
+    if (trimmed === '') return { searchResultIds: null, isSearching: false };
+    if (mocks.searchIsLoading) return { searchResultIds: [], isSearching: true };
+    const ids = (mocks.searchResultIds ??
+      [...(mocks.featuredClaims ?? []), ...(mocks.debateTagClaims ?? [])].filter(entry => entry.name.toLowerCase().includes(trimmed)).map(
+        entry => entry.claimEntityId
+      )) as string[];
+    return { searchResultIds: ids, isSearching: false };
   },
   useTaggedTopicFacet: (tagId: string, filters: any, enabled: boolean) => {
     // Co-occurrence: counted over the claims that already carry every picked topic.
@@ -669,6 +695,8 @@ beforeEach(() => {
   mocks.featuredCatalogError = null;
   mocks.taggedFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
+  mocks.searchResultIds = null;
+  mocks.searchIsLoading = false;
   mocks.fetchNextTaggedPage = vi.fn();
   mocks.entityHydrationErrorFor = null;
   mocks.savedClaimsLoading = false;
@@ -2321,13 +2349,16 @@ describe('DebateRematchPageClient', () => {
       target: { value: 'newly published' },
     });
 
-    // Every tab searches on the client now — the All tab included, since its corpus arrives whole.
-    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    // The Claims tab searches through the app's own search now, so the term narrows the list a
+    // round trip later rather than on the same frame.
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
 
-    // The opponent's tab is the graph's list, so the term is applied here — where it leaves nothing.
+    // The opponent's tab is their own positions, fetched by id and filtered here — so the term
+    // still applies, and it leaves nothing. Awaited on the row that was actually on this tab: the
+    // claim from the other one was never here, so waiting on *its* absence would assert nothing.
     fireEvent.click(screen.getByRole('button', { name: /Salina’s positions/ }));
-    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
     expect(screen.getByText('No claims match these filters.')).toBeInTheDocument();
   });
 
