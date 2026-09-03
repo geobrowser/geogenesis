@@ -38,7 +38,7 @@ export const CURATOR_ONBOARDING_STEPS: CuratorOnboardingStep[] = [
   {
     id: 'claim-position',
     title: 'Take a position on a claim',
-    description: 'Indicate whether you agree or disagree with a claim',
+    description: 'Indicate whether you agree or disagree',
   },
   {
     // Id unchanged: it is the key completion is tracked under, and renaming it would buy nothing

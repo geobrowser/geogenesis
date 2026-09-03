@@ -87,8 +87,14 @@ export function CuratorOnboardingSection() {
               <li key={step.id} className="flex gap-3">
                 <CuratorOnboardingStepIndicator complete={complete} />
                 <div className="min-w-0 flex-1">
-                  <p className="text-[16px] leading-[17px] font-medium tracking-[-0.35px] text-text">{step.title}</p>
-                  <p className="mt-1 text-[16px] leading-[16px] font-normal tracking-[-0.35px] text-grey-04">
+                  {/* `text-pretty`, not `text-balance`, per the note on the claim page hero: balancing
+                      evens every line and reads as wrapping early, while pretty only refuses to
+                      strand the last word. The rail is fluid between 280px and 360px now, so there
+                      is no wording that avoids a lone trailing word at every width — this does. */}
+                  <p className="text-[16px] leading-[17px] font-medium tracking-[-0.35px] text-pretty text-text">
+                    {step.title}
+                  </p>
+                  <p className="mt-1 text-[16px] leading-[16px] font-normal tracking-[-0.35px] text-pretty text-grey-04">
                     {step.description}
                   </p>
                 </div>
