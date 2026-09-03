@@ -84,6 +84,9 @@ const mocks = vi.hoisted(() => ({
   featuredCatalogError: null as Error | null,
   /** Fails the entity lookup whose id list contains this claim, leaving the others answering. */
   entityHydrationErrorFor: null as string | null,
+  /** The session's saved-claims request — the parent of the saved rows, their ids and the exclusions. */
+  savedClaimsLoading: false,
+  savedClaimsError: null as Error | null,
   featuredEnabledWith: [] as boolean[],
   /** Which tag each render asked the graph for, in order. */
   taggedClaimsAskedFor: [] as string[],
@@ -195,9 +198,14 @@ vi.mock('~/core/debates/hooks', () => ({
   // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
   // arrive through the id lookup.
   useDebateRematchClaims: () => ({
-    data: { claims: mocks.savedClaims ?? mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
-    isLoading: false,
-    error: null,
+    // Answerless while loading or failed, as react-query is — the id list below is built from this,
+    // and handing back rows in either state hides the window this parent's absence opens.
+    data:
+      mocks.savedClaimsLoading || mocks.savedClaimsError
+        ? undefined
+        : { claims: mocks.savedClaims ?? mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+    isLoading: mocks.savedClaimsLoading,
+    error: mocks.savedClaimsError,
   }),
   // Two lookups run: one for the curated ids, one for the browsed ones. `curatedIds` lets a test
   // stall the browsed lookup on its own, which is the whole point of their being separate.
@@ -567,6 +575,8 @@ beforeEach(() => {
   mocks.featuredCatalogLoading = false;
   mocks.featuredCatalogError = null;
   mocks.entityHydrationErrorFor = null;
+  mocks.savedClaimsLoading = false;
+  mocks.savedClaimsError = null;
   mocks.featuredEnabledWith = [];
   mocks.taggedClaimsAskedFor = [];
   mocks.entityQueryHasNextPage = false;
@@ -1108,6 +1118,52 @@ describe('DebateRematchPageClient', () => {
 
     // A failed tag query is not an empty tag query. Reporting "nothing is featured" for one hides a
     // fault behind a sentence that reads like a fact about the graph.
+    // A hydration lookup is keyed on ids that come from the query above it, so while that query is
+    // in flight the id list is empty, the lookup is disabled rather than loading, and it reports
+    // `isLoading: false`. Waiting on the child alone therefore called All settled before the saved
+    // rows and the exclusions existed.
+    it('waits for the query the saved hydration is keyed on, not just the hydration', async () => {
+      mocks.savedClaimsLoading = true;
+      mocks.debateTagClaims = [
+        {
+          claimEntityId: CLAIM_MORE,
+          spaceId: SPACE_2,
+          name: 'A newly published claim',
+          description: null,
+          rankingScore: 2,
+        },
+      ];
+
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showAllClaims();
+
+      // Held: the tagged rows are in hand, but the list they are merged into is not complete yet.
+      expect(screen.queryByText('A newly published claim')).toBeNull();
+
+      mocks.savedClaimsLoading = false;
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    });
+
+    it('reports a failed saved-claims request rather than a list missing its saved rows', async () => {
+      mocks.savedClaimsError = new Error('saved claims exploded');
+      mocks.debateTagClaims = [
+        {
+          claimEntityId: CLAIM_MORE,
+          spaceId: SPACE_2,
+          name: 'A newly published claim',
+          description: null,
+          rankingScore: 2,
+        },
+      ];
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showAllClaims();
+
+      expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+    });
+
     // The All tab merges three lists into the tagged one, and waits on all three. A lookup worth
     // waiting for is worth reporting: the opponent's hydration failing leaves their claims out of a
     // list that is supposed to contain them, and a short list reads as an answer.

@@ -611,9 +611,27 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Only for All, because only All merges them. Featured would otherwise wait on lookups it never
   // shows.
+  // The three merged lists, each waited on from the top of its own chain rather than at its last
+  // link. A hydration lookup is keyed on ids that come from the query above it, so while that query
+  // is in flight the id list is empty, the lookup is disabled rather than loading, and it reports
+  // `isLoading: false` — the same trap `opponentCountPending` documents below, reached from here.
+  //
+  // Left at the last link, All was "settled" in the window before the saved rows or the opponent's
+  // positions had arrived: the topic reconciliation then ran against a menu those rows had not
+  // contributed to yet, and dropped a selection they would have kept.
+  //
+  // `recommendedLoading` is the deliberate exception — the parent of the curated branch, and not
+  // waited on. Recommended is a curator's page for this pairing, offered when it exists; blocking
+  // the whole All list on a lookup that may find nothing is worse than the narrow reconciliation
+  // window it would close, and there is a test holding All open while that lookup is slow.
   const mergedHydrationSettling =
     source === 'all' &&
-    (savedEntitiesQuery.isLoading || opponentEntitiesQuery.isLoading || curatedClaimsQuery.isLoading);
+    (sessionQuery.isLoading ||
+      savedClaimsQuery.isLoading ||
+      savedEntitiesQuery.isLoading ||
+      positions.isLoading ||
+      opponentClaimsSettling ||
+      curatedClaimsQuery.isLoading);
   const taggedClaimsSettling =
     allowlistPending ||
     taggedCatalogLoading ||
@@ -1028,16 +1046,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     (tab === 'opponent'
       ? (positions.error ?? opponentEntitiesQuery.error)
       : source === 'featured' || source === 'all'
-        ? // The three merged lookups only for All, and only because their rows are merged there: a
-          // failed hydration leaves those rows on screen with no topics, so picking any topic
-          // removes them silently. Better an error than a list that looks filtered. These are the
-          // same three `mergedHydrationSettling` waits on — waiting on a lookup whose failure goes
-          // unreported is how an outage reads as an answer.
+        ? // The merged lists only for All, and only because their rows are merged there: a failed
+          // lookup drops them, or leaves them on screen with no topics so picking any topic removes
+          // them silently. Better an error than a list that looks filtered.
+          //
+          // The same chain `mergedHydrationSettling` waits on, parents included — a failed parent
+          // takes its whole branch with it (no saved rows and no exclusions, or no opponent merge)
+          // while its child lookup sits disabled and reports nothing at all. Waiting on a lookup
+          // whose failure goes unreported is how an outage reads as an answer.
           (taggedCatalogError ??
           taggedEntitiesQuery.error ??
           taggedClaimsQuery.error ??
           (source === 'all'
-            ? (savedEntitiesQuery.error ?? opponentEntitiesQuery.error ?? curatedClaimsQuery.error)
+            ? (savedClaimsQuery.error ??
+              savedEntitiesQuery.error ??
+              positions.error ??
+              opponentClaimsQuery.error ??
+              opponentEntitiesQuery.error ??
+              curatedClaimsQuery.error)
             : null))
         : curatedClaimsQuery.error);
 

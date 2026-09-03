@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -116,6 +118,16 @@ const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
 const TAGGED_ROWS_ERROR = new Error('Could not load claim details.');
 
 /**
+ * Key prefixes for the two lookups behind the graph-sourced list, so "Try again" can reach them.
+ *
+ * Written out rather than derived, because both are keyed per batch — by id chunk and by space —
+ * and the retry has to cover every batch rather than the one that happened to fail. Kept in step
+ * with `claimPickerEntitiesQueryKey` and `debateQueryKeys.claims`.
+ */
+const CLAIM_ENTITIES_QUERY_PREFIX = ['claim-picker', 'entities'] as const;
+const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
+
+/**
  * Cross-space claim discovery. Search, the space, topic and position filters, and the sort (people
  * available now → total positions → recency) all run server-side, and the response carries a facet
  * for each filter dimension describing the whole filtered corpus rather than the pages walked so
@@ -128,6 +140,7 @@ const TAGGED_ROWS_ERROR = new Error('Could not load claim details.');
  * seen it.
  */
 export function ClaimsTab() {
+  const queryClient = useQueryClient();
   const { authenticated } = useGeoChatAuth();
   // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
   // the claim page and the entity vote arrows use it. Passed as `undefined` when signed in so the
@@ -632,7 +645,21 @@ export function ClaimsTab() {
               ? (taggedError ?? taggedEntitiesError ?? (taggedRows.isError ? TAGGED_ROWS_ERROR : null))
               : claimsQuery.error
           }
-          onRetry={() => void (graphSourced ? refetchTagged() : claimsQuery.refetch())}
+          // Retries whatever failed, not just the catalog. The error above can come from either of
+          // the two lookups behind the list, and neither is keyed on the catalog — so refetching
+          // only that left the failed dependency untouched and the error state exactly where it
+          // was. Invalidated by key rather than through a `refetch` handed back by those hooks:
+          // both combine their results, and a fresh closure in a `combine` would be a new identity
+          // on every render, which is the one thing those hooks document that they must not be.
+          onRetry={() =>
+            void (graphSourced
+              ? Promise.all([
+                  refetchTagged(),
+                  queryClient.invalidateQueries({ queryKey: CLAIM_ENTITIES_QUERY_PREFIX }),
+                  queryClient.invalidateQueries({ queryKey: DEBATE_CLAIMS_QUERY_PREFIX }),
+                ])
+              : claimsQuery.refetch())
+          }
           isEmpty={visibleClaims.length === 0}
           signInAction={
             onRequireSignIn

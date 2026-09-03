@@ -157,7 +157,13 @@ export function dedupeTaggedClaims(claims: TaggedClaim[]): TaggedClaim[] {
   });
 }
 
-type TaggedClaimsPage = { claims: TaggedClaim[]; hasNextPage: boolean; endCursor: string | null };
+type TaggedClaimsPage = {
+  claims: TaggedClaim[];
+  /** Entities the page returned, before the decoder dropped any — what the guard is counted against. */
+  nodeCount: number;
+  hasNextPage: boolean;
+  endCursor: string | null;
+};
 
 function decodeTaggedClaimsPage(data: TaggedClaimsQuery): TaggedClaimsPage {
   const claims: TaggedClaim[] = [];
@@ -185,6 +191,7 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery): TaggedClaimsPage {
 
   return {
     claims,
+    nodeCount: (data.entitiesConnection?.nodes ?? []).length,
     hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
     endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
   };
@@ -206,6 +213,7 @@ export type TaggedClaimsResult = { claims: TaggedClaim[]; truncated: boolean };
 export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Promise<TaggedClaimsResult> {
   const claims: TaggedClaim[] = [];
   let after: string | null = null;
+  let fetched = 0;
   let truncated = false;
 
   while (true) {
@@ -225,9 +233,14 @@ export async function fetchTaggedClaims(tagId: string, signal?: AbortSignal): Pr
     );
 
     claims.push(...page.claims);
+    fetched += page.nodeCount;
 
     if (!page.hasNextPage || !page.endCursor) break;
-    if (claims.length >= TAGGED_CLAIMS_LIMIT) {
+    // Counted on what the server returned, not on what survived decoding. A row dropped here —
+    // an unnamed claim, a tag relation with no space — never advances `claims.length`, so a
+    // mis-tagging made of exactly those would page through the whole corpus untouched by a guard
+    // that exists to stop it.
+    if (fetched >= TAGGED_CLAIMS_LIMIT) {
       truncated = true;
       break;
     }

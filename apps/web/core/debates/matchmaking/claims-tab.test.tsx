@@ -345,7 +345,8 @@ function render(ui: ReactElement) {
   // Testing Library's own `rerender` replaces the whole tree with what it is handed, which drops
   // the provider — so a re-render of the same component crashes on a missing QueryClient rather
   // than showing what changed. Re-wrapped here so a test can move the world and render again.
-  return { ...view, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
+  // The client comes back too, so a test can watch what a retry asks it to refetch.
+  return { ...view, queryClient, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
 }
 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
@@ -936,6 +937,23 @@ describe('All claims reads the Debate tag', () => {
     // Still picked: the menu it was picked from has not answered, so it has not stopped offering it.
     expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+  });
+
+  // "Try again" has to reach whatever produced the error. The two lookups behind this list are not
+  // keyed on the catalog, so refetching the catalog alone left the failed one untouched and the
+  // error state exactly where it was — a retry button that cannot clear the state it is offered in.
+  it('retries the lookups behind the list, not only the catalog', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    mocks.claimEntitiesError = new Error('hydration exploded');
+    const { queryClient } = render(<ClaimsTab />);
+    await showAllClaims();
+
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    const keys = invalidate.mock.calls.map(([options]) => options?.queryKey);
+    expect(keys).toContainEqual(['claim-picker', 'entities']);
+    expect(keys).toContainEqual(['debates', 'claims']);
   });
 
   it('does not serve Featured’s catalog to it', async () => {

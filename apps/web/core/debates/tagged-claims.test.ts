@@ -188,6 +188,38 @@ describe('fetchTaggedClaims', () => {
     expect(result.truncated).toBe(true);
   });
 
+  // The guard exists to stop a mis-tagging, so it has to count what the server sent rather than what
+  // survived decoding. Rows the decoder drops — an unnamed claim, a tag relation with no space —
+  // never grow `claims`, so a corpus made of exactly those pages straight past a guard counting only
+  // renderable rows. The cap in the mock stands in for the paging that would otherwise not stop.
+  it('stops on the entities it fetched, not only on the rows it kept', async () => {
+    let calls = 0;
+    graphqlMock.mockImplementation(({ decoder }) => {
+      calls += 1;
+      return Effect.succeed(
+        decoder({
+          // Well past the guard's own page budget, so a run that reaches it has not stopped.
+          entitiesConnection: {
+            pageInfo: { hasNextPage: calls < 50, endCursor: 'cursor' },
+            nodes: Array.from({ length: 1_000 }, (_, index) => ({
+              id: `a${index}`,
+              name: null,
+              description: null,
+              rankingScore: '1',
+              relationsList: [{ spaceId: SPACE }],
+            })),
+          },
+        })
+      );
+    });
+
+    const result = await fetchTaggedClaims(TAG);
+
+    expect(result.claims).toEqual([]);
+    expect(result.truncated).toBe(true);
+    expect(calls).toBeLessThanOrEqual(Math.ceil(TAGGED_CLAIMS_LIMIT / 1_000));
+  });
+
   it('calls an exhausted list complete, however large', async () => {
     respondWithPages([[node('a1', 'One', '1')], [node('a2', 'Two', '2')]]);
 
