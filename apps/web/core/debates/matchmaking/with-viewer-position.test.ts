@@ -151,8 +151,58 @@ describe('withViewerPosition', () => {
 
     expect(on(sides, true).participants).toHaveLength(0);
     expect(on(sides, false).participants.map(p => p.profile_space_id)).toEqual([VIEWER_SPACE]);
-    // The server count already includes the viewer on the new side.
-    expect(presentCount(on(sides, false))).toBe(1);
+    // The viewer moves rather than appears: `present_count` describes the same population as
+    // `participants` on every surface that sets it, so the side listing the viewer was counting
+    // them and the side they hold was not. One off Agree, one onto Disagree.
+    expect(presentCount(on(sides, true))).toBe(0);
+    expect(presentCount(on(sides, false))).toBe(2);
+  });
+
+  // The held side's own population, which the correction has to keep whole. Trusting
+  // `serverPosition` to mean "this side already counts the viewer" prepended a face without a
+  // number, and the stack then reported fewer people than it knows about.
+  it('counts the viewer onto the side they hold when the lists had them elsewhere', () => {
+    const sides = place(
+      [
+        side(true, {
+          total_count: 3,
+          present_count: 3,
+          participants: [participant(OTHER_SPACE), participant('019fedb3aaaa7a4f8b223d8e6f9c5521')],
+        }),
+        side(false, { total_count: 1, present_count: 1, participants: [participant(VIEWER_SPACE)] }),
+      ],
+      true,
+      true
+    );
+
+    const agree = on(sides, true);
+    expect(agree.participants.map(p => p.profile_space_id)[0]).toBe(VIEWER_SPACE);
+    expect(presentCount(agree)).toBe(4);
+    // What the "+N" behind the two rendered faces is drawn from.
+    expect(presentCount(agree) - 2).toBe(2);
+    expect(presentCount(on(sides, false))).toBe(0);
+  });
+
+  // "geo-chat has not answered" is not "the viewer holds nothing". The rematch picker draws
+  // graph-derived sides for claims geo-chat has no row for, and stripping them there took the
+  // viewer off the side the graph says they hold.
+  it('leaves the lists alone when the server has given no answer', () => {
+    const positions = [
+      side(true, { total_count: 1, present_count: 1, participants: [participant(VIEWER_SPACE)] }),
+      side(false),
+    ];
+
+    const sides = withViewerPosition({
+      positions,
+      responseKind: 'stance',
+      serverPosition: undefined,
+      viewerPosition: null,
+      viewerSpaceId: VIEWER_SPACE,
+      viewerName: 'You',
+      viewerAvatarUrl: null,
+    });
+
+    expect(sides).toBe(positions);
   });
 
   // Preserve referential equality when no correction is required.

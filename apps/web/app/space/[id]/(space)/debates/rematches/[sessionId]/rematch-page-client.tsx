@@ -1012,6 +1012,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     });
   };
 
+  /** The last request failure, and whether the claim it was sent for is still on screen. */
+  const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
+  const requestErrorClaimId = requestError ? createRequest.variables?.claim_id : undefined;
+  const hasClaimId = (claim: DebateRematchClaim) => claim.claim.claim_entity_id === requestErrorClaimId;
+  const requestErrorHasCard =
+    requestErrorClaimId !== undefined &&
+    (showsSections ? visibleSections.some(section => section.claims.some(hasClaimId)) : visibleClaims.some(hasClaimId));
+
   const renderClaimCard = (claim: DebateRematchClaim) => (
     <RematchClaimCard
       key={claim.claim.claim_entity_id}
@@ -1029,11 +1037,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       }
       busy={createRequest.isPending || session?.status === 'request_pending'}
       // Associate the shared mutation error with the claim that initiated it.
-      requestError={
-        createRequest.error instanceof Error && createRequest.variables?.claim_id === claim.claim.claim_entity_id
-          ? createRequest.error.message
-          : null
-      }
+      requestError={hasClaimId(claim) ? requestError : null}
     />
   );
 
@@ -1162,12 +1166,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           </div>
         </div>
 
-        {/* Request errors are rendered on their claim cards. */}
-        {leaveSession.error instanceof Error && (
+        {/* A request error belongs on the card it was sent from; this line is the fallback for when
+            that card is no longer drawn — a tab swap, a search, a filter. Losing the message because
+            the list moved underneath it is how the failure read as silence (GEO-2807). */}
+        {leaveSession.error instanceof Error ? (
           <Text color="red-01" className="mb-4">
             {leaveSession.error.message}
           </Text>
-        )}
+        ) : requestError && !requestErrorHasCard ? (
+          <div role="alert" className="mb-4">
+            <Text color="red-01">{requestError}</Text>
+          </div>
+        ) : null}
         {session?.request?.status === 'expired' && session.request.cancellation_reason && (
           <Text color="red-01" className="mb-4">
             {rematchCancellationMessage(session.request.cancellation_reason)}
@@ -1481,6 +1491,11 @@ function RematchClaimCard({
       // lands. Until then `chatPosition` reads as "no position" for someone the summaries
       // may already count, and the card would draw them onto a second side.
       viewerIdentityPending={currentUserId === null}
+      // geo-chat has no row for this claim, which `readiness.viewer_response` below flattens to the
+      // same `null` it uses for "no position". The card needs the difference: its sides here are the
+      // graph's, and correcting them against an answer nobody gave takes the viewer off the side
+      // the graph says they hold (GEO-2807).
+      viewerResponseUnknown={chatPosition === undefined}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}

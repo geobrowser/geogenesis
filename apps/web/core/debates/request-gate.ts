@@ -1,20 +1,29 @@
 /**
  * Determines whether a debate request can be created for a claim.
  *
- * The rematch endpoint validates graph-resolved positions, so the picker compares the viewer's
- * local position with the position reported by geo-chat before enabling a request. Comparing the
- * values also prevents requests while a side change is still being reconciled.
+ * `create_rematch_request` resolves both participants' positions from the knowledge graph and
+ * refuses with `claim_response_required` until the write is indexed. So the picker holds the
+ * request until the position it will be validated against is the one the viewer holds — a wait of
+ * `web.write.entity_response`, p50 9.9s / p95 48.6s, which no client change shortens.
  *
- * The debates hub does not use this gate. Its match data and request validation both use
- * `debate_claim_readiness`, so an additional graph-backed position check would delay valid requests.
+ * Compare the two sources rather than null-checking one: `localPosition` falls back to
+ * `chatPosition`, so `chatPosition === localPosition` written against a single source goes trivially
+ * true and opens a button the server still refuses — pressable, and nothing happens. Comparing also
+ * covers switching sides, where the server still holds the side just moved off.
+ *
+ * The debates hub does not use this gate, deliberately. Its match data and `create_debate_request_as`
+ * both read `debate_claim_readiness`, which the in-flight response notification writes, so a
+ * graph-backed position check there would hold a button the server would have accepted.
  */
 export type DebateRequestGateInput = {
   /**
-   * geo-chat's own copy of the viewer's position on this claim.
+   * The position the request will be validated against, as the surface last heard it.
    *
-   * `undefined` when geo-chat has not answered for this claim yet, which is not the same as `null`
-   * — "no position" is an answer, "no row" is not. Both block the request; only the distinction
-   * keeps a missing row from reading as a deliberate absence.
+   * Named for where the picker reads it — geo-chat's rematch rows — though geo-chat derives those
+   * from the graph, so this trails the chain rather than the server's own record. `undefined` is "no
+   * row", and a `null` can also be a hydration timeout on that endpoint rather than a deliberate
+   * absence. All of which block the request, which is the point: none of them is the viewer's
+   * position confirmed.
    */
   chatPosition: boolean | null | undefined;
   /** The side the viewer believes they hold, optimistic where the surface has one. */

@@ -257,29 +257,83 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
     expect(sideOf(result)).toBe(true);
   });
 
-  it('hands back to the fetched list once a refetch has landed', async () => {
+  /**
+   * The release, asserted where it is observable: the fetch has to *contradict* the overlay, or a
+   * held row and a released one look identical. A refetch returning the same answer proves nothing,
+   * and neither does the row count — the overlay and the fetched row share a `positionKey`, so the
+   * merge cannot produce two of them whatever it does.
+   */
+  it('hands back to the fetched list once it agrees, and stops asserting anything after that', async () => {
     mocks.attention = true;
-    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    const graphRow = (voteType: number) => [
+      { userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType, voteKind: 1 },
+    ];
+    const refetch = () =>
+      act(async () => {
+        await client.invalidateQueries({
+          queryKey: participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]),
+        });
+      });
+
+    mocks.graphql.mockImplementation(() => Effect.succeed(graphRow(0)));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderPositions(client);
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(sideOf(result)).toBe(true));
 
-    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', 'positive')));
-    expect(sideOf(result)).toBe(true);
+    // The viewer switches sides, it confirms, and the snapshot retires.
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', 'negative')));
     await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+    expect(sideOf(result)).toBe(false);
 
-    // Ensure the refetch timestamp is later than the overlay retirement timestamp.
-    await new Promise(resolve => setTimeout(resolve, 5));
+    // The graph catches up, which is what the overlay was waiting for.
+    mocks.graphql.mockImplementation(() => Effect.succeed(graphRow(1)));
+    await refetch();
+    expect(sideOf(result)).toBe(false);
+
+    // Handing back is only observable afterwards: a row still held would keep asserting the side it
+    // was retired with, whatever the graph goes on to say.
+    mocks.graphql.mockImplementation(() => Effect.succeed(graphRow(0)));
+    await refetch();
+    await waitFor(() => expect(sideOf(result)).toBe(true));
+  });
+
+  /**
+   * The half that made the old release rule wrong: `dataUpdatedAt` is when a response *landed*, so
+   * any newer response released the overlay — including a poll that was already in flight when the
+   * write confirmed and therefore carries rows from before it. Landing is not agreeing.
+   */
+  it('is not released by a fetch that still holds the pre-write rows', async () => {
+    mocks.attention = true;
     mocks.graphql.mockImplementation(() =>
       Effect.succeed([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }])
     );
-    await client.invalidateQueries({
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(sideOf(result)).toBe(true));
+
+    // A fetch that will answer with the pre-write rows, held open across the confirmation.
+    let answer: (rows: unknown[]) => void = () => {};
+    mocks.graphql.mockImplementation(() => Effect.promise(() => new Promise(resolve => (answer = resolve))));
+    void client.refetchQueries({
       queryKey: participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]),
     });
+    await waitFor(() =>
+      expect(
+        client.getQueryState(participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]))
+          ?.fetchStatus
+      ).toBe('fetching')
+    );
 
-    // The fetched row replaces the overlay without changing the displayed position.
-    await waitFor(() => expect(sideOf(result)).toBe(true));
-    expect(result.current.byClaim.get(CLAIM)).toHaveLength(1);
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', 'negative')));
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+    expect(sideOf(result)).toBe(false);
+
+    await act(async () => {
+      answer([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }]);
+      await Promise.resolve();
+    });
+
+    expect(sideOf(result)).toBe(false);
   });
 
   // Keep a removal tombstone until the fetched data reflects the removal.
@@ -319,6 +373,26 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
     expect(sideOf(result)).toBe(true);
 
     await act(async () => rerender({ profileSpaceId: null }));
+    expect(sideOf(result)).toBe(null);
+  });
+
+  /**
+   * An `entity-response-indexing` query has no observers, so react-query garbage collects it on its
+   * own schedule — five minutes after the write started, whatever state it is in. That arrives as a
+   * `removed` event, and a hook watching only `updated` kept the row overlaid for the rest of the
+   * session: a write that never indexed, still drawn as a position and still gated on.
+   */
+  it('drops a position whose snapshot is garbage collected', async () => {
+    mocks.attention = true;
+    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('reconciling', 'positive')));
+    expect(sideOf(result)).toBe(true);
+
+    await act(async () => client.removeQueries({ queryKey: INDEXING_KEY }));
     expect(sideOf(result)).toBe(null);
   });
 

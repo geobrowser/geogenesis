@@ -56,7 +56,7 @@ export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: un
  * should disappear as fast as clicking one on.
  */
 export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown) {
-  const [scope, , entityId, spaceId, responseKind] = queryKey;
+  const [scope, personalSpaceId, entityId, spaceId, responseKind] = queryKey;
   const indexingState = data as EntityResponseIndexingState | undefined;
   if (
     scope !== 'entity-response-indexing' ||
@@ -71,6 +71,8 @@ export function pendingClaimResponse(queryKey: readonly unknown[], data: unknown
       indexingState.pending.expectedResponse === null ? null : indexingState.pending.expectedResponse === 'positive',
     responseKind: responseKind as DebateResponseKind,
     spaceId: String(spaceId),
+    /** Whose write this is, so a reader can attribute the row without assuming the current viewer. */
+    personalSpaceId: String(personalSpaceId),
     /** Used to distinguish confirmed responses from rolled-back responses. */
     status: indexingState.status,
   };
