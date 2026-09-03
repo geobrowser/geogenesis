@@ -1,9 +1,9 @@
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
-import { HIDDEN_PROPERTIES } from '~/core/constants';
+import { HIDDEN_PROPERTIES, OG_IMAGE_PROPERTY } from '~/core/constants';
 import { EntityId } from '~/core/io/substream-schema';
 import { Relation, Value } from '~/core/types';
-import { getSpaceRank, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
+import { getTopRankedSpaceId, sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
 
 /**
  * This function traverses through all the triples of an Entity and attempts to find the
@@ -24,8 +24,34 @@ export function description(values: Value[]): string | null {
   return value?.value ?? null;
 }
 
+/**
+ * The one value to show for a property an entity may carry in several spaces: skip the empty ones,
+ * then take the highest-ranked space.
+ *
+ * Shared by name and description because they had drifted. Name ranked; description took the first
+ * match, so array order decided the winner — and `entity.values` is re-partitioned on every store
+ * merge, so an entity described by two spaces could swap descriptions between renders. That also
+ * left the space fallback below arbitrary rather than deliberate (GEO-2778).
+ */
+function pickBySpaceRank(values: Value[], propertyId: string): Value | undefined {
+  const candidates = values.filter(value => value.property.id === propertyId);
+  if (candidates.length <= 1) return candidates[0];
+
+  const nonEmpty = candidates.filter(v => v.value);
+  const contenders = nonEmpty.length > 0 ? nonEmpty : candidates;
+
+  // `getTopRankedSpaceId` rather than sorting on rank alone. Rank ties are the common case, not the
+  // exotic one — only a handful of spaces are ranked and every other one, personal spaces included,
+  // shares `UNRANKED`. A rank-only comparator leaves ties to sort stability, i.e. to array order,
+  // which is the non-determinism this function exists to remove: `entity.values` is re-partitioned
+  // on every store merge, so two unranked spaces could swap between renders. That helper already
+  // tie-breaks on the id itself.
+  const topSpaceId = getTopRankedSpaceId(contenders.map(value => value.spaceId));
+  return contenders.find(value => value.spaceId === topSpaceId) ?? contenders[0];
+}
+
 export function descriptionTriple(values: Value[]): Value | undefined {
-  return values.find(value => value.property.id === SystemIds.DESCRIPTION_PROPERTY);
+  return pickBySpaceRank(values, SystemIds.DESCRIPTION_PROPERTY);
 }
 
 /**
@@ -38,13 +64,73 @@ export function name(values: Value[]): string | null {
 }
 
 export function nameValue(values: Value[]): Value | undefined {
-  const nameValues = values.filter(value => value.property.id === SystemIds.NAME_PROPERTY);
-  if (nameValues.length <= 1) return nameValues[0];
+  return pickBySpaceRank(values, SystemIds.NAME_PROPERTY);
+}
 
-  // Skip empty names, then pick from the highest-ranked space
-  const nonEmpty = nameValues.filter(v => v.value);
-  const candidates = nonEmpty.length > 0 ? nonEmpty : nameValues;
-  return candidates.sort((a, b) => getSpaceRank(a.spaceId) - getSpaceRank(b.spaceId))[0];
+/**
+ * True when a pending local deletion masks this property.
+ *
+ * Every aggregate fallback in the read paths has to consult this. `syncedEntities` and
+ * `remoteEntity` both retain the server's pre-deletion value, so a fallback that fires on a
+ * tombstone hands the reader back the very thing they just deleted. The fallback is for triples
+ * that were never hydrated; a tombstone means this one was.
+ *
+ * Takes the values *including* tombstones — the live set has by definition dropped the evidence.
+ */
+export function hasDeletedValue(values: Value[], propertyId: string): boolean {
+  return values.some(value => value.isDeleted === true && value.property.id === propertyId);
+}
+
+function writtenIn(values: Value[], spaceId: string): Value[] {
+  return values.filter(value => value.spaceId === spaceId);
+}
+
+/**
+ * The name a reader inside `spaceId` should see (GEO-2778).
+ *
+ * A space's version of an entity should read as that space wrote it — the words belong to the
+ * people whose space it is. `name` above resolves across every space and picks the highest-ranked,
+ * which is right when nobody named a space and wrong the moment somebody did.
+ *
+ * The cross-space fallback is deliberate: a space that never named the entity should read as the
+ * graph does rather than render untitled. An empty string counts as absent, the judgement
+ * `pickBySpaceRank` already makes when choosing between spaces. `descriptionInSpace` deliberately
+ * does *not* fall back — see there for why the two differ.
+ *
+ * Deliberately narrower than it looks: this is for *content*, which is space-specific. Aggregate
+ * signals go the other way on purpose — GEO-2660 reads votes from the top-ranked space, because a
+ * vote count re-counted per space would mean nothing.
+ *
+ * Takes the unscoped values and does its own filtering, so the fallback has something to fall back
+ * to and callers cannot disagree about what scoping means.
+ *
+ * Deliberately not `scopeBySpacePrecedence`, which looks like the same shape and is not: its
+ * fallback is Root *only*, because it scopes schema and Root holds the canonical version. Content
+ * has no canonical space — an entity named in Crypto and nowhere else would render untitled to
+ * every other space under that rule. This falls back to the ranked resolution across all spaces.
+ */
+export function nameInSpace(values: Value[], spaceId?: string): string | null {
+  // `|| null` on every branch, including the cross-space one. An empty name is nothing written, and
+  // a non-nullish `''` returned from here is worse than useless downstream: it satisfies the `??` in
+  // `getEntity` and `E.merge`, blocking the synced/remote aggregate and rendering the entity
+  // untitled — the exact opposite of the rule. `pickBySpaceRank` only skips empties when it has
+  // more than one candidate, so a lone empty triple reaches here intact.
+  if (!spaceId) return name(values) || null;
+  return (name(writtenIn(values, spaceId)) || null) ?? (name(values) || null);
+}
+
+/**
+ * Unlike `nameInSpace`, this does **not** fall back: a space that has not described the entity
+ * shows no description.
+ *
+ * The asymmetry is the point. A name is an identifier — an entity rendered untitled is unusable,
+ * and borrowing the graph's name costs a reader nothing because it names the same thing. A
+ * description is editorial: borrowing another space's prose puts words in this space's mouth, and
+ * silence is the honest answer. Empty and absent are the same answer here for that reason.
+ */
+export function descriptionInSpace(values: Value[], spaceId?: string): string | null {
+  if (!spaceId) return description(values) || null;
+  return description(writtenIn(values, spaceId)) || null;
 }
 
 /**
@@ -69,6 +155,31 @@ export function cover(relations?: Relation[]): string | null {
   // For now, return the relation value directly since we can't use hooks in utility functions
   // The calling components should handle fetching the actual image URL
   return coverRelation.toEntity.value ?? null;
+}
+
+/**
+ * The image an entity nominates for a share card, ahead of its cover and its avatar.
+ *
+ * Only reads the property — whether the value can actually be fetched by the card renderer is a
+ * different question with a different answer on the server, and lives in `core/og-share-image.ts`
+ * with the chain that asks it.
+ *
+ * Read like `cover` because it is shaped like `cover`: relation-typed, pointing at an Image entity
+ * that carries the URL.
+ */
+export function ogImage(relations?: Relation[]): string | null {
+  if (!relations) return null;
+  const ogImageRelation = relations.find(r => r.type.id === EntityId(OG_IMAGE_PROPERTY));
+  if (!ogImageRelation) return null;
+  // `RelationDtoLive` fills `toEntity.value` from the *target*: the IPFS URL when the target is an
+  // Image, and the target's own entity id when it is not. Checking `renderableType` is what tells
+  // those two apart — without it, an OG Image pointed at some ordinary entity would report a bare
+  // id as though it were a URL.
+  if (ogImageRelation.renderableType !== 'IMAGE') return null;
+  const trimmed = ogImageRelation.toEntity.value?.trim();
+  // `RelationDtoLive` writes `''` when the target resolves as an Image but carries no
+  // `IMAGE_URL_PROPERTY` yet, which is what an upload mid-flight looks like.
+  return trimmed ? trimmed : null;
 }
 
 export function spaces(values?: Value[], relations?: Relation[]): string[] {

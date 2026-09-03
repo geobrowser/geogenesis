@@ -563,14 +563,34 @@ export const getImagePath = (value: string) => getImagePathAtLevel(value, 0);
 // Image values are free-text entity properties, so an author can type anything.
 // next/image throws on a src that is neither root-relative nor an absolute URL,
 // which kills the whole page that rendered it.
+//
+// The scheme is checked too, not just the syntax: `mailto:`, `javascript:`, `file:`
+// and `blob:` all parse as URLs and none of them is a picture.
+//
+// No `ipfs:` here, deliberately. This runs *after* `getImagePathAtLevel`, so a value
+// the resolver understood is already `https:` by now; the only `ipfs:` strings that
+// can reach this point are the ones it declined to rewrite — `ipfs:QmAbc` without
+// the slashes, `IPFS://` with the wrong case — and admitting those would hand
+// next/image a src it cannot load.
+//
+// Server-side card rendering asks a stricter question again: see `toSatoriImageSrc`,
+// which additionally rejects the relative forms a browser resolves happily.
+const RENDERABLE_IMAGE_PROTOCOLS = new Set(['http:', 'https:']);
+
 export const isRenderableImageSrc = (src: string) => {
   if (src.startsWith('/')) return true;
+
+  let parsed: URL;
   try {
-    new URL(src);
-    return true;
+    parsed = new URL(src);
   } catch {
     return false;
   }
+
+  // Only an image data URL is a picture; `data:text/html,...` parses just as happily.
+  if (parsed.protocol === 'data:') return src.startsWith('data:image/');
+
+  return RENDERABLE_IMAGE_PROTOCOLS.has(parsed.protocol);
 };
 
 export const getVideoHash = getImageHash;
