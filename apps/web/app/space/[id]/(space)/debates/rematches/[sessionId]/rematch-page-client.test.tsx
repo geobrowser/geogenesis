@@ -95,6 +95,11 @@ const mocks = vi.hoisted(() => ({
   // this the mock could only ever offer topics already on screen — and a menu wrongly derived from
   // the loaded rows would look correct.
   facetOnlyTopics: [] as Array<{ id: string; name: string; count: number }>,
+  // Spaces the aggregate counts from claims on pages this list has not loaded. The facet covers the
+  // whole tag while the page is one page of it (GEO-2798), so without this the mock could only ever
+  // offer spaces already on screen — and it is exactly the ones that are not that reach the menu
+  // without reaching the space-type lookup.
+  facetOnlySpaces: [] as Array<{ id: string; count: number }>,
   /** Fails the entity lookup whose id list contains this claim, leaving the others answering. */
   entityHydrationErrorFor: null as string | null,
   /** The session's saved-claims request — the parent of the saved rows, their ids and the exclusions. */
@@ -419,7 +424,7 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
       }
     }
     return {
-      spaces: [...counts.values()],
+      spaces: [...counts.values(), ...(enabled ? mocks.facetOnlySpaces : [])],
       isLoading: false,
       settled: enabled && !mocks.featuredCatalogError,
       error: null,
@@ -713,6 +718,7 @@ beforeEach(() => {
   mocks.featuredCatalogError = null;
   mocks.topicFacetSettled = true;
   mocks.facetOnlyTopics = [];
+  mocks.facetOnlySpaces = [];
   mocks.taggedFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
   mocks.fetchNextTaggedPage = vi.fn();
@@ -2030,6 +2036,29 @@ describe('DebateRematchPageClient', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+  });
+
+  // The rows are one page; the facet counts the whole tag. So a space whose only tagged claim is on
+  // a later page reaches the *menu* without ever reaching the space-type lookup — which is keyed on
+  // the loaded entities — and an unresolved type reads as publishable. That is how a personal space,
+  // the one thing that gate exists to exclude, could be offered and take the one-shot default with
+  // it before its page arrived and pruned it away.
+  it('knows the type of a space the facet offers but no loaded claim names', async () => {
+    const PERSONAL_SPACE = '019fedae-72b6-7ab2-927a-df044d57c5aa';
+    mocks.memberSpaceIds = new Set([PERSONAL_SPACE.replace(/-/g, ''), SPACE_1.replace(/-/g, '')]);
+    // Theirs, and a personal space — so it is both seedable and unpublishable.
+    mocks.spaceTypes = { [PERSONAL_SPACE]: 'PERSONAL' };
+    mocks.facetOnlySpaces = [{ id: PERSONAL_SPACE, count: 4 }];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // The default lands on the space that survives the gate, not the one whose type was unknown.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+
+    // And the personal space is not on the menu at all.
+    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    expect(screen.queryByRole('button', { name: /Space 019fedae/ })).toBeNull();
   });
 
   // The seed is spent on whatever the menu is offering, so every gate that decides what it offers

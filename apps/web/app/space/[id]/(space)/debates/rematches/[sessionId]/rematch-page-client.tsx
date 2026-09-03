@@ -456,6 +456,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   // Every space a claim is named in is looked up, not just the one that currently wins the ranking,
   // because which one wins is the next decision and it needs the types to make it.
+  //
+  // Plus every space the tagged facet offers, which is not the same set and stopped being a subset
+  // when GEO-2798 paged the tag. The rows are one page; the facet counts the whole tag — so a space
+  // whose only tagged claim is on a later page reaches the *menu* without ever reaching this
+  // lookup, and an unresolved type reads as publishable. The menu would then offer a personal
+  // space, which is the one thing this gate exists to exclude, and the one-shot default would be
+  // spent on it and pruned once its page finally arrived. Asking about the ids the menu is built
+  // from is what makes "settled" mean settled; the tag spans a handful of spaces, so it is cheap.
   const candidateSpaceIds = React.useMemo(() => {
     const ids = new Set<string>();
     for (const entity of [
@@ -465,8 +473,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     ]) {
       for (const spaceId of claimCandidateSpaceIds(entity)) ids.add(spaceId);
     }
+    for (const space of taggedSpaceFacet.spaces) ids.add(space.id);
     return [...ids];
-  }, [opponentEntitiesQuery.entities, recommendedEntities, taggedCatalog]);
+  }, [opponentEntitiesQuery.entities, recommendedEntities, taggedCatalog, taggedSpaceFacet.spaces]);
   const {
     spacesById: candidateSpaces,
     isLoading: candidateSpacesPending,
