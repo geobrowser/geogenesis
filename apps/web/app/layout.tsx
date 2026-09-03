@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { Metadata } from 'next';
+import { Metadata, Viewport } from 'next';
 
 import cx from 'classnames';
 import 'katex/dist/katex.min.css';
@@ -47,6 +47,12 @@ const geistMedium = localFont({
   variable: '--font-geist-medium',
   preload: false,
 });
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.ENV_URL ?? 'https://geobrowser.io'),

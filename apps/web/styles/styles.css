@@ -285,6 +285,14 @@
 @custom-variant claim-pills-wide (@container (width >= 272px));
 @custom-variant claim-card-narrow (@container (width < 520px));
 
+/* Mobile debates feed: document scroll needs edge-to-edge layout */
+@media (max-width: 767px) {
+  html[data-debate-feed-mobile] [data-app-navbar],
+  body[data-debate-feed-mobile] [data-app-navbar] {
+    display: none !important;
+  }
+}
+
 /* Lifts the debate and the indicator and settles them back, miming the direction the
    content travels when the viewer scrolls on to the next debate. */
 @keyframes debateScrollHint {
