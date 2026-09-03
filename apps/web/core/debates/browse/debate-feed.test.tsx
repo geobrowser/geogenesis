@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { Provider, createStore } from 'jotai';
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Debate } from '~/core/debates/api';
+import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 
 import { DebatesBrowseFeed } from './debate-feed';
 import { debateFullscreenActiveAtom } from '~/atoms';
@@ -446,6 +446,32 @@ describe('DebatesBrowseFeed layout and scroll nudge', () => {
 
     expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
     expect(screen.getByText('Loading debates…')).toBeInTheDocument();
+  });
+
+  // GEO-2785. A hidden debate reads as 404 on every by-id route, so the anchor fetch fails with a
+  // definitive answer rather than an ambiguous one. That has to fall back to the entity page: the
+  // transient-error path below deliberately HOLDS the feed, and holding it for a debate that is
+  // deliberately gone would strand the visitor on an error for content we chose to hide.
+  it('falls back when the anchor is gone (404), rather than holding on an error', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = null;
+    mocks.anchorError = new GeoChatRequestError('404 Not Found', 'debate_not_found', 404);
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
+
+    expect(screen.getByText('Entity page')).toBeInTheDocument();
+  });
+
+  // The contrast that makes the case above load-bearing: a transient failure is *unknown*, so it
+  // must NOT fall back -- that would misreport a blip as "this debate has no video".
+  it('holds the feed on a non-404 anchor error instead of falling back', () => {
+    mocks.debates = [completedDebate('debate-1', 'In the window', '2026-07-02T00:01:10.000Z')];
+    mocks.anchorDebate = null;
+    mocks.anchorError = new GeoChatRequestError('500 Internal Server Error', null, 500);
+
+    render(<DebatesBrowseFeed spaceId="space-1" initialDebateId="debate-99" fallback={<div>Entity page</div>} />);
+
+    expect(screen.queryByText('Entity page')).not.toBeInTheDocument();
   });
 
   // A debate that genuinely is not watchable anywhere still reaches the entity page.
