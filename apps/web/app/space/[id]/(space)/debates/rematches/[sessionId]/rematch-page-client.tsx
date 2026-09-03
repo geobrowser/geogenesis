@@ -59,6 +59,7 @@ import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
+import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import {
   type TaggedClaimFilters,
@@ -387,7 +388,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }, [curatedClaimsQuery.data, taggedClaimsQuery.data, opponentClaimsQuery.data, savedClaimsQuery.data]);
 
   // geo-chat's row for a claim, where it has one. It carries the session flags and readiness; the
-  // sides on it are replaced by the graph's below, which are fresher by a notification round trip.
+  // sides on it are replaced by the graph's below, which is what the card draws.
+  //
+  // That replacement used to be justified as the graph being "fresher by a notification round
+  // trip". It is not, and has not been since #2348: geo-chat learns a position the moment the write
+  // starts, while the graph waits on `web.write.entity_response` (p50 9.9s). The sides are still
+  // drawn from the graph — that is the shape the page draws, and both agree in the end — but the
+  // *gate* is measured against geo-chat below, because geo-chat is what rejects an early request.
   const sessionRowsByClaimId = React.useMemo(
     () =>
       new Map(
@@ -399,6 +406,44 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ].map(claim => [claim.claim.claim_entity_id, claim])
       ),
     [curatedClaimsQuery.data, taggedClaimsQuery.data, opponentClaimsQuery.data, savedClaimsQuery.data]
+  );
+
+  /**
+   * geo-chat's own copy of the viewer's position, per claim, kept out of the assembly below so it
+   * survives being overwritten by the graph's sides (GEO-2808).
+   *
+   * Present-but-no-entry is recorded as `null`: geo-chat has a row and holds no position for this
+   * viewer, which is an answer. A claim with no row at all reads as `undefined` — not an answer.
+   * `debateRequestGate` blocks on both and only distinguishes them so a missing row cannot read as
+   * a deliberate absence.
+   *
+   * Carries the row's space, and the reader matches on it. Responses are space-scoped, and the
+   * assembly below already discards a row recorded in a space other than the one a card is being
+   * drawn under — so keying this on the claim alone fed that discarded row's position into the
+   * card's gate anyway, and could open a request geo-chat scopes elsewhere and rejects.
+   */
+  const chatPositionByClaimId = React.useMemo(() => {
+    const byClaim = new Map<string, { spaceId: string; position: boolean | null }>();
+    // Every source is a rematch row since #2351 moved paging server-side, and a rematch row lists
+    // each session participant's side — so the viewer's is picked out of `participants`. This used
+    // to also read `viewer_response` off the hub's paged index, which that change removed.
+    for (const row of sessionRowsByClaimId.values()) {
+      byClaim.set(row.claim.claim_entity_id, {
+        spaceId: row.claim.space_id,
+        position: row.participants.find(side => side.user_id === currentUserId)?.position ?? null,
+      });
+    }
+    return byClaim;
+  }, [currentUserId, sessionRowsByClaimId]);
+
+  /** geo-chat's position for this claim *in this space*, or `undefined` when it has no such row. */
+  const chatPositionFor = React.useCallback(
+    (claimEntityId: string, spaceId: string): boolean | null | undefined => {
+      const recorded = chatPositionByClaimId.get(claimEntityId);
+      if (!recorded || !sameId(recorded.spaceId, spaceId)) return undefined;
+      return recorded.position;
+    },
+    [chatPositionByClaimId]
   );
 
   // A debate is published into the claim's home space by the acceptor, and a personal space grants
@@ -973,6 +1018,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       claim={claim}
       session={session}
       currentUserId={currentUserId}
+      chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
       readiness={readinessByClaimId.get(claim.claim.claim_entity_id) ?? null}
       onRequest={() =>
         createRequest.mutate({
@@ -1274,6 +1320,7 @@ function RematchClaimCard({
   claim,
   session,
   currentUserId,
+  chatPosition,
   readiness: claimReadiness,
   onRequest,
   busy,
@@ -1281,12 +1328,13 @@ function RematchClaimCard({
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
   currentUserId: string | null;
+  /** geo-chat's own copy of this viewer's position; `undefined` when it has no row yet. */
+  chatPosition: boolean | null | undefined;
   readiness: ClaimReadinessState | null;
   /** True while any readiness lookup is still running or has failed. */
   onRequest: () => void;
   busy: boolean;
 }) {
-  const serverLocalPosition = claim.participants.find(side => side.user_id === currentUserId)?.position ?? null;
   const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
 
   // A claim whose stored kind didn't parse still has to render; 'stance' is the fallback
@@ -1301,20 +1349,46 @@ function RematchClaimCard({
     spaceId: claim.claim.space_id,
     responseKind,
   });
+  const responseIndexing = useEntityResponseIndexingSnapshot({
+    entityId: claim.claim.claim_entity_id,
+    spaceId: claim.claim.space_id,
+    responseKind,
+  });
+  /**
+   * The side the viewer holds, as well as it can be known: their in-flight answer where there is
+   * one, and otherwise **geo-chat's** record.
+   *
+   * Deliberately not the graph, which this used to fall back to. That fallback caused two things.
+   * It made the old readiness check compare a value against itself (the request was pressable and
+   * geo-chat rejected it), and it made the control flicker: the optimistic answer clears when the
+   * mutation settles, the graph is still ten seconds behind, so `opposing` collapsed and took the
+   * whole footer with it — ready, then gone, then ready again.
+   *
+   * Falling back to `chatPosition` is not the same trap. There the fallback was a different source
+   * from the one that validates the request; here they are the same source, so agreement is real.
+   */
+  /**
+   * One snapshot, read at the card's threshold rather than the response hook's.
+   *
+   * `optimisticResponse` is derived from this same snapshot, so the two can never disagree about
+   * *what* the answer is — but they disagree about when it is over. It goes undefined outside
+   * `reconciling`/`delayed`, while the card counts anything but `idle` as still in flight. So at
+   * `indexed` the pill stays lit and this fell straight through to geo-chat, which had not echoed
+   * the write yet: `opposing` collapsed and unmounted the whole footer under a pill that was still
+   * on. The button did not change label; it left.
+   *
+   * Matching the card's threshold is what keeps a card and its own footer describing one moment.
+   */
+  const inFlightResponse = optimisticResponse !== undefined ? optimisticResponse : responseIndexing.pending?.expectedResponse;
+
   const localPosition =
-    optimisticResponse === undefined
-      ? serverLocalPosition
-      : optimisticResponse === null
+    inFlightResponse === undefined
+      ? (chatPosition ?? null)
+      : inFlightResponse === null
         ? null
-        : optimisticResponse === 'positive';
+        : inFlightResponse === 'positive';
 
   const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
-  // geo-chat validates against its own copy of your position, which trails the optimistic one by a
-  // publish, an index, and a notification. Acting before it agrees earns "respond to this claim
-  // before requesting a rematch". Comparing rather than null-checking also covers switching sides,
-  // where geo-chat still holds the side you just moved off — equally invalid to act on.
-  const responseSettled = serverLocalPosition === localPosition;
-  const canRequest = opposing && responseSettled;
   /**
    * GEO-2652. The side you picked highlights immediately off the optimistic answer, but the request
    * has to wait for geo-chat's copy, which trails by a publish, an index and a notification. That
@@ -1331,19 +1405,26 @@ function RematchClaimCard({
    * before the response is indexed is a backend decision about whether a debate may be created on a
    * position that does not exist on-chain yet.
    */
-  const responseIndexing = useEntityResponseIndexingSnapshot({
-    entityId: claim.claim.claim_entity_id,
-    spaceId: claim.claim.space_id,
-    responseKind,
+  /**
+   * The shared gate, so this reads the same fact the hub reads and wears the same label.
+   *
+   * `chatPosition` rather than the graph's view of the viewer's side, which is the whole fix: the
+   * latter arrives via `participantSidesOn`, and comparing it against a `localPosition` that fell
+   * back to it whenever there was no optimistic answer went trivially true and opened a button
+   * geo-chat would still reject.
+   *
+   * `delayed` is only reachable from the response mutation's `onSuccess`, so by the time it is set
+   * the publish has landed and the wait is the index. That changes the label, never the gate.
+   */
+  const requestGate = debateRequestGate({
+    chatPosition,
+    localPosition,
+    opponentReady: opposing,
+    indexingDelayed: responseIndexing.status === 'delayed',
   });
-  const awaitingResponse = opposing && !responseSettled;
-  // Two phases, named for what is actually happening in each. `delayed` is only reachable from the
-  // response mutation's `onSuccess` — `reconcileResponseIndexing` runs after `run.status =
-  // 'success'` and sets it when the indexer hasn't confirmed in time — so by then the publish has
-  // landed and the wait is the index. Saying "still publishing" there would point the viewer at a
-  // transaction that already succeeded.
-  const awaitingLabel =
-    responseIndexing.status === 'delayed' ? 'Still confirming your position…' : 'Publishing your position…';
+  const canRequest = requestGate.canRequest;
+  const awaitingResponse = requestGate.pending;
+  const awaitingLabel = requestGate.pendingLabel ?? REQUEST_PENDING_LABEL;
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
 
@@ -1355,18 +1436,25 @@ function RematchClaimCard({
     [claim, responseKind, session]
   );
 
-  // geo-chat's copy, deliberately — not `localPosition`. The card reads the viewer's own in-flight
-  // response off the indexing snapshot for display, and uses this field for the two questions only
-  // the server can answer: whether it is safe to send readiness yet, and whether the position
-  // summaries already count the viewer. Handing it the optimistic answer claimed the server agreed
-  // the instant the viewer clicked, which sent readiness before there was an indexed response to
-  // hang it on and suppressed the optimistic avatar the card would otherwise add.
+  // geo-chat's copy, deliberately — not the optimistic one. The card reads the viewer's own
+  // in-flight response off the indexing snapshot for display, and uses this field for the two
+  // questions only the server can answer: whether it is safe to send readiness yet, and whether the
+  // position summaries already count the viewer. Handing it the optimistic answer claimed the
+  // server agreed the instant the viewer clicked, which sent readiness before there was an indexed
+  // response to hang it on and suppressed the optimistic avatar the card would otherwise add.
+  //
+  // `chatPosition`, not `claim.participants`. This used to read the latter, on the same reasoning —
+  // except the assembly upstream overwrites those sides with the graph's, so "the server's copy"
+  // had quietly become the indexer's. The card falls back to this field the moment the indexing
+  // snapshot clears, so a graph that had not caught up yet took the viewer's own side off the card
+  // and left it off for as long as `web.write.entity_response` took (p50 9.9s, p95 48.6s). It came
+  // back only when the indexer landed, or when the viewer answered a second time (GEO-2808).
   const readiness: MatchmakingReadiness = {
     response_kind: responseKind,
     viewer_response:
-      serverLocalPosition === null
+      chatPosition === null || chatPosition === undefined
         ? null
-        : { position: serverLocalPosition, position_label: responsePositionLabel(responseKind, serverLocalPosition) },
+        : { position: chatPosition, position_label: responsePositionLabel(responseKind, chatPosition) },
     viewer_debate_ready: claimReadiness?.viewer_debate_ready ?? false,
     readiness_disabled_reason: claimReadiness?.readiness_disabled_reason ?? null,
   };
@@ -1383,14 +1471,17 @@ function RematchClaimCard({
       // the viewer is already in. With the slot off, `activeDebate` has no reader.
       hideEndSlot
       // `positions` locates the viewer by geo-chat user id, which is null until the token exchange
-      // lands. Until then `serverLocalPosition` reads as "no position" for someone the summaries
+      // lands. Until then `chatPosition` reads as "no position" for someone the summaries
       // may already count, and the card would draw them onto a second side.
       viewerIdentityPending={currentUserId === null}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
       footer={
-        awaitingResponse || canRequest || requesting ? (
+        // `recently_rejected` too: the note lives in this footer, and it is a standing fact about
+        // the claim rather than a state of the offer. Without it a rejected claim the viewer has no
+        // position on lost the explanation along with the button.
+        awaitingResponse || canRequest || requesting || claim.recently_rejected ? (
           <div className="mt-3">
             {/* GEO-2697. The wait lives on the control it is blocking. This used to be a separate
                 spinner line rendered *instead* of the button, which left the viewer watching a
