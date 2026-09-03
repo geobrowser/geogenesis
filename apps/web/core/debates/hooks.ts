@@ -83,7 +83,22 @@ export const debateQueryNetworkOptions = {
 } as const;
 
 export const debateQueryKeys = {
-  claims: (spaceId: string, claimIds: string[] | null) => ['debates', 'claims', spaceId, claimIds ?? 'all'] as const,
+  /**
+   * Viewer-specific, like every other key below that carries an account: the rows hold
+   * `viewer_response`, `viewer_debate_ready` and the readiness reason, and geo-chat answers
+   * differently per identity — `batchDebateClaims` keys its own batches the same way and says so.
+   *
+   * The account goes *last* rather than up front so the gateway's positional match on
+   * `[root, kind, spaceId, claimIds]` keeps working.
+   *
+   * Without it a response fetched before the viewer's account was known — `auth: 'optional'`, so it
+   * succeeds and comes back with no viewer fields — was stored under the key the signed-in fetch
+   * would later read, and never refetched, because the key had not changed. That is a claim the
+   * viewer has answered drawn as one they have not, with the pill unselected and a press
+   * republishing the side they already hold.
+   */
+  claims: (spaceId: string, claimIds: string[] | null, accountKey: string | null) =>
+    ['debates', 'claims', spaceId, claimIds ?? 'all', accountKey] as const,
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
   debate: (debateId: string) => ['debates', 'detail', debateId] as const,
   media: (debateId: string) => ['debates', 'media', debateId] as const,
@@ -147,7 +162,7 @@ export function useDebateClaims(spaceId: string, claimIds: string[] | null, enab
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: debateQueryKeys.claims(spaceId, claimIds),
+    queryKey: debateQueryKeys.claims(spaceId, claimIds, authenticated ? accountKey : null),
     queryFn: ({ signal }) =>
       listDebateClaims(
         spaceId,
@@ -213,7 +228,7 @@ export function useDebateClaimsBySpaces(groups: Array<{ spaceId: string; claimId
   return useQueries({
     queries: batches.map(group => ({
       ...debateQueryNetworkOptions,
-      queryKey: debateQueryKeys.claims(group.spaceId, group.claimIds),
+      queryKey: debateQueryKeys.claims(group.spaceId, group.claimIds, authenticated ? accountKey : null),
       queryFn: ({ signal }: { signal?: AbortSignal }) =>
         listDebateClaims(
           group.spaceId,
