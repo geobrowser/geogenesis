@@ -668,15 +668,21 @@ export function ClaimsTab() {
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
           isLoading={spacesPending || (graphSourced ? taggedLoading : claimsQuery.isLoading)}
-          // Every source the graph-backed list depends on, not just the catalog. Entity hydration
-          // carries the topics; the per-space geo-chat rows carry the viewer's position, readiness
-          // and any live debate. A row rendered without either is not a claim with no metadata, it
-          // is a claim whose metadata failed to arrive.
-          error={
-            graphSourced
-              ? (taggedError ?? taggedEntitiesError ?? (taggedRows.isError ? TAGGED_ROWS_ERROR : null))
-              : claimsQuery.error
-          }
+          // The catalog only. It is the list — without it there is nothing to show, and an error is
+          // the honest answer.
+          //
+          // The two lookups behind it are metadata, and their failure is deliberately *not* fatal.
+          // `taggedRows` fans out one request per space in batches of fifty, so across a few hundred
+          // tagged claims a single failing batch would blank a list that renders perfectly well
+          // without it — which is exactly what it did the first time this was tried, in a browser.
+          // The rows come from the catalog; the entity is optional in `taggedEntries`.
+          //
+          // Their consequences are handled where they land instead, and both are pinned by tests:
+          // `facetsSettled` refuses to reconcile against a menu those lookups never filled, so the
+          // viewer's topic selection is not spent, and `taggedKindResolvedFor` keeps a card
+          // unpressable until its vocabulary and the viewer's own side have actually arrived. A
+          // short list beats a blank one; a wrong publish beats neither, and is what those guard.
+          error={graphSourced ? taggedError : claimsQuery.error}
           // Retries whatever failed, not just the catalog. The error above can come from either of
           // the two lookups behind the list, and neither is keyed on the catalog — so refetching
           // only that left the failed dependency untouched and the error state exactly where it

@@ -900,23 +900,81 @@ describe('All claims reads the Debate tag', () => {
   // The catalog says which claims; two lookups behind it say everything about them. Reporting only
   // the catalog's failure leaves the other two rendering an outage as content — a claim with no
   // topics, or with no position and no readiness — which reads as a settled answer.
-  it('reports a failed entity hydration rather than claims with no topics', async () => {
+  it('keeps listing claims when the hydration behind their topics fails', async () => {
     mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
     mocks.claimEntitiesError = new Error('hydration exploded');
     render(<ClaimsTab />);
     await showAllClaims();
 
-    expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
-    expect(screen.queryByText('Nuclear power is the cheapest clean energy')).toBeNull();
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(screen.queryByText('Something went wrong.')).toBeNull();
   });
 
-  it('reports a failed claim-details lookup rather than rows with no position', async () => {
+  // `taggedRows` asks geo-chat once per space in batches of fifty. Across a few hundred tagged
+  // claims that is a lot of requests, and treating any one failure as fatal blanked a list that
+  // renders perfectly well without it — found in a browser, not by these tests, which is why the
+  // pair above now assert the list survives rather than that the tab reports an error.
+  it('keeps listing claims when the per-space details lookup fails', async () => {
     mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
     mocks.taggedRowsError = true;
     render(<ClaimsTab />);
     await showAllClaims();
 
-    expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(screen.queryByText('Something went wrong.')).toBeNull();
+  });
+
+  // The card is still held, which is where a missing lookup is actually answered: without the
+  // vocabulary and the viewer's own side, a press would publish the wrong thing.
+  it('holds the response controls while those lookups are unanswered', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    mocks.taggedRowsError = true;
+    mocks.claimEntities = [];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    const agree = await screen.findByRole('button', { name: /^Agree/ });
+    expect(agree).toBeDisabled();
+  });
+
+  // The tag rows are per space, so a claim tagged in two comes back twice and the collapse to one
+  // row has to happen *after* the picked-space cut. Collapsing first pins the claim to whichever
+  // row arrived first, and filtering to the other space it is tagged in hides it.
+  //
+  // The hub has always had this the right way round — `taggedMatching` filters and then collapses —
+  // but nothing held it there, and the picker had the same code the wrong way round until GEO-2771.
+  it('keeps a claim tagged in two spaces when the second one is picked', async () => {
+    // Named through the sidebar cache, which is where the menu's labels come from — otherwise both
+    // options read "Space" and the pick below could not say which one it made.
+    mocks.sidebarData = {
+      featured: [
+        { id: SPACE_ID, name: 'Crypto', image: null },
+        { id: OTHER_SPACE_ID, name: 'Governance', image: null },
+      ],
+      editorOf: [],
+      memberOf: [],
+      documentationImage: null,
+      personalSpaceId: null,
+    };
+    // SPACE_ID first, so a collapse ahead of the cut would settle on it and lose the pick below.
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', SPACE_ID),
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', OTHER_SPACE_ID),
+      featuredClaim(FEATURED_B, 'Only in the first space', SPACE_ID),
+    ];
+    render(<ClaimsTab />);
+    await showAllClaims();
+    await waitFor(() => expect(screen.getByText('Tagged in two spaces')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    // Unanchored: the option's accessible name carries the space's avatar initial and its count,
+    // so it reads "GGovernance1" rather than the label alone.
+    fireEvent.click(screen.getByRole('button', { name: /Governance/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    // The SPACE_ID-only claim going is what says the filter landed — without it this asserts nothing.
+    await waitFor(() => expect(screen.queryByText('Only in the first space')).toBeNull());
+    expect(screen.getByText('Tagged in two spaces')).toBeInTheDocument();
   });
 
   // Same rule, one query further up. A failed *catalog* leaves the list with no claims, so the
@@ -1064,9 +1122,12 @@ describe('All claims reads the Debate tag', () => {
 
     mocks.claimEntitiesError = new Error('hydration exploded');
     view.rerender(<ClaimsTab />);
+    mocks.claimEntitiesError = null;
+    view.rerender(<ClaimsTab />);
 
-    // Still picked: the menu it was picked from has not answered, so it has not stopped offering it.
-    expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+    // Still picked: the menu it was picked from never answered during the outage, so it never
+    // stopped offering it. The list is not blanked by that failure, so this is observable directly.
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
   });
 
@@ -1075,7 +1136,9 @@ describe('All claims reads the Debate tag', () => {
   // error state exactly where it was — a retry button that cannot clear the state it is offered in.
   it('retries the lookups behind the list, not only the catalog', async () => {
     mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
-    mocks.claimEntitiesError = new Error('hydration exploded');
+    // The catalog is the only fatal failure now, so it is what puts the retry on screen. What the
+    // retry must still reach is everything the list depends on, not just the query that failed.
+    mocks.taggedCatalogError = new Error('catalog exploded');
     const { queryClient } = render(<ClaimsTab />);
     await showAllClaims();
 

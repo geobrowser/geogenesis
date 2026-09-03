@@ -1031,25 +1031,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     (tab === 'opponent'
       ? (positions.error ?? opponentEntitiesQuery.error)
       : source === 'featured' || source === 'all'
-        ? // The merged lists only for All, and only because their rows are merged there: a failed
-          // lookup drops them, or leaves them on screen with no topics so picking any topic removes
-          // them silently. Better an error than a list that looks filtered.
+        ? // Only what the list cannot be built without. The catalog says which claims; the entity
+          // is what every row is *made* of here, unlike the hub — `rowFromEntity` has nothing to
+          // return without one — so those two failing genuinely leaves nothing to show.
           //
-          // The same chain `mergedHydrationSettling` waits on, parents included — a failed parent
-          // takes its whole branch with it (no saved rows and no exclusions, or no opponent merge)
-          // while its child lookup sits disabled and reports nothing at all. Waiting on a lookup
-          // whose failure goes unreported is how an outage reads as an answer.
-          (taggedCatalogError ??
-          taggedEntitiesQuery.error ??
-          taggedClaimsQuery.error ??
-          (source === 'all'
-            ? (savedClaimsQuery.error ??
-              savedEntitiesQuery.error ??
-              positions.error ??
-              opponentClaimsQuery.error ??
-              opponentEntitiesQuery.error ??
-              curatedClaimsQuery.error)
-            : null))
+          // The merged lists are not among them, deliberately. A failed saved, opponent or curated
+          // lookup costs those rows, and the tagged ones still render; blanking the tab instead
+          // trades a short list for no list, and each of these is several batched requests, so the
+          // chance that one of them fails is not small. `mergedHydrationSettling` still waits on
+          // them, which is what keeps the topic menu from being reconciled against a half-built
+          // list — that is where the silent-filtering risk actually lives, not here.
+          (taggedCatalogError ?? taggedEntitiesQuery.error)
         : curatedClaimsQuery.error);
 
   // A topic the menu no longer offers is unpickable as well as empty — the chip filtering the

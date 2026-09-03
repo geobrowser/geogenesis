@@ -1,9 +1,14 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderHook } from '@testing-library/react';
+
+import * as React from 'react';
+
 import * as Effect from 'effect/Effect';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { graphql } from '~/core/io/graphql-client';
 
-import { TAGGED_CLAIMS_LIMIT, dedupeTaggedClaims, fetchTaggedClaims } from './tagged-claims';
+import { TAGGED_CLAIMS_LIMIT, dedupeTaggedClaims, fetchTaggedClaims, useTaggedClaims } from './tagged-claims';
 
 /** Any tag: this module is the same query whichever entity it points at. */
 const TAG = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
@@ -281,5 +286,57 @@ describe('dedupeTaggedClaims', () => {
     expect(dedupeTaggedClaims([claim('a1', 'space-1'), allowed].filter(c => c.spaceId === 'space-2'))).toEqual([
       allowed,
     ]);
+  });
+});
+
+
+/**
+ * A claim the ranking feed has never scored has no place in the order, so it goes last rather than
+ * being dropped — a curator tagged it deliberately, and leaving it out would quietly overrule them.
+ */
+describe('unscored claims', () => {
+  it('ranks them last rather than first', async () => {
+    respondWith([node('a1', 'Middling', '5'), node('a2', 'Unscored', null), node('a3', 'Top', '10')]);
+
+    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Top', 'Middling', 'Unscored']);
+  });
+
+  it('keeps them in a stable order among themselves', async () => {
+    // Two nulls compare equal on score, so the id tiebreak decides — descending, as the feed's own
+    // `ORDER BY ranking_score DESC, entity_id DESC` does.
+    respondWith([node('a1', 'First unscored', null), node('a2', 'Second unscored', null)]);
+
+    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Second unscored', 'First unscored']);
+  });
+});
+
+/**
+ * A caller waiting on this hook has to be able to tell "not asked" from "still asking". react-query
+ * v5 already answers that correctly for a disabled query — `isLoading` is `isPending && isFetching`
+ * — so this pins the contract rather than the `enabled &&` guard that also expresses it. Reaching
+ * for `isPending` instead would break it, and these cases would say so.
+ */
+describe('useTaggedClaims when it is not enabled', () => {
+  function wrapper({ children }: { children: React.ReactNode }) {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return React.createElement(QueryClientProvider, { client }, children);
+  }
+
+  it('reports settled rather than loading, so the caller can answer', () => {
+    // Call counts carry across this file's cases; only what this render does is of interest.
+    graphqlMock.mockClear();
+    const { result } = renderHook(() => useTaggedClaims(TAG, false), { wrapper });
+
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.claims).toEqual([]);
+    expect(graphqlMock).not.toHaveBeenCalled();
+  });
+
+  it('still reports loading while it is enabled and in flight', () => {
+    // The guard: without this, `isLoading: false` unconditionally would pass the case above.
+    graphqlMock.mockImplementation(() => Effect.never);
+    const { result } = renderHook(() => useTaggedClaims(TAG, true), { wrapper });
+
+    expect(result.current.isLoading).toBe(true);
   });
 });

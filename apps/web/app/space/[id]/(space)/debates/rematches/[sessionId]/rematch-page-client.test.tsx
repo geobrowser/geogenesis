@@ -1146,7 +1146,7 @@ describe('DebateRematchPageClient', () => {
       expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
     });
 
-    it('reports a failed saved-claims request rather than a list missing its saved rows', async () => {
+    it('keeps listing the tagged claims when the saved-claims request fails', async () => {
       mocks.savedClaimsError = new Error('saved claims exploded');
       mocks.debateTagClaims = [
         {
@@ -1161,13 +1161,16 @@ describe('DebateRematchPageClient', () => {
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showAllClaims();
 
-      expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+      // The tagged rows are the list; the saved ones are merged into it. Losing the merge costs
+      // those rows, and blanking the tab instead trades a short list for no list.
+      expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+      expect(screen.queryByText('Something went wrong.')).toBeNull();
     });
 
-    // The All tab merges three lists into the tagged one, and waits on all three. A lookup worth
-    // waiting for is worth reporting: the opponent's hydration failing leaves their claims out of a
-    // list that is supposed to contain them, and a short list reads as an answer.
-    it('reports a failed merge hydration as an error rather than a list missing its rows', async () => {
+    // The All tab merges three lists into the tagged one and waits on all three, but waiting is not
+    // the same as reporting: each merge is several batched requests, so making any of them fatal
+    // trades a list that renders for one that does not.
+    it('keeps listing the tagged claims when a merged hydration fails', async () => {
       // Disjoint id lists, so only the opponent's lookup fails: the tag catalog holds the published
       // claim, the opponent holds the shared one.
       mocks.debateTagClaims = [
@@ -1187,6 +1190,31 @@ describe('DebateRematchPageClient', () => {
       // it fails too and reports the outage through a branch that was already there.
       mocks.savedClaims = [];
       mocks.entityHydrationErrorFor = CLAIM_SHARED;
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showAllClaims();
+
+      // Only the opponent's hydration failed, and their claims are a merge into this list rather
+      // than the list itself — so the tagged rows still render.
+      expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+      expect(screen.queryByText('Something went wrong.')).toBeNull();
+    });
+
+    // What *is* fatal here, and the difference from the hub: every row on this page is built by
+    // `rowFromEntity`, which has nothing to return without an entity. So the tagged hydration
+    // failing leaves genuinely nothing to show, and saying so beats an empty list that looks like
+    // an answer.
+    it('reports a failed hydration of the tagged claims themselves', async () => {
+      mocks.debateTagClaims = [
+        {
+          claimEntityId: CLAIM_MORE,
+          spaceId: SPACE_2,
+          name: 'A newly published claim',
+          description: null,
+          rankingScore: 2,
+        },
+      ];
+      mocks.entityHydrationErrorFor = CLAIM_MORE;
 
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showAllClaims();

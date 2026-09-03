@@ -299,8 +299,14 @@ export function useTaggedClaims(tagId: string, enabled: boolean) {
   return {
     claims,
     claimIds,
-    // `enabled: false` leaves react-query pending forever, which a caller waiting on this would
-    // read as "still looking" and never show its empty state.
+    // The contract callers depend on: a disabled query reports settled, not loading. One that stays
+    // "loading" forever would leave every caller waiting on it stuck short of its empty state.
+    //
+    // react-query v5 already gives this — `isLoading` is `isPending && isFetching`, and a disabled
+    // query is pending but idle — so the `enabled &&` is belt-and-braces rather than the thing that
+    // makes it true. Kept because the distinction is easy to lose: `isPending` alone *is* true here,
+    // and reaching for it instead would reintroduce exactly that stall. The contract is pinned by a
+    // test rather than this expression, so it survives either spelling.
     isLoading: enabled && query.isLoading,
     error: query.error,
     refetch: query.refetch,
