@@ -59,8 +59,8 @@ import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
-import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import {
   type TaggedClaimFilters,
   tagDisplaySpaceId,
@@ -1012,6 +1012,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     });
   };
 
+  /** The last request failure, and whether the claim it was sent for is still on screen. */
+  const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
+  const requestErrorClaimId = requestError ? createRequest.variables?.claim_id : undefined;
+  const hasClaimId = (claim: DebateRematchClaim) => claim.claim.claim_entity_id === requestErrorClaimId;
+  const requestErrorHasCard =
+    requestErrorClaimId !== undefined &&
+    (showsSections ? visibleSections.some(section => section.claims.some(hasClaimId)) : visibleClaims.some(hasClaimId));
+
   const renderClaimCard = (claim: DebateRematchClaim) => (
     <RematchClaimCard
       key={claim.claim.claim_entity_id}
@@ -1028,6 +1036,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         })
       }
       busy={createRequest.isPending || session?.status === 'request_pending'}
+      // Associate the shared mutation error with the claim that initiated it.
+      requestError={hasClaimId(claim) ? requestError : null}
     />
   );
 
@@ -1156,15 +1166,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           </div>
         </div>
 
-        {(createRequest.error instanceof Error || leaveSession.error instanceof Error) && (
+        {/* A request error belongs on the card it was sent from; this line is the fallback for when
+            that card is no longer drawn — a tab swap, a search, a filter. Losing the message because
+            the list moved underneath it is how the failure read as silence (GEO-2807). */}
+        {leaveSession.error instanceof Error ? (
           <Text color="red-01" className="mb-4">
-            {createRequest.error instanceof Error
-              ? createRequest.error.message
-              : leaveSession.error instanceof Error
-                ? leaveSession.error.message
-                : null}
+            {leaveSession.error.message}
           </Text>
-        )}
+        ) : requestError && !requestErrorHasCard ? (
+          <div role="alert" className="mb-4">
+            <Text color="red-01">{requestError}</Text>
+          </div>
+        ) : null}
         {session?.request?.status === 'expired' && session.request.cancellation_reason && (
           <Text color="red-01" className="mb-4">
             {rematchCancellationMessage(session.request.cancellation_reason)}
@@ -1324,6 +1337,7 @@ function RematchClaimCard({
   readiness: claimReadiness,
   onRequest,
   busy,
+  requestError,
 }: {
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
@@ -1334,6 +1348,8 @@ function RematchClaimCard({
   /** True while any readiness lookup is still running or has failed. */
   onRequest: () => void;
   busy: boolean;
+  /** The last request error for this claim. */
+  requestError?: string | null;
 }) {
   const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
 
@@ -1379,7 +1395,8 @@ function RematchClaimCard({
    *
    * Matching the card's threshold is what keeps a card and its own footer describing one moment.
    */
-  const inFlightResponse = optimisticResponse !== undefined ? optimisticResponse : responseIndexing.pending?.expectedResponse;
+  const inFlightResponse =
+    optimisticResponse !== undefined ? optimisticResponse : responseIndexing.pending?.expectedResponse;
 
   const localPosition =
     inFlightResponse === undefined
@@ -1474,6 +1491,11 @@ function RematchClaimCard({
       // lands. Until then `chatPosition` reads as "no position" for someone the summaries
       // may already count, and the card would draw them onto a second side.
       viewerIdentityPending={currentUserId === null}
+      // geo-chat has no row for this claim, which `readiness.viewer_response` below flattens to the
+      // same `null` it uses for "no position". The card needs the difference: its sides here are the
+      // graph's, and correcting them against an answer nobody gave takes the viewer off the side
+      // the graph says they hold (GEO-2807).
+      viewerResponseUnknown={chatPosition === undefined}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
@@ -1481,7 +1503,7 @@ function RematchClaimCard({
         // `recently_rejected` too: the note lives in this footer, and it is a standing fact about
         // the claim rather than a state of the offer. Without it a rejected claim the viewer has no
         // position on lost the explanation along with the button.
-        awaitingResponse || canRequest || requesting || claim.recently_rejected ? (
+        awaitingResponse || canRequest || requesting || claim.recently_rejected || requestError ? (
           <div className="mt-3">
             {/* GEO-2697. The wait lives on the control it is blocking. This used to be a separate
                 spinner line rendered *instead* of the button, which left the viewer watching a
@@ -1509,6 +1531,14 @@ function RematchClaimCard({
               <Text as="p" variant="footnote" color="grey-04" className="mt-1">
                 Recently rejected
               </Text>
+            ) : null}
+            {/* Keep request feedback with the claim that initiated the mutation. */}
+            {requestError ? (
+              <div role="alert" className="mt-1">
+                <Text as="p" variant="footnote" color="red-01">
+                  {requestError}
+                </Text>
+              </div>
             ) : null}
           </div>
         ) : null

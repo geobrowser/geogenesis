@@ -1,59 +1,35 @@
 /**
- * May this viewer request a debate on this claim, right now?
+ * Determines whether a debate request can be created for a claim.
  *
- * Written to be the one answer for both surfaces that ask it — the "debate again" picker and the
- * debates hub side panel — which used to decide separately and disagree: the hub never waited and
- * never explained, the picker waited on the wrong thing and explained that (GEO-2808).
+ * `create_rematch_request` resolves both participants' positions from the knowledge graph and
+ * refuses with `claim_response_required` until the write is indexed. So the picker holds the
+ * request until the position it will be validated against is the one the viewer holds — a wait of
+ * `web.write.entity_response`, p50 9.9s / p95 48.6s, which no client change shortens.
  *
- * Only the picker reads it today. The hub is deliberately left alone here: it was working, and
- * changing a working surface belongs in its own change where someone can look at it. That is also
- * why the opponent half is a parameter rather than something this module decides — see
- * `opponentReady`.
+ * Compare the two sources rather than null-checking one: `localPosition` falls back to
+ * `chatPosition`, so `chatPosition === localPosition` written against a single source goes trivially
+ * true and opens a button the server still refuses — pressable, and nothing happens. Comparing also
+ * covers switching sides, where the server still holds the side just moved off.
  *
- * ## The wait is on geo-chat, so the gate is measured against geo-chat
- *
- * geo-chat validates a request against *its own* copy of the viewer's position and rejects an early
- * one with `claim_response_required`. That is the only thing the wait protects against, so it is
- * the only clock worth watching.
- *
- * The picker was watching the other one. Its `serverLocalPosition` came from `participantSidesOn`,
- * which reads the knowledge graph — so it waited on the indexer (`web.write.entity_response` p50
- * 9.9s, p95 48.6s) to clear a check geo-chat had already passed. Since #2348 geo-chat learns the
- * position the moment the write starts, so gating on geo-chat collapses the wait to about one round
- * trip while the graph catches up in its own time.
- *
- * Both surfaces already hold geo-chat's copy: the hub as `DebateClaim.viewer_response`, the picker
- * as the `participants` on the raw rematch row — which it fetched and then overwrote with
- * graph-derived sides before asking.
- *
- * ## Comparing two sources rather than one against itself
- *
- * `chatPosition` and `localPosition` must come from different places for this to mean anything. The
- * picker's old `serverLocalPosition === localPosition` did not: `localPosition` falls back to
- * `serverLocalPosition` whenever there is no optimistic answer, so the comparison went trivially
- * true and opened a button geo-chat would still reject — pressable, and nothing happens.
- *
- * Comparing rather than null-checking also covers switching sides, where geo-chat still holds the
- * side just moved off. That is equally invalid to act on, and a null check would miss it.
+ * The debates hub does not use this gate, deliberately. Its match data and `create_debate_request_as`
+ * both read `debate_claim_readiness`, which the in-flight response notification writes, so a
+ * graph-backed position check there would hold a button the server would have accepted.
  */
 export type DebateRequestGateInput = {
   /**
-   * geo-chat's own copy of the viewer's position on this claim.
+   * The position the request will be validated against, as the surface last heard it.
    *
-   * `undefined` when geo-chat has not answered for this claim yet, which is not the same as `null`
-   * — "no position" is an answer, "no row" is not. Both block the request; only the distinction
-   * keeps a missing row from reading as a deliberate absence.
+   * Named for where the picker reads it — geo-chat's rematch rows — though geo-chat derives those
+   * from the graph, so this trails the chain rather than the server's own record. `undefined` is "no
+   * row", and a `null` can also be a hydration timeout on that endpoint rather than a deliberate
+   * absence. All of which block the request, which is the point: none of them is the viewer's
+   * position confirmed.
    */
   chatPosition: boolean | null | undefined;
   /** The side the viewer believes they hold, optimistic where the surface has one. */
   localPosition: boolean | null;
   /**
-   * The surface's own opponent question, deliberately not shared.
-   *
-   * The picker asks whether *this* opponent holds the other side (`opposing`). The hub asks
-   * whether *anyone* is standing ready (`match`). A rematch has one possible opponent and the hub
-   * has many, so these are different questions with the same shape — the position half is shared,
-   * the opponent half stays with whoever can answer it.
+   * Whether the relevant opponent condition for the current surface is satisfied.
    */
   opponentReady: boolean;
   /**
@@ -98,4 +74,3 @@ export function debateRequestGate({
     pendingLabel: pending ? (indexingDelayed ? REQUEST_PENDING_DELAYED_LABEL : REQUEST_PENDING_LABEL) : null,
   };
 }
-

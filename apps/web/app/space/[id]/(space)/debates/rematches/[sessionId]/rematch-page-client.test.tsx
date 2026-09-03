@@ -49,6 +49,9 @@ const mocks = vi.hoisted(() => ({
   leaveMutate: vi.fn(),
   acceptMutate: vi.fn(),
   rejectMutate: vi.fn(),
+  /** The last rematch request error and its variables. */
+  requestError: null as Error | null,
+  requestVariables: undefined as { claim_id: string } | undefined,
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
   /** Overrides the snapshot status, so the window where it is `indexed` is reachable. */
@@ -233,7 +236,11 @@ vi.mock('~/core/debates/hooks', () => ({
       isError: mocks.claimReadinessError,
     };
   },
-  useCreateDebateRematchRequest: () => mutation(),
+  useCreateDebateRematchRequest: () => ({
+    ...mutation(),
+    error: mocks.requestError,
+    variables: mocks.requestVariables,
+  }),
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
@@ -675,6 +682,8 @@ beforeEach(() => {
   mocks.leaveMutate.mockReset();
   mocks.acceptMutate.mockReset();
   mocks.rejectMutate.mockReset();
+  mocks.requestError = null;
+  mocks.requestVariables = undefined;
   mocks.submitResponse.mockReset();
   mocks.optimisticResponses.clear();
   mocks.responseIndexingDelayed = false;
@@ -2800,6 +2809,41 @@ describe('DebateRematchPageClient', () => {
     expect(button).toHaveAttribute('aria-busy', 'true');
     // The old separate spinner line is gone: there is one element, not a message beside a gap.
     expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+  });
+
+  // Request errors are rendered on the claim card that initiated the mutation.
+  it('reports a refused request on the card it was sent from', async () => {
+    // Through the press, so the claim the error is keyed to is the one the mutation was actually
+    // sent for — `variables` is react-query's record of that call, not a value this test picks.
+    mocks.mutate.mockImplementation((variables: { claim_id: string }) => {
+      mocks.requestVariables = variables;
+    });
+    mocks.requestError = new Error('respond to this claim before requesting a rematch');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const card = screen.getByText('A claim both participants chose').closest('article');
+    fireEvent.click(within(card!).getByRole('button', { name: 'Request debate' }));
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.requestVariables?.claim_id).toBe(CLAIM_SHARED);
+    expect(within(card!).getByRole('alert')).toHaveTextContent('respond to this claim before requesting a rematch');
+    // One report, not one per surface.
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+  });
+
+  // The shared mutation must not expose one claim's error on other cards — and the card it belongs
+  // to can leave the list (a tab swap, a search, a filter), so the page keeps the fallback rather
+  // than letting the message go down with it.
+  it('keeps a refusal on the page when its card is not on screen', async () => {
+    mocks.requestError = new Error('respond to this claim before requesting a rematch');
+    mocks.requestVariables = { claim_id: 'a-claim-this-tab-does-not-show' };
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const card = screen.getByText('A claim both participants chose').closest('article');
+    expect(within(card!).queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('respond to this claim before requesting a rematch');
   });
 
   // GEO-2652. The wait is real — a publish, an index and a notification — so it is named rather

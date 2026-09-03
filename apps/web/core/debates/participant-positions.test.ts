@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchParticipant } from './api';
-import type { ParticipantPosition } from './participant-positions';
+import type { ParticipantPosition, PendingParticipantPosition } from './participant-positions';
 import {
   applyPendingPositions,
   fetchParticipantPositions,
@@ -210,6 +210,208 @@ describe('useParticipantPositions holding its list', () => {
   });
 });
 
+/** Confirmed position overlays remain active until participant positions are refetched. */
+describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
+  const CLAIM = 'claim-1';
+  const SPACE = '019fedae72b67ab2927adf044d57c560';
+  const INDEXING_KEY = ['entity-response-indexing', LOCAL.profile_space_id, CLAIM, SPACE, 'stance'] as const;
+
+  const snapshot = (status: 'reconciling' | 'indexed', expectedResponse: 'positive' | 'negative' | null) => ({
+    status,
+    pending: {
+      entityId: CLAIM,
+      expectedResponse,
+      personalSpaceId: LOCAL.profile_space_id,
+      responseKind: 'stance',
+      spaceId: SPACE,
+    },
+    runId: 'run-1',
+  });
+
+  const sideOf = (result: { current: { byClaim: Map<string, unknown> } }) =>
+    participantSidesOn(result.current.byClaim as ReturnType<typeof groupParticipantPositions>, CLAIM, SPACE, [
+      LOCAL,
+      REMOTE,
+    ])[0]!.position;
+
+  const renderPositions = (client: QueryClient) =>
+    renderHook(() => useParticipantPositions([LOCAL, REMOTE], LOCAL.profile_space_id), {
+      wrapper: ({ children }) => React.createElement(QueryClientProvider, { client }, children),
+    });
+
+  it('keeps the position on screen between the write confirming and the refetch landing', async () => {
+    mocks.attention = true;
+    // The graph has not returned the new position yet.
+    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('reconciling', 'positive')));
+    expect(sideOf(result)).toBe(true);
+
+    // Retire the indexing snapshot before the participant refetch completes.
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', 'positive')));
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+
+    expect(sideOf(result)).toBe(true);
+  });
+
+  /**
+   * The release, asserted where it is observable: the fetch has to *contradict* the overlay, or a
+   * held row and a released one look identical. A refetch returning the same answer proves nothing,
+   * and neither does the row count — the overlay and the fetched row share a `positionKey`, so the
+   * merge cannot produce two of them whatever it does.
+   */
+  it('hands back to the fetched list once it agrees, and stops asserting anything after that', async () => {
+    mocks.attention = true;
+    const graphRow = (voteType: number) => [
+      { userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType, voteKind: 1 },
+    ];
+    const refetch = () =>
+      act(async () => {
+        await client.invalidateQueries({
+          queryKey: participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]),
+        });
+      });
+
+    mocks.graphql.mockImplementation(() => Effect.succeed(graphRow(0)));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(sideOf(result)).toBe(true));
+
+    // The viewer switches sides, it confirms, and the snapshot retires.
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', 'negative')));
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+    expect(sideOf(result)).toBe(false);
+
+    // The graph catches up, which is what the overlay was waiting for.
+    mocks.graphql.mockImplementation(() => Effect.succeed(graphRow(1)));
+    await refetch();
+    expect(sideOf(result)).toBe(false);
+
+    // Handing back is only observable afterwards: a row still held would keep asserting the side it
+    // was retired with, whatever the graph goes on to say.
+    mocks.graphql.mockImplementation(() => Effect.succeed(graphRow(0)));
+    await refetch();
+    await waitFor(() => expect(sideOf(result)).toBe(true));
+  });
+
+  /**
+   * The half that made the old release rule wrong: `dataUpdatedAt` is when a response *landed*, so
+   * any newer response released the overlay — including a poll that was already in flight when the
+   * write confirmed and therefore carries rows from before it. Landing is not agreeing.
+   */
+  it('is not released by a fetch that still holds the pre-write rows', async () => {
+    mocks.attention = true;
+    mocks.graphql.mockImplementation(() =>
+      Effect.succeed([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }])
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(sideOf(result)).toBe(true));
+
+    // A fetch that will answer with the pre-write rows, held open across the confirmation.
+    let answer: (rows: unknown[]) => void = () => {};
+    mocks.graphql.mockImplementation(() => Effect.promise(() => new Promise(resolve => (answer = resolve))));
+    void client.refetchQueries({
+      queryKey: participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]),
+    });
+    await waitFor(() =>
+      expect(
+        client.getQueryState(participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]))
+          ?.fetchStatus
+      ).toBe('fetching')
+    );
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', 'negative')));
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+    expect(sideOf(result)).toBe(false);
+
+    await act(async () => {
+      answer([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }]);
+      await Promise.resolve();
+    });
+
+    expect(sideOf(result)).toBe(false);
+  });
+
+  // Keep a removal tombstone until the fetched data reflects the removal.
+  it('keeps a removal hidden until the refetch confirms it', async () => {
+    mocks.attention = true;
+    mocks.graphql.mockImplementation(() =>
+      Effect.succeed([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }])
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(sideOf(result)).toBe(true));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', null)));
+    expect(sideOf(result)).toBe(null);
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+    expect(sideOf(result)).toBe(null);
+  });
+
+  // A retained row carries the profile space it was written for, so it cannot outlive that viewer.
+  it('drops retained rows when the viewer goes away', async () => {
+    mocks.attention = true;
+    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result, rerender } = renderHook(
+      ({ profileSpaceId }: { profileSpaceId: string | null }) =>
+        useParticipantPositions([LOCAL, REMOTE], profileSpaceId),
+      {
+        initialProps: { profileSpaceId: LOCAL.profile_space_id as string | null },
+        wrapper: ({ children }) => React.createElement(QueryClientProvider, { client }, children),
+      }
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', 'positive')));
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+    expect(sideOf(result)).toBe(true);
+
+    await act(async () => rerender({ profileSpaceId: null }));
+    expect(sideOf(result)).toBe(null);
+  });
+
+  /**
+   * An `entity-response-indexing` query has no observers, so react-query garbage collects it on its
+   * own schedule — five minutes after the write started, whatever state it is in. That arrives as a
+   * `removed` event, and a hook watching only `updated` kept the row overlaid for the rest of the
+   * session: a write that never indexed, still drawn as a position and still gated on.
+   */
+  it('drops a position whose snapshot is garbage collected', async () => {
+    mocks.attention = true;
+    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('reconciling', 'positive')));
+    expect(sideOf(result)).toBe(true);
+
+    await act(async () => client.removeQueries({ queryKey: INDEXING_KEY }));
+    expect(sideOf(result)).toBe(null);
+  });
+
+  // A response that returns to idle without reaching indexed was rolled back.
+  it('drops a rolled-back write immediately', async () => {
+    mocks.attention = true;
+    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderPositions(client);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('reconciling', 'positive')));
+    expect(sideOf(result)).toBe(true);
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+    expect(sideOf(result)).toBe(null);
+  });
+});
+
 describe('applyPendingPositions (GEO-2784)', () => {
   const FETCHED: ParticipantPosition[] = [
     { profileSpaceId: 'me', claimId: 'c1', spaceId: 's1', responseKind: 'stance', position: true },
@@ -237,9 +439,9 @@ describe('applyPendingPositions (GEO-2784)', () => {
   /* The removal case, and the reason a tombstone is carried rather than dropped: without it the
      stale fetched row keeps the position on screen until the next refetch. */
   it('a pending removal hides the fetched row immediately', () => {
-    const pending = [
+    const pending: PendingParticipantPosition[] = [
       { profileSpaceId: 'me', claimId: 'c1', spaceId: 's1', responseKind: 'stance', position: null },
-    ] as unknown as ParticipantPosition[];
+    ];
     const merged = applyPendingPositions(FETCHED, pending);
     expect(merged.map(r => r.claimId)).toEqual(['c2']);
   });
