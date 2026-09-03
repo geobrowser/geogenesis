@@ -18,7 +18,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { ConnectionState, MediaDeviceFailure, type Room, Track } from 'livekit-client';
+import { ConnectionState, DisconnectReason, MediaDeviceFailure, type Room, RoomEvent, Track } from 'livekit-client';
 import type { RemoteParticipant } from 'livekit-client';
 
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
@@ -34,7 +34,7 @@ import {
   systemDefaultAudioOutput,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
-import { attachNoiseFilter, watchNoiseFilterContext } from '~/core/debates/noise-filter';
+import { attachNoiseFilter } from '~/core/debates/noise-filter';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { Avatar } from '~/design-system/avatar';
@@ -361,10 +361,29 @@ function VoiceDockBody({
   // drop, automatically, with a freshly-minted token. The ref resets on its own: `onRetry` remounts
   // `<LiveKitRoom>` under a new `connectionEpoch`, which gives this component a fresh instance. A
   // room that never connects in the first place is not this path; it keeps the manual Retry.
+  //
+  // Only for drops worth retrying. `Disconnected` also covers being told to leave, and reconnecting
+  // through that is how a retry loop starts: the ownership coordinator disconnects this tab to hand
+  // the microphone to another one, and coming straight back fights the tab it just yielded to —
+  // which DUPLICATE_IDENTITY then settles in favour of whoever connected last, both ways, forever.
+  // An unknown reason is treated as retryable; the named terminal ones are what must not be.
+  const disconnectReasonRef = React.useRef<number | undefined>(undefined);
+  React.useEffect(() => {
+    if (!room) return;
+    const handleDisconnected = (reason?: number) => {
+      disconnectReasonRef.current = reason;
+    };
+    room.on(RoomEvent.Disconnected, handleDisconnected);
+    return () => {
+      room.off(RoomEvent.Disconnected, handleDisconnected);
+    };
+  }, [room]);
+
   const autoRetriedRef = React.useRef(false);
   React.useEffect(() => {
     if (connectionState !== ConnectionState.Disconnected || !everConnected) return;
     if (autoRetriedRef.current) return;
+    if (isTerminalDisconnect(disconnectReasonRef.current)) return;
     autoRetriedRef.current = true;
     onRetry();
   }, [connectionState, everConnected, onRetry]);
@@ -440,12 +459,8 @@ function VoiceDockBody({
  * waits. The dock auto-joins, so this is a real state here rather than a theoretical one.
  *
  * One way only. Playback going quiet later does not take Krisp back off, and coming back does not
- * attach it a second time — the context resuming is enough, and re-attaching on every toggle would
- * mean a track swap each time.
- *
- * Once attached, the audio context is watched too (see `watchNoiseFilterContext`) — this dock
- * records nothing, so falling back to the raw microphone costs only the filtering. The debate room
- * deliberately does not do this: its recorder captures the processed track.
+ * attach it a second time: a suspended context resumes on its own, and tearing the filter down and
+ * building it back up would swap the published track twice for something that heals itself.
  */
 function useDockNoiseFilter(canPlayAudio: boolean) {
   const { microphoneTrack } = useLocalParticipant();
@@ -462,16 +477,27 @@ function useDockNoiseFilter(canPlayAudio: boolean) {
   React.useEffect(() => {
     if (!audioTrack || !playbackStarted) return;
     let current = true;
-    let unwatch: (() => void) | null = null;
-    void attachNoiseFilter(audioTrack, { enabled: true, isCurrent: () => current }).then(attachment => {
-      if (!attachment || !current) return;
-      unwatch = watchNoiseFilterContext(audioTrack, attachment);
-    });
+    void attachNoiseFilter(audioTrack, { enabled: true, isCurrent: () => current });
     return () => {
       current = false;
-      unwatch?.();
     };
   }, [audioTrack, playbackStarted]);
+}
+
+/**
+ * Disconnects that mean "stop connecting", not "the network went away". Reconnecting through any of
+ * these either fights another client for the same identity or re-enters a room that is gone.
+ */
+function isTerminalDisconnect(reason: number | undefined): boolean {
+  if (reason === undefined) return false;
+  return (
+    reason === DisconnectReason.CLIENT_INITIATED ||
+    reason === DisconnectReason.DUPLICATE_IDENTITY ||
+    reason === DisconnectReason.PARTICIPANT_REMOVED ||
+    reason === DisconnectReason.ROOM_DELETED ||
+    reason === DisconnectReason.ROOM_CLOSED ||
+    reason === DisconnectReason.USER_REJECTED
+  );
 }
 
 function micFailureMessage(failure: MediaDeviceFailure): string {

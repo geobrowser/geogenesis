@@ -17,8 +17,8 @@ export type LocalTrackLike = {
   mediaStreamTrack: MediaStreamTrack;
   setProcessor?: (processor: KrispNoiseFilterProcessor) => Promise<void>;
   stopProcessor?: () => Promise<void>;
-  /** The RTP sender carrying this track, once published. */
-  sender?: RTCRtpSender | null;
+  /** The processor LiveKit currently holds, which is not always the one a caller attached. */
+  getProcessor?: () => unknown;
   stop: () => void;
   detach?: () => void;
 };

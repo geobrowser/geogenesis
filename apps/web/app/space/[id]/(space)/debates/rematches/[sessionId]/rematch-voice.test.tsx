@@ -12,56 +12,71 @@ import { GeoChatRequestError } from '~/core/debates/api';
 
 import { RematchVoicePill } from './rematch-voice';
 
-const mocks = vi.hoisted(() => ({
-  joinData: null as { token: string; url: string; room_name: string; participant_slot: 1 | 2 } | null,
-  joinError: null as Error | null,
-  joinLoading: false,
-  /** Every (sessionId, enabled) pair the token hook was consulted with, in render order. */
-  joinCalls: [] as Array<{ sessionId: string; enabled: boolean }>,
-  acquireResult: { acquired: true, waitedForLocalRelease: false },
-  requestTakeover: vi.fn(() => Promise.resolve(false)),
-  release: vi.fn(() => Promise.resolve()),
-  close: vi.fn(),
-  coordinatorOptions: [] as Array<{
-    debateId: string;
-    userId: string;
-    onTakeoverRequested?: () => Promise<boolean> | boolean;
-  }>,
-  connectionState: 'connected',
-  canPlayAudio: true,
-  startAudio: vi.fn(() => Promise.resolve()),
-  audioDevices: [] as Array<{ deviceId: string; groupId: string; kind: string; label: string }>,
-  speakerDevices: [] as Array<{ deviceId: string; groupId: string; kind: string; label: string }>,
-  activeDeviceId: 'mic-a',
-  activeSpeakerId: 'speaker-a',
-  setActiveMediaDevice: vi.fn(() => Promise.resolve()),
-  setActiveSpeaker: vi.fn(() => Promise.resolve()),
-  changeAudioInput: vi.fn(),
-  changeAudioOutput: vi.fn(() => Promise.resolve()),
-  remoteParticipants: [] as Array<{ identity: string }>,
-  /** The published microphone, once there is one — what the noise filter attaches to. */
-  microphoneTrack: undefined as { track: Record<string, unknown> } | undefined,
-  attachNoiseFilter: vi.fn<
-    (
-      track: unknown,
-      options: { enabled: boolean; isCurrent: () => boolean }
-    ) => Promise<{ status: string; processor: object; sourceMediaStreamTrack: object }>
-  >(() => Promise.resolve({ status: 'enabled', processor: {}, sourceMediaStreamTrack: {} })),
-  unwatchNoiseFilterContext: vi.fn(),
-  watchNoiseFilterContext: vi.fn(() => mocks.unwatchNoiseFilterContext),
-  setMicrophoneEnabled: vi.fn(),
-  isMicrophoneEnabled: true,
-  isSpeaking: false,
-  localIsSpeaking: false,
-  isMuted: false,
-  /** Props of every `<LiveKitRoom>` mount, so tests can drive its callbacks. */
-  livekitRoomProps: [] as Array<Record<string, unknown>>,
-  /** One entry per `<LiveKitRoom>` *mount*, holding the token it connected with. */
-  livekitRoomMounts: [] as string[],
-  /** Every `useMediaDeviceSelect` call, to prove the picker never re-prompts for the microphone. */
-  deviceSelectCalls: [] as Array<{ kind: string; requestPermissions?: boolean }>,
-  disconnect: vi.fn(() => Promise.resolve()),
-}));
+const mocks = vi.hoisted(() => {
+  const disconnectHandlers: Array<(reason?: number) => void> = [];
+  const disconnect = vi.fn(() => Promise.resolve());
+  return {
+    joinData: null as { token: string; url: string; room_name: string; participant_slot: 1 | 2 } | null,
+    joinError: null as Error | null,
+    joinLoading: false,
+    /** Every (sessionId, enabled) pair the token hook was consulted with, in render order. */
+    joinCalls: [] as Array<{ sessionId: string; enabled: boolean }>,
+    acquireResult: { acquired: true, waitedForLocalRelease: false },
+    requestTakeover: vi.fn(() => Promise.resolve(false)),
+    release: vi.fn(() => Promise.resolve()),
+    close: vi.fn(),
+    coordinatorOptions: [] as Array<{
+      debateId: string;
+      userId: string;
+      onTakeoverRequested?: () => Promise<boolean> | boolean;
+    }>,
+    connectionState: 'connected',
+    canPlayAudio: true,
+    startAudio: vi.fn(() => Promise.resolve()),
+    audioDevices: [] as Array<{ deviceId: string; groupId: string; kind: string; label: string }>,
+    speakerDevices: [] as Array<{ deviceId: string; groupId: string; kind: string; label: string }>,
+    activeDeviceId: 'mic-a',
+    activeSpeakerId: 'speaker-a',
+    setActiveMediaDevice: vi.fn(() => Promise.resolve()),
+    setActiveSpeaker: vi.fn(() => Promise.resolve()),
+    changeAudioInput: vi.fn(),
+    changeAudioOutput: vi.fn(() => Promise.resolve()),
+    remoteParticipants: [] as Array<{ identity: string }>,
+    /** The published microphone, once there is one — what the noise filter attaches to. */
+    microphoneTrack: undefined as { track: Record<string, unknown> } | undefined,
+    attachNoiseFilter: vi.fn<
+      (
+        track: unknown,
+        options: { enabled: boolean; isCurrent: () => boolean }
+      ) => Promise<{ status: string; processor: object; sourceMediaStreamTrack: object }>
+    >(() => Promise.resolve({ status: 'enabled', processor: {}, sourceMediaStreamTrack: {} })),
+    setMicrophoneEnabled: vi.fn(),
+    isMicrophoneEnabled: true,
+    isSpeaking: false,
+    localIsSpeaking: false,
+    isMuted: false,
+    /** Props of every `<LiveKitRoom>` mount, so tests can drive its callbacks. */
+    livekitRoomProps: [] as Array<Record<string, unknown>>,
+    /** One entry per `<LiveKitRoom>` *mount*, holding the token it connected with. */
+    livekitRoomMounts: [] as string[],
+    /** Every `useMediaDeviceSelect` call, to prove the picker never re-prompts for the microphone. */
+    deviceSelectCalls: [] as Array<{ kind: string; requestPermissions?: boolean }>,
+    disconnect,
+    /** Handlers registered for RoomEvent.Disconnected, so a test can fire it with a reason. */
+    disconnectHandlers,
+    /** One stable object: the effect that records the disconnect reason keys on the room. */
+    room: {
+      disconnect,
+      on: (event: string, handler: (reason?: number) => void) => {
+        if (event === 'disconnected') disconnectHandlers.push(handler);
+      },
+      off: (event: string, handler: (reason?: number) => void) => {
+        const index = disconnectHandlers.indexOf(handler);
+        if (index >= 0) disconnectHandlers.splice(index, 1);
+      },
+    },
+  };
+});
 
 vi.mock('@livekit/components-react', () => ({
   LiveKitRoom: (props: Record<string, unknown>) => {
@@ -86,7 +101,7 @@ vi.mock('@livekit/components-react', () => ({
     microphoneTrack: mocks.microphoneTrack,
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
-  useRoomContext: () => ({ disconnect: mocks.disconnect }),
+  useRoomContext: () => mocks.room,
   useMediaDeviceSelect: ({ kind, requestPermissions }: { kind: MediaDeviceKind; requestPermissions?: boolean }) => {
     mocks.deviceSelectCalls.push({ kind, requestPermissions });
     return kind === 'audiooutput'
@@ -105,7 +120,6 @@ vi.mock('@livekit/components-react', () => ({
 
 vi.mock('~/core/debates/noise-filter', () => ({
   attachNoiseFilter: mocks.attachNoiseFilter,
-  watchNoiseFilterContext: mocks.watchNoiseFilterContext,
 }));
 
 vi.mock('livekit-client', () => ({
@@ -123,6 +137,17 @@ vi.mock('livekit-client', () => ({
     Other: 'Other',
   },
   Track: { Source: { Microphone: 'microphone' } },
+  RoomEvent: { Disconnected: 'disconnected' },
+  DisconnectReason: {
+    UNKNOWN_REASON: 0,
+    CLIENT_INITIATED: 1,
+    DUPLICATE_IDENTITY: 2,
+    SERVER_SHUTDOWN: 3,
+    PARTICIPANT_REMOVED: 4,
+    ROOM_DELETED: 5,
+    ROOM_CLOSED: 10,
+    USER_REJECTED: 12,
+  },
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -275,8 +300,6 @@ beforeEach(() => {
   mocks.attachNoiseFilter
     .mockReset()
     .mockResolvedValue({ status: 'enabled', processor: {}, sourceMediaStreamTrack: {} });
-  mocks.unwatchNoiseFilterContext.mockReset();
-  mocks.watchNoiseFilterContext.mockReset().mockReturnValue(mocks.unwatchNoiseFilterContext);
   mocks.acquireResult = { acquired: true, waitedForLocalRelease: false };
   mocks.requestTakeover.mockReset().mockResolvedValue(false);
   mocks.release.mockReset().mockResolvedValue(undefined);
@@ -308,6 +331,7 @@ beforeEach(() => {
   mocks.isMuted = false;
   mocks.livekitRoomProps = [];
   mocks.livekitRoomMounts = [];
+  mocks.disconnectHandlers.length = 0;
   mocks.disconnect.mockReset().mockResolvedValue(undefined);
   setVisibility('visible');
 });
@@ -718,6 +742,43 @@ describe('RematchVoicePill', () => {
     expect(screen.getByText('Connecting voice…')).toBeInTheDocument();
   });
 
+  // Being told to leave is not a dropped connection. The ownership coordinator disconnects this tab
+  // to hand the microphone over, and reconnecting through that fights the tab it just yielded to —
+  // which DUPLICATE_IDENTITY settles for whoever connected last, in both directions, forever.
+  it.each([
+    ['the coordinator handed the microphone to another tab', 1],
+    ['another client took this identity', 2],
+    ['the participant was removed', 4],
+    ['the room was deleted', 5],
+  ])('does not retry when %s', async (_case, reason) => {
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    await flushOwnership();
+    expect(mocks.livekitRoomMounts).toHaveLength(1);
+
+    act(() => mocks.disconnectHandlers.slice().forEach(handler => handler(reason)));
+    mocks.connectionState = 'disconnected';
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+
+    // No new room, and the manual Retry is there for a user who does want to come back.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument());
+    expect(mocks.livekitRoomMounts).toHaveLength(1);
+  });
+
+  // A dropped connection reports a reason too, and those are the ones worth coming back from.
+  it('still retries on a recoverable disconnect reason', async () => {
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    await flushOwnership();
+
+    // SERVER_SHUTDOWN: the room went away under us, and a fresh token gets a new one.
+    act(() => mocks.disconnectHandlers.slice().forEach(handler => handler(3)));
+    mocks.connectionState = 'disconnected';
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+
+    await waitFor(() => expect(mocks.livekitRoomMounts).toHaveLength(2));
+  });
+
   it('yields to the tab that owns the voice connection', async () => {
     mocks.acquireResult = { acquired: false, waitedForLocalRelease: false };
     mocks.requestTakeover.mockResolvedValue(false);
@@ -747,10 +808,6 @@ describe('RematchVoicePill', () => {
 
     await waitFor(() => expect(mocks.attachNoiseFilter).toHaveBeenCalledTimes(1));
     expect(mocks.attachNoiseFilter).toHaveBeenCalledWith(track, { enabled: true, isCurrent: expect.any(Function) });
-    // And keeps watching the context it runs on, for as long as this track is the microphone.
-    await waitFor(() => expect(mocks.watchNoiseFilterContext).toHaveBeenCalledTimes(1));
-    expect(mocks.watchNoiseFilterContext).toHaveBeenCalledWith(track, expect.objectContaining({ status: 'enabled' }));
-    expect(mocks.unwatchNoiseFilterContext).not.toHaveBeenCalled();
   });
 
   // Krisp's worklet runs on the room's audio context, which is the same one autoplay policy
@@ -793,8 +850,6 @@ describe('RematchVoicePill', () => {
     rerender(<RematchVoicePill session={session} currentUserId="me" />);
 
     expect(mocks.attachNoiseFilter).toHaveBeenCalledTimes(1);
-    // And the watch it set up is still the original one.
-    expect(mocks.unwatchNoiseFilterContext).not.toHaveBeenCalled();
   });
 
   // A microphone published again after a reconnect is a new track, and the old attach must not
@@ -818,7 +873,5 @@ describe('RematchVoicePill', () => {
     await waitFor(() => expect(mocks.attachNoiseFilter).toHaveBeenCalledTimes(2));
     expect(mocks.attachNoiseFilter).toHaveBeenLastCalledWith(second, expect.anything());
     expect(firstIsCurrent()).toBe(false);
-    // The first track's context watch went with it.
-    expect(mocks.unwatchNoiseFilterContext).toHaveBeenCalledTimes(1);
   });
 });
