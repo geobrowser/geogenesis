@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchParticipant } from './api';
-import type { ParticipantPosition } from './participant-positions';
+import type { ParticipantPosition, PendingParticipantPosition } from './participant-positions';
 import {
   applyPendingPositions,
   fetchParticipantPositions,
@@ -299,6 +299,29 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
     expect(sideOf(result)).toBe(null);
   });
 
+  // A retained row carries the profile space it was written for, so it cannot outlive that viewer.
+  it('drops retained rows when the viewer goes away', async () => {
+    mocks.attention = true;
+    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result, rerender } = renderHook(
+      ({ profileSpaceId }: { profileSpaceId: string | null }) =>
+        useParticipantPositions([LOCAL, REMOTE], profileSpaceId),
+      {
+        initialProps: { profileSpaceId: LOCAL.profile_space_id as string | null },
+        wrapper: ({ children }) => React.createElement(QueryClientProvider, { client }, children),
+      }
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    await act(async () => void client.setQueryData(INDEXING_KEY, snapshot('indexed', 'positive')));
+    await act(async () => void client.setQueryData(INDEXING_KEY, { status: 'idle', pending: null, runId: null }));
+    expect(sideOf(result)).toBe(true);
+
+    await act(async () => rerender({ profileSpaceId: null }));
+    expect(sideOf(result)).toBe(null);
+  });
+
   // A response that returns to idle without reaching indexed was rolled back.
   it('drops a rolled-back write immediately', async () => {
     mocks.attention = true;
@@ -342,9 +365,9 @@ describe('applyPendingPositions (GEO-2784)', () => {
   /* The removal case, and the reason a tombstone is carried rather than dropped: without it the
      stale fetched row keeps the position on screen until the next refetch. */
   it('a pending removal hides the fetched row immediately', () => {
-    const pending = [
+    const pending: PendingParticipantPosition[] = [
       { profileSpaceId: 'me', claimId: 'c1', spaceId: 's1', responseKind: 'stance', position: null },
-    ] as unknown as ParticipantPosition[];
+    ];
     const merged = applyPendingPositions(FETCHED, pending);
     expect(merged.map(r => r.claimId)).toEqual(['c2']);
   });

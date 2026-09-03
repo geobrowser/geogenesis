@@ -188,8 +188,17 @@ function sameId(left: string, right: string) {
   return left.replace(/-/g, '').toLowerCase() === right.replace(/-/g, '').toLowerCase();
 }
 
+/**
+ * A position the viewer's own client knows about before the graph does.
+ *
+ * `position: null` is a removal, which the merge resolves by deleting the fetched row rather than
+ * adding one — so this cannot be a `ParticipantPosition`, whose `position` is the side someone
+ * holds.
+ */
+export type PendingParticipantPosition = Omit<ParticipantPosition, 'position'> & { position: boolean | null };
+
 /** A confirmed position retained until participant positions are refetched. */
-type SettlingPosition = { row: ParticipantPosition; retiredAt: number };
+type SettlingPosition = { row: PendingParticipantPosition; retiredAt: number };
 
 /**
  * The viewer's own in-flight responses, as positions (GEO-2784).
@@ -210,28 +219,31 @@ function useOwnPendingPositions(
   localProfileSpaceId: string | null | undefined,
   /** Timestamp of the latest participant positions result. */
   dataUpdatedAt: number
-): ParticipantPosition[] {
+): PendingParticipantPosition[] {
   const queryClient = useQueryClient();
-  const [pending, setPending] = React.useState<ParticipantPosition[]>([]);
+  const [pending, setPending] = React.useState<PendingParticipantPosition[]>([]);
   const [settling, setSettling] = React.useState<SettlingPosition[]>([]);
   // Track the previous cache state to identify confirmed snapshots that were retired.
-  const lastRead = React.useRef(new Map<string, { row: ParticipantPosition; indexed: boolean }>());
+  const lastRead = React.useRef(new Map<string, { row: PendingParticipantPosition; indexed: boolean }>());
 
   React.useEffect(() => {
     if (!localProfileSpaceId) {
+      // Retained rows carry the previous viewer's profile space, so they have to go with them:
+      // signing out or switching accounts would otherwise keep overlaying somebody else's side.
       lastRead.current = new Map();
       setPending(current => (current.length === 0 ? current : []));
+      setSettling(current => (current.length === 0 ? current : []));
       return;
     }
     const cache = queryClient.getQueryCache();
 
     const read = () => {
-      const rows: ParticipantPosition[] = [];
-      const seen = new Map<string, { row: ParticipantPosition; indexed: boolean }>();
+      const rows: PendingParticipantPosition[] = [];
+      const seen = new Map<string, { row: PendingParticipantPosition; indexed: boolean }>();
       for (const query of cache.getAll()) {
         const parsed = pendingClaimResponse(query.queryKey, query.state.data);
         if (!parsed) continue;
-        const row = {
+        const row: PendingParticipantPosition = {
           profileSpaceId: localProfileSpaceId,
           claimId: parsed.entityId,
           spaceId: parsed.spaceId,
@@ -239,7 +251,7 @@ function useOwnPendingPositions(
           // `null` means the viewer is *removing* the position. Carried through as a tombstone and
           // resolved in the merge below, because dropping it here would let the stale fetched row
           // keep the position visible until the next refetch.
-          position: parsed.position as boolean,
+          position: parsed.position,
         };
         rows.push(row);
         seen.set(positionKey(row), { row, indexed: parsed.status === 'indexed' });
@@ -282,7 +294,7 @@ function useOwnPendingPositions(
   );
 }
 
-function samePositions(a: ParticipantPosition[], b: ParticipantPosition[]) {
+function samePositions(a: PendingParticipantPosition[], b: PendingParticipantPosition[]) {
   if (a.length !== b.length) return false;
   return a.every((row, i) => {
     const other = b[i];
@@ -311,13 +323,14 @@ function positionKey(row: Pick<ParticipantPosition, 'profileSpaceId' | 'claimId'
  */
 export function applyPendingPositions(
   fetched: ParticipantPosition[],
-  pending: ParticipantPosition[]
+  pending: PendingParticipantPosition[]
 ): ParticipantPosition[] {
   if (pending.length === 0) return fetched;
   const merged = new Map(fetched.map(row => [positionKey(row), row]));
   for (const row of pending) {
-    if (row.position === null) merged.delete(positionKey(row));
-    else merged.set(positionKey(row), row);
+    const { position } = row;
+    if (position === null) merged.delete(positionKey(row));
+    else merged.set(positionKey(row), { ...row, position });
   }
   return [...merged.values()];
 }
