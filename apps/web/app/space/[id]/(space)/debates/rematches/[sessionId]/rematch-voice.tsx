@@ -13,7 +13,6 @@ import {
   useRemoteParticipants,
   useRoomContext,
 } from '@livekit/components-react';
-import { useKrispNoiseFilter } from '@livekit/components-react/krisp';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -28,7 +27,13 @@ import { AudioSettings, MobileSettingsSheet } from '~/core/debates/audio-setting
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
-import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
+import {
+  type LocalTrackLike,
+  type MediaDeviceOption,
+  systemDefaultAudioOutput,
+  useDebateMediaSession,
+} from '~/core/debates/media-session';
+import { attachNoiseFilter, watchNoiseFilterContext } from '~/core/debates/noise-filter';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { Avatar } from '~/design-system/avatar';
@@ -340,10 +345,7 @@ function VoiceDockBody({
     };
   }, [room, roomRef]);
 
-  const { setNoiseFilterEnabled } = useKrispNoiseFilter();
-  React.useEffect(() => {
-    void setNoiseFilterEnabled(true);
-  }, [setNoiseFilterEnabled]);
+  useDockNoiseFilter();
 
   // Auto-join means no click stands between arriving and connecting, so the browser's autoplay
   // policy can refuse to play the opponent's audio — silently, with the room otherwise healthy
@@ -359,6 +361,20 @@ function VoiceDockBody({
   React.useEffect(() => {
     if (connectionState === ConnectionState.Connected) setEverConnected(true);
   }, [connectionState]);
+
+  // A drop after having connected is a dead end for whichever side it happens to: the affected
+  // participant has to notice this exact dock and click Retry, and the *other* participant has
+  // nothing to click at all — their screen shows a healthy-looking room going quiet. Retry once per
+  // drop, automatically, with a freshly-minted token. The ref resets on its own: `onRetry` remounts
+  // `<LiveKitRoom>` under a new `connectionEpoch`, which gives this component a fresh instance. A
+  // room that never connects in the first place is not this path; it keeps the manual Retry.
+  const autoRetriedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (connectionState !== ConnectionState.Disconnected || !everConnected) return;
+    if (autoRetriedRef.current) return;
+    autoRetriedRef.current = true;
+    onRetry();
+  }, [connectionState, everConnected, onRetry]);
 
   const remoteParticipants = useRemoteParticipants();
   const opponentParticipant = remoteParticipants.find(participant => participant.identity === opponent.user_id) ?? null;
@@ -412,6 +428,40 @@ function VoiceDockBody({
       </div>
     </VoiceDockShell>
   );
+}
+
+/**
+ * Krisp on the dock's microphone, with the debate room's lifecycle: attached once the microphone
+ * is published, mute carried across the swap, and taken back off — raw microphone kept — when
+ * anything fails. The components-react hook this replaces did none of that: on a failure after
+ * the swap it logged and left Krisp's output as the published track, which to the other side is a
+ * microphone that reads unmuted and carries nothing.
+ *
+ * Keyed on the track itself, so a microphone published again after a reconnect gets Krisp again,
+ * and an attach still in flight for a track that has gone is cleaned up rather than completed.
+ *
+ * Once attached, the audio context is watched too (see `watchNoiseFilterContext`) — this dock
+ * records nothing, so falling back to the raw microphone costs only the filtering. The debate room
+ * deliberately does not do this: its recorder captures the processed track.
+ */
+function useDockNoiseFilter() {
+  const { microphoneTrack } = useLocalParticipant();
+  const track = microphoneTrack?.track;
+  const audioTrack = track && 'setProcessor' in track ? (track as unknown as LocalTrackLike) : null;
+
+  React.useEffect(() => {
+    if (!audioTrack) return;
+    let current = true;
+    let unwatch: (() => void) | null = null;
+    void attachNoiseFilter(audioTrack, { enabled: true, isCurrent: () => current }).then(attachment => {
+      if (!attachment || !current) return;
+      unwatch = watchNoiseFilterContext(audioTrack, attachment);
+    });
+    return () => {
+      current = false;
+      unwatch?.();
+    };
+  }, [audioTrack]);
 }
 
 function micFailureMessage(failure: MediaDeviceFailure): string {

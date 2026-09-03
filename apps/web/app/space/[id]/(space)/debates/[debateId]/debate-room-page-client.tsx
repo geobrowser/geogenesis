@@ -53,6 +53,11 @@ import {
   debateMediaSessionKey,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
+import {
+  type DebateNoiseFilterStatus,
+  attachNoiseFilter,
+  debateNoiseFilterStatusLabel,
+} from '~/core/debates/noise-filter';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
 import {
   debateRecordingUploadId,
@@ -82,8 +87,6 @@ type DebateRoomPageClientProps = {
   spaceId: string;
   debateId: string;
 };
-
-type DebateNoiseFilterStatus = 'initializing' | 'enabled' | 'disabled' | 'unsupported' | 'failed';
 
 type DebateRoomConnectionConflictSource = 'web_lock_blocked' | 'ownership_released' | 'livekit_duplicate_identity';
 type LocalTrackPreferences = { audioEnabled: boolean; videoEnabled: boolean };
@@ -118,14 +121,6 @@ const debateRoomStagesAfterJoin: ReadonlySet<DebateRoomConnectionStage> = new Se
 const maxAutomaticPostJoinRecoveries = 1;
 /** A device that just reported itself busy usually still is a moment later; give it a beat. */
 const postJoinRecoveryDelayMs = 750;
-
-const debateNoiseFilterStatusLabel: Record<DebateNoiseFilterStatus, string> = {
-  initializing: 'Loading…',
-  enabled: 'On',
-  disabled: 'Off',
-  unsupported: 'Unavailable',
-  failed: 'Failed',
-};
 
 type RemoteTrackLike = {
   kind: string;
@@ -862,55 +857,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
 
     const audioTrack = tracks.find(track => track.mediaStreamTrack.kind === 'audio');
-    if (!audioTrack?.setProcessor) {
+    if (!audioTrack) {
       if (isCurrent()) setNoiseFilterStatus('failed');
       console.warn('[DebateNoiseFilter] Krisp could not attach because the local microphone track is unavailable.');
       return;
     }
 
-    let processor: KrispNoiseFilterProcessor | null = null;
-    let processorAttached = false;
-    try {
-      const { KrispNoiseFilter, isKrispNoiseFilterSupported } = await import('@livekit/krisp-noise-filter');
-      if (!isCurrent()) return;
-      if (!isKrispNoiseFilterSupported()) {
-        setNoiseFilterStatus('unsupported');
-        console.info('[DebateNoiseFilter] Krisp is unavailable in this browser; using the browser microphone track.');
-        return;
-      }
-
-      const sourceMediaStreamTrack = audioTrack.mediaStreamTrack;
-      sourceMediaStreamTracksRef.current.set(audioTrack, sourceMediaStreamTrack);
-      processor = KrispNoiseFilter();
-      await audioTrack.setProcessor(processor);
-      processorAttached = true;
-      if (!isCurrent()) {
-        await audioTrack.stopProcessor?.().catch(stopError => {
-          console.warn('[DebateNoiseFilter] Krisp cleanup failed after the connection changed.', stopError);
-        });
-        return;
-      }
-      audioTrack.mediaStreamTrack.enabled = sourceMediaStreamTrack.enabled;
-      await processor.setEnabled(noiseFilterEnabledRef.current);
-      if (!isCurrent()) {
-        await audioTrack.stopProcessor?.().catch(stopError => {
-          console.warn('[DebateNoiseFilter] Krisp cleanup failed after the connection changed.', stopError);
-        });
-        return;
-      }
-
-      noiseFilterProcessorRef.current = processor;
-      setNoiseFilterStatus(noiseFilterEnabledRef.current ? 'enabled' : 'disabled');
-    } catch (error) {
-      const cleanup = processorAttached ? audioTrack.stopProcessor?.() : processor?.destroy();
-      await cleanup?.catch(stopError => {
-        console.warn('[DebateNoiseFilter] Krisp cleanup failed after initialization.', stopError);
-      });
-      if (isCurrent()) {
-        noiseFilterProcessorRef.current = null;
-        setNoiseFilterStatus('failed');
-      }
-      console.warn('[DebateNoiseFilter] Krisp initialization failed; using the browser microphone track.', error);
+    // The attach itself is shared with the claim-exploration voice dock; see `attachNoiseFilter`.
+    const attachment = await attachNoiseFilter(audioTrack, { enabled: noiseFilterEnabledRef.current, isCurrent });
+    if (!attachment) return;
+    sourceMediaStreamTracksRef.current.set(audioTrack, attachment.sourceMediaStreamTrack);
+    if (isCurrent()) {
+      noiseFilterProcessorRef.current = attachment.processor;
+      setNoiseFilterStatus(attachment.status);
     }
   }, []);
 
