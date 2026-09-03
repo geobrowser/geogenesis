@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 /**
  * May this viewer request a debate on this claim, right now?
  *
@@ -92,4 +94,43 @@ export function debateRequestGate({
     pending,
     pendingLabel: pending ? (indexingDelayed ? REQUEST_PENDING_DELAYED_LABEL : REQUEST_PENDING_LABEL) : null,
   };
+}
+
+
+/**
+ * How long geo-chat's agreement has to hold before the request is offered.
+ *
+ * geo-chat reports the position on its rematch rows slightly before it will accept a request
+ * against it, so a gate that opens the instant the row agrees hands the viewer a button that fails
+ * with `claim_response_required`. Tested in the browser: the control flipped from
+ * "Publishing your position…" to "Request debate" and the request came straight back.
+ *
+ * This is a buffer, not a fix. It narrows the window rather than closing it — if geo-chat takes
+ * longer than this to become consistent, the request fails exactly as before, which is why the
+ * failure still has to be visible. The real fix is on the backend: either the rows should not
+ * report a position the request endpoint will not honour, or the endpoint should accept one the
+ * rows report.
+ */
+export const REQUEST_GATE_GRACE_MS = 250;
+
+/**
+ * True once `open` has been continuously true for `ms`, and false the moment it is not.
+ *
+ * Deliberately not a debounce on the label: the wait it extends is the existing pending state, so
+ * the viewer sees "Publishing your position…" for a quarter second longer rather than a new state
+ * or a flicker through one.
+ */
+export function useRequestGateGrace(open: boolean, ms: number = REQUEST_GATE_GRACE_MS): boolean {
+  const [held, setHeld] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) {
+      setHeld(false);
+      return;
+    }
+    const timer = setTimeout(() => setHeld(true), ms);
+    return () => clearTimeout(timer);
+  }, [open, ms]);
+
+  return held;
 }

@@ -716,7 +716,9 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+    // Awaited: the offer is held for a beat after the gate opens, so geo-chat's row cannot be
+    // acted on before its request endpoint agrees.
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled());
   });
 
   it('renders active semantic response buttons with holder avatars', async () => {
@@ -1282,7 +1284,7 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
     // Not just the card: its sides come from the graph, so nothing here waits on the browsed list.
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Request debate' })).toBeInTheDocument();
   });
 
   // The session's own claims arrive in one round trip; they shouldn't sit behind the scan either.
@@ -2734,7 +2736,7 @@ describe('DebateRematchPageClient', () => {
     ];
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    const settled = screen.getByRole('button', { name: 'Request debate' });
+    const settled = await screen.findByRole('button', { name: 'Request debate' });
     expect(settled).toBeEnabled();
     expect(settled).not.toHaveAttribute('aria-busy');
     expect(screen.queryByRole('status')).toBeNull();
@@ -2765,7 +2767,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    const request = screen.getByRole('button', { name: 'Request debate' });
+    const request = await screen.findByRole('button', { name: 'Request debate' });
     expect(request).toBeEnabled();
     fireEvent.click(request);
     expect(mocks.mutate).toHaveBeenCalled();
@@ -2795,7 +2797,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    const request = screen.getByRole('button', { name: 'Request debate' });
+    const request = await screen.findByRole('button', { name: 'Request debate' });
     expect(request).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
     fireEvent.click(request);
@@ -2895,14 +2897,46 @@ describe('DebateRematchPageClient', () => {
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Request debate' })).toBeEnabled();
 
     // The mutation settles. geo-chat still holds the side; the indexer still does not.
     mocks.optimisticResponses.delete(CLAIM_SHARED);
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Request debate' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
+  });
+
+  /**
+   * geo-chat's rematch row reports the position slightly before its request endpoint will honour a
+   * request against it. Reported from the browser: pressing the instant the control turned from
+   * "Publishing your position…" to "Request debate" returned `claim_response_required`.
+   *
+   * So the offer is held for a beat after the gate opens, and that beat is spent in the pending
+   * state already on screen rather than in a new one. A buffer, not a proof — if geo-chat takes
+   * longer than this the request still fails, which is why the failure stays visible.
+   */
+  it('holds the offer for a beat after geo-chat agrees, then opens it', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    // Not offering yet, even though geo-chat's row already agrees.
+    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeDisabled();
+
+    // And offering once the beat has passed.
+    expect(await screen.findByRole('button', { name: 'Request debate' })).toBeEnabled();
   });
 
   // Switching sides leaves geo-chat holding the side you just moved off, which is no more valid to

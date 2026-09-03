@@ -61,7 +61,7 @@ import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-
 import { useScopedMatchmakingClaims } from '~/core/debates/matchmaking/use-scoped-claims';
 import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-order';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
-import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
+import { REQUEST_PENDING_LABEL, debateRequestGate, useRequestGateGrace } from '~/core/debates/request-gate';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
@@ -1668,8 +1668,19 @@ function RematchClaimCard({
     opponentReady: opposing,
     indexingDelayed: responseIndexing.status === 'delayed',
   });
-  const canRequest = requestGate.canRequest;
-  const awaitingResponse = requestGate.pending;
+  /**
+   * geo-chat's row agrees a moment before its request endpoint will honour that agreement, so the
+   * offer is held for a beat after the gate opens. Reported from the browser: pressing the instant
+   * it turned from "Publishing your position…" to "Request debate" returned
+   * `claim_response_required`.
+   *
+   * The extra beat is spent in the pending state that was already on screen, so this reads as the
+   * wait being marginally longer rather than as a new state — and it narrows the window rather than
+   * closing it, which is why the failure below still has to be visible.
+   */
+  const gateHeld = useRequestGateGrace(requestGate.canRequest);
+  const canRequest = requestGate.canRequest && gateHeld;
+  const awaitingResponse = requestGate.pending || (requestGate.canRequest && !gateHeld);
   const awaitingLabel = requestGate.pendingLabel ?? REQUEST_PENDING_LABEL;
   const { openSidePanel } = useEntitySidePanel();
   const request = session?.request;
