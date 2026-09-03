@@ -424,7 +424,10 @@ export function ClaimsTab() {
   // the side is outstanding, and that rides on this space's geo-chat row. Settled rather than
   // answered: a claim with no row genuinely has no side recorded, and a signed-out viewer never
   // runs the query at all, so it settles immediately and correctly reports the side they lack.
-  const taggedAnswersReady = !graphSourced || !taggedRows.isLoading;
+  // A failed lookup is not an answered one: react-query drops `isLoading` on error, and the side
+  // the viewer already holds would be drawn unselected — so a press would republish it rather than
+  // clear it. The card's own contract asks for the side, not merely for the wait to be over.
+  const taggedAnswersReady = !graphSourced || (!taggedRows.isLoading && !taggedRows.isError);
 
   // The space menu, from the server's own count over the tag — narrowed by the search and the
   // topics, never by the space selection, which is what lets a picked space be un-picked and what
@@ -766,6 +769,7 @@ export function SpaceTopicFilters({
   topicAtEnd,
 }: SpaceTopicFiltersProps) {
   const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
+
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(facetSpaceIds);
 
   const spaceOptions = React.useMemo<HubFilterOption<string>[]>(

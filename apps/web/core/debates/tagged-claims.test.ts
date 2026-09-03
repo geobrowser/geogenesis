@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -8,31 +8,58 @@ import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { graphql } from '~/core/io/graphql-client';
 
-import { TAGGED_CLAIMS_LIMIT, dedupeTaggedClaims, fetchTaggedClaims, useTaggedClaims } from './tagged-claims';
+import {
+  NO_TAGGED_CLAIM_FILTERS,
+  TAGGED_CLAIMS_PAGE_SIZE,
+  type TaggedClaimFilters,
+  useTaggedClaims,
+  useTaggedSpaceFacet,
+  useTaggedTopicFacet,
+} from './tagged-claims';
 
 /** Any tag: this module is the same query whichever entity it points at. */
 const TAG = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
+const SPACE = '019fedae72b67ab2927adf044d57c566';
+const OTHER_SPACE = '019fedae72b67ab2927adf044d57c599';
+const TOPIC = '5d050707bc5840119b1e81ad3adb6244';
 
-vi.mock('~/core/io/graphql-client', () => ({
-  graphql: vi.fn(),
-}));
-
+vi.mock('~/core/io/graphql-client', () => ({ graphql: vi.fn() }));
 const graphqlMock = graphql as unknown as Mock;
 
-const SPACE = '019fedae72b67ab2927adf044d57c566';
+beforeEach(() => {
+  graphqlMock.mockReset();
+});
 
-/**
- * One claim as `entitiesConnection` returns it: the entity, with the tag relations that put it on
- * the list. Several spaces means several relations, and the decoder emits one row apiece.
- */
-function node(id: string, name: string, rankingScore: string | null, ...spaceIds: string[]) {
-  const spaces = spaceIds.length > 0 ? spaceIds : [SPACE];
-  return { id, name, description: null, rankingScore, relationsList: spaces.map(spaceId => ({ spaceId })) };
+function wrapper({ children }: { children: React.ReactNode }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return React.createElement(QueryClientProvider, { client }, children);
 }
 
-/** Runs the module's own decoder over one page of `nodes`, which is where the ordering lives. */
-function respondWith(nodes: unknown[]) {
-  respondWithPages([nodes]);
+/** One claim as `entitiesConnection` returns it, with the tag relations that put it on the list. */
+function node(
+  id: string,
+  name: string | null,
+  overrides: {
+    rankingScore?: string | null;
+    tagSpaces?: string[];
+    spaceIds?: string[];
+    topics?: Array<{ id: string; name: string }>;
+    factual?: boolean;
+  } = {}
+) {
+  return {
+    id,
+    name,
+    description: null,
+    rankingScore: 'rankingScore' in overrides ? overrides.rankingScore : '10',
+    spaceIds: overrides.spaceIds ?? [SPACE],
+    tagRelations: (overrides.tagSpaces ?? [SPACE]).map(spaceId => ({ spaceId })),
+    valuesList:
+      overrides.factual === undefined
+        ? []
+        : [{ spaceId: SPACE, propertyId: 'da4a6c1f9d4446f9832ff3b49a4400ef', text: null, boolean: overrides.factual }],
+    relationsList: (overrides.topics ?? []).map(topic => ({ toEntity: { id: topic.id, name: topic.name } })),
+  };
 }
 
 /** Answers each successive request with the next page, the last one closing the connection. */
@@ -43,300 +70,276 @@ function respondWithPages(pages: unknown[][]) {
     const hasNextPage = index < pages.length - 1;
     index += 1;
     return Effect.succeed(
-      decoder({
-        entitiesConnection: {
-          pageInfo: { hasNextPage, endCursor: `cursor-${index}` },
-          nodes,
-        },
-      })
+      decoder({ entitiesConnection: { pageInfo: { hasNextPage, endCursor: `cursor-${index}` }, nodes } })
     );
   });
 }
 
-function namesOf(claims: Array<{ name: string }>) {
-  return claims.map(claim => claim.name);
+function renderClaims(filters: TaggedClaimFilters = NO_TAGGED_CLAIM_FILTERS, enabled = true) {
+  return renderHook(() => useTaggedClaims(TAG, filters, enabled), { wrapper });
 }
 
-describe('fetchTaggedClaims', () => {
-  beforeEach(() => {
-    graphqlMock.mockReset();
+/** The variables the module actually sent, which is where the filter shape lives. */
+function sentVariables(call = 0) {
+  return graphqlMock.mock.calls[call][0].variables as Record<string, any>;
+}
+
+/** The query text, for the assertions about ordering that a decoder cannot make. */
+function sentQuery(call = 0) {
+  const { query } = graphqlMock.mock.calls[call][0];
+  return JSON.stringify(query);
+}
+
+describe('the page it asks for', () => {
+  it('orders by ranking score on the server', async () => {
+    // The inverse of the assertion this file used to carry. Ranked cursors lost and duplicated rows
+    // until GEO-2795, so the list was paged by id and sorted here; it is the server's job again.
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims();
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentQuery()).toContain('RANKING_SCORE_DESC');
+    expect(sentQuery()).not.toContain('ID_DESC');
   });
 
-  // Unordered, the relations connection comes back by relation id — random v4s, so a fixed shuffle
-  // with no relationship to anything a reader would recognise. This is Explore's "Best" order.
-  it('orders by ranking score, highest first', async () => {
-    respondWith([node('a1', 'Middling', '120.5'), node('a2', 'Best', '900.25'), node('a3', 'Worst', '3')]);
+  it('asks for one page rather than the whole tag', async () => {
+    respondWithPages([[node('a1', 'One')], [node('a2', 'Two')]]);
+    const { result } = renderClaims();
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Best', 'Middling', 'Worst']);
+    // One request, one page, and a second page left where it is until something asks for it.
+    expect(graphqlMock).toHaveBeenCalledTimes(1);
+    expect(sentVariables().first).toBe(TAGGED_CLAIMS_PAGE_SIZE);
+    expect(result.current.hasNextPage).toBe(true);
   });
 
-  // `entities_ranked_for_feed` breaks ties on `entity_id DESC`, so two claims on the same score land
-  // here exactly where Explore puts them.
-  it('breaks a tie on entity id, descending, as the ranked feed does', async () => {
-    respondWith([node('a1', 'Lower id', '500'), node('a3', 'Higher id', '500'), node('a2', 'Middle id', '500')]);
+  it('follows the cursor when the next page is asked for', async () => {
+    respondWithPages([[node('a1', 'One')], [node('a2', 'Two')]]);
+    const { result } = renderClaims();
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Higher id', 'Middle id', 'Lower id']);
+    result.current.fetchNextPage();
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+    expect(sentVariables(1).after).toBe('cursor-1');
+    expect(result.current.claims.map(claim => claim.entity.name)).toEqual(['One', 'Two']);
   });
 
-  // A claim the feed has never scored isn't in that table, so there is no place in the order for
-  // it. Last rather than dropped: a curator tagged it deliberately.
-  it('puts an unscored claim last rather than dropping it', async () => {
-    respondWith([node('a1', 'Unscored', null), node('a2', 'Scored', '1')]);
+  it('reports settled rather than loading when it is not enabled', () => {
+    const { result } = renderClaims(NO_TAGGED_CLAIM_FILTERS, false);
 
-    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Scored', 'Unscored']);
+    // `enabled: false` leaves react-query pending, and a caller waiting on this would read that as
+    // "still looking" and never reach its empty state.
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.claims).toEqual([]);
+    expect(graphqlMock).not.toHaveBeenCalled();
   });
+});
 
-  // Every tag survives the fetch. Which space a viewer may be shown is a question only the callers
-  // can answer, so collapsing here would make an arbitrary one authoritative — and drop the claim
-  // outright when that one falls outside their allowlist and another tag would have passed.
-  it('keeps every tag when a claim is featured in more than one space', async () => {
-    const OTHER_SPACE = '019fedae72b67ab2927adf044d57c599';
-    respondWith([node('a1', 'Tagged twice', '10'), node('a1', 'Tagged twice', '10', OTHER_SPACE)]);
-
-    expect((await fetchTaggedClaims(TAG)).claims.map(claim => claim.spaceId)).toEqual([SPACE, OTHER_SPACE]);
-  });
-
-  // The guard and the corpus ending on it are the same shape from the inside; only the server's
-  // count separates them. Without it, a tag with exactly 5,000 claims reported itself truncated.
-  it('calls a complete list complete, even at exactly the guard', async () => {
-    graphqlMock.mockImplementation(({ decoder }) =>
-      Effect.succeed(
-        decoder({
-          entitiesConnection: {
-            totalCount: TAGGED_CLAIMS_LIMIT,
-            pageInfo: { hasNextPage: false, endCursor: null },
-            nodes: Array.from({ length: TAGGED_CLAIMS_LIMIT }, (_, index) => node(`a${index}`, `Claim ${index}`, '1')),
-          },
-        })
-      )
-    );
-
-    const result = await fetchTaggedClaims(TAG);
-
-    expect(result.claims).toHaveLength(TAGGED_CLAIMS_LIMIT);
-    expect(result.truncated).toBe(false);
-  });
-
-  // A claim with no name has nothing to render, and a tag carrying no space can't be grouped for the
-  // geo-chat lookups or tested against the viewer's spaces.
-  it('drops rows it could not render or scope', async () => {
-    respondWith([
-      node('a1', 'Fine', '10'),
-      // Unnamed: nothing to draw.
-      { id: 'a2', name: null, description: null, rankingScore: '99', relationsList: [{ spaceId: SPACE }] },
-      // Named, but the tag relation carries no space.
-      { id: 'a3', name: 'No space', description: null, rankingScore: '99', relationsList: [{ spaceId: null }] },
-      // Named, but no tag relation came back at all.
-      { id: 'a4', name: 'No tag', description: null, rankingScore: '99', relationsList: [] },
-      { id: 'a5', name: 'Null relations', description: null, rankingScore: '99', relationsList: null },
-      null,
-    ]);
-
-    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Fine']);
-  });
-
-  // Paged to exhaustion, then ranked. Ranking cannot be the paging order — `RANKING_SCORE_DESC`
-  // silently drops every unscored claim past the first page — so the connection pages by id and the
-  // sort happens here, over the complete set.
-  it('pages to exhaustion and ranks the whole set, not the first page', async () => {
+describe('what a row carries', () => {
+  it('decodes the claim into the shape the rest of the app already reads', async () => {
     respondWithPages([
-      [node('a1', 'Page one, low', '1')],
-      [node('a2', 'Page two, high', '10')],
-      [node('a3', 'Page three, middling', '5')],
+      [node('a1', 'Nuclear power is cheap', { topics: [{ id: TOPIC, name: 'Energy' }], factual: true })],
     ]);
+    const { result } = renderClaims();
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual([
-      'Page two, high',
-      'Page three, middling',
-      'Page one, low',
+    const [claim] = result.current.claims;
+    expect(claim.entity.name).toBe('Nuclear power is cheap');
+    expect(claim.entity.spaces).toEqual([SPACE]);
+    // Topics and the Is factual value ride with the page, which is what retires the entity lookup.
+    expect(claim.entity.relations.map(relation => relation.toEntity.name)).toEqual(['Energy']);
+    // Booleans land as '1' / '0', matching `Entity`'s own decoding, so `claimResponseKind` reads it.
+    expect(claim.entity.values).toEqual([
+      { property: { id: 'da4a6c1f9d4446f9832ff3b49a4400ef' }, spaceId: SPACE, value: '1' },
     ]);
+    expect(claim.rankingScore).toBe(10);
   });
 
-  it('passes the previous page cursor along', async () => {
-    respondWithPages([[node('a1', 'One', '1')], [node('a2', 'Two', '2')]]);
+  it('keeps every space the claim is tagged in, and collapses none of them', async () => {
+    // The caller decides which space a card is drawn for: the hub tests them against the picked
+    // spaces, the picker against what a debate can be published into. Choosing here would let an
+    // arbitrary space stand for the claim and drop it whenever that one was the wrong one.
+    respondWithPages([[node('a1', 'Tagged twice', { tagSpaces: [SPACE, OTHER_SPACE] })]]);
+    const { result } = renderClaims();
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    await fetchTaggedClaims(TAG);
-
-    expect(graphqlMock.mock.calls.map(call => call[0].variables.after)).toEqual([null, 'cursor-1']);
+    expect(result.current.claims[0].tagSpaceIds).toEqual([SPACE, OTHER_SPACE]);
   });
 
-  // Ordering by id is what makes the paging exact. Ranking by the server instead loses rows, so the
-  // query must not quietly acquire an `orderBy` that reads better and pages worse.
-  it('pages by id, leaving the ranking to the client', async () => {
-    respondWith([node('a1', 'Only', '10')]);
+  it('drops a claim with no name, and one whose every tag has no space', async () => {
+    respondWithPages([
+      [
+        node('a1', 'Fine'),
+        node('a2', null),
+        { ...node('a3', 'No space'), tagRelations: [{ spaceId: null }] },
+      ],
+    ]);
+    const { result } = renderClaims();
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    await fetchTaggedClaims(TAG);
-
-    const source = graphqlMock.mock.calls[0][0].query?.loc?.source?.body ?? '';
-    expect(source).toContain('ID_DESC');
-    expect(source).not.toContain('RANKING_SCORE_DESC');
+    // Neither can be placed: one has nothing to render, the other nothing to be tested against the
+    // allowlist or grouped for the geo-chat lookup.
+    expect(result.current.claims.map(claim => claim.entity.name)).toEqual(['Fine']);
   });
 
-  // A guard against a mis-tagging pointing the whole corpus at one tag, not a product limit — and
-  // it says so, because the slice it leaves is arbitrary rather than the lowest-ranked.
-  it('stops at the runaway guard rather than paging forever', async () => {
-    graphqlMock.mockImplementation(({ decoder }) =>
-      Effect.succeed(
-        decoder({
-          entitiesConnection: {
-            pageInfo: { hasNextPage: true, endCursor: 'cursor' },
-            nodes: Array.from({ length: 1_000 }, (_, index) => node(`a${index}`, `Claim ${index}`, '1')),
-          },
-        })
-      )
+  it('reads an unscored claim as null rather than zero', async () => {
+    respondWithPages([[node('a1', 'Unscored', { rankingScore: null })]]);
+    const { result } = renderClaims();
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    // Zero is a score. The server sorts these last; the distinction is kept in case anything reads it.
+    expect(result.current.claims[0].rankingScore).toBeNull();
+  });
+});
+
+describe('the filter it builds', () => {
+  it('always asks for the tag', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims();
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.and).toContainEqual({
+      relations: { some: { typeId: { is: '257090341ba5406f94e4d4af90042fba' }, toEntityId: { is: TAG } } },
+    });
+  });
+
+  it('sends the search term to the server rather than filtering here', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.name).toEqual({ includesInsensitive: 'nuclear' });
+  });
+
+  it('intersects topics rather than uniting them', async () => {
+    // AND since GEO-2696: a claim has to carry every picked topic, which is one clause each.
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC, 'topic-2'] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const topicClauses = sentVariables().filter.and.filter(
+      (clause: any) => clause.relations?.some?.typeId?.is === '806d52bc27e94c9193c057978b093351'
     );
-
-    const result = await fetchTaggedClaims(TAG);
-
-    expect(result.claims.length).toBeGreaterThanOrEqual(TAGGED_CLAIMS_LIMIT);
-    expect(graphqlMock.mock.calls.length).toBeLessThanOrEqual(Math.ceil(TAGGED_CLAIMS_LIMIT / 1_000));
-    expect(result.truncated).toBe(true);
+    expect(topicClauses).toHaveLength(2);
   });
 
-  // The guard exists to stop a mis-tagging, so it has to count what the server sent rather than what
-  // survived decoding. Rows the decoder drops — an unnamed claim, a tag relation with no space —
-  // never grow `claims`, so a corpus made of exactly those pages straight past a guard counting only
-  // renderable rows. The cap in the mock stands in for the paging that would otherwise not stop.
-  it('stops on the entities it fetched, not only on the rows it kept', async () => {
-    let calls = 0;
-    graphqlMock.mockImplementation(({ decoder }) => {
-      calls += 1;
+  it('sends the picked spaces, and the eligible ones when nothing is picked', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result, rerender } = renderHook(
+      ({ filters }: { filters: TaggedClaimFilters }) => useTaggedClaims(TAG, filters, true),
+      { wrapper, initialProps: { filters: { ...NO_TAGGED_CLAIM_FILTERS, eligibleSpaceIds: [SPACE, OTHER_SPACE] } } }
+    );
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    // `spaceIds` on the entity is a list, so it takes a list filter — `overlaps`, not `in`.
+    expect(sentVariables().filter.spaceIds).toEqual({ overlaps: [SPACE, OTHER_SPACE] });
+
+    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, spaceIds: [SPACE], eligibleSpaceIds: [SPACE, OTHER_SPACE] } });
+    await waitFor(() => expect(graphqlMock.mock.calls.length).toBeGreaterThan(1));
+
+    // The picked set is already inside the eligible one, so the narrower wins.
+    expect(sentVariables(graphqlMock.mock.calls.length - 1).filter.spaceIds).toEqual({ overlaps: [SPACE] });
+  });
+
+  it('narrows nothing by space while the allowlist is unresolved', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, eligibleSpaceIds: null });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.spaceIds).toBeUndefined();
+  });
+});
+
+describe('the facet menus', () => {
+  function respondWithGroups(groups: Array<{ id: string; count: number }>) {
+    graphqlMock.mockImplementation(({ decoder, variables }) => {
+      // The names query answers separately; it is the only one taking `ids`.
+      if ((variables as any).ids) {
+        return Effect.succeed(
+          decoder({
+            entitiesConnection: { nodes: (variables as any).ids.map((id: string) => ({ id, name: `Topic ${id}` })) },
+          })
+        );
+      }
       return Effect.succeed(
         decoder({
-          // Well past the guard's own page budget, so a run that reaches it has not stopped.
-          entitiesConnection: {
-            pageInfo: { hasNextPage: calls < 50, endCursor: 'cursor' },
-            nodes: Array.from({ length: 1_000 }, (_, index) => ({
-              id: `a${index}`,
-              name: null,
-              description: null,
-              rankingScore: '1',
-              relationsList: [{ spaceId: SPACE }],
+          relationsConnection: {
+            groupedAggregates: groups.map(group => ({
+              keys: [group.id],
+              distinctCount: { fromEntityId: String(group.count) },
             })),
           },
         })
       );
     });
+  }
 
-    const result = await fetchTaggedClaims(TAG);
+  it('counts topics over the tag, and puts a name to each id', async () => {
+    respondWithGroups([{ id: TOPIC, count: 12 }]);
+    const { result } = renderHook(() => useTaggedTopicFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper });
 
-    expect(result.claims).toEqual([]);
-    expect(result.truncated).toBe(true);
-    expect(calls).toBeLessThanOrEqual(Math.ceil(TAGGED_CLAIMS_LIMIT / 1_000));
+    await waitFor(() => expect(result.current.topics).toHaveLength(1));
+    // The aggregate answers in ids; a menu row needs a word, so a second request resolves them.
+    expect(result.current.topics[0]).toEqual({ id: TOPIC, name: `Topic ${TOPIC}`, count: 12 });
   });
 
-  it('calls an exhausted list complete, however large', async () => {
-    respondWithPages([[node('a1', 'One', '1')], [node('a2', 'Two', '2')]]);
-
-    expect((await fetchTaggedClaims(TAG)).truncated).toBe(false);
-  });
-
-  // A row the decoder drops is not a truncated list. `totalCount` counts entities and the decoder
-  // legitimately discards unrenderable ones, so comparing the two called a complete page a slice.
-  it('does not call a complete page truncated because a row was dropped', async () => {
-    graphqlMock.mockImplementation(({ decoder }) =>
-      Effect.succeed(
-        decoder({
-          entitiesConnection: {
-            pageInfo: { hasNextPage: false, endCursor: null },
-            nodes: [
-              node('a1', 'Fine', '10'),
-              { id: 'a2', name: null, description: null, rankingScore: '9', relationsList: [{ spaceId: SPACE }] },
-            ],
-          },
-        })
-      )
+  it('counts topics over the topic selection, not around it', async () => {
+    // The two menus are not symmetric, and that is the product's own rule. Spaces are OR, so the
+    // space menu must not narrow by itself or every unpicked space would read zero. Topics are AND
+    // and co-occurrence (GEO-2696): the menu answers "what else do the claims I have narrowed to
+    // carry", so the selection *is* applied — and each picked topic comes back with its current
+    // count, which is what lets it be un-picked.
+    respondWithGroups([{ id: TOPIC, count: 12 }]);
+    const { result } = renderHook(
+      () => useTaggedTopicFacet(TAG, { ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC], search: 'x' }, true),
+      { wrapper }
     );
+    await waitFor(() => expect(result.current.topics).toHaveLength(1));
 
-    const result = await fetchTaggedClaims(TAG);
-
-    expect(namesOf(result.claims)).toEqual(['Fine']);
-    expect(result.truncated).toBe(false);
+    const fromEntity = sentVariables().fromEntity;
+    expect(fromEntity.name).toEqual({ includesInsensitive: 'x' });
+    expect(
+      fromEntity.and.filter((clause: any) => clause.relations?.some?.typeId?.is === '806d52bc27e94c9193c057978b093351')
+    ).toHaveLength(1);
   });
 
-  // The multi-space shape the decoder emits, which is what `dedupeTaggedClaims` below collapses.
-  it('emits one row per space a claim is tagged in', async () => {
-    const OTHER = '019fedae72b67ab2927adf044d57c500';
-    respondWith([node('a1', 'Tagged twice', '10', SPACE, OTHER)]);
+  it('does not narrow the space menu by the space selection, but still by the viewer', async () => {
+    respondWithGroups([{ id: SPACE, count: 5 }]);
+    const { result } = renderHook(
+      () =>
+        useTaggedSpaceFacet(
+          TAG,
+          { ...NO_TAGGED_CLAIM_FILTERS, spaceIds: [SPACE], eligibleSpaceIds: [SPACE, OTHER_SPACE] },
+          true
+        ),
+      { wrapper }
+    );
+    await waitFor(() => expect(result.current.spaces).toHaveLength(1));
 
-    const claims = (await fetchTaggedClaims(TAG)).claims;
-
-    expect(claims.map(claim => claim.spaceId).sort()).toEqual([OTHER, SPACE].sort());
-    expect(new Set(claims.map(claim => claim.claimEntityId)).size).toBe(1);
-  });
-});
-
-describe('dedupeTaggedClaims', () => {
-  function claim(claimEntityId: string, spaceId: string) {
-    return { claimEntityId, spaceId, name: claimEntityId, description: null, rankingScore: 1 };
-  }
-
-  it('keeps the first entry for each claim', () => {
-    const first = claim('a1', 'space-1');
-    const second = claim('a1', 'space-2');
-
-    expect(dedupeTaggedClaims([first, second, claim('a2', 'space-1')])).toEqual([first, claim('a2', 'space-1')]);
+    // The picked space is dropped so the menu can still offer the others; the eligible set is not,
+    // because a space the viewer cannot see should not be offered, counted or listed.
+    expect(sentVariables().fromEntity.spaceIds).toEqual({ overlaps: [SPACE, OTHER_SPACE] });
+    expect(result.current.spaces[0]).toEqual({ id: SPACE, count: 5 });
   });
 
-  // The point of deduplicating late: run after a space filter, the tag that survives is one the
-  // viewer may actually be shown.
-  it('collapses onto whichever tag survived a space filter', () => {
-    const allowed = claim('a1', 'space-2');
+  it('groups the space menu on the tag relation, so a space is counted for what is tagged in it', async () => {
+    respondWithGroups([{ id: SPACE, count: 5 }]);
+    const { result } = renderHook(() => useTaggedSpaceFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper });
+    await waitFor(() => expect(result.current.spaces).toHaveLength(1));
 
-    expect(dedupeTaggedClaims([claim('a1', 'space-1'), allowed].filter(c => c.spaceId === 'space-2'))).toEqual([
-      allowed,
-    ]);
-  });
-});
-
-
-/**
- * A claim the ranking feed has never scored has no place in the order, so it goes last rather than
- * being dropped — a curator tagged it deliberately, and leaving it out would quietly overrule them.
- */
-describe('unscored claims', () => {
-  it('ranks them last rather than first', async () => {
-    respondWith([node('a1', 'Middling', '5'), node('a2', 'Unscored', null), node('a3', 'Top', '10')]);
-
-    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Top', 'Middling', 'Unscored']);
+    expect(sentVariables().groupBy).toEqual(['SPACE_ID']);
+    expect(sentVariables().relationTypeId).toBe('257090341ba5406f94e4d4af90042fba');
+    expect(sentVariables().toEntityId).toBe(TAG);
   });
 
-  it('keeps them in a stable order among themselves', async () => {
-    // Two nulls compare equal on score, so the id tiebreak decides — descending, as the feed's own
-    // `ORDER BY ranking_score DESC, entity_id DESC` does.
-    respondWith([node('a1', 'First unscored', null), node('a2', 'Second unscored', null)]);
+  it('reports a failed count as unsettled, so a selection is not reconciled against it', async () => {
+    graphqlMock.mockImplementation(() => Effect.fail(new Error('facet exploded')));
+    const { result } = renderHook(() => useTaggedSpaceFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper });
 
-    expect(namesOf((await fetchTaggedClaims(TAG)).claims)).toEqual(['Second unscored', 'First unscored']);
-  });
-});
-
-/**
- * A caller waiting on this hook has to be able to tell "not asked" from "still asking". react-query
- * v5 already answers that correctly for a disabled query — `isLoading` is `isPending && isFetching`
- * — so this pins the contract rather than the `enabled &&` guard that also expresses it. Reaching
- * for `isPending` instead would break it, and these cases would say so.
- */
-describe('useTaggedClaims when it is not enabled', () => {
-  function wrapper({ children }: { children: React.ReactNode }) {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    return React.createElement(QueryClientProvider, { client }, children);
-  }
-
-  it('reports settled rather than loading, so the caller can answer', () => {
-    // Call counts carry across this file's cases; only what this render does is of interest.
-    graphqlMock.mockClear();
-    const { result } = renderHook(() => useTaggedClaims(TAG, false), { wrapper });
-
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.claims).toEqual([]);
-    expect(graphqlMock).not.toHaveBeenCalled();
-  });
-
-  it('still reports loading while it is enabled and in flight', () => {
-    // The guard: without this, `isLoading: false` unconditionally would pass the case above.
-    graphqlMock.mockImplementation(() => Effect.never);
-    const { result } = renderHook(() => useTaggedClaims(TAG, true), { wrapper });
-
-    expect(result.current.isLoading).toBe(true);
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+    // An error leaves the menu empty while it stops loading. Read as settled, that empty menu says
+    // the viewer's picked space no longer exists, and the reconciliation spends their selection.
+    expect(result.current.settled).toBe(false);
   });
 });

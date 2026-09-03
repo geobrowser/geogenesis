@@ -206,20 +206,24 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery) {
  * narrowed to. Shared by the list and both facet queries so a count can never describe a different
  * set from the rows.
  *
- * `omit` leaves one dimension out. A facet counts *without narrowing by itself* — the space menu
- * says how many claims each space would give under the current topic and search, so it must not
- * already be cut to the picked spaces — while still carrying the others.
+ * `omit` leaves the space selection out, and only that.
+ *
+ * The two menus do not work the same way, and the difference is the product's rather than an
+ * oversight. Spaces are OR: the menu says how many claims each space would give under the current
+ * topic and search, so it must not already be cut to the picked spaces or every unpicked one would
+ * read zero and there would be no way back to another. Topics are AND and co-occurrence
+ * (GEO-2696): the menu answers "what else do the claims I have narrowed to carry", so it *is*
+ * counted over the topic selection — and each picked topic comes back with its current result
+ * count, which is what lets it be un-picked.
  */
-function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: 'topics' | 'spaces') {
+function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: 'spaces') {
   const and: Record<string, unknown>[] = [
     { relations: { some: { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: tagId } } } },
   ];
 
-  if (omit !== 'topics') {
-    // AND, not OR (GEO-2696): one clause per topic, so a claim has to carry all of them.
-    for (const topicId of filters.topicIds) {
-      and.push({ relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: topicId } } } });
-    }
+  // AND, not OR (GEO-2696): one clause per topic, so a claim has to carry all of them.
+  for (const topicId of filters.topicIds) {
+    and.push({ relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { is: topicId } } } });
   }
 
   const filter: Record<string, unknown> = { and };
@@ -405,11 +409,13 @@ const NO_FACET_COUNTS: TaggedFacetCount[] = [];
 const NO_TOPIC_NAMES = new Map<string, string | null>();
 
 /**
- * The topic menu: every topic carried by a claim that survives the *other* filters, with a count.
+ * The topic menu: every topic carried by a claim that survives the current filters, the topic
+ * selection included.
  *
- * Not narrowed by the topic selection, which is what lets a count answer "how many of what I have
- * chosen so far are also in here" and what lets a picked topic be un-picked — narrowing by itself
- * would leave every unpicked topic reading zero.
+ * Co-occurrence, since topics intersect (GEO-2696). Counted over the claims that already carry
+ * every picked topic, so the menu answers "what else do these carry" and nothing it offers can lead
+ * to an empty list. The picked topics come back with the current result count, which is what lets
+ * them be un-picked.
  */
 export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, enabled: boolean) {
   const counts = useQuery({
@@ -422,7 +428,7 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
           variables: {
             relationTypeId: TOPICS_PROPERTY_ID,
             toEntityId: null,
-            fromEntity: { typeIds: { in: [CLAIM_TYPE_ID] }, ...taggedEntityFilter(tagId, filters, 'topics') },
+            fromEntity: { typeIds: { in: [CLAIM_TYPE_ID] }, ...taggedEntityFilter(tagId, filters) },
             groupBy: ['TO_ENTITY_ID'],
           },
           signal,

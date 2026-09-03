@@ -787,18 +787,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [taggedTopicFacet.topics, topicIds]
   );
 
-  // Nothing left to filter on the Claims tab: the server applied all three. The opponent's tab is
-  // still a client-side list — its rows come from the graph by id, not from a query that could
-  // narrow them — so it keeps the filters it always had.
+  // Only the tagged sources are narrowed by their query. The opponent's tab and Recommended are
+  // both lists fetched by id — the opponent's positions, a curator's page — so nothing narrowed
+  // them on the way in and the filters still run here.
+  const graphFiltered = tab === 'claims' && (source === 'featured' || source === 'all');
   const visibleClaims = React.useMemo(() => {
-    if (tab !== 'opponent') return claims;
+    if (graphFiltered) return claims;
     return claims.filter(claim => {
       if (spaceIds.length > 0 && !spaceIds.includes(claim.claim.space_id)) return false;
       if (!carriesPickedTopics(claim.claim.claim_entity_id)) return false;
       if (debouncedSearch && !claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
       return true;
     });
-  }, [carriesPickedTopics, claims, debouncedSearch, spaceIds, tab]);
+  }, [carriesPickedTopics, claims, debouncedSearch, graphFiltered, spaceIds]);
 
   const hasFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
