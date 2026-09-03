@@ -244,39 +244,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   //
   const { publishableSpaceIds } = useDebatePublishableSpaces();
 
-  // Same scoping as the hub's Claims tab: the facets have to describe the spaces this pairing can
-  // actually be shown claims from, or the topic menu offers topics from spaces `browsedRows`
-  // removes.
-  //
-  // It has to apply all three gates `canPublishDebateIn` does, including the space-type one that
-  // rules out personal spaces — the allowlist holds the viewer's own — or a personal space slips
-  // into the scope whenever the editor-space lookup is unresolved, since that gate passes
-  // everything until it lands.
-  //
-  // Typed off its own lookup rather than through `canPublishDebateIn`, which reads `candidateSpaces`
-  // — built from the claims this very query returns. Going through it would make the query depend
-  // on its own result. The allowlist depends on nothing here, so asking for those types directly
-  // breaks the loop.
-  // Same fallback as the Claims tab: an allowlist that settled without an answer stops narrowing
-  // by *it*, not by everything. The publishable set answers a different question and still bounds
-  // The empty-scope case belongs to the shared hook below. This is the same problem reached the
-  // other way: a space can be in the menu without being in the allowlist — the graph-backed tabs
-  // aren't narrowed by it, so their rows put their spaces there — but `browsedRows` still drops
-  // every *browsed* row from a disallowed space. Selecting one leaves the server answering with
-  // rows that cannot be shown, and a facet describing them, while only the pinned rows survive.
-  // Every picked space, not any: with one allowed space picked alongside a disallowed one, the
-  // browsed corpus still has rows to give.
-  // The graph-backed sources deliberately offer spaces outside the viewer's allowlist, so a
-  // selection can hold both kinds at once. Only the allowed ones may reach geo-chat: `browsedRows`
-  // drops the rest anyway, but the facets riding with them would still name their topics and count
-  // their claims. The full selection stays in `spaceIds` for the pinned rows, which come from the
-  // graph and are not narrowed by the allowlist.
-  //
-  // Debounced, like the hub's: the menu stays open across ticks, so picking three spaces in a row
-  // would otherwise fire three requests and throw two away. Only the request waits — every
-  // client-side filter below reads the live `spaceIds`, so the rows the page holds itself still
-  // react on the same frame as the tick.
-
   // GEO-2683. Fetched only when Featured is the source on screen — it is one option in a menu, and
   // the other two answer for themselves.
   //
@@ -527,18 +494,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // folding those in never added anything — the topics have to come from the entity or not at all,
     // which is why the saved claims are hydrated above rather than trusted to carry their own.
   }, [taggedEntitiesQuery.entities, opponentEntitiesQuery.entities, recommendedEntities, savedEntitiesQuery.entities]);
-
-  // Which claims the server has already held to the topic filter.
-  //
-  // geo-chat does not send per-row topics back: `matchmaking_claims_for_user` fills `topics: []`
-  // and puts the topic information in the facet beside the rows instead. So `topicsByClaimId`
-  // cannot know a browsed row's topics, and testing one against it fails every time — which is
-  // how a topic filter with 48 claims behind it rendered an empty list (GEO-2714). The rows were
-  // there and correct; the client threw them away for lacking a field the server never sends.
-  //
-  // Under the debounce these ids answer the previous topic selection for a moment, like the rows
-  // themselves do. That is the same beat of staleness `keepPreviousData` already shows, not a
-  // second one.
 
   /**
    * Whether a claim survives the topic filter.
@@ -866,12 +821,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           ? taggedClaims
           : browsedClaims;
 
-  // Every space the lists have shown, not only the current tab's. Space runs in the browsed query,
-  // so the loaded corpus is whatever the current filter allows — a menu listing only the space you
-  // picked would have no way back to another. Topics need no equivalent: their filter is applied
-  // here rather than in the query, so narrowing them never costs the viewer their way back — and
-  // remembering them anyway kept offering topics from spaces the viewer had filtered away, where
-  // picking one could only ever produce an empty list (GEO-2653).
+  // Every space the lists have shown, not only the current tab's.
+  //
+  // Nothing is narrowed by space server-side any more (GEO-2771) — every source is a graph list or
+  // an id lookup, and the space filter runs here. So this no longer keeps the menu from closing
+  // around the space you picked; what it keeps is the *selection*, which the effect below prunes to
+  // whatever this offers. Without the accumulation, rows going away for a moment — a refetch, an
+  // exclusion landing — would silently untick a space the viewer chose.
+  //
+  // It cannot widen the menu in the process: `facetSpaces` counts live rows and drops what comes
+  // back empty, so an id that outlives its rows is offered nothing to be counted against. Topics
+  // need no equivalent — they are pruned only once the tab has settled (GEO-2653).
   //
   // The two provenances are held apart because they are gated differently below. A space that
   // reached the menu through a *row* has already passed whatever its own tab requires, and the
@@ -899,9 +859,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return [...menu];
   }, [browsedClaims, canPublishDebateIn, curatedClaims, taggedClaims, opponentClaims]);
 
-  // The menu's ids with counts against them. The server counts the browsed corpus; anything only
-  // the rows know about is counted from the rows, which is all there is to count — see
-  // `mergeFacetCounts` for why the two are not summed.
+  // The menu's ids with counts against them, counted from the rows — which is all there is to count
+  // now that no source carries server facets (GEO-2771).
   const facetSpaces = React.useMemo(() => {
     const offered = new Set(facetSpaceIds);
     // Narrowed by the topic and the search, never by the space selection — what the server does
@@ -918,11 +877,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         })
         .map(claim => ({ id: claim.claim.space_id, name: null }))
     );
-    const merged = fromRows;
     // Absent options stay absent — one the other filters leave empty could only ever produce an
     // empty list. An absent *selection* comes back at zero, or its checkbox disappears while the
     // trigger goes on counting it, and it can't be unticked without clearing every space.
-    return orderFacetOptions(keepSelectedVisible(merged, spaceIds), spaceIds);
+    return orderFacetOptions(keepSelectedVisible(fromRows, spaceIds), spaceIds);
   }, [carriesPickedTopics, claims, debouncedSearch, facetSpaceIds, spaceIds]);
 
   // A space picked while the gates were still passing everything has to be let go once they

@@ -107,7 +107,7 @@ function filterOptionsFor(authenticated: boolean) {
 }
 
 /** Stable identity so the geo-chat lookups don't restart on every render of a geo-chat list. */
-const NO_FEATURED_CLAIMS: TaggedClaim[] = [];
+const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
 
 /**
  * Cross-space claim discovery. Search, the space, topic and position filters, and the sort (people
@@ -288,7 +288,7 @@ export function ClaimsTab() {
   const taggedAllowed = React.useMemo(
     () =>
       !graphSourced || spacesPending
-        ? NO_FEATURED_CLAIMS
+        ? NO_TAGGED_CLAIMS
         : taggedCatalog.filter(claim => spaceShowsClaims(claim.spaceId)),
     [graphSourced, taggedCatalog, spaceShowsClaims, spacesPending]
   );
