@@ -34,7 +34,7 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
 
   const busy = acceptRequest.isPending || dismissRequest.isPending || blockUser.isPending;
   const unavailable = request.requester.in_debate;
-  const { answerOnce } = useAnswerOnce();
+  const { answerOnce, releaseAnswer } = useAnswerOnce();
 
   return (
     // Expiry is owned by the list (`useUnexpiredRequests`) rather than this card, so the card can
@@ -86,7 +86,7 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
 
       <div className="grid grid-cols-2 gap-2">
         <HubPillButton
-          onClick={() => answerOnce(() => dismissRequest.mutate({ requestId: request.id }))}
+          onClick={() => answerOnce(() => dismissRequest.mutate({ requestId: request.id }, releaseAnswer))}
           disabled={busy}
           pending={dismissRequest.isPending}
           pendingLabel="Dismissing…"
@@ -95,7 +95,7 @@ export function IncomingRequestCard({ request, ref }: { request: DebateRequest; 
         </HubPillButton>
         <HubPillButton
           variant="primary"
-          onClick={() => answerOnce(() => acceptRequest.mutate({ requestId: request.id }))}
+          onClick={() => answerOnce(() => acceptRequest.mutate({ requestId: request.id }, releaseAnswer))}
           disabled={busy || unavailable}
           pending={acceptRequest.isPending}
           pendingLabel="Accepting…"
