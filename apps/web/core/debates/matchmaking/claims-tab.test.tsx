@@ -43,6 +43,8 @@ const mocks = vi.hoisted(() => ({
   taggedRowsError: false,
   /** The per-space lookup still in flight, which is where the viewer's own side comes from. */
   taggedRowsLoading: false,
+  /** Privy can report authenticated before it has rehydrated the user, so this is separable. */
+  accountKey: 'account-1' as string | null,
   /** A failed entity hydration, which is where the graph-backed list gets its topics. */
   claimEntitiesError: null as Error | null,
   /** A failed tag catalog — the query that says which claims the list is made of. */
@@ -247,7 +249,7 @@ vi.mock('../hooks', () => ({
     matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
-  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   // Read by the end slot's match lookup; the tab's tests do not exercise availability.
   useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
@@ -433,6 +435,7 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
+  mocks.accountKey = 'account-1' as string | null;
   mocks.taggedRowsError = false;
   mocks.taggedRowsLoading = false;
   mocks.claimEntitiesError = null;
@@ -935,6 +938,30 @@ describe('All claims reads the Debate tag', () => {
 
     const agree = await screen.findByRole('button', { name: /^Agree/ });
     expect(agree).toBeDisabled();
+  });
+
+  // `fetchDebateClaims` sends `auth: 'optional'` with no account, so a request made before Privy
+  // has rehydrated the user *succeeds* and comes back with every viewer field null — and that
+  // answer used to be cached under the key the signed-in fetch would later read. The card then drew
+  // its avatars and its split while reporting no response from the viewer.
+  it('asks geo-chat nothing until it knows whose responses it is asking about', async () => {
+    mocks.accountKey = null;
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    // The claims still list — the catalog is the graph's, and it needs no account.
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(mocks.debateClaimGroups.flat()).toEqual([]);
+  });
+
+  it('asks once the account is known', async () => {
+    // The guard: without it, never asking would satisfy the case above just as well.
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    await waitFor(() => expect(mocks.debateClaimGroups.flat().length).toBeGreaterThan(0));
   });
 
   // The tag rows are per space, so a claim tagged in two comes back twice and the collapse to one

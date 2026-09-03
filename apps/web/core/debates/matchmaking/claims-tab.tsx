@@ -141,7 +141,7 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  */
 export function ClaimsTab() {
   const queryClient = useQueryClient();
-  const { authenticated } = useGeoChatAuth();
+  const { authenticated, accountKey } = useGeoChatAuth();
   // A signed-out viewer gets Privy rather than a dead pill, the same hook and for the same reason
   // the claim page and the entity vote arrows use it. Passed as `undefined` when signed in so the
   // card keeps publishing directly.
@@ -344,15 +344,21 @@ export function ClaimsTab() {
   // filters a list that is already loaded instead of restarting a fan-out of per-space requests on
   // every keystroke, and the gateway scopes those lookups hold stay put while it happens.
   //
-  // Nothing is asked for signed out, and deliberately not just because the lookup would be
-  // disabled: `debateQueryKeys.claims` is keyed on space and ids but not on the account, and a
-  // disabled react-query observer still hands back whatever that key already holds. Left to it,
-  // the first signed-out render after a sign-out would draw the previous viewer's `viewer_response`
-  // and `viewer_debate_ready` onto these cards. Empty groups mean no key to read, and every field
-  // it would have carried already has the graph-derived fallback below.
+  // Nothing is asked for until the viewer is known — signed out, *or* signed in with the account
+  // not yet resolved.
+  //
+  // The second half is the one that bit us. `fetchDebateClaims` sends `auth: 'optional'` when it
+  // has no account, so a request made in that window succeeds and comes back with every viewer
+  // field null. The rows still carry the public ones, so the card drew its avatars and its split
+  // while reporting no response from the viewer — a claim they had answered, with the pill
+  // unselected and a press about to republish the side they already held.
+  //
+  // `debateQueryKeys.claims` now carries the account, so such an answer can no longer be read back
+  // by the signed-in fetch. Not asking at all is the other half: an answer nothing can use is a
+  // request worth not making.
   const taggedGroups = React.useMemo(
-    () => (authenticated ? taggedClaimIdsBySpace(taggedAllowed) : []),
-    [authenticated, taggedAllowed]
+    () => (authenticated && accountKey ? taggedClaimIdsBySpace(taggedAllowed) : []),
+    [accountKey, authenticated, taggedAllowed]
   );
   const taggedRows = useDebateClaimsBySpaces(taggedGroups);
 
