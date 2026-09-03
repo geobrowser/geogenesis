@@ -1281,3 +1281,43 @@ function rematchSession(): DebateRematchSession {
     updated_at: '2026-07-02T00:00:01.000Z',
   };
 }
+
+
+/**
+ * The rows behind these keys carry `viewer_response`, `viewer_debate_ready` and the readiness
+ * reason, so one identity's answer must never be served to another — the same rule
+ * `batchDebateClaims` applies to its own batching.
+ */
+describe('debateQueryKeys.claims', () => {
+  it('separates two identities asking about the same claims', () => {
+    const a = debateQueryKeys.claims('space-1', ['claim-1'], 'user-a');
+    const b = debateQueryKeys.claims('space-1', ['claim-1'], 'user-b');
+
+    expect(a).not.toEqual(b);
+  });
+
+  it('separates a signed-out answer from a signed-in one', () => {
+    // The window this was written for: `auth: 'optional'` succeeds with no account and returns no
+    // viewer fields, and that answer must not be what the signed-in fetch reads back.
+    expect(debateQueryKeys.claims('space-1', ['claim-1'], null)).not.toEqual(
+      debateQueryKeys.claims('space-1', ['claim-1'], 'user-a')
+    );
+  });
+
+  it('keeps the account out of the first four slots, which the gateway matches on', () => {
+    // `debate-gateway` destructures `[root, kind, spaceId, claimIds]` to decide what a claim change
+    // invalidates. Putting the account anywhere in that prefix would silently stop those refreshes.
+    const key = debateQueryKeys.claims('space-1', ['claim-1'], 'user-a');
+
+    expect(key.slice(0, 4)).toEqual(['debates', 'claims', 'space-1', ['claim-1']]);
+  });
+
+  it('still stores a whole-space subscription as "all"', () => {
+    expect(debateQueryKeys.claims('space-1', null, 'user-a').slice(0, 4)).toEqual([
+      'debates',
+      'claims',
+      'space-1',
+      'all',
+    ]);
+  });
+});

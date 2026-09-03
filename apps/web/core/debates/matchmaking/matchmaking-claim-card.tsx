@@ -634,27 +634,40 @@ export function withViewerPosition({
   // Counts follow `serverPosition`, but the participant lists are rebuilt from scratch on every
   // side. Removing the viewer only from the side the server reports assumed those two agree about
   // who the viewer is; where they don't, the viewer ends up on two sides at once.
-  // `present_count` and `total_count` both already include the viewer once geo-chat reports their
-  // position, so both are adjusted only while it does not. `available_now_count` is never adjusted:
-  // it means "people this viewer could request", which the viewer is not and never becomes.
-  const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
-    ...side,
-    total_count: side.total_count + (serverPosition === side.position ? 0 : 1),
-    // Left undefined when the server sent none, so `presentCount` keeps falling back to the
-    // face count — which the participant list below has already been adjusted for.
-    present_count:
-      side.present_count === undefined ? undefined : side.present_count + (serverPosition === side.position ? 0 : 1),
-    participants: [viewer, ...side.participants.filter(participant => !heldByViewer(participant))],
-  });
-  const withoutViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => ({
-    ...side,
-    total_count: Math.max(0, side.total_count - (serverPosition === side.position ? 1 : 0)),
-    present_count:
-      side.present_count === undefined
-        ? undefined
-        : Math.max(0, side.present_count - (serverPosition === side.position ? 1 : 0)),
-    participants: side.participants.filter(participant => !heldByViewer(participant)),
-  });
+  //
+  // Whether a count already includes the viewer is asked of the count's own population — the
+  // participant list — rather than inferred from `serverPosition`.
+  //
+  // `serverPosition` is `viewer_response`, and the two are not always in step. The hub's tagged
+  // rows build their sides from `online_choices`, which is presence-driven and (since GEO-2784)
+  // learns a position while the write is still in flight, while `viewer_response` waits for the
+  // response itself. In that window the viewer is in `participants` *and* absent from
+  // `viewer_response`, so a bump keyed on `serverPosition` alone counted them twice: one face and
+  // a "+1" beside it, on a side only the viewer holds. `available_now_count` is never adjusted: it
+  // means "people this viewer could request", which the viewer is not and never becomes.
+  const countsViewer = (side: DebateClaimPositionSummary) =>
+    serverPosition === side.position || side.participants.some(heldByViewer);
+
+  const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => {
+    const missing = countsViewer(side) ? 0 : 1;
+    return {
+      ...side,
+      total_count: side.total_count + missing,
+      // Left undefined when the server sent none, so `presentCount` keeps falling back to the
+      // face count — which the participant list below has already been adjusted for.
+      present_count: side.present_count === undefined ? undefined : side.present_count + missing,
+      participants: [viewer, ...side.participants.filter(participant => !heldByViewer(participant))],
+    };
+  };
+  const withoutViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => {
+    const counted = countsViewer(side) ? 1 : 0;
+    return {
+      ...side,
+      total_count: Math.max(0, side.total_count - counted),
+      present_count: side.present_count === undefined ? undefined : Math.max(0, side.present_count - counted),
+      participants: side.participants.filter(participant => !heldByViewer(participant)),
+    };
+  };
 
   const adjusted = positions.map(side => (side.position === viewerPosition ? withViewer(side) : withoutViewer(side)));
 
