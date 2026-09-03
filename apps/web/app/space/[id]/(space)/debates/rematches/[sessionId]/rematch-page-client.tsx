@@ -867,9 +867,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // *and* the tab is in error" hard to reach through the mocks. The hub's equivalent
     // (`facetsSettled` in claims-tab) is the same rule against one source, and it is pinned; this
     // is that rule, and it can only ever delay a prune, never cause a wrong one.
-    const resolved = !topicsSettling && !tabIsLoading && !tabError;
+    //
+    // And on a graph-filtered source, not before the *facet* has answered either. `tabIsLoading`
+    // watches the catalog, which is a different query: switching back to a source whose page is
+    // already cached settles it instantly while the facet is still out, and the menu it hands over
+    // in that gap is empty for the same reason an outage's is. Same rule as the two above, applied
+    // to the one source whose menu does not come from its own rows.
+    const resolved = !topicsSettling && !tabIsLoading && !tabError && (!graphFiltered || taggedTopicFacet.settled);
     setTopicIds(current => keepSelectableTopics(current, facetTopics, resolved));
-  }, [facetTopics, tabError, tabIsLoading, topicsSettling]);
+  }, [facetTopics, graphFiltered, tabError, tabIsLoading, taggedTopicFacet.settled, topicsSettling]);
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
   const showsSections = tab === 'claims' && source === 'recommended';

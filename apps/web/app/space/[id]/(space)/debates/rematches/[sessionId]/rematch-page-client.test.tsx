@@ -82,6 +82,9 @@ const mocks = vi.hoisted(() => ({
   }>,
   featuredCatalogLoading: false,
   featuredCatalogError: null as Error | null,
+  // Independent of the catalog on purpose: the facet is its own query, and the whole hazard is the
+  // catalog answering first. A mock that derives one from the other cannot reach it.
+  topicFacetSettled: true,
   /** Fails the entity lookup whose id list contains this claim, leaving the others answering. */
   entityHydrationErrorFor: null as string | null,
   /** The session's saved-claims request — the parent of the saved rows, their ids and the exclusions. */
@@ -380,9 +383,12 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
       }
     }
     return {
-      topics: [...counts.values()],
+      // An unsettled facet has no counts to give — `keepPreviousData` holds the *previous* key's,
+      // and on a first fetch of a new key there is no previous. That empty menu arriving beside an
+      // answered catalog is the whole hazard, so the mock has to be able to produce it.
+      topics: mocks.topicFacetSettled ? [...counts.values()] : [],
       isLoading: false,
-      settled: enabled && !mocks.featuredCatalogError,
+      settled: enabled && !mocks.featuredCatalogError && mocks.topicFacetSettled,
       error: null,
     };
   },
@@ -671,6 +677,7 @@ beforeEach(() => {
   mocks.featuredClaims = [];
   mocks.featuredCatalogLoading = false;
   mocks.featuredCatalogError = null;
+  mocks.topicFacetSettled = true;
   mocks.taggedFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
   mocks.fetchNextTaggedPage = vi.fn();
@@ -1714,6 +1721,34 @@ describe('DebateRematchPageClient', () => {
     // Only the Governance-tagged published claim survives; the untagged shared claim drops out.
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+  });
+
+  // GEO-2798 review. On a graph-filtered source the topic menu is its own query, separate from the
+  // catalog — so `tabIsLoading`, which watches the catalog, says "settled" while the facet is still
+  // out. Switching back to a source whose page is already cached hits that gap every time, and the
+  // menu it hands over there is empty for the same reason an outage's is: reconciling against it
+  // reads "your topic no longer exists" and takes the selection permanently.
+  it('keeps a picked topic through a gap in the facet, so it is still there when it returns', async () => {
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    selectFilter('Any topic', 'Governance');
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+
+    // The catalog stays answered and only the menu goes away, which is the divergence. With no
+    // options the menu is not drawn at all, so nothing is assertable *during* the gap — which is
+    // also why this went unnoticed: on screen it looks like the filter row simply thinned out.
+    mocks.topicFacetSettled = false;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull());
+
+    // What the guard is actually for: the *selection* outlived the gap, so the menu coming back
+    // restores the chip rather than the viewer finding their filter quietly cleared.
+    mocks.topicFacetSettled = true;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Governance/ })).toBeInTheDocument());
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
   });
 
   it('matches the topic filter on any of a claim topics, not just the first', async () => {
