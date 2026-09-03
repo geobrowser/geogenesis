@@ -36,8 +36,8 @@ export type SpaceTopicProposalDetails = {
  * from the API action: `slowThreshold`/`universalThreshold` are contract ratios (1e7 = 100%),
  * `duration` is in seconds, and `fastThreshold`/`quorum` are editor counts.
  *
- * `disableFastPathForNewMembers` is plumbed through but the API does not send it yet, so it is
- * always undefined today and its row is skipped. Grace period is not surfaced at all.
+ * `disableFastPathForNewMembers` is a boolean rather than a count. Grace period is the one field of
+ * the seven `updateVotingSettings` writes that still isn't surfaced.
  */
 export type VotingSettingsProposalDetails = {
   slowThreshold?: number;

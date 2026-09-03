@@ -82,8 +82,11 @@ export const ApiActionSchema = Schema.Struct({
   universalPercentageSupportThreshold: Schema.optional(Schema.Number),
   duration: Schema.optional(Schema.Number),
   /**
-   * Whether the proposal also flips new-member fast-path access. Optional like its siblings, and
-   * currently never sent — see {@link getVotingSettingsProposalDetails}.
+   * Whether the proposal also flips new-member fast-path access.
+   *
+   * The API had been sending this all along; the schema simply did not declare it, and decoding
+   * drops what it does not know about. So the value was arriving and being thrown away one layer
+   * before anything could read it — which is why the review page showed nothing.
    */
   disableFastPathAccessForNewMembers: Schema.optional(Schema.Boolean),
   targetSpaceId: Schema.optional(Schema.String),
@@ -330,11 +333,10 @@ export function getSpaceTopicProposalDetails(actions: readonly ApiAction[]): Spa
  * `fastThreshold`, `quorum`, `duration`) directly on the action; returns null if there's no
  * such action or it carries none of them.
  *
- * `disableFastPathAccessForNewMembers` is read here and threaded through to the review page, but
- * the API does not send it yet — `updateVotingSettings` takes seven fields and the action carries
- * five. Until it does, a proposal that only flips that switch shows no changed row, which is worth
- * fixing on the API side: it is an access-control change, and a voter should be able to see it
- * before approving. The plumbing is in place so the row appears the moment the value arrives.
+ * `disableFastPathAccessForNewMembers` is read here too. It was absent from the schema until the
+ * setting became editable, so decoding dropped it and a proposal that only flipped that switch
+ * rendered as a no-op — five rows, none of them changed, over an access-control change. Nothing
+ * about the API had to change; the field only had to be declared.
  */
 export function getVotingSettingsProposalDetails(actions: readonly ApiAction[]): VotingSettingsProposalDetails | null {
   const action = actions.find(a => a.actionType === 'UPDATE_VOTING_SETTINGS');

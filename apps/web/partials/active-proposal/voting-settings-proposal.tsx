@@ -109,7 +109,7 @@ function buildRows(
   }
 
   // An access-control change, so it belongs in front of a voter rather than only in the calldata.
-  // Skipped while the API omits the field, exactly as the five above are when absent.
+  // Guarded like the five above: absent means the proposal did not report it, not that it is off.
   if (details.disableFastPathForNewMembers !== undefined) {
     rows.push(
       makeRow(
