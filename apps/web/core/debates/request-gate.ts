@@ -105,13 +105,16 @@ export function debateRequestGate({
  * with `claim_response_required`. Tested in the browser: the control flipped from
  * "Publishing your position…" to "Request debate" and the request came straight back.
  *
- * This is a buffer, not a fix. It narrows the window rather than closing it — if geo-chat takes
- * longer than this to become consistent, the request fails exactly as before, which is why the
- * failure still has to be visible. The real fix is on the backend: either the rows should not
- * report a position the request endpoint will not honour, or the endpoint should accept one the
- * rows report.
+ * This is a buffer, not a fix. At 10ms it is about one frame — enough to stop the press that lands
+ * in the same tick the gate opens, and no defence at all against geo-chat being genuinely
+ * inconsistent for longer. Deliberately so: 250ms was measurably worse to use, and this is the
+ * cheapest thing that addresses the observed press without adding a wait anyone can feel.
+ *
+ * So the failure still has to be visible, and the real fix is on the backend: either the rows
+ * should not report a position the request endpoint will not honour, or the endpoint should accept
+ * one the rows report.
  */
-export const REQUEST_GATE_GRACE_MS = 250;
+export const REQUEST_GATE_GRACE_MS = 10;
 
 /**
  * True once `open` has been continuously true for `ms`, and false the moment it is not.

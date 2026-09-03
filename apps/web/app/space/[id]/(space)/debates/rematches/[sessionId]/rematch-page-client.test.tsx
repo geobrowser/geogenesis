@@ -2916,7 +2916,7 @@ describe('DebateRematchPageClient', () => {
    * state already on screen rather than in a new one. A buffer, not a proof — if geo-chat takes
    * longer than this the request still fails, which is why the failure stays visible.
    */
-  it('holds the offer for a beat after geo-chat agrees, then opens it', async () => {
+  it('offers the debate once geo-chat agrees and the beat has passed', async () => {
     mocks.claims = [
       {
         ...sharedClaim(),
@@ -2931,11 +2931,9 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    // Not offering yet, even though geo-chat's row already agrees.
-    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeDisabled();
-
-    // And offering once the beat has passed.
+    // That the offer is *withheld* for the beat is asserted in `request-gate.test.ts`, against the
+    // hook — the window is about one frame, so this test's own awaits would step over it. What
+    // belongs here is that the page comes out the other side offering the debate.
     expect(await screen.findByRole('button', { name: 'Request debate' })).toBeEnabled();
   });
 
