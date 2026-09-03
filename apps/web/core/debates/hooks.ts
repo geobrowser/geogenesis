@@ -48,8 +48,6 @@ import {
   getRecordingUrl,
   getRematchLiveKitToken,
   handleDebateSharePrompt,
-  joinDebateQueue,
-  leaveDebateQueue,
   leaveDebateRematch,
   listDebateClaims,
   listDebateRematchClaims,
@@ -307,44 +305,6 @@ function claimIdHash(claimId: string) {
 export function invalidateDebatesOutsideRematchClaims(queryClient: QueryClient) {
   return queryClient.invalidateQueries({
     predicate: query => query.queryKey[0] === 'debates' && !isRematchClaimsQueryKey(query.queryKey),
-  });
-}
-
-/**
- * Standing ready (or down) on one claim moves that claim's readiness wherever it is listed and
- * re-sorts who is matchable. Nothing else under `'debates'` changes, so only those families go.
- */
-function invalidateAfterReadinessChange(queryClient: QueryClient, accountKey: string | null, claimId: string) {
-  for (const queryKey of [
-    ['debates', 'claims'] as const,
-    debateQueryKeys.matchmakingClaimsRoot(accountKey),
-    debateQueryKeys.matches(accountKey),
-    debateQueryKeys.activity(accountKey),
-  ]) {
-    void queryClient.invalidateQueries({ queryKey });
-  }
-  void refreshRematchClaimBatches(queryClient, rematchClaimBatchesWithClaim(accountKey, claimId));
-}
-
-export function useJoinDebateQueue(spaceId: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ claimId }: { claimId: string }) =>
-      joinDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
-    onSuccess: (_result, { claimId }) => invalidateAfterReadinessChange(queryClient, accountKey, claimId),
-  });
-}
-
-export function useLeaveDebateQueue(spaceId: string) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-
-  return useMutation({
-    mutationFn: ({ claimId }: { claimId: string }) =>
-      leaveDebateQueue(spaceId, claimId, getPrivyIdentityToken, accountKey),
-    onSuccess: (_result, { claimId }) => invalidateAfterReadinessChange(queryClient, accountKey, claimId),
   });
 }
 

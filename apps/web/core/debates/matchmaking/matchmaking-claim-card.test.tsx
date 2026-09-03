@@ -13,8 +13,6 @@ import { MatchmakingClaimCard } from './matchmaking-claim-card';
 // refuses to touch the graph for anything else. The space id is hoisted because `vi.mock` factories
 // are lifted above every module-level declaration, so a mock that reads it can't use a plain const.
 const mocks = vi.hoisted(() => ({
-  joinMutateAsync: vi.fn(),
-  leaveMutateAsync: vi.fn(),
   submitResponse: vi.fn(),
   indexing: { status: 'idle', pending: null, runId: null } as {
     status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
@@ -45,8 +43,6 @@ vi.mock('../hooks', () => ({
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
-  useJoinDebateQueue: () => ({ mutateAsync: mocks.joinMutateAsync, reset: vi.fn(), isPending: false, error: null }),
-  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutateAsync, isPending: false, error: null }),
 }));
 
 // The end slot asks the hub whether there is a debate to be had. That is one shared query at
@@ -204,10 +200,6 @@ function renderCard(card: ReactElement) {
 }
 
 beforeEach(() => {
-  mocks.joinMutateAsync.mockReset();
-  mocks.joinMutateAsync.mockResolvedValue({ claim: null, match: null });
-  mocks.leaveMutateAsync.mockReset();
-  mocks.leaveMutateAsync.mockResolvedValue({ claim: null, match: null });
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';

@@ -1331,7 +1331,10 @@ export async function listMatchmakingMatches(
 
 /*
  * There is no debate-intent endpoint. A position is an on-chain claim response, never something
- * the client sends — `joinDebateQueue` / `leaveDebateQueue` toggle readiness on top of it.
+ * the client sends, and since GEO-2740 readiness follows from holding one: geo-chat writes it from
+ * `notify_claim_response_indexed`. GEO-2813 removed the last readiness switch in the app, so
+ * nothing here calls `joinDebateQueue` / `leaveDebateQueue` any more. They stay as the binding for
+ * endpoints geo-chat still serves, not as something the UI is expected to drive.
  */
 
 export async function listDebateRequests(

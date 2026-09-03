@@ -29,15 +29,12 @@ const mocks = vi.hoisted(() => ({
   setActiveSpace: vi.fn(),
   bumpReviewVersion: vi.fn(),
   setIsReviewOpen: vi.fn(),
-  joinMutate: vi.fn(),
-  leaveMutate: vi.fn(),
   responseBatchCalls: [] as unknown[],
   refetchResponseBatch: vi.fn(),
 }));
 
 let claims: Entity[] = [];
 let claimsLoading = false;
-let joinPending = false;
 let lastQueryEntitiesOptions: unknown = null;
 let debateClaimsResponse: { claims: unknown[] } = { claims: [] };
 let responseBatchReady = true;
@@ -66,13 +63,6 @@ vi.mock('~/core/debates/hooks', () => ({
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => ({ data: debateClaimsResponse, error: null }),
-  useJoinDebateQueue: () => ({
-    mutateAsync: mocks.joinMutate,
-    reset: vi.fn(),
-    isPending: joinPending,
-    error: null,
-  }),
-  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutate, isPending: false, error: null }),
 }));
 
 vi.mock('~/core/responses/use-claim-response-summaries', () => ({
@@ -173,14 +163,11 @@ vi.mock('~/design-system/select-entity-compact', () => ({
 beforeEach(() => {
   claims = [];
   claimsLoading = false;
-  joinPending = false;
   lastQueryEntitiesOptions = null;
   debateClaimsResponse = { claims: [] };
   responseBatchReady = true;
   responseBatchError = false;
   vi.clearAllMocks();
-  mocks.joinMutate.mockReturnValue(new Promise(() => undefined));
-  mocks.leaveMutate.mockReturnValue(new Promise(() => undefined));
   mocks.responseBatchCalls.length = 0;
 });
 

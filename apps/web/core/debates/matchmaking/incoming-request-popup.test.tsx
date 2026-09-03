@@ -11,8 +11,6 @@ const mocks = vi.hoisted(() => ({
   dismiss: vi.fn(),
   dismissIsError: false,
   block: vi.fn(),
-  setReadiness: vi.fn(),
-  readinessIsError: false,
 }));
 
 vi.mock('./hooks', () => ({
@@ -24,12 +22,6 @@ vi.mock('./hooks', () => ({
     error: mocks.dismissIsError ? new Error('nope') : null,
   }),
   useBlockDebateUser: () => ({ mutate: mocks.block, isPending: false, isError: false, error: null }),
-  useClaimReadiness: () => ({
-    mutate: mocks.setReadiness,
-    isPending: false,
-    isError: mocks.readinessIsError,
-    error: mocks.readinessIsError ? new Error('queue down') : null,
-  }),
 }));
 
 // useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These
@@ -92,11 +84,6 @@ beforeEach(() => {
   mocks.dismiss.mockReset();
   mocks.dismissIsError = false;
   mocks.block.mockReset();
-  mocks.setReadiness.mockReset();
-  mocks.readinessIsError = false;
-  // The dismissal is chained off leaving the queue, so the default mock has to succeed the way
-  // react-query does or nothing downstream of it ever runs.
-  mocks.setReadiness.mockImplementation((_variables, options) => options?.onSuccess?.());
 
   // Radix popovers measure their content; jsdom ships neither observer.
   window.ResizeObserver ??= class {
@@ -140,37 +127,23 @@ describe('IncomingRequestPopup', () => {
     expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true }, expect.anything());
   });
 
-  // Saying you don't want to debate the claim answers this request too: leaving it pending would
-  // offer a debate the viewer just declined, and hold the requester waiting on someone who has
-  // stood down. Dismissing with the intent removed does both, and the server clears the request
-  // for the requester as well.
-  it('rejects the request when the viewer turns the claim toggle off', () => {
+  // GEO-2813 removed the "Debate this claim" switch, which was the only control here that stood the
+  // viewer down on the claim itself. Readiness now follows from holding a position, so dismissing
+  // answers the request and drops the intent, and nothing in the client writes readiness.
+  it('offers no readiness switch', () => {
     renderPopup();
 
-    const toggle = screen.getByRole('switch', { name: 'Debate this claim' });
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-
-    fireEvent.click(toggle);
-
-    expect(mocks.dismiss).toHaveBeenCalledWith({ requestId: 'request-1', removeIntent: true }, expect.anything());
-    // And leave the claim's queue: dismissing answers this request, but only leaving the queue
-    // takes the viewer out of everyone else's matches for the claim.
-    expect(mocks.setReadiness).toHaveBeenCalledWith(
-      { spaceId: 'space-1', claimId: 'claim-1', ready: false },
-      expect.anything()
-    );
-    expect(mocks.accept).not.toHaveBeenCalled();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
-  it('answers once however fast the toggle is tapped', () => {
+  it('answers once however fast the dismissal is tapped', () => {
     renderPopup();
 
-    const toggle = screen.getByRole('switch', { name: 'Debate this claim' });
-    fireEvent.click(toggle);
-    fireEvent.click(toggle);
+    const dismiss = screen.getByRole('button', { name: 'Dismiss forever' });
+    fireEvent.click(dismiss);
+    fireEvent.click(dismiss);
 
     expect(mocks.dismiss).toHaveBeenCalledTimes(1);
-    expect(mocks.setReadiness).toHaveBeenCalledTimes(1);
   });
 
   it('offers blocking behind the overflow menu', () => {
@@ -195,22 +168,6 @@ describe('IncomingRequestPopup answers', () => {
     expect(mocks.accept).toHaveBeenCalledTimes(1);
   });
 
-  // Otherwise the switch reads as "you are out of matchmaking for this claim" while the server
-  // still has the viewer standing ready and the request live. Starting in the error state would
-  // never move the switch off, so this walks the real sequence: off on the press, back on when the
-  // rejection comes back failed.
-  it('puts the claim toggle back when the rejection fails', () => {
-    const view = render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
-    expect(screen.getByRole('switch', { name: 'Debate this claim' })).toHaveAttribute('aria-checked', 'false');
-
-    mocks.dismissIsError = true;
-    view.rerender(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
-
-    expect(screen.getByRole('switch', { name: 'Debate this claim' })).toHaveAttribute('aria-checked', 'true');
-  });
-
   // The controls come back after a failure, so the press that follows has to land — otherwise the
   // request can never be answered from this popup again.
   it('lets the viewer answer again after a failed answer', () => {
@@ -221,48 +178,24 @@ describe('IncomingRequestPopup answers', () => {
     });
     const view = render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss forever' }));
     expect(mocks.dismiss).toHaveBeenCalledTimes(1);
 
     view.rerender(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
-    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss forever' }));
 
     expect(mocks.dismiss).toHaveBeenCalledTimes(2);
   });
 
-  // The two calls can fail independently and no endpoint does both. Dismissing first would close
-  // the popup on a viewer who is still in the queue — matchable on a claim they just declined, with
-  // nothing left to retry from. Leaving the queue first keeps the failure recoverable.
-  it('does not dismiss the request when leaving the claim queue fails', () => {
-    mocks.setReadiness.mockImplementation((_variables, options) => {
-      mocks.readinessIsError = true;
-      options?.onError?.(new Error('queue down'));
-    });
-    const view = render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
-
-    expect(mocks.dismiss).not.toHaveBeenCalled();
-
-    // The request is still live, so the switch has to come back and the next press has to land.
-    view.rerender(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
-    expect(screen.getByRole('switch', { name: 'Debate this claim' })).toHaveAttribute('aria-checked', 'true');
-
-    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
-    expect(mocks.setReadiness).toHaveBeenCalledTimes(2);
-  });
-
-  // The switch moves on press rather than on the response, so it has to check that the press was
-  // actually taken: accepting first consumes the answer, and a failed accept would otherwise leave
-  // the switch off with no stand-down behind it.
-  it('leaves the claim toggle alone when the request was already answered', () => {
+  // Accepting consumes the answer, so a dismissal landing behind it would answer a request the
+  // server has already taken — the second call 409s over the first.
+  it('ignores a dismissal once the request was already answered', () => {
     render(<IncomingRequestPopup request={request} currentUserId="user-me" onNotNow={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    fireEvent.click(screen.getByRole('switch', { name: 'Debate this claim' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss forever' }));
 
-    expect(mocks.setReadiness).not.toHaveBeenCalled();
+    expect(mocks.accept).toHaveBeenCalledTimes(1);
     expect(mocks.dismiss).not.toHaveBeenCalled();
-    expect(screen.getByRole('switch', { name: 'Debate this claim' })).toHaveAttribute('aria-checked', 'true');
   });
 });
