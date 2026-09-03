@@ -562,8 +562,13 @@ export function ClaimsTab() {
   // an error leaves it empty while `isLoading` goes false — and the reconciliation below reads a
   // settled, empty menu as "these topics no longer exist" and drops the viewer's selection. Held
   // unsettled instead, so an outage costs the list rather than the selection.
+  //
+  // Every input, not just the hydration. A failed *catalog* leaves `taggedAllowed` empty, and so
+  // does `spacesPending` — deliberately, while the space gates are still resolving. In both the
+  // entity query has nothing to ask about, sits idle rather than loading, and reports neither. So
+  // the menu is empty and nothing says why, which is the one state this must not call settled.
   const facetsSettled = graphSourced
-    ? !taggedLoading && !taggedEntitiesLoading && !taggedEntitiesError
+    ? !taggedLoading && !taggedError && !spacesPending && !taggedEntitiesLoading && !taggedEntitiesError
     : claimsQuery.facetsSettled;
 
   // The space is let go on the condition that actually means "not yours to pick" — the gates

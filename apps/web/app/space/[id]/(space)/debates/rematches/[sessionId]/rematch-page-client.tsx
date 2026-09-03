@@ -1026,21 +1026,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       : sourceUndecided ||
         (source === 'recommended' ? recommendedLoading || curatedClaimsQuery.isLoading : taggedClaimsSettling));
 
-  // A topic the menu no longer offers is unpickable as well as empty — the chip filtering the
-  // list would not be in the menu to clear. Unlike the Claims tab, the topics here arrive with
-  // the claim rows rather than in a lookup behind them, so once the tab has settled an empty
-  // menu is a real answer.
-  React.useEffect(() => {
-    // No source has a facet behind it any more, so every tab's own loading state is the whole
-    // answer — the All tab used to wait on the index's facets as well.
-    // `topicsSettling` for the same reason as on the hub: `facetTopics` is rebuilt from
-    // `topicIds`, so reconciling while the selection is still debounced would re-run the effect on
-    // its own output against one unchanged answer, and take the whole selection instead of the
-    // single pick that didn't fit.
-    const resolved = !topicsSettling && !tabIsLoading;
-    setTopicIds(current => keepSelectableTopics(current, facetTopics, resolved));
-  }, [facetTopics, tabIsLoading, topicsSettling]);
-
   const tabError =
     sessionQuery.error ??
     (tab === 'opponent'
@@ -1066,6 +1051,33 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               curatedClaimsQuery.error)
             : null))
         : curatedClaimsQuery.error);
+
+  // A topic the menu no longer offers is unpickable as well as empty — the chip filtering the
+  // list would not be in the menu to clear. Unlike the Claims tab, the topics here arrive with
+  // the claim rows rather than in a lookup behind them, so once the tab has settled an empty
+  // menu is a real answer.
+  React.useEffect(() => {
+    // No source has a facet behind it any more, so every tab's own loading state is the whole
+    // answer — the All tab used to wait on the index's facets as well.
+    // `topicsSettling` for the same reason as on the hub: `facetTopics` is rebuilt from
+    // `topicIds`, so reconciling while the selection is still debounced would re-run the effect on
+    // its own output against one unchanged answer, and take the whole selection instead of the
+    // single pick that didn't fit.
+    // Not while the tab is in error either. react-query drops `isLoading` on failure, so an outage
+    // looks exactly like a settled answer from here — and the answer it settles on is an empty
+    // menu, because the entities the topics come from never arrived. Reconciling against that
+    // reads "these topics no longer exist" and takes the viewer's selection with it, permanently:
+    // the error clears, the rows come back, and the chips do not.
+    //
+    // Not covered by a test, deliberately rather than by omission. Five attempts at one here all
+    // passed with this guard removed — the picker's four topic sources make "the menu is empty
+    // *and* the tab is in error" hard to reach through the mocks. The hub's equivalent
+    // (`facetsSettled` in claims-tab) is the same rule against one source, and it is pinned; this
+    // is that rule, and it can only ever delay a prune, never cause a wrong one.
+    const resolved = !topicsSettling && !tabIsLoading && !tabError;
+    setTopicIds(current => keepSelectableTopics(current, facetTopics, resolved));
+  }, [facetTopics, tabError, tabIsLoading, topicsSettling]);
+
 
   // The curated tab groups by block rather than listing flat, but narrows on the same filters.
   const showsSections = tab === 'claims' && source === 'recommended';

@@ -45,6 +45,8 @@ const mocks = vi.hoisted(() => ({
   taggedRowsLoading: false,
   /** A failed entity hydration, which is where the graph-backed list gets its topics. */
   claimEntitiesError: null as Error | null,
+  /** A failed tag catalog — the query that says which claims the list is made of. */
+  taggedCatalogError: null as Error | null,
   claimEntities: [] as Array<{
     id: string;
     name: string | null;
@@ -282,13 +284,14 @@ vi.mock('../tagged-claims', async importOriginal => ({
     // Featured catalog under its old name, so the suite written before All moved here is untouched.
     const FEATURED = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
     const catalog = mocks.taggedClaims[tagId] ?? (tagId === FEATURED ? mocks.featuredClaims : []);
-    const claims = enabled ? catalog : [];
+    // Answerless when it failed, as react-query is.
+    const claims = enabled && !mocks.taggedCatalogError ? catalog : [];
     return {
       claims,
       claimIds: claims.map(claim => claim.claimEntityId),
       truncated: false,
       isLoading: enabled && mocks.featuredLoading,
-      error: null,
+      error: mocks.taggedCatalogError,
       refetch: vi.fn(),
     };
   },
@@ -433,6 +436,7 @@ beforeEach(() => {
   mocks.taggedRowsError = false;
   mocks.taggedRowsLoading = false;
   mocks.claimEntitiesError = null;
+  mocks.taggedCatalogError = null;
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
   mocks.featuredClaims = [];
@@ -915,12 +919,15 @@ describe('All claims reads the Debate tag', () => {
     expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
   });
 
-  // The topics come from the entity lookup alone, so a failed one leaves the menu empty while it
-  // stops loading. Read as settled, that empty menu says the viewer's topic no longer exists and
-  // the reconciliation drops it — the selection lost to an outage, and not given back when the
-  // lookup recovers.
-  it('keeps a picked topic when the lookup behind the menu fails', async () => {
-    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+  // Same rule, one query further up. A failed *catalog* leaves the list with no claims, so the
+  // entity lookup has nothing to ask about and sits idle — neither loading nor failed. The menu is
+  // then empty with nothing to say why, and calling that settled costs the viewer their selection
+  // for good: the outage clears, the claims come back, the chips do not.
+  it('keeps a picked topic when the catalog behind the list fails', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
     mocks.claimEntities = [
       {
         id: FEATURED_A,
@@ -930,6 +937,16 @@ describe('All claims reads the Debate tag', () => {
         values: [],
         relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
       },
+      // Carries no topic, so it is present exactly when nothing is selected — which is what makes
+      // the selection observable in the list rather than in the trigger's label.
+      {
+        id: FEATURED_B,
+        name: 'Cities should ban cars downtown',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
     ];
     const view = render(<ClaimsTab />);
     await showAllClaims();
@@ -937,7 +954,113 @@ describe('All claims reads the Debate tag', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
     fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull());
+    // The filter has actually landed once the untopiced claim is gone — not merely once the trigger
+    // has changed, which happens a debounce earlier and would leave the assertions below racing it.
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+
+    mocks.taggedCatalogError = new Error('catalog exploded');
+    view.rerender(<ClaimsTab />);
+    expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+
+    // Asserted after the outage clears rather than during it: while the error is up the menu is not
+    // rendered at all, so its absence says nothing. What matters is that the selection comes back
+    // with the list — a reconciliation that ran during the outage would have spent it by now.
+    mocks.taggedCatalogError = null;
+    view.rerender(<ClaimsTab />);
+
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    // Still filtered: a reconciliation during the outage would have dropped the selection, and this
+    // claim — which carries no topic — would be back.
+    expect(screen.queryByText('Cities should ban cars downtown')).toBeNull();
+  });
+
+  // And once more for the gate rather than a failure: `taggedAllowed` is deliberately emptied while
+  // the space gates resolve, which empties the menu the same way without anything being wrong.
+  it('keeps a picked topic while the space gates are still resolving', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
+      },
+      // Carries no topic, so it is present exactly when nothing is selected — which is what makes
+      // the selection observable in the list rather than in the trigger's label.
+      {
+        id: FEATURED_B,
+        name: 'Cities should ban cars downtown',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    // The filter has actually landed once the untopiced claim is gone — not merely once the trigger
+    // has changed, which happens a debounce earlier and would leave the assertions below racing it.
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+
+    mocks.allowlistLoading = true;
+    view.rerender(<ClaimsTab />);
+    mocks.allowlistLoading = false;
+    view.rerender(<ClaimsTab />);
+
+    // Same shape: the gate resolves, the claims come back, and the selection has to still be there.
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    // Still filtered: a reconciliation during the outage would have dropped the selection, and this
+    // claim — which carries no topic — would be back.
+    expect(screen.queryByText('Cities should ban cars downtown')).toBeNull();
+  });
+
+  // The topics come from the entity lookup alone, so a failed one leaves the menu empty while it
+  // stops loading. Read as settled, that empty menu says the viewer's topic no longer exists and
+  // the reconciliation drops it — the selection lost to an outage, and not given back when the
+  // lookup recovers.
+  it('keeps a picked topic when the lookup behind the menu fails', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
+      },
+      // Carries no topic, so it is present exactly when nothing is selected — which is what makes
+      // the selection observable in the list rather than in the trigger's label.
+      {
+        id: FEATURED_B,
+        name: 'Cities should ban cars downtown',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    // The filter has actually landed once the untopiced claim is gone — not merely once the trigger
+    // has changed, which happens a debounce earlier and would leave the assertions below racing it.
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
 
     mocks.claimEntitiesError = new Error('hydration exploded');
     view.rerender(<ClaimsTab />);
