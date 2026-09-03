@@ -51,6 +51,8 @@ const mocks = vi.hoisted(() => ({
   rejectMutate: vi.fn(),
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
+  /** Overrides the snapshot status, so the window where it is `indexed` is reachable. */
+  responseIndexingStatus: null as 'reconciling' | 'delayed' | 'indexed' | null,
   /** Drives the indexing machine's own "taking longer than it should" signal. */
   responseIndexingDelayed: false,
   setReadiness: vi.fn(),
@@ -450,23 +452,31 @@ vi.mock('~/core/debates/participant-positions', async importOriginal => {
   };
 });
 
+function responseIndexingStatusFor(entityId: string): 'idle' | 'reconciling' | 'delayed' | 'indexed' {
+  if (mocks.optimisticResponses.get(entityId) === undefined) return 'idle';
+  return mocks.responseIndexingStatus ?? (mocks.responseIndexingDelayed ? 'delayed' : 'reconciling');
+}
+
 vi.mock('~/core/hooks/use-entity-vote', () => ({
+  // In production `optimisticResponse` is derived from this snapshot, so the two can't disagree
+  // about *what* the answer is. They do apply different thresholds to the same status, though:
+  // `optimisticResponse` goes undefined outside `reconciling`/`delayed`, while the card treats
+  // anything but `idle` as still in flight — so at `indexed` the pill is lit and the gate sees
+  // nothing. Mirrored here rather than mocked independently, so that window is reachable without
+  // letting a test assert an optimistic side the snapshot denies.
   useEntityResponse: ({ entityId }: { entityId: string }) => ({
     submitResponse: (direction: 'positive' | 'negative' | 'clear') => mocks.submitResponse(entityId, direction),
-    optimisticResponse: mocks.optimisticResponses.get(entityId),
+    optimisticResponse: ['reconciling', 'delayed'].includes(responseIndexingStatusFor(entityId))
+      ? mocks.optimisticResponses.get(entityId)
+      : undefined,
     isConnected: true,
     personalSpaceId: 'personal-space',
   }),
-  // In production `optimisticResponse` is derived from this snapshot, so the two can't disagree.
-  // Mocking them independently let a test assert an optimistic side the snapshot denied.
   useEntityResponseIndexingSnapshot: ({ entityId }: { entityId: string }) => {
     const expectedResponse = mocks.optimisticResponses.get(entityId);
-    if (expectedResponse === undefined) return { status: 'idle', pending: null, runId: null };
-    return {
-      status: mocks.responseIndexingDelayed ? 'delayed' : 'reconciling',
-      pending: { entityId, expectedResponse },
-      runId: `run-${entityId}`,
-    };
+    const status = responseIndexingStatusFor(entityId);
+    if (expectedResponse === undefined || status === 'idle') return { status: 'idle', pending: null, runId: null };
+    return { status, pending: { entityId, expectedResponse }, runId: `run-${entityId}` };
   },
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
@@ -723,6 +733,7 @@ beforeEach(() => {
   mocks.savedClaims = null;
   mocks.browsedLookupLoading = false;
   mocks.currentUserId = 'user-local';
+  mocks.responseIndexingStatus = null;
   mocks.spaceAllowlist = null;
   mocks.allowlistLoading = false;
   mocks.spaceTypes = {};
@@ -859,7 +870,7 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled());
   });
 
   it('renders active semantic response buttons with holder avatars', async () => {
@@ -1396,7 +1407,7 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByRole('heading', { name: 'Geopolitics & chips' })).toBeInTheDocument();
     // Not just the card: its sides come from the graph, so nothing here waits on the browsed list.
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Request debate' })).toBeInTheDocument();
   });
 
   // The session's own claims arrive in one round trip; they shouldn't sit behind the scan either.
@@ -1632,7 +1643,13 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.getByText('Recently rejected')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
+    // Nothing pressable, whatever the control is currently called. With `mocks.claims` empty this
+    // claim lists off the session's rejected ids alone, so geo-chat has no row for it and the gate
+    // is shut on the position as well as the rejection (GEO-2808) — asserting the enabled state
+    // rather than one label keeps this test about the rejection it is named for.
+    for (const button of screen.getAllByRole('button', { name: /Request debate|your position/ })) {
+      expect(button).toBeDisabled();
+    }
   });
 
   // On a phone the three tabs are wider than the screen. They were laid out in a row that could
@@ -2760,7 +2777,16 @@ describe('DebateRematchPageClient', () => {
   // requesting a rematch" — so the request waits for geo-chat's copy, not the optimistic one.
   // GEO-2697: it waits as a pending button rather than by hiding, so the wait sits on the control
   // it is blocking instead of beside a button that isn't on screen.
-  it('holds the request unpressable until the graph has the position it will be validated against', async () => {
+  it('holds the request unpressable until geo-chat has the position it will be validated against', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -2780,6 +2806,15 @@ describe('DebateRematchPageClient', () => {
   // than left as an inert control. A disabled button nobody is focused on announces nothing, so the
   // wait is still a `status` for screen readers even though it is no longer drawn as one.
   it('announces what it is waiting for while the position is being confirmed', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -2792,6 +2827,15 @@ describe('DebateRematchPageClient', () => {
   // reached after the publish succeeded, so the label stops claiming to be publishing. It matters
   // more now that it is the button's own text — under GEO-2687 it can sit there for half a minute.
   it('says the wait is running long on the button itself', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     mocks.responseIndexingDelayed = true;
@@ -2806,6 +2850,15 @@ describe('DebateRematchPageClient', () => {
   // a settled render — the same DOM node has to go from pending to pressable, which is what
   // distinguishes this from a spinner disappearing and a button appearing somewhere else.
   it('turns the same button pressable once the position settles', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
     mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
     mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -2814,7 +2867,8 @@ describe('DebateRematchPageClient', () => {
     const pending = screen.getByRole('button', { name: 'Publishing your position…' });
     expect(pending).toBeDisabled();
 
-    // geo-chat catches up with the side already on screen.
+    // geo-chat catches up with the side already on screen. The graph is deliberately left
+    // behind: that is the whole point of the gate moving off it (GEO-2808).
     mocks.optimisticResponses.delete(CLAIM_SHARED);
     mocks.positions = [
       position('profile-local', CLAIM_SHARED, SPACE_1, true),
@@ -2831,7 +2885,7 @@ describe('DebateRematchPageClient', () => {
     ];
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    const settled = screen.getByRole('button', { name: 'Request debate' });
+    const settled = await screen.findByRole('button', { name: 'Request debate' });
     expect(settled).toBeEnabled();
     expect(settled).not.toHaveAttribute('aria-busy');
     expect(screen.queryByRole('status')).toBeNull();
@@ -2862,15 +2916,183 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    const request = screen.getByRole('button', { name: 'Request debate' });
+    const request = await screen.findByRole('button', { name: 'Request debate' });
     expect(request).toBeEnabled();
     fireEvent.click(request);
     expect(mocks.mutate).toHaveBeenCalled();
   });
 
+  /**
+   * GEO-2808, and the point of the change. geo-chat is the only thing that can reject an early
+   * request, and since #2348 it learns the position while the write is still in flight — so once it
+   * agrees there is nothing left to wait for, however far behind the indexer is.
+   *
+   * The graph is deliberately given *nothing* here: under the old gate this rendered
+   * "Publishing your position…" and stayed there for `web.write.entity_response` (p50 9.9s).
+   */
+  it('opens the request as soon as geo-chat agrees, without waiting for the graph', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    // The indexer has not seen the viewer's side at all.
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const request = await screen.findByRole('button', { name: 'Request debate' });
+    expect(request).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
+    fireEvent.click(request);
+    expect(mocks.mutate).toHaveBeenCalled();
+  });
+
+  /**
+   * Reported from the browser after the previous fix: the position stays, but the Request debate
+   * button does not.
+   *
+   * One snapshot, two thresholds. `optimisticResponse` goes undefined outside
+   * `reconciling`/`delayed`, while the card treats anything but `idle` as still in flight — so at
+   * `indexed` the pill stays lit and the gate sees nothing. With geo-chat not having echoed the
+   * write yet, `opposing` collapsed and unmounted the footer under a pill that was still on. The
+   * button did not change label; it left.
+   */
+  it('keeps the request control mounted while the snapshot sits at indexed', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          // geo-chat has not echoed the viewer's write back yet.
+          { user_id: 'user-local', position: null, position_label: null },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    // The snapshot has reached `indexed`: the card still treats that as in flight, while
+    // `optimisticResponse` has already gone undefined.
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    mocks.responseIndexingStatus = 'indexed';
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const card = screen.getByText('A claim both participants chose').closest('article')!;
+    expect(within(card).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeDisabled();
+  });
+
+  /**
+   * Reported from the browser: take a position, it says publishing, then the position itself
+   * disappears and does not come back — until you answer a second time, which sticks.
+   *
+   * The card falls back to `readiness.viewer_response` the moment the indexing snapshot clears, and
+   * that field was built from `claim.participants` — sides the assembly upstream had already
+   * overwritten with the graph's. So the fallback was an indexer that had not caught up, and the
+   * viewer's own side vanished for as long as it took (p95 48.6s). The second answer worked because
+   * by then the first had landed.
+   */
+  it('keeps the viewer side on the card when the optimistic answer clears before the graph', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    // The indexer has nothing for the viewer, which is the state that used to blank the pill.
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    const card = () => screen.getByText('A claim both participants chose').closest('article')!;
+    expect(within(card()).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+
+    // The mutation settles and the optimistic answer goes away. geo-chat still holds the side.
+    mocks.optimisticResponses.delete(CLAIM_SHARED);
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(within(card()).getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  /**
+   * The optimistic answer clears when the mutation settles, and the graph is still ten seconds
+   * behind it. A gate that fell back to the graph there shut again and re-announced a publish that
+   * had already landed — the control flickered ready → publishing → ready.
+   *
+   * Asserted across the transition rather than on a settled render: both ends were already green,
+   * and it is the middle that was wrong.
+   */
+  it('stays pressable when the optimistic answer clears before the graph catches up', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByRole('button', { name: 'Request debate' })).toBeEnabled();
+
+    // The mutation settles. geo-chat still holds the side; the indexer still does not.
+    mocks.optimisticResponses.delete(CLAIM_SHARED);
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: 'Request debate' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
+  });
+
+  /**
+   * geo-chat's rematch row reports the position slightly before its request endpoint will honour a
+   * request against it, so a request sent the instant the gate opens can still come back
+   * `claim_response_required`. That race is unaddressed here and belongs on the backend — a client
+   * timer large enough to cover it is large enough for a reader to feel.
+   */
+  it('offers the debate once geo-chat agrees', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByRole('button', { name: 'Request debate' })).toBeEnabled();
+  });
+
   // Switching sides leaves geo-chat holding the side you just moved off, which is no more valid to
   // request against than holding none.
   it('withholds the request while a side switch is still publishing', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          // geo-chat still holds the side the viewer just moved off.
+          { user_id: 'user-local', position: false, position_label: 'Disagree' },
+          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
+        ],
+      },
+    ];
     mocks.positions = [
       position('profile-local', CLAIM_SHARED, SPACE_1, false),
       position('profile-remote', CLAIM_SHARED, SPACE_1, false),
