@@ -1,0 +1,373 @@
+'use client';
+
+import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { useQueryClient } from '@tanstack/react-query';
+
+import * as React from 'react';
+
+import { useRouter } from 'next/navigation';
+import Textarea from 'react-textarea-autosize';
+
+import { type BountyFields, type EntityPick, buildCreateBountyOps } from '~/core/bounties/bounty-ops';
+import { useBountiesEnabled } from '~/core/bounties/config';
+import { deadlineFromDateInput } from '~/core/bounties/date-input';
+import {
+  DIFFICULTIES,
+  type DifficultyKey,
+  WORKFLOW_STATUSES,
+  type WorkflowStatusKey,
+  isDifficultyKey,
+  isWorkflowStatusKey,
+  statusKeyForId,
+} from '~/core/bounties/labels';
+import { bountyQueryKeys } from '~/core/bounties/use-bounties';
+import { useAccessControl } from '~/core/hooks/use-access-control';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
+import { usePublish } from '~/core/hooks/use-publish';
+import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useToast } from '~/core/hooks/use-toast';
+import { NavUtils } from '~/core/utils/utils';
+
+import { Button, SmallButton } from '~/design-system/button';
+import { CheckCloseSmall } from '~/design-system/icons/check-close-small';
+import { Select } from '~/design-system/select';
+import { SelectEntity } from '~/design-system/select-entity';
+import { Text } from '~/design-system/text';
+
+const fieldClass = 'w-full rounded-md border border-grey-02 px-3 py-2 text-metadata';
+
+type Props = { spaceId: string };
+
+function parseOptionalNumber(raw: string): number | null | 'invalid' {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 'invalid';
+}
+
+/**
+ * Validates form state into publishable fields. Returns the first problem as a
+ * message so the form can toast it — imperative validation is the repo norm.
+ */
+export function validateBountyForm(input: {
+  name: string;
+  budget: string;
+  maxContributors: string;
+  maxSubmissionsPerPerson: string;
+  deadline: string;
+}):
+  | { ok: true; budget: number | null; maxContributors: number | null; maxSubmissionsPerPerson: number | null }
+  | { ok: false; message: string } {
+  if (!input.name.trim()) return { ok: false, message: 'Add a bounty name.' };
+
+  const budget = parseOptionalNumber(input.budget);
+  if (budget === 'invalid') return { ok: false, message: 'Budget must be a positive number of points.' };
+
+  const maxContributors = parseOptionalNumber(input.maxContributors);
+  if (maxContributors === 'invalid' || (maxContributors != null && !Number.isInteger(maxContributors))) {
+    return { ok: false, message: 'Max contributors must be a whole number.' };
+  }
+  const maxSubmissionsPerPerson = parseOptionalNumber(input.maxSubmissionsPerPerson);
+  if (
+    maxSubmissionsPerPerson === 'invalid' ||
+    (maxSubmissionsPerPerson != null && !Number.isInteger(maxSubmissionsPerPerson))
+  ) {
+    return { ok: false, message: 'Max submissions per person must be a whole number.' };
+  }
+  if (input.deadline && !deadlineFromDateInput(input.deadline)) {
+    return { ok: false, message: 'Deadline is not a valid date.' };
+  }
+
+  return { ok: true, budget, maxContributors, maxSubmissionsPerPerson };
+}
+
+/** Author or edit a Bounty entity in a DAO space (editors only — the route gates on that). */
+export function BountyForm({ spaceId }: Props) {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { makeProposal } = usePublish();
+  const [, setToast] = useToast();
+  const { smartAccount } = useSmartAccount();
+  const { profile } = useGeoProfile(smartAccount?.account.address);
+  const access = useAccessControl(spaceId);
+
+  const [name, setName] = React.useState('');
+  const [description, setDescription] = React.useState('');
+  const [budget, setBudget] = React.useState('');
+  const [difficulty, setDifficulty] = React.useState<DifficultyKey | ''>('');
+  const [status, setStatus] = React.useState<WorkflowStatusKey>(statusKeyForId(null));
+  const [deadline, setDeadline] = React.useState('');
+  const [maxContributors, setMaxContributors] = React.useState('');
+  const [maxSubmissionsPerPerson, setMaxSubmissionsPerPerson] = React.useState('');
+  const [skills, setSkills] = React.useState<EntityPick[]>([]);
+  const [maintainers, setMaintainers] = React.useState<EntityPick[]>([]);
+  const [submitting, setSubmitting] = React.useState(false);
+
+  const isEasy = difficulty === 'easy';
+  const backHref = NavUtils.toCommunity(spaceId);
+
+  // Soft gate (per-browser feature flag): defence in depth against a direct URL.
+  const enabled = useBountiesEnabled();
+  React.useEffect(() => {
+    if (!enabled) router.replace(NavUtils.toSpace(spaceId));
+  }, [enabled, router, spaceId]);
+  if (!enabled) return null;
+
+  const onSubmit = async () => {
+    // The render guard only kicks in after access control resolves; a click in
+    // that window must not publish a proposal that would stall on the FAST path.
+    if (!access.isEditor) {
+      setToast(<>Only editors of this space can create bounties.</>);
+      return;
+    }
+    const validation = validateBountyForm({
+      name,
+      budget,
+      maxContributors,
+      maxSubmissionsPerPerson,
+      deadline,
+    });
+    if (!validation.ok) return setToast(<>{validation.message}</>);
+
+    const fields: BountyFields = {
+      spaceId,
+      name: name.trim(),
+      description,
+      budget: validation.budget,
+      difficulty: difficulty || null,
+      status,
+      deadline: deadlineFromDateInput(deadline),
+      maxContributors: validation.maxContributors,
+      maxSubmissionsPerPerson: validation.maxSubmissionsPerPerson,
+      skills,
+      maintainers,
+    };
+
+    setSubmitting(true);
+    const invalidate = () => queryClient.invalidateQueries({ queryKey: bountyQueryKeys.all });
+
+    const creator: EntityPick | null =
+      profile?.id && profile.id !== profile.spaceId && !profile.id.startsWith('0x')
+        ? { id: profile.id, name: profile.name }
+        : null;
+    const { entityId, values, relations } = buildCreateBountyOps(fields, creator);
+    await makeProposal({
+      values,
+      relations,
+      spaceId,
+      name: `Create bounty: ${fields.name}`,
+      onSuccess: async () => {
+        await invalidate();
+        router.push(NavUtils.toBounty(spaceId, entityId));
+      },
+      onError: () => setSubmitting(false),
+    });
+  };
+
+  // Only editors of the DAO space may author bounties: a member's proposal would
+  // stall on the FAST path awaiting an editor vote, so refuse up front instead.
+  if (!access.isLoading && !access.isEditor) {
+    return (
+      <div className="mx-auto flex max-w-[820px] flex-col gap-3 px-4 py-8" data-testid="bounty-form-denied">
+        <Text as="h1" variant="largeTitle">
+          New bounty
+        </Text>
+        <Text as="p" color="grey-04">
+          Only editors of this space can create bounties.
+        </Text>
+        <div>
+          <Button variant="secondary" onClick={() => router.push(backHref)}>
+            Back
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto flex max-w-[820px] flex-col gap-5 px-4 py-8" data-testid="bounty-form">
+      <Text as="h1" variant="largeTitle">
+        New bounty
+      </Text>
+
+      <label className="flex flex-col gap-1">
+        <Text variant="metadataMedium">Name</Text>
+        <Textarea
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="What needs curating?"
+          className={`${fieldClass} resize-none text-smallTitle`}
+          minRows={1}
+          maxRows={3}
+          autoFocus
+        />
+      </label>
+
+      <label className="flex flex-col gap-1">
+        <Text variant="metadataMedium">Description</Text>
+        <Textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder="A short summary shown on the board. Write the full brief in the page body after saving."
+          className={`${fieldClass} resize-none`}
+          minRows={2}
+          maxRows={8}
+        />
+      </label>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          <Text variant="metadataMedium">Difficulty</Text>
+          <Select
+            value={difficulty}
+            onChange={value => setDifficulty(isDifficultyKey(value) ? value : '')}
+            options={[{ value: '', label: 'Not set' }, ...DIFFICULTIES.map(d => ({ value: d.key, label: d.label }))]}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <Text variant="metadataMedium">Workflow status</Text>
+          <Select
+            value={status}
+            onChange={value => setStatus(isWorkflowStatusKey(value) ? value : 'backlog')}
+            options={WORKFLOW_STATUSES.map(s => ({ value: s.key, label: s.label }))}
+          />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <label className="flex flex-col gap-1">
+          <Text variant="metadataMedium">Budget (points)</Text>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            value={budget}
+            onChange={e => setBudget(e.target.value)}
+            placeholder={isEasy ? 'Paid in full per submission' : 'Total for all contributors'}
+            className={fieldClass}
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <Text variant="metadataMedium">Submission deadline</Text>
+          <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} className={fieldClass} />
+        </label>
+      </div>
+
+      {!isEasy ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <label className="flex flex-col gap-1">
+            <Text variant="metadataMedium">Max contributors</Text>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={maxContributors}
+              onChange={e => setMaxContributors(e.target.value)}
+              placeholder="Unlimited"
+              className={fieldClass}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <Text variant="metadataMedium">Max submissions per person</Text>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              step={1}
+              value={maxSubmissionsPerPerson}
+              onChange={e => setMaxSubmissionsPerPerson(e.target.value)}
+              placeholder="Unlimited"
+              className={fieldClass}
+            />
+          </label>
+        </div>
+      ) : null}
+
+      <PickList
+        label="Skills"
+        picks={skills}
+        onChange={setSkills}
+        spaceId={spaceId}
+        relationValueTypes={[{ id: ContentIds.SKILL_TYPE, name: 'Skill' }]}
+        placeholder="Add a skill…"
+      />
+      <PickList
+        label="Maintainers"
+        picks={maintainers}
+        onChange={setMaintainers}
+        spaceId={spaceId}
+        relationValueTypes={[{ id: SystemIds.PERSON_TYPE, name: 'Person' }]}
+        placeholder="Add a maintainer…"
+      />
+
+      <div className="flex justify-end gap-2 pt-2">
+        <Button variant="secondary" onClick={() => router.push(backHref)}>
+          Cancel
+        </Button>
+        <Button variant="primary" disabled={submitting} onClick={onSubmit}>
+          {submitting ? 'Publishing…' : 'Publish bounty'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function PickList({
+  label,
+  picks,
+  onChange,
+  spaceId,
+  relationValueTypes,
+  placeholder,
+}: {
+  label: string;
+  picks: EntityPick[];
+  onChange: (next: EntityPick[]) => void;
+  spaceId: string;
+  relationValueTypes: { id: string; name: string | null }[];
+  placeholder: string;
+}) {
+  const [adding, setAdding] = React.useState(false);
+  return (
+    <div className="flex flex-col gap-1">
+      <Text variant="metadataMedium">{label}</Text>
+      <div className="flex flex-wrap items-center gap-2">
+        {picks.map(pick => (
+          <span
+            key={pick.id}
+            className="inline-flex items-center gap-1 rounded-sm bg-grey-02 px-1.5 py-0.5 text-metadata text-text"
+          >
+            {pick.name?.trim() || 'Untitled'}
+            <button
+              type="button"
+              aria-label={`Remove ${pick.name ?? 'item'}`}
+              onClick={() => onChange(picks.filter(p => p.id !== pick.id))}
+              className="text-grey-04 hover:text-text"
+            >
+              <CheckCloseSmall />
+            </button>
+          </span>
+        ))}
+        {adding ? (
+          <div className="min-w-[240px]">
+            <SelectEntity
+              spaceId={spaceId}
+              relationValueTypes={relationValueTypes}
+              placeholder={placeholder}
+              autoFocus
+              variant="fixed"
+              width="full"
+              onDone={result => {
+                if (!picks.some(p => p.id === result.id)) onChange([...picks, { id: result.id, name: result.name }]);
+                setAdding(false);
+              }}
+            />
+          </div>
+        ) : (
+          <SmallButton onClick={() => setAdding(true)}>Add</SmallButton>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -47,6 +47,7 @@ describe('FeatureFlagsDialog', () => {
       'Debate debugging',
       'Debate format selector',
       'Debates debug tab per space',
+      'Bounties',
     ]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Debate debugging' }));
@@ -59,6 +60,7 @@ describe('FeatureFlagsDialog', () => {
           debugDebatesPage: true,
           debateDebugging: true,
           debateFormatSelector: true,
+          bountiesTab: true,
         })
       );
     });

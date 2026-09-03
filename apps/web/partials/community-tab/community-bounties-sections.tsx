@@ -1,27 +1,25 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
 import * as React from 'react';
 
 import cx from 'classnames';
-import { useSetAtom } from 'jotai';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { RemoveScroll } from 'react-remove-scroll';
 
-import type { SpaceBountiesResult, SpaceBounty } from '~/core/community/bounty-types';
-import { useInterestedBountyIds, useInterestedInBounty } from '~/core/community/use-interested-in-bounty';
+import { collectSkillNames, skillIdsByName, toSpaceBounty } from '~/core/bounties/community-adapter';
+import { useBountiesEnabled } from '~/core/bounties/config';
 import {
-  BOUNTY_DIFFICULTY_LEVELS,
-  BOUNTY_TASK_STATUS_DONE_ENTITY_ID,
-  BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID,
-  BOUNTY_TASK_STATUS_TODO_ENTITY_ID,
-} from '~/core/constants';
+  type CommunitySection,
+  buildBountiesHref,
+  communitySectionFilters,
+  countFacetOptions,
+} from '~/core/bounties/filters';
+import { type DifficultyKey, statusKeyForId } from '~/core/bounties/labels';
+import { useBoardBounties } from '~/core/bounties/use-bounties';
+import type { SpaceBounty } from '~/core/community/bounty-types';
+import { useInterestedBountyIds, useInterestedInBounty } from '~/core/community/use-interested-in-bounty';
+import { BOUNTY_DIFFICULTY_LEVELS } from '~/core/constants';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
-import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { NavUtils } from '~/core/utils/utils';
 
-import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
@@ -36,9 +34,6 @@ import {
 import { type BountyScope, CheckboxFilter, ScopeFilter } from './bounty-filters';
 import type { BountyStatusSlug } from './bounty-status';
 import { FILTER_PILL_CLASS } from './community-filter-pill';
-import { communityFullscreenActiveAtom } from '~/atoms';
-
-const EMPTY_RESULT: SpaceBountiesResult = { bounties: [], skills: [], truncated: false };
 
 const INLINE_CARD_LIMIT = 4;
 
@@ -194,15 +189,6 @@ function BountiesErrorState({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function BountiesTruncatedNotice({ shown, totalCount }: { shown: number; totalCount?: number }) {
-  const message =
-    totalCount != null && totalCount > shown
-      ? `Showing ${shown} of ${totalCount} bounties.`
-      : 'This list may be incomplete.';
-
-  return <p className="text-[16px] leading-[20px] text-grey-04">{message}</p>;
-}
-
 function BountiesEmptyState({
   totalCount,
   emptyMessage,
@@ -226,22 +212,24 @@ function BountiesEmptyState({
   );
 }
 
-function useSpaceBounties(spaceId: string, taskStatusId: string) {
-  const { data, isPending, isError, refetch } = useQuery({
-    queryKey: ['space-bounties', spaceId, taskStatusId],
-    queryFn: async () => {
-      const params = new URLSearchParams({ taskStatusId });
-      const response = await fetch(`/api/space/${spaceId}/bounties?${params.toString()}`);
-      if (!response.ok) throw new Error('Failed to load bounties');
-      return (await response.json()) as SpaceBountiesResult;
-    },
-    staleTime: 60_000,
-    retry: 2,
-    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 8000),
-  });
+/**
+ * One section's bounties, sliced from the space's board data (`core/bounties`
+ * — one query for the whole space, shared with the board and the detail page)
+ * by workflow status and adapted to the card view-model.
+ */
+function useSectionBounties(spaceId: string, section: CommunitySection) {
+  const { data, isLoading, isError, refetch } = useBoardBounties([spaceId]);
+  const statuses = communitySectionFilters(section).statuses;
 
-  const { bounties, skills, truncated, totalCount } = data ?? EMPTY_RESULT;
-  return { bounties, skills, truncated, totalCount, isLoading: isPending, isError, refetch };
+  const sectionBounties = React.useMemo(
+    () => (data?.bounties ?? []).filter(bounty => statuses.includes(statusKeyForId(bounty.statusId))),
+    [data?.bounties, statuses]
+  );
+  const bounties = React.useMemo(() => sectionBounties.map(toSpaceBounty), [sectionBounties]);
+  const skills = React.useMemo(() => collectSkillNames(sectionBounties), [sectionBounties]);
+  const skillIds = React.useMemo(() => skillIdsByName(sectionBounties), [sectionBounties]);
+
+  return { bounties, skills, skillIds, isLoading, isError, refetch };
 }
 
 type BountyFilterValues = {
@@ -262,10 +250,8 @@ type BountyFilterState = {
   filterKey: string;
   controls: React.ReactNode;
   clearFilters: () => void;
+  values: BountyFilterValues;
 };
-
-const allDifficultiesSelected = (difficulties: Set<string>) =>
-  selectsEverything(difficulties, BOUNTY_DIFFICULTY_LEVELS);
 
 function useBountyFilterPresentation(
   bounties: SpaceBounty[],
@@ -284,20 +270,55 @@ function useBountyFilterPresentation(
     selectedSkills ? [...selectedSkills].sort().join(',') : '*'
   }`;
 
+  // Facet counts composed with the section's other filters: each option shows
+  // how many bounties it would yield on its own, and options sort by that.
+  const scopeCounts = React.useMemo<Record<BountyScope, number>>(
+    () => ({
+      featured: applyFilters(bounties, 'featured', difficulties, skillSelection, skills).length,
+      all: applyFilters(bounties, 'all', difficulties, skillSelection, skills).length,
+    }),
+    [bounties, difficulties, skillSelection, skills]
+  );
+  const difficultyOptions = React.useMemo(
+    () =>
+      countFacetOptions(
+        bounties,
+        BOUNTY_DIFFICULTY_LEVELS.map(level => ({ key: level, label: level })),
+        bounty => applyFilters([bounty], scope, new Set(BOUNTY_DIFFICULTY_LEVELS), skillSelection, skills).length > 0,
+        (bounty, level) => bounty.difficulty === level
+      ),
+    [bounties, scope, skillSelection, skills]
+  );
+  const skillOptions = React.useMemo(
+    () =>
+      countFacetOptions(
+        bounties,
+        skills.map(skill => ({ key: skill, label: skill })),
+        bounty => applyFilters([bounty], scope, difficulties, new Set(skills), skills).length > 0,
+        (bounty, skill) => bounty.skills.includes(skill)
+      ),
+    [bounties, scope, difficulties, skills]
+  );
+
   const controls = (
     <>
-      <ScopeFilter value={scope} onChange={setScope} />
+      <ScopeFilter value={scope} onChange={setScope} counts={scopeCounts} />
       <CheckboxFilter
         allLabel="Any difficulty"
-        options={[...BOUNTY_DIFFICULTY_LEVELS]}
+        options={difficultyOptions}
         selected={difficulties}
         onChange={setDifficulties}
       />
-      <CheckboxFilter allLabel="Any skill" options={skills} selected={skillSelection} onChange={setSelectedSkills} />
+      <CheckboxFilter
+        allLabel="Any skill"
+        options={skillOptions}
+        selected={skillSelection}
+        onChange={setSelectedSkills}
+      />
     </>
   );
 
-  return { filtered, filterKey, controls, clearFilters };
+  return { filtered, filterKey, controls, clearFilters, values: { scope, difficulties, selectedSkills } };
 }
 
 function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): BountyFilterState {
@@ -320,91 +341,70 @@ function useBountyFilterState(bounties: SpaceBounty[], skills: string[]): Bounty
 }
 
 /**
- * Filter state mirrored in the URL query
+ * "View all" deep-links into the global bounties page, filtered to this space,
+ * with the section's statuses and its current controls applied: Featured
+ * scope, the selected difficulties, and the selected skills (by id). A
+ * selection that covers every option carries nothing — that's "any" on both
+ * sides.
  */
-function useUrlBountyFilterState(bounties: SpaceBounty[], skills: string[]): BountyFilterState {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const scope: BountyScope = searchParams.get('scope') === 'all' ? 'all' : 'featured';
-
-  const difficultyParam = searchParams.get('difficulty');
-  const difficulties = React.useMemo(() => {
-    if (difficultyParam == null) return new Set<string>(BOUNTY_DIFFICULTY_LEVELS);
-    const levels = BOUNTY_DIFFICULTY_LEVELS as readonly string[];
-    return new Set(difficultyParam.split(',').filter(level => levels.includes(level)));
-  }, [difficultyParam]);
-
-  const skillParam = searchParams.get('skill');
-  const selectedSkills = React.useMemo(
-    () => (skillParam == null ? null : new Set(skillParam.split(',').filter(Boolean))),
-    [skillParam]
-  );
-
-  const commit = React.useCallback(
-    (next: BountyFilterValues) => {
-      const params = new URLSearchParams(searchParams.toString());
-
-      if (next.scope === 'all') params.set('scope', 'all');
-      else params.delete('scope');
-
-      if (allDifficultiesSelected(next.difficulties)) params.delete('difficulty');
-      else params.set('difficulty', [...next.difficulties].join(','));
-
-      const noSkillFilter =
-        next.selectedSkills == null ||
-        (skills.length > 0 && selectsEverything(next.selectedSkills, skills)) ||
-        next.selectedSkills.size === 0;
-      if (noSkillFilter) params.delete('skill');
-      else params.set('skill', [...next.selectedSkills!].join(','));
-
-      const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [pathname, router, searchParams, skills]
-  );
-
-  const values: BountyFilterValues = { scope, difficulties, selectedSkills };
-
-  const setters: BountyFilterSetters = {
-    setScope: nextScope => commit({ ...values, scope: nextScope }),
-    setDifficulties: nextDifficulties => commit({ ...values, difficulties: nextDifficulties }),
-    setSelectedSkills: nextSelectedSkills => commit({ ...values, selectedSkills: nextSelectedSkills }),
-    clearFilters: () => commit({ scope: 'all', difficulties: new Set(BOUNTY_DIFFICULTY_LEVELS), selectedSkills: null }),
-  };
-
-  return useBountyFilterPresentation(bounties, skills, values, setters);
+export function viewAllHref(
+  spaceId: string,
+  section: CommunitySection,
+  values: BountyFilterValues,
+  skills: string[],
+  skillIds: Map<string, string>
+): string {
+  const allDifficulties =
+    values.difficulties.size === 0 || values.difficulties.size === BOUNTY_DIFFICULTY_LEVELS.length;
+  const difficulties = allDifficulties
+    ? []
+    : BOUNTY_DIFFICULTY_LEVELS.filter(level => values.difficulties.has(level)).map(
+        level => level.toLowerCase() as DifficultyKey
+      );
+  const selectedSkillNames = values.selectedSkills ?? new Set(skills);
+  const allSkills = selectedSkillNames.size === 0 || skills.every(skill => selectedSkillNames.has(skill));
+  const selectedSkillIds = allSkills
+    ? []
+    : skills.filter(skill => selectedSkillNames.has(skill)).flatMap(skill => skillIds.get(skill) ?? []);
+  return buildBountiesHref(NavUtils.toBounties(), {
+    ...communitySectionFilters(section, {
+      featuredOnly: values.scope === 'featured',
+      difficulties,
+      skillIds: selectedSkillIds,
+    }),
+    spaceIds: [spaceId],
+  });
 }
 
 function BountiesSection({
   spaceId,
+  section,
   title,
-  taskStatusId,
   emptyMessage,
   grid: Grid,
   cardHeightPx,
   gridClassName = GRID_CLASS,
   isInfinite = false,
-  viewAllHref,
 }: {
   spaceId: string;
+  section: CommunitySection;
   title: string;
-  taskStatusId: string;
   emptyMessage: string;
   grid: BountyGridComponent;
   cardHeightPx: number;
   /** Matches the grid the section's cards use, so the skeletons occupy the same columns. */
   gridClassName?: string;
   isInfinite?: boolean;
-  /** "View all" navigates to this full-screen route. */
-  viewAllHref: string;
 }) {
-  const { bounties, skills, isLoading, isError, refetch, truncated, totalCount } = useSpaceBounties(
-    spaceId,
-    taskStatusId
-  );
-  const { filtered, filterKey, controls: filterControls, clearFilters } = useBountyFilterState(bounties, skills);
+  const { bounties, skills, skillIds, isLoading, isError, refetch } = useSectionBounties(spaceId, section);
+  const {
+    filtered,
+    filterKey,
+    controls: filterControls,
+    clearFilters,
+    values,
+  } = useBountyFilterState(bounties, skills);
+  const viewAll = viewAllHref(spaceId, section, values, skills, skillIds);
 
   const [visibleCount, setVisibleCount] = React.useState(INFINITE_PAGE_SIZE);
 
@@ -434,7 +434,7 @@ function BountiesSection({
         <div className="flex flex-wrap items-center gap-2">
           {filterControls}
           <Link
-            href={viewAllHref}
+            href={viewAll}
             aria-disabled={viewAllDisabled}
             className={cx(FILTER_PILL_CLASS, viewAllDisabled && 'pointer-events-none opacity-50')}
           >
@@ -456,7 +456,6 @@ function BountiesSection({
       ) : (
         <>
           <Grid bounties={inlineBounties} allBounties={bounties} />
-          {truncated ? <BountiesTruncatedNotice shown={bounties.length} totalCount={totalCount} /> : null}
           {hasMore ? <div ref={sentinelRef} aria-hidden className="h-px w-full" /> : null}
         </>
       )}
@@ -464,96 +463,8 @@ function BountiesSection({
   );
 }
 
-function CommunityFullscreen({ children }: { children: React.ReactNode }) {
-  const isMobile = useIsMobileLayout();
-  const setFullscreenActive = useSetAtom(communityFullscreenActiveAtom);
-
-  React.useEffect(() => {
-    setFullscreenActive(true);
-    return () => setFullscreenActive(false);
-  }, [setFullscreenActive]);
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-white" style={{ top: 44 }}>
-      {isMobile ? (
-        <RemoveScroll className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</RemoveScroll>
-      ) : (
-        children
-      )}
-    </div>
-  );
-}
-
-/**
- * Full-screen route counterpart to a section's "View all"
- */
-function BountiesFullView({
-  spaceId,
-  title,
-  taskStatusId,
-  backHref,
-  grid: Grid,
-  cardHeightPx,
-  gridClassName = GRID_CLASS,
-  emptyMessage,
-}: {
-  spaceId: string;
-  title: string;
-  taskStatusId: string;
-  backHref: string;
-  grid: BountyGridComponent;
-  cardHeightPx: number;
-  /** Matches the grid the view's cards use, so the skeletons occupy the same columns. */
-  gridClassName?: string;
-  emptyMessage: string;
-}) {
-  const { bounties, skills, isLoading, isError, refetch, truncated, totalCount } = useSpaceBounties(
-    spaceId,
-    taskStatusId
-  );
-  const { filtered, controls: filterControls, clearFilters } = useUrlBountyFilterState(bounties, skills);
-
-  return (
-    <CommunityFullscreen>
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-6 py-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            href={backHref}
-            aria-label="Back to community"
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm hover:bg-grey-01"
-          >
-            <ArrowLeft color="grey-04" />
-          </Link>
-          <h1 className={SECTION_TITLE_CLASS}>{title}</h1>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">{filterControls}</div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-        {isError ? (
-          <BountiesErrorState onRetry={() => void refetch()} />
-        ) : isLoading ? (
-          <div className={gridClassName}>
-            {Array.from({ length: INLINE_CARD_LIMIT }).map((_, index) => (
-              <Skeleton key={index} className="w-full rounded-lg" style={{ height: cardHeightPx }} />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <BountiesEmptyState totalCount={bounties.length} emptyMessage={emptyMessage} onShowAll={clearFilters} />
-        ) : (
-          <>
-            <Grid bounties={filtered} allBounties={bounties} />
-            {truncated ? <BountiesTruncatedNotice shown={bounties.length} totalCount={totalCount} /> : null}
-          </>
-        )}
-      </div>
-    </CommunityFullscreen>
-  );
-}
-
 type BountyStatusConfig = {
   title: string;
-  taskStatusId: string;
   grid: BountyGridComponent;
   cardHeightPx: number;
   gridClassName: string;
@@ -564,7 +475,6 @@ type BountyStatusConfig = {
 const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
   completed: {
     title: 'Completed bounties',
-    taskStatusId: BOUNTY_TASK_STATUS_DONE_ENTITY_ID,
     grid: CompletedBountyGrid,
     cardHeightPx: COMPLETED_CARD_HEIGHT_PX,
     gridClassName: GRID_CLASS,
@@ -572,7 +482,6 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
   },
   'in-progress': {
     title: 'In progress bounties',
-    taskStatusId: BOUNTY_TASK_STATUS_IN_PROGRESS_ENTITY_ID,
     grid: InProgressBountyGrid,
     cardHeightPx: IN_PROGRESS_CARD_HEIGHT_PX,
     gridClassName: GRID_CLASS,
@@ -580,7 +489,6 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
   },
   available: {
     title: 'Available bounties',
-    taskStatusId: BOUNTY_TASK_STATUS_TODO_ENTITY_ID,
     grid: AvailableBountyGrid,
     cardHeightPx: AVAILABLE_CARD_HEIGHT_PX,
     gridClassName: AVAILABLE_GRID_CLASS,
@@ -589,18 +497,10 @@ const BOUNTY_STATUS_CONFIG: Record<BountyStatusSlug, BountyStatusConfig> = {
   },
 };
 
-export function BountiesStatusFullView({ spaceId, status }: { spaceId: string; status: BountyStatusSlug }) {
-  return (
-    <BountiesFullView spaceId={spaceId} backHref={NavUtils.toCommunity(spaceId)} {...BOUNTY_STATUS_CONFIG[status]} />
-  );
-}
-
 export function BountiesStatusSection({ spaceId, status }: { spaceId: string; status: BountyStatusSlug }) {
-  return (
-    <BountiesSection
-      spaceId={spaceId}
-      viewAllHref={NavUtils.toCommunityBounties(spaceId, status)}
-      {...BOUNTY_STATUS_CONFIG[status]}
-    />
-  );
+  // Bounty surfaces honor the network gate AND the per-browser bountiesTab
+  // flag; on mainnet these sections would otherwise render empty shells.
+  const enabled = useBountiesEnabled();
+  if (!enabled) return null;
+  return <BountiesSection spaceId={spaceId} section={status} {...BOUNTY_STATUS_CONFIG[status]} />;
 }

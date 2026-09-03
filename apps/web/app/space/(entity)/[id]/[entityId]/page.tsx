@@ -2,12 +2,15 @@ import { IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { notFound } from 'next/navigation';
 
+import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { DebateEntityView } from '~/core/debates/browse/debate-entity-view';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { entityHasOnlyPostType } from '~/core/utils/entity/entities';
 
+import { BountyDetailHeader } from '~/partials/bounties/bounty-detail-header';
+import { BountyDetailSections } from '~/partials/bounties/bounty-detail-sections';
 import { CommunityCallRecording } from '~/partials/community-calls/community-call-recording';
 
 import { cachedFetchEntityPage } from './cached-fetch-entity';
@@ -63,6 +66,23 @@ export default async function EntityTemplateStrategy(props: Props) {
             serverRecordingUrls={getRecordingUrls(result.entity.relations)}
           />
         }
+      />
+    );
+  }
+
+  // A bounty is an ordinary entity (markdown body, comments, backlinks, edit
+  // mode all come from the default page) with its structured facts and
+  // curator actions layered into the slots. On a build where bounties are off
+  // it degrades to the plain entity page.
+  if (bountiesEnabledForNetwork && isBountyEntity(result?.entity?.types)) {
+    return (
+      <DefaultEntityPage
+        params={params}
+        searchParams={searchParams}
+        notice={<BountyDetailHeader spaceId={params.id} bountyId={params.entityId} />}
+        belowBodySlot={<BountyDetailSections spaceId={params.id} bountyId={params.entityId} />}
+        // The facts card covers the bounty's structured properties, in read and edit mode alike.
+        hideProperties
       />
     );
   }
