@@ -458,8 +458,11 @@ export class GeoStore {
     // Get the base entity
     const entity = syncedEntities.get(id);
 
-    // Get triples including any pending optimistic updates
-    const values = this.getResolvedValues(id, options.includeDeleted);
+    // Get triples including any pending optimistic updates. Read with tombstones and narrow below,
+    // so the deletion guards further down can still see them — `values` has dropped the evidence by
+    // definition.
+    const allValues = this.getResolvedValues(id, true);
+    const values = options.includeDeleted ? allValues : allValues.filter(v => Boolean(v.isDeleted) === false);
 
     // Get relations including any pending optimistic updates
     const relations = this.getResolvedRelations(id, options.includeDeleted);
@@ -468,8 +471,26 @@ export class GeoStore {
       return undefined;
     }
 
-    const name = Entities.name(values);
-    const description = Entities.description(values);
+    // `options.spaceId` used to filter the values array below without touching the name and
+    // description derived from it, so a view pinned to a space still showed the top-ranked space's
+    // wording (GEO-2778). `nameInSpace` owns the rule and its fallback for every caller.
+    const spaceValues = options.spaceId ? values.filter(v => v.spaceId === options.spaceId) : values;
+    // Both aggregate fallbacks are gated on a tombstone, the same guard `E.merge` applies: the
+    // synced entity retains the server's pre-deletion value, so falling back onto a name or
+    // description the reader has just deleted puts it straight back on their screen.
+    const name =
+      Entities.nameInSpace(values, options.spaceId) ??
+      (Entities.hasDeletedValue(allValues, SystemIds.NAME_PROPERTY) ? null : (entity?.name ?? null));
+    // No fall-through to the synced entity's description when a space was named: that value is the
+    // server's cross-space resolution, and letting it through would put another space's prose in
+    // this one's mouth — exactly what `descriptionInSpace` declines to do.
+    // Resolved through the helper on both branches so an empty triple normalises to null rather than
+    // blocking the synced fallback with `''`, and the synced value applies only to an unscoped read.
+    const description =
+      Entities.descriptionInSpace(values, options.spaceId) ??
+      (options.spaceId || Entities.hasDeletedValue(allValues, SystemIds.DESCRIPTION_PROPERTY)
+        ? null
+        : (entity?.description ?? null));
     const types = readTypes(relations);
     const spaces = Entities.spaces(values, relations);
 
@@ -481,8 +502,8 @@ export class GeoStore {
             types,
             spaces,
             nameTripleSpaces: spaces,
-            name: name ?? entity.name,
-            description: description ?? entity.description,
+            name,
+            description,
           }
         : {
             id: id,
@@ -492,7 +513,7 @@ export class GeoStore {
             spaces,
             nameTripleSpaces: spaces,
           }),
-      values: values.filter(v => (options.spaceId ? v.spaceId === options.spaceId : true)),
+      values: spaceValues,
       relations: relations.filter(
         r => (includeDeleted || !r.isDeleted) && (options.spaceId ? r.spaceId === options.spaceId : true)
       ),

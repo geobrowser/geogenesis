@@ -10,11 +10,16 @@ import { type DebateResponseKind, type GetPrivyIdentityToken, notifyClaimRespons
 import { refreshRematchClaimBatches, rematchClaimBatchesWithClaim } from './rematch-claims-query-key';
 
 const MAX_NOTIFIED_RUNS = 256;
-type IndexedClaimResponse = NonNullable<ReturnType<typeof claimResponseIndexedEvent>>;
+/**
+ * What sending a notification actually needs. The indexed variant additionally carries `runId`,
+ * but that is only used to build the dedupe key at the call site — never inside the send — so both
+ * the in-flight and the confirmed response satisfy this (GEO-2784).
+ */
+type NotifiableClaimResponse = NonNullable<ReturnType<typeof pendingClaimResponse>>;
 type InterruptedNotification = {
   accountKey: string;
   notificationKey: string;
-  response: IndexedClaimResponse;
+  response: NotifiableClaimResponse;
 };
 
 export function claimResponseIndexedEvent(queryKey: readonly unknown[], data: unknown) {
@@ -90,7 +95,7 @@ export function useClaimResponseIndexedNotifier(
       notifiedRunOrder.current = notifiedRunOrder.current.filter(key => key !== notificationKey);
     };
 
-    const startNotification = (notificationKey: string, response: IndexedClaimResponse) => {
+    const startNotification = (notificationKey: string, response: NotifiableClaimResponse) => {
       if (notifiedRuns.current.has(notificationKey)) return;
 
       notifiedRuns.current.add(notificationKey);
@@ -130,9 +135,29 @@ export function useClaimResponseIndexedNotifier(
 
     const unsubscribe = queryClient.getQueryCache().subscribe(event => {
       if (event.type !== 'updated' || event.action.type !== 'success') return;
-      const response = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
-      if (!response) return;
-      startNotification(`${event.query.queryHash}:${response.runId}`, response);
+      const queryHash = event.query.queryHash;
+
+      const indexed = claimResponseIndexedEvent(event.query.queryKey, event.query.state.data);
+      if (indexed) {
+        // Still sent once the chain confirms, and it is not redundant: this is the reconciliation
+        // half. If the in-flight notification below reported a position the write never landed,
+        // this one carries the truth and geo-chat converges on it.
+        startNotification(`${queryHash}:${indexed.runId}`, indexed);
+        return;
+      }
+
+      // GEO-2784. Tell geo-chat the moment the write starts rather than when it finishes.
+      // `web.write.entity_response` is p50 9.9s / p95 48.6s, and geo-chat used to refuse an
+      // unindexed position outright (409 `claim_response_not_indexed`), so nobody could be offered
+      // a debate against a position for ~10s after the click. geo-chat is now the authority on
+      // readiness and takes the report immediately.
+      //
+      // Keyed separately from the indexed notification so both fire: this one makes the opposite
+      // side's Request debate appear at once, that one reconciles it. Keyed on the position too,
+      // so toggling a side off and on again is reported rather than swallowed as a duplicate.
+      const pending = pendingClaimResponse(event.query.queryKey, event.query.state.data);
+      if (!pending) return;
+      startNotification(`${queryHash}:pending:${String(pending.position)}`, pending);
     });
 
     for (const [notificationKey, interrupted] of interruptedNotifications.current) {

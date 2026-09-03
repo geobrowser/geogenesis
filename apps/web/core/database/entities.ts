@@ -15,7 +15,6 @@ import { E } from '../sync/orm';
 import { useQueryEntity } from '../sync/use-store';
 import { store as geoStore } from '../sync/use-sync-engine';
 import { Entity, EntityWithSchema, Property, Relation } from '../types';
-import { Entities } from '../utils/entity';
 import { sortRelations } from '../utils/utils';
 
 function orderEntitiesByIdList<T extends { id: string }>(ids: string[], entities: T[]): T[] {
@@ -114,9 +113,13 @@ export function useEntity(options: UseEntityOptions): EntityWithSchema & { isLoa
   const values = entity?.values ?? [];
   const relations = entity?.relations ?? [];
 
-  const name = Entities.name(values ?? []);
+  // Taken from the entity rather than recomputed. `useQueryEntity` was given a `spaceId`, so the
+  // values above are already filtered to it — resolving from them again dropped the cross-space
+  // fallback `getEntity` had just applied, and an entity this space had never named rendered
+  // untitled here while the graph had a perfectly good name for it (GEO-2778).
+  const name = entity?.name ?? null;
   const spaces = entity?.spaces ?? [];
-  const description = Entities.description(values);
+  const description = entity?.description ?? null;
   const types = readTypes(relations);
 
   // Extract type+space pairs from relations. Use toSpaceId (the type
