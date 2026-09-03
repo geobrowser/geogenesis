@@ -3067,7 +3067,7 @@ describe('DebateRematchPageClient', () => {
    * state already on screen rather than in a new one. A buffer, not a proof — if geo-chat takes
    * longer than this the request still fails, which is why the failure stays visible.
    */
-  it('offers the debate once geo-chat agrees and the beat has passed', async () => {
+  it('offers the debate once geo-chat agrees', async () => {
     mocks.claims = [
       {
         ...sharedClaim(),
@@ -3082,9 +3082,6 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
-    // That the offer is *withheld* for the beat is asserted in `request-gate.test.ts`, against the
-    // hook — the window is about one frame, so this test's own awaits would step over it. What
-    // belongs here is that the page comes out the other side offering the debate.
     expect(await screen.findByRole('button', { name: 'Request debate' })).toBeEnabled();
   });
 
