@@ -47,8 +47,8 @@ describe('debateRequestGate', () => {
   });
 
   // The viewer has not answered, so nothing is publishing. Naming a wait here would describe work
-  // nobody started — which is what the hub did, whose opponent half does not require a position the
-  // way the picker's `opposing` does.
+  // nobody started. The picker's `opposing` already requires a position, so this is unreachable
+  // from there — it is guarded for the next caller whose opponent half does not.
   it('is not waiting when the viewer holds no position', () => {
     expect(gate({ chatPosition: null, localPosition: null })).toEqual({
       canRequest: false,

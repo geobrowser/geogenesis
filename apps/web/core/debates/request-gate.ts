@@ -1,9 +1,14 @@
 /**
  * May this viewer request a debate on this claim, right now?
  *
- * One answer for both surfaces that ask it — the debates hub side panel and the "debate again"
- * picker. They used to decide separately and disagree: the hub never waited and never explained,
- * the picker waited on the wrong thing and explained that (GEO-2808).
+ * Written to be the one answer for both surfaces that ask it — the "debate again" picker and the
+ * debates hub side panel — which used to decide separately and disagree: the hub never waited and
+ * never explained, the picker waited on the wrong thing and explained that (GEO-2808).
+ *
+ * Only the picker reads it today. The hub is deliberately left alone here: it was working, and
+ * changing a working surface belongs in its own change where someone can look at it. That is also
+ * why the opponent half is a parameter rather than something this module decides — see
+ * `opponentReady`.
  *
  * ## The wait is on geo-chat, so the gate is measured against geo-chat
  *
@@ -45,8 +50,8 @@ export type DebateRequestGateInput = {
   /**
    * The surface's own opponent question, deliberately not shared.
    *
-   * The hub asks whether *anyone* is standing ready on the other side (`match`); the picker asks
-   * whether *this* opponent holds it (`opposing`). A rematch has one possible opponent and the hub
+   * The picker asks whether *this* opponent holds the other side (`opposing`). The hub asks
+   * whether *anyone* is standing ready (`match`). A rematch has one possible opponent and the hub
    * has many, so these are different questions with the same shape — the position half is shared,
    * the opponent half stays with whoever can answer it.
    */
