@@ -18,7 +18,6 @@ import {
   getServerTime,
 } from '~/core/debates/api';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
-import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import {
   CameraIcon,
@@ -44,6 +43,7 @@ import {
   useEndDebateTurn,
   useLeaveDebateRematch,
   useLiveKitJoin,
+  useMarkDebateCapturing,
   useMarkDebateJoined,
   useMarkDebateReady,
 } from '~/core/debates/hooks';
@@ -64,13 +64,19 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
-import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
+import {
+  usePublishOptOutOffer,
+  useSetPublishOptOutRequest,
+  useSetThankingDebate,
+} from '~/core/debates/thanking-debate-store';
+import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
+import { Toggle } from '~/design-system/toggle';
 
 type DebateRoomPageClientProps = {
   spaceId: string;
@@ -231,6 +237,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const liveKitJoin = useLiveKitJoin(debateId);
   const markJoined = useMarkDebateJoined(debateId);
   const markReady = useMarkDebateReady(debateId);
+  const markCapturing = useMarkDebateCapturing(debateId);
   const abortDebate = useAbortDebate(debateId);
   const endDebateTurn = useEndDebateTurn(debateId);
   const clearDebateActivity = useClearDebateActivity();
@@ -305,6 +312,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionFailureRedirectTimerRef = React.useRef<number | null>(null);
   const remoteParticipantRefetchTimerRef = React.useRef<number | null>(null);
   const serverNowRef = React.useRef(serverClock.now);
+  // Held in a ref rather than closed over: `useMutation` returns a fresh object whenever its state
+  // changes, and `startLocalRecorder` feeds an effect that clears and re-arms the capture timers.
+  // Depending on the mutation object directly would churn that effect on every retry.
+  const markCapturingRef = React.useRef<() => void>(() => undefined);
   const preflightEndsAtMsRef = React.useRef<number | null>(null);
   const finalizedDebateRef = React.useRef<string | null>(null);
   const debateExitStartedRef = React.useRef(false);
@@ -361,8 +372,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // teardown back until the answer is real.
   const rematchSessionStatus = rematchQuery.data?.status ?? null;
   const rematchQueryFailed = (rematchQuery.error ?? null) !== null;
-  const rematchOutcomeResolved =
-    !debate?.rematch_session_id || rematchSessionStatus !== null || rematchQueryFailed;
+  const rematchOutcomeResolved = !debate?.rematch_session_id || rematchSessionStatus !== null || rematchQueryFailed;
   const rematchSurvivesCancellation =
     Boolean(debate?.rematch_session_id) &&
     !rematchQueryFailed &&
@@ -382,6 +392,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     !thankingRecordingCancelled &&
     (recordingStartedAtRef.current !== null || recordingPersistenceStartedRef.current === thankingDebateId)
   );
+  // Whether the thank-you card — and so the publish switch — is actually on screen. The countdown
+  // alone doesn't say: the card lives inside `DebateRecordingModal`, which the room drops the
+  // moment the connection goes idle, and an ownership conflict can do that mid-countdown. Read off
+  // the countdown alone, this claimed the card was carrying the control while it wasn't rendered,
+  // and the banner stood down for a debate nothing else was reporting — leaving no publish state
+  // and no way to opt out, over a recording still cancellable.
+  const showsPublishControl = locallyThanking && roomState !== 'idle';
+
   // The global coordinator is a sibling of this page. Publish its state in a layout effect so the
   // upload banner joins the rematch card in the same browser paint at the countdown boundary.
   React.useLayoutEffect(() => {
@@ -392,11 +410,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             hasPendingLocalRecording: thankingHasPendingLocalRecording,
             hasUploadedRecording: thankingHasUploadedRecording,
             recordingCancelled: thankingRecordingCancelled,
+            showsPublishControl,
           }
         : null
     );
   }, [
     setThankingDebate,
+    showsPublishControl,
     thankingDebateId,
     thankingHasPendingLocalRecording,
     thankingHasUploadedRecording,
@@ -512,7 +532,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
-  }, [serverClock]);
+    markCapturingRef.current = () => void markCapturing.mutateAsync().catch(() => undefined);
+  }, [markCapturing, serverClock]);
 
   React.useEffect(() => {
     setLocalTrackPreferences(
@@ -645,6 +666,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       'start',
       () => {
         recordingStartedAtRef.current = serverNowRef.current();
+        // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
+        // clock waits on it. `/ready` fires after a camera *preview* exists and `/joined` fires on
+        // room connection, both before LiveKit has published the tracks this recorder consumes —
+        // so the window used to open while one participant was still acquiring a device, costing
+        // 20-50s off the head of their recording, permanently.
+        //
+        // Fire-and-forget: the mutation retries itself, and a failure must not stop a recorder
+        // that is already running. The worst case is the server waiting out its grace, which is
+        // the old behaviour rather than a new one.
+        markCapturingRef.current();
       },
       { once: true }
     );
@@ -2041,6 +2072,13 @@ function DebateRecordingModal({
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
+  // The publish control the thank-you card draws is the coordinator's opt-out, not this page's:
+  // the coordinator owns the upload queue and the cancel request, and says here whether there is
+  // still anything to opt out of. Off is the terminal state, so a cancelled recording keeps the
+  // row rather than dropping it — the answer to "Publish debate?" is no, not nothing.
+  const publishOptOutOffer = usePublishOptOutOffer();
+  const setPublishOptOutRequest = useSetPublishOptOutRequest();
+  const publishing = publishOptOutOffer.debateId !== null ? true : publishOptOutOffer.cancelled ? false : null;
   const localParticipant =
     (localSlot
       ? debate.participants.find(participant => participant.participant_slot === localSlot)
@@ -2245,6 +2283,9 @@ function DebateRecordingModal({
               remoteConsented={remoteConsented}
               busy={rematchBusy}
               onConsent={onRequestRematch}
+              publishing={publishing}
+              publishBusy={publishOptOutOffer.busy}
+              onStopPublishing={() => setPublishOptOutRequest(publishOptOutOffer.debateId)}
             />
           )}
         </div>
@@ -2671,7 +2712,7 @@ function DebateRecordingRemovedDialog({
           <button
             type="button"
             onClick={onAcknowledge}
-            className="min-h-7 rounded-full bg-text px-3 text-metadata text-white transition-colors hover:bg-text/90"
+            className={cx(cardPill, 'bg-text text-white transition-colors hover:bg-text/90')}
           >
             Okay
           </button>
@@ -2681,22 +2722,73 @@ function DebateRecordingRemovedDialog({
   );
 }
 
+/** The hairline between the card's rows. `divider` is the design's own #F0F0F0. */
+function CardDivider() {
+  return <div aria-hidden className="h-px w-full shrink-0 bg-divider" />;
+}
+
+/** A row of the thank-you card: what is being asked on the left, the control for it on the right. */
+function CardRow({ children }: { children: React.ReactNode }) {
+  return <div className="flex min-h-7 items-center justify-between gap-2.5">{children}</div>;
+}
+
+/**
+ * The pill every control on these cards is cut from — 28px tall, fully rounded, metadata type.
+ *
+ * Shared as a class string rather than a component because the three that use it are a button, a
+ * disabled button and a plain span, and only the shape is common to them.
+ */
+const cardPill = 'inline-flex min-h-7 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-metadata';
+
 function DebateAgainCard({
   opponentName,
   localConsented,
   remoteConsented,
   busy,
   onConsent,
+  publishing,
+  publishBusy,
+  onStopPublishing,
 }: {
   opponentName: string;
   localConsented: boolean;
   remoteConsented: boolean;
   busy: boolean;
   onConsent: () => void;
+  /** Null when there is no recording to opt out of, which is when the row is left off. */
+  publishing: boolean | null;
+  publishBusy: boolean;
+  onStopPublishing: () => void;
 }) {
   return (
     <section className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg bg-white px-3 py-2 text-text shadow-card">
-      <div className="flex min-h-7 items-center justify-between gap-2.5">
+      {publishing !== null && (
+        <>
+          <CardRow>
+            <Text as="span" variant="smallTitle" color="text">
+              Publish debate?
+            </Text>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={publishing}
+              aria-label="Publish debate"
+              // Off is one-way — it cancels the upload — so the control only acts on the way down.
+              // Left interactive while on so the label and the switch still read as one thing.
+              onClick={publishing ? onStopPublishing : undefined}
+              disabled={publishBusy || !publishing}
+              className="flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 text-metadata text-grey-04 disabled:cursor-default"
+            >
+              <Toggle checked={publishing} />
+              <span>{publishing ? 'Yes' : 'No'}</span>
+            </button>
+          </CardRow>
+          {/* Inside the conditional: with no publish row above it this would be a hairline
+              hanging off the top of the card. */}
+          <CardDivider />
+        </>
+      )}
+      <CardRow>
         <Text as="span" variant="smallTitle" color="text">
           Debate again?
         </Text>
@@ -2705,27 +2797,25 @@ function DebateAgainCard({
           onClick={onConsent}
           disabled={busy || localConsented}
           className={cx(
-            'min-h-7 rounded-full px-3 text-metadata text-white transition-colors disabled:cursor-default',
+            cardPill,
+            'text-white transition-colors disabled:cursor-default',
             localConsented ? 'bg-text' : 'bg-text hover:bg-text/90'
           )}
         >
-          {localConsented ? 'Waiting...' : busy ? 'Saving...' : 'Yes'}
+          {localConsented ? 'Waiting...' : busy ? 'Saving...' : "Let's go!"}
         </button>
-      </div>
-      <div className="flex min-h-7 items-center justify-between gap-2.5">
-        <Text as="span" variant="smallTitle" color="text" className="min-w-0 truncate">
+      </CardRow>
+      <CardDivider />
+      <CardRow>
+        {/* Grey until they are ready, like the pill beside it — the design shows the waiting state. */}
+        <Text as="span" variant="smallTitle" color={remoteConsented ? 'text' : 'grey-04'} className="min-w-0 truncate">
           {opponentName}
         </Text>
-        <span
-          className={cx(
-            'inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-full px-3 text-metadata',
-            remoteConsented ? 'bg-green text-text' : 'bg-grey-01 text-grey-04'
-          )}
-        >
+        <span className={cx(cardPill, remoteConsented ? 'bg-green text-text' : 'bg-grey-01 text-grey-04')}>
           {remoteConsented && <Check />}
           {remoteConsented ? 'Ready' : 'Waiting...'}
         </span>
-      </div>
+      </CardRow>
     </section>
   );
 }

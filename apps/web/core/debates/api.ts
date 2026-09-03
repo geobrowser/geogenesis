@@ -500,6 +500,13 @@ export type MatchmakingClaimsQuery = {
    *
    * The session id rather than the ids themselves — that set is geo-chat's own, and the client
    * would be handing back a value it isn't the authority on.
+   *
+   * No sender since GEO-2771: the rematch picker's All source is the graph's Debate tag now, so it
+   * makes no index query to attach this to, and `excludedClaimIds` removes the same claims
+   * client-side across all four of its sources. Kept because it still describes a parameter
+   * `/matchmaking/claims` accepts, and this module is the client's model of that endpoint rather
+   * than a list of what happens to be called today. It should go when geo-chat drops it — the two
+   * halves belong in one change.
    */
   rematchSessionId?: string | null;
   filter?: MatchmakingClaimsFilter;
@@ -1029,6 +1036,27 @@ export async function markDebateReady(
   accountKey: string | null
 ) {
   return geoChatRequest<Debate>(`/debates/${debateId}/ready`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Report that this participant's recorder is producing frames (GEO-2644).
+ *
+ * The debate clock waits on this rather than on `/ready` or `/joined`, both of which fire before a
+ * camera is delivering anything — `/joined` deliberately so, to keep the connecting deadline about
+ * room presence rather than device setup. Called from the `MediaRecorder` `start` event, which is
+ * the first moment capture is genuinely underway.
+ */
+export async function markDebateCapturing(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<Debate>(`/debates/${debateId}/capturing`, {
     method: 'POST',
     auth: true,
     getPrivyIdentityToken,
