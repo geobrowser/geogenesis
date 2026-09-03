@@ -10,6 +10,29 @@ import { type DebateResponseKind, type GetPrivyIdentityToken, notifyClaimRespons
 import { refreshRematchClaimBatches, rematchClaimBatchesWithClaim } from './rematch-claims-query-key';
 
 const MAX_NOTIFIED_RUNS = 256;
+
+/**
+ * Every query whose answer a position write changes, as key prefixes (GEO-2814).
+ *
+ * These are the three sources the Request debate control reads geo-chat's copy of the position
+ * from — Explore's per-space claims, the hub's Claims tab, and the hub's Matches tab. They ask the
+ * same question of the same service and are keyed independently, so a refresh has to name all
+ * three. Prefixes, because the full keys carry a claim-id batch and a filter set respectively,
+ * neither of which is reconstructable from a notification.
+ *
+ * `matches` is included because a new position can create or dissolve a match outright, not merely
+ * change how one renders.
+ */
+function readinessQueryPrefixes(accountKey: string, spaceId: string) {
+  return [
+    // Explore cards and the claim page: ['debates', 'claims', spaceId, claimIds, accountKey]
+    ['debates', 'claims', spaceId],
+    // Hub Claims tab: ['debates', 'account', accountKey, 'matchmaking-claims', filters]
+    ['debates', 'account', accountKey, 'matchmaking-claims'],
+    // Hub Matches tab: ['debates', 'account', accountKey, 'matches']
+    ['debates', 'account', accountKey, 'matches'],
+  ] as const;
+}
 /** Fields shared by pending and indexed response notifications. */
 type NotifiableClaimResponse = Pick<
   NonNullable<ReturnType<typeof pendingClaimResponse>>,
@@ -120,8 +143,11 @@ export function useClaimResponseIndexedNotifier(
         controller.signal
       )
         .catch(error => {
+          // Swallowed so `.finally` still runs and the promise never rejects unhandled. This used
+          // to invalidate the claims query as a fallback; the refresh below now covers that key on
+          // every path, so a second one here would only make "the notification failed" and "the
+          // notification succeeded" indistinguishable at the cache (GEO-2814).
           if (isAbortError(error)) return;
-          return queryClient.invalidateQueries({ queryKey: ['debates', 'claims', response.spaceId] });
         })
         .finally(() => {
           notificationControllers.delete(controller);
@@ -133,6 +159,20 @@ export function useClaimResponseIndexedNotifier(
           // until something unrelated happened to refetch. Asking again once the notification has
           // settled is the only refresh guaranteed to postdate it.
           void refreshRematchClaimBatches(queryClient, rematchClaimBatchesWithClaim(accountKey, response.entityId));
+
+          // GEO-2814. The rematch picker was the only surface refreshed here, so every *other*
+          // Request debate control converged on geo-chat's new answer by luck — whenever its own
+          // query happened to refetch next. Explore asks per card behind `nearViewport`, so
+          // scrolling refetches it constantly and its button opened first; the hub asks once per
+          // tab and sat on a stale answer, which is the reported inconsistency.
+          //
+          // The same argument as the rematch refresh above applies to all of them: this is the
+          // only refresh guaranteed to postdate the notification, so it is where they belong.
+          // Invalidated by prefix rather than by exact key because the claims queries are keyed by
+          // claim-id batch and the hub's by filter set — neither is reconstructable from here.
+          for (const queryKey of readinessQueryPrefixes(accountKey, response.spaceId)) {
+            void queryClient.invalidateQueries({ queryKey });
+          }
         });
     };
 
