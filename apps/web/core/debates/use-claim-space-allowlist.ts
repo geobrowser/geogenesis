@@ -10,7 +10,7 @@ import { useBrowseSidebarQuerySource } from '~/core/browse/use-browse-sidebar-ca
 
 import { loadBrowseSidebarData } from '~/partials/browse-sidebar/load-browse-sidebar-data';
 
-import { browseSidebarClaimSpaceAllowlist } from './claim-space-allowlist';
+import { browseSidebarClaimSpaceAllowlist, browseSidebarMemberSpaceIds } from './claim-space-allowlist';
 
 /**
  * The spaces the viewer may see claims from — featured spaces, plus the spaces they are a member
@@ -27,9 +27,15 @@ import { browseSidebarClaimSpaceAllowlist } from './claim-space-allowlist';
  * resolver is what keeps their own member and editor spaces in the allowlist.
  *
  * `allowlist` is null until the sources settle, which callers must read as "don't filter yet"
- * rather than "nothing is allowed".
+ * rather than "nothing is allowed". `memberSpaceIds` — the narrower set the viewer actually
+ * belongs to, which the space filter defaults to (GEO-2789) — is null on the same terms, and comes
+ * off this query rather than its own: it is the same sidebar payload, read two ways.
  */
-export function useClaimSpaceAllowlist(): { allowlist: Set<string> | null; isLoading: boolean } {
+export function useClaimSpaceAllowlist(): {
+  allowlist: Set<string> | null;
+  memberSpaceIds: Set<string> | null;
+  isLoading: boolean;
+} {
   const { personalSpaceId, walletAddress, keyInput, isLoading: personalSpaceLoading } = useBrowseSidebarQuerySource();
 
   // Held until the account and the personal space both resolve (`usePersonalSpaceId` waits on the
@@ -55,5 +61,13 @@ export function useClaimSpaceAllowlist(): { allowlist: Set<string> | null; isLoa
     [data, personalSpaceId, personalSpaceLoading]
   );
 
-  return { allowlist, isLoading: personalSpaceLoading || (enabled && isLoading) };
+  // Same gate, for the same reason: a signed-out entry left over under a partial key would read as
+  // a settled answer of "you belong to nothing", which is the case the default treats as a viewer
+  // with no memberships and falls back to showing everything. Held as null until it is real.
+  const memberSpaceIds = React.useMemo(
+    () => (personalSpaceLoading || !data ? null : browseSidebarMemberSpaceIds(data, personalSpaceId)),
+    [data, personalSpaceId, personalSpaceLoading]
+  );
+
+  return { allowlist, memberSpaceIds, isLoading: personalSpaceLoading || (enabled && isLoading) };
 }
