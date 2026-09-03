@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
+import type { DebateRequestPosition } from '~/core/debates/request-gate';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
@@ -464,8 +465,16 @@ export function useClaimPositionControl({
     respond,
     actionTitle,
     responseError,
-    /** Exposed so a request offer can name a late index differently from a publish in flight. */
-    responseIndexing,
+    /**
+     * Both clocks a request offer needs, composed here rather than at each `ClaimEndSlot`. Four
+     * surfaces render that control and every one was spelling this out identically — the same
+     * duplicated derivation that let the card and its own footer disagree (GEO-2808).
+     */
+    requestPosition: {
+      chat: readiness.viewer_response?.position ?? null,
+      local: viewerPosition,
+      indexingDelayed: responseIndexing.status === 'delayed',
+    } satisfies DebateRequestPosition,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
@@ -513,7 +522,7 @@ function RespondableControls({
     actionTitle,
     responseError,
     canRespond,
-    responseIndexing,
+    requestPosition,
   } = useClaimPositionControl({
     claim,
     positions,
@@ -560,11 +569,7 @@ function RespondableControls({
               claimId={claim.claim_entity_id}
               spaceId={claim.space_id}
               activeDebate={activeDebate}
-              position={{
-                chat: readiness.viewer_response?.position ?? null,
-                local: viewerPosition,
-                indexingDelayed: responseIndexing.status === 'delayed',
-              }}
+              position={requestPosition}
             />
           )
         }

@@ -12,7 +12,7 @@ import Link from 'next/link';
 import type { Debate } from '~/core/debates/api';
 import { debatePath } from '~/core/debates/debate-routes';
 
-import { debateRequestGate } from '~/core/debates/request-gate';
+import { type DebateRequestPosition, debateRequestGate } from '~/core/debates/request-gate';
 import { useClaimMatchup } from './use-claim-matchup';
 
 /**
@@ -59,13 +59,7 @@ export function ClaimEndSlot({
    * answer would be offering a debate it has no way to know is valid, which is what the hub and the
    * feed cards were doing.
    */
-  position: {
-    /** geo-chat's copy, from the readiness row. `undefined` when it has no row for this claim. */
-    chat: boolean | null | undefined;
-    /** What the viewer believes they hold — optimistic while a response is in flight. */
-    local: boolean | null;
-    indexingDelayed?: boolean;
-  };
+  position: DebateRequestPosition;
   /**
    * The live debate on this claim.
    *
