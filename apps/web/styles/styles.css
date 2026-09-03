@@ -94,6 +94,12 @@
   --text-mainPage--letter-spacing: -0.5px;
   --text-mainPage--font-weight: 600;
 
+  /* >=768 44/46, 410-767 36/38, <=409 26/30. Narrow steps live below the @theme block. */
+  --text-entityTitle: 2.75rem;
+  --text-entityTitle--line-height: 2.875rem;
+  --text-entityTitle--letter-spacing: -0.5px;
+  --text-entityTitle--font-weight: 600;
+
   --text-largeTitle: 2rem;
   --text-largeTitle--line-height: 2.5rem;
   --text-largeTitle--letter-spacing: -0.5px;
@@ -245,19 +251,20 @@
   --text-recordingLabel--font-weight: 600;
 }
 
-/* Page titles scale down on narrow viewports. Override the token here
-   so every `text-mainPage` consumer stays in sync — including entity vs topic on the same route. */
+/* Narrow-viewport steps for the entity title token. Kept separate from `mainPage`
+   because entity titles have a smaller desktop size and a responsive ramp that
+   section titles do not share. */
 @media (max-width: 767px) {
   :root {
-    --text-mainPage: 2.25rem; /* 36px */
-    --text-mainPage--line-height: 2.375rem; /* 38px */
+    --text-entityTitle: 2.25rem; /* 36px */
+    --text-entityTitle--line-height: 2.375rem; /* 38px */
   }
 }
 
 @media (max-width: 409px) {
   :root {
-    --text-mainPage: 1.625rem; /* 26px */
-    --text-mainPage--line-height: 1.875rem; /* 30px */
+    --text-entityTitle: 1.625rem; /* 26px */
+    --text-entityTitle--line-height: 1.875rem; /* 30px */
   }
 }
 

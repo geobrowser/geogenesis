@@ -9,8 +9,8 @@ import { ZERO_WIDTH_SPACE } from '~/core/constants';
 
 import { Spacer } from '~/design-system/spacer';
 
-/** Page-title token (`text-mainPage`), including the narrow-viewport steps in `styles.css`. */
-const titleTypographyClassName = 'text-mainPage';
+/** Entity-title token (`text-entityTitle`), including the narrow-viewport steps in `styles.css`. */
+const titleTypographyClassName = 'text-entityTitle';
 
 type EntityPageTitleProps = {
   value: string;
