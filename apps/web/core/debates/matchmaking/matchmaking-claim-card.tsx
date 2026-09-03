@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
+import type { DebateRequestPosition } from '~/core/debates/request-gate';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
@@ -465,6 +466,16 @@ export function useClaimPositionControl({
     actionTitle,
     responseError,
     /**
+     * Both clocks a request offer needs, composed here rather than at each `ClaimEndSlot`. Four
+     * surfaces render that control and every one was spelling this out identically — the same
+     * duplicated derivation that let the card and its own footer disagree (GEO-2808).
+     */
+    requestPosition: {
+      chat: readiness.viewer_response?.position ?? null,
+      local: viewerPosition,
+      indexingDelayed: responseIndexing.status === 'delayed',
+    } satisfies DebateRequestPosition,
+    /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
      * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
@@ -504,11 +515,18 @@ function RespondableControls({
   onRequireSignIn?: () => void;
   hideEndSlot?: boolean;
 }) {
-  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond } =
-    useClaimPositionControl({
-      claim,
-      positions,
-      readiness,
+  const {
+    viewerPosition,
+    optimisticPositions,
+    respond,
+    actionTitle,
+    responseError,
+    canRespond,
+    requestPosition,
+  } = useClaimPositionControl({
+    claim,
+    positions,
+    readiness,
       answersReady,
       responseBlockedReason,
       viewerIdentityPending,
@@ -547,7 +565,12 @@ function RespondableControls({
         isControversial={summary.isControversial}
         endSlot={
           hideEndSlot ? null : (
-            <ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />
+            <ClaimEndSlot
+              claimId={claim.claim_entity_id}
+              spaceId={claim.space_id}
+              activeDebate={activeDebate}
+              position={requestPosition}
+            />
           )
         }
       />
@@ -735,7 +758,20 @@ function UnresolvableControls({
              footer button that used to offer it is gone. Masking an action the server would accept
              is not the safe direction to be wrong in. */
           hideEndSlot ? null : (
-            <ClaimEndSlot claimId={claim.claim_entity_id} spaceId={claim.space_id} activeDebate={activeDebate} />
+            <ClaimEndSlot
+              claimId={claim.claim_entity_id}
+              spaceId={claim.space_id}
+              activeDebate={activeDebate}
+              // This card draws no response control, so it has no optimistic side of its own and
+              // both readings are geo-chat's. That is not the self-comparison GEO-2808 removed —
+              // there the fallback was the *graph*, a different source from the one that validates
+              // the request. Here it is the validating source agreeing with itself, which is the
+              // honest answer to "does geo-chat hold a position for this viewer".
+              position={{
+                chat: readiness.viewer_response?.position ?? null,
+                local: readiness.viewer_response?.position ?? null,
+              }}
+            />
           )
         }
       />
