@@ -251,11 +251,9 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
   }),
 }));
 
-// The readiness switch rides the shared queue-backed machine, which reaches for geo-chat auth and
-// the join/leave mutations rather than a one-shot readiness mutation.
 vi.mock('../hooks', () => ({
-  // Mirrors the real key factory: the readiness machine refetches these families before it
-  // retries a `claim_response_required`.
+  // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
+  // below this needs one here.
   debateQueryKeys: {
     matchmakingClaimsRoot: (accountKey: string | null) =>
       ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
@@ -265,8 +263,6 @@ vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   // Read by the end slot's match lookup; the tab's tests do not exercise availability.
   useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
-  useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
-  useLeaveDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
   // Featured rows are hydrated by the per-space debate-claims lookup. Records what it was asked
   // for so the suites can assert the tab only asks about spaces it may show.
   useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
@@ -428,11 +424,9 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
   }),
 }));
 
-// The readiness switch rides the shared queue-backed machine, which reaches for geo-chat auth and
-// the join/leave mutations rather than a one-shot readiness mutation.
 vi.mock('../hooks', () => ({
-  // Mirrors the real key factory: the readiness machine refetches these families before it
-  // retries a `claim_response_required`.
+  // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
+  // below this needs one here.
   debateQueryKeys: {
     matchmakingClaimsRoot: (accountKey: string | null) =>
       ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
@@ -442,8 +436,6 @@ vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   // Read by the end slot's match lookup; the tab's tests do not exercise availability.
   useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
-  useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
-  useLeaveDebateQueue: () => ({ mutateAsync: vi.fn(), isPending: false, error: null }),
   // Featured rows are hydrated by the per-space debate-claims lookup. Records what it was asked
   // for so the suites can assert the tab only asks about spaces it may show.
   useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {

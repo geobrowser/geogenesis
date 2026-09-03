@@ -29,15 +29,12 @@ const mocks = vi.hoisted(() => ({
   setActiveSpace: vi.fn(),
   bumpReviewVersion: vi.fn(),
   setIsReviewOpen: vi.fn(),
-  joinMutate: vi.fn(),
-  leaveMutate: vi.fn(),
   responseBatchCalls: [] as unknown[],
   refetchResponseBatch: vi.fn(),
 }));
 
 let claims: Entity[] = [];
 let claimsLoading = false;
-let joinPending = false;
 let lastQueryEntitiesOptions: unknown = null;
 let debateClaimsResponse: { claims: unknown[] } = { claims: [] };
 let responseBatchReady = true;
@@ -56,8 +53,8 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  // Mirrors the real key factory: the readiness machine refetches these families before it
-  // retries a `claim_response_required`.
+  // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
+  // below this needs one here.
   debateQueryKeys: {
     matchmakingClaimsRoot: (accountKey: string | null) =>
       ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
@@ -66,13 +63,6 @@ vi.mock('~/core/debates/hooks', () => ({
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
   useDebateClaims: () => ({ data: debateClaimsResponse, error: null }),
-  useJoinDebateQueue: () => ({
-    mutateAsync: mocks.joinMutate,
-    reset: vi.fn(),
-    isPending: joinPending,
-    error: null,
-  }),
-  useLeaveDebateQueue: () => ({ mutateAsync: mocks.leaveMutate, isPending: false, error: null }),
 }));
 
 vi.mock('~/core/responses/use-claim-response-summaries', () => ({
@@ -173,14 +163,11 @@ vi.mock('~/design-system/select-entity-compact', () => ({
 beforeEach(() => {
   claims = [];
   claimsLoading = false;
-  joinPending = false;
   lastQueryEntitiesOptions = null;
   debateClaimsResponse = { claims: [] };
   responseBatchReady = true;
   responseBatchError = false;
   vi.clearAllMocks();
-  mocks.joinMutate.mockReturnValue(new Promise(() => undefined));
-  mocks.leaveMutate.mockReturnValue(new Promise(() => undefined));
   mocks.responseBatchCalls.length = 0;
 });
 

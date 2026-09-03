@@ -58,13 +58,6 @@ const mocks = vi.hoisted(() => ({
   responseIndexingStatus: null as 'reconciling' | 'delayed' | 'indexed' | null,
   /** Drives the indexing machine's own "taking longer than it should" signal. */
   responseIndexingDelayed: false,
-  setReadiness: vi.fn(),
-  joinQueue: vi.fn((_variables: { spaceId: string; claimId: string }) => Promise.resolve({ claim: null, match: null })),
-  /** Which space each card wired its readiness machine to, in mount order. */
-  joinQueueSpaceIds: [] as string[],
-  leaveQueue: vi.fn((_variables: { spaceId: string; claimId: string }) =>
-    Promise.resolve({ claim: null, match: null })
-  ),
   openSidePanel: vi.fn(),
   /** Every query the All tab handed the hub's claims lookup, in render order. */
   entityQueries: [] as Array<{ search: string | null; spaceIds?: string[] | null; topicIds?: string[] | null }>,
@@ -251,8 +244,8 @@ vi.mock('~/core/debates/hooks', () => ({
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
-  // Mirrors the real key factory: the readiness machine refetches these families before it
-  // retries a `claim_response_required`.
+  // Mirrors the real key factory: `vi.mock` replaces the whole module, so every query key read
+  // below this needs one here.
   debateQueryKeys: {
     matchmakingClaimsRoot: (accountKey: string | null) =>
       ['debates', 'account', accountKey, 'matchmaking-claims'] as const,
@@ -260,21 +253,6 @@ vi.mock('~/core/debates/hooks', () => ({
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-a', getPrivyIdentityToken: vi.fn() }),
-  // The card's Debate switch shares the entity page's queue-backed readiness machine.
-  useJoinDebateQueue: (spaceId: string) => {
-    mocks.joinQueueSpaceIds.push(spaceId);
-    return {
-      mutateAsync: (variables: { claimId: string }) => mocks.joinQueue({ spaceId, ...variables }),
-      reset: vi.fn(),
-      isPending: false,
-      error: null,
-    };
-  },
-  useLeaveDebateQueue: (spaceId: string) => ({
-    mutateAsync: (variables: { claimId: string }) => mocks.leaveQueue({ spaceId, ...variables }),
-    isPending: false,
-    error: null,
-  }),
 }));
 
 function rematchClaimsLookup(claimIds: string[]) {
@@ -495,9 +473,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
   useResetEntityResponseIndexingSnapshot: () => vi.fn(),
 }));
 
-// The card's Debate toggle publishes readiness through this.
 vi.mock('~/core/debates/matchmaking/hooks', () => ({
-  useClaimReadiness: () => ({ mutate: mocks.setReadiness, isPending: false, error: null }),
   // The shared position control asks whether this claim has a match, to put the opponent's face on
   // the opposing side. The picker hides its own end slot — a rematch request is a different
   // mutation — so there is never an offer here, and these only have to answer "no".
@@ -706,10 +682,6 @@ beforeEach(() => {
   mocks.claimReadiness = [];
   mocks.claimReadinessLoading = false;
   mocks.claimReadinessError = false;
-  mocks.setReadiness.mockReset();
-  mocks.joinQueue.mockClear();
-  mocks.leaveQueue.mockClear();
-  mocks.joinQueueSpaceIds.length = 0;
   mocks.openSidePanel.mockReset();
   mocks.entityQueries.length = 0;
   mocks.entityIdLookups.length = 0;
@@ -2841,64 +2813,6 @@ describe('DebateRematchPageClient', () => {
     await showOpponentClaims();
 
     expect(mocks.perSpaceReadinessGroups.some(groups => groups.length > 0)).toBe(true);
-  });
-
-  // Taking a side here means you want to debate it, so readiness shouldn't be a second step.
-  // A position can appear without anyone picking one — here because geo-chat's copy of a claim the
-  // viewer had already answered lands after the card is on screen. That looks identical to a fresh
-  // pick, and standing them ready for it reverses a stand-down they made elsewhere.
-  it('does not stand the viewer ready when geo-chat reports a position they already held', async () => {
-    mocks.claims = [
-      {
-        ...sharedClaim(),
-        participants: [
-          { user_id: 'user-local', position: null, position_label: null },
-          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
-        ],
-      },
-    ];
-    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    mocks.claims = [
-      {
-        ...sharedClaim(),
-        participants: [
-          { user_id: 'user-local', position: true, position_label: 'Agree' },
-          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
-        ],
-      },
-    ];
-    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    expect(mocks.setReadiness).not.toHaveBeenCalled();
-  });
-
-  // Standing down elsewhere is deliberate; arriving here mustn't quietly reverse it.
-  it('leaves readiness alone for positions already held on arrival', async () => {
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    expect(mocks.setReadiness).not.toHaveBeenCalled();
-  });
-
-  it('does not re-publish readiness that is already on', async () => {
-    mocks.claims = [
-      {
-        ...sharedClaim(),
-        participants: [
-          { user_id: 'user-local', position: null, position_label: null },
-          { user_id: 'user-remote', position: false, position_label: 'Disagree' },
-        ],
-      },
-    ];
-    mocks.claimReadiness = [
-      { claim_entity_id: CLAIM_SHARED, viewer_debate_ready: true, readiness_disabled_reason: null },
-    ];
-    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
-    rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    expect(mocks.setReadiness).not.toHaveBeenCalled();
   });
 
   // Waiting for geo-chat to echo the response back would leave the side you just picked
