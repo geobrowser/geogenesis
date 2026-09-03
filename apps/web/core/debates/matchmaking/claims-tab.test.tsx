@@ -14,6 +14,19 @@ const mocks = vi.hoisted(() => ({
   /** Privy's answer; the tab's signed-out paths hang off it. */
   authenticated: true,
   claims: [] as MatchmakingClaim[],
+  /** Which tag each enabled render of the graph hook asked for, in order. */
+  tagsAskedFor: [] as string[],
+  /** One catalog per tag id, as the real hook keys them. */
+  taggedClaims: {} as Record<
+    string,
+    Array<{
+      claimEntityId: string;
+      spaceId: string;
+      name: string;
+      description: string | null;
+      rankingScore: number | null;
+    }>
+  >,
   featuredClaims: [] as Array<{
     claimEntityId: string;
     spaceId: string;
@@ -23,7 +36,19 @@ const mocks = vi.hoisted(() => ({
   }>,
   featuredLoading: false,
   debateClaimGroups: [] as Array<Array<{ spaceId: string; claimIds: string[] }>>,
+  /** geo-chat's per-space claim rows, keyed by the space that answered for them. */
+  debateClaimRows: [] as Array<Record<string, unknown> & { claim_entity_id: string; space_id: string }>,
   claimEntityLookups: [] as string[][],
+  /** A failed per-space geo-chat lookup — reported as a flag, as the real hook does. */
+  taggedRowsError: false,
+  /** The per-space lookup still in flight, which is where the viewer's own side comes from. */
+  taggedRowsLoading: false,
+  /** Privy can report authenticated before it has rehydrated the user, so this is separable. */
+  accountKey: 'account-1' as string | null,
+  /** A failed entity hydration, which is where the graph-backed list gets its topics. */
+  claimEntitiesError: null as Error | null,
+  /** A failed tag catalog — the query that says which claims the list is made of. */
+  taggedCatalogError: null as Error | null,
   claimEntities: [] as Array<{
     id: string;
     name: string | null;
@@ -224,7 +249,7 @@ vi.mock('../hooks', () => ({
     matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
-  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: mocks.accountKey }),
   // Read by the end slot's match lookup; the tab's tests do not exercise availability.
   useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
   useJoinDebateQueue: () => ({ mutateAsync: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
@@ -233,19 +258,42 @@ vi.mock('../hooks', () => ({
   // for so the suites can assert the tab only asks about spaces it may show.
   useDebateClaimsBySpaces: (groups: Array<{ spaceId: string; claimIds: string[] }>) => {
     mocks.debateClaimGroups.push(groups);
-    return { claims: [], isLoading: false, isError: false };
+    // Answers per space, as the real hook does: it asks geo-chat once per group and flattens the
+    // results, so a claim tagged in two spaces comes back twice with each space's own row.
+    const norm = (id: string) => id.replace(/-/g, '').toLowerCase();
+    const claims = mocks.debateClaimRows.filter(row =>
+      groups.some(
+        group =>
+          norm(group.spaceId) === norm(row.space_id) &&
+          group.claimIds.some(id => norm(id) === norm(row.claim_entity_id))
+      )
+    );
+    // Answerless while loading, as react-query is on a cold key.
+    return {
+      claims: mocks.taggedRowsLoading ? [] : claims,
+      isLoading: mocks.taggedRowsLoading,
+      isError: mocks.taggedRowsError,
+    };
   },
 }));
 
-vi.mock('../featured-claims', async importOriginal => ({
-  ...(await importOriginal<typeof import('../featured-claims')>()),
-  useFeaturedClaims: (enabled: boolean) => {
-    const claims = enabled ? mocks.featuredClaims : [];
+vi.mock('../tagged-claims', async importOriginal => ({
+  ...(await importOriginal<typeof import('../tagged-claims')>()),
+  useTaggedClaims: (tagId: string, enabled: boolean) => {
+    if (enabled) mocks.tagsAskedFor.push(tagId);
+    // Keyed by tag, as the real hook is: Featured and All are two catalogs, and a mock that served
+    // one list to both would hide a filter reading the wrong tag entirely. `featuredClaims` is the
+    // Featured catalog under its old name, so the suite written before All moved here is untouched.
+    const FEATURED = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
+    const catalog = mocks.taggedClaims[tagId] ?? (tagId === FEATURED ? mocks.featuredClaims : []);
+    // Answerless when it failed, as react-query is.
+    const claims = enabled && !mocks.taggedCatalogError ? catalog : [];
     return {
       claims,
       claimIds: claims.map(claim => claim.claimEntityId),
+      truncated: false,
       isLoading: enabled && mocks.featuredLoading,
-      error: null,
+      error: mocks.taggedCatalogError,
       refetch: vi.fn(),
     };
   },
@@ -255,7 +303,13 @@ vi.mock('../featured-claims', async importOriginal => ({
 vi.mock('../claim-picker-page', () => ({
   useClaimEntitiesByIds: (ids: string[]) => {
     mocks.claimEntityLookups.push(ids);
-    return { entities: mocks.claimEntities.filter(entity => ids.includes(entity.id)), isLoading: false, error: null };
+    // Answerless when it failed, as react-query is: a query that errored has no data. Handing back
+    // fixtures alongside an error makes the states that exist to survive a failure untestable.
+    return {
+      entities: mocks.claimEntitiesError ? [] : mocks.claimEntities.filter(entity => ids.includes(entity.id)),
+      isLoading: false,
+      error: mocks.claimEntitiesError,
+    };
   },
 }));
 
@@ -303,7 +357,8 @@ function render(ui: ReactElement) {
   // Testing Library's own `rerender` replaces the whole tree with what it is handed, which drops
   // the provider — so a re-render of the same component crashes on a missing QueryClient rather
   // than showing what changed. Re-wrapped here so a test can move the world and render again.
-  return { ...view, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
+  // The client comes back too, so a test can watch what a retry asks it to refetch.
+  return { ...view, queryClient, rerender: (next: ReactElement) => view.rerender(wrap(next)) };
 }
 
 const SPACE_ID = '019fedae-72b6-7ab2-927a-df044d57c566';
@@ -355,6 +410,20 @@ function chooseFilter(current: string, next: string) {
  * Awaits the swap: the region cross-fades with `mode="wait"`, so the list is not in the DOM until
  * the state it replaced has finished leaving.
  */
+/**
+ * Switches to a list geo-chat's index answers.
+ *
+ * "All claims" is no longer one of those — GEO-2771 moved it to the graph's Debate tag — so the
+ * paged behaviours these tests cover (the cursor, the scroll sentinel, the server facets, the space
+ * allowlist over returned rows) are reachable through the viewer-relative filters, which stayed.
+ * The mocked index ignores `filter`, so which of the two is picked changes nothing it returns.
+ */
+async function showIndexedClaims() {
+  chooseFilter('Featured', 'My positions');
+  await waitFor(() => expect(screen.queryByText('No claims have been featured yet.')).toBeNull());
+}
+
+/** Switches to the Debate-tagged list, which the graph answers. */
 async function showAllClaims() {
   chooseFilter('Featured', 'All claims');
   await waitFor(() => expect(screen.queryByText('No claims have been featured yet.')).toBeNull());
@@ -366,11 +435,19 @@ const THEIRS = '019fedb2-1d52-7a4f-8b22-3d8e6f9c5520';
 beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
+  mocks.accountKey = 'account-1' as string | null;
+  mocks.taggedRowsError = false;
+  mocks.taggedRowsLoading = false;
+  mocks.claimEntitiesError = null;
+  mocks.taggedCatalogError = null;
   mocks.hasNextPage = false;
   mocks.facetSpaceIds = [];
   mocks.featuredClaims = [];
+  mocks.tagsAskedFor = [];
+  mocks.taggedClaims = {};
   mocks.featuredLoading = false;
   mocks.debateClaimGroups = [];
+  mocks.debateClaimRows = [];
   mocks.claimEntityLookups = [];
   mocks.claimEntities = [];
   mocks.pageSize = null;
@@ -439,7 +516,7 @@ describe('ClaimsTab', () => {
     // scrolls".
     mocks.hasNextPage = true;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     const pinned = screen.getByLabelText('Search claims').closest('.sticky');
     expect(pinned).not.toBeNull();
@@ -447,7 +524,7 @@ describe('ClaimsTab', () => {
 
     // Both controls ride in the same pinned block. Two stickies would each claim `top-0` and
     // overlap, which is why the filters aren't pinned separately.
-    expect(screen.getByRole('button', { name: /All claims/ }).closest('.sticky')).toBe(pinned);
+    expect(screen.getByRole('button', { name: /My positions/ }).closest('.sticky')).toBe(pinned);
 
     // And the list itself is not inside it, or it would be pinned too and never scroll.
     expect(screen.getByTestId('claims-scroll-sentinel').closest('.sticky')).toBeNull();
@@ -457,7 +534,7 @@ describe('ClaimsTab', () => {
   it('fetches the next page when the end of the list scrolls into view', async () => {
     mocks.hasNextPage = true;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
     expect(mocks.fetchNextPage).not.toHaveBeenCalled();
@@ -469,7 +546,7 @@ describe('ClaimsTab', () => {
 
   it('places no sentinel once the last page has arrived', async () => {
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
   });
@@ -479,7 +556,7 @@ describe('ClaimsTab', () => {
   // card between two sections the moment you took a side.
   it('renders one unsectioned list in the order the server returned', async () => {
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.queryByRole('heading', { name: 'My positions' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'All claims' })).not.toBeInTheDocument();
@@ -497,7 +574,7 @@ describe('ClaimsTab', () => {
       claim(MINE, 'Chips are better than fries', true),
     ];
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     const unanswered = screen.getByText('Bitcoin will never top $250K');
     const answered = screen.getByText('Chips are better than fries');
@@ -515,10 +592,8 @@ describe('ClaimsTab', () => {
       claim(OFF, 'Rust belongs in the kernel', true, false),
     ];
     render(<ClaimsTab />);
-    await showAllClaims();
-
-    fireEvent.click(screen.getByRole('button', { name: /All claims/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
+    // The helper already lands here, which is the filter this is about.
+    await showIndexedClaims();
 
     expect(mocks.lastQuery).toMatchObject({ filter: 'mine' });
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
@@ -534,7 +609,7 @@ describe('ClaimsTab', () => {
     ];
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
     expect(screen.queryByText('Bitcoin will never top $250K')).not.toBeInTheDocument();
@@ -550,7 +625,7 @@ describe('ClaimsTab', () => {
     ];
     mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
     expect(screen.queryByText('Bitcoin will never top $250K')).not.toBeInTheDocument();
@@ -563,7 +638,7 @@ describe('ClaimsTab', () => {
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     mocks.publishableSpaceIds = new Set([OTHER_SPACE_ID.replace(/-/g, '')]);
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.queryByText('Chips are better than fries')).toBeNull();
   });
@@ -573,7 +648,7 @@ describe('ClaimsTab', () => {
     mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
     mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
 
@@ -588,7 +663,7 @@ describe('ClaimsTab', () => {
     mocks.publishableSpaceIds = null;
     mocks.publishableLoading = true;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.queryByText('Bitcoin will never top $250K')).toBeNull();
   });
@@ -600,7 +675,7 @@ describe('ClaimsTab', () => {
     mocks.publishableSpaceIds = null;
     mocks.publishableLoading = false;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
@@ -610,7 +685,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '').toLowerCase()]);
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.getByText('Chips are better than fries')).toBeInTheDocument();
   });
@@ -624,7 +699,7 @@ describe('ClaimsTab', () => {
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = true;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.queryByText('Bitcoin will never top $250K')).toBeNull();
 
@@ -640,7 +715,7 @@ describe('ClaimsTab', () => {
     mocks.allowlistLoading = true;
     mocks.hasNextPage = true;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
 
@@ -656,7 +731,7 @@ describe('ClaimsTab', () => {
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = false;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.getByText('Bitcoin will never top $250K')).toBeInTheDocument();
   });
@@ -666,7 +741,7 @@ describe('ClaimsTab', () => {
     mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
 
@@ -682,9 +757,11 @@ describe('ClaimsTab', () => {
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     mocks.hasNextPage = true;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
-    expect(screen.getByText('No debatable claims yet.')).toBeInTheDocument();
+    // Nothing is narrowing the list — the viewer simply holds no positions — so it says that rather
+    // than blaming filters they never set.
+    expect(screen.getByText('You haven’t taken a position on any claims yet.')).toBeInTheDocument();
     expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
 
     act(() => mocks.trigger());
@@ -698,7 +775,7 @@ describe('ClaimsTab', () => {
     mocks.facetSpaceIds = [SPACE_ID];
     mocks.sidebarData = sidebarData();
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
 
@@ -713,7 +790,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
     mocks.sidebarData = sidebarData();
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.getByText('Crypto')).toBeInTheDocument();
   });
@@ -725,7 +802,7 @@ describe('ClaimsTab', () => {
     mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
     mocks.spacesLoading = true;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
 
@@ -739,7 +816,7 @@ describe('ClaimsTab', () => {
     mocks.facetSpaceIds = [SPACE_ID];
     mocks.spacesLoading = true;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     const option = screen.getByLabelText('Loading space name').closest('button');
@@ -757,7 +834,7 @@ describe('ClaimsTab', () => {
     mocks.facetSpaceIds = [SPACE_ID];
     mocks.spacesLoading = false;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
 
@@ -771,7 +848,7 @@ describe('ClaimsTab', () => {
     mocks.claims = [claim(MINE, 'Chips are better than fries', true)];
     mocks.spacesLoading = true;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.getAllByLabelText('Loading space name').length).toBeGreaterThan(0);
     expect(screen.queryByText('Space')).toBeNull();
@@ -782,7 +859,7 @@ describe('ClaimsTab', () => {
     mocks.facetSpaceIds = [SPACE_ID, OTHER_SPACE_ID];
     mocks.sidebarData = sidebarData();
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect([...new Set(mocks.fetchedSpaceIds.flat())]).toEqual([OTHER_SPACE_ID]);
   });
@@ -792,14 +869,532 @@ describe('ClaimsTab', () => {
 // the query is the whole feature — a mock that ignores it cannot catch a dropped filter.
 it('asks the server for the filter the viewer picked', async () => {
   render(<ClaimsTab />);
-  await showAllClaims();
+  await showIndexedClaims();
 
-  expect(mocks.lastQuery).toMatchObject({ filter: 'all', spaceIds: null });
+  expect(mocks.lastQuery).toMatchObject({ filter: 'mine', spaceIds: null });
 
-  fireEvent.click(screen.getByRole('button', { name: 'All claims' }));
+  fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
   fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
 
   expect(mocks.lastQuery).toMatchObject({ filter: 'debate_now' });
+});
+
+/**
+ * GEO-2771. "All claims" is the graph's Debate tag now, not geo-chat's corpus.
+ *
+ * The index has no notion of the tag, and replicating one into it — the way GEO-2659 had to for
+ * topics — buys nothing when the graph already knows: 312 tagged claims against 313,722. So the
+ * graph answers *which* claims and geo-chat answers about them, which is what Featured has always
+ * done and is now the whole of the difference between these two lists and the other two.
+ */
+describe('All claims reads the Debate tag', () => {
+  const DEBATE_TAG = '55c95b2626f8482cb9739ea99dfde438';
+  const FEATURED_TAG = 'ec3086a54ddf43d8aaefd6cc6e1b0556';
+
+  it('asks the graph for the Debate tag rather than the index', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(screen.getByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(mocks.tagsAskedFor).toContain(DEBATE_TAG);
+  });
+
+  // The catalog says which claims; two lookups behind it say everything about them. Reporting only
+  // the catalog's failure leaves the other two rendering an outage as content — a claim with no
+  // topics, or with no position and no readiness — which reads as a settled answer.
+  it('keeps listing claims when the hydration behind their topics fails', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    mocks.claimEntitiesError = new Error('hydration exploded');
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(screen.queryByText('Something went wrong.')).toBeNull();
+  });
+
+  // `taggedRows` asks geo-chat once per space in batches of fifty. Across a few hundred tagged
+  // claims that is a lot of requests, and treating any one failure as fatal blanked a list that
+  // renders perfectly well without it — found in a browser, not by these tests, which is why the
+  // pair above now assert the list survives rather than that the tab reports an error.
+  it('keeps listing claims when the per-space details lookup fails', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    mocks.taggedRowsError = true;
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(screen.queryByText('Something went wrong.')).toBeNull();
+  });
+
+  // The card is still held, which is where a missing lookup is actually answered: without the
+  // vocabulary and the viewer's own side, a press would publish the wrong thing.
+  it('holds the response controls while those lookups are unanswered', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    mocks.taggedRowsError = true;
+    mocks.claimEntities = [];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    const agree = await screen.findByRole('button', { name: /^Agree/ });
+    expect(agree).toBeDisabled();
+  });
+
+  // `fetchDebateClaims` sends `auth: 'optional'` with no account, so a request made before Privy
+  // has rehydrated the user *succeeds* and comes back with every viewer field null — and that
+  // answer used to be cached under the key the signed-in fetch would later read. The card then drew
+  // its avatars and its split while reporting no response from the viewer.
+  it('asks geo-chat nothing until it knows whose responses it is asking about', async () => {
+    mocks.accountKey = null;
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    // The claims still list — the catalog is the graph's, and it needs no account.
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(mocks.debateClaimGroups.flat()).toEqual([]);
+  });
+
+  it('asks once the account is known', async () => {
+    // The guard: without it, never asking would satisfy the case above just as well.
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    await waitFor(() => expect(mocks.debateClaimGroups.flat().length).toBeGreaterThan(0));
+  });
+
+  // The tag rows are per space, so a claim tagged in two comes back twice and the collapse to one
+  // row has to happen *after* the picked-space cut. Collapsing first pins the claim to whichever
+  // row arrived first, and filtering to the other space it is tagged in hides it.
+  //
+  // The hub has always had this the right way round — `taggedMatching` filters and then collapses —
+  // but nothing held it there, and the picker had the same code the wrong way round until GEO-2771.
+  it('keeps a claim tagged in two spaces when the second one is picked', async () => {
+    // Named through the sidebar cache, which is where the menu's labels come from — otherwise both
+    // options read "Space" and the pick below could not say which one it made.
+    mocks.sidebarData = {
+      featured: [
+        { id: SPACE_ID, name: 'Crypto', image: null },
+        { id: OTHER_SPACE_ID, name: 'Governance', image: null },
+      ],
+      editorOf: [],
+      memberOf: [],
+      documentationImage: null,
+      personalSpaceId: null,
+    };
+    // SPACE_ID first, so a collapse ahead of the cut would settle on it and lose the pick below.
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', SPACE_ID),
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', OTHER_SPACE_ID),
+      featuredClaim(FEATURED_B, 'Only in the first space', SPACE_ID),
+    ];
+    render(<ClaimsTab />);
+    await showAllClaims();
+    await waitFor(() => expect(screen.getByText('Tagged in two spaces')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
+    // Unanchored: the option's accessible name carries the space's avatar initial and its count,
+    // so it reads "GGovernance1" rather than the label alone.
+    fireEvent.click(screen.getByRole('button', { name: /Governance/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    // The SPACE_ID-only claim going is what says the filter landed — without it this asserts nothing.
+    await waitFor(() => expect(screen.queryByText('Only in the first space')).toBeNull());
+    expect(screen.getByText('Tagged in two spaces')).toBeInTheDocument();
+  });
+
+  // Same rule, one query further up. A failed *catalog* leaves the list with no claims, so the
+  // entity lookup has nothing to ask about and sits idle — neither loading nor failed. The menu is
+  // then empty with nothing to say why, and calling that settled costs the viewer their selection
+  // for good: the outage clears, the claims come back, the chips do not.
+  it('keeps a picked topic when the catalog behind the list fails', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
+      },
+      // Carries no topic, so it is present exactly when nothing is selected — which is what makes
+      // the selection observable in the list rather than in the trigger's label.
+      {
+        id: FEATURED_B,
+        name: 'Cities should ban cars downtown',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    // The filter has actually landed once the untopiced claim is gone — not merely once the trigger
+    // has changed, which happens a debounce earlier and would leave the assertions below racing it.
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+
+    mocks.taggedCatalogError = new Error('catalog exploded');
+    view.rerender(<ClaimsTab />);
+    expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+
+    // Asserted after the outage clears rather than during it: while the error is up the menu is not
+    // rendered at all, so its absence says nothing. What matters is that the selection comes back
+    // with the list — a reconciliation that ran during the outage would have spent it by now.
+    mocks.taggedCatalogError = null;
+    view.rerender(<ClaimsTab />);
+
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    // Still filtered: a reconciliation during the outage would have dropped the selection, and this
+    // claim — which carries no topic — would be back.
+    expect(screen.queryByText('Cities should ban cars downtown')).toBeNull();
+  });
+
+  // And once more for the gate rather than a failure: `taggedAllowed` is deliberately emptied while
+  // the space gates resolve, which empties the menu the same way without anything being wrong.
+  it('keeps a picked topic while the space gates are still resolving', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
+      },
+      // Carries no topic, so it is present exactly when nothing is selected — which is what makes
+      // the selection observable in the list rather than in the trigger's label.
+      {
+        id: FEATURED_B,
+        name: 'Cities should ban cars downtown',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    // The filter has actually landed once the untopiced claim is gone — not merely once the trigger
+    // has changed, which happens a debounce earlier and would leave the assertions below racing it.
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+
+    mocks.allowlistLoading = true;
+    view.rerender(<ClaimsTab />);
+    mocks.allowlistLoading = false;
+    view.rerender(<ClaimsTab />);
+
+    // Same shape: the gate resolves, the claims come back, and the selection has to still be there.
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    // Still filtered: a reconciliation during the outage would have dropped the selection, and this
+    // claim — which carries no topic — would be back.
+    expect(screen.queryByText('Cities should ban cars downtown')).toBeNull();
+  });
+
+  // The topics come from the entity lookup alone, so a failed one leaves the menu empty while it
+  // stops loading. Read as settled, that empty menu says the viewer's topic no longer exists and
+  // the reconciliation drops it — the selection lost to an outage, and not given back when the
+  // lookup recovers.
+  it('keeps a picked topic when the lookup behind the menu fails', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Nuclear power is the cheapest clean energy',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [{ type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-energy', name: 'Energy' } }],
+      },
+      // Carries no topic, so it is present exactly when nothing is selected — which is what makes
+      // the selection observable in the list rather than in the trigger's label.
+      {
+        id: FEATURED_B,
+        name: 'Cities should ban cars downtown',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    const view = render(<ClaimsTab />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    // The filter has actually landed once the untopiced claim is gone — not merely once the trigger
+    // has changed, which happens a debounce earlier and would leave the assertions below racing it.
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+
+    mocks.claimEntitiesError = new Error('hydration exploded');
+    view.rerender(<ClaimsTab />);
+    mocks.claimEntitiesError = null;
+    view.rerender(<ClaimsTab />);
+
+    // Still picked: the menu it was picked from never answered during the outage, so it never
+    // stopped offering it. The list is not blanked by that failure, so this is observable directly.
+    expect(await screen.findByText('Nuclear power is the cheapest clean energy')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+  });
+
+  // "Try again" has to reach whatever produced the error. The two lookups behind this list are not
+  // keyed on the catalog, so refetching the catalog alone left the failed one untouched and the
+  // error state exactly where it was — a retry button that cannot clear the state it is offered in.
+  it('retries the lookups behind the list, not only the catalog', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    // The catalog is the only fatal failure now, so it is what puts the retry on screen. What the
+    // retry must still reach is everything the list depends on, not just the query that failed.
+    mocks.taggedCatalogError = new Error('catalog exploded');
+    const { queryClient } = render(<ClaimsTab />);
+    await showAllClaims();
+
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    const keys = invalidate.mock.calls.map(([options]) => options?.queryKey);
+    expect(keys).toContainEqual(['claim-picker', 'entities']);
+    expect(keys).toContainEqual(['debates', 'claims']);
+  });
+
+  it('does not serve Featured’s catalog to it', async () => {
+    // The two are different tags and different lists. A shared mock — or a filter reading the wrong
+    // constant — would look identical on screen without this.
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Only featured')];
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_B, 'Only debatable')];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    // `waitFor`, because `AnimatePresence` keeps an exiting card mounted until its exit animation
+    // finishes and jsdom never runs one — so the outgoing list is still in the DOM on the tick the
+    // filter changes. The same wait the search cases in this file use.
+    await waitFor(() => expect(screen.queryByText('Only featured')).toBeNull());
+    expect(screen.getByText('Only debatable')).toBeInTheDocument();
+  });
+
+  it('keeps Featured on its own tag', async () => {
+    mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Only featured')];
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_B, 'Only debatable')];
+    render(<ClaimsTab />);
+
+    expect(screen.getByText('Only featured')).toBeInTheDocument();
+    expect(screen.queryByText('Only debatable')).toBeNull();
+    expect(mocks.tagsAskedFor).toContain(FEATURED_TAG);
+  });
+
+  // An untouched list is empty because it is empty, not because filters hid it. The position filter
+  // still counts as something "Clear filters" should undo — the two questions had one answer, and
+  // an unfiltered My positions was being blamed on filters the viewer never set.
+  it('says why an unfiltered list is empty rather than blaming filters', async () => {
+    mocks.claims = [];
+    render(<ClaimsTab />);
+    await showIndexedClaims();
+
+    expect(screen.getByText('You haven’t taken a position on any claims yet.')).toBeInTheDocument();
+    expect(screen.queryByText('No claims match these filters.')).toBeNull();
+  });
+
+  // The batch query key *is* the id list, so hydrating the searched slice mints a fresh key on every
+  // settled keystroke and refetches entities the client already holds. Searching a list it is
+  // holding should cost no requests.
+  it('does not re-ask for entities while the viewer searches', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy'),
+      featuredClaim(FEATURED_B, 'Cities should ban cars downtown'),
+    ];
+    render(<ClaimsTab />);
+    await showAllClaims();
+    await waitFor(() => expect(mocks.claimEntityLookups.length).toBeGreaterThan(0));
+
+    const askedBefore = mocks.claimEntityLookups.at(-1);
+    fireEvent.change(screen.getByLabelText('Search claims'), { target: { value: 'nuclear' } });
+    await waitFor(() => expect(screen.queryByText('Cities should ban cars downtown')).toBeNull());
+
+    expect(mocks.claimEntityLookups.at(-1)).toEqual(askedBefore);
+  });
+
+  // A claim tagged in two spaces is asked about once per space, so geo-chat answers twice — each row
+  // carrying that space's own sides and readiness. The card is built against the tag row that
+  // survived deduplication, so the answers have to be looked up by the same space, or it draws one
+  // space's positions onto the other's card and publishes into the wrong one.
+  it('takes each claim’s answers from the space its card is for', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', SPACE_ID),
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', OTHER_SPACE_ID),
+    ];
+    // Only the *other* space has a position on it. The card is drawn for SPACE_ID, which has none.
+    mocks.debateClaimRows = [
+      {
+        id: 'row-other',
+        claim_entity_id: FEATURED_A,
+        space_id: OTHER_SPACE_ID,
+        response_kind: 'stance',
+        viewer_response: { position: true, position_label: 'Agree' },
+        viewer_debate_ready: true,
+        readiness_disabled_reason: null,
+        online_choices: [],
+        active_debate: null,
+      },
+    ];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    // Drawn from SPACE_ID's absent row, so no side is held — not the other space's Agree.
+    const agree = await screen.findByRole('button', { name: /^Agree/ });
+    expect(agree).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  // The same shape one step earlier: not which side the card holds, but whether it may be pressed
+  // at all. The response *kind* is what a press publishes, and it comes from this space's row or
+  // from the entity. Neither has answered for SPACE_ID here — the only row belongs to the other
+  // space — so counting that row as an answer let the card go live on the `stance` fallback and
+  // publish a stance response against a claim that may well be factual.
+  it('does not let another space’s row vouch for the vocabulary of this one’s card', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', SPACE_ID),
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', OTHER_SPACE_ID),
+    ];
+    mocks.debateClaimRows = [
+      {
+        id: 'row-other',
+        claim_entity_id: FEATURED_A,
+        space_id: OTHER_SPACE_ID,
+        response_kind: 'stance',
+        viewer_response: null,
+        viewer_debate_ready: false,
+        readiness_disabled_reason: null,
+        online_choices: [],
+        active_debate: null,
+      },
+    ];
+    // The other source of the kind has not arrived either, which is the window this is about.
+    mocks.claimEntities = [];
+
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    const agree = await screen.findByRole('button', { name: /^Agree/ });
+    expect(agree).toBeDisabled();
+    expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+  });
+
+  // The entity settles the vocabulary and nothing else. The side the viewer already holds rides on
+  // this space's geo-chat row, and `viewerPosition` is read from it alone — so opening the card on a
+  // hydrated entity while that row is still in flight draws a held side as unselected, and pressing
+  // it publishes that side again instead of clearing it. The card's own contract asks for both.
+  it('does not open the card on the vocabulary alone, before the viewer’s side has arrived', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Tagged in one space', SPACE_ID)];
+    // The vocabulary *is* resolved: the entity has landed and says this is a stance claim.
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Tagged in one space',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    // The half that has not: no row yet, so nothing knows which side the viewer is already on.
+    mocks.taggedRowsLoading = true;
+
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    const agree = await screen.findByRole('button', { name: /^Agree/ });
+    expect(agree).toBeDisabled();
+    expect(agree).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+  });
+
+  // The guard for the case above: a claim with no row at all still has to become answerable once
+  // the lookup settles, or the entity path would be dead and every unanswered claim stuck loading.
+  it('opens the card once the row lookup settles, even with no row for the claim', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Tagged in one space', SPACE_ID)];
+    mocks.claimEntities = [
+      {
+        id: FEATURED_A,
+        name: 'Tagged in one space',
+        description: null,
+        spaces: [SPACE_ID],
+        values: [],
+        relations: [],
+      },
+    ];
+    mocks.debateClaimRows = [];
+    mocks.taggedRowsLoading = false;
+
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByRole('button', { name: /^Agree/ })).toBeEnabled();
+  });
+
+  // The guard for the case above: the card has to come alive once this space's own row lands, or a
+  // permanently dead pill would satisfy it just as well.
+  it('lets the card answer once its own space’s row arrives', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', SPACE_ID),
+      featuredClaim(FEATURED_A, 'Tagged in two spaces', OTHER_SPACE_ID),
+    ];
+    mocks.debateClaimRows = [
+      {
+        id: 'row-this',
+        claim_entity_id: FEATURED_A,
+        space_id: SPACE_ID,
+        response_kind: 'stance',
+        viewer_response: null,
+        viewer_debate_ready: false,
+        readiness_disabled_reason: null,
+        online_choices: [],
+        active_debate: null,
+      },
+    ];
+    mocks.claimEntities = [];
+
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(await screen.findByRole('button', { name: /^Agree/ })).toBeEnabled();
+  });
+
+  it('stops paging the index, which is no longer answering this list', async () => {
+    // The sentinel is what walked geo-chat's cursor. A graph-sourced list has every row in hand, so
+    // a sentinel here would page a corpus nothing is reading.
+    mocks.hasNextPage = true;
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy')];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
+  });
+
+  it('says nothing is tagged rather than blaming the filters', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    render(<ClaimsTab />);
+    await showAllClaims();
+
+    expect(screen.getByText('No claims have been tagged for debate yet.')).toBeInTheDocument();
+  });
 });
 
 // GEO-2653. The menu is the server's topic facet, which describes every claim the current
@@ -821,7 +1416,7 @@ describe('topic menu', () => {
 
   it('offers every topic while no space is picked', async () => {
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
@@ -835,7 +1430,7 @@ describe('topic menu', () => {
   // `topicIds`, so an ungated effect reconciles against its own output and takes both.
   it('gives back only the newest topic when two picked in a row cannot co-occur', async () => {
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
     fireEvent.click(screen.getByRole('button', { name: /^AI/ }));
@@ -852,7 +1447,7 @@ describe('topic menu', () => {
   // so the stale numbers stood for both delays back to back instead of one.
   it('covers the counts while the typed query is still settling', async () => {
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
     vi.useFakeTimers();
@@ -872,7 +1467,7 @@ describe('topic menu', () => {
 
   it('drops the topics that have no claims in the picked space', async () => {
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
@@ -896,7 +1491,7 @@ describe('topic menu', () => {
     ];
     mocks.pageSize = 1;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.getByText('A claim with no topics')).toBeInTheDocument();
     expect(screen.queryByText('Models are getting cheaper')).toBeNull();
@@ -911,7 +1506,7 @@ describe('topic menu', () => {
   it('scopes the query to the spaces the viewer can be shown claims from', async () => {
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] });
   });
@@ -926,7 +1521,7 @@ describe('topic menu', () => {
     mocks.allowlistLoading = false;
     mocks.publishableSpaceIds = new Set([SPACE_ID.replace(/-/g, '')]);
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(mocks.lastQuery).toMatchObject({ spaceIds: [SPACE_ID.replace(/-/g, '')] });
   });
@@ -937,7 +1532,7 @@ describe('topic menu', () => {
     mocks.allowlistLoading = false;
     mocks.publishableSpaceIds = null;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(mocks.lastQuery).toMatchObject({ spaceIds: null });
   });
@@ -949,7 +1544,7 @@ describe('topic menu', () => {
     mocks.spaceAllowlist = new Set();
     mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI])];
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.queryByText('Models are getting cheaper')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
@@ -963,7 +1558,7 @@ describe('topic menu', () => {
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, '')]);
     mocks.claims = [claim('claim-ai', 'Models are getting cheaper', false, false, SPACE_ID, [AI])];
     const view = render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
     expect(screen.getByRole('button', { name: /^AI/ })).toBeInTheDocument();
@@ -981,7 +1576,7 @@ describe('topic menu', () => {
   it('sends the picked space alone, never alongside the eligible list', async () => {
     mocks.spaceAllowlist = new Set([SPACE_ID.replace(/-/g, ''), OTHER_SPACE_ID.replace(/-/g, '')]);
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
@@ -995,7 +1590,7 @@ describe('topic menu', () => {
 
   it('asks the server to do the topic filtering', async () => {
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
     fireEvent.click(screen.getByRole('button', { name: /^AI/ }));
@@ -1015,7 +1610,7 @@ describe('topic menu', () => {
     mocks.spaceAllowlist = null;
     mocks.allowlistLoading = true;
     render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
@@ -1028,7 +1623,7 @@ describe('topic menu', () => {
   // corpus moving underneath a selection that was valid when it was made.
   it('lets go of a selected topic once the space stops having claims for it', async () => {
     const view = render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
@@ -1056,7 +1651,7 @@ describe('topic menu', () => {
   // would silently discard the space the moment a topic, or a search, emptied the pair.
   it('keeps a selected space when the current combination has nothing in it', async () => {
     const view = render(<ClaimsTab />);
-    await showAllClaims();
+    await showIndexedClaims();
 
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
@@ -1333,7 +1928,7 @@ describe('ClaimsTab -- Featured', () => {
     // Still 'all', so asking for it lands on whatever pages are already cached.
     expect(mocks.lastQuery).toMatchObject({ filter: 'all' });
 
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(mocks.lastEnabled).toBe(true);
   });
@@ -1516,7 +2111,7 @@ describe('ClaimsTab -- Featured', () => {
 
     expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
 
-    await showAllClaims();
+    await showIndexedClaims();
 
     expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
   });

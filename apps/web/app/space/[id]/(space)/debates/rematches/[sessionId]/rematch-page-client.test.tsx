@@ -65,6 +65,14 @@ const mocks = vi.hoisted(() => ({
   entityQueries: [] as Array<{ search: string | null; spaceIds?: string[] | null; topicIds?: string[] | null }>,
   /** Every id list the opponent's claims were hydrated with, in render order. */
   entityIdLookups: [] as string[][],
+  /** The Debate tag's catalog, which is the All tab's corpus. */
+  debateTagClaims: [] as Array<{
+    claimEntityId: string;
+    spaceId: string;
+    name: string;
+    description: string | null;
+    rankingScore: number | null;
+  }>,
   featuredClaims: [] as Array<{
     claimEntityId: string;
     spaceId: string;
@@ -74,7 +82,14 @@ const mocks = vi.hoisted(() => ({
   }>,
   featuredCatalogLoading: false,
   featuredCatalogError: null as Error | null,
+  /** Fails the entity lookup whose id list contains this claim, leaving the others answering. */
+  entityHydrationErrorFor: null as string | null,
+  /** The session's saved-claims request — the parent of the saved rows, their ids and the exclusions. */
+  savedClaimsLoading: false,
+  savedClaimsError: null as Error | null,
   featuredEnabledWith: [] as boolean[],
+  /** Which tag each render asked the graph for, in order. */
+  taggedClaimsAskedFor: [] as string[],
   entityQueryHasNextPage: false,
   /** The hub's claims query (the All tab) is still in flight. */
   entityQueryLoading: false,
@@ -183,9 +198,14 @@ vi.mock('~/core/debates/hooks', () => ({
   // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
   // arrive through the id lookup.
   useDebateRematchClaims: () => ({
-    data: { claims: mocks.savedClaims ?? mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
-    isLoading: false,
-    error: null,
+    // Answerless while loading or failed, as react-query is — the id list below is built from this,
+    // and handing back rows in either state hides the window this parent's absence opens.
+    data:
+      mocks.savedClaimsLoading || mocks.savedClaimsError
+        ? undefined
+        : { claims: mocks.savedClaims ?? mocks.claims, excluded_claim_ids: [CLAIM_SOURCE] },
+    isLoading: mocks.savedClaimsLoading,
+    error: mocks.savedClaimsError,
   }),
   // Two lookups run: one for the curated ids, one for the browsed ones. `curatedIds` lets a test
   // stall the browsed lookup on its own, which is the whole point of their being separate.
@@ -266,14 +286,19 @@ vi.mock('~/core/debates/debate-entry-intent', () => ({
 
 // GEO-2683. Featured stands in for Recommended when no curator page exists, which is what most of
 // these suites run under — so without this every case here would reach the graph for the tag.
-vi.mock('~/core/debates/featured-claims', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/debates/featured-claims')>()),
-  useFeaturedClaims: (enabled: boolean) => {
+vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/debates/tagged-claims')>()),
+  useTaggedClaims: (tagId: string, enabled: boolean) => {
     mocks.featuredEnabledWith.push(enabled);
+    mocks.taggedClaimsAskedFor.push(tagId);
+    // Keyed by tag, as the real hook is. Featured and All are two catalogs now, and a mock serving
+    // one list to both would hide a source reading the wrong tag — the two would look identical.
+    //
     // Rows are returned whether or not the query is enabled, as react-query does: `enabled: false`
     // stops the fetch, it does not clear the cache — and the hub shares this key, so a catalog it
     // fetched arrives here already warm.
-    const claims = mocks.featuredClaims;
+    const DEBATE = '55c95b2626f8482cb9739ea99dfde438';
+    const claims = tagId === DEBATE ? mocks.debateTagClaims : mocks.featuredClaims;
     return {
       claims,
       claimIds: claims.map(claim => claim.claimEntityId),
@@ -284,14 +309,20 @@ vi.mock('~/core/debates/featured-claims', async importOriginal => ({
   },
 }));
 
+const HYDRATION_ERROR = new Error('hydration exploded');
+
 // The opponent's claims are hydrated from the graph by id, through the picker's narrow projection.
 vi.mock('~/core/debates/claim-picker-page', () => ({
   useClaimEntitiesByIds: (ids: string[]) => {
     mocks.entityIdLookups.push(ids);
+    // Answerless while loading, as react-query is on a cold key. Without that a "loading" lookup
+    // still handed back its fixtures, so nothing downstream could tell the two apart — and the
+    // states that exist to wait for hydration were untestable.
     return {
-      entities: mocks.entities.filter(entity => ids.includes(entity.id as string)),
+      entities: mocks.entityHydrationLoading ? [] : mocks.entities.filter(entity => ids.includes(entity.id as string)),
       isLoading: mocks.entityHydrationLoading,
-      error: null,
+      // Stable identity: a fresh Error each render would be a new value for every memo below it.
+      error: mocks.entityHydrationErrorFor && ids.includes(mocks.entityHydrationErrorFor) ? HYDRATION_ERROR : null,
     };
   },
 }));
@@ -543,7 +574,11 @@ beforeEach(() => {
   mocks.featuredClaims = [];
   mocks.featuredCatalogLoading = false;
   mocks.featuredCatalogError = null;
+  mocks.entityHydrationErrorFor = null;
+  mocks.savedClaimsLoading = false;
+  mocks.savedClaimsError = null;
   mocks.featuredEnabledWith = [];
+  mocks.taggedClaimsAskedFor = [];
   mocks.entityQueryHasNextPage = false;
   mocks.lastEnabledData = undefined;
   mocks.spacesHeldOver = false;
@@ -552,6 +587,9 @@ beforeEach(() => {
   mocks.entityHydrationLoading = false;
   mocks.fetchNextPage.mockReset();
   mocks.entities = [sharedEntity(), publishedEntity()];
+  // The All tab's corpus (GEO-2771). It used to be `matchmakingClaims` — geo-chat's paged rows —
+  // and is now the Debate tag paired with the entity above, which is what the list is built from.
+  mocks.debateTagClaims = [debateTag()];
   mocks.matchmakingClaims = [matchmakingClaim()];
   mocks.entityQueryPages = null;
   mocks.entityQueryFetchingNextPage = false;
@@ -1080,6 +1118,110 @@ describe('DebateRematchPageClient', () => {
 
     // A failed tag query is not an empty tag query. Reporting "nothing is featured" for one hides a
     // fault behind a sentence that reads like a fact about the graph.
+    // A hydration lookup is keyed on ids that come from the query above it, so while that query is
+    // in flight the id list is empty, the lookup is disabled rather than loading, and it reports
+    // `isLoading: false`. Waiting on the child alone therefore called All settled before the saved
+    // rows and the exclusions existed.
+    it('waits for the query the saved hydration is keyed on, not just the hydration', async () => {
+      mocks.savedClaimsLoading = true;
+      mocks.debateTagClaims = [
+        {
+          claimEntityId: CLAIM_MORE,
+          spaceId: SPACE_2,
+          name: 'A newly published claim',
+          description: null,
+          rankingScore: 2,
+        },
+      ];
+
+      const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showAllClaims();
+
+      // Held: the tagged rows are in hand, but the list they are merged into is not complete yet.
+      expect(screen.queryByText('A newly published claim')).toBeNull();
+
+      mocks.savedClaimsLoading = false;
+      view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    });
+
+    it('keeps listing the tagged claims when the saved-claims request fails', async () => {
+      mocks.savedClaimsError = new Error('saved claims exploded');
+      mocks.debateTagClaims = [
+        {
+          claimEntityId: CLAIM_MORE,
+          spaceId: SPACE_2,
+          name: 'A newly published claim',
+          description: null,
+          rankingScore: 2,
+        },
+      ];
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showAllClaims();
+
+      // The tagged rows are the list; the saved ones are merged into it. Losing the merge costs
+      // those rows, and blanking the tab instead trades a short list for no list.
+      expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+      expect(screen.queryByText('Something went wrong.')).toBeNull();
+    });
+
+    // The All tab merges three lists into the tagged one and waits on all three, but waiting is not
+    // the same as reporting: each merge is several batched requests, so making any of them fatal
+    // trades a list that renders for one that does not.
+    it('keeps listing the tagged claims when a merged hydration fails', async () => {
+      // Disjoint id lists, so only the opponent's lookup fails: the tag catalog holds the published
+      // claim, the opponent holds the shared one.
+      mocks.debateTagClaims = [
+        {
+          claimEntityId: CLAIM_MORE,
+          spaceId: SPACE_2,
+          name: 'A newly published claim',
+          description: null,
+          rankingScore: 2,
+        },
+      ];
+      mocks.positions = [
+        position('profile-local', CLAIM_SHARED, SPACE_1, true),
+        position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+      ];
+      // The session has saved none, so the saved lookup never asks for the shared claim — otherwise
+      // it fails too and reports the outage through a branch that was already there.
+      mocks.savedClaims = [];
+      mocks.entityHydrationErrorFor = CLAIM_SHARED;
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showAllClaims();
+
+      // Only the opponent's hydration failed, and their claims are a merge into this list rather
+      // than the list itself — so the tagged rows still render.
+      expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+      expect(screen.queryByText('Something went wrong.')).toBeNull();
+    });
+
+    // What *is* fatal here, and the difference from the hub: every row on this page is built by
+    // `rowFromEntity`, which has nothing to return without an entity. So the tagged hydration
+    // failing leaves genuinely nothing to show, and saying so beats an empty list that looks like
+    // an answer.
+    it('reports a failed hydration of the tagged claims themselves', async () => {
+      mocks.debateTagClaims = [
+        {
+          claimEntityId: CLAIM_MORE,
+          spaceId: SPACE_2,
+          name: 'A newly published claim',
+          description: null,
+          rankingScore: 2,
+        },
+      ];
+      mocks.entityHydrationErrorFor = CLAIM_MORE;
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showAllClaims();
+
+      expect(await screen.findByText('Something went wrong.')).toBeInTheDocument();
+    });
+
     it('reports a failed tag lookup as an error rather than an empty list', async () => {
       mocks.featuredCatalogError = new Error('tag lookup exploded');
       render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -1194,23 +1336,6 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('heading', { name: 'Open weight AI' })).toBeInTheDocument();
   });
 
-  // Recommended comes from the curator's page whole, so paging the browsed corpus means nothing
-  // there — offering it implies there are more recommendations waiting.
-  // Nor on the opponent's tab: that list is the session's own from geo-chat, and paging the graph-wide
-  // scan from it walked the corpus hoping a browsed claim happened to carry their side.
-  it('keeps the paging sentinel off the Recommended and opponent tabs, placing it on All', async () => {
-    mocks.entityQueryHasNextPage = true;
-    mocks.recommendedSections = [{ id: 'block-1', name: 'Geopolitics & chips', claimIds: [CLAIM_SHARED] }];
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Salina’s positions/ }));
-    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
-
-    await showAllClaims();
-    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
-  });
-
   // No button to press any more; reaching the end of the list is what asks for the next page.
   it('does not offer a Keep looking button while the sentinel is still paging', async () => {
     mocks.entityQueryHasNextPage = true;
@@ -1218,21 +1343,6 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
 
     expect(screen.queryByRole('button', { name: 'Keep looking' })).toBeNull();
-  });
-
-  // The picker pages by cursor rather than through an infinite query, so the sentinel firing has
-  // to be shown to advance that cursor — a sentinel that renders but is wired to nothing would
-  // satisfy every other test here.
-  it('asks the hub query for its next page when the end of the list scrolls into view', async () => {
-    mocks.entityQueryHasNextPage = true;
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    expect(mocks.fetchNextPage).not.toHaveBeenCalled();
-
-    act(() => mocks.scrollSentinelIntoView());
-
-    expect(mocks.fetchNextPage).toHaveBeenCalledOnce();
   });
 
   it('leaves the sentinel out once there is no page left to fetch', async () => {
@@ -1510,16 +1620,6 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
   });
 
-  // The hub's query takes a space, so the space filter runs server-side on the All tab; topics are
-  // knowledge-graph data geo-chat doesn't model, so that one stays a cut over the loaded rows.
-  it('sends the selected space to the hub query', async () => {
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    selectFilter('Any space', 'Crypto');
-    await waitFor(() => expect(browsedClaimsQueryOptions()?.spaceIds).toEqual([SPACE_1]));
-  });
-
   // On a phone the three tabs are wider than the screen. They were laid out in a row that could
   // neither shrink them nor scroll, inside a layer that could scroll sideways — so a swipe at the
   // tabs panned the whole session instead of moving the tabs.
@@ -1645,16 +1745,23 @@ describe('DebateRematchPageClient', () => {
   // The report that reopened GEO-2653: the menu was built from the claims paged in so far, so a
   // space whose first page carried no topics looked like a space with none. The facet describes
   // the whole filtered set, so a topic shows up without the viewer scrolling to reach its claim.
-  it('offers a topic from a claim no page has returned yet', async () => {
-    mocks.matchmakingClaims = [
-      { ...matchmakingClaim(), topics: [] },
+  // The paged version of this covered a claim the index knew about through its facet but had not
+  // returned a row for. There is no such claim now: the tag hands the whole corpus over at once, so
+  // every topic in the menu comes off a row already in hand. What survives is the guarantee that
+  // made it worth having — a topic carried by any listed claim is offerable, not just by the first.
+  it('offers a topic carried by any claim on the list', async () => {
+    const OTHER = '019fedc2-3333-7000-8000-000000000003';
+    mocks.debateTagClaims = [debateTag(), debateTag(OTHER, 'A claim carrying a topic of its own')];
+    mocks.entities = [
+      sharedEntity(),
+      { ...publishedEntity(), relations: [] },
       {
-        ...matchmakingClaim(CLAIM_SOURCE, 'A claim only the facet knows about'),
-        topics: [{ id: 'topic-later', name: 'Later' }],
+        ...publishedEntity(OTHER, 'A claim carrying a topic of its own'),
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-later', name: 'Later' }, isDeleted: false },
+        ],
       },
     ];
-    // The server returns the second row only once the topic is picked; the facet names it either
-    // way, which is the difference this is here to hold.
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
     await waitFor(() => expect(screen.getByText('A newly published claim')).toBeInTheDocument());
@@ -1693,17 +1800,28 @@ describe('DebateRematchPageClient', () => {
   it('takes the new ranking when the topic changes, rather than holding the old one', async () => {
     const FIRST = '019fedc1-1111-7000-8000-000000000001';
     const SECOND = '019fedc1-2222-7000-8000-000000000002';
-    const gov = [{ id: 'topic-gov', name: 'Governance' }];
-    mocks.matchmakingClaims = [
-      { ...matchmakingClaim(FIRST, 'Ranked first when unfiltered'), topics: gov },
-      { ...matchmakingClaim(SECOND, 'Ranked first once filtered'), topics: gov },
+    const govOnly = (id: string, name: string) => ({
+      ...publishedEntity(id, name),
+      relations: [
+        { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+      ],
+    });
+    mocks.debateTagClaims = [
+      debateTag(FIRST, 'Ranked first when unfiltered'),
+      debateTag(SECOND, 'Ranked first once filtered'),
+    ];
+    mocks.entities = [
+      sharedEntity(),
+      govOnly(FIRST, 'Ranked first when unfiltered'),
+      govOnly(SECOND, 'Ranked first once filtered'),
     ];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
     await waitFor(() => expect(appearsBefore('Ranked first when unfiltered', 'Ranked first once filtered')).toBe(true));
 
-    // What the server does when the filter it ranks under changes.
-    mocks.matchmakingClaims = [...mocks.matchmakingClaims].reverse();
+    // A re-ranked catalog, which is what a refetch can hand back. The hold on list order has to
+    // release when the topic changes, or the new arrangement is drawn in the old one's order.
+    mocks.debateTagClaims = [...mocks.debateTagClaims].reverse();
     selectFilter('Any topic', 'Governance');
 
     await waitFor(() => expect(appearsBefore('Ranked first once filtered', 'Ranked first when unfiltered')).toBe(true));
@@ -1730,10 +1848,16 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: /Later/ })).toBeNull();
   });
 
-  // The All tab's search runs server-side over the browsed rows; the pinned ones are merged in
-  // whether they match it or not. Cutting them out of the facet left them on screen with their
-  // topics missing from the menu — the pinned-row merge undone by the filter beside it.
-  it('keeps the topics of a pinned row the search does not match', async () => {
+  // Search is client-side over every row now, the merged ones included (GEO-2771), so a row the
+  // term excludes leaves the list *and* the topic menu beside it.
+  //
+  // It used to survive both: the All tab searched server-side over the browsed rows while the
+  // merged ones rode along unfiltered, and the facet had to be careful not to cut them. This
+  // asserted that care. With one client-side filter over one list there is nothing left to be out
+  // of step, and the old expectation only passed because it was read before the debounce landed —
+  // the row it looked for was still on screen from before the term was typed.
+  it('drops a merged row the search excludes, and its topic with it', async () => {
+    // `publishedEntity` stays: the tagged claim this searches for hydrates from it.
     mocks.entities = [
       sharedEntity(),
       {
@@ -1742,49 +1866,24 @@ describe('DebateRematchPageClient', () => {
           { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-pinned', name: 'Pinned only' }, isDeleted: false },
         ],
       },
+      publishedEntity(),
     ];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    // Matches the browsed row's text, not the pinned claim both participants chose.
+    // On screen before the term, so what follows asserts its removal rather than its absence —
+    // which is what made the previous version of this test pass whatever the filter did.
+    await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
+
+    // Matches the tagged row's text, not the pinned claim both participants chose.
     fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'newly' } });
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ search: 'newly' }));
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
 
-    // The pinned row is still on screen — the search never reached it — so it is still a row the
-    // viewer can be filtering to.
-    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    // And the menu is narrowed with it: a topic only that row carried has nothing left to filter.
     fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
 
-    expect(screen.getByRole('button', { name: /Pinned only/ })).toBeInTheDocument();
-  });
-
-  // The scope can also change after it has settled — the viewer joins a space and the allowlist
-  // refetches — and no loading flag turns over when it does. The only sign is that the pages in
-  // hand were fetched under the scope before it, and their topic facet still names spaces that
-  // are now outside it.
-  it('drops the pages fetched under a scope the viewer has since left', async () => {
-    mocks.matchmakingClaims = [
-      { ...matchmakingClaim(), topics: [] },
-      {
-        ...matchmakingClaim(CLAIM_SOURCE, 'A claim only the facet knows about'),
-        topics: [{ id: 'topic-later', name: 'Later' }],
-      },
-    ];
-    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-    await waitFor(() => expect(screen.getByText('A newly published claim')).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole('button', { name: /Any topic/ }));
-    expect(screen.getByRole('button', { name: /Later/ })).toBeInTheDocument();
-
-    // The scope narrows from "no filter" to one space; the previous one's pages are what React
-    // Query has to answer with meanwhile. The menu is left open, so this is the option list
-    // changing under the viewer's cursor.
-    mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
-    mocks.scopeHeldOver = true;
-    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Later/ })).toBeNull());
+    expect(screen.queryByRole('button', { name: /Pinned only/ })).toBeNull();
   });
 
   // The browsed query runs on every tab, so its answer must not vouch for rows another tab drew
@@ -1809,16 +1908,6 @@ describe('DebateRematchPageClient', () => {
 
     // The shared claim carries no topics at all, so nothing about it survives the filter.
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
-  });
-
-  it('asks the server to do the topic filtering on the All tab', async () => {
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    selectFilter('Any topic', 'Governance');
-
-    // Filtering only here would narrow the pages already loaded and nothing beyond them.
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ topicIds: ['topic-gov'] }));
   });
 
   // Reported after the facet landed: pick a space, pick a topic it lists, get nothing. The space
@@ -1857,23 +1946,6 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: /Governance/ })).toBeNull());
   });
 
-  // The scope sent to geo-chat has to apply the space-type gate too. The allowlist holds the
-  // viewer's own personal space, and the editor-space lookup passes everything while unresolved —
-  // so without it a personal space joins the scope, contributes its topics to the facet, and has
-  // every one of its rows removed again by `canPublishDebateIn`.
-  it('keeps a personal space out of the scope even when the editor lookup is unresolved', async () => {
-    mocks.publishableSpaceIds = null;
-    mocks.spaceTypes = { [SPACE_2]: 'PERSONAL' };
-    mocks.spaceAllowlist = new Set([SPACE_1.replace(/-/g, ''), SPACE_2.replace(/-/g, '')]);
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toBeTruthy());
-    const scope = (mocks.entityQueries.at(-1) as { spaceIds?: string[] | null }).spaceIds ?? [];
-    expect(scope).toContain(SPACE_1.replace(/-/g, ''));
-    expect(scope).not.toContain(SPACE_2.replace(/-/g, ''));
-  });
-
   // The opponent and curated tabs are deliberately not narrowed by the viewer's allowlist, so a
   // claim of theirs in a space the viewer has never joined stays on screen. Its space has to stay
   // in the menu with it, or the row is visible and unfilterable.
@@ -1888,6 +1960,42 @@ describe('DebateRematchPageClient', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
+  });
+
+  // A claim can carry the Debate tag in more than one space, and the catalog returns a row for each.
+  //
+  // The hub cuts by the picked space and *then* collapses to one row per claim. The picker
+  // collapsed first, which pinned the claim to whichever tag row came back first — so filtering to
+  // the other space it is tagged in hid it, and the two surfaces answered the same question
+  // differently.
+  it('keeps a claim tagged in two spaces when the second one is picked', async () => {
+    mocks.entities = [sharedEntity(), { ...publishedEntity(), spaces: [SPACE_1, SPACE_2] }];
+    // SPACE_1 first, so the collapse would settle on it and the pick below would be the other one.
+    mocks.debateTagClaims = [
+      {
+        claimEntityId: CLAIM_MORE,
+        spaceId: SPACE_1,
+        name: 'A newly published claim',
+        description: null,
+        rankingScore: 2,
+      },
+      {
+        claimEntityId: CLAIM_MORE,
+        spaceId: SPACE_2,
+        name: 'A newly published claim',
+        description: null,
+        rankingScore: 2,
+      },
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(screen.getByText('A newly published claim')).toBeInTheDocument());
+
+    selectFilter('Any space', 'Governance space');
+
+    // The SPACE_1 row going is what says the filter landed — without it this would assert nothing.
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
   });
 
   // A space can be picked while the gates are still passing everything. Once they reject it the
@@ -1955,17 +2063,6 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: /Server only/ })).toBeNull();
   });
 
-  // The session's own exclusions — the source debate's claim, and anything this pairing has
-  // blocked — are geo-chat's to apply, so its facets describe the rows it actually returns. Left
-  // to the client they were applied after the facets were built, and a topic whose every claim in
-  // the space had been excluded stayed on the menu over an empty list (GEO-2674).
-  it('asks geo-chat to scope the corpus to this session', async () => {
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ rematchSessionId: 'rematch-1' }));
-  });
-
   it('keeps every space on offer after narrowing to one', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
@@ -1980,25 +2077,6 @@ describe('DebateRematchPageClient', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
   });
 
-  // A space can be on the menu without being in the allowlist — the graph-backed sources aren't
-  // narrowed by it, so their rows put their spaces there. Picking one alongside an allowed space
-  // used to send both: `browsedRows` dropped the disallowed rows, but the facets riding with them
-  // still named their topics and counted their claims.
-  it('sends geo-chat only the picked spaces it can answer for', async () => {
-    mocks.spaceAllowlist = new Set([SPACE_2.replace(/-/g, '')]);
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    selectFilter('Any space', 'Governance space');
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ spaceIds: [SPACE_2] }));
-
-    // Crypto reaches the menu through a pinned row, not through the allowlist. The trigger now
-    // reads the picked space's own name, so that is what opens the menu again.
-    selectFilter('Governance space', 'Crypto');
-
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ spaceIds: [SPACE_2] }));
-  });
-
   // GEO-2696: topics intersect now, and the menu answers "what appears alongside what I picked".
   // The pinned rows are the half geo-chat has no facet for, so the rule is applied here — the two
   // halves of one menu must not disagree about what a second topic does.
@@ -2006,8 +2084,12 @@ describe('DebateRematchPageClient', () => {
   // Built so the old union rule and the new one differ: `Pinned only` shares no claim with Ethics,
   // so under union it stayed on offer and led to an empty list.
   it('offers only the topics that co-occur with the picked one', async () => {
-    // The default browsed claim carries Governance and Ethics; this adds a pinned row carrying a
+    // The default tagged claim carries Governance and Ethics; this adds a pinned row carrying a
     // topic that appears on nothing else.
+    //
+    // `publishedEntity` stays in the list. The tagged claim's topics come off its entity now, where
+    // the paged row used to carry them itself — so replacing the entities wholesale would take the
+    // claim this test compares against with them.
     mocks.entities = [
       {
         ...sharedEntity(),
@@ -2015,6 +2097,7 @@ describe('DebateRematchPageClient', () => {
           { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-pinned', name: 'Pinned only' }, isDeleted: false },
         ],
       },
+      publishedEntity(),
     ];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
@@ -2039,11 +2122,19 @@ describe('DebateRematchPageClient', () => {
 
     selectFilter('Any space', 'Governance space');
     selectFilter('Any topic', 'Ethics');
-    await waitFor(() => expect(mocks.entityQueries.at(-1)).toMatchObject({ topicIds: ['topic-eth'] }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /Ethics/ })).toBeInTheDocument());
 
     // The one Ethics claim in that space is answered, published elsewhere, or otherwise leaves the
-    // candidate set, so the facet stops naming the topic.
-    mocks.matchmakingClaims = [{ ...matchmakingClaim(), topics: [{ id: 'topic-gov', name: 'Governance' }] }];
+    // candidate set, so the menu stops naming the topic. Its topics come off the entity now.
+    mocks.entities = [
+      sharedEntity(),
+      {
+        ...publishedEntity(),
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+        ],
+      },
+    ];
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
     // Held, it would filter the list by a chip that is no longer in the menu to unpick.
@@ -2311,9 +2402,9 @@ describe('DebateRematchPageClient', () => {
       target: { value: 'newly published' },
     });
 
-    // The All tab searches server-side, through the hub's query — debounced.
+    // Every tab searches on the client now — the All tab included, since its corpus arrives whole.
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
-    await waitFor(() => expect(browsedClaimsQueryOptions()?.search).toBe('newly published'));
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
 
     // The opponent's tab is the graph's list, so the term is applied here — where it leaves nothing.
     fireEvent.click(screen.getByRole('button', { name: /Salina’s positions/ }));
@@ -2365,8 +2456,14 @@ describe('DebateRematchPageClient', () => {
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showOpponentClaims();
       const scoped = () => mocks.gatewaySpaceScopes.filter(scope => scope.enabled).at(-1)?.spaceIds;
-      expect(scoped()).toEqual([SPACE_1, SPACE_2, 'profile-local', 'profile-remote']);
+      // The opponent's tab: their claims' space and both debaters' own.
+      expect(scoped()).toEqual([SPACE_1, 'profile-local', 'profile-remote']);
 
+      // The All tab brings its own claims' space with it. The scope follows the tab now, because
+      // every source is tab-gated — Featured always was, and GEO-2771 put All on the same footing
+      // by replacing the index query, which ran on every tab and so kept its spaces scoped from
+      // anywhere. Nothing is lost by the narrowing: a scope exists to have updates pushed for rows
+      // on screen, and these rows are not.
       await showAllClaims();
       expect(scoped()).toEqual([SPACE_1, SPACE_2, 'profile-local', 'profile-remote']);
     });
@@ -2374,14 +2471,23 @@ describe('DebateRematchPageClient', () => {
 
   // geo-chat answers the browsed lookup in id-sorted batches, so a list laid out in response order
   // would reshuffle every time a new page's ids landed in the middle of the sorted range.
-  it('keeps the All tab in the order the page returned the claims', async () => {
+  it('keeps the All tab in the order the tag ranked the claims', async () => {
     const FIRST = '019fedb4-3f74-7c61-8d44-5fa08b1e7a01';
     const SECOND = '019fedb4-3f74-7c61-8d44-5fa08b1e7a02';
     const THIRD = '019fedb4-3f74-7c61-8d44-5fa08b1e7a03';
-    mocks.matchmakingClaims = [
-      matchmakingClaim(FIRST, 'Ordered claim one'),
-      matchmakingClaim(SECOND, 'Ordered claim two'),
-      matchmakingClaim(THIRD, 'Ordered claim three'),
+    // Ranked by the graph now rather than paged by geo-chat, and `fetchTaggedClaims` has already
+    // sorted before this list sees it — so what is pinned here is that nothing downstream re-sorts,
+    // which is the same guarantee the paged version needed.
+    mocks.debateTagClaims = [
+      debateTag(FIRST, 'Ordered claim one'),
+      debateTag(SECOND, 'Ordered claim two'),
+      debateTag(THIRD, 'Ordered claim three'),
+    ];
+    mocks.entities = [
+      sharedEntity(),
+      publishedEntity(FIRST, 'Ordered claim one'),
+      publishedEntity(SECOND, 'Ordered claim two'),
+      publishedEntity(THIRD, 'Ordered claim three'),
     ];
     mocks.savedClaims = [];
     mocks.claims = [
@@ -2401,7 +2507,6 @@ describe('DebateRematchPageClient', () => {
   // why they are pinned alongside the filters — pinning the filters alone would float them over a
   // tab strip sliding past behind them.
   it('pins the tabs, filters and search together, leaving the list to scroll', async () => {
-    mocks.entityQueryHasNextPage = true;
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
@@ -2413,57 +2518,122 @@ describe('DebateRematchPageClient', () => {
     expect(screen.getByRole('button', { name: 'Claims' }).closest('.sticky')).toBe(pinned);
     expect(screen.getByRole('button', { name: /Any space/ }).closest('.sticky')).toBe(pinned);
 
-    // And the list is outside it, or it would be pinned too and never scroll.
-    expect(screen.getByTestId('claims-scroll-sentinel').closest('.sticky')).toBeNull();
+    // And the list is outside it, or it would be pinned too and never scroll. Anchored on a claim
+    // row: the scroll sentinel used to stand for the list here, and nothing pages any more.
+    expect(screen.getByText('A newly published claim').closest('.sticky')).toBeNull();
   });
 
-  // GEO-2671. Rows the index hasn't paged to — a claim the opponent answered, a saved or curated
-  // one — used to be appended after every paged row, so each new batch inserted rows above them
-  // and slid them further down. A claim the viewer already held a position on was still sinking
-  // after ten pages. Their slot is fixed after the first page now.
-  it('holds a claim the pages have not reached in place when the next page lands', async () => {
-    const PAGE_ONE = '019fedb4-3f74-7c61-8d44-5fa08b1e7b01';
-    const PAGE_TWO = '019fedb4-3f74-7c61-8d44-5fa08b1e7b02';
-    const ANSWERED = '019fedb7-5b96-7e83-9f66-7bc2ad4f9953';
-    mocks.savedClaims = [];
-    mocks.claims = [];
-    mocks.entityQueryPages = [
-      [matchmakingClaim(PAGE_ONE, 'Paged claim one')],
-      [matchmakingClaim(PAGE_TWO, 'Paged claim two')],
+  // The paging skeleton and the sentinel it followed are both gone (GEO-2771): the tag hands the
+  // list over whole, so there is never a next page to wait on. Pinned as their absence, because
+  // leaving either behind would page a corpus nothing reads.
+  /**
+   * GEO-2771. The All source is the graph's Debate tag, not geo-chat's paged corpus.
+   *
+   * What stays merged into it is the session's own: saved, opponent and curated rows, tag or no
+   * tag. Those three are already exceptions to whatever the corpus is, and a rematch that dropped
+   * the very claim the pair had been arguing — because nobody had tagged it — is the one failure
+   * this list cannot afford.
+   */
+  it('reads the Debate tag, not Featured’s', async () => {
+    // Two tags, two catalogs, two claims. The row's text comes from the *entity*, so each needs one.
+    const ONLY_FEATURED = '019fedc3-4444-7000-8000-000000000004';
+    mocks.featuredClaims = [debateTag(ONLY_FEATURED, 'Only featured')];
+    mocks.debateTagClaims = [debateTag()];
+    mocks.entities = [sharedEntity(), publishedEntity(), publishedEntity(ONLY_FEATURED, 'Only featured')];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(mocks.taggedClaimsAskedFor).toContain('55c95b2626f8482cb9739ea99dfde438');
+    // `waitFor`, because the picker animates the outgoing list out and jsdom never finishes an
+    // exit animation — Featured's row is still mounted on the tick the source changes.
+    await waitFor(() => expect(screen.queryByText('Only featured')).toBeNull());
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+  });
+
+  /**
+   * Reported: flipping between Featured and All on first load left the list unchanged, and only
+   * started switching after a few goes.
+   *
+   * `useLastSettled` holds the last settled list while a new one loads, keyed on the session — which
+   * does not change when the source does. Before GEO-2771 that was safe, because Featured was the
+   * only tagged source and All came from a different variable entirely. Routing both through
+   * `taggedClaims` made the hold bridge two genuinely different lists: switch, and the previous
+   * source's rows stay up for as long as the new tag takes to fetch. Once both catalogs are cached
+   * the fetch is instant, which is why it comes right after a few switches.
+   */
+  it('does not hold the previous source’s claims while the new tag loads', async () => {
+    const ONLY_FEATURED = '019fedc4-5555-7000-8000-000000000005';
+    mocks.featuredClaims = [debateTag(ONLY_FEATURED, 'Only featured')];
+    mocks.debateTagClaims = [debateTag()];
+    mocks.entities = [sharedEntity(), publishedEntity(), publishedEntity(ONLY_FEATURED, 'Only featured')];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await waitFor(() => expect(screen.getByText('Only featured')).toBeInTheDocument());
+
+    // The Debate tag has never been fetched, so switching to All starts a load.
+    mocks.featuredCatalogLoading = true;
+    await showAllClaims();
+
+    await waitFor(() => expect(screen.queryByText('Only featured')).toBeNull());
+  });
+
+  /**
+   * The saved rows are geo-chat's, and geo-chat sends them with `topics: []` — so their topics can
+   * only come from the graph. While the index answered this tab, picking a topic was deferred to
+   * its server-side filter for the rows it returned; with the index gone, an unhydrated row carries
+   * no topics and `carriesEveryTopic` reads that as "does not match".
+   *
+   * Which dropped every claim the pair had already answered the moment any topic was picked — the
+   * one row this list exists to keep.
+   */
+  it('keeps a saved claim under a topic it carries', async () => {
+    // Reaching the saved claim through the *saved* path alone. With no opponent positions its id is
+    // absent from `opponentClaimIds`, and with no tagged catalog it is absent from that lookup too —
+    // so the only thing that can hydrate its topics is the saved-claims lookup this pins.
+    mocks.positions = [];
+    mocks.debateTagClaims = [];
+    mocks.entities = [
+      {
+        ...sharedEntity(),
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+        ],
+      },
     ];
-    // Answered by the opponent, so it joins the All tab without the index having paged to it.
-    mocks.entities = [{ ...sharedEntity(), id: ANSWERED, name: 'Claim the pages have not reached' }];
-    mocks.positions = [position('profile-remote', ANSWERED, SPACE_1, true)];
-
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
+    await waitFor(() => expect(screen.getByText('A claim both participants chose')).toBeInTheDocument());
 
-    // Its slot is after the first page and before the second — not swept to the end behind
-    // every row paging has since produced.
-    expect(appearsBefore('Paged claim one', 'Claim the pages have not reached')).toBe(true);
-    expect(appearsBefore('Claim the pages have not reached', 'Paged claim two')).toBe(true);
+    selectFilter('Any topic', 'Governance');
+
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 
-  // Reaching the end of the list is what asks for the next page, so without this the sentinel
-  // fires silently and the list sits there looking finished.
-  it('shows a loading skeleton while the next page is on its way', async () => {
-    mocks.entityQueryHasNextPage = true;
-    mocks.entityQueryFetchingNextPage = true;
+  // Every other entity lookup on this page is gated by the source that shows its rows. Ungated, this
+  // one fanned out graph batches behind the opponent's tab and Recommended, which never list them.
+  it('does not hydrate the saved claims on tabs that do not show them', async () => {
+    mocks.positions = [];
+    mocks.debateTagClaims = [];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
 
-    // Not on the tabs that don't page — they load whole.
-    expect(screen.queryByTestId('claims-next-page-skeleton')).toBeNull();
-    await showAllClaims();
-    expect(screen.getByTestId('claims-next-page-skeleton')).toBeInTheDocument();
+    expect(mocks.entityIdLookups.flat()).not.toContain(CLAIM_SHARED);
   });
 
-  it('shows no skeleton once the page has landed', async () => {
-    mocks.entityQueryHasNextPage = true;
-    mocks.entityQueryFetchingNextPage = false;
+  it('keeps an untagged claim both debaters answered on the list', async () => {
+    // The shared claim carries no Debate tag. It is what the rematch is *for*, so it stays.
+    mocks.debateTagClaims = [];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    expect(screen.getByTestId('claims-scroll-sentinel')).toBeInTheDocument();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  it('places no scroll sentinel and no paging skeleton, since nothing pages', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(screen.queryByTestId('claims-scroll-sentinel')).toBeNull();
     expect(screen.queryByTestId('claims-next-page-skeleton')).toBeNull();
   });
 
@@ -2471,14 +2641,20 @@ describe('DebateRematchPageClient', () => {
   // of what the viewer had typed and pushed their search results down. Matched claims stay
   // legible without the pin — they are the ones offering "Request debate", and the Matches tab
   // lists them on their own.
-  it('leaves a matched claim where the page returned it rather than pinning it first', async () => {
+  it('leaves a matched claim where the ranking put it rather than pinning it first', async () => {
     const FIRST = '019fedb4-3f74-7c61-8d44-5fa08b1e7a01';
     const SECOND = '019fedb4-3f74-7c61-8d44-5fa08b1e7a02';
     const MATCHED = '019fedb4-3f74-7c61-8d44-5fa08b1e7a03';
-    mocks.matchmakingClaims = [
-      matchmakingClaim(FIRST, 'Ordered claim one'),
-      matchmakingClaim(SECOND, 'Ordered claim two'),
-      matchmakingClaim(MATCHED, 'Ordered claim three'),
+    mocks.debateTagClaims = [
+      debateTag(FIRST, 'Ordered claim one'),
+      debateTag(SECOND, 'Ordered claim two'),
+      debateTag(MATCHED, 'Ordered claim three'),
+    ];
+    mocks.entities = [
+      sharedEntity(),
+      publishedEntity(FIRST, 'Ordered claim one'),
+      publishedEntity(SECOND, 'Ordered claim two'),
+      publishedEntity(MATCHED, 'Ordered claim three'),
     ];
     mocks.savedClaims = [];
     // The last of the three is the one both participants have answered.
@@ -2572,17 +2748,6 @@ describe('DebateRematchPageClient', () => {
     rerender(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(mocks.setReadiness).not.toHaveBeenCalled();
-  });
-
-  // The All tab browses every published claim a page at a time, so filtering the loaded pages
-  // only ever searched what had been paged in. The hub's Claims tab searches server-side.
-  it('searches the whole claim corpus rather than the loaded pages', async () => {
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'Fast fashion' } });
-
-    await waitFor(() => expect(browsedClaimsQueryOptions()?.search).toBe('Fast fashion'));
   });
 
   // Waiting for geo-chat to echo the response back would leave the side you just picked
@@ -2738,9 +2903,6 @@ describe('DebateRematchPageClient', () => {
 });
 
 /** The latest arguments the picker handed its browsed-claims page query. */
-function browsedClaimsQueryOptions() {
-  return mocks.entityQueries.at(-1);
-}
 
 /** The picker opens on the opponent's positions; most assertions want the unfiltered list. */
 /**
@@ -2889,6 +3051,17 @@ function matchmakingClaim(id = CLAIM_MORE, claim = 'A newly published claim'): M
     score: 0,
     active_debate: false,
   };
+}
+
+/**
+ * A claim carrying the Debate tag, which is where the All tab's corpus comes from since GEO-2771.
+ *
+ * Pairs with `publishedEntity`: same id, same space, and the topics the menus are built from. The
+ * tag says *which* claims are on the list; the entity says everything else about them. Both are
+ * needed, the way the two lookups behind this list need them.
+ */
+function debateTag(id = CLAIM_MORE, name = 'A newly published claim', spaceId = SPACE_2, rankingScore = 1) {
+  return { claimEntityId: id, spaceId, name, description: null, rankingScore };
 }
 
 function publishedEntity(id = CLAIM_MORE, name = 'A newly published claim') {
