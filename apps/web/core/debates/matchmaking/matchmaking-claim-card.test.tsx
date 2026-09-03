@@ -254,6 +254,52 @@ describe('position avatar stack', () => {
     expect(within(disagree).queryByText(/^\+/)).toBeNull();
   });
 
+  /**
+   * GEO-2808. The offer used to appear the instant a match existed, with no regard for whether
+   * geo-chat held the viewer's position — so the request was pressable and geo-chat rejected it
+   * with `claim_response_required`. It now waits on the same fact the picker waits on and wears the
+   * same label.
+   */
+  describe('the request waits for geo-chat to hold the viewer position', () => {
+    const twoSides = () =>
+      withCounts([
+        { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('a')] },
+        { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('b')] },
+      ]);
+
+    it('names the wait while geo-chat has not caught up', () => {
+      mocks.match = { id: 'match-1' };
+      // An answer still reconciling is what the card draws its optimistic side from.
+      mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(
+        <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
+      );
+
+      expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeDisabled();
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
+
+    it('offers the debate once geo-chat holds the side on screen', () => {
+      mocks.match = { id: 'match-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness()} />);
+
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    });
+
+    // A claim nobody has answered is not publishing anything. The hub's opponent half is a match,
+    // which does not require a position the way the picker's `opposing` does, so without this the
+    // card announced a wait nobody had started.
+    it('does not name a wait on a claim the viewer has not answered', () => {
+      mocks.match = { id: 'match-1' };
+      renderCard(
+        <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
+      );
+
+      expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
+    });
+  });
+
   // The regression that caused the revert. Drawing the stack from `available_now_count` looked
   // right until you noticed it is viewer-relative: it excludes the viewer and anyone they have
   // already debated on this claim. So a claim you had actually argued showed an empty stack — to

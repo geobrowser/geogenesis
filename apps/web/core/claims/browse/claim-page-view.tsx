@@ -236,6 +236,9 @@ function ClaimPositionSection({
         activeDebate={row?.active_debate}
         variant="block"
         className="mt-2"
+        // The offer sits directly under the pills that set the position it depends on, so it has to
+        // wait for the same fact those pills are publishing (GEO-2808).
+        position={control.requestPosition}
       />
     </section>
   );

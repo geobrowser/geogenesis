@@ -80,6 +80,8 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     viewerPosition: null,
     respond: () => {},
     canRespond: false,
+    // Mirrors the hook: the request offer reads this to decide whether to make itself.
+    requestPosition: { chat: null, local: null, indexingDelayed: false },
     actionTitle: () => undefined,
     responseError: null,
   }),
