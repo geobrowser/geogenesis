@@ -369,3 +369,80 @@ describe('EntityFeed Explore type filter', () => {
     });
   });
 });
+
+/**
+ * GEO-2789, the explore half. The feed used to open unfiltered over every space the reader may
+ * see — featured ones included, which say nothing about who is asking. It opens on theirs now,
+ * with the rest still on the menu to widen back to, and the same multi-select the debates side
+ * panel uses so the two filters read and behave alike.
+ */
+describe('the space filter', () => {
+  const OPTIONS = [
+    { value: 'space-featured', label: 'Crypto' },
+    { value: 'space-mine', label: 'Relationships' },
+    { value: 'space-pending', label: 'US Politics' },
+  ];
+
+  function renderFeed(memberSpaceIds?: string[]) {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSpaceOptions={OPTIONS}
+        memberSpaceIds={memberSpaceIds}
+        showSortFilter
+      />
+    );
+  }
+
+  /** The trigger, which the mocked Menu renders alongside the options. */
+  const spaceTrigger = () => screen.getAllByRole('button', { name: /Any space|Relationships|spaces$/ })[0];
+
+  const sentSpaceIds = async () => new URLSearchParams((await requestedUrl()).split('?')[1]).get('spaceIds');
+
+  it('opens on the spaces the reader belongs to', async () => {
+    renderFeed(['space-mine']);
+
+    expect(await sentSpaceIds()).toBe('space-mine');
+  });
+
+  // A membership the reader has asked for is one of theirs: they chose it at sign-up, and nothing
+  // should lurch when the approval lands.
+  it('counts a pending membership as one of theirs', async () => {
+    renderFeed(['space-mine', 'space-pending']);
+
+    expect((await sentSpaceIds())?.split(',').sort()).toEqual(['space-mine', 'space-pending']);
+  });
+
+  // The fallback, and the case every signed-out reader is in.
+  it('shows everything when the reader belongs to none of the spaces on offer', async () => {
+    renderFeed([]);
+
+    expect(await sentSpaceIds()).toBeNull();
+    expect(spaceTrigger().textContent).toContain('Any space');
+  });
+
+  it('holds the default while their memberships are still unknown', async () => {
+    // Undefined is not empty: spending the default on a viewer whose spaces had not arrived would
+    // land them on the fallback for the whole visit.
+    renderFeed(undefined);
+
+    expect(await sentSpaceIds()).toBeNull();
+  });
+
+  it('lets the reader widen to a featured space they have not joined', async () => {
+    renderFeed(['space-mine']);
+
+    pickOption('Crypto');
+
+    expect((await sentSpaceIds())?.split(',').sort()).toEqual(['space-featured', 'space-mine']);
+  });
+
+  it('clears back to every space, and the default does not put theirs back', async () => {
+    renderFeed(['space-mine']);
+    expect(await sentSpaceIds()).toBe('space-mine');
+
+    pickOption('Any space');
+
+    expect(await sentSpaceIds()).toBeNull();
+  });
+});

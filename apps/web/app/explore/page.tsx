@@ -52,9 +52,17 @@ export default async function ExploreRoutePage() {
     initialSpaceOptions.push({ value: row.id, label: row.name });
   }
 
+  // Joined, or with a membership still pending — the spaces the filter opens on (GEO-2789). Asked
+  // for as one set because the reader does not experience the difference: they chose the space at
+  // sign-up and it is theirs from that moment, whether or not an approval has landed yet.
+  const memberSpaceIds = [
+    ...new Set([...sidePanel.memberOrEditorSpaceIds, ...sidePanel.pendingMembershipSpaceIds].map(normId)),
+  ];
+
   return (
     <ExplorePage
       initialSpaceOptions={initialSpaceOptions}
+      memberSpaceIds={memberSpaceIds}
       featuredSpaces={sidePanel.featuredSpaces}
       featuredRankings={sidePanel.featuredRankings}
       pendingMembershipSpaceIds={sidePanel.pendingMembershipSpaceIds}

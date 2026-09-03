@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { HubMultiFilterMenu } from '~/core/debates/matchmaking/hub-filter-menu';
+import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
 import {
   EXPLORE_TYPE_FILTER_STORAGE_KEY,
@@ -66,6 +68,16 @@ type EntityFeedProps = {
   apiEndpoint: string;
   /** Space options for the space dropdown. Required when `lockedSpaceId` is not set. */
   initialSpaceOptions?: SpaceOption[];
+  /**
+   * The spaces this reader belongs to — joined, or with a membership still pending. The filter
+   * opens on whichever of them are on offer, and on nothing at all when there are none, which is
+   * the unfiltered feed a reader with no memberships already saw (GEO-2789).
+   *
+   * Undefined while unknown, which is not the same as empty: empty is a settled answer and takes
+   * the fallback, whereas unknown holds the default rather than spending it on a viewer whose
+   * memberships had not arrived.
+   */
+  memberSpaceIds?: string[];
   /** When set, the feed is pinned to this space. No space dropdown is rendered. */
   lockedSpaceId?: string;
   /** Initial value for the time dropdown. Defaults to "week". */
@@ -96,7 +108,8 @@ async function fetchFeedPage(
     sort: ExploreSort;
     /** Omitted when the feed's sort has no time range. */
     time: ExploreTime | undefined;
-    spaceId: string;
+    /** Empty means no space narrowing at all. */
+    spaceIds: readonly string[];
     typeIds: readonly string[] | undefined;
     cursor: string | undefined;
   }
@@ -106,7 +119,9 @@ async function fetchFeedPage(
   // Absent means "no time filter" — see the route's parseTime. Sending nothing is what keeps a
   // hidden range out of the feed it isn't shown for.
   if (params.time !== undefined) sp.set('time', params.time);
-  sp.set('spaceId', params.spaceId);
+  // Omitted rather than sent as `all` when nothing is ticked: the routes read an absent parameter
+  // as "no narrowing", which is the same answer with one fewer special string in it.
+  if (params.spaceIds.length > 0) sp.set('spaceIds', params.spaceIds.join(','));
   if (params.typeIds !== undefined) sp.set('typeIds', params.typeIds.join(','));
   if (params.cursor) sp.set('cursor', params.cursor);
   const res = await fetch(`${apiEndpoint}?${sp.toString()}`, { credentials: 'include' });
@@ -123,6 +138,7 @@ async function fetchFeedPage(
 export function EntityFeed({
   apiEndpoint,
   initialSpaceOptions = [],
+  memberSpaceIds,
   lockedSpaceId,
   initialTime = 'week',
   initialSort = 'new',
@@ -135,17 +151,22 @@ export function EntityFeed({
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExploreSort>(initialSort);
-  const [selectedSpaceId, setSelectedSpaceId] = React.useState<string>('all');
+  const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [sortMenuOpen, setSortMenuOpen] = React.useState(false);
   const [timeMenuOpen, setTimeMenuOpen] = React.useState(false);
-  const [spaceMenuOpen, setSpaceMenuOpen] = React.useState(false);
   // Seeded with the default rather than every type, so the first paint is what the effect below
   // will settle on for a reader with nothing stored — the common case. Starting from all twelve
   // showed a wider feed for a frame and then narrowed it.
   const [selectedTypeIds, setSelectedTypeIds] = React.useState<string[]>([...DEFAULT_EXPLORE_TYPE_IDS]);
   const [typeSelectionLoaded, setTypeSelectionLoaded] = React.useState(!showTypeFilter);
   const shouldPersistTypeSelectionRef = React.useRef(false);
-  const spaceId = lockedSpaceId ?? selectedSpaceId;
+  // A locked space is the whole filter and there is no menu to reconcile it with; otherwise it is
+  // whatever is ticked, and nothing ticked means every space the reader may see.
+  const requestedSpaceIds = React.useMemo(
+    () => (lockedSpaceId ? [lockedSpaceId] : spaceIds),
+    [lockedSpaceId, spaceIds]
+  );
+  const spaceIdsKey = requestedSpaceIds.join(',');
   const typeIds =
     showTypeFilter && selectedTypeIds.length !== EXPLORE_ENTITY_TYPE_IDS.length ? selectedTypeIds : undefined;
   const typeIdsKey = typeIds?.join(',') ?? null;
@@ -189,8 +210,8 @@ export function EntityFeed({
   // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
   // request, and caching them apart would refetch on a change the viewer never made.
   const queryKey = showTypeFilter
-    ? [apiEndpoint, sort, requestedTime, spaceId, typeIdsKey, smartAccountAddress]
-    : [apiEndpoint, sort, requestedTime, spaceId, smartAccountAddress];
+    ? [apiEndpoint, sort, requestedTime, spaceIdsKey, typeIdsKey, smartAccountAddress]
+    : [apiEndpoint, sort, requestedTime, spaceIdsKey, smartAccountAddress];
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
     queryKey,
@@ -198,7 +219,7 @@ export function EntityFeed({
       fetchFeedPage(apiEndpoint, {
         sort,
         time: requestedTime,
-        spaceId,
+        spaceIds: requestedSpaceIds,
         typeIds,
         cursor: pageParam as string | undefined,
       }),
@@ -233,12 +254,47 @@ export function EntityFeed({
     return flat;
   }, [data?.pages]);
 
+  // The space filter, defaulted and driven the same way the debates side panel's is (GEO-2789), by
+  // the same hook — so the two surfaces cannot drift on what "your spaces" means or on what a tick
+  // does. `count` is left off: the feed has no per-space totals to offer, and the menu draws a row
+  // without one rather than a zero.
+  const offeredSpaces = React.useMemo(
+    () => initialSpaceOptions.map(option => ({ id: option.value, name: option.label, count: 0 })),
+    [initialSpaceOptions]
+  );
+
+  const memberSpaces = React.useMemo(
+    () => (memberSpaceIds === undefined ? null : new Set(memberSpaceIds)),
+    [memberSpaceIds]
+  );
+
+  const { onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
+    offeredSpaces,
+    spaceIds,
+    setSpaceIds,
+    memberSpaceIds: memberSpaces,
+    // The options are a server prop rather than a query, so they are never half-arrived here.
+    pending: false,
+  });
+
+  // The menu's own shape. `facetSpaces` is skipped deliberately: it exists to keep a *selected*
+  // option visible after a count drops it, and nothing here drops one — the options are a fixed
+  // list, so a ticked space is always still on it.
+  const spaceMenuOptions = React.useMemo(
+    () => initialSpaceOptions.map(option => ({ value: option.value, label: option.label })),
+    [initialSpaceOptions]
+  );
+
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_OPTIONS.find(o => o.value === sort)?.label ?? sort;
+  // The one name while a single space is ticked, a count past that — the debates panel's wording,
+  // so the two filters read the same way.
   const spaceLabel =
-    selectedSpaceId === 'all'
+    spaceIds.length === 0
       ? 'Any space'
-      : (initialSpaceOptions.find(o => o.value === selectedSpaceId)?.label ?? 'Any space');
+      : spaceIds.length === 1
+        ? (initialSpaceOptions.find(option => option.value === spaceIds[0])?.label ?? 'Any space')
+        : `${spaceIds.length} spaces`;
 
   return (
     <div className="mx-auto w-full max-w-[880px]">
@@ -315,48 +371,15 @@ export function EntityFeed({
           {lockedSpaceId == null || showTypeFilter ? (
             <div className="ml-auto flex items-center gap-3">
               {lockedSpaceId == null ? (
-                <Menu
-                  asChild
-                  open={spaceMenuOpen}
-                  onOpenChange={setSpaceMenuOpen}
-                  sideOffset={8}
-                  className="max-w-60 bg-white"
-                  trigger={
-                    <button
-                      type="button"
-                      className="flex h-6 items-center gap-1.5 rounded border border-grey-02 pr-2 pl-1.5 text-metadata text-grey-04 shadow-button transition-colors duration-150 focus-within:border-text"
-                    >
-                      <span>{spaceLabel}</span>
-                      <span
-                        className={cx('inline-flex transition-transform duration-200', spaceMenuOpen && 'rotate-180')}
-                      >
-                        <ChevronDownSmall color="grey-04" />
-                      </span>
-                    </button>
-                  }
-                >
-                  <MenuItem
-                    active={selectedSpaceId === 'all'}
-                    onClick={() => {
-                      setSelectedSpaceId('all');
-                      setSpaceMenuOpen(false);
-                    }}
-                  >
-                    Any space
-                  </MenuItem>
-                  {initialSpaceOptions.map(o => (
-                    <MenuItem
-                      key={o.value}
-                      active={o.value === selectedSpaceId}
-                      onClick={() => {
-                        setSelectedSpaceId(o.value);
-                        setSpaceMenuOpen(false);
-                      }}
-                    >
-                      {o.label}
-                    </MenuItem>
-                  ))}
-                </Menu>
+                <HubMultiFilterMenu
+                  label={spaceLabel}
+                  options={spaceMenuOptions}
+                  values={spaceIds}
+                  onToggle={onSpaceToggle}
+                  onClear={onSpacesClear}
+                  clearLabel="Any space"
+                  showImages={false}
+                />
               ) : null}
               {showTypeFilter ? (
                 <ExploreTypeFilterMenu
