@@ -15,8 +15,17 @@ import { useValues } from '~/core/sync/use-store';
 import { store } from '~/core/sync/use-sync-engine';
 import { mergeRelationValueTypesFromStore } from '~/core/utils/property/properties';
 
-import { Filter, FilterMode, parseFiltersSync, resolveFilterDisplayNames, toGeoFilterState } from './filters';
+import {
+  Filter,
+  FilterMode,
+  ModesByColumn,
+  mergeModeOverrides,
+  parseFiltersSync,
+  resolveFilterDisplayNames,
+  toGeoFilterState,
+} from './filters';
 import { useDataBlockInstance } from './use-data-block';
+import { useOptimisticFilterModes } from './use-optimistic-filter-modes';
 
 export function useFilters(canEdit?: boolean) {
   const { entityId, spaceId } = useDataBlockInstance();
@@ -48,10 +57,16 @@ export function useFilters(canEdit?: boolean) {
     return null;
   }, [filterTriple]);
 
-  const { filters: filterState, mode: filterMode } = React.useMemo(
+  const { filters: filterState, modesByColumn } = React.useMemo(
     () => parseFiltersSync(geoFilterString),
     [geoFilterString]
   );
+
+  const {
+    modesByColumn: effectiveModesByColumn,
+    modesByColumnRef,
+    setOptimisticModesByColumn,
+  } = useOptimisticFilterModes(modesByColumn);
 
   const [optimisticFilterState, setOptimisticFilterState] = React.useState<Filter[] | null>(null);
 
@@ -109,30 +124,47 @@ export function useFilters(canEdit?: boolean) {
   }, [freshResolvedState]);
 
   const [temporaryFilterOverride, setTemporaryFilterOverride] = React.useState<Filter[] | null>(null);
-  const [temporaryModeOverride, setTemporaryModeOverride] = React.useState<FilterMode | null>(null);
+  const [temporaryModesOverride, setTemporaryModesOverride] = React.useState<ModesByColumn | null>(null);
 
   const temporaryFilters = temporaryFilterOverride ?? effectiveResolvedState;
-  const temporaryFilterMode: FilterMode = temporaryModeOverride ?? filterMode;
+  const temporaryModesByColumn = temporaryModesOverride ?? effectiveModesByColumn;
 
-  const setTemporaryFilters = React.useCallback((filters: Filter[]) => {
-    setTemporaryFilterOverride(filters);
-  }, []);
+  const setTemporaryFilters = React.useCallback(
+    (filters: Filter[], modeOverrides?: ModesByColumn) => {
+      setTemporaryFilterOverride(filters);
+      // Snapshot modes alongside the filters and prune to the columns still
+      // present, mirroring `setFilterState` — without the prune, a read-only
+      // user who sets OR, clears the group and re-adds it silently inherits
+      // the stale OR (see `mergeModeOverrides`).
+      setTemporaryModesOverride(previous =>
+        mergeModeOverrides(
+          previous ?? effectiveModesByColumn,
+          modeOverrides,
+          new Set(filters.map(filter => filter.columnId))
+        )
+      );
+    },
+    [effectiveModesByColumn]
+  );
 
-  const setTemporaryFilterMode = React.useCallback((mode: FilterMode) => {
-    setTemporaryModeOverride(mode);
-  }, []);
+  const setTemporaryGroupMode = React.useCallback(
+    (columnId: string, mode: FilterMode) => {
+      setTemporaryModesOverride(previous => {
+        const next = { ...(previous ?? effectiveModesByColumn) };
+        if (mode === 'AND') delete next[columnId];
+        else next[columnId] = mode;
+        return next;
+      });
+    },
+    [effectiveModesByColumn]
+  );
 
   React.useEffect(() => {
     if (canEdit === true) {
       setTemporaryFilterOverride(null);
-      setTemporaryModeOverride(null);
+      setTemporaryModesOverride(null);
     }
   }, [canEdit]);
-
-  const filterModeRef = React.useRef(filterMode);
-  React.useEffect(() => {
-    filterModeRef.current = filterMode;
-  }, [filterMode]);
 
   const filterStateRef = React.useRef(filterState);
   React.useEffect(() => {
@@ -140,8 +172,8 @@ export function useFilters(canEdit?: boolean) {
   }, [filterState]);
 
   const writeFilterTriple = React.useCallback(
-    (filters: Filter[], mode: FilterMode) => {
-      const newFiltersString = filters.length === 0 && mode === 'AND' ? '' : toGeoFilterState(filters, mode);
+    (filters: Filter[], modes: ModesByColumn) => {
+      const newFiltersString = filters.length === 0 ? '' : toGeoFilterState(filters, modes);
       const entityName = initialBlockEntity?.name ?? '';
 
       storage.values.set({
@@ -167,33 +199,61 @@ export function useFilters(canEdit?: boolean) {
   );
 
   const setFilterState = React.useCallback(
-    (filters: Filter[]) => {
+    /**
+     * `modeOverrides` lets a caller commit filters and their modes in one
+     * write — the filter prompt chooses a mode for chips that do not exist
+     * yet, so writing the mode through a separate setGroupMode call (on a
+     * different hook instance, against a filter list without those chips)
+     * silently dropped it.
+     */
+    (filters: Filter[], modeOverrides?: ModesByColumn) => {
       setOptimisticFilterState(filters);
-      writeFilterTriple(filters, filterModeRef.current);
+      filterStateRef.current = filters;
+      // An AND override removes the column's entry rather than storing an
+      // explicit 'AND', and modes are pruned to the columns still present —
+      // see `mergeModeOverrides`.
+      const nextModes = mergeModeOverrides(
+        modesByColumnRef.current,
+        modeOverrides,
+        new Set(filters.map(filter => filter.columnId))
+      );
+      setOptimisticModesByColumn(nextModes);
+      writeFilterTriple(filters, nextModes);
     },
-    [writeFilterTriple]
+    [modesByColumnRef, setOptimisticModesByColumn, writeFilterTriple]
   );
 
-  const setFilterMode = React.useCallback(
-    (mode: FilterMode) => {
-      filterModeRef.current = mode;
-      writeFilterTriple(filterStateRef.current, mode);
+  const setGroupMode = React.useCallback(
+    (columnId: string, mode: FilterMode) => {
+      const nextModes = { ...modesByColumnRef.current };
+      if (mode === 'AND') delete nextModes[columnId];
+      else nextModes[columnId] = mode;
+      // Prune to committed columns: the serializer drops modes for columns
+      // without filters, so an unprunable entry would never match persisted
+      // state and the optimistic override would be stuck forever, masking
+      // (and later overwriting) modes set through other instances.
+      const presentColumnIds = new Set(filterStateRef.current.map(filter => filter.columnId));
+      const prunedModes: ModesByColumn = Object.fromEntries(
+        Object.entries(nextModes).filter(([id]) => presentColumnIds.has(id))
+      );
+      setOptimisticModesByColumn(prunedModes);
+      writeFilterTriple(filterStateRef.current, prunedModes);
     },
-    [writeFilterTriple]
+    [modesByColumnRef, setOptimisticModesByColumn, writeFilterTriple]
   );
 
   return {
     filterState,
     resolvedFilterState: effectiveResolvedState,
     isFilterResolving,
-    filterMode,
+    modesByColumn: effectiveModesByColumn,
     temporaryFilters,
-    temporaryFilterMode,
+    temporaryModesByColumn,
     filterableProperties: filterableProperties ?? [],
     setFilterState,
-    setFilterMode,
+    setGroupMode,
     setTemporaryFilters,
-    setTemporaryFilterMode,
+    setTemporaryGroupMode,
   };
 }
 

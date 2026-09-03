@@ -663,7 +663,7 @@ async function applySetDataBlockFilters(
     return applyFailed(`block ${intent.blockId} not found in space ${intent.spaceId}`);
   }
 
-  const encoded = intent.filters.length === 0 ? '' : toGeoFilterState(intent.filters, intent.mode);
+  const encoded = intent.filters.length === 0 ? '' : toGeoFilterState(intent.filters, intent.modesByColumn);
 
   storage.values.set({
     spaceId: intent.spaceId,
