@@ -10,7 +10,6 @@ import { parse } from 'graphql';
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
-import { useSearch } from '~/core/hooks/use-search';
 import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
@@ -113,17 +112,14 @@ export const TAGGED_CLAIMS_PAGE_SIZE = 50;
 /** What narrows the list. Every one of these reaches the server. */
 export type TaggedClaimFilters = {
   /**
-   * The claims a search matched, in the order it ranked them — or `null` when nothing is being
-   * searched for.
+   * Free text over the claim's name, matched by the server. Debounced by the caller.
    *
-   * Ids rather than a term, because the search is the app's own (see {@link useTaggedClaimSearch}).
-   * `name: { includesInsensitive }` was a substring match: "nuclear power" did not find "Nuclear
-   * energy is cheap", and no amount of tuning fixes that shape. The search endpoint is fuzzy and
-   * ranked, and it is what every other search box in the app uses.
-   *
-   * An empty array is a real answer — a search that matched nothing — and narrows to nothing.
+   * A substring match, with the limits of one: "nuclear power" will not find "Nuclear energy is
+   * cheap". Routing this through the app's own search — fuzzy, relevance-ranked, the same endpoint
+   * every other search box uses — was tried and reverted: it returned nothing for claims plainly on
+   * the list, twice, for reasons I could not pin down. See GEO-2806. This is what works.
    */
-  searchResultIds: string[] | null;
+  search: string;
   /** AND, not OR: a claim has to carry every picked topic. */
   topicIds: string[];
   /** OR: any of the picked spaces. Left out of the space facet, which must not narrow by itself. */
@@ -139,14 +135,12 @@ export type TaggedClaimFilters = {
 };
 
 export const NO_TAGGED_CLAIM_FILTERS: TaggedClaimFilters = {
-  searchResultIds: null,
+  search: '',
   topicIds: [],
   spaceIds: [],
   eligibleSpaceIds: null,
 };
 
-/** How many search hits are carried into the list. The connection's own ceiling on `first` is 1,000. */
-export const TAGGED_SEARCH_LIMIT = 100;
 
 /** A claim a curator has tagged, and the spaces they tagged it in. */
 export type TaggedClaim = {
@@ -242,9 +236,7 @@ function taggedEntityFilter(tagId: string, filters: TaggedClaimFilters, omit?: '
   }
 
   const filter: Record<string, unknown> = { and };
-  // The search narrows to what it matched, and the order it matched in is applied after decoding —
-  // the connection can rank by score or by id, not by an arbitrary list.
-  if (filters.searchResultIds !== null) filter.id = { in: filters.searchResultIds };
+  if (filters.search) filter.name = { includesInsensitive: filters.search };
 
   // Two space filters with different jobs. The picked one narrows and is what the space facet must
   // *not* apply to itself; the eligible one is what the viewer may see at all, and applies to
@@ -269,7 +261,7 @@ export const taggedClaimsQueryKey = (tagId: string, filters: TaggedClaimFilters)
     'tagged-claims',
     'claims',
     tagId,
-    filters.searchResultIds,
+    filters.search,
     filters.topicIds,
     filters.spaceIds,
     filters.eligibleSpaceIds,
@@ -303,10 +295,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
             propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
             filter: taggedEntityFilter(tagId, filters),
             spaceIds: null,
-            // A search is asked for whole rather than paged: its own order is the answer, and a
-            // page ordered by rank could only be re-ranked within itself. The set is bounded by
-            // `TAGGED_SEARCH_LIMIT`, so "whole" is one request.
-            first: filters.searchResultIds ? Math.max(filters.searchResultIds.length, 1) : TAGGED_CLAIMS_PAGE_SIZE,
+            first: TAGGED_CLAIMS_PAGE_SIZE,
             after: pageParam,
           },
           signal,
@@ -320,16 +309,10 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     enabled,
   });
 
-  const claims = React.useMemo(() => {
-    const pages = query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS;
-    if (!filters.searchResultIds || pages.length === 0) return pages;
-    // Relevance decides the order while a search is on. The whole matched set is in hand, so this
-    // ranks the answer rather than reshuffling a page of it.
-    const rank = new Map(filters.searchResultIds.map((id, index) => [id, index]));
-    return [...pages].sort(
-      (a, z) => (rank.get(a.entity.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(z.entity.id) ?? Number.MAX_SAFE_INTEGER)
-    );
-  }, [filters.searchResultIds, query.data?.pages]);
+  const claims = React.useMemo(
+    () => query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS,
+    [query.data?.pages]
+  );
 
   return {
     claims,
@@ -337,8 +320,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // "still looking" and never show its empty state.
     isLoading: enabled && query.isLoading,
     error: query.error,
-    // A search is answered whole, so there is never a page below it.
-    hasNextPage: filters.searchResultIds ? false : query.hasNextPage,
+    hasNextPage: query.hasNextPage,
     fetchNextPage: query.fetchNextPage,
     isFetchingNextPage: query.isFetchingNextPage,
     refetch: query.refetch,
@@ -428,7 +410,7 @@ export const taggedFacetQueryKey = (
     'facet',
     dimension,
     tagId,
-    filters.searchResultIds,
+    filters.search,
     filters.topicIds,
     // The space facet does not narrow by the picked spaces, so they are not part of its identity.
     dimension === 'spaces' ? null : filters.spaceIds,
@@ -558,62 +540,3 @@ export function useTaggedSpaceFacet(tagId: string, filters: TaggedClaimFilters, 
   };
 }
 
-/* -------------------------------------------------------------------------------------------------
- * Search
- * -----------------------------------------------------------------------------------------------*/
-
-/**
- * The claims a search matched, ranked, from the app's own search.
- *
- * `useSearch` is what every other search box here uses — fuzzy, relevance-ordered, and served by
- * the same endpoint — so a claim list searches the way the rest of the app does rather than the way
- * one filter happened to be written. What it replaced was `name: { includesInsensitive }`, a
- * substring match: "nuclear power" did not find "Nuclear energy is cheap".
- *
- * It debounces internally, so callers hand it the live term and pass the ids to
- * {@link TaggedClaimFilters}. The tag filter still applies on top, which is why this returns ids
- * rather than rows: what the viewer gets is what the search matched *and* a curator tagged.
- *
- * Deliberately not narrowed by `filterByTypes: [CLAIM_TYPE_ID]`, which is the obvious thing to do
- * and is a trap. That filter reaches the store as a raw id comparison — `types: [{ id: { equals }}]`
- * — while the id spellings in play differ by hyphenation, and `searchResultMatchesAllowedTypes`
- * exists in that same module precisely because the two have to be normalized before they match.
- * A filter that silently matches nothing returns an empty search, which is indistinguishable from
- * "no results". The type is implied anyway: only a tagged Claim survives the query these ids feed.
- */
-export function useTaggedClaimSearch(search: string) {
-  const trimmed = search.trim();
-  const { results, isLoading, onQueryChange } = useSearch({
-    pageSize: TAGGED_SEARCH_LIMIT,
-    enabled: trimmed !== '',
-    // The search must not apply a *second* space scope on top of this list's own.
-    //
-    // Its default is the canonical graph plus the spaces the viewer belongs to. These lists are
-    // scoped by the claim allowlist instead, which is a different and wider set — featured spaces
-    // included — so a claim the list shows from a space the viewer has not joined was findable by
-    // browsing and unfindable by typing its name. Searching "Allegations" for a claim on screen
-    // returned nothing, for anyone not already a member of the space it lives in.
-    //
-    // Lifting it here is safe because the narrowing happens downstream: `eligibleSpaceIds` goes out
-    // with the query these ids are handed to, so the viewer still only sees what they may.
-    includeNonCanonical: true,
-  });
-
-  React.useEffect(() => {
-    onQueryChange(search);
-  }, [onQueryChange, search]);
-
-  const ids = React.useMemo(() => results.map(result => result.id), [results]);
-
-  return {
-    /** `null` when nothing is being searched for, which narrows nothing. */
-    searchResultIds: trimmed === '' ? null : ids,
-    /**
-     * True while the term has changed and the match has not caught up.
-     *
-     * Callers wait on this the way they waited on their own debounce: the list is about to change,
-     * and reconciling a selection against a menu counted over the previous match would spend it.
-     */
-    isSearching: trimmed !== '' && isLoading,
-  };
-}

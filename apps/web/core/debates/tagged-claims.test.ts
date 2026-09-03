@@ -6,14 +6,12 @@ import * as React from 'react';
 import * as Effect from 'effect/Effect';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useSearch } from '~/core/hooks/use-search';
 import { graphql } from '~/core/io/graphql-client';
 
 import {
   NO_TAGGED_CLAIM_FILTERS,
   TAGGED_CLAIMS_PAGE_SIZE,
   type TaggedClaimFilters,
-  useTaggedClaimSearch,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -26,9 +24,6 @@ const OTHER_SPACE = '019fedae72b67ab2927adf044d57c599';
 const TOPIC = '5d050707bc5840119b1e81ad3adb6244';
 
 vi.mock('~/core/io/graphql-client', () => ({ graphql: vi.fn() }));
-vi.mock('~/core/hooks/use-search', () => ({
-  useSearch: vi.fn(() => ({ results: [], isLoading: false, onQueryChange: () => {} })),
-}));
 const graphqlMock = graphql as unknown as Mock;
 
 beforeEach(() => {
@@ -209,31 +204,12 @@ describe('the filter it builds', () => {
     });
   });
 
-  it('narrows to what the search matched, and asks for the whole match at once', async () => {
-    // Ids rather than a term: the app's own search is fuzzy and ranked, where
-    // `name: { includesInsensitive }` was a substring match that could not find "Nuclear energy is
-    // cheap" from "nuclear power". Asked for whole because relevance is the order — a page ranked
-    // by score could only ever be re-ranked within itself.
-    respondWithPages([[node('a1', 'One'), node('a2', 'Two')]]);
-    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, searchResultIds: ['a2', 'a1'] });
-    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+  it('sends the search term to the server rather than filtering here', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
 
-    expect(sentVariables().filter.id).toEqual({ in: ['a2', 'a1'] });
-    expect(sentVariables().filter.name).toBeUndefined();
-    expect(sentVariables().first).toBe(2);
-    // Ranked by the search, not by score: 'Two' matched better.
-    expect(result.current.claims.map(claim => claim.entity.name)).toEqual(['Two', 'One']);
-    expect(result.current.hasNextPage).toBe(false);
-  });
-
-  it('narrows to nothing when the search matched nothing', async () => {
-    // An empty array is an answer, not an absent filter.
-    respondWithPages([[]]);
-    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, searchResultIds: [] });
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
-
-    expect(sentVariables().filter.id).toEqual({ in: [] });
-    expect(result.current.claims).toEqual([]);
+    expect(sentVariables().filter.name).toEqual({ includesInsensitive: 'nuclear' });
   });
 
   it('intersects topics rather than uniting them', async () => {
@@ -332,7 +308,7 @@ describe('the facet menus', () => {
       () =>
         useTaggedTopicFacet(
           TAG,
-          { ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC], searchResultIds: ['a1'] },
+          { ...NO_TAGGED_CLAIM_FILTERS, topicIds: [TOPIC], search: 'x' },
           true
         ),
       { wrapper }
@@ -340,7 +316,7 @@ describe('the facet menus', () => {
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
 
     const fromEntity = sentVariables().fromEntity;
-    expect(fromEntity.id).toEqual({ in: ['a1'] });
+    expect(fromEntity.name).toEqual({ includesInsensitive: 'x' });
     expect(
       fromEntity.and.filter((clause: any) => clause.relations?.some?.typeId?.is === '806d52bc27e94c9193c057978b093351')
     ).toHaveLength(1);
@@ -387,43 +363,3 @@ describe('the facet menus', () => {
 });
 
 
-/**
- * The search's own scoping, which is not this list's.
- *
- * `useSearch` defaults to the canonical graph plus the spaces the viewer belongs to. These lists
- * are scoped by the claim allowlist, which is wider — featured spaces included — so a claim on
- * screen from a space the viewer has not joined was findable by browsing and unfindable by typing
- * its name. Found in a browser, on the account that was *not* a member of the space.
- */
-describe('useTaggedClaimSearch', () => {
-  it('lifts the search’s own space restriction, leaving the narrowing to the query', async () => {
-    const { useSearch } = await import('~/core/hooks/use-search');
-    const searchMock = useSearch as unknown as Mock;
-    searchMock.mockReturnValue({ results: [], isLoading: false, onQueryChange: () => {} });
-
-    renderHook(() => useTaggedClaimSearch('allegations'), { wrapper });
-
-    expect(searchMock.mock.calls.at(-1)?.[0]).toMatchObject({ includeNonCanonical: true });
-  });
-
-  it('does not ask the search to filter by type', () => {
-    // `types: [{ id: { equals } }]` reaches the store as a raw comparison while the id spellings
-    // differ by hyphenation — a filter that matches nothing returns an empty search, which reads
-    // exactly like "no results". The type is implied by the tag the query applies downstream.
-    const searchMock = useSearch as unknown as Mock;
-
-    renderHook(() => useTaggedClaimSearch('allegations'), { wrapper });
-
-    expect(searchMock.mock.calls.at(-1)?.[0]).not.toHaveProperty('filterByTypes');
-  });
-
-  it('asks for nothing while the box is empty', () => {
-    const searchMock = useSearch as unknown as Mock;
-
-    const { result } = renderHook(() => useTaggedClaimSearch('   '), { wrapper });
-
-    expect(searchMock.mock.calls.at(-1)?.[0]).toMatchObject({ enabled: false });
-    // `null` narrows nothing; an empty array would narrow to nothing.
-    expect(result.current.searchResultIds).toBeNull();
-  });
-});

@@ -30,7 +30,6 @@ import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../h
 import {
   type TaggedClaim,
   type TaggedClaimFilters,
-  useTaggedClaimSearch,
   useTaggedClaims,
   useTaggedSpaceFacet,
   useTaggedTopicFacet,
@@ -295,19 +294,14 @@ export function ClaimsTab() {
   // set. Without that a topic living only in a space the viewer cannot see is still offered, and
   // picking it returns rows the client then removes — an option that can only produce an empty list
   // (GEO-2653). It is the same list geo-chat's own query is scoped by, for the same reason.
-  // The app's own search rather than a filter of this list's own: fuzzy and relevance-ranked, and
-  // the same endpoint every other search box here uses. It debounces internally, so it takes the
-  // live term.
-  const { searchResultIds, isSearching } = useTaggedClaimSearch(search);
-
   const taggedFilters = React.useMemo<TaggedClaimFilters>(
     () => ({
-      searchResultIds,
+      search: debouncedSearch,
       topicIds: debouncedTopicIds,
       spaceIds,
       eligibleSpaceIds,
     }),
-    [debouncedTopicIds, eligibleSpaceIds, searchResultIds, spaceIds]
+    [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, spaceIds]
   );
 
   // Held while the space gates are still resolving: they pass everything until they land, so asking
@@ -481,9 +475,7 @@ export function ClaimsTab() {
   // rather than the selection. `spacesPending` for the same reason at the other end: the query is
   // not made at all while the gates resolve.
   const facetsSettled = graphSourced
-    ? // `isSearching` for the same reason as the rest: the match is about to change, and a menu
-      // counted over the previous one would spend a selection the new one still offers.
-      !spacesPending && !isSearching && topicFacet.countsSettled && spaceFacet.settled
+    ? !spacesPending && topicFacet.countsSettled && spaceFacet.settled
     : claimsQuery.facetsSettled;
 
   // The space is let go on the condition that actually means "not yours to pick" — the gates
