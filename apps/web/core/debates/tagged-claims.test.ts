@@ -383,8 +383,14 @@ describe('the facet menus', () => {
 
     await waitFor(() => expect(result.current.topics).toHaveLength(1));
     // The aggregate answers in ids; a menu row needs a word, so a second request resolves them.
+    //
+    // And the id comes back out *dashless*, whatever spelling it went in as. These ids become the
+    // viewer's selection, and the selection outlives the source that produced it: a dashed topic id
+    // carried to the opponent tab reaches `carriesEveryTopic`, which compares with `Set.has`
+    // against dashless relation targets — nothing matches, the list empties, and the reconciliation
+    // effect then discards the selection as no longer offered.
     expect(result.current.topics[0]).toEqual({
-      id: '5d050707-bc58-4011-9b1e-81ad3adb6244',
+      id: TOPIC,
       name: `Topic ${TOPIC}`,
       count: 12,
     });

@@ -1077,10 +1077,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               // Search is not like that: every source filters its rows by `debouncedSearch`, so
               // while the box is unsettled the counts describe the pre-typing query wherever they
               // came from. That window is ungated for the same reason the others are gated.
-              // Only the search now. The menus are built from claims already in hand, so a space or
-              // topic tick is answered on the same render — there is no request behind them to be
-              // pending on.
-              countsPending={searchSettling}
+              // Not only the search since GEO-2798. That was true while the menus were built from
+              // claims already in hand — a tick was answered on the same render, with no request
+              // behind it. The tagged sources' menus are their own server requests now, and
+              // `keepPreviousData` deliberately holds the previous filter's numbers rather than
+              // blinking, so without this they read as current for a debounce plus a request.
+              countsPending={
+                searchSettling ||
+                (graphFiltered && (topicsSettling || !taggedTopicFacet.settled || !taggedSpaceFacet.settled))
+              }
               topicAtEnd
               // Only on Claims: the opponent's tab is one fixed source — their own responses — and
               // a menu offering three others there would read as filtering a list it can't reach.

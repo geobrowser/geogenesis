@@ -1984,7 +1984,12 @@ describe('ClaimsTab -- Featured', () => {
     expect(mocks.spaceFacetFiltersAskedFor.at(-1).spaceIds).toEqual(mocks.taggedFiltersAskedFor.at(-1).spaceIds);
   });
 
-  it('never covers its counts with skeletons, having nothing to wait for', async () => {
+  // GEO-2798 review. This used to assert that Featured *never* covered its counts, on the grounds
+  // that its menus were built from a list already in hand and so were right on the same render as
+  // the tick. That stopped being true here: both facets are their own server requests now, and
+  // `keepPreviousData` holds the previous filter's numbers rather than blinking — so the window
+  // between the tick and the new counts is exactly what the skeletons are for.
+  it('covers its counts while a tick is still settling, then uncovers them', async () => {
     mocks.featuredClaims = [featuredClaim(FEATURED_A, 'Nuclear power is the cheapest clean energy', SPACE_ID)];
     mocks.claimEntities = [
       {
@@ -2014,9 +2019,11 @@ describe('ClaimsTab -- Featured', () => {
       fireEvent.click(screen.getByRole('button', { name: /^Grid/ }));
       act(() => void vi.advanceTimersByTime(100));
 
-      expect(screen.queryAllByLabelText('Loading count')).toHaveLength(0);
+      // Mid-debounce: the numbers on screen describe the selection before this tick.
+      expect(screen.queryAllByLabelText('Loading count').length).toBeGreaterThan(0);
 
-      // And still none once everything has settled, so this isn't passing on a race.
+      // And gone once it settles, so the cover is a window rather than a permanent state — which
+      // is the half of the old rule worth keeping.
       act(() => void vi.advanceTimersByTime(500));
       expect(screen.queryAllByLabelText('Loading count')).toHaveLength(0);
     } finally {

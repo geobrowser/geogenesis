@@ -453,12 +453,25 @@ type TaggedFacetQuery = {
 
 export type TaggedFacetCount = { id: string; count: number };
 
+/**
+ * Ids come out of here dashless, which is the spelling everything else in the app speaks.
+ *
+ * `groupedAggregates` answers in dashed UUIDs while entity ids, relation targets and geo-chat rows
+ * are all dashless — and these ids do not stay inside the menu. They become the viewer's selection,
+ * and the selection outlives the source that produced it: switching from a tagged list to the
+ * opponent's tab hands a dashed topic id to `carriesEveryTopic` and `keepSelectableTopics`, which
+ * compare with `Set.has` against dashless relation targets. Nothing matches, so the list empties
+ * and the reconciliation effect then discards the selection as no longer offered.
+ *
+ * Normalized here rather than at each comparison, because there is one boundary and five callers.
+ * The server accepts either spelling on the way back out, which was measured before relying on it.
+ */
 function decodeTaggedFacet(data: TaggedFacetQuery): TaggedFacetCount[] {
   const counts: TaggedFacetCount[] = [];
   for (const group of data.relationsConnection?.groupedAggregates ?? []) {
     const id = group?.keys?.[0];
     if (!id) continue;
-    counts.push({ id, count: Number(group?.distinctCount?.fromEntityId ?? 0) });
+    counts.push({ id: uuidToHex(id), count: Number(group?.distinctCount?.fromEntityId ?? 0) });
   }
   return counts;
 }

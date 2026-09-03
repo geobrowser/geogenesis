@@ -261,8 +261,9 @@ export function ClaimsTab() {
   // Search is the exception, because Featured filters by `debouncedSearch` like every other source
   // does — see `taggedSearched`. Its counts really do describe the pre-typing query for as long
   // as the box is unsettled, so that window has to cover the counts wherever they came from.
-  const countsPending =
-    searchSettling || (!graphSourced && (claimsQuery.countsPending || topicsSettling || spacesSettling));
+  //
+  // The graph path is folded in below, once its facets exist to be asked — see `countsPending`.
+  const indexedCountsPending = !graphSourced && (claimsQuery.countsPending || topicsSettling || spacesSettling);
 
   const serverClaims = React.useMemo(
     () => pages.flatMap(page => page.claims).filter(entry => spaceShowsClaims(entry.claim.space_id)),
@@ -471,6 +472,16 @@ export function ClaimsTab() {
   const facetsSettled = graphSourced
     ? !spacesPending && topicFacet.settled && spaceFacet.settled
     : claimsQuery.facetsSettled;
+
+  // What the menus are showing is a filter the viewer has moved on from, wherever the counts came
+  // from. The paragraph above used to except the graph path on the grounds that its menus were
+  // built from claims already in hand and so were right on the same render as the tick. GEO-2798
+  // ended that: both facets are their own server requests, and `keepPreviousData` deliberately
+  // keeps the previous filter's numbers on screen rather than blinking — which is exactly the
+  // window this flag exists to mark, or the old counts read as current for a debounce plus a
+  // request. `facetsSettled` is the same question these menus already answer with.
+  const countsPending =
+    searchSettling || indexedCountsPending || (graphSourced && (topicsSettling || spacesSettling || !facetsSettled));
 
   // The space is let go on the condition that actually means "not yours to pick" — the gates
   // stopped admitting it — rather than on its absence from the facet.
