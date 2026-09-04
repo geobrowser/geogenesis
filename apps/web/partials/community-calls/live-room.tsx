@@ -41,6 +41,7 @@ import { ChatEntry, usePersistentChat } from '~/core/community-calls/use-persist
 import { useReconnectionState } from '~/core/community-calls/use-reconnection-state';
 import { useRecordingMetadataSync } from '~/core/community-calls/use-recording-metadata-sync';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { setTelemetryUser } from '~/core/telemetry/logger';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
 
 import { Avatar } from '~/design-system/avatar';
@@ -201,6 +202,17 @@ function RoomBody({
   // agreed across the room rather than held locally — see `useCallExtension`.
   const { extensionMs, extend, canExtendFurther } = useCallExtension({ room, canExtend: isActiveEditor });
 
+  // Every Sentry issue on this app reported "Users: 0" — `setTelemetryUser` existed and was
+  // never called from anywhere, so nothing was ever attributed to a person. Without it the
+  // drop telemetry can count episodes but not people, and "11 drops" reads the same whether
+  // it is eleven users once or one user eleven times. Set from the room rather than at
+  // sign-in because that is where this audit needed it; the identity is the participant's
+  // own and stays correct after they leave, so it is not cleared on unmount.
+  const localIdentity = room.localParticipant.identity;
+  React.useEffect(() => {
+    if (localIdentity) setTelemetryUser({ id: localIdentity });
+  }, [localIdentity]);
+
   // Moderation's "stop screen share" only mutes the track server-side, which doesn't
   // stop the browser's own capture (its "you're sharing your screen" indicator stays
   // up) — the moderator's client also sends this data message so the sharer's own
@@ -234,8 +246,9 @@ function RoomBody({
       roomName,
       occurrenceStart,
       role: isViewer ? ('viewer' as const) : ('participant' as const),
+      participantIdentity: localIdentity,
     }),
-    [spaceId, callId, roomName, occurrenceStart, isViewer]
+    [spaceId, callId, roomName, occurrenceStart, isViewer, localIdentity]
   );
 
   // Distinguishes an intentional Leave (CLIENT_INITIATED) — navigate away directly —
