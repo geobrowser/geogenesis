@@ -1,6 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { applyClaimReusePolicy } from './claim-reuse';
 import { DebateNotPublishableError, listSweepCandidateDebateIds, loadDebatePublishSource } from './debate-source';
+
+// The reuse policy needs a graph read and its own flag, both covered in `claim-reuse.test.ts`. Here it
+// passes claims through, so what the loader decodes from geo-chat is observable on the input.
+vi.mock('./claim-reuse', () => ({
+  applyClaimReusePolicy: vi.fn(async (claims: unknown) => claims),
+}));
 
 const DEBATE_ID = '019f89dc2124799193daafd5bc4ffa0a';
 
@@ -176,9 +183,38 @@ describe('loadDebatePublishSource media gating', () => {
     expect(input.transcriptTurns[0].text).toBe('Nuclear program was advancing.');
     // Claims arrive pre-attributed, keyed to the same turn indices.
     expect(input.claims).toEqual([
-      { text: 'The nuclear program was advancing.', isFactual: true, turnIndex: 0 },
-      { text: 'The action was unjustified.', isFactual: false, turnIndex: 1 },
+      { text: 'The nuclear program was advancing.', isFactual: true, turnIndex: 0, existingClaimEntityId: null },
+      { text: 'The action was unjustified.', isFactual: false, turnIndex: 1, existingClaimEntityId: null },
     ]);
+  });
+
+  it('decodes geo-chat’s existing_entity_id and hands the claims to the reuse policy with the debate space', async () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] }, debateBody(), {
+      turns: [
+        { turn_index: 0, participant_slot: 1, attributed_space_id: 'space-1', speaker_name: 'Specter', text: 'Turn.' },
+      ],
+      claims: [
+        {
+          text: 'Matched to a published claim.',
+          is_factual: false,
+          turn_index: 0,
+          existing_entity_id: EXISTING,
+          match: { candidates: 3, best_score: 0.97, judged: true, verdict: 'equivalent' },
+        },
+        { text: 'Blank id means none.', is_factual: null, turn_index: 0, existing_entity_id: '   ' },
+        { text: 'Pre-matching payload shape.', is_factual: null, turn_index: 0 },
+      ],
+    });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+
+    expect((input.claims ?? []).map(claim => claim.existingClaimEntityId)).toEqual([EXISTING, null, null]);
+    expect(vi.mocked(applyClaimReusePolicy)).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ existingClaimEntityId: EXISTING })]),
+      'c9f267dcb0d270718c2a3c45a64afd32',
+      { debateId: DEBATE_ID }
+    );
   });
 
   it('falls back to the raw transcript with no claims when geo-chat reports none', async () => {

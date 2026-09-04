@@ -21,6 +21,7 @@ import {
   mergeTranscriptSegmentsIntoTurns,
 } from '../debate-publish-draft';
 import { hasProcessedVideo } from '../playback-utils';
+import { applyClaimReusePolicy } from './claim-reuse';
 
 const debatePublishSettlementMs = 60_000;
 
@@ -247,7 +248,10 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   // transcript ourselves (and publishing no claims) when claims aren't available yet.
   const extracted = await loadDebateClaims(debateId);
   const transcriptTurns = extracted?.transcriptTurns ?? (await loadTranscriptTurns(debateId, debate));
-  const claims = extracted?.claims ?? [];
+  // geo-chat decided an hour ago which claims duplicate a published one; the policy decides which
+  // of those references the draft may honour now (flag, and the entity still being a Claim in
+  // this space). Everything it drops is minted as before.
+  const claims = await applyClaimReusePolicy(extracted?.claims ?? [], debate.claim.space_id, { debateId });
 
   const participants: DebatePublishParticipant[] = debate.participants.map(p => ({
     spaceEntityId: p.profile_space_id,
@@ -405,7 +409,17 @@ type DebateExtractedClaimsTurn = {
   speaker_name: string | null;
   text: string;
 };
-type DebateExtractedClaimsClaim = { text: string; is_factual: boolean | null; turn_index: number };
+type DebateExtractedClaimsClaim = {
+  text: string;
+  is_factual: boolean | null;
+  turn_index: number;
+  /**
+   * Find-or-create: the published Claim in the debate's space geo-chat judged logically equivalent
+   * to this one, or null/absent when it found none (or matching was off). geo-chat also sends a
+   * `match` audit object next to it, which the publisher does not read.
+   */
+  existing_entity_id?: string | null;
+};
 type DebateExtractedClaimsResponse = { turns: DebateExtractedClaimsTurn[]; claims: DebateExtractedClaimsClaim[] };
 
 /**
@@ -442,6 +456,10 @@ async function loadDebateClaims(
     text: claim.text,
     isFactual: claim.is_factual ?? null,
     turnIndex: claim.turn_index,
+    existingClaimEntityId:
+      typeof claim.existing_entity_id === 'string' && claim.existing_entity_id.trim().length > 0
+        ? claim.existing_entity_id.trim()
+        : null,
   }));
   return { transcriptTurns, claims };
 }
