@@ -91,8 +91,6 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     respond: vi.fn(),
     actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
     responseError: null,
-    // Mirrors the hook: the request offer reads this to decide whether to make itself.
-    requestPosition: { chat: null, local: null, indexingDelayed: false },
     canRespond: answersReady,
   }),
 }));
