@@ -11,9 +11,10 @@ import { useRouter } from 'next/navigation';
 import Textarea from 'react-textarea-autosize';
 
 import { parseAgendaText } from '~/core/community-calls/agenda';
-import { notifyCommunityCallUpdate, reconcileAutoPublish } from '~/core/community-calls/api';
+import { reconcileAutoPublish } from '~/core/community-calls/api';
 import { buildCreateCallOps, buildUpdateCallOps } from '~/core/community-calls/call-ops';
 import { CALL_SCHEMA } from '~/core/community-calls/constants';
+import { notifyScheduleChange } from '~/core/community-calls/notify-schedule-change';
 import { useCommunityCallIdentityToken } from '~/core/community-calls/use-identity-token';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useToast } from '~/core/hooks/use-toast';
@@ -127,12 +128,25 @@ export function CallForm(props: Props) {
         spaceId,
         name: `Update ${name}`,
         onSuccess: async () => {
-          // Fire after the write, not before: the update replaces `meetingTime` rather than
-          // unsetting it, so curator-backend must read the entity post-write to resend an
-          // invite with the *new* schedule — firing earlier would notify subscribers with the
-          // stale pre-edit time.
-          const notifyToken = await getToken();
-          if (notifyToken) await notifyCommunityCallUpdate({ spaceId, callId }, notifyToken).catch(() => {});
+          // Resend the calendar invites, but not from here: curator-backend reads the new time
+          // back out of the indexer, and `onSuccess` only means the user operation was
+          // confirmed on chain. Notifying in that window mails the *old* time with a bumped
+          // SEQUENCE, which is worse than not notifying at all (GEO-2817). `notifyScheduleChange`
+          // waits for the indexer first, so it is detached rather than awaited — an editor
+          // should not sit on this form for the length of an indexing round trip. The toast is
+          // a global atom, so it still reaches them after `router.push` below.
+          void notifyScheduleChange({
+            spaceId,
+            callId,
+            next: schedule,
+            previous: initial?.schedule ?? '',
+            getToken,
+          }).then(result => {
+            if (result.status === 'notified') return;
+            // Say so. Swallowing this is how "the calendar just never updates" became
+            // indistinguishable from "there was nobody to tell".
+            setToast(<>Call saved, but subscribers weren’t sent the new time.</>);
+          });
 
           if (autoPublishAhead > 0) {
             const token = await getToken();
