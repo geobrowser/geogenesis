@@ -14,6 +14,11 @@
  * The debates hub does not use this gate, deliberately. Its match data and `create_debate_request_as`
  * both read `debate_claim_readiness`, which the in-flight response notification writes, so a
  * graph-backed position check there would hold a button the server would have accepted.
+ *
+ * That was tried, in #2354, and reverted. Wiring this into `ClaimEndSlot` re-asked a question
+ * `match` had already answered, using a field that can disagree with it — so a viewer with a live
+ * match and no `viewer_response` got a rendered, permanently disabled "Request debate" with nothing
+ * saying why. The warning above and the one in `claim-end-slot.tsx` both predate that attempt.
  */
 export type DebateRequestGateInput = {
   /**
@@ -64,8 +69,8 @@ export function debateRequestGate({
   const positionSettled = held && chatPosition === localPosition;
   // Waiting means something is actually in flight. A viewer who has not answered at all is not
   // waiting for anything, and saying "Publishing your position…" at them names work nobody
-  // started — which is what this did on the hub, where the opponent half does not already
-  // require a position the way the picker's `opposing` does.
+  // started. The picker's `opposing` already requires a position, so this is unreachable from the
+  // one caller — it is guarded for any future caller whose opponent half does not.
   const pending = opponentReady && held && !positionSettled;
 
   return {
