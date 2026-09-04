@@ -15,6 +15,8 @@ import { EntityFeed } from './entity-feed';
 
 const mocks = vi.hoisted(() => ({
   queryOptions: null as Record<string, unknown> | null,
+  /** Every key the feed has subscribed under, so a test can see what it asked for *first*. */
+  queryKeys: [] as unknown[][],
   fetch: vi.fn(),
   /** Pages the mocked infinite query hands back, so a test can put a card on the page. */
   pages: null as { items: Record<string, unknown>[] }[] | null,
@@ -40,6 +42,7 @@ function createLocalStorage(): Storage {
 vi.mock('@tanstack/react-query', () => ({
   useInfiniteQuery: (options: Record<string, unknown>) => {
     mocks.queryOptions = options;
+    mocks.queryKeys.push(options.queryKey as unknown[]);
     return {
       data: mocks.pages ? { pages: mocks.pages } : undefined,
       isLoading: false,
@@ -81,6 +84,7 @@ beforeEach(() => {
   mocks.queryOptions = null;
   mocks.pages = null;
   mocks.cardProps = null;
+  mocks.queryKeys = [];
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [], nextCursor: null }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -367,5 +371,93 @@ describe('EntityFeed Explore type filter', () => {
 
       expect(mocks.cardProps?.titleOpensSidePanel).toBe(false);
     });
+  });
+});
+
+/**
+ * GEO-2789, the explore half. The feed used to open unfiltered over every space the reader may
+ * see — featured ones included, which say nothing about who is asking. It opens on theirs now,
+ * with the rest still on the menu to widen back to, and the same multi-select the debates side
+ * panel uses so the two filters read and behave alike.
+ */
+describe('the space filter', () => {
+  const OPTIONS = [
+    { value: 'space-featured', label: 'Crypto' },
+    { value: 'space-mine', label: 'Relationships' },
+    { value: 'space-pending', label: 'US Politics' },
+  ];
+
+  function renderFeed(memberSpaceIds?: string[]) {
+    return render(
+      <EntityFeed
+        apiEndpoint="/api/explore/feed"
+        initialSpaceOptions={OPTIONS}
+        memberSpaceIds={memberSpaceIds}
+        showSortFilter
+      />
+    );
+  }
+
+  /** The trigger, which the mocked Menu renders alongside the options. */
+  const spaceTrigger = () => screen.getAllByRole('button', { name: /Any space|Relationships|spaces$/ })[0];
+
+  const sentSpaceIds = async () => new URLSearchParams((await requestedUrl()).split('?')[1]).get('spaceIds');
+
+  it('opens on the spaces the reader belongs to', async () => {
+    renderFeed(['space-mine']);
+
+    expect(await sentSpaceIds()).toBe('space-mine');
+  });
+
+  // A membership the reader has asked for is one of theirs: they chose it at sign-up, and nothing
+  // should lurch when the approval lands.
+  // The default is applied in the feed's own initial state rather than by the hook's effect, because
+  // both sides are server props here and the answer is already in hand. Starting empty would
+  // subscribe to the unfiltered query, fire that request, and only then narrow — two requests on
+  // every load, with the wide feed on screen in between.
+  it('never subscribes to the unfiltered feed on the way to the default', () => {
+    renderFeed(['space-mine']);
+
+    expect(mocks.queryKeys.length).toBeGreaterThan(0);
+    for (const key of mocks.queryKeys) expect(key).toContain('space-mine');
+  });
+
+  it('counts a pending membership as one of theirs', async () => {
+    renderFeed(['space-mine', 'space-pending']);
+
+    expect((await sentSpaceIds())?.split(',').sort()).toEqual(['space-mine', 'space-pending']);
+  });
+
+  // The fallback, and the case every signed-out reader is in.
+  it('shows everything when the reader belongs to none of the spaces on offer', async () => {
+    renderFeed([]);
+
+    expect(await sentSpaceIds()).toBeNull();
+    expect(spaceTrigger().textContent).toContain('Any space');
+  });
+
+  it('holds the default while their memberships are still unknown', async () => {
+    // Undefined is not empty: spending the default on a viewer whose spaces had not arrived would
+    // land them on the fallback for the whole visit.
+    renderFeed(undefined);
+
+    expect(await sentSpaceIds()).toBeNull();
+  });
+
+  it('lets the reader widen to a featured space they have not joined', async () => {
+    renderFeed(['space-mine']);
+
+    pickOption('Crypto');
+
+    expect((await sentSpaceIds())?.split(',').sort()).toEqual(['space-featured', 'space-mine']);
+  });
+
+  it('clears back to every space, and the default does not put theirs back', async () => {
+    renderFeed(['space-mine']);
+    expect(await sentSpaceIds()).toBe('space-mine');
+
+    pickOption('Any space');
+
+    expect(await sentSpaceIds()).toBeNull();
   });
 });

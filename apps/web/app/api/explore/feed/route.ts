@@ -38,7 +38,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const sort = parseSort(searchParams.get('sort'));
   const time = parseTime(searchParams.get('time'));
-  const spaceId = searchParams.get('spaceId');
+  // A list since GEO-2789's explore half. `spaceId` is still read so an older client, or a link
+  // someone kept, still narrows to the one space it names.
+  const spaceIdsParam = searchParams.get('spaceIds') ?? searchParams.get('spaceId');
   const cursor = searchParams.get('cursor');
   const typeIds = parseExploreTypeIdsParam(searchParams.get('typeIds'));
 
@@ -80,11 +82,17 @@ export async function GET(request: Request) {
     }
   }
 
-  let spaceFilter: string | null = null;
-  if (spaceId && spaceId !== 'all') {
-    const want = normId(spaceId);
-    const match = [...browse.featured, ...browse.editorOf, ...browse.memberOf].find(r => normId(r.id) === want);
-    if (match) spaceFilter = match.id;
+  // Only spaces this reader may see, whatever they asked for. `all` and an empty parameter both
+  // mean no narrowing; so does a list that matches nothing they can see, because a filter naming
+  // only spaces they cannot see is a request we have no honest way to answer and an empty feed is
+  // the wrong answer to it.
+  let spaceFilter: string[] | null = null;
+  if (spaceIdsParam && spaceIdsParam !== 'all') {
+    const wanted = new Set(spaceIdsParam.split(',').map(normId).filter(Boolean));
+    const visible = [...browse.featured, ...browse.editorOf, ...browse.memberOf]
+      .filter(row => wanted.has(normId(row.id)))
+      .map(row => row.id);
+    if (visible.length > 0) spaceFilter = visible;
   }
 
   try {
@@ -92,7 +100,7 @@ export async function GET(request: Request) {
       browse,
       sort,
       time,
-      spaceFilterId: spaceFilter,
+      spaceFilterIds: spaceFilter,
       cursor,
       walletAddress: cookieWallet ?? null,
       memberOrEditorSpaceIds,

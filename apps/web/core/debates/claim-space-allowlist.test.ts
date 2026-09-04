@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
+import { normId } from '~/core/utils/norm-id';
 
 import {
   browseSidebarClaimSpaceAllowlist,
+  browseSidebarMemberSpaceIds,
   buildClaimSpaceAllowlist,
+  buildMemberSpaceIds,
   isClaimSpaceAllowed,
 } from './claim-space-allowlist';
 
@@ -34,9 +37,12 @@ describe('buildClaimSpaceAllowlist', () => {
     expect(isClaimSpaceAllowed(STRANGER, allowlist)).toBe(false);
   });
 
-  // A pending row is a space the viewer asked to join, not one they belong to — the same line
-  // `useGlobalSearchSpaceIds` draws off these lists.
-  it('leaves out spaces whose membership or editorship is only requested', () => {
+  // Requested counts as theirs, which is a wider line than `useGlobalSearchSpaceIds` draws off the
+  // same lists. Sign-up collects the viewer's spaces before any approval exists,
+  // so a new account has nothing else for its first few minutes — and excluding these left it
+  // looking at a panel with none of the spaces it had just chosen, which then filled in on its own
+  // once the approvals landed.
+  it('covers spaces whose membership or editorship is only requested', () => {
     const allowlist = buildClaimSpaceAllowlist({
       featured: [],
       editorOf: [row(PENDING, { pendingLabel: 'Editorship pending' })],
@@ -44,8 +50,8 @@ describe('buildClaimSpaceAllowlist', () => {
       personalSpaceId: null,
     });
 
-    expect(isClaimSpaceAllowed(PENDING, allowlist)).toBe(false);
-    expect(isClaimSpaceAllowed(MEMBER, allowlist)).toBe(false);
+    expect(isClaimSpaceAllowed(PENDING, allowlist)).toBe(true);
+    expect(isClaimSpaceAllowed(MEMBER, allowlist)).toBe(true);
   });
 
   // Featured ids arrive UUID-formatted and claim rows carry canonical hex, so a raw comparison
@@ -106,5 +112,53 @@ describe('isClaimSpaceAllowed', () => {
   it('rejects a claim with no home space once the allowlist is known', () => {
     expect(isClaimSpaceAllowed(null, new Set([FEATURED]))).toBe(false);
     expect(isClaimSpaceAllowed('', new Set([FEATURED]))).toBe(false);
+  });
+});
+
+// GEO-2789. The space filter defaults to what the viewer belongs to, which is the allowlist minus
+// the part of it that is on offer to everybody.
+describe('buildMemberSpaceIds', () => {
+  it('covers the spaces the viewer belongs to, and their own', () => {
+    const mine = buildMemberSpaceIds({
+      editorOf: [row(EDITOR)],
+      memberOf: [row(MEMBER)],
+      personalSpaceId: PERSONAL,
+    });
+
+    expect([...mine].sort()).toEqual([EDITOR, MEMBER, PERSONAL].map(normId).sort());
+  });
+
+  // The difference from the allowlist, and the whole point of a second function: a featured space
+  // is one the viewer may browse, not one that is theirs, so defaulting the filter to it would
+  // answer a question about them with a list about everyone.
+  it('leaves out featured spaces, which the allowlist includes', () => {
+    const data = {
+      featured: [row(FEATURED)],
+      editorOf: [row(EDITOR)],
+      memberOf: [],
+      personalSpaceId: PERSONAL,
+    } as unknown as BrowseSidebarData;
+
+    expect(browseSidebarClaimSpaceAllowlist(data, PERSONAL).has(normId(FEATURED))).toBe(true);
+    expect(browseSidebarMemberSpaceIds(data, PERSONAL).has(normId(FEATURED))).toBe(false);
+    expect(browseSidebarMemberSpaceIds(data, PERSONAL).has(normId(EDITOR))).toBe(true);
+  });
+
+  // The default has to reach them for the same reason the allowlist does: a new account's spaces
+  // are all pending at once, and a default that skipped them would open on everything for exactly
+  // the viewers it exists for.
+  it('counts spaces the viewer has asked to join', () => {
+    const mine = buildMemberSpaceIds({
+      editorOf: [],
+      memberOf: [row(MEMBER), row(PENDING, { pendingLabel: 'Membership pending' })],
+      personalSpaceId: null,
+    });
+
+    expect(mine.has(normId(PENDING))).toBe(true);
+    expect(mine.has(normId(MEMBER))).toBe(true);
+  });
+
+  it('is empty for a viewer who belongs to nothing, which is the fallback case', () => {
+    expect(buildMemberSpaceIds({ editorOf: [], memberOf: [], personalSpaceId: null }).size).toBe(0);
   });
 });

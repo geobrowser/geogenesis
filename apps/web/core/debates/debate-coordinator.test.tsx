@@ -92,7 +92,6 @@ vi.mock('./matchmaking/hooks', () => ({
   useAcceptDebateRequest: () => ({ mutate: mocks.acceptRequestMutate, isPending: false, error: null }),
   useDismissDebateRequest: () => ({ mutate: mocks.dismissRequestMutate, isPending: false, error: null }),
   useBlockDebateUser: () => ({ mutate: mocks.blockUserMutate, isPending: false, error: null }),
-  useClaimReadiness: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
 // useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These

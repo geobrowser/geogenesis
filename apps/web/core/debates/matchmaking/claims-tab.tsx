@@ -38,15 +38,16 @@ import {
 import { useClaimSpaceAllowlist } from '../use-claim-space-allowlist';
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useDebateRequests } from './hooks';
-import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
+import { HubFilterMenu, type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { keepSelectableTopics, keepSelectedVisible, orderFacetOptions, toggleId } from './topic-facets';
+import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
 import { useScopedMatchmakingClaims } from './use-scoped-claims';
+import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 
 /**
@@ -160,7 +161,7 @@ export function ClaimsTab() {
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [topicIds, setTopicIds] = React.useState<string[]>([]);
 
-  const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
+  const { allowlist: spaceAllowlist, memberSpaceIds, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
 
   // Until the allowlist settles there is no telling an allowed space from one the viewer has
   // nothing to do with, so the tab waits instead of showing the unfiltered set and trimming it
@@ -430,12 +431,48 @@ export function ClaimsTab() {
   //
   // Filtered by the publishability gate on the way out: the server knows the viewer's allowlist,
   // because it was sent, but not which spaces can carry a published debate.
-  const facetSpaces = React.useMemo(() => {
-    const source = graphSourced
-      ? spaceFacet.spaces.filter(space => spaceShowsClaims(space.id)).map(space => ({ ...space, name: null }))
-      : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id));
-    return orderFacetOptions(keepSelectedVisible(source, spaceIds), spaceIds);
-  }, [facets?.space_facets, graphSourced, spaceFacet.spaces, spaceIds, spaceShowsClaims]);
+  //
+  // Split from `facetSpaces` below because the default is seeded from exactly this list, before the
+  // viewer's own selection is folded back in — and from this list rather than the eligible set,
+  // which is the wider and more obvious source.
+  //
+  // Not for the id shapes: those agreed once GEO-2798 normalized the facet's keys, and `normId` and
+  // `uuidToHex` are the same function. It is that this list is the spaces that actually *have*
+  // claims. Seeding from the eligible set would tick a space the viewer belongs to and the tag has
+  // nothing in, landing them on an empty list behind a filter they never set. The cost is a second
+  // request — the list loads unfiltered, then again narrowed — which is the price of not defaulting
+  // to nothing.
+  const offeredSpaces = React.useMemo(
+    () =>
+      graphSourced
+        ? spaceFacet.spaces.filter(space => spaceShowsClaims(space.id)).map(space => ({ ...space, name: null }))
+        : (facets?.space_facets ?? []).filter(facet => spaceShowsClaims(facet.id)),
+    [facets?.space_facets, graphSourced, spaceFacet.spaces, spaceShowsClaims]
+  );
+
+  // Settled when the *counts* have answered, which is what a selection is reconciled against — the
+  // names arrive separately and a topic does not stop existing while its label is in flight.
+  //
+  // A failed lookup is not a settled one: an error leaves the menu empty while `isLoading` goes
+  // false, and the reconciliation below reads a settled, empty menu as "these topics no longer
+  // exist" and drops the viewer's selection. Held unsettled instead, so an outage costs the list
+  // rather than the selection. `spacesPending` for the same reason at the other end: the query is
+  // not made at all while the gates resolve.
+  const facetsSettled = graphSourced
+    ? !spacesPending && topicFacet.settled && spaceFacet.settled
+    : claimsQuery.facetsSettled;
+
+  // The menu, and the handlers that drive it. Defaults to the spaces the viewer belongs to
+  // (GEO-2789) and is held until the menu has finished arriving as well as the gates: the seed
+  // fires once, so taking it against a half-built list leaves a member space that turned up a
+  // moment later unselected for the visit.
+  const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
+    offeredSpaces,
+    spaceIds,
+    setSpaceIds,
+    memberSpaceIds,
+    pending: spacesPending || !facetsSettled,
+  });
 
   // The server re-sorts on every readiness change, so hold the order the user is looking at until
   // they ask for a different list.
@@ -460,18 +497,6 @@ export function ClaimsTab() {
     const source = graphSourced ? topicFacet.topics : (facets?.topic_facets ?? []);
     return orderFacetOptions(source, topicIds);
   }, [facets?.topic_facets, graphSourced, topicFacet.topics, topicIds]);
-
-  // Settled when the *counts* have answered, which is what a selection is reconciled against — the
-  // names arrive separately and a topic does not stop existing while its label is in flight.
-  //
-  // A failed lookup is not a settled one: an error leaves the menu empty while `isLoading` goes
-  // false, and the reconciliation below reads a settled, empty menu as "these topics no longer
-  // exist" and drops the viewer's selection. Held unsettled instead, so an outage costs the list
-  // rather than the selection. `spacesPending` for the same reason at the other end: the query is
-  // not made at all while the gates resolve.
-  const facetsSettled = graphSourced
-    ? !spacesPending && topicFacet.settled && spaceFacet.settled
-    : claimsQuery.facetsSettled;
 
   // What the menus are showing is a filter the viewer has moved on from, wherever the counts came
   // from. The paragraph above used to except the graph path on the grounds that its menus were
@@ -560,8 +585,8 @@ export function ClaimsTab() {
 
         <SpaceTopicFilters
           spaceIds={spaceIds}
-          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-          onSpacesClear={() => setSpaceIds([])}
+          onSpaceToggle={onSpaceToggle}
+          onSpacesClear={onSpacesClear}
           topicIds={topicIds}
           onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
           onTopicsClear={() => setTopicIds([])}
@@ -636,7 +661,9 @@ export function ClaimsTab() {
                   onClick: () => {
                     setSearch('');
                     if (!graphSourced) setFilter('all');
-                    setSpaceIds([]);
+                    // The menu's own clear row, so this counts as choosing the unfiltered list and
+                    // the default cannot put its spaces back.
+                    onSpacesClear();
                     setTopicIds([]);
                   },
                 }
@@ -845,14 +872,4 @@ export function SpaceTopicFilters({
       ) : null}
     </div>
   );
-}
-
-/**
- * What the trigger pill says. One selection reads as its own name — the useful case, and the one
- * the viewer is most often in — while several collapse to a count, because two names rarely fit
- * and a truncated pair reads as one bad name.
- */
-function pickerLabel(count: number, empty: string, single: () => string, many: (count: number) => string) {
-  if (count === 0) return empty;
-  return count === 1 ? single() : many(count);
 }
