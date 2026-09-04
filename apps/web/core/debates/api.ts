@@ -314,6 +314,20 @@ export type DebateRematchClaim = {
    */
   viewer_debate_ready?: boolean;
   readiness_disabled_reason?: string | null;
+  /**
+   * The viewer's own position, as geo-chat holds it: the live knowledge-graph resolution when one
+   * ran, falling back to the readiness row when it did not.
+   *
+   * Prefer this over the viewer's entry in `participants`, which is graph-only. That resolve sits
+   * behind a timeout on geo-chat's side, and when it lapses every `participants` position comes
+   * back null — which reads as "no position held" and disables every Request button on the page.
+   * This field is the same precedence the per-space `debate-claims` list has always used.
+   *
+   * `undefined` means the backend predates the field, which is distinct from `null` meaning no
+   * position — hence the explicit `undefined` check at the reader rather than `??`.
+   */
+  viewer_position?: boolean | null;
+  viewer_position_label?: string | null;
 };
 
 export type DebateRematchClaimsResponse = {
