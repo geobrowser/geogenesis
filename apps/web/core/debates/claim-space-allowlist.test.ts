@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
+import { type RequestedMembershipSpace } from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
 
 import {
+  REQUESTED_MEMBERSHIP_SETTLE_MS,
+  awaitsRequestedMembership,
   browseSidebarClaimSpaceAllowlist,
   browseSidebarMemberSpaceIds,
   buildClaimSpaceAllowlist,
@@ -21,6 +24,7 @@ const MEMBER = '019fedae-72b6-7ab2-927a-df044d57c568';
 const PENDING = '019fedae-72b6-7ab2-927a-df044d57c569';
 const PERSONAL = '019fedae-72b6-7ab2-927a-df044d57c570';
 const STRANGER = '019fedae-72b6-7ab2-927a-df044d57c571';
+const WALLET = '0x1234567890abcdef1234567890abcdef12345678';
 
 describe('buildClaimSpaceAllowlist', () => {
   it('covers featured spaces and the spaces the viewer belongs to', () => {
@@ -160,5 +164,103 @@ describe('buildMemberSpaceIds', () => {
 
   it('is empty for a viewer who belongs to nothing, which is the fallback case', () => {
     expect(buildMemberSpaceIds({ editorOf: [], memberOf: [], personalSpaceId: null }).size).toBe(0);
+  });
+});
+
+// GEO-2815. A membership request reaches the indexer about a minute after the transaction, so the
+// payload fetched at the moment of writing answers a question that has already changed — and
+// nothing asked again until a remount or a tab refocus, which in practice meant a hard refresh.
+describe('awaitsRequestedMembership', () => {
+  const NOW = 1_700_000_000_000;
+
+  function requested(id: string, overrides: Partial<RequestedMembershipSpace> = {}): RequestedMembershipSpace {
+    return { id, ownerId: PERSONAL, requestedAt: NOW - 1_000, ...overrides };
+  }
+
+  function data(overrides: Partial<BrowseSidebarData> = {}): BrowseSidebarData {
+    return {
+      featured: [row(FEATURED)],
+      editorOf: [],
+      memberOf: [],
+      personalSpaceId: PERSONAL,
+      ...overrides,
+    } as unknown as BrowseSidebarData;
+  }
+
+  const awaits = (requestedSpaces: RequestedMembershipSpace[], sidebar: BrowseSidebarData | undefined) =>
+    awaitsRequestedMembership({
+      requestedSpaces,
+      personalSpaceId: PERSONAL,
+      walletAddress: null,
+      data: sidebar,
+      now: NOW,
+    });
+
+  it('waits while a request the viewer just made is missing from the payload', () => {
+    expect(awaits([requested(PENDING)], data())).toBe(true);
+  });
+
+  it('stops once the payload reports it', () => {
+    const sidebar = data({ memberOf: [row(PENDING, { pendingLabel: 'Membership pending' })] });
+
+    expect(awaits([requested(PENDING)], sidebar)).toBe(false);
+  });
+
+  it('does not wait when the viewer has made no request', () => {
+    expect(awaits([], data())).toBe(false);
+  });
+
+  // The bound on a request that never lands, and it has to be much tighter than the bridge's own
+  // five-minute TTL: a rejected or vote-ended proposal is dropped by `fetchPendingMembershipSpaceIds`
+  // outright, so it can never arrive, and every tick spent waiting is a full sidebar payload while
+  // the filter sits open on nothing.
+  it('gives up on a request that has passed the settle window', () => {
+    const stale = requested(PENDING, { requestedAt: NOW - REQUESTED_MEMBERSHIP_SETTLE_MS - 1 });
+
+    expect(awaits([stale], data())).toBe(false);
+  });
+
+  it('is still waiting just inside the settle window', () => {
+    const recent = requested(PENDING, { requestedAt: NOW - REQUESTED_MEMBERSHIP_SETTLE_MS + 1_000 });
+
+    expect(awaits([recent], data())).toBe(true);
+  });
+
+  // The window the whole ticket is about, and the one case that must NOT poll: onboarding seeds
+  // bridge entries under the wallet address before the personal space exists, while its own
+  // membership requests are still queued behind that space being created. There is nothing for the
+  // server to report yet, and on this branch the query is a server action.
+  it('does not wait before the viewer has a personal space', () => {
+    const seeded: RequestedMembershipSpace = { id: PENDING, ownerId: WALLET, requestedAt: NOW - 1_000 };
+
+    expect(
+      awaitsRequestedMembership({
+        requestedSpaces: [seeded],
+        personalSpaceId: null,
+        walletAddress: WALLET,
+        data: undefined,
+        now: NOW,
+      })
+    ).toBe(false);
+  });
+
+  // A featured space is what sign-up offers, so a request for one is the ordinary case. Comparing
+  // against the allowlist rather than the viewer's own spaces would read it as already answered.
+  it('waits for a request whose space is also featured', () => {
+    expect(awaits([requested(FEATURED)], data())).toBe(true);
+  });
+
+  it('does not wait when there is no request and no payload either', () => {
+    expect(awaits([], undefined)).toBe(false);
+  });
+
+  it('treats a payload that has not arrived as still owing', () => {
+    expect(awaits([requested(PENDING)], undefined)).toBe(true);
+  });
+
+  // A request belonging to a different account says nothing about this viewer, and waiting on it
+  // would poll for the rest of the bridge's life.
+  it('ignores a request made by another account', () => {
+    expect(awaits([requested(PENDING, { ownerId: STRANGER })], data())).toBe(false);
   });
 });

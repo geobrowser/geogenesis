@@ -8,6 +8,7 @@ import cx from 'classnames';
 
 import { HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { memberSpaceSelection, useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
+import { useClaimSpaceAllowlist } from '~/core/debates/use-claim-space-allowlist';
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPE_IDS } from '~/core/explore/explore-constants';
 import {
   EXPLORE_TYPE_FILTER_STORAGE_KEY,
@@ -272,18 +273,51 @@ export function EntityFeed({
     [initialSpaceOptions]
   );
 
-  const memberSpaces = React.useMemo(
-    () => (memberSpaceIds === undefined ? null : new Set(memberSpaceIds)),
-    [memberSpaceIds]
-  );
+  // The prop is what the viewer's spaces were when the page was *rendered*, which for someone who
+  // has just signed up is before they had any: their personal space takes 30s-3min to land and the
+  // membership requests behind their sign-up picks are fired after it, so the server answers with
+  // an empty set and the filter opens on nothing — the unfiltered feed, over every featured space
+  // (GEO-2815). Nothing then moved it, because a server prop cannot: the requests landed a minute
+  // later and only a hard refresh re-rendered the page that computes it.
+  //
+  // So the prop seeds the first paint and the live query takes over the moment it answers. Same
+  // value, same helper, same sidebar payload the server read — this is the client's copy of it,
+  // shared with the debates surfaces rather than fetched again, and it refreshes when a membership
+  // request is published (see `requestSpaceMembership`).
+  //
+  // `useMemberSpaceDefault` is already written for a late answer: its seed is spent on a match, so
+  // an empty first answer leaves it armed and the real one applies when it arrives. A viewer who
+  // touches the filter before then forfeits it, which is the behaviour that makes this a default
+  // rather than a policy.
+  const {
+    memberSpaceIds: liveMemberSpaceIds,
+    isSettlingMemberships,
+    isLoading: memberSpacesLoading,
+  } = useClaimSpaceAllowlist(lockedSpaceId == null);
+
+  // The union of the two, not the live one in place of the prop. Neither is reliably the fresher:
+  // the prop was computed during *this* render of the page, while the live value can be a cache
+  // entry up to a minute old that the sidebar filled on another route — so a reader who joined a
+  // space and navigated here would have had the space in the prop and missing from the cache, and
+  // preferring the cache would seed the default without it. Both lists answer "spaces that are
+  // mine", so a union can only be too generous, and too generous means one extra box ticked in a
+  // menu the reader can edit.
+  const memberSpaces = React.useMemo(() => {
+    if (liveMemberSpaceIds === null && memberSpaceIds === undefined) return null;
+    return new Set([...(liveMemberSpaceIds ?? []), ...(memberSpaceIds ?? [])]);
+  }, [liveMemberSpaceIds, memberSpaceIds]);
 
   const { onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
     offeredSpaces,
     spaceIds,
     setSpaceIds,
     memberSpaceIds: memberSpaces,
-    // The options are a server prop rather than a query, so they are never half-arrived here.
-    pending: false,
+    // The *options* are a server prop and are never half-arrived. The viewer's spaces are, and the
+    // seed is spent on the first non-empty match — so reporting anything but the truth here spends
+    // it on a fraction of the answer. Sign-up sends one membership proposal per picked space and
+    // they land seconds apart: a reader who picked three spaces would otherwise be pinned to
+    // whichever indexed first, with the other two silently dropped.
+    pending: memberSpacesLoading || isSettlingMemberships,
   });
   // The hook's `facetSpaces` is deliberately unused. It keeps a *selected* option visible after a
   // count drops it and orders by that count — neither of which applies to a fixed server-rendered

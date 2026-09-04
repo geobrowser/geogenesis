@@ -22,6 +22,12 @@ const mocks = vi.hoisted(() => ({
   pages: null as { items: Record<string, unknown>[] }[] | null,
   /** Props the last rendered card received. */
   cardProps: null as Record<string, unknown> | null,
+  /** The viewer's spaces as the live query answers them; null until it does. */
+  liveMemberSpaceIds: null as Set<string> | null,
+  /** Whether a request the viewer made is still missing from that answer. */
+  isSettlingMemberships: false,
+  /** What the feed asked the allowlist hook for. */
+  allowlistEnabled: undefined as boolean | undefined,
 }));
 
 function createLocalStorage(): Storage {
@@ -50,6 +56,18 @@ vi.mock('@tanstack/react-query', () => ({
       fetchNextPage: vi.fn(),
       hasNextPage: false,
       error: null,
+    };
+  },
+}));
+
+vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
+  useClaimSpaceAllowlist: (enabled?: boolean) => {
+    mocks.allowlistEnabled = enabled;
+    return {
+      allowlist: null,
+      memberSpaceIds: mocks.liveMemberSpaceIds,
+      isLoading: false,
+      isSettlingMemberships: mocks.isSettlingMemberships,
     };
   },
 }));
@@ -85,6 +103,9 @@ beforeEach(() => {
   mocks.pages = null;
   mocks.cardProps = null;
   mocks.queryKeys = [];
+  mocks.liveMemberSpaceIds = null;
+  mocks.isSettlingMemberships = false;
+  mocks.allowlistEnabled = undefined;
   mocks.fetch.mockReset();
   mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [], nextCursor: null }) });
   vi.stubGlobal('fetch', mocks.fetch);
@@ -442,6 +463,79 @@ describe('the space filter', () => {
     renderFeed(undefined);
 
     expect(await sentSpaceIds()).toBeNull();
+  });
+
+  // GEO-2815. The prop is what their spaces were when the page was rendered, and a reader who has
+  // just signed up is rendered before they have any: the personal space takes minutes to land and
+  // the requests behind their sign-up picks are fired after it. The filter opened on nothing — the
+  // unfiltered feed over every featured space — and a server prop cannot move, so it stayed there
+  // until a hard refresh.
+  it('applies the default when their memberships arrive after the page was rendered', async () => {
+    const { rerender } = renderFeed([]);
+    expect(await sentSpaceIds()).toBeNull();
+
+    mocks.liveMemberSpaceIds = new Set(['space-pending']);
+    rerender(
+      <EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={OPTIONS} memberSpaceIds={[]} showSortFilter />
+    );
+
+    await waitFor(async () => expect(await sentSpaceIds()).toBe('space-pending'));
+  });
+
+  // The seed is spent on a match, so a reader who acted before their memberships landed keeps what
+  // they asked for. Without this the late answer would be a policy rather than a default.
+  it('leaves a reader who has already touched the filter alone', async () => {
+    const { rerender } = renderFeed([]);
+    pickOption('Crypto');
+    expect(await sentSpaceIds()).toBe('space-featured');
+
+    mocks.liveMemberSpaceIds = new Set(['space-pending']);
+    rerender(
+      <EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={OPTIONS} memberSpaceIds={[]} showSortFilter />
+    );
+
+    expect(await sentSpaceIds()).toBe('space-featured');
+  });
+
+  // Inverting this gate reinstates the bug in full — Explore never asks for the memberships, so the
+  // live answer never arrives — while spending a request on every space-pinned feed. Nothing else
+  // in the suite notices, because the argument is otherwise invisible from outside.
+  it('asks for the viewer’s spaces on the cross-space feed, and not on a pinned one', () => {
+    renderFeed(['space-mine']);
+    expect(mocks.allowlistEnabled).toBe(true);
+    cleanup();
+
+    render(<EntityFeed apiEndpoint="/api/activity/feed" lockedSpaceId="space-id" />);
+    expect(mocks.allowlistEnabled).toBe(false);
+  });
+
+  // The live value is not reliably the fresher of the two: it can be a cache entry up to a minute
+  // old that the sidebar filled on another route, while the prop was computed during this render.
+  // Preferring it would drop a space the reader had just joined back out of their own default.
+  it('keeps a space the server prop knows about but the cached answer does not', async () => {
+    mocks.liveMemberSpaceIds = new Set(['space-mine']);
+    renderFeed(['space-mine', 'space-pending']);
+
+    expect((await sentSpaceIds())?.split(',').sort()).toEqual(['space-mine', 'space-pending']);
+  });
+
+  // The seed is spent on the first non-empty match, and sign-up sends one proposal per picked
+  // space — they land seconds apart. Spending it on the first to arrive pins the reader to that one
+  // and silently drops the rest of what they chose.
+  it('holds the default while more of their memberships are still landing', async () => {
+    mocks.isSettlingMemberships = true;
+    mocks.liveMemberSpaceIds = new Set(['space-mine']);
+    const { rerender } = renderFeed([]);
+
+    expect(await sentSpaceIds()).toBeNull();
+
+    mocks.isSettlingMemberships = false;
+    mocks.liveMemberSpaceIds = new Set(['space-mine', 'space-pending']);
+    rerender(
+      <EntityFeed apiEndpoint="/api/explore/feed" initialSpaceOptions={OPTIONS} memberSpaceIds={[]} showSortFilter />
+    );
+
+    expect((await sentSpaceIds())?.split(',').sort()).toEqual(['space-mine', 'space-pending']);
   });
 
   it('lets the reader widen to a featured space they have not joined', async () => {
