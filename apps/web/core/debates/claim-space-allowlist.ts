@@ -1,4 +1,9 @@
 import type { BrowseSidebarData, BrowseSpaceRow } from '~/core/browse/fetch-browse-sidebar-data';
+import {
+  type RequestedMembershipSpace,
+  activeRequestedSpacesForOwner,
+  requestedMembershipIdSet,
+} from '~/core/state/requested-membership';
 import { normId } from '~/core/utils/norm-id';
 
 /**
@@ -84,6 +89,70 @@ export function browseSidebarMemberSpaceIds(
     memberOf: data.memberOf,
     personalSpaceId: personalSpaceId ?? data.personalSpaceId,
   });
+}
+
+/**
+ * How long a request is treated as still settling.
+ *
+ * Deliberately much shorter than `REQUEST_BRIDGE_TTL_MS`, which the bridge needs for a different
+ * job: keeping a "Membership pending" label up until the server can be trusted to contradict it.
+ * This bounds two things that must not run for five minutes — how long the sidebar payload is
+ * re-asked for, and how long the space filter holds its default waiting for one more answer.
+ *
+ * Sized on the observed gap, which is tens of seconds. A request still missing after this either
+ * failed or was rejected — `fetchPendingMembershipSpaceIds` drops a vote-ended proposal outright,
+ * so it can *never* arrive — and continuing to wait costs a full sidebar payload every tick while
+ * the filter stays open on nothing.
+ */
+export const REQUESTED_MEMBERSHIP_SETTLE_MS = 90_000;
+
+/**
+ * Whether this payload still owes the viewer a membership request they have already made.
+ *
+ * The gap it measures is real and about a minute wide: the request reaches the chain when the
+ * transaction does and the indexer some time after, so a payload fetched in between is a correct
+ * answer to a question that has since changed. Everything reading these lists — the space filter's
+ * default among it — was left on the pre-request answer until something happened to refetch, which
+ * in practice meant a hard refresh (GEO-2815).
+ *
+ * The optimistic bridge is the only thing that knows a request was made before the server does, so
+ * it is what says whether waiting is worth it — it decides *when to re-ask*, never what the answer
+ * is. Two things stop the wait: the request appearing here, and
+ * {@link REQUESTED_MEMBERSHIP_SETTLE_MS} passing, which is what retires one that never lands.
+ *
+ * No data yet is treated as owing: there is a live request and nothing to say it has arrived.
+ */
+export function awaitsRequestedMembership({
+  requestedSpaces,
+  personalSpaceId,
+  walletAddress,
+  data,
+  now,
+}: {
+  requestedSpaces: RequestedMembershipSpace[];
+  personalSpaceId: string | null | undefined;
+  walletAddress: string | null | undefined;
+  data: BrowseSidebarData | undefined;
+  now: number;
+}): boolean {
+  // Nothing to wait for until the viewer has a personal space. Membership is proposed *by* that
+  // space, so the sources behind this payload cannot report a request before it exists — and
+  // onboarding seeds bridge entries under the wallet address minutes earlier, while its own
+  // requests are still queued behind the space being created. Polling on those re-asks a question
+  // that has no answer yet, for the whole of signup, and on that branch the query is a *server
+  // action* (`loadBrowseSidebarData`) rather than a plain fetch.
+  if (!personalSpaceId) return false;
+
+  const settling = activeRequestedSpacesForOwner(requestedSpaces, personalSpaceId, now, walletAddress).filter(
+    space => now - space.requestedAt < REQUESTED_MEMBERSHIP_SETTLE_MS
+  );
+
+  const requested = requestedMembershipIdSet(settling);
+  if (requested.size === 0) return false;
+  if (!data) return true;
+
+  const answered = browseSidebarMemberSpaceIds(data, personalSpaceId);
+  return [...requested].some(id => !answered.has(id));
 }
 
 export function browseSidebarClaimSpaceAllowlist(
