@@ -15,21 +15,6 @@
  * both read `debate_claim_readiness`, which the in-flight response notification writes, so a
  * graph-backed position check there would hold a button the server would have accepted.
  */
-/**
- * The viewer's position on a claim, read from both clocks, as a request offer needs it.
- *
- * Derived once by `useClaimPositionControl`, which already holds both readings, and passed straight
- * to `ClaimEndSlot`. Every surface that offers a debate needs the same three values, and deriving
- * them per surface is how the two clocks drifted apart in the first place (GEO-2808).
- */
-export type DebateRequestPosition = {
-  /** geo-chat's copy. `undefined` when it has no row for this claim yet. */
-  chat: boolean | null | undefined;
-  /** What the viewer believes they hold — optimistic while a response is in flight. */
-  local: boolean | null;
-  indexingDelayed?: boolean;
-};
-
 export type DebateRequestGateInput = {
   /**
    * The position the request will be validated against, as the surface last heard it.
