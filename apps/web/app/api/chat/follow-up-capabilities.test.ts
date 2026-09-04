@@ -30,8 +30,21 @@ describe('buildFollowUpCapabilityNote', () => {
   it('rules out the abilities the chat has no control for', () => {
     const note = buildFollowUpCapabilityNote(asTools('setEntityImage'));
 
-    expect(note).toMatch(/cannot receive a photo, image or document/);
+    expect(note).toMatch(/cannot receive a document/);
     expect(note).toMatch(/cannot send email/);
+  });
+
+  it('allows an attached image but not an option that would have to attach one', () => {
+    // Both halves matter. The assistant can now use an image the user attached,
+    // so denying it outright would send someone who just attached one to a
+    // different part of the app. But a pill click only sends text — it cannot
+    // open the file picker — so an option that assumes an image nobody attached
+    // yet dead-ends the user.
+    const note = buildFollowUpCapabilityNote(asTools('setEntityImage'));
+
+    expect(note).toMatch(/CAN use an image the user has already attached/);
+    expect(note).toMatch(/a click cannot attach a file/);
+    expect(note).toMatch(/never offer an option that depends on an image the user has not attached/);
   });
 
   it('does not deny the spreadsheet attachment the import feature adds', () => {

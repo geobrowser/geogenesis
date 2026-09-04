@@ -18,13 +18,22 @@ const MAX_HEADERS = 60;
 const MAX_HEADER_CHARS = 120;
 const MAX_FILE_NAME_CHARS = 200;
 
-export type AttachmentDescriptor = {
-  importId: string;
-  fileName: string;
-  rowCount: number;
-  headers: string[];
-  sheetName?: string;
-};
+export type AttachmentDescriptor =
+  | {
+      kind: 'table';
+      importId: string;
+      fileName: string;
+      rowCount: number;
+      headers: string[];
+      sheetName?: string;
+    }
+  | {
+      kind: 'image';
+      imageId: string;
+      fileName: string;
+      mimeType: string;
+      sizeBytes: number;
+    };
 
 function isUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f-]{16,64}$/i.test(value);
@@ -46,11 +55,26 @@ export function attachmentInLastUserMessage(messages: ReadonlyArray<UIMessage>):
     if (!raw || typeof raw !== 'object') return null;
 
     const attachment = raw as Record<string, unknown>;
-    if (!isUuid(attachment.importId)) return null;
     if (typeof attachment.fileName !== 'string') return null;
+
+    // An image carries no rows or headers — it is identified by `imageId` and
+    // reaches the graph through `setEntityImage`, never through the importer.
+    if (isUuid(attachment.imageId)) {
+      if (typeof attachment.mimeType !== 'string') return null;
+      return {
+        kind: 'image',
+        imageId: attachment.imageId,
+        fileName: attachment.fileName.slice(0, MAX_FILE_NAME_CHARS),
+        mimeType: attachment.mimeType.slice(0, 100),
+        sizeBytes: typeof attachment.sizeBytes === 'number' && attachment.sizeBytes >= 0 ? attachment.sizeBytes : 0,
+      };
+    }
+
+    if (!isUuid(attachment.importId)) return null;
     if (!Array.isArray(attachment.headers)) return null;
 
     return {
+      kind: 'table',
       importId: attachment.importId,
       fileName: attachment.fileName.slice(0, MAX_FILE_NAME_CHARS),
       rowCount:
@@ -67,6 +91,18 @@ export function attachmentInLastUserMessage(messages: ReadonlyArray<UIMessage>):
 }
 
 export function renderAttachmentNote(attachment: AttachmentDescriptor): string {
+  if (attachment.kind === 'image') {
+    return (
+      `[Attached image] The user has attached ${JSON.stringify(attachment.fileName)} (${attachment.mimeType}). ` +
+      `Its attachmentId is \`${attachment.imageId}\`. To put it on an entity, call ` +
+      `\`setEntityImage({ entityId, propertyId, spaceId, attachmentId })\` with that id — pass \`attachmentId\` ` +
+      `instead of \`sourceUrl\`, and do NOT call \`searchImages\`, the user has already given you the picture. ` +
+      `You cannot see it: decide which entity and which image property it belongs to from what the user says, ` +
+      `and ask them if that is not clear rather than guessing — the upload is permanent. This is not a ` +
+      `spreadsheet; never call \`proposeImportMapping\` or \`applyImport\` for it.`
+    );
+  }
+
   const sheet = attachment.sheetName ? `, sheet ${JSON.stringify(attachment.sheetName)}` : '';
   const headers = attachment.headers.map(h => JSON.stringify(h)).join(', ');
 

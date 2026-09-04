@@ -37,6 +37,7 @@ import {
   isEditToolPartType,
   lookupFailed,
 } from './edit-types';
+import { ImageAttachments } from './image-attachment';
 import { planWriteTool } from './write-validators';
 import { editorContentVersionAtom } from '~/atoms';
 
@@ -165,12 +166,13 @@ function extensionForMime(mime: string): string {
   return MIME_TO_EXTENSION[normalized] ?? 'png';
 }
 
-// Mints an Image entity from a source URL and writes the link relation via
-// the same `storage.images.createAndLink` helper the in-page editor uses for
-// file uploads. http(s) URLs go through /api/chat/proxy-image (CORS); ipfs://
-// URLs short-circuit since they're already pinned.
+// Mints an Image entity and writes the link relation via the same
+// `storage.images.createAndLink` helper the in-page editor uses for file
+// uploads. A file the user attached goes straight in as a blob; http(s) URLs
+// go through /api/chat/proxy-image (CORS); ipfs:// URLs short-circuit since
+// they're already pinned.
 async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntityImage' }>): Promise<ApplyResult> {
-  const { entityId, entityName, spaceId, propertyId, propertyName, sourceUrl } = intent;
+  const { entityId, entityName, spaceId, propertyId, propertyName, sourceUrl, attachment } = intent;
 
   // Replace, don't stack: tombstone any existing same-property image relations
   // on this entity in this space first. Mirrors the in-page editor's behavior
@@ -183,6 +185,32 @@ async function applySetEntityImage(intent: Extract<EditIntent, { kind: 'setEntit
   );
   for (const old of oldImageRelations) {
     storage.relations.delete(old);
+  }
+
+  // The user handed us the bytes. No proxy, no fetch — `createAndLink` takes a
+  // File directly, which is the path the entity page's own upload control uses.
+  if (attachment) {
+    const held = ImageAttachments.get(attachment.id);
+    if (!held) {
+      return applyFailed('that attached image is no longer available');
+    }
+    try {
+      await storage.images.createAndLink({
+        file: held.file,
+        fromEntityId: entityId,
+        fromEntityName: entityName,
+        relationPropertyId: propertyId,
+        relationPropertyName: propertyName,
+        spaceId,
+      });
+    } catch (err) {
+      console.error('[chat/edit-dispatcher] image attachment upload failed', err);
+      return applyFailed('the image could not be uploaded');
+    }
+    // Consumed. Leaving it would let a later turn silently re-upload the same
+    // picture onto a different entity.
+    ImageAttachments.clear(attachment.id);
+    return { ok: true };
   }
 
   if (sourceUrl.toLowerCase().startsWith('ipfs://')) {

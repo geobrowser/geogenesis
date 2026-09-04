@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import type { ImageAttachment } from '~/core/chat/image-attachment';
 import type { ImportSession } from '~/core/chat/import/session';
 
 function formatSize(bytes: number): string {
@@ -13,6 +14,7 @@ function formatSize(bytes: number): string {
 export type AttachmentState =
   | { status: 'parsing'; fileName: string }
   | { status: 'ready'; session: ImportSession }
+  | { status: 'image'; image: ImageAttachment; previewUrl: string }
   | { status: 'error'; fileName: string; message: string };
 
 type Props = {
@@ -48,6 +50,34 @@ export function ChatAttachment({ attachment, onRemove }: Props) {
           type="button"
           onClick={onRemove}
           aria-label="Remove attached file"
+          className="shrink-0 text-grey-03 transition-colors hover:text-text"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+    );
+  }
+
+  // An image shows itself. The thumbnail is the check that the right file was
+  // picked, the way row and column counts are for a spreadsheet.
+  if (attachment.status === 'image') {
+    const { image, previewUrl } = attachment;
+    return (
+      <div className="mx-3 mt-3 flex items-center justify-between gap-2 rounded-lg bg-grey-01 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element -- object URL for a local file, not a remote asset */}
+          <img src={previewUrl} alt="" className="size-8 shrink-0 rounded-sm object-cover" />
+          <div className="min-w-0">
+            <p className="truncate text-metadata font-medium text-text">{image.fileName}</p>
+            <p className="truncate text-metadata text-grey-04">{formatSize(image.sizeBytes)}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove attached image"
           className="shrink-0 text-grey-03 transition-colors hover:text-text"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">

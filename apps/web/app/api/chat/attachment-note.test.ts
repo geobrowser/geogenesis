@@ -1,7 +1,13 @@
 import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
-import { attachmentInLastUserMessage, renderAttachmentNote } from './attachment-note';
+import { type AttachmentDescriptor, attachmentInLastUserMessage, renderAttachmentNote } from './attachment-note';
+
+/** Narrows to the spreadsheet variant, and fails loudly if the reader picked the wrong one. */
+function asTable(result: AttachmentDescriptor | null): Extract<AttachmentDescriptor, { kind: 'table' }> {
+  if (result?.kind !== 'table') throw new Error(`expected a table attachment, got ${result?.kind ?? 'null'}`);
+  return result;
+}
 
 const IMPORT_ID = '8f2c1d4e-9a3b-4c5d-8e7f-1a2b3c4d5e6f';
 
@@ -14,10 +20,20 @@ function assistantMessage(): UIMessage {
 }
 
 const attachment = {
+  kind: 'table' as const,
   importId: IMPORT_ID,
   fileName: 'projects.csv',
   rowCount: 340,
   headers: ['Name', 'URL', 'Founded'],
+};
+
+const IMAGE_ID = '3d9e7c2a-1b4f-4a6d-9c8e-5f0a1b2c3d4e';
+
+const imageAttachment = {
+  imageId: IMAGE_ID,
+  fileName: 'cover.png',
+  mimeType: 'image/png',
+  sizeBytes: 240_000,
 };
 
 describe('attachmentInLastUserMessage', () => {
@@ -57,7 +73,7 @@ describe('attachmentInLastUserMessage', () => {
 
     const result = attachmentInLastUserMessage([userMessage({ attachment: { ...attachment, headers } })]);
 
-    expect(result?.headers).toHaveLength(60);
+    expect(asTable(result).headers).toHaveLength(60);
   });
 
   it('truncates an absurdly long header', () => {
@@ -65,7 +81,7 @@ describe('attachmentInLastUserMessage', () => {
       userMessage({ attachment: { ...attachment, headers: ['x'.repeat(1000)] } }),
     ]);
 
-    expect(result?.headers[0].length).toBe(120);
+    expect(asTable(result).headers[0].length).toBe(120);
   });
 
   it('drops non-string headers instead of rendering them as objects', () => {
@@ -73,13 +89,41 @@ describe('attachmentInLastUserMessage', () => {
       userMessage({ attachment: { ...attachment, headers: ['Name', { a: 1 }, 7] } }),
     ]);
 
-    expect(result?.headers).toEqual(['Name']);
+    expect(asTable(result).headers).toEqual(['Name']);
   });
 
   it('defaults a missing row count to zero rather than NaN', () => {
     const result = attachmentInLastUserMessage([userMessage({ attachment: { ...attachment, rowCount: 'lots' } })]);
 
-    expect(result?.rowCount).toBe(0);
+    expect(asTable(result).rowCount).toBe(0);
+  });
+
+  // An image and a spreadsheet arrive through the same control and the same
+  // metadata slot, so the reader is what keeps them apart.
+  it('reads an image attachment as its own kind', () => {
+    expect(attachmentInLastUserMessage([userMessage({ attachment: imageAttachment })])).toEqual({
+      kind: 'image',
+      imageId: IMAGE_ID,
+      fileName: 'cover.png',
+      mimeType: 'image/png',
+      sizeBytes: 240_000,
+    });
+  });
+
+  it('rejects a malformed imageId rather than passing it to setEntityImage', () => {
+    expect(
+      attachmentInLastUserMessage([userMessage({ attachment: { ...imageAttachment, imageId: 'nope!' } })])
+    ).toBeNull();
+  });
+
+  it('does not mistake an image for a spreadsheet when headers are absent', () => {
+    // The table branch requires an importId and a headers array; an image has
+    // neither, so without its own branch it would read as null and the model
+    // would never be told a picture was attached.
+    const result = attachmentInLastUserMessage([userMessage({ attachment: imageAttachment })]);
+
+    expect(result).not.toBeNull();
+    expect(result?.kind).toBe('image');
   });
 });
 
@@ -109,5 +153,34 @@ describe('renderAttachmentNote', () => {
 
   it('names the sheet when there is one', () => {
     expect(renderAttachmentNote({ ...attachment, sheetName: 'Projects' })).toContain('"Projects"');
+  });
+
+  describe('for an attached image', () => {
+    const note = () => renderAttachmentNote({ kind: 'image', ...imageAttachment });
+
+    it('names the attachmentId and the tool that consumes it', () => {
+      expect(note()).toContain(IMAGE_ID);
+      expect(note()).toContain('cover.png');
+      expect(note()).toContain('setEntityImage');
+      expect(note()).toContain('attachmentId');
+    });
+
+    it('sends the model away from the importer', () => {
+      // Both files arrive through the same control; without this the model has
+      // been seen reaching for the mapping flow because that is what an
+      // attachment has always meant.
+      expect(note()).toContain('never call `proposeImportMapping`');
+    });
+
+    it('stops it searching the web for a picture it already has', () => {
+      expect(note()).toContain('do NOT call `searchImages`');
+    });
+
+    it('says it cannot see the image, and to ask rather than guess', () => {
+      // The upload is a permanent pin, so a wrong entity is not a free mistake.
+      expect(note()).toContain('You cannot see it');
+      expect(note()).toContain('ask them');
+      expect(note()).toContain('permanent');
+    });
   });
 });

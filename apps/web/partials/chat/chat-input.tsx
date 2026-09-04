@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import Textarea from 'react-textarea-autosize';
 
+import { ACCEPTED_IMAGE_EXTENSIONS } from '~/core/chat/image-attachment';
+
 import { ContextMeter } from './context-meter';
 
 type Props = {
@@ -24,7 +26,7 @@ type Props = {
   onAttachFile?: (file: File) => void;
 };
 
-const ACCEPTED_FILES = '.csv,.tsv,.xlsx,.xls';
+const ACCEPTED_FILES = `.csv,.tsv,.xlsx,.xls,${ACCEPTED_IMAGE_EXTENSIONS}`;
 
 export function ChatInput({
   value,
@@ -81,7 +83,7 @@ export function ChatInput({
             type="file"
             accept={ACCEPTED_FILES}
             className="sr-only"
-            aria-label="Attach a spreadsheet"
+            aria-label="Attach a spreadsheet or image"
             onChange={event => {
               const file = event.target.files?.[0];
               if (file) onAttachFile(file);
@@ -93,8 +95,8 @@ export function ChatInput({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isBusy}
-            aria-label="Attach a CSV or Excel file"
-            title="Attach a CSV or Excel file"
+            aria-label="Attach a spreadsheet or an image"
+            title="Attach a spreadsheet or an image"
             className="shrink-0 text-grey-03 transition-colors enabled:hover:text-text disabled:cursor-not-allowed"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">

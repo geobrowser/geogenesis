@@ -10,10 +10,12 @@
  */
 import * as React from 'react';
 
+import { type ImageAttachment, ImageAttachments, isAcceptedImage, looksLikeImage } from '~/core/chat/image-attachment';
+
 import type { AttachmentState } from '~/partials/chat/chat-attachment';
 
 import { type ImportSession, ImportSessions } from './session';
-import { MAX_FILE_SIZE_MB, type ParseResult } from './types';
+import { MAX_FILE_SIZE_BYTES, MAX_FILE_SIZE_MB, type ParseResult } from './types';
 
 /**
  * Parse off the main thread.
@@ -46,6 +48,10 @@ export function useFileAttachment(currentSpaceId: string | null) {
   const remove = React.useCallback(() => {
     setAttachment(current => {
       if (current?.status === 'ready') ImportSessions.clear(current.session.id);
+      if (current?.status === 'image') {
+        ImageAttachments.clear(current.image.id);
+        URL.revokeObjectURL(current.previewUrl);
+      }
       return null;
     });
     generationRef.current++;
@@ -60,7 +66,13 @@ export function useFileAttachment(currentSpaceId: string | null) {
    * same file and inviting a second import of it.
    */
   const dismiss = React.useCallback(() => {
-    setAttachment(null);
+    setAttachment(current => {
+      // The chip goes; the file stays, because `setEntityImage` may not run
+      // until the assistant has asked which entity it belongs to. Only the
+      // preview is finished with.
+      if (current?.status === 'image') URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
   }, []);
 
   const attach = React.useCallback(
@@ -69,8 +81,42 @@ export function useFileAttachment(currentSpaceId: string | null) {
         setAttachment({
           status: 'error',
           fileName: file.name,
-          message: 'Open a space first — an import needs somewhere to land.',
+          message: 'Open a space first — an attachment needs somewhere to land.',
         });
+        return;
+      }
+
+      // Images take the other lane entirely: nothing to parse, nothing to map.
+      // The file is held for `setEntityImage` to pick up by id.
+      if (looksLikeImage(file)) {
+        const generation = ++generationRef.current;
+        if (!isAcceptedImage(file)) {
+          setAttachment({
+            status: 'error',
+            fileName: file.name,
+            message: 'That image format is not supported — use JPG, PNG, WebP, GIF or AVIF.',
+          });
+          return;
+        }
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+          setAttachment({
+            status: 'error',
+            fileName: file.name,
+            message: `That image is too large (max ${MAX_FILE_SIZE_MB}mb).`,
+          });
+          return;
+        }
+        if (generation !== generationRef.current) return;
+
+        const image: ImageAttachment = {
+          id: crypto.randomUUID(),
+          file,
+          fileName: file.name,
+          mimeType: file.type.split(';')[0].trim().toLowerCase(),
+          sizeBytes: file.size,
+        };
+        ImageAttachments.set(image);
+        setAttachment({ status: 'image', image, previewUrl: URL.createObjectURL(file) });
         return;
       }
 
@@ -121,6 +167,19 @@ export function useFileAttachment(currentSpaceId: string | null) {
    * never leave this tab.
    */
   const metadata = React.useCallback(() => {
+    if (attachment?.status === 'image') {
+      const { image } = attachment;
+      // No dimensions and no pixels — the model decides where an image goes from
+      // the user's words, not from the picture.
+      return {
+        attachment: {
+          imageId: image.id,
+          fileName: image.fileName,
+          mimeType: image.mimeType,
+          sizeBytes: image.sizeBytes,
+        },
+      };
+    }
     if (attachment?.status !== 'ready') return {};
     const { session } = attachment;
     return {

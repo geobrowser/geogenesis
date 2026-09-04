@@ -1,7 +1,7 @@
 import type { ToolSet } from 'ai';
 
 const NO_ABILITIES =
-  "It has no other abilities. The chat's one attachment control takes a CSV or Excel spreadsheet to import and nothing else, so the assistant cannot receive a photo, image or document from the user, and it cannot send email, export or download anything, or act outside Geo. An image can only be attached from a URL or an image search.";
+  'It has no other abilities. The chat\'s attachment control takes a CSV or Excel spreadsheet to import, or an image to put on an entity — nothing else, so the assistant cannot receive a document from the user, and it cannot send email, export or download anything, or act outside Geo. It CAN use an image the user has already attached, but clicking one of your options only sends its text: a click cannot attach a file. So never offer an option that depends on an image the user has not attached yet — if no image is attached, offer the image-search route ("Find a cover photo") rather than one that would leave them stuck.';
 
 const SELF_CHECK =
   'Before offering an option, name to yourself the tool that would run when the user clicks it. If there is no such tool, do not offer that option.';
