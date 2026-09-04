@@ -12,8 +12,7 @@ import type { ParticipantPosition } from './participant-positions';
 
 export const PERSON_DEBATE_SIDE_TYPE_IDS = [DEBATE_SUPPORTED_BY_PROPERTY_ID, DEBATE_OPPOSED_BY_PROPERTY_ID];
 
-/** `debateId` is the indexer's own id-form (for hydrating the entity by `id in`); `spaceId` is canonical hex. */
-export type PersonDebate = { debateId: string; spaceId: string };
+export type PersonDebate = { debateId: string };
 
 /**
  * The four figures on the strip.
@@ -27,7 +26,7 @@ export type PersonDebateStats = {
 
 const RELATIONS_PAGE_SIZE = 500;
 
-type RelationNode = { fromEntityId?: string | null; spaceId?: string | null };
+type RelationNode = { fromEntityId?: string | null };
 type PersonDebateRelationsConnection = {
   pageInfo: { hasNextPage: boolean; endCursor: string | null } | null;
   nodes: Array<RelationNode | null> | null;
@@ -42,8 +41,8 @@ type PersonDebateRelationsVariables = {
 };
 
 /**
- * Hand-written for the same reason `participant-positions` is: it selects `spaceId` alongside the
- * debate id, which the generated documents don't, and the space is what the Spaces figure unions.
+ * Side relations → debate ids. Space for the Spaces figure is resolved later from the hydrated
+ * debate entity via `resolveEntitySpaceId`
  */
 const PERSON_DEBATE_RELATIONS_SOURCE = `
   query PersonDebateRelations($person: UUID!, $sides: [UUID!]!, $debateTypes: [UUID!]!, $first: Int!, $after: Cursor) {
@@ -62,7 +61,6 @@ const PERSON_DEBATE_RELATIONS_SOURCE = `
       }
       nodes {
         fromEntityId
-        spaceId
       }
     }
   }
@@ -104,7 +102,7 @@ export async function fetchPersonDebates(personId: string, signal?: AbortSignal)
       // is the indexer's, not a normalized one. This mirrors the People tab, which keeps the raw id too.
       const key = uuidToHex(node.fromEntityId);
       if (byDebateId.has(key)) continue;
-      byDebateId.set(key, { debateId: node.fromEntityId, spaceId: node.spaceId ? uuidToHex(node.spaceId) : '' });
+      byDebateId.set(key, { debateId: node.fromEntityId });
     }
 
     if (!connection?.pageInfo?.hasNextPage || !connection.pageInfo.endCursor) break;
@@ -121,11 +119,13 @@ export function derivePersonDebateStats({
   personId,
   positions,
   debates,
+  debateSpaceIds,
   winnerShares,
 }: {
   personId: string;
   positions: ParticipantPosition[];
   debates: PersonDebate[];
+  debateSpaceIds: string[];
   winnerShares: Map<string, WinnerShare>;
 }): PersonDebateStats {
   const claimIds = new Set(positions.map(position => uuidToHex(position.claimId)));
@@ -141,10 +141,7 @@ export function derivePersonDebateStats({
   }
 
   const spaceIds = [
-    ...new Set([
-      ...positions.map(position => uuidToHex(position.spaceId)),
-      ...debates.map(debate => debate.spaceId).filter(Boolean),
-    ]),
+    ...new Set([...positions.map(position => uuidToHex(position.spaceId)), ...debateSpaceIds.map(uuidToHex)]),
   ];
 
   return {
