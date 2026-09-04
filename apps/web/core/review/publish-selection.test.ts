@@ -9,6 +9,7 @@ import {
   buildIsNewEntity,
   buildOwnershipIndex,
   collectCandidateEntityIds,
+  collectOpsForEntities,
   countEntityChanges,
   findDanglingDependencies,
   getDeselectionBlockers,
@@ -136,6 +137,48 @@ describe('selectOpsForPublish', () => {
   });
 });
 
+describe('collectOpsForEntities', () => {
+  it('takes a row’s folded blocks with it, so no orphan block is left behind', () => {
+    const values = [value('page'), value('table-block'), value('other')];
+    const relations = [blocksRelation('page', 'table-block'), relation('other', 'somewhere')];
+    const index = buildOwnershipIndex([diff('page', ['table-block']), diff('other')], relations);
+
+    const discarded = collectOpsForEntities(index, new Set(['page']), values, relations);
+
+    expect(discarded.values.map(v => v.entity.id)).toEqual(['page', 'table-block']);
+    expect(discarded.relations).toEqual([blocksRelation('page', 'table-block')]);
+  });
+
+  it('leaves every other row untouched', () => {
+    const values = [value('kept'), value('dropped')];
+    const relations = [relation('kept', 'x'), relation('dropped', 'y')];
+    const index = buildOwnershipIndex([diff('kept'), diff('dropped')], relations);
+
+    const discarded = collectOpsForEntities(index, new Set(['dropped']), values, relations);
+
+    expect(discarded.values.map(v => v.entity.id)).toEqual(['dropped']);
+    expect(discarded.relations).toEqual([relation('dropped', 'y')]);
+  });
+
+  it('is the exact complement of what publishing the others would keep', () => {
+    const values = [value('kept'), value('dropped')];
+    const relations = [relation('kept', 'x'), relation('dropped', 'y')];
+    const index = buildOwnershipIndex([diff('kept'), diff('dropped')], relations);
+
+    const kept = selectOpsForPublish(index, new Set(['kept']), values, relations);
+    const discarded = collectOpsForEntities(index, new Set(['dropped']), values, relations);
+
+    expect(kept.values.length + discarded.values.length).toBe(values.length);
+    expect(kept.relations.length + discarded.relations.length).toBe(relations.length);
+  });
+
+  it('takes nothing when nothing is named', () => {
+    const index = buildOwnershipIndex([diff('page')], []);
+
+    expect(collectOpsForEntities(index, new Set(), [value('page')], [])).toEqual({ values: [], relations: [] });
+  });
+});
+
 describe('countEntityChanges', () => {
   it('counts values, relations and blocks together', () => {
     const entity: EntityDiff = {
@@ -185,7 +228,7 @@ describe('countEntityChanges', () => {
     expect(countEntityChanges(entity)).toBe(1);
   });
 
-  it('counts the edits listed inside a data block', () => {
+  it('counts an edited data block once — it is still one panel below', () => {
     const entity: EntityDiff = {
       ...diff('parent'),
       blocks: [
@@ -202,7 +245,7 @@ describe('countEntityChanges', () => {
       ],
     };
 
-    expect(countEntityChanges(entity)).toBe(3);
+    expect(countEntityChanges(entity)).toBe(1);
   });
 
   it('counts nothing for a row with no changes', () => {

@@ -107,6 +107,26 @@ export function selectOpsForPublish(
   };
 }
 
+/**
+ * Reads ownership the same way, so discarding a page takes the table on it: reverting the page and
+ * leaving the block's values behind would strand a block nothing points at.
+ */
+export function collectOpsForEntities(
+  index: OwnershipIndex,
+  entityIds: ReadonlySet<string>,
+  values: readonly Value[],
+  relations: readonly Relation[]
+): { values: Value[]; relations: Relation[] } {
+  const owns = (ownerId: string | undefined) => ownerId !== undefined && entityIds.has(ownerId);
+
+  return {
+    values: values.filter(value => owns(index.ownerOf.get(value.entity.id))),
+    relations: relations.filter(
+      relation => owns(index.ownerOf.get(relation.fromEntity.id)) || owns(index.ownerOf.get(relation.entityId))
+    ),
+  };
+}
+
 /** Change count for the row header: each value, relation, and block counts as one. */
 export function countEntityChanges(entity: EntityDiff): number {
   return entity.values.length + entity.relations.length + entity.blocks.length;
