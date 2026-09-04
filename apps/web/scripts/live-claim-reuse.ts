@@ -12,6 +12,7 @@
  *   bun run scripts/live-claim-reuse.ts <payload.json> <debate space id>
  */
 import { Effect } from 'effect';
+import { readFile } from 'node:fs/promises';
 
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import {
@@ -39,7 +40,8 @@ if (!payloadPath || !spaceId) {
   console.error('usage: bun run scripts/live-claim-reuse.ts <payload.json> <debate space id>');
   process.exit(2);
 }
-const payload = JSON.parse(await Bun.file(payloadPath).text()) as Payload;
+// Node's fs rather than `Bun.file`: the Next build type-checks `scripts/**` and has no Bun types.
+const payload = JSON.parse(await readFile(payloadPath, 'utf8')) as Payload;
 
 // Same decode as `loadDebateClaims` in debate-source.ts (private there, and it needs geo-chat).
 const claims: DebateClaimInput[] = payload.claims.map(claim => ({
