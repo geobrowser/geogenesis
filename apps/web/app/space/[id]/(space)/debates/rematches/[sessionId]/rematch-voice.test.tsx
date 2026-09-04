@@ -51,6 +51,9 @@ const mocks = vi.hoisted(() => ({
   /** Every `useMediaDeviceSelect` call, to prove the picker never re-prompts for the microphone. */
   deviceSelectCalls: [] as Array<{ kind: string; requestPermissions?: boolean }>,
   disconnect: vi.fn(() => Promise.resolve()),
+  /** The published microphone, once there is one. */
+  microphoneTrack: undefined as { track: Record<string, unknown> } | undefined,
+  useKrispNoiseFilter: vi.fn(() => ({ setNoiseFilterEnabled: vi.fn(() => Promise.resolve()) })),
 }));
 
 vi.mock('@livekit/components-react', () => ({
@@ -73,6 +76,7 @@ vi.mock('@livekit/components-react', () => ({
   useLocalParticipant: () => ({
     localParticipant: { identity: 'me', setMicrophoneEnabled: mocks.setMicrophoneEnabled },
     isMicrophoneEnabled: mocks.isMicrophoneEnabled,
+    microphoneTrack: mocks.microphoneTrack,
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
   useRoomContext: () => ({ disconnect: mocks.disconnect }),
@@ -93,7 +97,7 @@ vi.mock('@livekit/components-react', () => ({
 }));
 
 vi.mock('@livekit/components-react/krisp', () => ({
-  useKrispNoiseFilter: () => ({ setNoiseFilterEnabled: vi.fn(() => Promise.resolve()) }),
+  useKrispNoiseFilter: mocks.useKrispNoiseFilter,
 }));
 
 vi.mock('livekit-client', () => ({
@@ -291,6 +295,8 @@ beforeEach(() => {
   mocks.livekitRoomProps = [];
   mocks.livekitRoomMounts = [];
   mocks.disconnect.mockReset().mockResolvedValue(undefined);
+  mocks.microphoneTrack = undefined;
+  mocks.useKrispNoiseFilter.mockClear();
   setVisibility('visible');
 });
 
@@ -677,6 +683,24 @@ describe('RematchVoicePill', () => {
     mocks.connectionState = 'connected';
     rerender(<RematchVoicePill session={session} currentUserId="me" />);
     expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeEnabled();
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
+  });
+
+  // Krisp substitutes its own output for the published microphone, so a filter that fails quietly
+  // leaves this dock connected, unmuted and silent, with nothing on screen to say so. The lobby
+  // publishes the raw track: filtering is worth less here than audio that is either working or
+  // visibly broken.
+  it('publishes the raw microphone without attaching a processor', async () => {
+    const track = { mediaStreamTrack: { kind: 'audio' }, setProcessor: vi.fn(), stop: vi.fn() };
+    mocks.microphoneTrack = { track };
+    const session = makeSession('browsing');
+    const { rerender } = render(<RematchVoicePill session={session} currentUserId="me" />);
+    await flushOwnership();
+    rerender(<RematchVoicePill session={session} currentUserId="me" />);
+
+    expect(mocks.useKrispNoiseFilter).not.toHaveBeenCalled();
+    expect(track.setProcessor).not.toHaveBeenCalled();
+    // The microphone is still published — it is the filter that is gone, not the audio.
     expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
   });
 
