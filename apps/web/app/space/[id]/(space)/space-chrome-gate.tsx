@@ -13,10 +13,21 @@ import { spaceSidebarHasContentAtom } from '~/atoms';
  * The debates surface is full-screen and edge-to-edge (TikTok-style feed): no
  * space header, metadata, or tabs. This gate hides that chrome on any
  * `/space/<id>/debates...` (or `/root/debates...`) route while keeping it everywhere else.
+ *
+ * A person's own space is the exception: there `/debates` is an ordinary content tab — their debate
+ * record, not the feed — so it keeps the header, cover and tab list like every other tab. The feed
+ * only means anything on a DAO space geo-chat indexes, which is the same branch the page itself takes.
  */
-export function SpaceChromeGate({ children }: { children: React.ReactNode }) {
+export function SpaceChromeGate({
+  children,
+  isPersonSpace = false,
+}: {
+  children: React.ReactNode;
+  isPersonSpace?: boolean;
+}) {
   const pathname = usePathname();
-  if (pathname && /^(\/space\/[^/]+|\/root)\/debates(\/|$)/.test(pathname)) return null;
+  const isDebatesRoute = pathname != null && /^(\/space\/[^/]+|\/root)\/debates(\/|$)/.test(pathname);
+  if (isDebatesRoute && !isPersonSpace) return null;
   return <>{children}</>;
 }
 
@@ -42,7 +53,9 @@ type SpaceHeaderContentContainerProps = {
 
 export function SpaceHeaderContentContainer({ children, hasSidebar }: SpaceHeaderContentContainerProps) {
   return (
-    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>{children}</EntityPageContentContainer>
+    <EntityPageContentContainer variant={hasSidebar ? 'with-sidebar' : 'content'}>
+      {children}
+    </EntityPageContentContainer>
   );
 }
 
