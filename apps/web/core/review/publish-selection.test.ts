@@ -179,6 +179,44 @@ describe('collectOpsForEntities', () => {
   });
 });
 
+/**
+ * Discarding a row removes its ops, and with them its diff row — so the entity vanishes from the
+ * ownership index. Treating an unowned target as safe let discard walk straight past the guard that
+ * refuses the very same deselection, and published a relation pointing at nothing.
+ */
+describe('a target discarded out from under its holder', () => {
+  const relations = [relation('holder', 'fresh')];
+
+  it('refuses the deselection while both rows are present', () => {
+    const index = buildOwnershipIndex([diff('holder'), diff('fresh')], relations);
+
+    expect(getDeselectionBlockers(index, new Set(['holder', 'fresh']), relations, always).get('fresh')).toEqual([
+      'holder',
+    ]);
+  });
+
+  it('still reports the dangle once the target has no row left', () => {
+    const index = buildOwnershipIndex([diff('holder')], relations);
+
+    expect(findDanglingDependencies(index, new Set(['holder']), relations, always)).toEqual([
+      { entityId: 'fresh', requiredBy: ['holder'] },
+    ]);
+  });
+
+  it('says nothing when the vanished target was already on the graph', () => {
+    // No row and never created here — an ordinary link to an existing entity, which must publish.
+    const index = buildOwnershipIndex([diff('holder')], relations);
+
+    expect(findDanglingDependencies(index, new Set(['holder']), relations, never)).toEqual([]);
+  });
+
+  it('asks about relation targets, so the graph check can tell those two apart', () => {
+    const index = buildOwnershipIndex([diff('holder')], relations);
+
+    expect(collectCandidateEntityIds(index, relations).has('fresh')).toBe(true);
+  });
+});
+
 describe('countEntityChanges', () => {
   it('counts values, relations and blocks together', () => {
     const entity: EntityDiff = {
@@ -254,21 +292,28 @@ describe('countEntityChanges', () => {
 });
 
 describe('collectCandidateEntityIds', () => {
-  it('names the row, its folded blocks and its relation entities, and nothing else', () => {
+  it('names the row, its folded blocks, its relation entities and every relation target', () => {
     const relations = [blocksRelation('parent', 'block-a'), relation('parent', 'target', { entityId: 'rel-entity' })];
     const index = buildOwnershipIndex([diff('parent', ['block-a'])], relations);
 
-    const candidates = collectCandidateEntityIds(index);
+    const candidates = collectCandidateEntityIds(index, relations);
 
-    expect(candidates).toEqual(new Set(['parent', 'block-a', 'blocks-rel-parent-block-a', 'rel-entity']));
-    // The relation's target is somebody else's entity, so its existence is not this index's to say.
-    expect(candidates.has('target')).toBe(false);
+    expect(candidates).toEqual(new Set(['parent', 'block-a', 'blocks-rel-parent-block-a', 'rel-entity', 'target']));
+  });
+
+  /** Relation targets must be candidates too — else discarded existing entities look "new". */
+  it('includes a target no row owns, so the graph check can answer for it', () => {
+    const relations = [relation('holder', 'somewhere-else')];
+    const index = buildOwnershipIndex([diff('holder')], relations);
+
+    expect(index.ownerOf.has('somewhere-else')).toBe(false);
+    expect(collectCandidateEntityIds(index, relations).has('somewhere-else')).toBe(true);
   });
 
   it('covers every id the dependency checks actually ask about', () => {
     const relations = [relation('holder', 'fresh'), relation('holder', 'outside')];
     const index = buildOwnershipIndex([diff('holder'), diff('fresh')], relations);
-    const candidates = collectCandidateEntityIds(index);
+    const candidates = collectCandidateEntityIds(index, relations);
 
     const asked: string[] = [];
     const record = (id: string) => {

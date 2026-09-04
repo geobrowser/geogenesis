@@ -133,8 +133,10 @@ export function countEntityChanges(entity: EntityDiff): number {
 }
 
 /** All entity ids the dependency checks may ask about — every key of `ownerOf`. */
-export function collectCandidateEntityIds(index: OwnershipIndex): Set<string> {
-  return new Set(index.ownerOf.keys());
+export function collectCandidateEntityIds(index: OwnershipIndex, relations: readonly Relation[]): Set<string> {
+  const ids = new Set(index.ownerOf.keys());
+  for (const relation of relations) ids.add(relation.toEntity.id);
+  return ids;
 }
 
 /**
@@ -212,13 +214,15 @@ export function findDanglingDependencies(
     if (fromOwner === undefined || !selectedDisplayIds.has(fromOwner)) continue;
 
     const toOwner = index.ownerOf.get(relation.toEntity.id);
-    if (toOwner === undefined || selectedDisplayIds.has(toOwner)) continue;
+    if (toOwner !== undefined && selectedDisplayIds.has(toOwner)) continue;
     if (toOwner === fromOwner) continue;
+    // Already on the graph, so the endpoint resolves however the selection falls.
     if (!isNewEntity(relation.toEntity.id)) continue;
 
-    const holders = requiredBy.get(toOwner) ?? new Set<string>();
+    const target = toOwner ?? relation.toEntity.id;
+    const holders = requiredBy.get(target) ?? new Set<string>();
     holders.add(fromOwner);
-    requiredBy.set(toOwner, holders);
+    requiredBy.set(target, holders);
   }
 
   return [...requiredBy.entries()].map(([entityId, holders]) => ({
