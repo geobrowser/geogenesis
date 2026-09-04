@@ -223,4 +223,50 @@ describe('withViewerPosition', () => {
     // `presentCount` falls back to the face count, so the badge cannot claim a remainder.
     expect(presentCount(disagree)).toBe(1);
   });
+
+  // GEO-2820. `participants` is presence-driven and `serverPosition` is the stored response, so
+  // for a position taken in an earlier session geo-chat names the side and lists nobody on it.
+  // Agreeing about the side used to be enough to return early, which left the pill filled with the
+  // viewer's colour and no face — the very failure this function exists to prevent.
+  it('adds the viewer to the side they hold when the lists carry them nowhere', () => {
+    const sides = place(
+      [
+        side(true, { total_count: 3, participants: [participant(OTHER_SPACE)] }),
+        side(false, { total_count: 12, participants: [participant(OTHER_SPACE)] }),
+      ],
+      false,
+      false
+    );
+
+    const disagree = on(sides, false);
+    expect(disagree.participants.map(p => p.profile_space_id)).toContain(VIEWER_SPACE);
+    // The count already included them — only the face was missing, so no "+1" appears beside it.
+    expect(disagree.total_count).toBe(12);
+  });
+
+  // The other side is rebuilt too, and must not gain a face it never had.
+  it('leaves the opposing side alone when filling in the held side', () => {
+    const sides = place(
+      [
+        side(true, { total_count: 3, participants: [participant(OTHER_SPACE)] }),
+        side(false, { total_count: 12, participants: [participant(OTHER_SPACE)] }),
+      ],
+      false,
+      false
+    );
+
+    const agree = on(sides, true);
+    expect(agree.participants.map(p => p.profile_space_id)).toEqual([OTHER_SPACE]);
+    expect(agree.total_count).toBe(3);
+  });
+
+  // A viewer who holds nothing has no side to be missing from, so the early return still stands.
+  it('returns the same array for a viewer with no position and no stale entry', () => {
+    const positions = [
+      side(true, { total_count: 1, participants: [participant(OTHER_SPACE)] }),
+      side(false, { total_count: 1, participants: [participant(OTHER_SPACE)] }),
+    ];
+
+    expect(place(positions, null, null)).toBe(positions);
+  });
 });

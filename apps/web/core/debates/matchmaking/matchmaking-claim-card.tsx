@@ -651,7 +651,23 @@ export function withViewerPosition({
   const listedOnAnotherSide = positions.some(
     side => side.position !== viewerPosition && side.participants.some(heldByViewer)
   );
-  if (viewerPosition === serverPosition && !listedOnAnotherSide) return positions;
+  // ...and the side they *do* hold may not carry them either. `participants` is presence-driven —
+  // the hub's rows build it from `online_choices` — while `serverPosition` is the stored response,
+  // so for any position taken outside this session geo-chat agrees about the side and still lists
+  // nobody on it. Returning early there left the pill filled with the viewer's colour and no face,
+  // which is the exact failure this function exists to prevent; GEO-2807 covered the case where the
+  // lists put the viewer on the *wrong* side, and this is the case where they put them on none.
+  //
+  // Falling through costs the counts nothing: `countsViewer` already reports the viewer as counted
+  // when `serverPosition` names this side, so `withViewer` adds the face with `missing = 0` rather
+  // than inventing a "+1" beside it.
+  //
+  // `viewerPosition === null` still returns early — there is no held side to be missing from, and
+  // a stale entry on either side is what `listedOnAnotherSide` already catches.
+  const listedOnHeldSide =
+    viewerPosition === null ||
+    positions.some(side => side.position === viewerPosition && side.participants.some(heldByViewer));
+  if (viewerPosition === serverPosition && !listedOnAnotherSide && listedOnHeldSide) return positions;
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const viewer = {
