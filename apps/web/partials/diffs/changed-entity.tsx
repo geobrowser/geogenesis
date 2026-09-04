@@ -31,12 +31,93 @@ import { getVideoPath } from '~/core/utils/utils';
 
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Trash } from '~/design-system/icons/trash';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
 import { TableBlockLoadingPlaceholder } from '~/partials/blocks/table/table-block';
 
 import { getFenceLength, readFencedCodeBlock } from './markdown-fences';
+
+/** Checkbox for including this row; blocked (not cascaded) when other selected rows depend on it. */
+function EntitySelectionCheckbox({
+  entityId,
+  entityName,
+  selection,
+}: {
+  entityId: string;
+  entityName: string | null;
+  selection: ChangedEntitySelection;
+}) {
+  const isBlocked = selection.blockedBy.length > 0;
+  const label = entityName ?? entityId;
+
+  const checkbox = (
+    <span className={cx('flex shrink-0 items-center', isBlocked && 'cursor-not-allowed opacity-50')}>
+      <Checkbox
+        checked={selection.isSelected}
+        onChange={isBlocked ? () => {} : selection.onToggle}
+        aria-label={`Include ${label} in this publish`}
+        aria-checked={selection.isSelected}
+        aria-disabled={isBlocked || undefined}
+      />
+    </span>
+  );
+
+  if (!isBlocked) return checkbox;
+
+  const holders = selection.blockedBy.join(', ');
+
+  return (
+    <Tooltip
+      trigger={checkbox}
+      position="right"
+      label={`${label} is created by this proposal and ${holders} still links to it. Remove ${holders} first, or publish them together.`}
+    />
+  );
+}
+
+/** Per-row discard; blocked when other selected rows still depend on this entity. */
+function EntityDiscardButton({
+  entityName,
+  selection,
+}: {
+  entityName: string;
+  selection: ChangedEntitySelection;
+}) {
+  const isBlocked = selection.blockedBy.length > 0;
+
+  const button = (
+    <span className={cx('ml-auto flex shrink-0', isBlocked && 'cursor-not-allowed')}>
+      <button
+        type="button"
+        onClick={isBlocked ? undefined : selection.onDiscard}
+        disabled={isBlocked}
+        className={cx(
+          'flex items-center gap-1.5 rounded px-1.5 py-1 text-metadata text-grey-04 focus-visible:outline-hidden',
+          isBlocked ? 'opacity-50' : 'hover:text-red-01'
+        )}
+        aria-label={`Discard changes to ${entityName}`}
+      >
+        <Trash />
+        <span>Discard</span>
+      </button>
+    </span>
+  );
+
+  if (!isBlocked) return button;
+
+  const holders = selection.blockedBy.join(', ');
+
+  return (
+    <Tooltip
+      trigger={button}
+      position="left"
+      label={`${entityName} is created by this proposal and ${holders} still links to it. Remove ${holders} first, or discard them together.`}
+    />
+  );
+}
 
 const TYPES_PROPERTY_ID = SystemIds.TYPES_PROPERTY;
 const AVATAR_PROPERTY_ID = ContentIds.AVATAR_PROPERTY;
@@ -98,13 +179,29 @@ export function hasVisibleChanges(entity: EntityDiff): boolean {
   );
 }
 
+/** Selection controls — review panel only; proposal/history diffs are read-only. */
+export type ChangedEntitySelection = {
+  isSelected: boolean;
+  onToggle: () => void;
+  blockedBy: readonly string[];
+  changeCount: number;
+  isNew: boolean;
+  onDiscard: () => void;
+};
+
 type ChangedEntityProps = {
   entity: EntityDiff;
   spaceId: string;
   onOpenEntity?: (entityId: string) => void;
+  selection?: ChangedEntitySelection;
 };
 
-export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId, onOpenEntity }: ChangedEntityProps) {
+export const ChangedEntity = React.memo(function ChangedEntity({
+  entity,
+  spaceId,
+  onOpenEntity,
+  selection,
+}: ChangedEntityProps) {
   const typeRelations = entity.relations.filter(r => r.typeId === TYPES_PROPERTY_ID);
   const avatarRelations = entity.relations.filter(r => r.typeId === AVATAR_PROPERTY_ID);
   const coverRelations = entity.relations.filter(r => r.typeId === COVER_PROPERTY_ID);
@@ -148,20 +245,35 @@ export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId
 
   const resolvedAvatarUrl = avatarChangeImageUrl ?? coverChangeImageUrl ?? fetchedMediaUrl;
 
+  const isCollapsed = selection !== undefined && !selection.isSelected;
+
+  const typeName =
+    typeRelations.find(r => r.after?.toEntityName)?.after?.toEntityName ??
+    typeRelations.find(r => r.before?.toEntityName)?.before?.toEntityName ??
+    null;
+  const displayName = entity.name ?? (typeName ? `Untitled ${typeName.toLowerCase()}` : 'Untitled');
+
   const entityHeader = (
     <>
       {resolvedAvatarUrl && (
-        <div className="h-8 w-8 shrink-0 overflow-hidden rounded">
+        <div className={cx('h-8 w-8 shrink-0 overflow-hidden rounded', isCollapsed && 'opacity-40')}>
           <NativeGeoImage value={resolvedAvatarUrl} alt="" className="h-full w-full object-cover" />
         </div>
       )}
-      <h2 className="text-xl font-semibold">{entity.name}</h2>
+      <h2
+        className={cx('text-xl font-semibold', isCollapsed && 'text-grey-03', entity.name === null && 'text-grey-04')}
+      >
+        {displayName}
+      </h2>
     </>
   );
 
   return (
     <div>
       <div className="mb-4 flex items-center gap-3">
+        {selection && (
+          <EntitySelectionCheckbox entityId={entity.entityId} entityName={displayName} selection={selection} />
+        )}
         {onOpenEntity ? (
           <button
             type="button"
@@ -174,135 +286,157 @@ export const ChangedEntity = React.memo(function ChangedEntity({ entity, spaceId
         ) : (
           entityHeader
         )}
-      </div>
-
-      <div className="mb-4 grid grid-cols-2 gap-20">
-        <div className="text-sm text-grey-04">Current</div>
-        <div className="text-sm text-grey-04">Proposed edits</div>
-      </div>
-
-      <div className="space-y-4">
-        {(avatarRelations.length > 0 || coverRelations.length > 0) && (
-          <MediaChangeRow avatarRelations={avatarRelations} coverRelations={coverRelations} spaceId={spaceId} />
+        {selection && (
+          <span className="shrink-0 text-metadata text-grey-04">
+            {selection.changeCount === 1 ? '1 change' : `${selection.changeCount} changes`}
+            {selection.isNew && ' · new entity'}
+            {isCollapsed && ' · not included'}
+          </span>
         )}
+        {isCollapsed && (
+          <button
+            type="button"
+            onClick={selection.onToggle}
+            className="ml-auto shrink-0 rounded p-1 text-grey-04 transition-colors hover:text-text"
+            aria-label={`Include ${displayName} in this publish`}
+          >
+            <ChevronDownSmall />
+          </button>
+        )}
+        {selection && !isCollapsed && <EntityDiscardButton entityName={displayName} selection={selection} />}
+      </div>
 
-        {nameChange && (
-          <div className="grid grid-cols-2 gap-20">
-            <div className="flex items-center">
-              <TextDiffDisplay
-                value={nameChange.before}
-                diff={nameChange.type === 'TEXT' ? (nameChange as TextValueChange).diff : undefined}
-                side="before"
-                className="text-mainPage"
-              />
-            </div>
-            <div className="flex items-center">
-              <TextDiffDisplay
-                value={nameChange.after}
-                diff={nameChange.type === 'TEXT' ? (nameChange as TextValueChange).diff : undefined}
-                side="after"
-                className="text-mainPage"
-              />
-            </div>
+      {isCollapsed ? null : (
+        <>
+          <div className="mb-4 grid grid-cols-2 gap-20">
+            <div className="text-sm text-grey-04">Current</div>
+            <div className="text-sm text-grey-04">Proposed edits</div>
           </div>
-        )}
 
-        {typeRelations.length > 0 && <TypesChangeRow relations={typeRelations} />}
-
-        {entity.blocks.map(block => (
-          <BlockChangeRow key={block.id} block={block} spaceId={spaceId} />
-        ))}
-
-        {(filteredOtherValues.length > 0 ||
-          otherRelations.length > 0 ||
-          imageRelations.length > 0 ||
-          videoRelations.length > 0) && (
-          <div className="grid grid-cols-2 gap-20">
-            {filteredOtherValues.some(v => v.before !== null) ||
-            otherRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ||
-            imageRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ||
-            videoRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ? (
-              <div className="rounded-lg border border-grey-02 p-5 shadow-button">
-                {groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
-                  <ImagePropertyCell
-                    key={typeId}
-                    typeName={typeName}
-                    typeId={typeId}
-                    relations={relations}
-                    spaceId={spaceId}
-                    side="before"
-                  />
-                ))}
-                {groupRelationsByType(videoRelations).map(([typeId, typeName, relations]) => (
-                  <VideoPropertyCell
-                    key={typeId}
-                    typeName={typeName}
-                    typeId={typeId}
-                    relations={relations}
-                    spaceId={spaceId}
-                    side="before"
-                  />
-                ))}
-                {filteredOtherValues.map(value => (
-                  <ValueChangeCell key={value.propertyId} value={value} side="before" />
-                ))}
-                {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
-                  <RelationGroupCell
-                    key={typeId}
-                    typeId={typeId}
-                    typeName={typeName}
-                    relations={relations}
-                    side="before"
-                  />
-                ))}
-              </div>
-            ) : (
-              <div />
+          <div className="space-y-4">
+            {(avatarRelations.length > 0 || coverRelations.length > 0) && (
+              <MediaChangeRow avatarRelations={avatarRelations} coverRelations={coverRelations} spaceId={spaceId} />
             )}
-            {filteredOtherValues.some(v => v.after !== null) ||
-            otherRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ||
-            imageRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ||
-            videoRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ? (
-              <div className="rounded-lg border border-grey-02 p-5 shadow-button">
-                {groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
-                  <ImagePropertyCell
-                    key={typeId}
-                    typeName={typeName}
-                    typeId={typeId}
-                    relations={relations}
-                    spaceId={spaceId}
-                    side="after"
+
+            {nameChange && (
+              <div className="grid grid-cols-2 gap-20">
+                <div className="flex items-center">
+                  <TextDiffDisplay
+                    value={nameChange.before}
+                    diff={nameChange.type === 'TEXT' ? (nameChange as TextValueChange).diff : undefined}
+                    side="before"
+                    className="text-mainPage"
                   />
-                ))}
-                {groupRelationsByType(videoRelations).map(([typeId, typeName, relations]) => (
-                  <VideoPropertyCell
-                    key={typeId}
-                    typeName={typeName}
-                    typeId={typeId}
-                    relations={relations}
-                    spaceId={spaceId}
+                </div>
+                <div className="flex items-center">
+                  <TextDiffDisplay
+                    value={nameChange.after}
+                    diff={nameChange.type === 'TEXT' ? (nameChange as TextValueChange).diff : undefined}
                     side="after"
+                    className="text-mainPage"
                   />
-                ))}
-                {filteredOtherValues.map(value => (
-                  <ValueChangeCell key={value.propertyId} value={value} side="after" />
-                ))}
-                {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
-                  <RelationGroupCell
-                    key={typeId}
-                    typeId={typeId}
-                    typeName={typeName}
-                    relations={relations}
-                    side="after"
-                  />
-                ))}
+                </div>
               </div>
-            ) : (
-              <div />
+            )}
+
+            {typeRelations.length > 0 && <TypesChangeRow relations={typeRelations} />}
+
+            {entity.blocks.map(block => (
+              <BlockChangeRow key={block.id} block={block} spaceId={spaceId} />
+            ))}
+
+            {(filteredOtherValues.length > 0 ||
+              otherRelations.length > 0 ||
+              imageRelations.length > 0 ||
+              videoRelations.length > 0) && (
+              <div className="grid grid-cols-2 gap-20">
+                {filteredOtherValues.some(v => v.before !== null) ||
+                otherRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ||
+                imageRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ||
+                videoRelations.some(r => r.changeType === 'REMOVE' || r.changeType === 'UPDATE') ? (
+                  <div className="rounded-lg border border-grey-02 p-5 shadow-button">
+                    {groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
+                      <ImagePropertyCell
+                        key={typeId}
+                        typeName={typeName}
+                        typeId={typeId}
+                        relations={relations}
+                        spaceId={spaceId}
+                        side="before"
+                      />
+                    ))}
+                    {groupRelationsByType(videoRelations).map(([typeId, typeName, relations]) => (
+                      <VideoPropertyCell
+                        key={typeId}
+                        typeName={typeName}
+                        typeId={typeId}
+                        relations={relations}
+                        spaceId={spaceId}
+                        side="before"
+                      />
+                    ))}
+                    {filteredOtherValues.map(value => (
+                      <ValueChangeCell key={value.propertyId} value={value} side="before" />
+                    ))}
+                    {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
+                      <RelationGroupCell
+                        key={typeId}
+                        typeId={typeId}
+                        typeName={typeName}
+                        relations={relations}
+                        side="before"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div />
+                )}
+                {filteredOtherValues.some(v => v.after !== null) ||
+                otherRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ||
+                imageRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ||
+                videoRelations.some(r => r.changeType === 'ADD' || r.changeType === 'UPDATE') ? (
+                  <div className="rounded-lg border border-grey-02 p-5 shadow-button">
+                    {groupRelationsByType(imageRelations).map(([typeId, typeName, relations]) => (
+                      <ImagePropertyCell
+                        key={typeId}
+                        typeName={typeName}
+                        typeId={typeId}
+                        relations={relations}
+                        spaceId={spaceId}
+                        side="after"
+                      />
+                    ))}
+                    {groupRelationsByType(videoRelations).map(([typeId, typeName, relations]) => (
+                      <VideoPropertyCell
+                        key={typeId}
+                        typeName={typeName}
+                        typeId={typeId}
+                        relations={relations}
+                        spaceId={spaceId}
+                        side="after"
+                      />
+                    ))}
+                    {filteredOtherValues.map(value => (
+                      <ValueChangeCell key={value.propertyId} value={value} side="after" />
+                    ))}
+                    {groupRelationsByType(otherRelations).map(([typeId, typeName, relations]) => (
+                      <RelationGroupCell
+                        key={typeId}
+                        typeId={typeId}
+                        typeName={typeName}
+                        relations={relations}
+                        side="after"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div />
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   );
 });
