@@ -1,5 +1,5 @@
 /**
- * Determines whether a debate request can be created for a claim.
+ * Whether the rematch picker can create a debate request for a claim.
  *
  * `create_rematch_request` resolves both participants' positions from the knowledge graph and
  * refuses with `claim_response_required` until the write is indexed. So the picker holds the
@@ -11,25 +11,14 @@
  * true and opens a button the server still refuses — pressable, and nothing happens. Comparing also
  * covers switching sides, where the server still holds the side just moved off.
  *
- * The debates hub does not use this gate, deliberately. Its match data and `create_debate_request_as`
- * both read `debate_claim_readiness`, which the in-flight response notification writes, so a
- * graph-backed position check there would hold a button the server would have accepted.
+ * The picker is the only caller, and the only surface that should be. Every other Request debate
+ * control is `ClaimEndSlot`, which posts to `/debate-requests` — validated against the same
+ * `debate_claim_readiness` rows its match is drawn from, so a graph-backed position check there
+ * waits on a fact the server neither reads nor needs. #2354 applied this gate to all of them, and
+ * that is what went wrong: the hub sat on "Publishing your position…" while the explore card
+ * offered the same claim and the request went through. Before adding a caller, check which endpoint
+ * it posts to.
  */
-/**
- * The viewer's position on a claim, read from both clocks, as a request offer needs it.
- *
- * Derived once by `useClaimPositionControl`, which already holds both readings, and passed straight
- * to `ClaimEndSlot`. Every surface that offers a debate needs the same three values, and deriving
- * them per surface is how the two clocks drifted apart in the first place (GEO-2808).
- */
-export type DebateRequestPosition = {
-  /** geo-chat's copy. `undefined` when it has no row for this claim yet. */
-  chat: boolean | null | undefined;
-  /** What the viewer believes they hold — optimistic while a response is in flight. */
-  local: boolean | null;
-  indexingDelayed?: boolean;
-};
-
 export type DebateRequestGateInput = {
   /**
    * The position the request will be validated against, as the surface last heard it.

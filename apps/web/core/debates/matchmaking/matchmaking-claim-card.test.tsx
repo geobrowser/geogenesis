@@ -250,23 +250,29 @@ describe('position avatar stack', () => {
    * with `claim_response_required`. It now waits on the same fact the picker waits on and wears the
    * same label.
    */
-  describe('the request waits for geo-chat to hold the viewer position', () => {
+  describe('the request follows the match, not the graph position', () => {
     const twoSides = () =>
       withCounts([
         { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('a')] },
         { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('b')] },
       ]);
 
-    it('names the wait while geo-chat has not caught up', () => {
+    // The reported bug: the hub sat on "Publishing your position…" while the explore card offered
+    // the same claim and the request went through. This button posts to `/debate-requests`, which
+    // validates against the same `debate_claim_readiness` rows the match is drawn from — so a
+    // position geo-chat has not yet derived from the graph is not something to wait for. #2354
+    // waited on it anyway, having generalised the rematch picker's graph-validated fix.
+    it('offers the debate while the response is still indexing', () => {
       mocks.match = { id: 'match-1' };
-      // An answer still reconciling is what the card draws its optimistic side from.
+      // An answer still reconciling is what the card draws its optimistic side from, and the state
+      // geo-chat's own row has not caught up with.
       mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
       renderCard(
         <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
       );
 
-      expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeDisabled();
-      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+      expect(screen.queryByText('Publishing your position…')).not.toBeInTheDocument();
     });
 
     it('offers the debate once geo-chat holds the side on screen', () => {
@@ -276,17 +282,12 @@ describe('position avatar stack', () => {
       expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
     });
 
-    // A claim nobody has answered is not publishing anything. The hub's opponent half is a match,
-    // which does not require a position the way the picker's `opposing` does, so without this the
-    // card announced a wait nobody had started.
-    it('does not name a wait on a claim the viewer has not answered', () => {
-      mocks.match = { id: 'match-1' };
-      renderCard(
-        <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
-      );
+    // Without a match there is no opponent to ask, which is the only condition this control has.
+    it('offers nothing when geo-chat reports no match', () => {
+      mocks.match = null;
+      renderCard(<MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness()} />);
 
-      expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Request debate' })).toBeDisabled();
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
     });
   });
 
