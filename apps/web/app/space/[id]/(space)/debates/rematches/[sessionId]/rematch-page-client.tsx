@@ -43,7 +43,6 @@ import {
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
-import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState } from '~/core/debates/matchmaking/hub-states';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import {
@@ -60,6 +59,7 @@ import { useStableListOrder } from '~/core/debates/matchmaking/use-stable-list-o
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { participantSidesOn, useParticipantPositions } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { RequestDebateControl } from '~/core/debates/request-debate-control';
 import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import {
   type TaggedClaimFilters,
@@ -1546,12 +1546,35 @@ function RematchClaimCard({
       claim={claim.claim}
       positions={positions}
       readiness={readiness}
-      // No end slot. A rematch request is its own mutation with its own gating, and the footer
-      // below is the control that sends it, so a second "Request debate" in the header would be a
-      // different button wearing the same words. Nothing to watch either: the picker has no
-      // active-debate signal, and it is mid-session anyway — the only debate to watch is the one
-      // the viewer is already in. With the slot off, `activeDebate` has no reader.
+      // The card's own offer is replaced rather than hidden. A rematch request is its own mutation
+      // with its own gating, but it is the same offer to the reader — so it wears the same control
+      // in the same place instead of a footer button of its own (GEO-2825). Nothing to watch here
+      // either: the picker has no active-debate signal, and it is mid-session anyway, so
+      // `activeDebate` has no reader.
+      // `hideEndSlot` stays for when there is no offer: the slot falls through to the card's own
+      // `ClaimEndSlot` otherwise, which sends the wrong mutation entirely.
       hideEndSlot
+      // Only when there is something to offer, the same way the side panel renders its control only
+      // once a match exists. Rendering it unconditionally put a dead disabled button on every card.
+      endSlot={
+        awaitingResponse || canRequest || requesting || claim.recently_rejected || requestError ? (
+          <RequestDebateControl
+            onRequest={onRequest}
+            disabled={!canRequest || busy || claim.recently_rejected}
+            isRequesting={requesting}
+            pending={awaitingResponse}
+            pendingLabel={awaitingLabel}
+            requestError={requestError}
+            note={
+              claim.recently_rejected ? (
+                <Text as="span" variant="footnote" color="grey-04">
+                  Recently rejected
+                </Text>
+              ) : null
+            }
+          />
+        ) : null
+      }
       // `positions` locates the viewer by geo-chat user id, which is null until the token exchange
       // lands. Until then `chatPosition` reads as "no position" for someone the summaries
       // may already count, and the card would draw them onto a second side.
@@ -1564,50 +1587,6 @@ function RematchClaimCard({
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
       onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
-      footer={
-        // `recently_rejected` too: the note lives in this footer, and it is a standing fact about
-        // the claim rather than a state of the offer. Without it a rejected claim the viewer has no
-        // position on lost the explanation along with the button.
-        awaitingResponse || canRequest || requesting || claim.recently_rejected || requestError ? (
-          <div className="mt-3">
-            {/* GEO-2697. The wait lives on the control it is blocking. This used to be a separate
-                spinner line rendered *instead* of the button, which left the viewer watching a
-                message in one place for a button that wasn't on screen yet — nothing connected the
-                two. `HubPillButton` already disables and sets `aria-busy` while pending, so the
-                button carries the whole state: named while it waits, pressable when it doesn't. */}
-            <HubPillButton
-              onClick={onRequest}
-              disabled={!canRequest || busy || requesting || claim.recently_rejected}
-              pending={requesting || awaitingResponse}
-              pendingLabel={requesting ? 'Requesting…' : awaitingLabel}
-              className="w-full"
-            >
-              Request debate
-            </HubPillButton>
-            {/* The button's own label changes, but a disabled control nobody is focused on
-                announces nothing. This is what actually reaches a screen reader, and it is why the
-                wait is still a `status` even though it is no longer drawn as one. */}
-            {awaitingResponse && !requesting ? (
-              <span role="status" aria-live="polite" className="sr-only">
-                {awaitingLabel}
-              </span>
-            ) : null}
-            {claim.recently_rejected ? (
-              <Text as="p" variant="footnote" color="grey-04" className="mt-1">
-                Recently rejected
-              </Text>
-            ) : null}
-            {/* Keep request feedback with the claim that initiated the mutation. */}
-            {requestError ? (
-              <div role="alert" className="mt-1">
-                <Text as="p" variant="footnote" color="red-01">
-                  {requestError}
-                </Text>
-              </div>
-            ) : null}
-          </div>
-        ) : null
-      }
     />
   );
 }
