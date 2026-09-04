@@ -3177,6 +3177,34 @@ describe('DebateRematchPageClient', () => {
     expect(await screen.findByRole('button', { name: 'Request debate' })).toBeEnabled();
   });
 
+  /**
+   * GEO-2825. The offer now rides the card's own end slot rather than a footer of its own, so it
+   * has to appear on the same terms the side panel's does — only when there is something to offer.
+   * Rendering it unconditionally put a dead disabled button on every card in the list.
+   */
+  it('offers no request on a claim with nothing to offer', async () => {
+    mocks.claims = [
+      {
+        ...sharedClaim(),
+        participants: [
+          // Both on the same side, so there is no opposing pair to request a debate against.
+          { user_id: 'user-local', position: true, position_label: 'Agree' },
+          { user_id: 'user-remote', position: true, position_label: 'Agree' },
+        ],
+      },
+    ];
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED, SPACE_1, true),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Publishing your position…' })).not.toBeInTheDocument();
+  });
+
   // Switching sides leaves geo-chat holding the side you just moved off, which is no more valid to
   // request against than holding none.
   it('withholds the request while a side switch is still publishing', async () => {

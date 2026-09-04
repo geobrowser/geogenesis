@@ -76,6 +76,16 @@ type Props = {
    */
   hideEndSlot?: boolean;
   /**
+   * Replaces the card's own offer with the host's.
+   *
+   * For the one host whose offer is not the card's: the rematch picker sends a session-scoped
+   * rematch request, its own mutation with its own gating. It used to draw that in a footer, which
+   * left the same action wearing two designs depending on which surface you were looking at
+   * (GEO-2825). It now passes the same control the card would have rendered, wired to its own
+   * mutation, and it lands in the same place.
+   */
+  endSlot?: React.ReactNode;
+  /**
    * Replaces the claim's link to its entity page. The rematch picker opens the side panel instead:
    * following a link there would navigate out of the app shell and abandon the live session.
    */
@@ -134,6 +144,7 @@ export function MatchmakingClaimCard({
   viewerResponseUnknown,
   onRequireSignIn,
   hideEndSlot,
+  endSlot,
   ref,
 }: Props) {
   // geo-chat can hand back a claim the graph has never seen. Responding to one is impossible, and
@@ -191,6 +202,7 @@ export function MatchmakingClaimCard({
           viewerResponseUnknown={viewerResponseUnknown}
           onRequireSignIn={onRequireSignIn}
           hideEndSlot={hideEndSlot}
+          endSlot={endSlot}
         />
       ) : (
         <UnresolvableControls
@@ -200,6 +212,7 @@ export function MatchmakingClaimCard({
           activeDebate={activeDebate}
           onOpenClaim={onOpenClaim}
           hideEndSlot={hideEndSlot}
+          endSlot={endSlot}
         />
       )}
 
@@ -500,6 +513,7 @@ function RespondableControls({
   viewerResponseUnknown,
   onRequireSignIn,
   hideEndSlot,
+  endSlot,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -514,6 +528,7 @@ function RespondableControls({
   viewerResponseUnknown?: boolean;
   onRequireSignIn?: () => void;
   hideEndSlot?: boolean;
+  endSlot?: React.ReactNode;
 }) {
   const {
     viewerPosition,
@@ -564,14 +579,14 @@ function RespondableControls({
         onOpenClaim={onOpenClaim}
         isControversial={summary.isControversial}
         endSlot={
-          hideEndSlot ? null : (
+          endSlot ?? (hideEndSlot ? null : (
             <ClaimEndSlot
               claimId={claim.claim_entity_id}
               spaceId={claim.space_id}
               activeDebate={activeDebate}
               position={requestPosition}
             />
-          )
+          ))
         }
       />
       <PositionRow
@@ -732,6 +747,7 @@ function UnresolvableControls({
   activeDebate,
   onOpenClaim,
   hideEndSlot,
+  endSlot,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -739,6 +755,7 @@ function UnresolvableControls({
   activeDebate?: Debate | boolean | null;
   onOpenClaim?: () => void;
   hideEndSlot?: boolean;
+  endSlot?: React.ReactNode;
 }) {
   return (
     <>
@@ -757,7 +774,7 @@ function UnresolvableControls({
              hardest to reach any other way: every card there is a match by definition, and the
              footer button that used to offer it is gone. Masking an action the server would accept
              is not the safe direction to be wrong in. */
-          hideEndSlot ? null : (
+          endSlot ?? (hideEndSlot ? null : (
             <ClaimEndSlot
               claimId={claim.claim_entity_id}
               spaceId={claim.space_id}
@@ -772,7 +789,7 @@ function UnresolvableControls({
                 local: readiness.viewer_response?.position ?? null,
               }}
             />
-          )
+          ))
         }
       />
       <PositionRow
