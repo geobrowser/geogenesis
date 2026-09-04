@@ -7,10 +7,11 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
-import type { DebateRequestPosition } from '~/core/debates/request-gate';
+import { viewerResponseFromDirection } from '~/core/claims/browse/claim-position-summaries';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
+import type { DebateRequestPosition } from '~/core/debates/request-gate';
 import {
   useEntityResponse,
   useEntityResponseIndexingSnapshot,
@@ -515,29 +516,9 @@ function RespondableControls({
   onRequireSignIn?: () => void;
   hideEndSlot?: boolean;
 }) {
-  const {
-    viewerPosition,
-    optimisticPositions,
-    respond,
-    actionTitle,
-    responseError,
-    canRespond,
-    requestPosition,
-  } = useClaimPositionControl({
-    claim,
-    positions,
-    readiness,
-      answersReady,
-      responseBlockedReason,
-      viewerIdentityPending,
-      viewerResponseUnknown,
-      onRequireSignIn,
-      // The faces the match implies belong with the offer the match makes. Where the slot is hidden
-      // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
-      offersDebate: !hideEndSlot,
-    });
-  // One read for the card. The header flags a contested claim and the footer reports the split, and
-  // deciding that twice is how the two would eventually disagree.
+  // One read for the card, and now the second half of what the card draws from. The header flags a
+  // contested claim, the footer reports the split, and — since GEO-2823 — the viewer's own response
+  // is reconciled against it too. Deciding any of that twice is how surfaces drift.
   //
   // Held on `answersReady` as well as proximity, because the response kind is part of both query
   // keys. Asking under the `stance` fallback does not merely waste a pair of requests on a factual
@@ -555,6 +536,42 @@ function RespondableControls({
     readiness.response_kind,
     readResponses && answersReady
   );
+
+  /**
+   * The viewer's own side, with the on-chain read standing in where geo-chat has no answer.
+   *
+   * The half of GEO-2823 that was actually costing people their position. The optimistic snapshot
+   * is a *shared* store keyed on the claim, so whichever surface first sees geo-chat confirm the
+   * response retires the optimism for all of them — and a surface whose only source is geo-chat
+   * then falls back to an endpoint that has not caught up. Take a side in the hub panel and it
+   * vanished about ten seconds later while the explore card, which already had this fallback
+   * through `useClaimResponseState`, went on showing it.
+   *
+   * `viewerResponseUnknown` is left alone deliberately. That flag means the host cannot say whether
+   * geo-chat holds an answer at all, and substituting one there is what GEO-2807 removed: the
+   * rematch picker's sides are the graph's, and correcting them against an answer nobody gave takes
+   * the viewer off the side the graph says they hold.
+   */
+  const resolvedReadiness = React.useMemo(() => {
+    if (viewerResponseUnknown || readiness.viewer_response) return readiness;
+    const fromChain = viewerResponseFromDirection(summary.viewerDirection, readiness.response_kind);
+    return fromChain ? { ...readiness, viewer_response: fromChain } : readiness;
+  }, [readiness, summary.viewerDirection, viewerResponseUnknown]);
+
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond, requestPosition } =
+    useClaimPositionControl({
+      claim,
+      positions,
+      readiness: resolvedReadiness,
+      answersReady,
+      responseBlockedReason,
+      viewerIdentityPending,
+      viewerResponseUnknown,
+      onRequireSignIn,
+      // The faces the match implies belong with the offer the match makes. Where the slot is hidden
+      // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
+      offersDebate: !hideEndSlot,
+    });
 
   return (
     <>
@@ -651,7 +668,16 @@ export function withViewerPosition({
   const listedOnAnotherSide = positions.some(
     side => side.position !== viewerPosition && side.participants.some(heldByViewer)
   );
-  if (viewerPosition === serverPosition && !listedOnAnotherSide) return positions;
+  // ...and they may lag behind it on the side the viewer actually holds, which is the half this
+  // used to miss (GEO-2821). Agreeing about the *position* was treated as nothing left to do, so
+  // the viewer's own face was left to geo-chat's presence view — and that view lists a viewer only
+  // where it has a readiness row for them, which pre-GEO-2740 positions do not have until
+  // something backfills one. Same viewer, same online status, face on the claims that had been
+  // repaired and no face on the rest. The client knows which side it holds; assert it.
+  const listedOnHeldSide =
+    viewerPosition === null ||
+    positions.some(side => side.position === viewerPosition && side.participants.some(heldByViewer));
+  if (viewerPosition === serverPosition && !listedOnAnotherSide && listedOnHeldSide) return positions;
 
   const copy = ENTITY_RESPONSE_COPY[responseKind];
   const viewer = {
@@ -685,23 +711,30 @@ export function withViewerPosition({
   const countsViewer = (side: DebateClaimPositionSummary) =>
     (serverPosition === side.position && !listedOnAnotherSide) || side.participants.some(heldByViewer);
 
+  // `present_count` asks the participant list and nothing else, because that is the population it
+  // reports: the faces and the "+N" behind them have to describe the same people. `total_count` can
+  // count a viewer the list leaves out — on a claim page it is the on-chain total, which includes
+  // the viewer's own response whether or not geo-chat considers them present — so the two questions
+  // are asked separately. Answering both with `countsViewer` prepended a face without room for it
+  // and left the badge one short.
+  const listsViewer = (side: DebateClaimPositionSummary) => side.participants.some(heldByViewer);
+
   const withViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => {
-    const missing = countsViewer(side) ? 0 : 1;
     return {
       ...side,
-      total_count: side.total_count + missing,
+      total_count: side.total_count + (countsViewer(side) ? 0 : 1),
       // Left undefined when the server sent none, so `presentCount` keeps falling back to the
       // face count — which the participant list below has already been adjusted for.
-      present_count: side.present_count === undefined ? undefined : side.present_count + missing,
+      present_count: side.present_count === undefined ? undefined : side.present_count + (listsViewer(side) ? 0 : 1),
       participants: [viewer, ...side.participants.filter(participant => !heldByViewer(participant))],
     };
   };
   const withoutViewer = (side: DebateClaimPositionSummary): DebateClaimPositionSummary => {
-    const counted = countsViewer(side) ? 1 : 0;
     return {
       ...side,
-      total_count: Math.max(0, side.total_count - counted),
-      present_count: side.present_count === undefined ? undefined : Math.max(0, side.present_count - counted),
+      total_count: Math.max(0, side.total_count - (countsViewer(side) ? 1 : 0)),
+      present_count:
+        side.present_count === undefined ? undefined : Math.max(0, side.present_count - (listsViewer(side) ? 1 : 0)),
       participants: side.participants.filter(participant => !heldByViewer(participant)),
     };
   };

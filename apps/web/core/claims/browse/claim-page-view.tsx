@@ -202,7 +202,7 @@ function ClaimPositionSection({
   // See claims-page-client: retiring the optimistic snapshot outlived the toggle that used to own
   // it, because `claim-response-summary` on this page reads that snapshot for display.
   useRetireConfirmedResponseIndexing({ debateClaim: row, entityId, spaceId });
-  useBackfillReadinessForHeldPosition({ debateClaim: row, entityId, spaceId });
+  useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId });
 
   return (
     <section aria-label="Your position" className="rounded-lg border border-grey-02 bg-white p-4 @[560px]:p-5">
@@ -235,10 +235,10 @@ function ClaimPositionSection({
         spaceId={spaceId}
         activeDebate={row?.active_debate}
         variant="block"
-        className="mt-2"
         // The offer sits directly under the pills that set the position it depends on, so it has to
         // wait for the same fact those pills are publishing (GEO-2808).
         position={control.requestPosition}
+        className="mt-2"
       />
     </section>
   );

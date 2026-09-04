@@ -41,6 +41,14 @@ vi.mock('~/core/debates/hooks', () => ({
     mocks.rowEnabledCalls.push(enabled);
     return { data: mocks.row ? { claims: [mocks.row] } : { claims: [] }, isLoading: false, error: null };
   },
+  // The readiness backfill reads this. Signed out, so it never sends — the repair itself has its
+  // own suite, and this one is about what the card draws.
+  useGeoChatAuth: () => ({
+    ready: false,
+    authenticated: false,
+    accountKey: null,
+    getPrivyIdentityToken: async () => null,
+  }),
 }));
 
 vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
@@ -91,8 +99,8 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     respond: vi.fn(),
     actionTitle: () => (answersReady ? '' : 'Loading this claim’s responses…'),
     responseError: null,
-    // Mirrors the hook: the request offer reads this to decide whether to make itself.
     requestPosition: { chat: null, local: null, indexingDelayed: false },
+    // Mirrors the hook: the request offer reads this to decide whether to make itself.
     canRespond: answersReady,
   }),
 }));

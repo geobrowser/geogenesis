@@ -205,7 +205,8 @@ describe('withViewerPosition', () => {
     expect(sides).toBe(positions);
   });
 
-  // Preserve referential equality when no correction is required.
+  // Preserve referential equality when no correction is required. Both sources agreeing is not
+  // enough on its own — the list has to agree too, which is what the next test is about.
   it('returns the same array when both sources already agree', () => {
     const positions = [
       side(true, { total_count: 1, present_count: 1, participants: [participant(VIEWER_SPACE)] }),
@@ -213,6 +214,48 @@ describe('withViewerPosition', () => {
     ];
 
     expect(place(positions, true, true)).toBe(positions);
+  });
+
+  /**
+   * GEO-2821. `participants` is geo-chat's presence view and lists a viewer only where it has a
+   * readiness row for them, which a position taken before GEO-2740 does not have. Agreeing about
+   * the position was treated as nothing left to do, so on those claims the viewer's own face never
+   * appeared — while a claim whose readiness had been repaired drew it, from one online status.
+   */
+  it('adds the viewer to the side they hold when the list omits them, even once the server agrees', () => {
+    const sides = place(
+      [
+        side(true, { total_count: 5, present_count: 2, participants: [participant(OTHER_SPACE)] }),
+        side(false, { total_count: 1, present_count: 0 }),
+      ],
+      true,
+      true
+    );
+
+    const agree = on(sides, true);
+    expect(agree.participants.map(p => p.profile_space_id)).toEqual([VIEWER_SPACE, OTHER_SPACE]);
+    // The presence count follows the list it describes, so the badge cannot claim a remainder of
+    // zero behind two faces.
+    expect(agree.present_count).toBe(3);
+    // The on-chain total already counts the viewer's own response — `serverPosition` says so — so
+    // it is not bumped a second time.
+    expect(agree.total_count).toBe(5);
+  });
+
+  // The mirror of it: a side the viewer does not hold loses nothing it never listed them on.
+  it('leaves the other side alone when the list never had the viewer', () => {
+    const sides = place(
+      [
+        side(true, { total_count: 5, present_count: 2, participants: [participant(OTHER_SPACE)] }),
+        side(false, { total_count: 1, present_count: 1, participants: [participant(OTHER_SPACE)] }),
+      ],
+      true,
+      true
+    );
+
+    const disagree = on(sides, false);
+    expect(disagree.present_count).toBe(1);
+    expect(disagree.total_count).toBe(1);
   });
 
   it('leaves present_count undefined where the server sent none, so the faces still answer', () => {

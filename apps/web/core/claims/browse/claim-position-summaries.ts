@@ -50,7 +50,13 @@ export function positionSummariesFromCounts(
       position_label: choice?.position_label ?? responsePositionLabel(responseKind, position),
       total_count: count,
       available_now_count: choice?.participant_count ?? 0,
-      present_count: choice?.participants.length ?? 0,
+      // The server's count of the present population, not the length of the preview it sent.
+      //
+      // `participants` is capped, so reading its length dropped the overflow the badge exists to
+      // report: five people behind two faces rendered no "+3". The hub's own rows have always used
+      // `participant_count` here, which is the divergence — one claim, two different "+N" on two
+      // surfaces (GEO-2823).
+      present_count: choice?.participant_count ?? 0,
       participants: choice?.participants ?? [],
     };
   });
