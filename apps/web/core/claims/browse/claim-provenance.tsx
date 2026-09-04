@@ -41,12 +41,25 @@ export function ClaimProvenance({
   claimRelations: Relation[];
   spaceId: string;
 }) {
-  const source = React.useMemo(() => {
-    const relation = claimRelations.find(
-      candidate => candidate.isDeleted !== true && ID.equals(candidate.type.id, SOURCES_PROPERTY_ID)
-    );
-    return relation ? { id: relation.toEntity.id, name: relation.toEntity.name } : null;
+  // Every source, in relation order, deduped by target. A claim used to carry exactly one `Sources`
+  // relation because every debate minted its own Claim; with find-or-create a transcript claim that
+  // already exists in the space is linked to the existing entity, which then collects one `Sources`
+  // per debate that stated it. The first is rendered as the primary source and the rest listed, so
+  // no debate is hidden behind another.
+  const sources = React.useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ id: string; name: string | null }> = [];
+    for (const relation of claimRelations) {
+      if (relation.isDeleted === true || !ID.equals(relation.type.id, SOURCES_PROPERTY_ID)) continue;
+      const key = ID.uuidToHex(relation.toEntity.id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: relation.toEntity.id, name: relation.toEntity.name });
+    }
+    return out;
   }, [claimRelations]);
+  const source = sources[0] ?? null;
+  const otherSources = sources.slice(1);
 
   // Only asked for once we know there is a source to attribute the claim to, and constrained to
   // blocks belonging to *that* source. A claim can be quoted by more than one transcript — the same
@@ -105,7 +118,9 @@ export function ClaimProvenance({
         <Text as="span" variant="metadata" color="grey-04">
           {speaker?.name ? (
             <>
-              First stated by{' '}
+              {/* Relation order says nothing about chronology, so "First" is only claimed when
+                  there is a single source to be first in. */}
+              {otherSources.length > 0 ? 'Stated by' : 'First stated by'}{' '}
               {/* Linked when the profile resolves to one. `profileLink` is nullable — a speaker
                   whose personal space has no front-page entity has nowhere to go, and a link to
                   nothing is worse than plain text. `whitespace-nowrap` keeps a two-word name from
@@ -125,6 +140,25 @@ export function ClaimProvenance({
         <Link href={NavUtils.toEntity(spaceId, source.id)} className="truncate text-metadata text-text hover:underline">
           {source.name ?? `this ${sourceKind}`}
         </Link>
+        {otherSources.length > 0 && (
+          <span className="truncate">
+            <Text as="span" variant="metadata" color="grey-04">
+              Also in{' '}
+            </Text>
+            {otherSources.map((other, index) => (
+              <React.Fragment key={other.id}>
+                {index > 0 ? (
+                  <Text as="span" variant="metadata" color="grey-04">
+                    ,{' '}
+                  </Text>
+                ) : null}
+                <Link href={NavUtils.toEntity(spaceId, other.id)} className="text-metadata text-text hover:underline">
+                  {other.name ?? `this ${sourceKind}`}
+                </Link>
+              </React.Fragment>
+            ))}
+          </span>
+        )}
       </div>
     </section>
   );

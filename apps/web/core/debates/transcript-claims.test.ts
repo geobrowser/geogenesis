@@ -125,7 +125,10 @@ describe('groupTranscriptClaims', () => {
     expect(claimsForParticipant(grouped, PRESTON)).toHaveLength(1);
   });
 
-  it('attributes a claim repeated by the other debater to whoever said it first', () => {
+  it('lists a claim both debaters stated under each of them, but counts it once', () => {
+    // With find-or-create a transcript claim that already exists in the space is linked to the
+    // existing entity, so the same claim id under two speakers is the ordinary case, not a quotation
+    // to attribute to whoever came first.
     const grouped = group(
       response([
         { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
@@ -134,7 +137,23 @@ describe('groupTranscriptClaims', () => {
     );
 
     expect(claimsForParticipant(grouped, PRESTON)).toHaveLength(1);
-    expect(claimsForParticipant(grouped, ARTURAS)).toHaveLength(0);
+    expect(claimsForParticipant(grouped, ARTURAS)).toHaveLength(1);
+    expect(claimsForParticipant(grouped, PRESTON)[0]).toBe(claimsForParticipant(grouped, ARTURAS)[0]);
+    expect(grouped.totalCount).toBe(1);
+    expect(grouped.all).toHaveLength(1);
+  });
+
+  it('still lists a claim once per speaker when that speaker repeats it', () => {
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-1' }] },
+        { id: 'block-3', position: 'a3', author: PRESTON, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+
+    expect(claimsForParticipant(grouped, PRESTON)).toHaveLength(1);
+    expect(claimsForParticipant(grouped, ARTURAS)).toHaveLength(1);
   });
 
   it('drops claims with no text, since the text is the name', () => {

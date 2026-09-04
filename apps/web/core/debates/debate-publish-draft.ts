@@ -63,6 +63,14 @@ export type DebateClaimInput = {
    * rides its Authors relation for speaker attribution.
    */
   turnIndex: number;
+  /**
+   * Find-or-create: the already-published Claim entity in the debate's space that geo-chat judged
+   * logically equivalent to this claim (its `existing_entity_id`). When set, the draft references
+   * that entity — the block's Claims relation and the claim's Sources relation point at it — and
+   * mints nothing: no Name, no Types, no Is factual, so an entity we did not create keeps its own
+   * facts. Null/absent mints a fresh Claim as before.
+   */
+  existingClaimEntityId?: string | null;
 };
 
 export type DebatePublishInput = {
@@ -338,20 +346,28 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       // the Claims relation — so attribution rides the block's Authors relation (the speaker), with no
       // separate claim→speaker property. Side (for/against) is recoverable from the participant's
       // Supported/Opposed-by membership on the Debate.
+      //
+      // Find-or-create: a claim geo-chat matched to an existing Claim in this space reuses that
+      // entity. Only the two relations are written — the block's Claims and the claim's Sources —
+      // and nothing on the entity itself, so a claim someone else published keeps its own Name,
+      // Types and Is factual even where this extraction would have said otherwise.
       for (const claim of claimsByTurnIndex.get(turn.turnIndex) ?? []) {
         const claimEntityText = claim.text.trim();
         if (claimEntityText.length === 0) continue;
-        const claimId = createEntityId();
+        const existingClaimId = claim.existingClaimEntityId?.trim() || null;
+        const claimId = existingClaimId ?? createEntityId();
         const claimRef = { id: claimId, name: claimEntityText };
-        setText(claimId, claimEntityText, NAME_PROPERTY_ID, claimEntityText);
-        relate({
-          fromEntity: claimRef,
-          propertyId: TYPES_PROPERTY_ID,
-          toEntityId: CLAIM_TYPE_ID,
-          toEntityName: 'Claim',
-        });
-        if (claim.isFactual !== null) {
-          setBoolean(claimId, claimEntityText, CLAIM_IS_FACTUAL_PROPERTY_ID, claim.isFactual);
+        if (existingClaimId === null) {
+          setText(claimId, claimEntityText, NAME_PROPERTY_ID, claimEntityText);
+          relate({
+            fromEntity: claimRef,
+            propertyId: TYPES_PROPERTY_ID,
+            toEntityId: CLAIM_TYPE_ID,
+            toEntityName: 'Claim',
+          });
+          if (claim.isFactual !== null) {
+            setBoolean(claimId, claimEntityText, CLAIM_IS_FACTUAL_PROPERTY_ID, claim.isFactual);
+          }
         }
         relate({
           fromEntity: blockRef,
