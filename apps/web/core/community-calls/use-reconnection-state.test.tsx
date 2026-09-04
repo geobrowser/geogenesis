@@ -14,6 +14,7 @@ const TELEMETRY = {
   roomName: 'space-1::call-1::1772130000000',
   occurrenceStart: 1772130000000,
   role: 'participant' as const,
+  participantIdentity: 'participant-a',
 };
 
 /**
@@ -23,6 +24,8 @@ const TELEMETRY = {
 function createFakeRoom() {
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
   const room = {
+    // The real Room always has this; the episode's participant count reads it.
+    remoteParticipants: new Map<string, unknown>(),
     on(event: string, handler: (...args: unknown[]) => void) {
       if (!listeners.has(event)) listeners.set(event, new Set());
       listeners.get(event)!.add(handler);
@@ -36,7 +39,7 @@ function createFakeRoom() {
   const emit = (event: string, ...args: unknown[]) => {
     for (const handler of [...(listeners.get(event) ?? [])]) handler(...args);
   };
-  return { room: room as unknown as Room, emit };
+  return { room: room as unknown as Room, emit, remotes: room.remoteParticipants };
 }
 
 const episodes = () => vi.mocked(reportCallDisconnect).mock.calls.map(([, episode]) => episode);
@@ -187,5 +190,35 @@ describe('useReconnectionState cutoff handling', () => {
     expect(result.current.status).toBe('disconnected');
     expect(result.current.disconnectReason).toBe(DisconnectReason.DUPLICATE_IDENTITY);
     expect(onPermanentDisconnect).not.toHaveBeenCalled();
+  });
+});
+
+// Attribution was the module's whole purpose and it could not do it: with no identity and
+// no room size, five episodes in one room read identically whether that is one flaky
+// connection or five people hit by one server event.
+describe('useReconnectionState drop attribution', () => {
+  it('reports the room size as it was when the trouble started, not after the teardown', () => {
+    const { room, emit, remotes } = createFakeRoom();
+    remotes.set('b', {});
+    remotes.set('c', {});
+    renderHook(() => useReconnectionState(room, () => {}, TELEMETRY));
+
+    act(() => emit('reconnecting'));
+    // LiveKit tears the participant list down before the disconnect resolves, so a count
+    // read at report time would always be 1.
+    remotes.clear();
+    act(() => emit('disconnected', DisconnectReason.SIGNAL_CLOSE));
+
+    expect(episodes()[0]?.participantCount).toBe(3);
+  });
+
+  it('still reports a count for an immediate disconnect with no episode open', () => {
+    const { room, emit, remotes } = createFakeRoom();
+    remotes.set('b', {});
+    renderHook(() => useReconnectionState(room, () => {}, TELEMETRY));
+
+    act(() => emit('disconnected', DisconnectReason.SERVER_SHUTDOWN));
+
+    expect(episodes()[0]?.participantCount).toBe(2);
   });
 });
