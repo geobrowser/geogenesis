@@ -11,6 +11,7 @@ import {
   collectCandidateEntityIds,
   collectOpsForEntities,
   countEntityChanges,
+  expandDiscardSet,
   findDanglingDependencies,
   getDeselectionBlockers,
   selectOpsForPublish,
@@ -176,6 +177,43 @@ describe('collectOpsForEntities', () => {
     const index = buildOwnershipIndex([diff('page')], []);
 
     expect(collectOpsForEntities(index, new Set(), [value('page')], [])).toEqual({ values: [], relations: [] });
+  });
+});
+
+describe('expandDiscardSet', () => {
+  it('cascades a new target that nothing outside the discard set still links to', () => {
+    const relations = [relation('holder', 'fresh')];
+    const index = buildOwnershipIndex([diff('holder'), diff('fresh')], relations);
+
+    expect(expandDiscardSet(index, new Set(['holder']), relations, always)).toEqual(new Set(['holder', 'fresh']));
+  });
+
+  it('leaves a target alone when another row still links to it', () => {
+    const relations = [relation('holder', 'fresh'), relation('other', 'fresh')];
+    const index = buildOwnershipIndex([diff('holder'), diff('other'), diff('fresh')], relations);
+
+    expect(expandDiscardSet(index, new Set(['holder']), relations, always)).toEqual(new Set(['holder']));
+  });
+
+  it('does not cascade an established graph entity', () => {
+    const relations = [relation('holder', 'existing')];
+    const index = buildOwnershipIndex([diff('holder'), diff('existing')], relations);
+
+    expect(expandDiscardSet(index, new Set(['holder']), relations, never)).toEqual(new Set(['holder']));
+  });
+
+  it('does not cascade a standalone new row that was never linked from the discard set', () => {
+    const relations = [relation('other', 'fresh')];
+    const index = buildOwnershipIndex([diff('holder'), diff('other'), diff('fresh')], relations);
+
+    expect(expandDiscardSet(index, new Set(['holder']), relations, always)).toEqual(new Set(['holder']));
+  });
+
+  it('cascades a chain of orphans', () => {
+    const relations = [relation('a', 'b'), relation('b', 'c')];
+    const index = buildOwnershipIndex([diff('a'), diff('b'), diff('c')], relations);
+
+    expect(expandDiscardSet(index, new Set(['a']), relations, always)).toEqual(new Set(['a', 'b', 'c']));
   });
 });
 

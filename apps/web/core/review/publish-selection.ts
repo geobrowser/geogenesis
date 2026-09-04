@@ -127,6 +127,50 @@ export function collectOpsForEntities(
   };
 }
 
+/**
+ * Expands a discard set so new display rows aren't left with no remaining inbound links.
+ *
+ * Only cascades entities this proposal creates, that were pointed at by something already being
+ * discarded, and that nothing outside the set still links to.
+ */
+export function expandDiscardSet(
+  index: OwnershipIndex,
+  entityIds: ReadonlySet<string>,
+  relations: readonly Relation[],
+  isNewEntity: (entityId: string) => boolean
+): Set<string> {
+  const discard = new Set(entityIds);
+  let settled = false;
+
+  while (!settled) {
+    settled = true;
+
+    for (const displayId of index.displayIds) {
+      if (discard.has(displayId) || !isNewEntity(displayId)) continue;
+
+      let linkedFromDiscard = false;
+      let linkedFromOutside = false;
+
+      for (const relation of relations) {
+        const toOwner = index.ownerOf.get(relation.toEntity.id);
+        if (toOwner !== displayId) continue;
+
+        const fromOwner = index.ownerOf.get(relation.fromEntity.id);
+        if (fromOwner === undefined || fromOwner === displayId) continue;
+
+        if (discard.has(fromOwner)) linkedFromDiscard = true;
+        else linkedFromOutside = true;
+      }
+
+      if (!linkedFromDiscard || linkedFromOutside) continue;
+      discard.add(displayId);
+      settled = false;
+    }
+  }
+
+  return discard;
+}
+
 /** Change count for the row header: each value, relation, and block counts as one. */
 export function countEntityChanges(entity: EntityDiff): number {
   return entity.values.length + entity.relations.length + entity.blocks.length;

@@ -34,6 +34,7 @@ import {
   collectCandidateEntityIds,
   collectOpsForEntities,
   countEntityChanges,
+  expandDiscardSet,
   findDanglingDependencies,
   getDeselectionBlockers,
   selectOpsForPublish,
@@ -547,7 +548,9 @@ export const ReviewChanges = () => {
       );
       if (wouldDangle) return;
 
-      const removed = collectOpsForEntities(ownershipIndex, entityIds, valuesFromSpace, relationsFromSpace);
+      // Cascade new rows that would be left with no remaining inbound links.
+      const toDiscard = expandDiscardSet(ownershipIndex, entityIds, relationsFromSpace, isNewEntity);
+      const removed = collectOpsForEntities(ownershipIndex, toDiscard, valuesFromSpace, relationsFromSpace);
       if (removed.values.length === 0 && removed.relations.length === 0) return;
 
       store.clearLocalChangesByIds({
@@ -581,6 +584,7 @@ export const ReviewChanges = () => {
       valuesFromSpace,
       relationsFromSpace,
       deselectionBlockers,
+      isNewEntity,
       store,
       storage,
       setToast,
