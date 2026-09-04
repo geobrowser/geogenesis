@@ -426,13 +426,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const chatPositionByClaimId = React.useMemo(() => {
     const byClaim = new Map<string, { spaceId: string; position: boolean | null }>();
-    // Every source is a rematch row since #2351 moved paging server-side, and a rematch row lists
-    // each session participant's side — so the viewer's is picked out of `participants`. This used
-    // to also read `viewer_response` off the hub's paged index, which that change removed.
+    // Every source is a rematch row since #2351 moved paging server-side. This used to also read
+    // `viewer_response` off the hub's paged index, which that change removed.
     for (const row of sessionRowsByClaimId.values()) {
+      // `viewer_position` in preference to the viewer's `participants` entry. The latter carries
+      // only what a live knowledge-graph resolution returned, and that resolve sits behind a
+      // timeout on geo-chat's side — when it lapses every `participants` position comes back null,
+      // which this gate reads as "no position held" and uses to disable every Request button on
+      // the page, for everyone, saying nothing. `viewer_position` falls back to the readiness row
+      // geo-chat already holds, so a slow graph costs accuracy at the margin instead of the
+      // whole page.
+      //
+      // Checked against `undefined` rather than with `??`, because `null` is a real answer here —
+      // geo-chat has a row and the viewer holds no position — and only `undefined` means a backend
+      // that predates the field. Collapsing the two would make an old backend look like a
+      // deliberate absence.
+      const viewerParticipant = row.participants.find(side => side.user_id === currentUserId);
       byClaim.set(row.claim.claim_entity_id, {
         spaceId: row.claim.space_id,
-        position: row.participants.find(side => side.user_id === currentUserId)?.position ?? null,
+        position: row.viewer_position !== undefined ? row.viewer_position : (viewerParticipant?.position ?? null),
       });
     }
     return byClaim;
