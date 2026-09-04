@@ -1,5 +1,6 @@
 'use client';
 
+import * as Popover from '@radix-ui/react-popover';
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -12,14 +13,12 @@ import {
   useRemoteParticipants,
   useRoomContext,
 } from '@livekit/components-react';
-import * as Popover from '@radix-ui/react-popover';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import cx from 'classnames';
-import { ConnectionState, DisconnectReason, MediaDeviceFailure, type Room, RoomEvent, Track } from 'livekit-client';
-import type { RemoteParticipant } from 'livekit-client';
+import { ConnectionState, MediaDeviceFailure, type Room, Track } from 'livekit-client';
 
 import { useIsMobileCallLayout } from '~/core/community-calls/use-is-mobile-call-layout';
 import type { DebateRematchParticipant, DebateRematchSession } from '~/core/debates/api';
@@ -28,18 +27,14 @@ import { AudioSettings, MobileSettingsSheet } from '~/core/debates/audio-setting
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
-import {
-  type LocalTrackLike,
-  type MediaDeviceOption,
-  systemDefaultAudioOutput,
-  useDebateMediaSession,
-} from '~/core/debates/media-session';
-import { attachNoiseFilter } from '~/core/debates/noise-filter';
+import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
+
+import type { RemoteParticipant } from 'livekit-client';
 
 // Voice auto-joins with the mic live: both users came here to coordinate out loud, and in the
 // debate-again flow they arrive straight from a debate where their mics were already hot.
@@ -63,7 +58,13 @@ function voiceCapable(status: DebateRematchSession['status']) {
  * or the session has left a voice-capable status. A denied microphone keeps the room in
  * listen-only mode rather than tearing it down.
  */
-export function RematchVoicePill({ session, currentUserId }: { session: DebateRematchSession; currentUserId: string }) {
+export function RematchVoicePill({
+  session,
+  currentUserId,
+}: {
+  session: DebateRematchSession;
+  currentUserId: string;
+}) {
   const voiceActive = voiceCapable(session.status);
   const opponent = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
   const local = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
@@ -198,7 +199,9 @@ export function RematchVoicePill({ session, currentUserId }: { session: DebateRe
     () => ({
       // LiveKit's default reconnect gives up after ~37s; this rides out deploys and brief drops.
       reconnectPolicy: new ExtendedReconnectPolicy(),
-      audioCaptureDefaults: initialAudioInputIdRef.current ? { deviceId: initialAudioInputIdRef.current } : undefined,
+      audioCaptureDefaults: initialAudioInputIdRef.current
+        ? { deviceId: initialAudioInputIdRef.current }
+        : undefined,
     }),
     []
   );
@@ -206,9 +209,7 @@ export function RematchVoicePill({ session, currentUserId }: { session: DebateRe
   if (!voiceActive || !opponent) return null;
 
   if (ownership === 'elsewhere') {
-    return (
-      <VoiceDockMessage message="Voice is active in another tab" actionLabel="Use voice here" onAction={takeOver} />
-    );
+    return <VoiceDockMessage message="Voice is active in another tab" actionLabel="Use voice here" onAction={takeOver} />;
   }
 
   if (ownership === 'pending' || join.isLoading) return null;
@@ -338,14 +339,23 @@ function VoiceDockBody({
     };
   }, [room, roomRef]);
 
+  // No noise filter here, deliberately. Krisp substitutes its own output for the *published* track,
+  // so anything that leaves it attached and not producing audio is a microphone that reads unmuted
+  // and carries nothing: the room stays connected, the pills stay lit, and the other side hears
+  // silence with nothing to click. The raw track depends on no audio context, worklet or processor
+  // swap, so this dock is on air whenever the room is. It auto-joins and exists to keep two people
+  // talking while they browse claims, and filtering is worth less here than audio that is either
+  // working or visibly broken.
+  //
+  // The debate room keeps Krisp: its pre-join screen means the audio context is already running
+  // before a filter attaches, and its recording is worth the filtering.
+
   // Auto-join means no click stands between arriving and connecting, so the browser's autoplay
   // policy can refuse to play the opponent's audio — silently, with the room otherwise healthy
   // (presence and mute state keep updating). The debate room never hits this because its pre-join
   // screen supplies the gesture. `startAudio()` has to run from a real user event, so the dock
   // asks for one.
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
-
-  useDockNoiseFilter(canPlayAudio);
 
   const connectionState = useConnectionState();
   // The room reports Disconnected both before the first connect and after the reconnect policy
@@ -354,39 +364,6 @@ function VoiceDockBody({
   React.useEffect(() => {
     if (connectionState === ConnectionState.Connected) setEverConnected(true);
   }, [connectionState]);
-
-  // A drop after having connected is a dead end for whichever side it happens to: the affected
-  // participant has to notice this exact dock and click Retry, and the *other* participant has
-  // nothing to click at all — their screen shows a healthy-looking room going quiet. Retry once per
-  // drop, automatically, with a freshly-minted token. The ref resets on its own: `onRetry` remounts
-  // `<LiveKitRoom>` under a new `connectionEpoch`, which gives this component a fresh instance. A
-  // room that never connects in the first place is not this path; it keeps the manual Retry.
-  //
-  // Only for drops worth retrying. `Disconnected` also covers being told to leave, and reconnecting
-  // through that is how a retry loop starts: the ownership coordinator disconnects this tab to hand
-  // the microphone to another one, and coming straight back fights the tab it just yielded to —
-  // which DUPLICATE_IDENTITY then settles in favour of whoever connected last, both ways, forever.
-  // An unknown reason is treated as retryable; the named terminal ones are what must not be.
-  const disconnectReasonRef = React.useRef<number | undefined>(undefined);
-  React.useEffect(() => {
-    if (!room) return;
-    const handleDisconnected = (reason?: number) => {
-      disconnectReasonRef.current = reason;
-    };
-    room.on(RoomEvent.Disconnected, handleDisconnected);
-    return () => {
-      room.off(RoomEvent.Disconnected, handleDisconnected);
-    };
-  }, [room]);
-
-  const autoRetriedRef = React.useRef(false);
-  React.useEffect(() => {
-    if (connectionState !== ConnectionState.Disconnected || !everConnected) return;
-    if (autoRetriedRef.current) return;
-    if (isTerminalDisconnect(disconnectReasonRef.current)) return;
-    autoRetriedRef.current = true;
-    onRetry();
-  }, [connectionState, everConnected, onRetry]);
 
   const remoteParticipants = useRemoteParticipants();
   const opponentParticipant = remoteParticipants.find(participant => participant.identity === opponent.user_id) ?? null;
@@ -405,12 +382,12 @@ function VoiceDockBody({
   // Blocked playback outranks everything else the dock could say: the room is fine, the opponent
   // may well be talking, and the viewer simply cannot hear it until they click.
   if (!canPlayAudio) {
-    return (
-      <VoiceDockMessage message="Audio is blocked" actionLabel="Enable audio" onAction={() => void startAudio()} />
-    );
+    return <VoiceDockMessage message="Audio is blocked" actionLabel="Enable audio" onAction={() => void startAudio()} />;
   }
 
-  const localRow = <LocalRow local={local} room={room} micFailure={micFailure} onMicIntentChange={onMicIntentChange} />;
+  const localRow = (
+    <LocalRow local={local} room={room} micFailure={micFailure} onMicIntentChange={onMicIntentChange} />
+  );
   const opponentRow = <OpponentRow participant={opponentParticipant} opponent={opponent} name={opponentName} />;
   // The mute button can only go dim and grow a tooltip, which says nothing to a keyboard or screen
   // reader user — a disabled control is out of the tab order. The reason goes in the dock itself,
@@ -439,64 +416,6 @@ function VoiceDockBody({
         {micNote}
       </div>
     </VoiceDockShell>
-  );
-}
-
-/**
- * Krisp on the dock's microphone, with the debate room's lifecycle: attached once the microphone
- * is published, mute carried across the swap, and taken back off — raw microphone kept — when
- * anything fails. The components-react hook this replaces did none of that: on a failure after
- * the swap it logged and left Krisp's output as the published track, which to the other side is a
- * microphone that reads unmuted and carries nothing.
- *
- * Keyed on the track itself, so a microphone published again after a reconnect gets Krisp again,
- * and an attach still in flight for a track that has gone is cleaned up rather than completed.
- *
- * Held back until playback is live. The room hands its own audio context to the processor, and the
- * same context is the one autoplay policy blocks — so attaching while playback is refused puts
- * Krisp's worklet on a suspended context and publishes its silence. The raw microphone does not
- * care about any of that, so the dock is on air from the first moment either way; Krisp is what
- * waits. The dock auto-joins, so this is a real state here rather than a theoretical one.
- *
- * One way only. Playback going quiet later does not take Krisp back off, and coming back does not
- * attach it a second time: a suspended context resumes on its own, and tearing the filter down and
- * building it back up would swap the published track twice for something that heals itself.
- */
-function useDockNoiseFilter(canPlayAudio: boolean) {
-  const { microphoneTrack } = useLocalParticipant();
-  const track = microphoneTrack?.track;
-  const audioTrack = track && 'setProcessor' in track ? (track as unknown as LocalTrackLike) : null;
-
-  // Latched for this room: `<LiveKitRoom>` remounts under a new epoch on retry, which is where a
-  // fresh connection gets to make the decision again.
-  const [playbackStarted, setPlaybackStarted] = React.useState(false);
-  React.useEffect(() => {
-    if (canPlayAudio) setPlaybackStarted(true);
-  }, [canPlayAudio]);
-
-  React.useEffect(() => {
-    if (!audioTrack || !playbackStarted) return;
-    let current = true;
-    void attachNoiseFilter(audioTrack, { enabled: true, isCurrent: () => current });
-    return () => {
-      current = false;
-    };
-  }, [audioTrack, playbackStarted]);
-}
-
-/**
- * Disconnects that mean "stop connecting", not "the network went away". Reconnecting through any of
- * these either fights another client for the same identity or re-enters a room that is gone.
- */
-function isTerminalDisconnect(reason: number | undefined): boolean {
-  if (reason === undefined) return false;
-  return (
-    reason === DisconnectReason.CLIENT_INITIATED ||
-    reason === DisconnectReason.DUPLICATE_IDENTITY ||
-    reason === DisconnectReason.PARTICIPANT_REMOVED ||
-    reason === DisconnectReason.ROOM_DELETED ||
-    reason === DisconnectReason.ROOM_CLOSED ||
-    reason === DisconnectReason.USER_REJECTED
   );
 }
 
@@ -605,12 +524,7 @@ function OpponentRow({
   if (!participant) {
     return (
       <>
-        <ParticipantIdentity
-          name={name}
-          avatarUrl={opponent.avatar_cid}
-          avatarValue={opponent.profile_space_id}
-          dimmed
-        />
+        <ParticipantIdentity name={name} avatarUrl={opponent.avatar_cid} avatarValue={opponent.profile_space_id} dimmed />
         <OpponentMicChip state="waiting" name={name} />
       </>
     );
@@ -720,9 +634,7 @@ function LocalAudioControls({
       <button
         type="button"
         aria-label={isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
-        title={
-          micFailure ? micFailureMessage(micFailure) : isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'
-        }
+        title={micFailure ? micFailureMessage(micFailure) : isMicrophoneEnabled ? 'Mute microphone' : 'Unmute microphone'}
         onClick={() => {
           const next = !isMicrophoneEnabled;
           // Record the intent before publishing it, so a reconnect restores this choice rather
@@ -743,7 +655,12 @@ function LocalAudioControls({
       {isMobile ? (
         <>
           {settingsTrigger}
-          <MobileSettingsSheet title="Audio settings" open={open} onOpenChange={setOpen} returnFocusRef={triggerRef}>
+          <MobileSettingsSheet
+            title="Audio settings"
+            open={open}
+            onOpenChange={setOpen}
+            returnFocusRef={triggerRef}
+          >
             <AudioSettings {...settings} framed />
           </MobileSettingsSheet>
         </>
