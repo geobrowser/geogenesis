@@ -32,6 +32,7 @@ import { getVideoPath } from '~/core/utils/utils';
 import { Checkbox, getChecked } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
+import { Trash } from '~/design-system/icons/trash';
 import { Text } from '~/design-system/text';
 import { Tooltip } from '~/design-system/tooltip';
 
@@ -144,6 +145,7 @@ export type ChangedEntitySelection = {
   blockedBy: readonly string[];
   changeCount: number;
   isNew: boolean;
+  onDiscard: () => void;
 };
 
 type ChangedEntityProps = {
@@ -227,7 +229,7 @@ export const ChangedEntity = React.memo(function ChangedEntity({
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-3">
+      <div className="group mb-4 flex items-center gap-3">
         {selection && (
           <EntitySelectionCheckbox entityId={entity.entityId} entityName={displayName} selection={selection} />
         )}
@@ -258,6 +260,21 @@ export const ChangedEntity = React.memo(function ChangedEntity({
             aria-label={`Include ${displayName} in this publish`}
           >
             <ChevronDownSmall />
+          </button>
+        )}
+        {selection && !isCollapsed && (
+          <button
+            type="button"
+            onClick={selection.onDiscard}
+            className={cx(
+              'ml-auto flex shrink-0 items-center gap-1.5 rounded px-1.5 py-1 text-metadata text-grey-04',
+              'opacity-0 transition-opacity hover:text-red-01',
+              'group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-hidden'
+            )}
+            aria-label={`Discard changes to ${displayName}`}
+          >
+            <Trash />
+            <span>Discard</span>
           </button>
         )}
       </div>

@@ -22,6 +22,7 @@ import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { type ProposalVotingMode, usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useToast } from '~/core/hooks/use-toast';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
@@ -31,6 +32,7 @@ import {
   buildIsNewEntity,
   buildOwnershipIndex,
   collectCandidateEntityIds,
+  collectOpsForEntities,
   countEntityChanges,
   findDanglingDependencies,
   getDeselectionBlockers,
@@ -39,6 +41,7 @@ import {
 import { useDiff } from '~/core/state/diff-store';
 import { isPendingPersonalSpaceId, usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
+import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import type { Relation as StoreRelation, Value as StoreValue } from '~/core/types';
@@ -119,6 +122,8 @@ export const ReviewChanges = () => {
   const jotaiStore = useStore();
   const { makeProposal } = usePublish();
   const { store } = useSyncEngine();
+  const { storage } = useMutate();
+  const [, setToast] = useToast();
   const bumpEditorContentVersion = useSetAtom(editorContentVersionAtom);
   const resetSuggestedTasks = useSetAtom(personalProfileSuggestedTasksAtom);
   const resetSuggestedDismiss = useSetAtom(personalProfileSuggestedDismissAtom);
@@ -524,6 +529,58 @@ export const ReviewChanges = () => {
   );
 
   const selectAllEntities = React.useCallback(() => setExcludedEntityIds(new Set()), []);
+
+  /**
+   * Throws a row's edits away and reverts it to the published version.
+   */
+  const discardEntities = React.useCallback(
+    (entityIds: ReadonlySet<string>, label: string) => {
+      if (!activeSpace || entityIds.size === 0) return;
+
+      const removed = collectOpsForEntities(ownershipIndex, entityIds, valuesFromSpace, relationsFromSpace);
+      if (removed.values.length === 0 && removed.relations.length === 0) return;
+
+      store.clearLocalChangesByIds({
+        spaceId: activeSpace,
+        valueIds: removed.values.map(value => value.id),
+        relationIds: removed.relations.map(relation => relation.id),
+      });
+      bumpEditorContentVersion(version => version + 1);
+
+      setToast(
+        <>
+          <span>{label} reverted to the published version</span>
+          <button
+            type="button"
+            onClick={() => {
+              for (const value of removed.values) storage.values.set(value);
+              for (const relation of removed.relations) storage.relations.set(relation);
+              bumpEditorContentVersion(version => version + 1);
+              setToast(null);
+            }}
+            className="shrink-0 underline"
+          >
+            Undo
+          </button>
+        </>
+      );
+    },
+    [
+      activeSpace,
+      ownershipIndex,
+      valuesFromSpace,
+      relationsFromSpace,
+      store,
+      storage,
+      setToast,
+      bumpEditorContentVersion,
+    ]
+  );
+
+  const discardSelectedEntities = React.useCallback(() => {
+    const count = selectedEntityIds.size;
+    discardEntities(selectedEntityIds, count === 1 ? '1 edit' : `${count} edits`);
+  }, [discardEntities, selectedEntityIds]);
 
   const publishSelection = React.useMemo(
     () => selectOpsForPublish(ownershipIndex, selectedEntityIds, valuesFromSpace, relationsFromSpace),
@@ -1034,7 +1091,12 @@ export const ReviewChanges = () => {
                             {selectedEntityCount} of {totalEntityCount} {totalEntityCount === 1 ? 'entity' : 'entities'}{' '}
                             selected · {selectedChangeCount} {selectedChangeCount === 1 ? 'change' : 'changes'}
                           </Text>
-                          {isPartialPublish && <SmallButton onClick={selectAllEntities}>Select all</SmallButton>}
+                          <div className="flex shrink-0 items-center gap-2">
+                            {isPartialPublish && <SmallButton onClick={selectAllEntities}>Select all</SmallButton>}
+                            {hasSelectedEntities && (
+                              <SmallButton onClick={discardSelectedEntities}>Discard selected</SmallButton>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
@@ -1105,6 +1167,8 @@ export const ReviewChanges = () => {
                                       blockedBy: deselectionBlockers.get(entity.entityId) ?? [],
                                       changeCount: changeCountByEntity.get(entity.entityId) ?? 0,
                                       isNew: isNewEntity(entity.entityId),
+                                      onDiscard: () =>
+                                        discardEntities(new Set([entity.entityId]), entity.name ?? 'The edit'),
                                     }}
                                   />
                                 </div>
