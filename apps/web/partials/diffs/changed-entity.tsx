@@ -78,6 +78,47 @@ function EntitySelectionCheckbox({
   );
 }
 
+/** Per-row discard; blocked when other selected rows still depend on this entity. */
+function EntityDiscardButton({
+  entityName,
+  selection,
+}: {
+  entityName: string;
+  selection: ChangedEntitySelection;
+}) {
+  const isBlocked = selection.blockedBy.length > 0;
+
+  const button = (
+    <span className={cx('ml-auto flex shrink-0', isBlocked && 'cursor-not-allowed')}>
+      <button
+        type="button"
+        onClick={isBlocked ? undefined : selection.onDiscard}
+        disabled={isBlocked}
+        className={cx(
+          'flex items-center gap-1.5 rounded px-1.5 py-1 text-metadata text-grey-04 focus-visible:outline-hidden',
+          isBlocked ? 'opacity-50' : 'hover:text-red-01'
+        )}
+        aria-label={`Discard changes to ${entityName}`}
+      >
+        <Trash />
+        <span>Discard</span>
+      </button>
+    </span>
+  );
+
+  if (!isBlocked) return button;
+
+  const holders = selection.blockedBy.join(', ');
+
+  return (
+    <Tooltip
+      trigger={button}
+      position="left"
+      label={`${entityName} is created by this proposal and ${holders} still links to it. Remove ${holders} first, or discard them together.`}
+    />
+  );
+}
+
 const TYPES_PROPERTY_ID = SystemIds.TYPES_PROPERTY;
 const AVATAR_PROPERTY_ID = ContentIds.AVATAR_PROPERTY;
 const COVER_PROPERTY_ID = SystemIds.COVER_PROPERTY;
@@ -229,7 +270,7 @@ export const ChangedEntity = React.memo(function ChangedEntity({
 
   return (
     <div>
-      <div className="group mb-4 flex items-center gap-3">
+      <div className="mb-4 flex items-center gap-3">
         {selection && (
           <EntitySelectionCheckbox entityId={entity.entityId} entityName={displayName} selection={selection} />
         )}
@@ -262,21 +303,7 @@ export const ChangedEntity = React.memo(function ChangedEntity({
             <ChevronDownSmall />
           </button>
         )}
-        {selection && !isCollapsed && (
-          <button
-            type="button"
-            onClick={selection.onDiscard}
-            className={cx(
-              'ml-auto flex shrink-0 items-center gap-1.5 rounded px-1.5 py-1 text-metadata text-grey-04',
-              'opacity-0 transition-opacity hover:text-red-01',
-              'group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-hidden'
-            )}
-            aria-label={`Discard changes to ${displayName}`}
-          >
-            <Trash />
-            <span>Discard</span>
-          </button>
-        )}
+        {selection && !isCollapsed && <EntityDiscardButton entityName={displayName} selection={selection} />}
       </div>
 
       {isCollapsed ? null : (

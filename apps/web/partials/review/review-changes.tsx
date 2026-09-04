@@ -479,7 +479,10 @@ export const ReviewChanges = () => {
   );
 
   // Full store read for touched ids — not pending-only, or everything looks new.
-  const candidateEntityIds = React.useMemo(() => collectCandidateEntityIds(ownershipIndex), [ownershipIndex]);
+  const candidateEntityIds = React.useMemo(
+    () => collectCandidateEntityIds(ownershipIndex, relationsFromSpace),
+    [ownershipIndex, relationsFromSpace]
+  );
   const candidateValues = useValues({
     selector: v => candidateEntityIds.has(v.entity.id),
     includeDeleted: true,
@@ -537,6 +540,13 @@ export const ReviewChanges = () => {
     (entityIds: ReadonlySet<string>, label: string) => {
       if (!activeSpace || entityIds.size === 0) return;
 
+      // Refuse only when a holder outside this discard set still needs the target. Discarding
+      // holder + target together is fine; discarding the target alone is not.
+      const wouldDangle = [...entityIds].some(id =>
+        (deselectionBlockers.get(id) ?? []).some(holder => !entityIds.has(holder))
+      );
+      if (wouldDangle) return;
+
       const removed = collectOpsForEntities(ownershipIndex, entityIds, valuesFromSpace, relationsFromSpace);
       if (removed.values.length === 0 && removed.relations.length === 0) return;
 
@@ -570,6 +580,7 @@ export const ReviewChanges = () => {
       ownershipIndex,
       valuesFromSpace,
       relationsFromSpace,
+      deselectionBlockers,
       store,
       storage,
       setToast,
