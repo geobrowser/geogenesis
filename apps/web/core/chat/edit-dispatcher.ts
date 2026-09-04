@@ -1352,49 +1352,61 @@ export function useEditDispatcher(
         const inputSpaceId = typeof input.spaceId === 'string' ? input.spaceId : undefined;
         const inputTargetSpaceId = typeof input.targetSpaceId === 'string' ? input.targetSpaceId : undefined;
 
+        // Every dispatched call must be answered exactly once. An unanswered
+        // one is not a dropped edit — it is a turn that never ends: the model
+        // waits on a result that will never come and the panel stays "working"
+        // until the user reloads. `enqueue` only console.errors a throw, so
+        // without this catch a failure inside `planWriteTool` reaches nobody —
+        // not the user, not the model. The read dispatcher already works this
+        // way; this is the write side catching up.
         enqueue(async () => {
-          if (cancelledRef.current) return;
-
-          // Lazy controller for the StrictMode pre-mount-effect window.
-          const signal = (abortRef.current ??= new AbortController()).signal;
-          const auth = await authorizeWrite(inputSpaceId, toolName, signal, inputTargetSpaceId);
-          if (cancelledRef.current) return;
-          if (auth.ok !== true) {
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: auth });
-            return;
-          }
-
-          const ctx = { store, cache: queryClient };
-          const planned: EditToolOutput = await planWriteTool(toolName, input, ctx);
-          if (cancelledRef.current) return;
-          if (!planned.ok) {
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: planned });
-            return;
-          }
-
-          let applyResult: ApplyResult;
           try {
-            applyResult = await applyIntent(planned.intent, { setEditable, bumpEditorVersion });
-          } catch (err) {
-            console.error('[chat/edit-dispatcher] applyIntent threw', err);
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
-            return;
-          }
-          // No cancellation gate past this point — the mutation has landed,
-          // so the model has to hear about it or the turn hangs forever.
-          if (!applyResult.ok) {
-            addToolResultRef.current?.({ tool: toolName, toolCallId, output: applyResult });
-            return;
-          }
+            if (cancelledRef.current) return;
 
-          if (EDITOR_REFRESHING_INTENTS.has(planned.intent.kind)) {
-            bumpEditorVersion();
+            // Lazy controller for the StrictMode pre-mount-effect window.
+            const signal = (abortRef.current ??= new AbortController()).signal;
+            const auth = await authorizeWrite(inputSpaceId, toolName, signal, inputTargetSpaceId);
+            if (cancelledRef.current) return;
+            if (auth.ok !== true) {
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: auth });
+              return;
+            }
+
+            const ctx = { store, cache: queryClient };
+            const planned: EditToolOutput = await planWriteTool(toolName, input, ctx);
+            if (cancelledRef.current) return;
+            if (!planned.ok) {
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: planned });
+              return;
+            }
+
+            let applyResult: ApplyResult;
+            try {
+              applyResult = await applyIntent(planned.intent, { setEditable, bumpEditorVersion });
+            } catch (err) {
+              console.error('[chat/edit-dispatcher] applyIntent threw', err);
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
+              return;
+            }
+            // No cancellation gate past this point — the mutation has landed,
+            // so the model has to hear about it or the turn hangs forever.
+            if (!applyResult.ok) {
+              addToolResultRef.current?.({ tool: toolName, toolCallId, output: applyResult });
+              return;
+            }
+
+            if (EDITOR_REFRESHING_INTENTS.has(planned.intent.kind)) {
+              bumpEditorVersion();
+            }
+            addToolResultRef.current?.({
+              tool: toolName,
+              toolCallId,
+              output: { ok: true, intent: planned.intent },
+            });
+          } catch (err) {
+            console.error('[chat/edit-dispatcher] tool execution threw', toolName, err);
+            addToolResultRef.current?.({ tool: toolName, toolCallId, output: lookupFailed() });
           }
-          addToolResultRef.current?.({
-            tool: toolName,
-            toolCallId,
-            output: { ok: true, intent: planned.intent },
-          });
         });
       }
     }

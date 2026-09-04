@@ -18,6 +18,10 @@ const REQUEST_TIMEOUT_MS = 120_000;
 
 /** Names per batch request to the values endpoint. */
 const BATCH_SIZE = 200;
+// The tiebreaker query sets no `first:`, so a chunk must stay under the API's
+// default page size — same 50 the sibling entity batch query is chunked at.
+const TIEBREAK_ID_BATCH_SIZE = 50;
+const TIEBREAK_BATCH_CONCURRENCY = 6;
 
 /** Max concurrent batch requests per round. */
 const BATCH_CONCURRENCY = 4;
@@ -68,18 +72,56 @@ type Candidate = {
  * 4. Earliest creation date
  * 5. First in list (deterministic fallback)
  */
-async function breakTieWithEntityMetadata(candidates: Candidate[]): Promise<Candidate> {
-  if (candidates.length === 1) return candidates[0];
+/**
+ * Metadata for every tied candidate in a batch, in as few round trips as possible.
+ *
+ * Fetched for the whole batch rather than per name. The tie that needs this is
+ * the degenerate one — same name, both spaces unranked, both with no relations
+ * and no backlinks — which is exactly what duplicated data looks like, so on a
+ * messy graph it fires for hundreds of names. One request each, awaited in a
+ * loop, made the import's wall time scale with how ambiguous the graph was.
+ *
+ * Chunked at `TIEBREAK_ID_BATCH_SIZE` because the query sets no `first:` and so
+ * takes the API's default page size; the sibling `entitiesBatchQuery` is
+ * chunked at the same 50 for the same reason. A chunk that fails is left out of
+ * the map rather than failing the batch — a missing entry reads as "no
+ * metadata", which is the same fallback the per-name version had.
+ */
+async function fetchTiebreakerData(entityIds: string[]): Promise<Map<string, EntityTiebreakerData>> {
+  const data = new Map<string, EntityTiebreakerData>();
+  if (entityIds.length === 0) return data;
 
-  let tiebreakerData: Map<string, EntityTiebreakerData>;
-  try {
-    const entityIds = candidates.map(c => c.id);
-    const data = await Effect.runPromise(getEntityTiebreakerBatch(entityIds));
-    tiebreakerData = new Map(data.map(d => [d.id, d]));
-  } catch {
-    // If the tiebreaker query fails, fall back to picking the first candidate
-    return candidates[0];
+  const unique = Array.from(new Set(entityIds));
+
+  for (let i = 0; i < unique.length; i += TIEBREAK_ID_BATCH_SIZE * TIEBREAK_BATCH_CONCURRENCY) {
+    const chunks: string[][] = [];
+    for (let j = 0; j < TIEBREAK_BATCH_CONCURRENCY; j++) {
+      const start = i + j * TIEBREAK_ID_BATCH_SIZE;
+      if (start >= unique.length) break;
+      chunks.push(unique.slice(start, start + TIEBREAK_ID_BATCH_SIZE));
+    }
+
+    const settled = await Promise.allSettled(
+      chunks.map(chunk => Effect.runPromise(getEntityTiebreakerBatch(chunk, timeoutSignal(REQUEST_TIMEOUT_MS))))
+    );
+
+    for (const result of settled) {
+      if (result.status !== 'fulfilled') {
+        if (DEBUG_IMPORT) console.warn('[import:resolve] tiebreaker chunk failed', result.reason);
+        continue;
+      }
+      for (const row of result.value) data.set(row.id, row);
+    }
   }
+
+  return data;
+}
+
+function breakTieWithEntityMetadata(
+  candidates: Candidate[],
+  tiebreakerData: Map<string, EntityTiebreakerData>
+): Candidate {
+  if (candidates.length === 1) return candidates[0];
 
   const withData = candidates.map(c => ({
     candidate: c,
@@ -162,6 +204,8 @@ async function classifyBatchResults(
   }
 
   // Step 2: Classify each input name
+  const deferredTies: { norm: string; candidates: Candidate[] }[] = [];
+
   for (const name of inputNames) {
     const norm = name.trim().toLowerCase();
     const entityMap = candidatesByNorm.get(norm);
@@ -202,10 +246,21 @@ async function classifyBatchResults(
       const winner = atBestConnectedness[0].candidate;
       results.set(norm, { status: 'resolved', entity: { id: winner.id, name: winner.name } });
     } else {
-      // Connectedness also tied — use deep tiebreaker (backlinks → relations → values → createdAt)
-      const tiedCandidates = atBestConnectedness.map(r => r.candidate);
-      const winner = await breakTieWithEntityMetadata(tiedCandidates);
-      results.set(norm, { status: 'resolved', entity: { id: winner.id, name: winner.name } });
+      // Connectedness also tied — defer to the deep tiebreaker (backlinks →
+      // relations → values → createdAt), resolved for the whole batch at once.
+      deferredTies.push({ norm, candidates: atBestConnectedness.map(r => r.candidate) });
+    }
+  }
+
+  if (deferredTies.length > 0) {
+    if (DEBUG_IMPORT)
+      console.log(`[import:resolve] ${deferredTies.length} names need the deep tiebreaker — fetching in one pass`);
+
+    const tiebreakerData = await fetchTiebreakerData(deferredTies.flatMap(tie => tie.candidates.map(c => c.id)));
+
+    for (const tie of deferredTies) {
+      const winner = breakTieWithEntityMetadata(tie.candidates, tiebreakerData);
+      results.set(tie.norm, { status: 'resolved', entity: { id: winner.id, name: winner.name } });
     }
   }
 
@@ -292,6 +347,11 @@ async function resolveNames(params: {
         results.set(norm, match);
       }
     }
+
+    if (DEBUG_IMPORT)
+      console.log(
+        `[import:resolve] round ${roundNum}/${totalRounds}: ${namesInRound} names in ${Math.round(performance.now() - tRound)}ms`
+      );
   }
 
   return results;

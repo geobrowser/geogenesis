@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import Textarea from 'react-textarea-autosize';
 
+import { ContextMeter } from './context-meter';
+
 type Props = {
   value: string;
   onChange: (value: string) => void;
@@ -11,9 +13,31 @@ type Props = {
   isBusy?: boolean;
   onStop?: () => void;
   placeholder?: string;
+  /**
+   * How full the conversation is, 0-1. Undefined until it's worth showing —
+   * the meter has nothing useful to say about a chat with room to spare.
+   */
+  contextFraction?: number;
+  /** Undefined while a turn is running, so the ring shows but doesn't act. */
+  onCompact?: () => void;
+  /** Undefined outside a space — an import needs somewhere to land. */
+  onAttachFile?: (file: File) => void;
 };
 
-export function ChatInput({ value, onChange, onSubmit, isBusy, onStop, placeholder = 'Ask anything...' }: Props) {
+const ACCEPTED_FILES = '.csv,.tsv,.xlsx,.xls';
+
+export function ChatInput({
+  value,
+  onChange,
+  onSubmit,
+  isBusy,
+  onStop,
+  placeholder = 'Ask anything...',
+  contextFraction,
+  onCompact,
+  onAttachFile,
+}: Props) {
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   const canSend = !isBusy && value.trim().length > 0;
   const showStop = isBusy && Boolean(onStop);
@@ -50,6 +74,42 @@ export function ChatInput({ value, onChange, onSubmit, isBusy, onStop, placehold
         // we never get an inner scrollbar at any panel size.
         className="max-h-[60cqh] flex-1 resize-none bg-transparent text-[16px] leading-4 tracking-[-0.35px] text-text placeholder:text-grey-03 focus:outline-hidden"
       />
+      {onAttachFile ? (
+        <>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_FILES}
+            className="sr-only"
+            aria-label="Attach a spreadsheet"
+            onChange={event => {
+              const file = event.target.files?.[0];
+              if (file) onAttachFile(file);
+              // Cleared so picking the same file twice still fires a change.
+              event.target.value = '';
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isBusy}
+            aria-label="Attach a CSV or Excel file"
+            title="Attach a CSV or Excel file"
+            className="shrink-0 text-grey-03 transition-colors enabled:hover:text-text disabled:cursor-not-allowed"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M8 3.5v9M3.5 8h9"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </>
+      ) : null}
+      {contextFraction === undefined ? null : <ContextMeter fraction={contextFraction} onCompact={onCompact} />}
       {showStop ? (
         <button
           type="button"
