@@ -156,7 +156,15 @@ export function useCreateDebateRequest() {
 
   return useMutation({
     mutationFn: (request: CreateDebateRequestBody) => createDebateRequest(request, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
+    // On the refusal as well as on the acceptance.
+    //
+    // `/matchmaking/matches` is looser than this endpoint — it omits the `validation_failed_at IS
+    // NULL` / `last_validated_at IS NOT NULL` predicates and the attempted-recipient exclusion — and
+    // it is fetched once, with `refetchOnWindowFocus` off. So a match that has since evaporated
+    // (opponent taken, already requested, readiness swept) stays in the cache drawing a live button,
+    // and refusing without refetching left the reader pressing it into the same error. A refusal is
+    // the server telling us the list is wrong; the only wrong thing to do with that is nothing.
+    onSettled: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
 }
 

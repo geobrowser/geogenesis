@@ -9,6 +9,7 @@ import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-s
 import { ClaimSides, ClaimSplitBar, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
+import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { PositionRow, useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
@@ -123,6 +124,13 @@ export function ClaimExploreFeedCard({
     responseBlockedReason,
     onRequireSignIn: promptSignIn,
   });
+  // geo-chat's own row, not the merged `readiness` above — that one falls back to the graph, and
+  // this repair is only for the gap where geo-chat holds the response and not the readiness.
+  //
+  // The feed is where the gap showed itself: a viewer scrolling past claims they hold positions on
+  // saw their own face on the repaired ones and not the rest (GEO-2821). The card cannot be the one
+  // surface that draws a held position without standing the viewer up on it.
+  useBackfillReadinessForHeldPosition({ readiness: row, entityId: item.entityId, spaceId: item.spaceId });
 
   // Withheld while the counts are still out, so the column does not appear a beat after the card.
   // `hasCounts` as well as a non-zero total. The two are equivalent as the hook computes them —
@@ -183,6 +191,7 @@ export function ClaimExploreFeedCard({
               spaceId={item.spaceId}
               activeDebate={row?.active_debate}
               enabled={nearViewport}
+              viewerPosition={control.viewerPosition}
               className="ml-auto"
             />
           }

@@ -36,8 +36,10 @@ function claim(overrides: Partial<DebateClaim> = {}): DebateClaim {
   } as DebateClaim;
 }
 
+// A `DebateClaim` still, because that is one of the two envelopes the hook takes and the wider one:
+// the hub's `MatchmakingReadiness` is the same four fields with nothing else on them.
 function Harness({ debateClaim }: { debateClaim: DebateClaim | null }) {
-  useBackfillReadinessForHeldPosition({ debateClaim, entityId: 'claim-1', spaceId: 'space-1' });
+  useBackfillReadinessForHeldPosition({ readiness: debateClaim, entityId: 'claim-1', spaceId: 'space-1' });
   return null;
 }
 
