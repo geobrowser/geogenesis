@@ -16,6 +16,28 @@ import * as React from 'react';
  * `create_debate_request_as`, the picker a session-scoped rematch request. Only the offer is shared
  * — what it looks like, what it is called in each state, and how it announces itself.
  */
+/**
+ * The shape of a control in a claim card's end slot.
+ *
+ * Exported because the slot holds two of them — this offer and the live-debate link beside it in
+ * `claim-end-slot` — and they have to be the same size. Sized to the row rather than to itself: the
+ * meta row is 14px text about 20px tall, so a 28px control grew the row by 8px the moment the match
+ * lookup answered. It follows the Join button instead, the control already living in that row.
+ *
+ * Deliberately not `HubPillButton`, whose whole purpose is collapsing hand-written pills — its
+ * `h-7` is precisely the 28px this row cannot take, and its `text-metadata` is not the meta row's
+ * size either. Reaching for it here would reintroduce the layout shift the comment above describes.
+ */
+export function claimSlotPillClass(variant: 'inline' | 'block'): string {
+  return cx(
+    'items-center gap-1.5 rounded-full transition-colors',
+    variant === 'block'
+      ? // The position pills' own metrics: `min-h-7` and `text-button`, full width beneath them.
+        'flex min-h-7 w-full justify-center px-3 text-button'
+      : 'inline-flex h-5 shrink-0 px-2.5 text-[14px] leading-none'
+  );
+}
+
 export function RequestDebateControl({
   onRequest,
   disabled = false,
@@ -49,16 +71,7 @@ export function RequestDebateControl({
   variant?: 'inline' | 'block';
   className?: string;
 }) {
-  // Sized to the row it sits in rather than to itself. The meta row is 14px text about 20px tall,
-  // so a 28px control grew the row by 8px the moment the match lookup answered. It follows the Join
-  // button instead — the control already living in this row — at 14px `leading-none` in a 20px pill.
-  const base = cx(
-    'items-center gap-1.5 rounded-full transition-colors',
-    variant === 'block'
-      ? // The position pills' own metrics: `min-h-7` and `text-button`, full width beneath them.
-        'flex min-h-7 w-full justify-center px-3 text-button'
-      : 'inline-flex h-5 shrink-0 px-2.5 text-[14px] leading-none'
-  );
+  const base = claimSlotPillClass(variant);
   const aside = cx('text-footnote', variant === 'block' ? 'text-left' : 'text-right');
 
   return (

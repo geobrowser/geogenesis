@@ -12,7 +12,7 @@ import Link from 'next/link';
 import type { Debate } from '~/core/debates/api';
 import { debatePath } from '~/core/debates/debate-routes';
 
-import { RequestDebateControl } from '~/core/debates/request-debate-control';
+import { RequestDebateControl, claimSlotPillClass } from '~/core/debates/request-debate-control';
 import { type DebateRequestPosition, debateRequestGate } from '~/core/debates/request-gate';
 import { useClaimMatchup } from './use-claim-matchup';
 
@@ -111,23 +111,9 @@ export function ClaimEndSlot({
     indexingDelayed: position.indexingDelayed,
   });
 
-  // Sized to the row it sits in rather than to itself.
-  //
-  // It was the explore page's "Rank" CTA — 16px in a 28px pill — which is right for a standalone
-  // call to action in a panel and wrong here: the meta row is 14px text about 20px tall, so a 28px
-  // control grew the row by 8px the moment the match lookup answered. That is the layout shift, and
-  // no amount of reserving height fixes it without holding every claim card 8px taller than its
-  // neighbours to no purpose.
-  //
-  // So it follows the Join button instead, which is the control already living in this row: 14px at
-  // `leading-none` in a 20px pill. Same height as its neighbour, so the row cannot grow.
-  const base = cx(
-    'items-center gap-1.5 rounded-full transition-colors',
-    variant === 'block'
-      ? // The position pills' own metrics: `min-h-7` and `text-button`, full width beneath them.
-        'flex min-h-7 w-full justify-center px-3 text-button'
-      : 'inline-flex h-5 shrink-0 px-2.5 text-[14px] leading-none'
-  );
+  // The live-debate link below shares its shape with the offer, so both read the size from one
+  // place — see `claimSlotPillClass` for why it is not the debates pill.
+  const base = claimSlotPillClass(variant);
 
   // A match is derived from the same `debate_claim_readiness` rows `create_debate_request_as` reads,
   // so no additional position check belongs here — one against the graph would only be slower.
