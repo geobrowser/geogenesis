@@ -12,7 +12,6 @@ import Link from 'next/link';
 import type { Debate } from '~/core/debates/api';
 import { debatePath } from '~/core/debates/debate-routes';
 
-import { type DebateRequestPosition, debateRequestGate } from '~/core/debates/request-gate';
 import { useClaimMatchup } from './use-claim-matchup';
 
 /**
@@ -44,22 +43,21 @@ export function ClaimEndSlot({
   activeDebate,
   enabled = true,
   variant = 'inline',
-  position,
+  viewerPosition,
   className,
 }: {
   claimId: string;
   spaceId: string;
   /**
-   * The viewer's position on this claim, from both clocks, so the offer only appears once geo-chat
-   * will honour it (GEO-2808).
+   * The side the viewer holds, as this client knows it right now. `null` for no side.
    *
-   * geo-chat validates a request against its *own* copy of the position and rejects an early one
-   * with `claim_response_required`. Every host of this slot already runs `useClaimPositionControl`,
-   * which holds both readings — so this is required rather than optional: a host that could not
-   * answer would be offering a debate it has no way to know is valid, which is what the hub and the
-   * feed cards were doing.
+   * Not the position check #2354 added and #2376 took back out. That one compared the local side
+   * against geo-chat's copy and waited for them to agree, which is a wait this endpoint never needed
+   * — see the note above the match check. This never waits on geo-chat at all: it reads the side the
+   * *match* was already computed for, which is in hand, and asks whether it is still the side the
+   * reader is on.
    */
-  position: DebateRequestPosition;
+  viewerPosition: boolean | null;
   /**
    * The live debate on this claim.
    *
@@ -100,16 +98,6 @@ export function ClaimEndSlot({
     enabled,
   });
 
-  // `match` is this surface's opponent half — somebody standing ready on the other side. The
-  // position half is the shared rule, so every surface waits on the same fact and names it the
-  // same way.
-  const gate = debateRequestGate({
-    chatPosition: position.chat,
-    localPosition: position.local,
-    opponentReady: match !== null,
-    indexingDelayed: position.indexingDelayed,
-  });
-
   // Sized to the row it sits in rather than to itself.
   //
   // It was the explore page's "Rank" CTA — 16px in a 28px pill — which is right for a standalone
@@ -140,14 +128,14 @@ export function ClaimEndSlot({
   //
   // `viewer_response` is the richer field and `viewer_position` the one a match always carries.
   //
-  // Hiding rather than disabling, and ahead of the gate below: a disabled button still says a
-  // debate is on offer here. On a side the reader has stepped off, there is none to make.
+  // Hiding rather than disabling: a greyed button still says a debate is on offer here. On a side
+  // the reader has stepped off, there is none to make.
   const matchedSide = match ? (match.viewer_response?.position ?? match.viewer_position) : null;
-  const matchesViewerSide = position.local !== null && matchedSide === position.local;
+  const matchesViewerSide = viewerPosition !== null && matchedSide === viewerPosition;
 
   // A match is otherwise derived from the same `debate_claim_readiness` rows
   // `create_debate_request_as` reads, so nothing further about the position belongs here — a check
-  // against the graph would only be slower.
+  // against the graph would only be slower, which is why #2376 took one back out.
   //
   // Not a guarantee the request will be accepted: the match query omits that endpoint's
   // `validation_failed_at IS NULL` / `last_validated_at IS NOT NULL` predicates and its
@@ -159,7 +147,7 @@ export function ClaimEndSlot({
         <button
           type="button"
           onClick={request}
-          disabled={Boolean(blockedReason) || isRequesting || !gate.canRequest}
+          disabled={Boolean(blockedReason) || isRequesting}
           // Shown rather than left to a `title`: native tooltips never appear on touch and are
           // unreliable on a disabled button, which is exactly when the explanation matters.
           title={blockedReason}
@@ -175,35 +163,19 @@ export function ClaimEndSlot({
           {/* Both labels stacked in one grid cell, so the button is always as wide as the longer of
               them. "Requesting…" is the shorter, and a button that shrinks the moment you press it
               reads as something having gone wrong. The grid is on this span rather than the button
-              so it cannot fight the button's own `inline-flex`.
-              
-              Only while the offer is pressable. The pending label is longer than "Request debate",
-              so sizing against it would hold every idle button that much wider — and this slot sits
-              in a meta row built not to grow. A press cannot happen while pending, which is the
-              only transition the sizer exists to smooth. */}
-          {gate.pending ? (
-            <span>{gate.pendingLabel}</span>
-          ) : (
-            <span className="grid place-items-center">
-              <span className="invisible col-start-1 row-start-1" aria-hidden>
-                Request debate
-              </span>
-              <span className="col-start-1 row-start-1">{isRequesting ? 'Requesting…' : 'Request debate'}</span>
+              so it cannot fight the button's own `inline-flex`. */}
+          <span className="grid place-items-center">
+            <span className="invisible col-start-1 row-start-1" aria-hidden>
+              Request debate
             </span>
-          )}
+            <span className="col-start-1 row-start-1">{isRequesting ? 'Requesting…' : 'Request debate'}</span>
+          </span>
         </button>
         {/* A blocked reason is a standing condition the reader can see for themselves, so it is
             ordinary text. A failed request is an event that happens after they press, with nothing
             on screen to mark it — `role="alert"` is what makes it reach anyone not watching this
             corner. The Matches tab's old button announced it; losing that when the button moved
             would have been a silent regression. */}
-        {/* A disabled control nobody is focused on announces nothing, so the wait is a `status` as
-            well as a label. */}
-        {gate.pending && !isRequesting ? (
-          <span role="status" aria-live="polite" className="sr-only">
-            {gate.pendingLabel}
-          </span>
-        ) : null}
         {blockedReason ? (
           <span className={cx('text-footnote text-grey-04', variant === 'block' ? 'text-left' : 'text-right')}>
             {blockedReason}

@@ -191,7 +191,7 @@ export function ClaimExploreFeedCard({
               spaceId={item.spaceId}
               activeDebate={row?.active_debate}
               enabled={nearViewport}
-              position={control.requestPosition}
+              viewerPosition={control.viewerPosition}
               className="ml-auto"
             />
           }

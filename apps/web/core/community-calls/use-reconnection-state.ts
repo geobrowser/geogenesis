@@ -45,6 +45,16 @@ const NAVIGATE_AWAY_REASONS = new Set([DisconnectReason.CLIENT_INITIATED]);
  * Also the reporting point for drop telemetry, since it is the one place that observes
  * every connection transition — see disconnect-telemetry.ts.
  */
+/**
+ * Local participant plus remotes. Defensive because it is called from inside the disconnect
+ * handler: a throw here would take the reconnection overlay down with it, and an unknown
+ * room size is never worth that.
+ */
+function roomSize(room: Room): number | undefined {
+  const remotes = room.remoteParticipants?.size;
+  return remotes === undefined ? undefined : remotes + 1;
+}
+
 export function useReconnectionState(
   room: Room,
   onPermanentDisconnect: () => void,
@@ -70,6 +80,9 @@ export function useReconnectionState(
   // emits `reconnecting` and `signalReconnecting` repeatedly through one outage, so this is
   // what collapses that burst into a single episode with one outcome.
   const episodeStartedAtRef = React.useRef<number | null>(null);
+  // Captured when the episode opens. Reading it at report time is useless — the room's
+  // participant list is already torn down by then, so it would always be 1.
+  const episodeParticipantCountRef = React.useRef<number | undefined>(undefined);
   const joinedAtRef = React.useRef(Date.now());
   const endedByCutoffRef = React.useRef(false);
   // A single disconnect reaches us twice — once via the `disconnected` event and once via
@@ -77,22 +90,28 @@ export function useReconnectionState(
   // double every count, so the terminal report is latched until the next reconnect.
   const reportedTerminalRef = React.useRef(false);
 
-  const reportEpisode = React.useCallback((outcome: EpisodeOutcome, reason: DisconnectReason | undefined) => {
-    const context = telemetryRef.current;
-    const startedAt = episodeStartedAtRef.current;
-    episodeStartedAtRef.current = null;
-    if (!context) return;
+  const reportEpisode = React.useCallback(
+    (outcome: EpisodeOutcome, reason: DisconnectReason | undefined) => {
+      const context = telemetryRef.current;
+      const startedAt = episodeStartedAtRef.current;
+      const participantCount = episodeParticipantCountRef.current ?? roomSize(room);
+      episodeStartedAtRef.current = null;
+      episodeParticipantCountRef.current = undefined;
+      if (!context) return;
 
-    reportCallDisconnect(context, {
-      outcome,
-      reason,
-      endedByCutoff: endedByCutoffRef.current,
-      reconnectingMs: startedAt === null ? undefined : Date.now() - startedAt,
-      // Measured from when the trouble started, not when it resolved, so "how far into the
-      // call did this happen" isn't skewed by however long the retry ran.
-      msSinceJoin: (startedAt ?? Date.now()) - joinedAtRef.current,
-    });
-  }, []);
+      reportCallDisconnect(context, {
+        outcome,
+        reason,
+        endedByCutoff: endedByCutoffRef.current,
+        reconnectingMs: startedAt === null ? undefined : Date.now() - startedAt,
+        // Measured from when the trouble started, not when it resolved, so "how far into the
+        // call did this happen" isn't skewed by however long the retry ran.
+        msSinceJoin: (startedAt ?? Date.now()) - joinedAtRef.current,
+        participantCount,
+      });
+    },
+    [room]
+  );
 
   const markEndedByCutoff = React.useCallback(() => {
     endedByCutoffRef.current = true;
@@ -111,6 +130,7 @@ export function useReconnectionState(
       // measured duration collapses to the last retry rather than the whole outage.
       if (episodeStartedAtRef.current === null) {
         episodeStartedAtRef.current = Date.now();
+        episodeParticipantCountRef.current = roomSize(room);
       }
       setStatus('reconnecting');
     };

@@ -251,18 +251,20 @@ describe('position avatar stack', () => {
   });
 
   /**
-   * GEO-2808. The offer waits on geo-chat holding the viewer's position, which is what the request
-   * is validated against — a real confirmation, just geo-chat's rather than the chain's, since the
-   * on-chain check came out under GEO-2784.
+   * The offer follows the match, and the match has to still be about the side the viewer is on.
+   *
+   * #2376 took the position gate back off this control: the request is validated against the same
+   * `debate_claim_readiness` rows the match is drawn from, so waiting on geo-chat echoing the
+   * position back bought nothing. What that leaves uncovered is the match itself going stale.
    */
-  describe('the request waits for geo-chat to hold the viewer position', () => {
+  describe('the offer follows the match, on the side it was made for', () => {
     const twoSides = () =>
       withCounts([
         { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('a')] },
         { total_count: 1, available_now_count: 1, present_count: 1, participants: [participant('b')] },
       ]);
 
-    it('names the wait while geo-chat has not caught up', () => {
+    it('offers the debate while the response is still indexing', () => {
       mocks.match = { id: 'match-1', viewer_position: true };
       // An answer still reconciling is what the card draws its optimistic side from.
       mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
@@ -270,45 +272,19 @@ describe('position avatar stack', () => {
         <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
       );
 
-      expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeDisabled();
-      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
-    });
-
-    it('offers the debate once geo-chat holds the side on screen', () => {
-      mocks.match = { id: 'match-1', viewer_position: true };
-      renderCard(<MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness()} />);
-
       expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
     });
 
-    // A claim nobody has answered is not publishing anything, so there is no wait to name — the
-    // hub's opponent half is a match, which does not require a position the way the picker's
-    // `opposing` does, and without this the card announced work nobody had started.
-    //
-    // No offer either, where it used to draw a disabled one. A match cannot be made for a viewer
-    // holding no side, so a match reported alongside one is the list being stale, and a dead button
-    // still tells the reader a debate is available here.
-    it('makes no offer, and names no wait, on a claim the viewer has not answered', () => {
-      mocks.match = { id: 'match-1', viewer_position: true };
-      renderCard(
-        <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
-      );
-
-      expect(screen.queryByText('Publishing your position…')).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
-    });
-
     /**
-     * A separate failure from the gate above, and one the gate cannot see: the match itself goes
-     * stale. `/matchmaking/matches` is account-level, fetched once with `refetchOnWindowFocus` off,
-     * so it keeps describing the side the viewer held when it was fetched. Switch sides and the
+     * `/matchmaking/matches` is account-level, fetched once with `refetchOnWindowFocus` off, so it
+     * keeps describing the side the viewer held when it was fetched. Switch sides and the
      * "opponent" it names is now on the *same* side — an offer geo-chat is right to refuse as
-     * nobody holding the opposite position being available, which is the error Bryan hit on both
-     * branches. The match carries the side it was made on, so the card can see this for itself.
+     * nobody holding the opposite position being available, an error the reader cannot connect to
+     * the side they just changed. The match carries the side it was made on, so the card can see
+     * this without asking anything.
      */
     it('withdraws an offer made for the side the viewer has switched away from', () => {
       mocks.match = { id: 'match-1', viewer_position: true };
-      // Agree is geo-chat's copy and the match's side; the viewer now holds Disagree.
       renderCard(
         <MatchmakingClaimCard
           claim={claim}
@@ -318,8 +294,6 @@ describe('position avatar stack', () => {
       );
 
       expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
-      // Not the wait either. Nothing is publishing; the offer simply is not this viewer's to take.
-      expect(screen.queryByText('Publishing your position…')).not.toBeInTheDocument();
     });
 
     it('offers the debate again once the match is for the side the viewer now holds', () => {
@@ -335,13 +309,24 @@ describe('position avatar stack', () => {
       expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
     });
 
-    // Clearing the side the offer rests on takes the offer with it, rather than leaving a disabled
-    // button claiming a debate is available on a claim the reader has just stepped away from.
+    // Clearing the side the offer rests on takes the offer with it, rather than leaving a button
+    // claiming a debate is available on a claim the reader has just stepped away from.
     it('withdraws the offer when the viewer clears their position', () => {
       mocks.match = { id: 'match-1', viewer_position: true };
       // A clear in flight: `expectedResponse: null` is a removal, and the card holds no side.
       mocks.indexing = { status: 'reconciling', pending: { expectedResponse: null }, runId: 'run-1' };
       renderCard(<MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness()} />);
+
+      expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    });
+
+    // A match cannot be made for a viewer holding no side, so a match reported alongside one is the
+    // list being stale.
+    it('makes no offer on a claim the viewer has not answered', () => {
+      mocks.match = { id: 'match-1', viewer_position: true };
+      renderCard(
+        <MatchmakingClaimCard claim={claim} positions={twoSides()} readiness={readiness({ viewer_response: null })} />
+      );
 
       expect(screen.queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
     });

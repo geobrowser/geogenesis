@@ -26,9 +26,14 @@ export const CALL_SCHEMA = {
 } as const;
 
 /**
- * `Community call event` (single occurrence) schema. `OCCURRENCE_ORIGINAL_START_PROPERTY`
- * is confirmed **not deployed yet** — matching a republished/rescheduled occurrence back to
- * its RRULE slot is best-effort by `occurrenceStart` until it ships.
+ * `Community call event` (single occurrence) schema.
+ *
+ * `OCCURRENCE_ORIGINAL_START_PROPERTY` **is deployed and is the property to match on** — 90
+ * of the 107 event entities in the graph carry it, against 6 for `START_TIME_PROPERTY`. An
+ * earlier version of this comment said it was "confirmed not deployed yet", which is what
+ * kept `matchOccurrenceEvent` reading `START_TIME_PROPERTY` alone and silently failing to
+ * match 101 of 107 published occurrences. Both the curator frontend and the Rapporteur bot
+ * write Meeting Time + Occurence original start + Published by, and never Start time.
  */
 export const EVENT_SCHEMA = {
   COMMUNITY_CALL_EVENT_TYPE: process.env.NEXT_PUBLIC_COMMUNITY_CALL_EVENT_TYPE_ID ?? '0419ca20118b4cdb84dfdb9ed73b50c2',
@@ -43,9 +48,9 @@ export const EVENT_SCHEMA = {
   TRANSCRIPTS_PROPERTY:
     process.env.NEXT_PUBLIC_COMMUNITY_CALL_EVENT_TRANSCRIPTS_ID ?? 'c504c7d5c3374016a5f083e4b5a92911',
   /**
-   * Canonical ID confirmed against curator's own `ids.ts`, but the type-projection
-   * registration for it may not be live on this network yet — see module doc comment above.
-   * Writing it is harmless either way; reading it back for occurrence-matching is best-effort.
+   * The RRULE slot an event was published for, pinned so the event maps back to its series
+   * slot even when its own Meeting Time was overridden. The deployed property name carries a
+   * typo — "Occurence original start" — which is load-bearing; do not "correct" it.
    */
   OCCURRENCE_ORIGINAL_START_PROPERTY:
     process.env.NEXT_PUBLIC_COMMUNITY_CALL_OCCURRENCE_ORIGINAL_START_ID ?? '660686547e2084faef521eaebbc848f8',
@@ -107,10 +112,9 @@ export function parseRoomName(roomName: string): { spaceId: string; callId: stri
   return { spaceId, callId, occurrenceStart };
 }
 
-// Occurrence Original Start (see EVENT_SCHEMA doc comment) isn't deployed yet, and legacy
-// curator-produced occurrences may have been computed with a different RRULE engine — this
-// tolerance absorbs minor DST/serialization drift when matching by start time, not a real
-// reschedule.
+// Legacy curator-produced occurrences may have been computed with a different RRULE engine,
+// and an event's own Meeting Time can be overridden at publish — this tolerance absorbs minor
+// DST/serialization drift when matching by start time, not a real reschedule.
 export const OCCURRENCE_MATCH_TOLERANCE_MS = 15 * 60 * 1000;
 
 /** A call is joinable from 15min before start until the call-end countdown begins. */
