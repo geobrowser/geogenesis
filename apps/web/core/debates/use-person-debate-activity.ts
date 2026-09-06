@@ -73,7 +73,7 @@ function fetchPersonHasDebateActivity(personId: string, signal?: AbortSignal): P
 
 /**
  * Gates the Debates tab. Returns `false` until the check resolves, so the tab appears only once it is
- * known to have a page behind it
+ * known to have a page behind it.
  */
 export function usePersonHasDebateActivity(personId: string, enabled: boolean): boolean {
   const { data } = useQuery({
