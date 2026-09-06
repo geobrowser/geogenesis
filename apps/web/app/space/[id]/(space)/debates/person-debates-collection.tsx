@@ -164,6 +164,7 @@ export function PersonDebatesCollection({
                 winnerShare={winnerShares.get(uuidToHex(debate.id)) ?? null}
                 keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
                 responseKind={responseKindByDebateId.get(debate.id) ?? 'stance'}
+                highlightedSpaceId={personId}
               />
             </li>
           ))}

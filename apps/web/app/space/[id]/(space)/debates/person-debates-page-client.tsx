@@ -1,7 +1,5 @@
 'use client';
 
-import * as React from 'react';
-
 import { usePersonDebateStats } from '~/core/debates/use-person-debate-stats';
 
 import { Skeleton } from '~/design-system/skeleton';
