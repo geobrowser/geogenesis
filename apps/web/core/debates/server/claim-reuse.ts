@@ -2,10 +2,11 @@ import { Effect } from 'effect';
 
 import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { uuidToHex } from '~/core/id/normalize';
-import { getBatchEntities } from '~/core/io/queries';
+import { graphql } from '~/core/io/graphql-client';
 
 import type { DebateClaimInput } from '../debate-publish-draft';
 import { readEnv } from './acceptor-config';
+import { existingClaimsDocument } from './existing-claims-document';
 
 /**
  * Find-or-create, half two: which of geo-chat's `existing_entity_id` references the publisher may
@@ -34,10 +35,30 @@ export type ExistingClaimEntity = {
 
 export type ExistingClaimLookup = (entityIds: string[]) => Promise<ExistingClaimEntity[]>;
 
-const lookupInGraph: ExistingClaimLookup = async entityIds => {
-  const entities = await Effect.runPromise(getBatchEntities(entityIds));
-  return entities.map(entity => ({ id: entity.id, spaces: entity.spaces, types: entity.types }));
-};
+const lookupInGraph: ExistingClaimLookup = entityIds =>
+  Effect.runPromise(
+    graphql({
+      query: existingClaimsDocument,
+      decoder: data =>
+        (data.entities ?? []).flatMap(entity =>
+          entity
+            ? [
+                {
+                  id: entity.id,
+                  spaces: (entity.spaceIds ?? []).filter((id): id is string => typeof id === 'string'),
+                  types: (entity.types ?? []).flatMap(type => (type ? [{ id: type.id }] : [])),
+                },
+              ]
+            : []
+        ),
+      variables: { ids: entityIds },
+    })
+  );
+
+/** A Geo entity id in either shape: 32 hex chars, dashed or not. Anything else cannot be queried. */
+export function looksLikeEntityId(id: string): boolean {
+  return /^[0-9a-f]{32}$/i.test(id.replace(/-/g, ''));
+}
 
 export function isDebateClaimReuseEnabled(): boolean {
   return /^(true|1|yes|on)$/i.test(readEnv('DEBATE_CLAIM_REUSE_ENABLED'));
@@ -81,6 +102,17 @@ export async function applyClaimReusePolicy(
     return claims.map(withoutReference);
   }
 
+  // One malformed id would fail the whole batched read (the API rejects the query, not the id), and
+  // the fail-safe below would then mint every matched claim in the debate. Drop those first.
+  const isMalformed = (id: string) => !looksLikeEntityId(id);
+  const malformed = referenced.filter(claim => isMalformed(claim.existingClaimEntityId as string));
+  if (malformed.length > 0) {
+    console.warn('[debate-acceptor] matched claims carry ids that are not entity ids; minting them instead', {
+      debateId: options.debateId,
+      ids: malformed.map(claim => claim.existingClaimEntityId),
+    });
+  }
+
   const motionKey = options.motionClaimEntityId ? uuidToHex(options.motionClaimEntityId) : null;
   const isMotion = (id: string) => motionKey !== null && uuidToHex(id) === motionKey;
   const motionReferences = referenced.filter(claim => isMotion(claim.existingClaimEntityId as string));
@@ -91,7 +123,11 @@ export async function applyClaimReusePolicy(
     });
   }
 
-  const ids = [...new Set(referenced.map(claim => claim.existingClaimEntityId as string).filter(id => !isMotion(id)))];
+  const ids = [
+    ...new Set(
+      referenced.map(claim => claim.existingClaimEntityId as string).filter(id => !isMalformed(id) && !isMotion(id))
+    ),
+  ];
   let verified: Set<string>;
   try {
     const entities = ids.length > 0 ? await (options.lookup ?? lookupInGraph)(ids) : [];
@@ -117,7 +153,11 @@ export async function applyClaimReusePolicy(
   let reused = 0;
   const result = claims.map(claim => {
     if (!claim.existingClaimEntityId) return claim;
-    if (!isMotion(claim.existingClaimEntityId) && verified.has(uuidToHex(claim.existingClaimEntityId))) {
+    if (
+      !isMalformed(claim.existingClaimEntityId) &&
+      !isMotion(claim.existingClaimEntityId) &&
+      verified.has(uuidToHex(claim.existingClaimEntityId))
+    ) {
       reused += 1;
       return claim;
     }
@@ -138,7 +178,7 @@ export async function applyClaimReusePolicy(
       entityIds: referenced
         .filter(claim => {
           const id = claim.existingClaimEntityId as string;
-          return isMotion(id) || !verified.has(uuidToHex(id));
+          return isMalformed(id) || isMotion(id) || !verified.has(uuidToHex(id));
         })
         .map(claim => claim.existingClaimEntityId),
     });

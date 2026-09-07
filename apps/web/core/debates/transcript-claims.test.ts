@@ -244,6 +244,26 @@ describe('unmatchedClaims', () => {
   });
 });
 
+describe('unmatchedClaims with reused claims', () => {
+  it('keeps a claim a participant stated when an unknown author stated it too', () => {
+    const OUTSIDER = 'dddddddddddddddddddddddddddddddd';
+    const grouped = group(
+      response([
+        { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: OUTSIDER, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+    expect(unmatchedClaims(grouped, [PRESTON]).map(claim => claim.id)).toEqual(['claim-1']);
+    const reversed = group(
+      response([
+        { id: 'block-1', position: 'a1', author: OUTSIDER, claims: [{ id: 'claim-1' }] },
+        { id: 'block-2', position: 'a2', author: PRESTON, claims: [{ id: 'claim-1' }] },
+      ])
+    );
+    expect(unmatchedClaims(reversed, [PRESTON]).map(claim => claim.id)).toEqual(['claim-1']);
+  });
+});
+
 describe('claim space', () => {
   it('carries the claim’s own space, which is where its responses are published', () => {
     const grouped = group(response([{ id: 'block-1', author: PRESTON, claims: [{ id: 'claim-1' }] }]));

@@ -94,6 +94,27 @@ describe('applyClaimReusePolicy', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('debate motion'), expect.objectContaining({ count: 1 }));
   });
 
+  it('drops references that are not entity ids without failing the batch for the rest', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const lookup = vi.fn<ExistingClaimLookup>(async () => graph);
+    const broken: DebateClaimInput = {
+      text: 'Bad reference.',
+      isFactual: null,
+      turnIndex: 0,
+      existingClaimEntityId: 'not-an-id',
+    };
+
+    const result = await applyClaimReusePolicy([broken, claims[0]], SPACE, { enabled: true, lookup });
+
+    expect(result.map(claim => claim.existingClaimEntityId)).toEqual([null, EXISTING]);
+    expect(lookup.mock.calls[0]?.[0]).toEqual([EXISTING]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('not entity ids'),
+      expect.objectContaining({ ids: ['not-an-id'] })
+    );
+  });
+
   it('accepts a space id in dashed form against the graph’s hex spaceIds', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const lookup = vi.fn(async () => graph);

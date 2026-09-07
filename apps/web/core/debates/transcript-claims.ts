@@ -173,16 +173,20 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
 export function unmatchedClaims(claims: DebateTranscriptClaims, participantSpaceIds: string[]): TranscriptClaim[] {
   const known = new Set(participantSpaceIds.map(uuidToHex));
 
-  const claimed = new Set<string>();
+  // The unit is the statement — an (author, claim) pair — not the claim. With reuse one claim can
+  // be stated by a participant and by an author outside the list; the participant's row does not
+  // cover the other statement, which would otherwise vanish from the panel.
+  const unmatched = new Set<string>();
   for (const [authorSpaceId, rows] of claims.byAuthorSpaceId) {
-    if (known.has(authorSpaceId)) for (const row of rows) claimed.add(uuidToHex(row.id));
+    if (!known.has(authorSpaceId)) for (const row of rows) unmatched.add(uuidToHex(row.id));
   }
+  for (const row of claims.unattributed) unmatched.add(uuidToHex(row.id));
 
   // Filtered out of the flat list rather than assembled from the author map: walking the map would
   // emit one unknown author's claims together and then every unattributed one after them, so an
   // A/B/A transcript came out A/A/B. `all` is already in transcript order, which is the order this
   // is documented to fall back to.
-  return claims.all.filter(claim => !claimed.has(uuidToHex(claim.id)));
+  return claims.all.filter(claim => unmatched.has(uuidToHex(claim.id)));
 }
 
 /** The claims a given participant made, in transcript order. */
