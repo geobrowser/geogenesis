@@ -360,6 +360,30 @@ describe('buildDebatePublishDraft', () => {
     expect(blockAuthoringClaim(draft, claimIdByName(draft, 'A novel point.'))).toBe(NO_SPACE);
   });
 
+  it('writes each relation once when several claims resolve to the same existing entity', () => {
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claims: [
+          // Both debaters restate the same published point, and one restates it twice in a turn.
+          { text: 'Same point, yes side.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING },
+          { text: 'Same point again, yes side.', isFactual: null, turnIndex: 0, existingClaimEntityId: EXISTING },
+          { text: 'Same point, no side.', isFactual: null, turnIndex: 1, existingClaimEntityId: EXISTING },
+        ],
+      }),
+      { createEntityId: idFactory(), createPosition: () => 'a0' }
+    );
+    const sources = draft.relations.filter(r => r.type.id === SOURCES_PROPERTY_ID && r.fromEntity.id === EXISTING);
+    expect(sources).toHaveLength(1);
+    expect(sources[0].toEntity.id).toBe(draft.debateEntityId);
+    const blockLinks = draft.relations.filter(
+      r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === EXISTING
+    );
+    // One Claims edge per block, not per extracted claim.
+    expect(blockLinks).toHaveLength(2);
+    expect(new Set(blockLinks.map(r => r.fromEntity.id)).size).toBe(2);
+  });
+
   it('mints a fresh Claim when the existing id is blank or null', () => {
     const draft = buildDebatePublishDraft(
       baseInput({

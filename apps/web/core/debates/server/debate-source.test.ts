@@ -213,7 +213,7 @@ describe('loadDebatePublishSource media gating', () => {
     expect(vi.mocked(applyClaimReusePolicy)).toHaveBeenCalledWith(
       expect.arrayContaining([expect.objectContaining({ existingClaimEntityId: EXISTING })]),
       'c9f267dcb0d270718c2a3c45a64afd32',
-      { debateId: DEBATE_ID }
+      { debateId: DEBATE_ID, motionClaimEntityId: 'claim-1' }
     );
   });
 

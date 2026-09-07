@@ -9,7 +9,7 @@
  *
  *   NEXT_PUBLIC_CHAIN_ID=55516 NEXT_PUBLIC_PRIVY_APP_ID=live NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=live \
  *   DEBATE_CLAIM_REUSE_ENABLED=true \
- *   bun run scripts/live-claim-reuse.ts <payload.json> <debate space id>
+ *   bun run scripts/live-claim-reuse.ts <payload.json> <debate space id> [motion claim entity id]
  */
 import { Effect } from 'effect';
 import { readFile } from 'node:fs/promises';
@@ -22,40 +22,26 @@ import {
 } from '~/core/debates/debate-publish-draft';
 import { NAME_PROPERTY_ID, SOURCES_PROPERTY_ID, TYPES_PROPERTY_ID } from '~/core/debates/ontology';
 import { applyClaimReusePolicy } from '~/core/debates/server/claim-reuse';
+import { type DebateExtractedClaimsResponse, decodeExtractedClaims } from '~/core/debates/server/extracted-claims';
 import { Publish } from '~/core/utils/publish';
 
-type Payload = {
-  turns: Array<{ turn_index: number; attributed_space_id: string; speaker_name: string | null; text: string }>;
-  claims: Array<{
-    text: string;
-    is_factual: boolean | null;
-    turn_index: number;
-    existing_entity_id?: string | null;
-    match?: { verdict?: string; best_score?: number | null; candidates?: number } | null;
-  }>;
+type Payload = DebateExtractedClaimsResponse & {
+  claims: Array<{ match?: { verdict?: string; best_score?: number | null; candidates?: number } | null }>;
 };
 
-const [payloadPath, spaceId] = process.argv.slice(2);
+const [payloadPath, spaceId, motionClaimEntityId] = process.argv.slice(2);
 if (!payloadPath || !spaceId) {
-  console.error('usage: bun run scripts/live-claim-reuse.ts <payload.json> <debate space id>');
+  console.error('usage: bun run scripts/live-claim-reuse.ts <payload.json> <debate space id> [motion claim entity id]');
   process.exit(2);
 }
 // Node's fs rather than `Bun.file`: the Next build type-checks `scripts/**` and has no Bun types.
 const payload = JSON.parse(await readFile(payloadPath, 'utf8')) as Payload;
 
-// Same decode as `loadDebateClaims` in debate-source.ts (private there, and it needs geo-chat).
-const claims: DebateClaimInput[] = payload.claims.map(claim => ({
-  text: claim.text,
-  isFactual: claim.is_factual ?? null,
-  turnIndex: claim.turn_index,
-  existingClaimEntityId:
-    typeof claim.existing_entity_id === 'string' && claim.existing_entity_id.trim().length > 0
-      ? claim.existing_entity_id.trim()
-      : null,
-}));
+// The same decode the publish sweep runs.
+const { claims }: { claims: DebateClaimInput[] } = decodeExtractedClaims(payload);
 
 console.log(`policy: DEBATE_CLAIM_REUSE_ENABLED=${process.env.DEBATE_CLAIM_REUSE_ENABLED ?? '(unset)'}`);
-const decided = await applyClaimReusePolicy(claims, spaceId, { debateId: 'live-harness' });
+const decided = await applyClaimReusePolicy(claims, spaceId, { debateId: 'live-harness', motionClaimEntityId });
 
 // Stand-in speakers with well-formed ids; the harness turn carries a placeholder space id.
 const YES = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';

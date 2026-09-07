@@ -310,6 +310,14 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
       toEntityName: transcriptName,
     });
 
+    // Every iteration used to mint a fresh claim id, which made these pairs unique by construction.
+    // A reused entity can appear behind several extracted claims (both debaters restating the same
+    // published point, or two near-duplicate extractions from one turn), and `relate` does not
+    // dedupe, so the pairs are tracked: one Claims edge per (block, claim), one Sources edge per
+    // claim per debate.
+    const linkedBlockClaims = new Set<string>();
+    const sourcedClaims = new Set<string>();
+
     turns.forEach(turn => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
       const blockId = createEntityId();
@@ -369,18 +377,25 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
             setBoolean(claimId, claimEntityText, CLAIM_IS_FACTUAL_PROPERTY_ID, claim.isFactual);
           }
         }
-        relate({
-          fromEntity: blockRef,
-          propertyId: DEBATE_CLAIMS_PROPERTY_ID,
-          toEntityId: claimId,
-          toEntityName: claimEntityText,
-        });
-        relate({
-          fromEntity: claimRef,
-          propertyId: SOURCES_PROPERTY_ID,
-          toEntityId: debateEntityId,
-          toEntityName: debateName,
-        });
+        const blockClaimKey = `${blockId}:${claimId}`;
+        if (!linkedBlockClaims.has(blockClaimKey)) {
+          linkedBlockClaims.add(blockClaimKey);
+          relate({
+            fromEntity: blockRef,
+            propertyId: DEBATE_CLAIMS_PROPERTY_ID,
+            toEntityId: claimId,
+            toEntityName: claimEntityText,
+          });
+        }
+        if (!sourcedClaims.has(claimId)) {
+          sourcedClaims.add(claimId);
+          relate({
+            fromEntity: claimRef,
+            propertyId: SOURCES_PROPERTY_ID,
+            toEntityId: debateEntityId,
+            toEntityName: debateName,
+          });
+        }
       }
     });
   }

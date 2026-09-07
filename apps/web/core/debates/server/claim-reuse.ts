@@ -5,6 +5,7 @@ import { uuidToHex } from '~/core/id/normalize';
 import { getBatchEntities } from '~/core/io/queries';
 
 import type { DebateClaimInput } from '../debate-publish-draft';
+import { readEnv } from './acceptor-config';
 
 /**
  * Find-or-create, half two: which of geo-chat's `existing_entity_id` references the publisher may
@@ -38,13 +39,6 @@ const lookupInGraph: ExistingClaimLookup = async entityIds => {
   return entities.map(entity => ({ id: entity.id, spaces: entity.spaces, types: entity.types }));
 };
 
-/** Secrets UIs and shell exports often keep the wrapping quotes as part of the value. */
-function readEnv(name: string): string {
-  const value = process.env[name]?.trim() ?? '';
-  const quoted = /^(['"])([\s\S]*)\1$/.exec(value);
-  return quoted ? quoted[2].trim() : value;
-}
-
 export function isDebateClaimReuseEnabled(): boolean {
   return /^(true|1|yes|on)$/i.test(readEnv('DEBATE_CLAIM_REUSE_ENABLED'));
 }
@@ -54,6 +48,11 @@ export type ClaimReuseOptions = {
   enabled?: boolean;
   /** Defaults to a batched graph read. Injectable for tests. */
   lookup?: ExistingClaimLookup;
+  /**
+   * The debate's own motion. It is a Claim in the publication space, so it passes every other check,
+   * but a debater restating the motion must not make the motion "their" transcript claim.
+   */
+  motionClaimEntityId?: string;
   /** For the log line only. */
   debateId?: string;
 };
@@ -82,10 +81,20 @@ export async function applyClaimReusePolicy(
     return claims.map(withoutReference);
   }
 
-  const ids = [...new Set(referenced.map(claim => claim.existingClaimEntityId as string))];
+  const motionKey = options.motionClaimEntityId ? uuidToHex(options.motionClaimEntityId) : null;
+  const isMotion = (id: string) => motionKey !== null && uuidToHex(id) === motionKey;
+  const motionReferences = referenced.filter(claim => isMotion(claim.existingClaimEntityId as string));
+  if (motionReferences.length > 0) {
+    console.warn('[debate-acceptor] matched claims point at the debate motion; minting them instead', {
+      debateId: options.debateId,
+      count: motionReferences.length,
+    });
+  }
+
+  const ids = [...new Set(referenced.map(claim => claim.existingClaimEntityId as string).filter(id => !isMotion(id)))];
   let verified: Set<string>;
   try {
-    const entities = await (options.lookup ?? lookupInGraph)(ids);
+    const entities = ids.length > 0 ? await (options.lookup ?? lookupInGraph)(ids) : [];
     const spaceKey = uuidToHex(spaceId);
     verified = new Set(
       entities
@@ -108,7 +117,7 @@ export async function applyClaimReusePolicy(
   let reused = 0;
   const result = claims.map(claim => {
     if (!claim.existingClaimEntityId) return claim;
-    if (verified.has(uuidToHex(claim.existingClaimEntityId))) {
+    if (!isMotion(claim.existingClaimEntityId) && verified.has(uuidToHex(claim.existingClaimEntityId))) {
       reused += 1;
       return claim;
     }
@@ -127,7 +136,10 @@ export async function applyClaimReusePolicy(
       debateId: options.debateId,
       spaceId,
       entityIds: referenced
-        .filter(claim => !verified.has(uuidToHex(claim.existingClaimEntityId as string)))
+        .filter(claim => {
+          const id = claim.existingClaimEntityId as string;
+          return isMotion(id) || !verified.has(uuidToHex(id));
+        })
         .map(claim => claim.existingClaimEntityId),
     });
   }

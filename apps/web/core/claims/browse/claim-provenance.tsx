@@ -118,9 +118,10 @@ export function ClaimProvenance({
         <Text as="span" variant="metadata" color="grey-04">
           {speaker?.name ? (
             <>
-              {/* Relation order says nothing about chronology, so "First" is only claimed when
-                  there is a single source to be first in. */}
-              {otherSources.length > 0 ? 'Stated by' : 'First stated by'}{' '}
+              {/* Not "First stated by": relation order says nothing about chronology, and a claim
+                  authored in the space by hand and reused by one debate carries a single Sources
+                  relation while predating that debate. */}
+              Stated by{' '}
               {/* Linked when the profile resolves to one. `profileLink` is nullable — a speaker
                   whose personal space has no front-page entity has nowhere to go, and a link to
                   nothing is worse than plain text. `whitespace-nowrap` keeps a two-word name from

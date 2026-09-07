@@ -67,6 +67,33 @@ describe('applyClaimReusePolicy', () => {
     expect(result.map(claim => claim.existingClaimEntityId)).toEqual([EXISTING, null, null, null, null]);
   });
 
+  it('never reuses the debate motion, even though it is a Claim in the space', async () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const motion = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const lookup = vi.fn<ExistingClaimLookup>(async () => [
+      ...graph,
+      { id: motion, spaces: [SPACE], types: [{ id: CLAIM_TYPE_ID }] },
+    ]);
+    const restated: DebateClaimInput = {
+      text: 'The motion, restated.',
+      isFactual: null,
+      turnIndex: 0,
+      existingClaimEntityId: 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA',
+    };
+
+    const result = await applyClaimReusePolicy([restated, claims[0]], SPACE, {
+      enabled: true,
+      lookup,
+      motionClaimEntityId: motion,
+    });
+
+    expect(result.map(claim => claim.existingClaimEntityId)).toEqual([null, EXISTING]);
+    // The motion is not even looked up.
+    expect(lookup.mock.calls[0]?.[0]).toEqual([EXISTING]);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('debate motion'), expect.objectContaining({ count: 1 }));
+  });
+
   it('accepts a space id in dashed form against the graph’s hex spaceIds', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     const lookup = vi.fn(async () => graph);
