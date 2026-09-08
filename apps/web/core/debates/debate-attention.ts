@@ -97,6 +97,8 @@ export function createDebateAttentionStore(
   };
 }
 
+const DEFAULT_HIDE_GRACE_MS = 60_000;
+
 /**
  * Presence, unlike attention, asks only whether this tab is *open and on screen* — not whether it
  * is the frontmost window.
@@ -107,9 +109,24 @@ export function createDebateAttentionStore(
  * requests from an offline requester are filtered out). Keying either on focus meant a request
  * disappeared the moment its requester clicked into another window, well inside its 25-minute
  * lifetime — and, with several browsers open on one machine, only ever one user could be online.
+ *
+ * Hiding the tab is graced rather than acted on at once (GEO-2836). Visibility is a much sharper
+ * signal than the thing it stands in for: checking a calendar in another tab for ten seconds is
+ * not leaving, but it used to report as leaving, and the report was immediate because the gateway
+ * flushes a heartbeat on every presence transition. Someone who is about to come back should not
+ * vanish from other people's matchmaking lists in the meantime.
+ *
+ * Closing the tab is *not* graced. `pagehide` drops presence at once, so the case a grace would
+ * genuinely get wrong — offering a debate to someone who has already gone — keeps its explicit
+ * signal, and the grace only ever covers a tab that is still there.
  */
-export function createDebatePresenceStore(windowRef: Window, documentRef: Document): DebateAttentionStore {
+export function createDebatePresenceStore(
+  windowRef: Window,
+  documentRef: Document,
+  hideGraceMs = DEFAULT_HIDE_GRACE_MS
+): DebateAttentionStore {
   let visible = documentRef.visibilityState === 'visible';
+  let hideTimer: ReturnType<typeof setTimeout> | null = null;
   const listeners = new Set<() => void>();
 
   const setVisible = (nextVisible: boolean) => {
@@ -118,10 +135,34 @@ export function createDebatePresenceStore(windowRef: Window, documentRef: Docume
     for (const listener of listeners) listener();
   };
 
-  const reconcile = () => setVisible(documentRef.visibilityState === 'visible');
+  const clearHideTimer = () => {
+    if (!hideTimer) return;
+    clearTimeout(hideTimer);
+    hideTimer = null;
+  };
+
+  const reconcile = () => {
+    if (documentRef.visibilityState === 'visible') {
+      clearHideTimer();
+      setVisible(true);
+      return;
+    }
+    // Already counting down, or already gone: either way the deadline stands as it is. Restarting
+    // it on each `visibilitychange` would let a tab that keeps waking briefly never expire.
+    if (hideTimer || !visible) return;
+    hideTimer = setTimeout(() => {
+      hideTimer = null;
+      if (documentRef.visibilityState !== 'visible') setVisible(false);
+    }, hideGraceMs);
+  };
+
   // `pagehide` covers the back-forward cache, where `visibilitychange` alone can leave a frozen
-  // page reporting itself as present.
-  const hide = () => setVisible(false);
+  // page reporting itself as present. It is also the one departure we can be sure of, so unlike a
+  // plain hide it takes effect immediately.
+  const hide = () => {
+    clearHideTimer();
+    setVisible(false);
+  };
 
   const attach = () => {
     documentRef.addEventListener('visibilitychange', reconcile);
@@ -130,6 +171,7 @@ export function createDebatePresenceStore(windowRef: Window, documentRef: Docume
   };
 
   const detach = () => {
+    clearHideTimer();
     documentRef.removeEventListener('visibilitychange', reconcile);
     windowRef.removeEventListener('pagehide', hide);
     windowRef.removeEventListener('pageshow', reconcile);
@@ -141,7 +183,10 @@ export function createDebatePresenceStore(windowRef: Window, documentRef: Docume
       listeners.add(listener);
       if (listeners.size === 1) {
         attach();
-        reconcile();
+        // A store nobody was listening to ran no timer, so the grace does not apply across the
+        // gap: settle on what the document says now.
+        clearHideTimer();
+        setVisible(documentRef.visibilityState === 'visible');
       }
       return () => {
         listeners.delete(listener);
@@ -178,7 +223,7 @@ export function useDebateAttention() {
   return React.useSyncExternalStore(store.subscribe, store.getSnapshot, getServerSnapshot);
 }
 
-/** Is this tab on screen at all? Drives the gateway's `debate_presence`. */
+/** Is this tab on screen, or recently so? Drives the gateway's `debate_presence`. */
 export function useDebatePresence() {
   const store = getBrowserPresenceStore();
   return React.useSyncExternalStore(store.subscribe, store.getSnapshot, getServerSnapshot);
