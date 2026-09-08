@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
-import { MatchmakingClaimCard } from './matchmaking-claim-card';
+import { MatchmakingClaimCard, withRecordPersonFaces } from './matchmaking-claim-card';
 
 // Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
 // refuses to touch the graph for anything else. The space id is hoisted because `vi.mock` factories
@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   viewerSpaceId: 'personal-space',
   /** Whether each render of the card's summary read was enabled, in order. */
   summaryEnabled: [] as boolean[],
+  matchupEnabled: [] as boolean[],
 }));
 
 vi.mock('../hooks', () => ({
@@ -67,13 +68,16 @@ vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
   // Honours `enabled`, because the real hook does: disabled means no answer, not a stale one, so it
   // masks the match rather than just holding the fetch. A stub that ignored it would report every
   // host as offering a debate no matter what the host asked for.
-  useClaimMatchup: ({ enabled = true }: { enabled?: boolean }) => ({
-    match: enabled ? mocks.match : null,
-    blockedReason: mocks.blockedReason,
-    isRequesting: false,
-    requestError: null,
-    request: mocks.request,
-  }),
+  useClaimMatchup: ({ enabled = true }: { enabled?: boolean }) => {
+    mocks.matchupEnabled.push(enabled);
+    return {
+      match: enabled ? mocks.match : null,
+      blockedReason: mocks.blockedReason,
+      isRequesting: false,
+      requestError: null,
+      request: mocks.request,
+    };
+  },
 }));
 
 // The card reports its own responses now. The tier this returns is what decides whether the footer
@@ -228,6 +232,7 @@ beforeEach(() => {
   mocks.summaryIndexedViewerDirection = null;
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
+  mocks.matchupEnabled = [];
 });
 
 afterEach(cleanup);
@@ -802,6 +807,17 @@ describe('MatchmakingClaimCard', () => {
     expect(mocks.summaryEnabled.some(enabled => enabled === true)).toBe(true);
   });
 
+  it('holds both response and matchup reads behind a host-supplied query gate', () => {
+    renderCard(
+      <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} queriesEnabled={false} />
+    );
+
+    expect(mocks.summaryEnabled).not.toHaveLength(0);
+    expect(mocks.summaryEnabled.every(enabled => enabled === false)).toBe(true);
+    expect(mocks.matchupEnabled).not.toHaveLength(0);
+    expect(mocks.matchupEnabled.every(enabled => enabled === false)).toBe(true);
+  });
+
   it('refuses to publish across an unpublished edit to the claim’s own vocabulary', () => {
     renderCard(
       <MatchmakingClaimCard
@@ -998,5 +1014,93 @@ describe('MatchmakingClaimCard', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
     expect(mocks.submitResponse).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Personal Debates record: pin one known person on the side they took, ignore presence.
+ * Presence faces would drop an offline profile from their own positions and show online strangers.
+ */
+describe('record person faces', () => {
+  const recordPerson = {
+    profileSpaceId: '019fedb1-0c41-7f3e-9a11-2c7d5e8b4419',
+    displayName: 'Ada',
+    avatarCid: 'https://example.com/ada.png',
+    heldPositions: [true],
+  };
+
+  it('pins only the record person on their held side', () => {
+    const crowded: DebateClaimPositionSummary[] = [
+      {
+        ...positions[0]!,
+        present_count: 3,
+        participants: [participant('stranger-a'), participant('stranger-b')],
+      },
+      {
+        ...positions[1]!,
+        present_count: 2,
+        participants: [participant('stranger-c')],
+      },
+    ];
+
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={crowded}
+        readiness={readiness({ viewer_response: null })}
+        recordPerson={recordPerson}
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    const disagree = screen.getByRole('button', { name: /^Disagree/ });
+
+    expect(within(agree).getByTestId('avatar')).toHaveTextContent('https://example.com/ada.png');
+    expect(within(agree).getAllByTestId('avatar')).toHaveLength(1);
+    expect(within(agree).queryByText(/^\+/)).not.toBeInTheDocument();
+    expect(within(disagree).queryAllByTestId('avatar')).toHaveLength(0);
+  });
+
+  it('does not fill empty sides from the match while recording a person', () => {
+    mocks.match = {
+      id: 'match-1',
+      positions: [
+        { ...positions[0]!, present_count: 0, participants: [] },
+        { ...positions[1]!, present_count: 1, participants: [participant('opponent')] },
+      ],
+    };
+
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={[
+          { ...positions[0]!, present_count: 0, participants: [] },
+          { ...positions[1]!, present_count: 0, participants: [] },
+        ]}
+        readiness={readiness({ viewer_response: null })}
+        recordPerson={recordPerson}
+      />
+    );
+
+    expect(within(screen.getByRole('button', { name: /^Agree/ })).getByTestId('avatar')).toHaveTextContent(
+      'https://example.com/ada.png'
+    );
+    expect(within(screen.getByRole('button', { name: /^Disagree/ })).queryAllByTestId('avatar')).toHaveLength(0);
+  });
+
+  it('rebuilds stacks without depending on present_count', () => {
+    const pinned = withRecordPersonFaces(
+      [
+        { ...positions[0]!, present_count: 0, participants: [] },
+        { ...positions[1]!, present_count: 4, participants: [participant('online')] },
+      ],
+      recordPerson
+    );
+
+    expect(pinned[0]?.participants).toHaveLength(1);
+    expect(pinned[0]?.present_count).toBe(1);
+    expect(pinned[0]?.participants[0]?.profile_space_id).toBe(recordPerson.profileSpaceId);
+    expect(pinned[1]?.participants).toHaveLength(0);
+    expect(pinned[1]?.present_count).toBe(0);
   });
 });

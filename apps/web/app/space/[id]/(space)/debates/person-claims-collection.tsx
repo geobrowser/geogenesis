@@ -2,18 +2,28 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
+import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
+import { CursorPager } from '~/core/claims/browse/use-cursor-pages';
+import type { DebateClaim } from '~/core/debates/api';
+import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
+import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { type PersonClaimEntry, personTopics, usePersonClaims } from '~/core/debates/use-person-claims';
-import { equals as idEquals } from '~/core/id/normalize';
-import { responsePositionLabel } from '~/core/responses/entity-response';
-import { NavUtils } from '~/core/utils/utils';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
+import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
+import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
+import type { Entity } from '~/core/types';
 
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import { ALL_FILTER, PersonDebateFilters } from './person-debate-filters';
+
+const CLAIMS_PAGE_SIZE = 8;
+
+type PersonClaimRecord = {
+  entry: PersonClaimEntry;
+  spaceId: string;
+};
 
 /**
  * Every claim the person holds a position on, with the Space and Topic filters that narrow it.
@@ -23,25 +33,67 @@ export function PersonClaimsCollection({ personId }: { personId: string }) {
 
   const [selectedSpace, setSelectedSpace] = React.useState(ALL_FILTER);
   const [selectedTopic, setSelectedTopic] = React.useState(ALL_FILTER);
+  const [pageIndex, setPageIndex] = React.useState(0);
 
   // The spaces the person's claims live in — the filter is claim-scoped, so its options are too.
   const spaceIds = React.useMemo(() => [...new Set(entries.flatMap(entry => entry.spaceIds))], [entries]);
   const topics = React.useMemo(() => personTopics(topicsByClaimHex), [topicsByClaimHex]);
 
-  const visible = React.useMemo(
+  const filtered = React.useMemo<PersonClaimRecord[]>(
     () =>
-      entries.filter(entry => {
-        if (selectedSpace !== ALL_FILTER && !entry.spaceIds.some(spaceId => idEquals(spaceId, selectedSpace))) {
-          return false;
-        }
+      entries.flatMap(entry => {
         if (selectedTopic !== ALL_FILTER) {
           const claimTopics = topicsByClaimHex.get(entry.claimHex) ?? [];
-          if (!claimTopics.some(topic => idEquals(topic.id, selectedTopic))) return false;
+          if (!claimTopics.some(topic => idEquals(topic.id, selectedTopic))) return [];
         }
-        return true;
+
+        const position =
+          selectedSpace === ALL_FILTER
+            ? entry.positions[0]
+            : entry.positions.find(candidate => idEquals(candidate.spaceId, selectedSpace));
+
+        return position ? [{ entry, spaceId: position.spaceId }] : [];
       }),
     [entries, topicsByClaimHex, selectedSpace, selectedTopic]
   );
+
+  const lastPageIndex = Math.max(0, Math.ceil(filtered.length / CLAIMS_PAGE_SIZE) - 1);
+  const currentPageIndex = Math.min(pageIndex, lastPageIndex);
+  const page = React.useMemo(
+    () => filtered.slice(currentPageIndex * CLAIMS_PAGE_SIZE, (currentPageIndex + 1) * CLAIMS_PAGE_SIZE),
+    [currentPageIndex, filtered]
+  );
+  const hasNextPage = currentPageIndex < lastPageIndex;
+
+  const selectSpace = React.useCallback((spaceId: string) => {
+    setSelectedSpace(spaceId);
+    setPageIndex(0);
+  }, []);
+  const selectTopic = React.useCallback((topicId: string) => {
+    setSelectedTopic(topicId);
+    setPageIndex(0);
+  }, []);
+
+  const debateClaimGroups = React.useMemo(() => {
+    const bySpace = new Map<string, string[]>();
+    for (const { entry, spaceId } of page) {
+      const list = bySpace.get(spaceId) ?? [];
+      list.push(entry.claimId);
+      bySpace.set(spaceId, list);
+    }
+    return [...bySpace.entries()].map(([spaceId, claimIds]) => ({ spaceId, claimIds }));
+  }, [page]);
+
+  const rowsQuery = useDebateClaimsBySpaces(debateClaimGroups);
+  const rowByClaimHex = React.useMemo(() => {
+    const map = new Map<string, DebateClaim>();
+    for (const row of rowsQuery.claims) map.set(uuidToHex(row.claim_entity_id), row);
+    return map;
+  }, [rowsQuery.claims]);
+
+  const personSpaceIds = React.useMemo(() => [personId], [personId]);
+  const { profilesBySpaceId } = useProfilesBySpaceIds(personSpaceIds);
+  const personProfile = profilesBySpaceId.get(personId);
 
   if (isLoading && entries.length === 0) return <Skeleton className="h-[120px] w-full rounded-lg" />;
   if (entries.length === 0) return null;
@@ -57,63 +109,105 @@ export function PersonClaimsCollection({ personId }: { personId: string }) {
           topics={topics}
           selectedSpace={selectedSpace}
           selectedTopic={selectedTopic}
-          onSelectSpace={setSelectedSpace}
-          onSelectTopic={setSelectedTopic}
+          onSelectSpace={selectSpace}
+          onSelectTopic={selectTopic}
         />
       </div>
 
-      {visible.length === 0 ? (
+      {filtered.length === 0 ? (
         <Text as="p" variant="metadata" color="grey-04">
           No claims match these filters.
         </Text>
       ) : (
-        <ul className="m-0 flex list-none flex-col gap-2 p-0">
-          {visible.map(entry => (
-            <li key={entry.claimHex}>
-              <ClaimPositionRow entry={entry} name={claimByHex.get(entry.claimHex)?.name ?? 'Claim'} />
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 @[560px]:grid-cols-2">
+            {page.map(({ entry, spaceId }) => (
+              <li key={entry.claimHex}>
+                <PersonRecordClaimCard
+                  entry={entry}
+                  spaceId={spaceId}
+                  entity={claimByHex.get(entry.claimHex) ?? null}
+                  row={rowByClaimHex.get(entry.claimHex) ?? null}
+                  personId={personId}
+                  personName={personProfile?.name ?? null}
+                  personAvatarUrl={personProfile?.avatarUrl ?? null}
+                />
+              </li>
+            ))}
+          </ul>
+          <CursorPager
+            isFirstPage={currentPageIndex === 0}
+            hasNextPage={hasNextPage}
+            isLoading={rowsQuery.isLoading}
+            onPrevious={() => setPageIndex(Math.max(0, currentPageIndex - 1))}
+            onNext={() => setPageIndex(Math.min(lastPageIndex, currentPageIndex + 1))}
+          />
+        </>
       )}
     </section>
   );
 }
 
-function ClaimPositionRow({ entry, name }: { entry: PersonClaimEntry; name: string }) {
-  // One chip per distinct side taken on this claim — usually one; two only when the person answered
-  // both the stance and veracity axis.
-  const chips = React.useMemo(() => {
-    const seen = new Map<string, { responseKind: 'stance' | 'veracity'; position: boolean }>();
-    for (const position of entry.positions) {
-      seen.set(`${position.responseKind}:${String(position.position)}`, {
-        responseKind: position.responseKind,
-        position: position.position,
-      });
-    }
-    return [...seen.values()];
-  }, [entry.positions]);
+function PersonRecordClaimCard({
+  entry,
+  spaceId,
+  entity,
+  row,
+  personId,
+  personName,
+  personAvatarUrl,
+}: {
+  entry: PersonClaimEntry;
+  spaceId: string;
+  entity: Entity | null;
+  row: DebateClaim | null;
+  personId: string;
+  personName: string | null;
+  personAvatarUrl: string | null;
+}) {
+  const { ref, nearViewport } = useNearViewport();
+  const state = useClaimResponseState({
+    claimId: entry.claimId,
+    spaceId,
+    row,
+    entity,
+    title: entity?.name ?? 'Claim',
+    description: entity?.description ?? null,
+    enabled: nearViewport,
+  });
+
+  // Prefer sides matching the claim's vocabulary
+  const heldPositions = React.useMemo(() => {
+    const heldForKind = entry.positions
+      .filter(position => idEquals(position.spaceId, spaceId) && position.responseKind === state.responseKind)
+      .map(position => position.position);
+    const heldInSpace = entry.positions
+      .filter(position => idEquals(position.spaceId, spaceId))
+      .map(position => position.position);
+    return [...new Set(heldForKind.length > 0 ? heldForKind : heldInSpace)];
+  }, [entry.positions, spaceId, state.responseKind]);
+
+  const recordPerson = React.useMemo(
+    () => ({
+      profileSpaceId: personId,
+      displayName: personName,
+      avatarCid: personAvatarUrl,
+      heldPositions,
+    }),
+    [heldPositions, personAvatarUrl, personId, personName]
+  );
 
   return (
-    <Link
-      href={NavUtils.toEntity(entry.positions[0].spaceId, entry.claimId)}
-      className="flex items-center justify-between gap-3 rounded-lg border border-grey-02 bg-white p-3 transition-colors hover:border-grey-03"
-    >
-      <Text as="span" variant="metadataMedium" color="text" className="min-w-0 flex-1 truncate">
-        {name}
-      </Text>
-      <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-        {chips.map(chip => (
-          <span
-            key={`${chip.responseKind}:${String(chip.position)}`}
-            className={cx(
-              'rounded-xs px-1 py-px text-[0.6875rem] font-medium',
-              chip.position ? 'bg-successTertiary text-text' : 'bg-errorTertiary text-text'
-            )}
-          >
-            {responsePositionLabel(chip.responseKind, chip.position)}
-          </span>
-        ))}
-      </span>
-    </Link>
+    <MatchmakingClaimCard
+      claim={state.claim}
+      positions={state.positions}
+      readiness={state.readiness}
+      answersReady={state.isResponseKindResolved && state.isViewerResponseResolved}
+      responseBlockedReason={state.responseBlockedReason}
+      activeDebate={row?.active_debate ?? null}
+      recordPerson={recordPerson}
+      queriesEnabled={nearViewport}
+      ref={ref}
+    />
   );
 }
