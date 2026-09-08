@@ -103,7 +103,9 @@ export function PersonDebatesCollection({
   const visible = React.useMemo(
     () =>
       debates.filter(debate => {
-        if (selectedSpace !== ALL_FILTER && !idEquals(spaceByDebateId.get(debate.id) ?? '', selectedSpace)) {
+        const debateSpaceId = spaceByDebateId.get(debate.id);
+        if (!debateSpaceId) return false;
+        if (selectedSpace !== ALL_FILTER && !idEquals(debateSpaceId, selectedSpace)) {
           return false;
         }
         if (selectedTopic !== ALL_FILTER) {
@@ -136,7 +138,7 @@ export function PersonDebatesCollection({
     () => [...new Set(page.flatMap(debate => (sidesByDebateId.get(debate.id) ?? []).map(side => side.spaceId)))],
     [page, sidesByDebateId]
   );
-  const { profilesBySpaceId } = useProfilesBySpaceIds(participantSpaceIds, participantSpaceIds.length > 0);
+  const { profilesBySpaceId } = useProfilesBySpaceIds(participantSpaceIds);
   const keyframeByDebateId = useDebateKeyframes(page);
 
   // Hydrate this page's claims for accurate side labels.
@@ -204,20 +206,25 @@ export function PersonDebatesCollection({
       ) : (
         <>
           <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {page.map(debate => (
-              <li key={debate.id}>
-                <DebateRow
-                  debate={debate}
-                  spaceId={spaceByDebateId.get(debate.id) ?? personId}
-                  sides={sidesByDebateId.get(debate.id) ?? []}
-                  profilesBySpaceId={profilesBySpaceId}
-                  winnerShare={winnerShares.get(uuidToHex(debate.id)) ?? null}
-                  keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
-                  responseKind={responseKindByDebateId.get(debate.id) ?? 'stance'}
-                  highlightedSpaceId={personId}
-                />
-              </li>
-            ))}
+            {page.map(debate => {
+              const debateSpaceId = spaceByDebateId.get(debate.id);
+              if (!debateSpaceId) return null;
+
+              return (
+                <li key={debate.id}>
+                  <DebateRow
+                    debate={debate}
+                    spaceId={debateSpaceId}
+                    sides={sidesByDebateId.get(debate.id) ?? []}
+                    profilesBySpaceId={profilesBySpaceId}
+                    winnerShare={winnerShares.get(uuidToHex(debate.id)) ?? null}
+                    keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
+                    responseKind={responseKindByDebateId.get(debate.id) ?? 'stance'}
+                    highlightedSpaceId={personId}
+                  />
+                </li>
+              );
+            })}
           </ul>
           <CursorPager
             isFirstPage={currentPageIndex === 0}
