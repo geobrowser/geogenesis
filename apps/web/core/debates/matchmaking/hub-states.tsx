@@ -40,7 +40,13 @@ export function HubMessage({
   action,
 }: {
   children: React.ReactNode;
-  /** A second sentence under the message, set closer to it than the action is. */
+  /**
+   * A second sentence under the message, set closer to it than the action is.
+   *
+   * Rendered as given rather than wrapped in a `Text` of its own: a note that decides at runtime it
+   * has nothing to say returns null, and a wrapper here would still leave an empty paragraph in the
+   * markup and the a11y tree. Notes bring their own {@link HubMessageNote}.
+   */
   note?: React.ReactNode;
   action?: React.ReactNode;
 }) {
@@ -50,14 +56,19 @@ export function HubMessage({
         <Text as="p" variant="metadata" color="grey-04">
           {children}
         </Text>
-        {note ? (
-          <Text as="p" variant="metadata" color="grey-04">
-            {note}
-          </Text>
-        ) : null}
+        {note}
       </div>
       {action}
     </div>
+  );
+}
+
+/** The type the message itself is set in, so a `note` sits with it rather than beside it. */
+export function HubMessageNote({ children }: { children: React.ReactNode }) {
+  return (
+    <Text as="p" variant="metadata" color="grey-04">
+      {children}
+    </Text>
   );
 }
 

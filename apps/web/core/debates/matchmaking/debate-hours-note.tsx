@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { debateHoursNote, debateHoursWindow } from '../debate-hours';
+import { HubMessageNote } from './hub-states';
 
 /**
  * "Debate hours are every day between 5-6pm…" / "Stay here and you'll be matched…", under a hub
@@ -19,10 +20,11 @@ import { debateHoursNote, debateHoursWindow } from '../debate-hours';
  */
 export function DebateHoursNote() {
   const now = useTickingNow();
-  // Null until mounted. The window is expressed in the viewer's local zone, which the server does
-  // not have and cannot guess, so rendering it during SSR would hydrate as a mismatch.
+  // Null until mounted — the paragraph included, so nothing empty is left standing in its place.
+  // The window is expressed in the viewer's local zone, which the server does not have and cannot
+  // guess, so rendering it during SSR would hydrate as a mismatch.
   if (!now) return null;
-  return <>{debateHoursNote(debateHoursWindow(now))}</>;
+  return <HubMessageNote>{debateHoursNote(debateHoursWindow(now))}</HubMessageNote>;
 }
 
 /**

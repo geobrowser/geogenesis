@@ -2,8 +2,9 @@
  * The daily window when debates actually happen, and the copy that points people at it.
  *
  * Pure and React-free so the arithmetic can be tested against fixed instants and fixed zones —
- * `use-debate-hours` owns the ticking and the "what time is it" part.
+ * `matchmaking/debate-hours-note` owns the ticking and the "what time is it" part.
  */
+import { format } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 
 export type DebateHoursConfig = {
@@ -118,12 +119,18 @@ export function debateHoursWindow(now: Date, config: DebateHoursConfig = DEBATE_
   return { isOpen: false, start: next.start, end: next.end, nextTransition: next.start };
 }
 
+/**
+ * A local wall-clock time, in the `h:mmaaa` shape the rest of the app formats times in — see
+ * `DEFAULT_TIME_FORMAT` and `formatGovernanceOutcomeTime`.
+ *
+ * Two departures from that constant, both for reading a *range* rather than a timestamp: a whole
+ * hour drops its `:00`, and the opening end drops its meridiem when the closing end already carries
+ * the same one. `format` runs in the runtime's zone, which is what makes the output the viewer's
+ * own local time.
+ */
 function clockLabel(date: Date, withMeridiem: boolean) {
-  const hours = date.getHours();
-  const minutes = date.getMinutes();
-  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-  const minuteLabel = minutes === 0 ? '' : `:${String(minutes).padStart(2, '0')}`;
-  return `${hour12}${minuteLabel}${withMeridiem ? (hours < 12 ? 'am' : 'pm') : ''}`;
+  const hour = date.getMinutes() === 0 ? 'h' : 'h:mm';
+  return format(date, withMeridiem ? `${hour}aaa` : hour);
 }
 
 /**

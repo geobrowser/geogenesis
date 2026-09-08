@@ -81,10 +81,14 @@ export function MatchesTab({ onTabChange }: { onTabChange: (tab: DebatesHubTab) 
               ? 'You’re marked unavailable, so nobody can be matched with you.'
               : 'Matches appear once you’ve taken a position on a claim and someone holding the opposite position is online and ready too.'
           }
-          // Withheld in the two cases where the empty list has a cause of its own. A space filter
-          // means the viewer excluded the matches, and being marked unavailable means the viewer
-          // excluded themselves — neither is answered by "come back at 9am" (GEO-2840).
-          emptyNote={spaceIds.length === 0 && activity?.available_to_debate !== false ? <DebateHoursNote /> : undefined}
+          // GEO-2840, and withheld in the two cases where the empty list has a cause of its own.
+          // Read off `serverMatches` rather than off the space filter: with nothing to match on at
+          // all, the filter is not what emptied the list, so the test is whether anyone is there
+          // and not whether the viewer has narrowed. Being marked unavailable is the viewer's own
+          // switch, undoable in a click, and "come back at 9am" does not answer it.
+          emptyNote={
+            serverMatches.length === 0 && activity?.available_to_debate !== false ? <DebateHoursNote /> : undefined
+          }
           emptyAction={{ label: 'Browse claims', onClick: () => onTabChange('claims') }}
         >
           <HubCardList>

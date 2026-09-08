@@ -182,6 +182,21 @@ describe('PeopleTab', () => {
     expect(screen.queryByText(/Debate hours are every day between|Stay here and you/)).not.toBeInTheDocument();
   });
 
+  // Both states are reachable with text in the search box, so the box cannot be what tells them
+  // apart: search for a name at 3am, or be mid-search when the last person drops off, and the
+  // reason the list is empty is that nobody is online — which is the state GEO-2840 is about.
+  it('blames nobody being online rather than the search when there is nobody to search', async () => {
+    mocks.people = [];
+    render(<PeopleTab />);
+
+    fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'artur' } });
+
+    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    expect(screen.getByText(/Debate hours are every day between|Stay here and you/)).toBeInTheDocument();
+    // Clearing a search that excluded nobody would put the same empty list back.
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+  });
+
   it('pins search alongside a sent request rather than in a second sticky', () => {
     // Two stickies would both claim top-0 and overlap; the card is conditional, so search could
     // not be offset by a known height either.
