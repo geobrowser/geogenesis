@@ -1,9 +1,12 @@
 /**
  * Constraints for the Edit profile modal (GEO-2839).
  *
- * The graph imposes none of these — a 40 MB phone photo and a 4,000-character
- * description are both valid writes today. They are product limits, so they live
- * in one pure module the modal and its tests can both read.
+ * The graph imposes none of these — a 40 MB phone photo is a valid banner today.
+ * They are product limits, so they live in one pure module the modal and its
+ * tests can both read.
+ *
+ * Description length is deliberately absent: it is free text and the graph does
+ * not cap it, so neither does the modal.
  */
 
 export const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
@@ -16,8 +19,6 @@ export const MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024;
 export const ACCEPTED_PROFILE_IMAGE_TYPES = ['image/png', 'image/jpeg'] as const;
 
 export const ACCEPTED_PROFILE_IMAGE_ATTR = ACCEPTED_PROFILE_IMAGE_TYPES.join(', ');
-
-export const MAX_PROFILE_DESCRIPTION_LENGTH = 280;
 
 export type ProfileImageKind = 'banner' | 'avatar';
 
@@ -51,8 +52,4 @@ export function validateProfileImage(file: File, kind: ProfileImageKind): string
   }
 
   return null;
-}
-
-export function isDescriptionOverLimit(description: string) {
-  return description.length > MAX_PROFILE_DESCRIPTION_LENGTH;
 }

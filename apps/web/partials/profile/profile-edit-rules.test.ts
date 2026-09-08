@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  MAX_PROFILE_DESCRIPTION_LENGTH,
-  MAX_PROFILE_IMAGE_BYTES,
-  isDescriptionOverLimit,
-  validateProfileImage,
-} from './profile-edit-rules';
+import { MAX_PROFILE_IMAGE_BYTES, validateProfileImage } from './profile-edit-rules';
 
 function fakeFile({ type, size }: { type: string; size: number }) {
   const file = new File([''], 'upload', { type });
@@ -59,19 +54,5 @@ describe('validateProfileImage', () => {
     expect(validateProfileImage(fakeFile({ type: 'image/gif', size: 40 * 1024 * 1024 }), 'banner')).toBe(
       'Banners have to be a PNG or JPEG.'
     );
-  });
-});
-
-describe('isDescriptionOverLimit', () => {
-  it('allows a description exactly at the limit', () => {
-    expect(isDescriptionOverLimit('x'.repeat(MAX_PROFILE_DESCRIPTION_LENGTH))).toBe(false);
-  });
-
-  it('flags one character past the limit', () => {
-    expect(isDescriptionOverLimit('x'.repeat(MAX_PROFILE_DESCRIPTION_LENGTH + 1))).toBe(true);
-  });
-
-  it('allows an empty description', () => {
-    expect(isDescriptionOverLimit('')).toBe(false);
   });
 });

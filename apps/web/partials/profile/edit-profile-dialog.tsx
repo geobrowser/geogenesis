@@ -4,15 +4,12 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-profile';
 
 import { Button, SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Warning } from '~/design-system/icons/warning';
 
-import { MAX_PROFILE_DESCRIPTION_LENGTH, isDescriptionOverLimit } from './profile-edit-rules';
 import { ProfileImageField } from './profile-image-field';
 
 const UNCHANGED: ProfileImageEdit = { kind: 'unchanged' };
@@ -102,7 +99,6 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   };
 
   const hasFailed = status === 'error';
-  const isOverLimit = isDescriptionOverLimit(description);
   const hasChanges =
     name !== current.name ||
     description !== current.description ||
@@ -112,7 +108,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // A failed save has already written its rows to the local store, so the entity
   // now reads back the edit and `hasChanges` goes false. Retry has to stay live
   // regardless — the work is staged, it just hasn't been published.
-  const canSave = canEdit && (hasChanges || hasFailed) && name.trim() !== '' && !isOverLimit && !isPublishing;
+  const canSave = canEdit && (hasChanges || hasFailed) && name.trim() !== '' && !isPublishing;
 
   const close = () => {
     // Closing mid-publish hands off to the status bar; it does not cancel the
@@ -215,12 +211,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   placeholder="A sentence about who you are and what you work on."
                   className="w-full resize-none appearance-none rounded px-[10px] py-[9px] text-input text-text shadow-inner shadow-grey-02 outline-hidden transition-all duration-150 placeholder:text-grey-03 hover:shadow-text focus:shadow-inner-lg focus:shadow-text disabled:cursor-not-allowed disabled:bg-divider disabled:text-grey-03 disabled:hover:shadow-grey-02"
                 />
-                <div className="flex items-center justify-between">
-                  <span className="text-footnote text-grey-04">Shown under your name across Geo.</span>
-                  <span className={cx('text-footnote', isOverLimit ? 'text-red-01' : 'text-grey-04')}>
-                    {description.length}/{MAX_PROFILE_DESCRIPTION_LENGTH}
-                  </span>
-                </div>
+                <span className="text-footnote text-grey-04">Shown under your name across Geo.</span>
               </label>
             </div>
 

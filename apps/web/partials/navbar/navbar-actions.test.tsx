@@ -183,7 +183,9 @@ describe('NavbarActions profile menu', () => {
     expect(screen.queryByTestId('edit-profile-dialog')).not.toBeInTheDocument();
 
     const editProfile = screen.getByRole('button', { name: 'Edit profile' });
-    // Sign out keeps its own group below the divider; Edit profile sits above it.
+    // Each of the three groups — identity, Edit profile, Sign out — is separated
+    // by its own rule.
+    expect(editProfile).toHaveClass('border-t', 'border-grey-02');
     expect(editProfile.compareDocumentPosition(screen.getByRole('button', { name: 'Sign out' }))).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING
     );

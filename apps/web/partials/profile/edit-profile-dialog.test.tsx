@@ -85,14 +85,17 @@ describe('EditProfileDialog', () => {
     expect(saveButton()).toBeDisabled();
   });
 
-  it('blocks save past the description limit and marks the counter', async () => {
+  // The graph does not cap description length, so neither does the modal — no
+  // counter, and nothing to block save on.
+  it('accepts a long description without capping it', async () => {
     renderDialog();
 
+    const long = 'x'.repeat(1000);
     await userEvent.clear(descriptionField());
-    await userEvent.paste('x'.repeat(281));
+    await userEvent.paste(long);
 
-    expect(screen.getByText('281/280')).toHaveClass('text-red-01');
-    expect(saveButton()).toBeDisabled();
+    expect(descriptionField()).toHaveValue(long);
+    expect(saveButton()).toBeEnabled();
   });
 
   it('publishes the trimmed draft', async () => {
