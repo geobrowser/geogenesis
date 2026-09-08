@@ -7,8 +7,11 @@ import type { Relation, Value } from '~/core/types';
 
 import { useEditProfile } from './use-edit-profile';
 
-const ENTITY_ID = 'person-entity';
-const SPACE_ID = 'personal-space';
+// The real ids from the account this modal was first tested against, whose space
+// had a null topicId — see the topicId test below.
+const ENTITY_ID = '3eb17193b0ae44fe9083ce931bc9210e';
+const SPACE_ID = 'c3cdf799eb8a469abbb609b7c3ecdb83';
+const ADDRESS = '0xA452380716c7699581aE129f178cafa8a49e5e80';
 
 const mocks = vi.hoisted(() => ({
   makeProposal: vi.fn(),
@@ -22,6 +25,14 @@ const mocks = vi.hoisted(() => ({
   dispatch: vi.fn(),
   reviewState: 'idle' as string,
   entityRelations: [] as Relation[],
+  entityName: 'Preston' as string | null,
+  // Literals, not the consts above: vi.hoisted runs before their initialisers.
+  personalEntityId: '3eb17193b0ae44fe9083ce931bc9210e' as string | null,
+  profile: { id: '3eb17193b0ae44fe9083ce931bc9210e', name: 'Preston', avatarUrl: null } as {
+    id: string;
+    name: string | null;
+    avatarUrl: string | null;
+  } | null,
   storeValues: [] as Value[],
   storeRelations: [] as Relation[],
 }));
@@ -34,12 +45,18 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 vi.mock('~/core/hooks/use-smart-account', () => ({
-  useSmartAccount: () => ({ smartAccount: { account: { address: '0xabc' } } }),
+  useSmartAccount: () => ({ smartAccount: { account: { address: ADDRESS } } }),
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId: SPACE_ID, personalEntityId: ENTITY_ID, isRegistered: true }),
+  usePersonalSpaceId: () => ({
+    personalSpaceId: SPACE_ID,
+    personalEntityId: mocks.personalEntityId,
+    isRegistered: true,
+  }),
 }));
+
+vi.mock('~/core/hooks/use-geo-profile', () => ({ useGeoProfile: () => ({ profile: mocks.profile }) }));
 
 vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: mocks.makeProposal }) }));
 
@@ -49,7 +66,7 @@ vi.mock('~/core/state/status-bar-store', () => ({
 
 vi.mock('~/core/database/entities', () => ({
   useEntity: () => ({
-    name: 'Preston',
+    name: mocks.entityName,
     description: 'Working on debates.',
     relations: mocks.entityRelations,
     isLoading: false,
@@ -114,6 +131,9 @@ beforeEach(() => {
   });
   mocks.reviewState = 'idle';
   mocks.entityRelations = [];
+  mocks.entityName = 'Preston';
+  mocks.personalEntityId = ENTITY_ID;
+  mocks.profile = { id: ENTITY_ID, name: 'Preston', avatarUrl: null };
   mocks.storeValues = [];
   mocks.storeRelations = [];
   mocks.makeProposal.mockResolvedValue(undefined);
@@ -121,6 +141,47 @@ beforeEach(() => {
 });
 
 afterEach(() => vi.clearAllMocks());
+
+describe('resolving the profile entity', () => {
+  // Real personal spaces ship with topicId null. Reading it alone left the modal
+  // showing a blank profile it also could not have saved, since canEdit was false.
+  it('still resolves the entity when the space has no topicId', () => {
+    mocks.personalEntityId = null;
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    expect(result.current.entityId).toBe(ENTITY_ID);
+    expect(result.current.canEdit).toBe(true);
+  });
+
+  it('falls back to topicId when the profile lookup degraded to a wallet address', () => {
+    // fetchProfile returns defaultProfile(address, address) on every failure path,
+    // and an address is not an entity id.
+    mocks.profile = { id: ADDRESS, name: null, avatarUrl: null };
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    expect(result.current.entityId).toBe(ENTITY_ID);
+  });
+
+  it('cannot edit when neither source yields an entity', () => {
+    mocks.personalEntityId = null;
+    mocks.profile = { id: ADDRESS, name: null, avatarUrl: null };
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    expect(result.current.canEdit).toBe(false);
+  });
+
+  it('falls back to the profile name while the entity is still hydrating', () => {
+    mocks.entityName = null;
+    mocks.profile = { id: ENTITY_ID, name: 'Test account 70', avatarUrl: 'ipfs://profile-avatar' };
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    expect(result.current.current.name).toBe('Test account 70');
+  });
+});
 
 describe('useEditProfile', () => {
   it('removes an image by deleting its relation, not by writing an empty value', async () => {
@@ -259,7 +320,7 @@ describe('useEditProfile', () => {
 
     await waitFor(() => expect(result.current.status).toBe('published'));
     expect(mocks.setStoredAvatar).toHaveBeenCalledWith('ipfs://new-avatar');
-    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['profile', '0xabc'] });
+    expect(mocks.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['profile', ADDRESS] });
   });
 
   it('falls the navbar avatar back to the generated gradient when the photo is removed', async () => {

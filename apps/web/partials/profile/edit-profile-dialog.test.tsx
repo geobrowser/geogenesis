@@ -171,6 +171,14 @@ describe('EditProfileDialog', () => {
     });
   });
 
+  it('says why rather than showing a Save button that can never work', () => {
+    mocks.canEdit = false;
+    renderDialog();
+
+    expect(screen.getByText('We couldn’t find your profile to edit. Try reloading the page.')).toBeInTheDocument();
+    expect(saveButton()).toBeDisabled();
+  });
+
   it('rejects a dropped file the picker’s accept filter would never have allowed', async () => {
     renderDialog();
 

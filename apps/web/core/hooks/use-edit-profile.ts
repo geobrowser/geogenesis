@@ -1,6 +1,6 @@
 'use client';
 
-import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { ContentIds, IdUtils, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
@@ -8,6 +8,7 @@ import * as React from 'react';
 import { useSetAtom } from 'jotai';
 
 import { useEntity } from '~/core/database/entities';
+import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -63,6 +64,7 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   const { smartAccount } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { personalSpaceId, personalEntityId, isRegistered } = usePersonalSpaceId();
+  const { profile } = useGeoProfile(address);
   const { storage } = useMutate();
   const { makeProposal } = usePublish();
   const { state: statusBarState, dispatch } = useStatusBar();
@@ -70,7 +72,14 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   const queryClient = useQueryClient();
 
   const spaceId = personalSpaceId ?? '';
-  const entityId = personalEntityId ?? '';
+
+  // `space.topicId` is null on plenty of real personal spaces — it was null on
+  // the account this was first tested against, which left the modal reading a
+  // blank profile it could not have saved either. /profile/address answers with
+  // the person entity directly, so prefer it and keep topicId as the fallback.
+  // Its own fallback is the wallet address, which is not an entity id, hence the
+  // validity check rather than a truthiness one.
+  const entityId = profile?.id && IdUtils.isValid(profile.id) ? profile.id : (personalEntityId ?? '');
   const canEdit = Boolean(isRegistered && spaceId && entityId);
 
   const entity = useEntity({ id: entityId, spaceId: spaceId || undefined });
@@ -93,14 +102,17 @@ export function useEditProfile({ isOpen }: { isOpen: boolean }) {
   const bannerUrl = useEntityCoverUrl(entityId || undefined, spaceId);
   const avatarUrl = useEntityAvatarUrl(entityId || undefined, spaceId);
 
+  // The profile query is already warm — the navbar runs it on every page — so it
+  // fills the fields immediately while the entity hydrates behind it, and covers
+  // a name held outside this space that the space-scoped read won't return.
   const current = React.useMemo(
     () => ({
-      name: entity.name ?? '',
+      name: entity.name ?? profile?.name ?? '',
       description: entity.description ?? '',
       bannerUrl,
-      avatarUrl,
+      avatarUrl: avatarUrl ?? profile?.avatarUrl ?? undefined,
     }),
-    [entity.name, entity.description, bannerUrl, avatarUrl]
+    [entity.name, entity.description, bannerUrl, avatarUrl, profile?.name, profile?.avatarUrl]
   );
 
   const stage = React.useCallback(

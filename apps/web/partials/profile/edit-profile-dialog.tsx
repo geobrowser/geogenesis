@@ -4,6 +4,8 @@ import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/re
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-profile';
 
 import { Button, SquareButton } from '~/design-system/button';
@@ -37,7 +39,7 @@ type Props = {
  * hand-off to the status bar rather than a cancel.
  */
 export function EditProfileDialog({ open, onOpenChange }: Props) {
-  const { canEdit, current, status, errorMessage, publish, discard } = useEditProfile({ isOpen: open });
+  const { canEdit, isLoading, current, status, errorMessage, publish, discard } = useEditProfile({ isOpen: open });
 
   const [name, setName] = React.useState('');
   const [description, setDescription] = React.useState('');
@@ -99,6 +101,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   };
 
   const hasFailed = status === 'error';
+  const isUnavailable = !canEdit && !isLoading;
   const hasChanges =
     name !== current.name ||
     description !== current.description ||
@@ -229,8 +232,14 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
             )}
 
             <footer className="mt-5 flex items-center justify-between gap-3 border-t border-grey-02 px-5 py-4">
-              <p className="text-footnote text-grey-04">
-                {hasFailed ? 'Nothing was published.' : 'Saving publishes to your space.'}
+              {/* Save is dead without a resolvable profile entity, so say why
+                  rather than leaving a button that does nothing. */}
+              <p className={cx('text-footnote', isUnavailable ? 'text-red-01' : 'text-grey-04')}>
+                {isUnavailable
+                  ? 'We couldn’t find your profile to edit. Try reloading the page.'
+                  : hasFailed
+                    ? 'Nothing was published.'
+                    : 'Saving publishes to your space.'}
               </p>
               <div className="flex items-center gap-2">
                 <Button type="button" variant="secondary" onClick={close}>
