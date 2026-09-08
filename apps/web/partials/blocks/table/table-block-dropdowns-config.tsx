@@ -19,6 +19,12 @@ type TableBlockDropdownsConfigProps = {
   configs: BlockDropdownConfig[];
   properties: Property[];
   toggleDropdownProperty: (property: { id: string; name: string | null }) => void;
+  /**
+   * Relation property ids the table's spaces declare (null = unrestricted).
+   * Filters the PICK list only — already-configured chips stay visible so a
+   * config that became ineligible can still be removed.
+   */
+  eligiblePropertyIds?: string[] | null;
 };
 
 /**
@@ -32,6 +38,7 @@ export function TableBlockDropdownsConfigTrigger({
   configs,
   properties,
   toggleDropdownProperty,
+  eligiblePropertyIds,
 }: TableBlockDropdownsConfigProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -44,9 +51,10 @@ export function TableBlockDropdownsConfigTrigger({
     () =>
       properties
         .filter(p => p.dataType === 'RELATION' && !ID.equals(p.id, SystemIds.NAME_PROPERTY))
+        .filter(p => eligiblePropertyIds == null || eligiblePropertyIds.some(e => ID.equals(e, p.id)))
         .filter((p, index, all) => all.findIndex(other => ID.equals(other.id, p.id)) === index)
         .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id)),
-    [properties]
+    [properties, eligiblePropertyIds]
   );
 
   const query = search.trim().toLowerCase();

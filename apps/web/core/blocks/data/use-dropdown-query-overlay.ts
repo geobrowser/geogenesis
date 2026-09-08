@@ -1,9 +1,11 @@
 'use client';
 
 import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import { getSchemaFromTypeIds } from '~/core/database/entities';
 import { ID } from '~/core/id';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -95,12 +97,52 @@ export function useDropdownQueryOverlay({
   // the eye menu, the dropdown picker, and the overlay's gate all see it.
   const collectionMemberProperties = useCollectionMemberSchema(collectionItemIds);
 
+  // Dropdown ELIGIBILITY is scoped to the table's own spaces — a deliberate,
+  // dropdown-only divergence from the graph-wide schema union (GEO-2202)
+  // that feeds the column/sort/filter menus. The union lets ANY space graft
+  // a same-named twin property onto a shared type and have it surface in
+  // every picker in the graph; a table's dropdowns should only offer
+  // properties the table's selected spaces (or its own space) actually
+  // declare. GEO tables scope to the whole graph by definition and
+  // COLLECTION schemas already derive from the members, so only SPACES
+  // sources are restricted.
+  const typesInFilter = React.useMemo(
+    () => baseFilterState.filter(f => ID.equals(f.columnId, SystemIds.TYPES_PROPERTY)).map(f => f.value),
+    [baseFilterState]
+  );
+  const tableSpaceIds = React.useMemo(() => {
+    const ids = baseFilterState.filter(f => ID.equals(f.columnId, SystemIds.SPACE_FILTER)).map(f => f.value);
+    if (spaceId && !ids.some(id => ID.equals(id, spaceId))) ids.push(spaceId);
+    return ids;
+  }, [baseFilterState, spaceId]);
+  const restrictToTableSpaces = source.type === 'SPACES';
+  const { data: tableSpaceSchema } = useQuery({
+    enabled: restrictToTableSpaces && typesInFilter.length > 0 && tableSpaceIds.length > 0,
+    queryKey: ['data-block', 'dropdown-eligible-schema', [...typesInFilter].sort(), [...tableSpaceIds].sort()],
+    placeholderData: keepPreviousData,
+    queryFn: async () =>
+      // The type entities' schema relations read ONLY from the table's
+      // spaces: the spaceId hint scopes the native fetch and the second
+      // argument adds each selected space; includeAllTypeSpaces stays off.
+      getSchemaFromTypeIds(
+        typesInFilter.map(id => ({ id, spaceId: tableSpaceIds[0] })),
+        tableSpaceIds,
+        { includeAllTypeSpaces: false }
+      ),
+  });
+  /** Relation property ids declared by the table's spaces; null = unrestricted (GEO/COLLECTION, or loading). */
+  const dropdownEligibleIds = React.useMemo(() => {
+    if (!restrictToTableSpaces || !tableSpaceSchema) return null;
+    return tableSpaceSchema.filter(property => property.dataType === 'RELATION').map(property => property.id);
+  }, [restrictToTableSpaces, tableSpaceSchema]);
+
   const appliedColumnIds = React.useMemo(() => {
     const pillProperties = [...filterableProperties, ...(extraPillProperties ?? []), ...collectionMemberProperties];
     return configs
       .map(config => config.propertyId)
-      .filter(id => pillProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION'));
-  }, [configs, filterableProperties, extraPillProperties, collectionMemberProperties]);
+      .filter(id => pillProperties.some(p => ID.equals(p.id, id) && p.dataType === 'RELATION'))
+      .filter(id => dropdownEligibleIds === null || dropdownEligibleIds.some(e => ID.equals(e, id)));
+  }, [configs, filterableProperties, extraPillProperties, collectionMemberProperties, dropdownEligibleIds]);
 
   const isActive = !isEditing && supportsDropdowns && hydrated && appliedColumnIds.length > 0;
 
@@ -127,6 +169,7 @@ export function useDropdownQueryOverlay({
       collectionItemIds,
       populationReady,
       collectionMemberProperties,
+      dropdownEligibleIds,
     },
   };
 }

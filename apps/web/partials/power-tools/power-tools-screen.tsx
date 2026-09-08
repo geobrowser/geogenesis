@@ -1044,6 +1044,7 @@ export function PowerToolsScreen() {
               isEditing && supportsDropdowns ? (
                 <TableBlockDropdownsConfigTrigger
                   configs={browseDropdowns.configs}
+                  eligiblePropertyIds={browseDropdowns.dropdownEligibleIds}
                   properties={dropdownUiProperties}
                   toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                 />

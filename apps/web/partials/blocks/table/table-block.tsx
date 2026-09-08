@@ -1210,6 +1210,7 @@ const ConfiguredTableBlock = ({
                           supportsDropdowns ? (
                             <TableBlockDropdownsConfigTrigger
                               configs={browseDropdowns.configs}
+                              eligiblePropertyIds={browseDropdowns.dropdownEligibleIds}
                               properties={mergedBlockProperties}
                               toggleDropdownProperty={browseDropdowns.toggleDropdownProperty}
                             />
