@@ -79,13 +79,7 @@ function EntitySelectionCheckbox({
 }
 
 /** Per-row discard; blocked when other selected rows still depend on this entity. */
-function EntityDiscardButton({
-  entityName,
-  selection,
-}: {
-  entityName: string;
-  selection: ChangedEntitySelection;
-}) {
+function EntityDiscardButton({ entityName, selection }: { entityName: string; selection: ChangedEntitySelection }) {
   const isBlocked = selection.blockedBy.length > 0;
 
   const button = (
@@ -187,6 +181,8 @@ export type ChangedEntitySelection = {
   changeCount: number;
   isNew: boolean;
   onDiscard: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 };
 
 type ChangedEntityProps = {
@@ -245,7 +241,8 @@ export const ChangedEntity = React.memo(function ChangedEntity({
 
   const resolvedAvatarUrl = avatarChangeImageUrl ?? coverChangeImageUrl ?? fetchedMediaUrl;
 
-  const isCollapsed = selection !== undefined && !selection.isSelected;
+  const isCollapsed = selection?.isCollapsed ?? false;
+  const isExcluded = selection !== undefined && !selection.isSelected;
 
   const typeName =
     typeRelations.find(r => r.after?.toEntityName)?.after?.toEntityName ??
@@ -256,13 +253,11 @@ export const ChangedEntity = React.memo(function ChangedEntity({
   const entityHeader = (
     <>
       {resolvedAvatarUrl && (
-        <div className={cx('h-8 w-8 shrink-0 overflow-hidden rounded', isCollapsed && 'opacity-40')}>
+        <div className={cx('h-8 w-8 shrink-0 overflow-hidden rounded', isExcluded && 'opacity-40')}>
           <NativeGeoImage value={resolvedAvatarUrl} alt="" className="h-full w-full object-cover" />
         </div>
       )}
-      <h2
-        className={cx('text-xl font-semibold', isCollapsed && 'text-grey-03', entity.name === null && 'text-grey-04')}
-      >
+      <h2 className={cx('text-xl font-semibold', isExcluded && 'text-grey-03', entity.name === null && 'text-grey-04')}>
         {displayName}
       </h2>
     </>
@@ -290,20 +285,23 @@ export const ChangedEntity = React.memo(function ChangedEntity({
           <span className="shrink-0 text-metadata text-grey-04">
             {selection.changeCount === 1 ? '1 change' : `${selection.changeCount} changes`}
             {selection.isNew && ' · new entity'}
-            {isCollapsed && ' · not included'}
+            {isExcluded && ' · not included'}
           </span>
         )}
-        {isCollapsed && (
+        {selection && <EntityDiscardButton entityName={displayName} selection={selection} />}
+        {selection && (
           <button
             type="button"
-            onClick={selection.onToggle}
-            className="ml-auto shrink-0 rounded p-1 text-grey-04 transition-colors hover:text-text"
-            aria-label={`Include ${displayName} in this publish`}
+            onClick={selection.onToggleCollapse}
+            className="shrink-0 rounded p-1 text-grey-04 transition-colors hover:text-text"
+            aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${displayName}`}
+            aria-expanded={!isCollapsed}
           >
-            <ChevronDownSmall />
+            <span className={cx('block transition-transform', isCollapsed && '-rotate-90')}>
+              <ChevronDownSmall />
+            </span>
           </button>
         )}
-        {selection && !isCollapsed && <EntityDiscardButton entityName={displayName} selection={selection} />}
       </div>
 
       {isCollapsed ? null : (

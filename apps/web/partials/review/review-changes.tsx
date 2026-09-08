@@ -465,9 +465,24 @@ export const ReviewChanges = () => {
   // Excluded ids (not included) so new rows mid-review stay selected by default.
   const [excludedEntityIds, setExcludedEntityIds] = React.useState<ReadonlySet<string>>(new Set());
 
+  const [collapsedEntityIds, setCollapsedEntityIds] = React.useState<ReadonlySet<string>>(new Set());
+
   React.useEffect(() => {
     setExcludedEntityIds(new Set());
+    setCollapsedEntityIds(new Set());
   }, [activeSpace]);
+
+  const toggleEntityCollapsed = React.useCallback((entityId: string) => {
+    setCollapsedEntityIds(prev => {
+      const next = new Set(prev);
+      if (next.has(entityId)) {
+        next.delete(entityId);
+      } else {
+        next.add(entityId);
+      }
+      return next;
+    });
+  }, []);
 
   const ownershipIndex = React.useMemo(
     () => buildOwnershipIndex(visibleEntities, relationsFromSpace),
@@ -533,6 +548,11 @@ export const ReviewChanges = () => {
   );
 
   const selectAllEntities = React.useCallback(() => setExcludedEntityIds(new Set()), []);
+
+  const unselectAllEntities = React.useCallback(
+    () => setExcludedEntityIds(new Set(ownershipIndex.displayIds)),
+    [ownershipIndex]
+  );
 
   /**
    * Throws a row's edits away and reverts it to the published version.
@@ -606,12 +626,7 @@ export const ReviewChanges = () => {
   const totalEntityCount = ownershipIndex.displayIds.size;
   const isPartialPublish = selectedEntityCount < totalEntityCount;
 
-  const publishEditLabel = isPartialPublish
-    ? `Publish ${selectedEntityCount} ${selectedEntityCount === 1 ? 'edit' : 'edits'}`
-    : 'Publish edit';
-  const publishProposalLabel = isPartialPublish
-    ? `Publish ${selectedEntityCount} ${selectedEntityCount === 1 ? 'edit' : 'edits'}`
-    : 'Publish proposal';
+  const publishButtonLabel = isPartialPublish ? 'Publish selected edits' : 'Publish all edits';
 
   const hasSelectedEntities = selectedEntityIds.size > 0;
   const isReadyToPublish = proposalName.length > 0 && hasSelectedEntities;
@@ -702,7 +717,7 @@ export const ReviewChanges = () => {
 
   React.useEffect(() => {
     rowVirtualizer.measure();
-  }, [entities, visibleEntities.length, excludedEntityIds]);
+  }, [entities, visibleEntities.length, excludedEntityIds, collapsedEntityIds]);
 
   const handleOpenReviewEntity = React.useCallback(
     (entityId: string) => {
@@ -1072,9 +1087,7 @@ export const ReviewChanges = () => {
                   onClick={handleSubmit}
                   disabled={!isReadyToPublish || isPublishing || isPublishGatedByPendingSetup}
                 >
-                  <Pending isPending={isPublishing}>
-                    {activeSpaceMetadata?.type === 'PERSONAL' ? publishEditLabel : publishProposalLabel}
-                  </Pending>
+                  <Pending isPending={isPublishing}>{publishButtonLabel}</Pending>
                 </Button>
               </div>
             )}
@@ -1112,6 +1125,9 @@ export const ReviewChanges = () => {
                           </Text>
                           <div className="flex shrink-0 items-center gap-2">
                             {isPartialPublish && <SmallButton onClick={selectAllEntities}>Select all</SmallButton>}
+                            {hasSelectedEntities && (
+                              <SmallButton onClick={unselectAllEntities}>Unselect all</SmallButton>
+                            )}
                             {hasSelectedEntities && (
                               <SmallButton onClick={discardSelectedEntities}>Discard selected</SmallButton>
                             )}
@@ -1188,6 +1204,8 @@ export const ReviewChanges = () => {
                                       isNew: isNewEntity(entity.entityId),
                                       onDiscard: () =>
                                         discardEntities(new Set([entity.entityId]), entity.name ?? 'The edit'),
+                                      isCollapsed: collapsedEntityIds.has(entity.entityId),
+                                      onToggleCollapse: () => toggleEntityCollapsed(entity.entityId),
                                     }}
                                   />
                                 </div>
